@@ -27,7 +27,7 @@ The frontend web application for AuthSec — an open-source enterprise Identity 
 
 ```bash
 git clone https://github.com/authsec-ai/Authsec-ui.git
-cd UI
+cd Authsec-ui
 ```
 
 ### 2. Install dependencies
