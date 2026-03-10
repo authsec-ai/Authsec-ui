@@ -70,7 +70,7 @@ export const domainApi = baseApi.injectEndpoints({
      * List all domains for a tenant
      */
     listDomains: builder.query<CustomDomain[], { tenant_id: string }>({
-      query: ({ tenant_id }) => `/uflow/admin/tenants/${tenant_id}/domains`,
+      query: ({ tenant_id }) => `/authsec/uflow/admin/tenants/${tenant_id}/domains`,
       transformResponse: (response: ListDomainsResponse) => {
         return response.domains || [];
       },
@@ -94,7 +94,7 @@ export const domainApi = baseApi.injectEndpoints({
       { tenant_id: string; domain_id: string }
     >({
       query: ({ tenant_id, domain_id }) =>
-        `/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
+        `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
       transformResponse: (response: {
         success: boolean;
         domain: CustomDomain;
@@ -111,7 +111,7 @@ export const domainApi = baseApi.injectEndpoints({
      */
     createDomain: builder.mutation<CreateDomainResponse, CreateDomainRequest>({
       query: (data) => ({
-        url: `/uflow/admin/tenants/${data.tenant_id}/domains`,
+        url: `/authsec/uflow/admin/tenants/${data.tenant_id}/domains`,
         method: "POST",
         body: {
           domain: data.domain,
@@ -129,7 +129,7 @@ export const domainApi = baseApi.injectEndpoints({
       { tenant_id: string; domain_id: string }
     >({
       query: ({ tenant_id, domain_id }) => ({
-        url: `/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/verify`,
+        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/verify`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, { domain_id }) => [
@@ -146,7 +146,7 @@ export const domainApi = baseApi.injectEndpoints({
       { tenant_id: string; domain_id: string }
     >({
       query: ({ tenant_id, domain_id }) => ({
-        url: `/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/set-primary`,
+        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/set-primary`,
         method: "POST",
       }),
       // Invalidate entire list since we need to update the old primary too
@@ -161,7 +161,7 @@ export const domainApi = baseApi.injectEndpoints({
       { tenant_id: string; domain_id: string }
     >({
       query: ({ tenant_id, domain_id }) => ({
-        url: `/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
+        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, { domain_id }) => [

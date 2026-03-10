@@ -28,14 +28,14 @@ export const permissionsResourcesApi = baseApi.injectEndpoints({
     endpoints: (builder) => ({
         // GET /uflow/admin/permissions/resources - List unique resources for admin
         getAdminPermissionResources: builder.query<string[], void>({
-            query: () => 'uflow/admin/permissions/resources',
+            query: () => 'authsec/uflow/admin/permissions/resources',
             transformResponse: (response: PermissionResourcesResponse) => response.resources || [],
             providesTags: ['AdminRBACResource'],
         }),
 
         // GET /uflow/user/rbac/permissions/resources - List unique resources for enduser
         getEndUserPermissionResources: builder.query<string[], string>({
-            query: (tenant_id) => `uflow/user/rbac/permissions/resources?tenant_id=${tenant_id}`,
+            query: (tenant_id) => `authsec/uflow/user/rbac/permissions/resources?tenant_id=${tenant_id}`,
             transformResponse: (response: PermissionResourcesResponse) => response.resources || [],
             providesTags: ['EndUserRBACResource'],
         }),

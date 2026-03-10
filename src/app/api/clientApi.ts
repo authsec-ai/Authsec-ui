@@ -380,7 +380,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Delete a client completely
     deleteClientComplete: builder.mutation<DeleteClientResponse, DeleteClientRequest>({
       query: ({ tenant_id, client_id }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/delete-complete`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/delete-complete`,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: withSessionData({
@@ -394,7 +394,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Set client status (activate/deactivate)
     setClientStatus: builder.mutation<SetClientStatusResponse, SetClientStatusRequest>({
       query: (data) => ({
-        url: `/clientms/tenants/${data.tenant_id}/clients/set-status`,
+        url: `/authsec/clientms/tenants/${data.tenant_id}/clients/set-status`,
         method: "POST",
         body: data,
       }),
@@ -425,7 +425,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Get raw text to handle potential multiple JSON objects
@@ -491,7 +491,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Handle potential response format issues
@@ -643,7 +643,7 @@ export const clientApi = baseApi.injectEndpoints({
       query: (data) => {
         const tenantId = data.tenant_id;
         return {
-          url: `/clientms/tenants/${tenantId}/clients/create`,
+          url: `/authsec/clientms/tenants/${tenantId}/clients/create`,
           method: "POST",
           body: data,
           responseHandler: "text", // Get raw text to handle multiple JSON objects
@@ -660,7 +660,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Add OIDC provider to a client
     addOIDCProvider: builder.mutation<AddProviderResponse, AddProviderRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/add-provider",
+        url: "/authsec/oocmgr/oidc/add-provider",
         method: "POST",
         body: data,
       }),
@@ -670,7 +670,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Get OIDC configuration for a tenant
     getOIDCConfig: builder.mutation<GetConfigResponse, GetConfigRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/get-config", 
+        url: "/authsec/oocmgr/oidc/get-config", 
         method: "POST",
         body: data,
       }),

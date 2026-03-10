@@ -81,7 +81,7 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // GET /uflow/user/roles
     // Get all roles assigned to the authenticated user (extracted from JWT)
     getMyRoles: builder.query<UserRole[], void>({
-      query: () => 'uflow/user/roles',
+      query: () => 'authsec/uflow/user/roles',
       transformResponse: (response: GetMyRolesResponse) => response.roles,
       providesTags: ['EndUserRBACRole', 'EndUser'],
     }),
@@ -89,7 +89,7 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // GET /uflow/user/roles/available
     // Get all roles available in the tenant that can be requested
     getAvailableRoles: builder.query<AvailableRole[], void>({
-      query: () => 'uflow/user/roles/available',
+      query: () => 'authsec/uflow/user/roles/available',
       transformResponse: (response: GetAvailableRolesResponse) => response.roles,
       providesTags: ['EndUserRBACRole'],
     }),
@@ -98,7 +98,7 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // Request assignment of a role (creates a pending role request for admin approval)
     requestRoleAssignment: builder.mutation<RequestRoleAssignmentResponse, RequestRoleAssignmentRequest>({
       query: (data) => ({
-        url: 'uflow/user/roles/request',
+        url: 'authsec/uflow/user/roles/request',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -108,7 +108,7 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // GET /uflow/user/roles/requests
     // Get all role requests made by the authenticated user
     getMyRoleRequests: builder.query<RoleRequest[], void>({
-      query: () => 'uflow/user/roles/requests',
+      query: () => 'authsec/uflow/user/roles/requests',
       transformResponse: (response: GetMyRoleRequestsResponse) => response.requests,
       providesTags: ['EndUserRBACRole'],
     }),

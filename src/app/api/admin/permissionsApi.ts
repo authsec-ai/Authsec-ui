@@ -65,7 +65,7 @@ export const adminPermissionsApi = baseApi.injectEndpoints({
     // POST /uflow/admin/permissions
     createPermission: builder.mutation<CreatePermissionResponse, CreatePermissionRequest>({
       query: (data) => ({
-        url: 'uflow/admin/permissions',
+        url: 'authsec/uflow/admin/permissions',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -74,7 +74,7 @@ export const adminPermissionsApi = baseApi.injectEndpoints({
 
     // GET /uflow/uflow/admin/permissions
     getPermissionsByTenant: builder.query<AdminPermission[], void>({
-      query: () => 'uflow/uflow/admin/permissions',
+      query: () => 'authsec/uflow/admin/permissions',
       transformResponse: (response: { permissions: AdminPermission[] } | AdminPermission[]) => {
         if (Array.isArray(response)) return response;
         return response.permissions || [];
@@ -85,7 +85,7 @@ export const adminPermissionsApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/permissions
     deletePermissions: builder.mutation<ApiResponse, DeletePermissionsRequest>({
       query: (data) => ({
-        url: 'uflow/admin/permissions',
+        url: 'authsec/uflow/admin/permissions',
         method: 'DELETE',
         body: withSessionData(data),
       }),

@@ -139,7 +139,7 @@ export const authApi = baseApi.injectEndpoints({
           tenant_domain: credentials.tenant_domain ?? currentDomain,
         };
         return {
-          url: "uflow/login",  //temporary change actual one being /auth/admin/login
+          url: "authsec/uflow/auth/admin/login",
           method: "POST",
           body: bodyWithDomain,
         };
@@ -149,7 +149,7 @@ export const authApi = baseApi.injectEndpoints({
     registerInitiate: builder.mutation<RegisterInitiateResponse, RegisterInitiateRequest>({
       query: (userData) => {
         return {
-          url: "/uflow/register/initiate",
+          url: "/authsec/uflow/register/initiate",
           method: "POST",
           body: userData,
         };
@@ -158,7 +158,7 @@ export const authApi = baseApi.injectEndpoints({
     }),
     registerVerify: builder.mutation<RegisterVerifyResponse, RegisterVerifyRequest>({
       query: (verifyData) => ({
-        url: "/uflow/register/verify",
+        url: "/authsec/uflow/register/verify",
         method: "POST",
         body: verifyData,
       }),
@@ -166,7 +166,7 @@ export const authApi = baseApi.injectEndpoints({
     }),
     resendOtp: builder.mutation<ResendOtpResponse, ResendOtpRequest>({
       query: (resendData) => ({
-        url: "/uflow/register/resendOtp",
+        url: "/authsec/uflow/register/resendOtp",
         method: "POST",
         body: resendData,
       }),
@@ -175,7 +175,7 @@ export const authApi = baseApi.injectEndpoints({
     // Forgot Password endpoints - End User
     forgotPassword: builder.mutation<ForgotPasswordResponse, ForgotPasswordRequest>({
       query: (forgotPasswordData) => ({
-        url: "/uflow/user/forgot-password",
+        url: "/authsec/uflow/user/forgot-password",
         method: "POST",
         body: forgotPasswordData,
       }),
@@ -186,7 +186,7 @@ export const authApi = baseApi.injectEndpoints({
       ForgotPasswordVerifyOtpRequest
     >({
       query: (verifyOtpData) => ({
-        url: "/uflow/user/forgot-password/verify-otp",
+        url: "/authsec/uflow/user/forgot-password/verify-otp",
         method: "POST",
         body: verifyOtpData,
       }),
@@ -194,7 +194,7 @@ export const authApi = baseApi.injectEndpoints({
 
     forgotPasswordReset: builder.mutation<ForgotPasswordResponse, ForgotPasswordResetRequest>({
       query: (resetPasswordData) => ({
-        url: "/uflow/user/forgot-password/reset",
+        url: "/authsec/uflow/user/forgot-password/reset",
         method: "POST",
         body: resetPasswordData,
       }),
@@ -204,7 +204,7 @@ export const authApi = baseApi.injectEndpoints({
     // Admin forgot password endpoints
     adminForgotPassword: builder.mutation<ForgotPasswordResponse, AdminForgotPasswordRequest>({
       query: (adminForgotPasswordData) => ({
-        url: "/uflow/auth/admin/forgot-password",
+        url: "/authsec/uflow/auth/admin/forgot-password",
         method: "POST",
         body: adminForgotPasswordData,
       }),
@@ -215,7 +215,7 @@ export const authApi = baseApi.injectEndpoints({
       AdminForgotPasswordVerifyOtpRequest
     >({
       query: (adminVerifyOtpData) => ({
-        url: "/uflow/auth/admin/forgot-password/verify-otp",
+        url: "/authsec/uflow/auth/admin/forgot-password/verify-otp",
         method: "POST",
         body: adminVerifyOtpData,
       }),
@@ -226,7 +226,7 @@ export const authApi = baseApi.injectEndpoints({
       AdminForgotPasswordResetRequest
     >({
       query: (adminResetPasswordData) => ({
-        url: "/uflow/auth/admin/forgot-password/reset",
+        url: "/authsec/uflow/auth/admin/forgot-password/reset",
         method: "POST",
         body: adminResetPasswordData,
       }),
@@ -235,14 +235,14 @@ export const authApi = baseApi.injectEndpoints({
     // Admin login precheck/ bootstrap for modern flow
     adminLoginPrecheck: builder.mutation<AdminLoginPrecheckResponse, AdminLoginPrecheckRequest>({
       query: (body) => ({
-        url: "/uflow/auth/admin/login/precheck",
+        url: "/authsec/uflow/auth/admin/login/precheck",
         method: "POST",
         body,
       }),
     }),
     adminBootstrapAccount: builder.mutation<AdminBootstrapAccountResponse, AdminBootstrapAccountRequest>({
       query: (body) => ({
-        url: "/uflow/auth/admin/login/bootstrap",
+        url: "/authsec/uflow/auth/admin/login/bootstrap",
         method: "POST",
         body,
       }),
@@ -251,7 +251,7 @@ export const authApi = baseApi.injectEndpoints({
     // New user registration notification
     notifyNewUserRegistration: builder.mutation<NotifyNewUserResponse, NotifyNewUserRequest>({
       query: (data) => ({
-        url: '/uflow/auth/notify/new-user-registration',
+        url: '/authsec/uflow/auth/notify/new-user-registration',
         method: 'POST',
         body: {},
         headers: data?.token ? { Authorization: `Bearer ${data.token}` } : undefined,

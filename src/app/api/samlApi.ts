@@ -189,7 +189,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Get SAML Metadata
     getSamlMetadata: builder.query<SamlMetadataResponse, SamlMetadataRequest>({
       query: ({ tenant_id, client_id }) => ({
-        url: `/hmgr/saml/metadata/${tenant_id}/${client_id}`,
+        url: `/authsec/hmgr/saml/metadata/${tenant_id}/${client_id}`,
         method: 'GET',
         responseHandler: async (response) => {
           const xml = await response.text();
@@ -207,7 +207,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Add SAML Provider
     addSamlProvider: builder.mutation<AddSamlProviderResponse, AddSamlProviderRequest>({
       query: (data) => ({
-        url: '/oocmgr/saml/add-provider',
+        url: '/authsec/oocmgr/saml/add-provider',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -220,7 +220,7 @@ export const samlApi = baseApi.injectEndpoints({
     // List SAML Providers
     listSamlProviders: builder.query<ListSamlProvidersResponse, ListSamlProvidersRequest>({
       query: (data) => ({
-        url: '/oocmgr/saml/list-providers',
+        url: '/authsec/oocmgr/saml/list-providers',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -236,7 +236,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Get Specific SAML Provider
     getSamlProvider: builder.query<GetSamlProviderResponse, GetSamlProviderRequest>({
       query: (data) => ({
-        url: '/oocmgr/saml/get-provider',
+        url: '/authsec/oocmgr/saml/get-provider',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +249,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Update SAML Provider
     updateSamlProvider: builder.mutation<UpdateSamlProviderResponse, UpdateSamlProviderRequest>({
       query: (data) => ({
-        url: '/oocmgr/saml/update-provider',
+        url: '/authsec/oocmgr/saml/update-provider',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,7 +266,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Delete SAML Provider
     deleteSamlProvider: builder.mutation<DeleteSamlProviderResponse, DeleteSamlProviderRequest>({
       query: (data) => ({
-        url: '/oocmgr/saml/delete-provider',
+        url: '/authsec/oocmgr/saml/delete-provider',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ export const samlApi = baseApi.injectEndpoints({
     // Get SAML Templates
     getSamlTemplates: builder.query<GetSamlTemplatesResponse, {}>({
       query: () => ({
-        url: '/oocmgr/saml/templates',
+        url: '/authsec/oocmgr/saml/templates',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

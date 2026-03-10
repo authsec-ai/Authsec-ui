@@ -263,7 +263,7 @@ export const oidcApi = createApi({
     // Exchange OAuth code for tokens (Hydra flow)
     exchangeCodeForTokens: builder.mutation<OIDCTokenExchangeResponse, OIDCTokenExchangeRequest>({
       query: (data) => ({
-        url: "/hmgr/auth/exchange-token",
+        url: "/authsec/hmgr/auth/exchange-token",
         method: "POST",
         body: data,
       }),
@@ -290,7 +290,7 @@ export const oidcApi = createApi({
     // Provider information is extracted from the state parameter on the backend
     handleCallback: builder.mutation<CallbackResponse, CallbackRequest>({
       query: (data) => ({
-        url: "/hmgr/auth/callback", // Universal callback URL - no provider parameter
+        url: "/authsec/hmgr/auth/callback", // Universal callback URL - no provider parameter
         method: "POST",
         body: data,
         credentials: "include",
@@ -309,7 +309,7 @@ export const oidcApi = createApi({
         const queryString = qs.toString();
 
         return {
-          url: `/hmgr/login/page-data${queryString ? `?${queryString}` : ""}`,
+          url: `/authsec/hmgr/login/page-data${queryString ? `?${queryString}` : ""}`,
           method: "GET",
           credentials: "include",
         };
@@ -350,7 +350,7 @@ export const oidcApi = createApi({
 
         return {
           url:
-            (isSaml ? `/hmgr/saml/initiate/${provider}` : `/hmgr/auth/initiate/${provider}`) +
+            (isSaml ? `/authsec/hmgr/saml/initiate/${provider}` : `/authsec/hmgr/auth/initiate/${provider}`) +
             suffix,
           method: "POST",
           body: { login_challenge }, // keep for compatibility
@@ -396,7 +396,7 @@ export const oidcApi = createApi({
     // Check custom login user status
     checkCustomLoginStatus: builder.mutation<CustomLoginStatusResponse, CustomLoginStatusRequest>({
       query: (data) => ({
-        url: "/uflow/user/login/status",
+        url: "/authsec/uflow/user/login/status",
         method: "POST",
         body: data,
       }),
@@ -423,7 +423,7 @@ export const oidcApi = createApi({
     // Register custom login user
     registerCustomUser: builder.mutation<CustomLoginRegisterResponse, CustomLoginRegisterRequest>({
       query: (data) => ({
-        url: "/uflow/user/register/initiate",
+        url: "/authsec/uflow/user/register/initiate",
         method: "POST",
         body: data,
       }),
@@ -449,7 +449,7 @@ export const oidcApi = createApi({
       CustomLoginRegisterCompleteRequest
     >({
       query: (data) => ({
-        url: "/uflow/user/register/complete",
+        url: "/authsec/uflow/user/register/complete",
         method: "POST",
         body: data,
       }),
@@ -474,7 +474,7 @@ export const oidcApi = createApi({
     // SAML login check (similar to custom login but for SAML flows)
     samlLogin: builder.mutation<SamlLoginResponse, SamlLoginRequest>({
       query: (data) => ({
-        url: "/uflow/user/saml/login",
+        url: "/authsec/uflow/user/saml/login",
         method: "POST",
         body: data,
       }),
@@ -483,7 +483,7 @@ export const oidcApi = createApi({
     // Send token to OIDC login endpoint (enhanced)
     sendTokenToOIDCLogin: builder.mutation<OIDCLoginResponse, OIDCLoginRequest>({
       query: (data) => ({
-        url: "/uflow/user/oidc/login",
+        url: "/authsec/uflow/user/oidc/login",
         method: "POST",
         body: data,
         credentials: "include",
@@ -494,7 +494,7 @@ export const oidcApi = createApi({
     // Get list of available OAuth providers
     getUFlowOIDCProviders: builder.mutation<UFlowOIDCProvidersResponse, { email: string }>({
       query: (_data) => ({
-        url: "/uflow/oidc/providers",
+        url: "/authsec/uflow/oidc/providers",
         method: "GET",
       }),
     }),
@@ -502,7 +502,7 @@ export const oidcApi = createApi({
     // Initiate UFlow OAuth authentication
     initiateUFlowOIDC: builder.mutation<UFlowOIDCInitiateResponse, UFlowOIDCInitiateRequest>({
       query: (data) => ({
-        url: "/uflow/oidc/initiate",
+        url: "/authsec/uflow/oidc/initiate",
         method: "POST",
         body: data,
       }),
@@ -514,7 +514,7 @@ export const oidcApi = createApi({
       AdminOIDCExchangeRequest
     >({
       query: (data) => ({
-        url: "/uflow/oidc/exchange-code",
+        url: "/authsec/uflow/oidc/exchange-code",
         method: "POST",
         body: data,
       }),
@@ -523,7 +523,7 @@ export const oidcApi = createApi({
     // Check tenant domain availability
     checkTenantDomain: builder.query<TenantDomainCheckResponse, string>({
       query: (domain) => ({
-        url: `/uflow/oidc/check-tenant?domain=${encodeURIComponent(domain)}`,
+        url: `/authsec/uflow/oidc/check-tenant?domain=${encodeURIComponent(domain)}`,
         method: "GET",
       }),
     }),
@@ -534,7 +534,7 @@ export const oidcApi = createApi({
       CompleteUFlowOIDCRegistrationRequest
     >({
       query: (data) => ({
-        url: "/uflow/oidc/complete-registration",
+        url: "/authsec/uflow/oidc/complete-registration",
         method: "POST",
         body: data,
       }),

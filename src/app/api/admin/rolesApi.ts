@@ -76,7 +76,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // POST /uflow/admin/roles
     createRoles: builder.mutation<CreateRolesResponse, CreateRolesRequest>({
       query: (data) => ({
-        url: 'uflow/admin/roles',
+        url: 'authsec/uflow/admin/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -85,7 +85,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
 
     // GET /uflow/admin/roles/:tenant_id
     getRolesByTenant: builder.query<AdminRole[], string>({
-      query: (tenant_id) => `uflow/admin/roles/${tenant_id}`,
+      query: (tenant_id) => `authsec/uflow/admin/roles/${tenant_id}`,
       transformResponse: (response: { roles: AdminRole[] }) => response.roles,
       providesTags: ['AdminRBACRole'],
     }),
@@ -93,7 +93,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // PUT /uflow/admin/roles/:id
     updateRole: builder.mutation<ApiResponse, { id: string; data: UpdateRoleRequest }>({
       query: ({ id, data }) => ({
-        url: `uflow/admin/roles/${id}`,
+        url: `authsec/uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -103,7 +103,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/roles
     deleteRoles: builder.mutation<ApiResponse, DeleteRolesRequest>({
       query: (data) => ({
-        url: 'uflow/admin/roles',
+        url: 'authsec/uflow/admin/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -113,7 +113,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // POST /uflow/admin/roles/map
     mapRolesToClient: builder.mutation<ApiResponse, MapRolesToClientRequest>({
       query: (data) => ({
-        url: 'uflow/admin/roles/map',
+        url: 'authsec/uflow/admin/roles/map',
         method: 'POST',
         body: withSessionData(data),
       }),

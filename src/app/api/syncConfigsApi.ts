@@ -123,7 +123,7 @@ export const syncConfigsApi = baseApi.injectEndpoints({
     // Create a new sync configuration
     createSyncConfig: builder.mutation<CreateSyncConfigResponse, CreateSyncConfigRequest>({
       query: (data) => ({
-        url: 'uflow/admin/sync-configs/create',
+        url: 'authsec/uflow/admin/sync-configs/create',
         method: 'POST',
         body: withSessionData({
           sync_type: data.sync_type,
@@ -140,7 +140,7 @@ export const syncConfigsApi = baseApi.injectEndpoints({
     // List all sync configurations
     listSyncConfigs: builder.query<ListSyncConfigsResponse, ListSyncConfigsRequest | void>({
       query: (data = {}) => ({
-        url: 'uflow/admin/sync-configs/list',
+        url: 'authsec/uflow/admin/sync-configs/list',
         method: 'POST',
         body: withSessionData({
           sync_type: data.sync_type,
@@ -153,7 +153,7 @@ export const syncConfigsApi = baseApi.injectEndpoints({
     // Update an existing sync configuration
     updateSyncConfig: builder.mutation<UpdateSyncConfigResponse, UpdateSyncConfigRequest>({
       query: (data) => ({
-        url: 'uflow/admin/sync-configs/update',
+        url: 'authsec/uflow/admin/sync-configs/update',
         method: 'POST',
         body: withSessionData({
           id: data.id,
@@ -171,7 +171,7 @@ export const syncConfigsApi = baseApi.injectEndpoints({
     // Delete a sync configuration
     deleteSyncConfig: builder.mutation<DeleteSyncConfigResponse, DeleteSyncConfigRequest>({
       query: (data) => ({
-        url: 'uflow/admin/sync-configs/delete',
+        url: 'authsec/uflow/admin/sync-configs/delete',
         method: 'POST',
         body: withSessionData({
           id: data.id,

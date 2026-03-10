@@ -46,7 +46,7 @@ export const invitesApi = baseApi.injectEndpoints({
     // Send individual user invite
     inviteUser: builder.mutation<any, InviteUser>({
       query: (data) => ({
-        url: 'uflow/invite',
+        url: 'authsec/uflow/admin/invite',
         method: 'POST',
         body: withSessionData({
           email: data.email,
@@ -63,7 +63,7 @@ export const invitesApi = baseApi.injectEndpoints({
     // Bulk CSV invite
     bulkInviteUsers: builder.mutation<any, CSVUpload>({
       query: (data) => ({
-        url: 'uflow/bulk-invite',
+        url: 'authsec/uflow/bulk-invite',
         method: 'POST',
         body: withSessionData({
           users: data.users,
@@ -79,7 +79,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `uflow/${audiencePath}ad/sync`,
+          url: `authsec/uflow/${audiencePath}ad/sync`,
           method: 'POST',
           body: withSessionData({
             dry_run: data.dry_run || false,
@@ -95,7 +95,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `uflow/${audiencePath}entra/sync`,
+          url: `authsec/uflow/${audiencePath}entra/sync`,
           method: 'POST',
           body: withSessionData({
             config: data.config,
@@ -111,7 +111,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `uflow/${audiencePath}scim/sync`,
+          url: `authsec/uflow/${audiencePath}scim/sync`,
           method: 'POST',
           body: withSessionData({
             provider: data.provider,
@@ -128,7 +128,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `uflow/${audiencePath}okta/sync`,
+          url: `authsec/uflow/${audiencePath}okta/sync`,
           method: 'POST',
           body: withSessionData({
             config: data.config,

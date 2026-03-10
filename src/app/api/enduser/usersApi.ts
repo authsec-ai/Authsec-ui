@@ -112,7 +112,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: 'uflow/admin/enduser/list',
+          url: 'authsec/uflow/admin/enduser/list',
           method: 'POST',
           body: payload,
         };
@@ -123,7 +123,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // GET /uflow/enduser/:id
     // Get single user by ID
     getUser: builder.query<any, string>({
-      query: (id) => `uflow/enduser/${id}`,
+      query: (id) => `authsec/uflow/enduser/${id}`,
       providesTags: (result, error, id) => [{ type: 'EndUser', id }],
     }),
 
@@ -131,7 +131,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Check Active Directory configuration status for end users
     checkADConfigStatus: builder.query<ConfigStatus, void>({
       query: () => ({
-        url: 'uflow/admin/enduser/ad/status',
+        url: 'authsec/uflow/admin/enduser/ad/status',
         method: 'POST',
         body: withSessionData({}),
       }),
@@ -142,7 +142,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Check Azure Entra ID configuration status for end users
     checkEntraConfigStatus: builder.query<ConfigStatus, void>({
       query: () => ({
-        url: 'uflow/admin/enduser/entra/status',
+        url: 'authsec/uflow/admin/enduser/entra/status',
         method: 'POST',
         body: withSessionData({}),
       }),
@@ -155,7 +155,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Soft delete end user
     deleteUser: builder.mutation<any, { tenant_id: string; user_id: string }>({
       query: ({ tenant_id, user_id }) => ({
-        url: `uflow/user/enduser/${tenant_id}/${user_id}`,
+        url: `authsec/uflow/user/enduser/${tenant_id}/${user_id}`,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +168,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Activate/Deactivate user
     setUserActive: builder.mutation<any, { user_id: string; active: boolean }>({
       query: ({ user_id, active }) => ({
-        url: 'uflow/enduser/active',
+        url: 'authsec/uflow/enduser/active',
         method: 'POST',
         body: withSessionData({
           user_id,
@@ -182,7 +182,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Reset user password (admin)
     resetUserPassword: builder.mutation<any, { email: string; send_email?: boolean }>({
       query: ({ email, send_email = true }) => ({
-        url: 'uflow/admin/reset-password',
+        url: 'authsec/uflow/admin/reset-password',
         method: 'POST',
         body: withSessionData({
           email,
@@ -198,7 +198,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Change user password (admin)
     changeUserPassword: builder.mutation<any, { email: string; new_password: string }>({
       query: ({ email, new_password }) => ({
-        url: 'uflow/admin/change-password',
+        url: 'authsec/uflow/admin/change-password',
         method: 'POST',
         body: withSessionData({
           email,

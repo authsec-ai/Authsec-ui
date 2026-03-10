@@ -106,7 +106,7 @@ export const deviceApi = createApi({
     // Get TOTP devices
     getTOTPDevices: builder.query<TOTPDevicesResponse, { token: string }>({
       query: ({ token }) => ({
-        url: "/uflow/auth/tenant/totp/devices",
+        url: "/authsec/uflow/auth/tenant/totp/devices",
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -121,7 +121,7 @@ export const deviceApi = createApi({
       { token: string; data: TOTPRegisterRequest }
     >({
       query: ({ token, data }) => ({
-        url: "/uflow/auth/tenant/totp/register",
+        url: "/authsec/uflow/auth/tenant/totp/register",
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -137,7 +137,7 @@ export const deviceApi = createApi({
       { token: string; data: TOTPConfirmRequest }
     >({
       query: ({ token, data }) => ({
-        url: "/uflow/auth/tenant/totp/confirm",
+        url: "/authsec/uflow/auth/tenant/totp/confirm",
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -150,7 +150,7 @@ export const deviceApi = createApi({
     // Delete TOTP device
     deleteTOTPDevice: builder.mutation<TOTPDeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/uflow/auth/tenant/totp/devices/${deviceId}`,
+        url: `/authsec/uflow/auth/tenant/totp/devices/${deviceId}`,
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -164,7 +164,7 @@ export const deviceApi = createApi({
     // Get CIBA devices
     getCIBADevices: builder.query<CIBADevicesResponse, { token: string }>({
       query: ({ token }) => ({
-        url: "/uflow/auth/tenant/ciba/devices",
+        url: "/authsec/uflow/auth/tenant/ciba/devices",
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -176,7 +176,7 @@ export const deviceApi = createApi({
     // Delete CIBA device
     deleteCIBADevice: builder.mutation<CIBADeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/uflow/auth/tenant/ciba/devices/${deviceId}`,
+        url: `/authsec/uflow/auth/tenant/ciba/devices/${deviceId}`,
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

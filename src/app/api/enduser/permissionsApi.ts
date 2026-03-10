@@ -65,7 +65,7 @@ export const endUserPermissionsApi = baseApi.injectEndpoints({
     // GET /uflow/uflow/user/rbac/permissions
     // Get all direct permissions assigned to the authenticated user
     getMyPermissions: builder.query<UserPermission[], void>({
-      query: () => 'uflow/uflow/user/rbac/permissions',
+      query: () => 'authsec/uflow/uflow/user/rbac/permissions',
       transformResponse: (response: GetMyPermissionsResponse | UserPermission[]) => {
         if (Array.isArray(response)) return response;
         return response.permissions || [];
@@ -76,7 +76,7 @@ export const endUserPermissionsApi = baseApi.injectEndpoints({
     // GET /uflow/user/permissions/effective
     // Get all effective permissions (direct + inherited from roles and groups)
     getMyEffectivePermissions: builder.query<EffectivePermission[], void>({
-      query: () => 'uflow/user/permissions/effective',
+      query: () => 'authsec/uflow/user/permissions/effective',
       transformResponse: (response: GetMyEffectivePermissionsResponse) => response.permissions,
       providesTags: ['EndUserRBACPermission', 'EndUser'],
     }),
@@ -85,7 +85,7 @@ export const endUserPermissionsApi = baseApi.injectEndpoints({
     // Check if the authenticated user has a specific permission
     checkMyPermission: builder.query<CheckPermissionResponse, CheckPermissionParams>({
       query: ({ resource, scope }) => ({
-        url: 'uflow/user/permissions/check',
+        url: 'authsec/uflow/user/permissions/check',
         params: { resource, scope },
       }),
       providesTags: ['EndUserRBACPermission', 'EndUser'],
