@@ -336,7 +336,7 @@ function UserAuthCompletionView({
             {/* Button 4: Close */}
             <Button
               onClick={onClose}
-              className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
+              className="w-full h-12 bg-[var(--brand-blue-600)] text-white hover:bg-[var(--brand-blue-700)]"
             >
               Close Wizard
             </Button>

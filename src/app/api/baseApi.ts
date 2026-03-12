@@ -145,6 +145,7 @@ export const baseApi = createApi({
     "AdminApiOAuthScope",
     "EndUserApiOAuthScope",
     "CustomDomain",
+    "DelegationPolicy",
   ],
   endpoints: () => ({}),
 });

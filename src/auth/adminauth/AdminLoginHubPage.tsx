@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AuthSecMark } from "@/components/ui/authsec-logo";
+import authsecLogoWhite from "@/logos/AuthSec Logo White.png";
 import { useTheme } from "next-themes";
 import {
   useAdminLoginPrecheckMutation,
@@ -36,6 +36,17 @@ import {
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
 import config from "../../config";
+import {
+  trackSignInAttempted,
+  trackSignInSucceeded,
+  trackSignUpStarted,
+  trackWorkspaceCreated,
+  trackOtpVerified,
+  trackOAuthProviderClicked,
+  trackForgotPasswordRequested,
+  trackPasswordResetCompleted,
+} from "@/utils/analytics";
+import { trackXSignupCompleted } from "@/utils/xPixel";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";
@@ -875,6 +886,7 @@ export function AdminLoginHubPage() {
         response?.message ||
           "If the email is registered, we'll send you an OTP to reset your password.",
       );
+      trackForgotPasswordRequested();
       setForgotPasswordStep("otp");
     } catch (error: unknown) {
       const apiError = error as { data?: { message?: string } };
@@ -940,6 +952,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Password reset successfully. Please sign in with your new password.",
       );
+      trackPasswordResetCompleted();
       resetForgotPasswordState();
       setEmailInput(normalizedEmail);
       setCheckedEmail(normalizedEmail);
@@ -963,6 +976,7 @@ export function AdminLoginHubPage() {
   const handleUFlowProviderAuth = async (provider: UFlowOIDCProvider) => {
     try {
       setIdleNotice(null);
+      trackOAuthProviderClicked(provider.provider_name);
       setAuthenticatingProvider(provider.provider_name);
 
       const response = await initiateUFlowOIDC({
@@ -1115,6 +1129,7 @@ export function AdminLoginHubPage() {
 
     try {
       setIsPasswordSubmitting(true);
+      trackSignInAttempted("password");
       const tenantOverride = tenantDomain?.trim() || undefined;
       const result = await signIn(
         currentEmail,
@@ -1123,6 +1138,7 @@ export function AdminLoginHubPage() {
       );
 
       if (result.success) {
+        trackSignInSucceeded();
         // Already on the correct tenant domain (redirected in precheck), navigate locally
         if (result.requiresWebAuthn) {
           navigate("/admin/webauthn", { replace: true });
@@ -1175,6 +1191,7 @@ export function AdminLoginHubPage() {
     }
 
     try {
+      trackSignUpStarted();
       const response = await bootstrapAccount({
         email: currentEmail,
         password: newPassword,
@@ -1196,6 +1213,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Account created! Check your inbox for the verification code.",
       );
+      trackWorkspaceCreated(tenantDomain.trim());
       safeSetFlowStage("otp");
       setTimeLeft(60);
       setCanResend(false);
@@ -1214,6 +1232,8 @@ export function AdminLoginHubPage() {
 
       if ("data" in result) {
         toast.success("Account verified successfully!");
+        trackOtpVerified();
+        trackXSignupCompleted(currentEmail);
 
         // Redirect to tenant domain for login
         if (tenantDomain && window.location.hostname !== tenantDomain) {
@@ -1312,7 +1332,11 @@ export function AdminLoginHubPage() {
       <div className="space-y-4">
         <AuthActionPanel>
           <div className="mb-5 flex items-center justify-center gap-3">
-            <AuthSecMark className="h-8 w-8 text-slate-900" />
+            <img
+              src={authsecLogoWhite}
+              alt="AuthSec"
+              className="h-8 w-8 object-contain"
+            />
             <span className="text-sm font-medium text-slate-600">
               AuthSec Admin Access
             </span>
@@ -1819,11 +1843,27 @@ export function AdminLoginHubPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="auth-card-footer" aria-label="Trust footer">
-          <span>Security & Compliance</span>
-          <span>Status</span>
-          <span>Privacy</span>
-          <span>Help</span>
+        <div className="auth-card-footer pb-3" aria-label="Trust footer">
+          <span>
+            <a href="https://authsec.ai/security" target="__blank">
+              Security & Compliance
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/terms-and-conditions" target="__blank">
+              Terms
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/privacy-policy" target="__blank">
+              Privacy
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/contact" target="__blank">
+              Support
+            </a>
+          </span>
         </div>
       </div>
 

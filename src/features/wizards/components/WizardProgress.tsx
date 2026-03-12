@@ -150,8 +150,8 @@ export function WizardProgress({
         {/* Header Section */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-primary" />
+            <div className="w-7 h-7 rounded-md bg-[var(--brand-blue-600)]/10 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-[var(--brand-blue-600)]" />
             </div>
             <div>
               <h3 className="font-medium text-sm">{title}</h3>
@@ -187,9 +187,9 @@ export function WizardProgress({
                     className={cn(
                       "w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-200 shrink-0 z-10",
                       isCompleted &&
-                        "bg-primary text-primary-foreground shadow-md",
+                        "bg-[var(--brand-blue-600)] text-white shadow-md",
                       isCurrent &&
-                        "bg-primary text-primary-foreground shadow-md",
+                        "bg-[var(--brand-blue-600)] text-white shadow-md",
                       isPending &&
                         "bg-muted text-muted-foreground border-2 border-border"
                     )}
@@ -207,7 +207,7 @@ export function WizardProgress({
                       className={cn(
                         "w-0.5 flex-1 mt-2 transition-all duration-300",
                         "absolute top-12 bottom-0 left-6 transform -translate-x-1/2",
-                        isCompleted ? "bg-primary" : "bg-border"
+                        isCompleted ? "bg-[var(--brand-blue-600)]" : "bg-border"
                       )}
                     />
                   )}
@@ -320,7 +320,7 @@ export function WizardProgress({
                             onClick={() => handleAction(step)}
                             size="sm"
                             variant="outline"
-                            className="bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs"
+                            className="bg-[var(--brand-blue-600)] text-white hover:bg-[var(--brand-blue-700)] shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs"
                           >
                             {step.actionLabel}
                             <ChevronRight className="ml-2 h-3 w-3" />
@@ -334,7 +334,7 @@ export function WizardProgress({
                               }}
                               size="sm"
                               variant="outline"
-                              className="bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs"
+                              className="bg-[var(--brand-blue-600)] text-white hover:bg-[var(--brand-blue-700)] shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs"
                             >
                               <Check className="mr-2 h-3 w-3" />
                               Complete
@@ -345,8 +345,8 @@ export function WizardProgress({
 
                       {/* Completed State */}
                       {isCompleted && (
-                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                          <div className="flex items-center gap-2 text-primary">
+                        <div className="p-3 rounded-lg bg-[var(--brand-blue-600)]/5 border border-[var(--brand-blue-600)]/20">
+                          <div className="flex items-center gap-2 text-[var(--brand-blue-600)]">
                             <Check className="h-4 w-4" />
                             <span className="text-sm font-medium">
                               Step completed successfully!
