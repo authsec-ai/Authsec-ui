@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         // --- 1. GLOBAL CONFIGURATION (Edit this per service) ---
-        SERVICE_NAME = 'ui'  
-        GITHUB_REPO = 'https://github.com/authsec-ai/UI.git'
+        SERVICE_NAME = 'authsec-ui'  
+        GITHUB_REPO = 'https://github.com/authsec-ai/Authsec-ui.git'
         
         // --- 2. STATIC VARIABLES (Do not edit until and unless you need to) ---
         DOCKER_REGISTRY = 'docker-repo.authsec.ai'
@@ -63,7 +63,7 @@ pipeline {
                         env.DOCKER_IMAGE = "${env.DOCKER_REGISTRY}/${SERVICE_NAME}:production"
                         env.DOCKER_IMAGE_PUBLIC = "${env.DOCKER_REGISTRY_PUBLIC}/${SERVICE_NAME}:1.0.0" 
                         
-                    } else if (env.BRANCH_NAME == 'authsec-dev' || env.BRANCH_NAME == 'development') {
+                    } else if (env.BRANCH_NAME == 'authsec-dev' || env.BRANCH_NAME == 'development' || env.BRANCH_NAME == 'test') {
                         echo "Configuring for DEVELOPMENT environment..."
                         env.IS_PROD_BRANCH = 'false'
                         env.AKS_ENV = 'authsec'
