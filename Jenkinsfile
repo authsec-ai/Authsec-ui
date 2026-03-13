@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // --- 1. GLOBAL CONFIGURATION (Edit this per service) ---
-        SERVICE_NAME = 'authsec-ui'  
+        SERVICE_NAME = 'authsec'  
         GITHUB_REPO = 'https://github.com/authsec-ai/Authsec-ui.git'
         
         // --- 2. STATIC VARIABLES (Do not edit until and unless you need to) ---
