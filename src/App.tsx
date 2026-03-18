@@ -214,7 +214,7 @@ function AppContent() {
                   />
                   <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
-                    path="/uflow/oidc/callback"
+                    path="/authsec/uflow/oidc/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
                   {/* Backward compat: backend renderOAuthCallbackHTML redirects here */}
