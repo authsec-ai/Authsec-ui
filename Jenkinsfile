@@ -269,7 +269,7 @@ pipeline {
                         az aks get-credentials \
                           --resource-group "$resourceGroup" \
                           --admin \
-                          --name "$aksCluster"
+                          --name "$aksCluster" \
                           --overwrite-existing
                     """
                 }
