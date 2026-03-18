@@ -270,6 +270,7 @@ pipeline {
                           --resource-group "$resourceGroup" \
                           --admin \
                           --name "$aksCluster"
+                          --overwrite-existing
                     """
                 }
             }
