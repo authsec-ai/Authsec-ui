@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import { toast } from "react-hot-toast";
 import {
   useGetUFlowOIDCProvidersMutation,
   useInitiateUFlowOIDCMutation,
+  useLazyCheckTenantDomainQuery,
   type UFlowOIDCProvider,
   type UFlowOIDCCallbackData,
 } from "@/app/api/oidcApi";
@@ -139,6 +140,13 @@ export function AdminLoginHubPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [tenantDomain, setTenantDomain] = useState("");
+  const [domainCheckStatus, setDomainCheckStatus] = useState<
+    "idle" | "checking" | "available" | "taken" | "error"
+  >("idle");
+  const [domainCheckMessage, setDomainCheckMessage] = useState<string | null>(
+    null,
+  );
+  const [checkTenantDomain] = useLazyCheckTenantDomainQuery();
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isPrecheckInProgress, setIsPrecheckInProgress] = useState(false);
 
@@ -225,6 +233,32 @@ export function AdminLoginHubPage() {
       setCanResend(true);
     }
   }, [timeLeft, canResend, flowStage]);
+
+  // Real-time domain availability check
+  useEffect(() => {
+    if (!tenantDomain || tenantDomain.length < 2) {
+      setDomainCheckStatus("idle");
+      setDomainCheckMessage(null);
+      return;
+    }
+    setDomainCheckStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkTenantDomain(tenantDomain).unwrap();
+        if (result.exists) {
+          setDomainCheckStatus("taken");
+          setDomainCheckMessage("This domain is already taken");
+        } else {
+          setDomainCheckStatus("available");
+          setDomainCheckMessage("Available");
+        }
+      } catch {
+        setDomainCheckStatus("error");
+        setDomainCheckMessage("Could not check availability");
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [tenantDomain, checkTenantDomain]);
 
   // Debug logging (development only)
   useEffect(() => {
@@ -826,6 +860,8 @@ export function AdminLoginHubPage() {
     setCheckedEmail("");
     setExistingPassword("");
     setTenantDomain("");
+    setDomainCheckStatus("idle");
+    setDomainCheckMessage(null);
     setNewPassword("");
     setConfirmPassword("");
     setOtp("");
@@ -1221,7 +1257,10 @@ export function AdminLoginHubPage() {
       setTimeLeft(60);
       setCanResend(false);
     } catch (error: any) {
-      const message = error?.data?.message || "Failed to create account";
+      const message =
+        error?.data?.message ||
+        error?.data?.error ||
+        "Failed to create account";
       toast.error(message);
     }
   };
@@ -1604,8 +1643,35 @@ export function AdminLoginHubPage() {
                       setTenantDomain(value);
                     }}
                     required
-                    className="h-11 rounded-xl"
+                    className={`h-11 rounded-xl ${
+                      domainCheckStatus === "available"
+                        ? "border-green-500"
+                        : domainCheckStatus === "taken" ||
+                            domainCheckStatus === "error"
+                          ? "border-red-500"
+                          : ""
+                    }`}
                   />
+                  {domainCheckStatus === "checking" && (
+                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Checking availability...</span>
+                    </div>
+                  )}
+                  {domainCheckStatus === "available" && (
+                    <div className="flex items-center gap-1.5 text-sm text-green-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Available</span>
+                    </div>
+                  )}
+                  {(domainCheckStatus === "taken" ||
+                    domainCheckStatus === "error") &&
+                    domainCheckMessage && (
+                      <div className="flex items-center gap-1.5 text-sm text-red-600">
+                        <XCircle className="h-3.5 w-3.5" />
+                        <span>{domainCheckMessage}</span>
+                      </div>
+                    )}
                 </div>
                 <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="new-password">Password</Label>
