@@ -64,7 +64,6 @@ interface IdleNotice {
   message: string;
 }
 
-
 // Lightweight, URL-safe handoff token utilities for cross-tenant redirects
 // (moved to utils/handoff)
 
@@ -692,7 +691,9 @@ export function AdminLoginHubPage() {
     response: AdminLoginPrecheckResponse,
   ): string | null => {
     const providers = response.available_providers ?? [];
-    const nonEmailProviders = providers.filter((provider) => provider !== "email");
+    const nonEmailProviders = providers.filter(
+      (provider) => provider !== "email",
+    );
     const allowsPassword =
       response.requires_password !== false && providers.includes("email");
 
@@ -705,7 +706,9 @@ export function AdminLoginHubPage() {
 
   const getPrecheckErrorMessage = (error: any) => {
     const rawMessage =
-      error?.data?.message || error?.error || "Unable to verify email right now";
+      error?.data?.message ||
+      error?.error ||
+      "Unable to verify email right now";
     const status = error?.status || error?.originalStatus;
 
     if (status === 429 || /too many|rate limit/i.test(rawMessage)) {
@@ -1593,7 +1596,13 @@ export function AdminLoginHubPage() {
                     id="tenant-domain"
                     placeholder="acme-cloud"
                     value={tenantDomain}
-                    onChange={(event) => setTenantDomain(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(
+                        /[^a-zA-Z0-9]/g,
+                        "",
+                      );
+                      setTenantDomain(value);
+                    }}
                     required
                     className="h-11 rounded-xl"
                   />
@@ -1737,7 +1746,10 @@ export function AdminLoginHubPage() {
               </DialogHeader>
 
               {forgotPasswordStep === "email" && (
-                <form className="space-y-4" onSubmit={handleForgotPasswordRequest}>
+                <form
+                  className="space-y-4"
+                  onSubmit={handleForgotPasswordRequest}
+                >
                   <div className="space-y-2">
                     <Label htmlFor="forgot-email">Email</Label>
                     <Input
@@ -1766,7 +1778,9 @@ export function AdminLoginHubPage() {
                     <Button
                       type="submit"
                       className="flex-1 rounded-xl font-semibold"
-                      disabled={isForgotPasswordSubmitting || !forgotPasswordEmail}
+                      disabled={
+                        isForgotPasswordSubmitting || !forgotPasswordEmail
+                      }
                     >
                       {isForgotPasswordSubmitting ? (
                         <>
@@ -1826,7 +1840,8 @@ export function AdminLoginHubPage() {
                       type="submit"
                       className="flex-1 rounded-xl font-semibold"
                       disabled={
-                        isForgotPasswordSubmitting || forgotPasswordOtp.length !== 6
+                        isForgotPasswordSubmitting ||
+                        forgotPasswordOtp.length !== 6
                       }
                     >
                       {isForgotPasswordSubmitting ? (
@@ -1843,14 +1858,19 @@ export function AdminLoginHubPage() {
               )}
 
               {forgotPasswordStep === "reset" && (
-                <form className="space-y-4" onSubmit={handleForgotPasswordReset}>
+                <form
+                  className="space-y-4"
+                  onSubmit={handleForgotPasswordReset}
+                >
                   <div className="space-y-2">
                     <Label htmlFor="forgot-new-password">New password</Label>
                     <PasswordInput
                       id="forgot-new-password"
                       placeholder="Enter new password"
                       value={forgotPasswordNew}
-                      onChange={(event) => setForgotPasswordNew(event.target.value)}
+                      onChange={(event) =>
+                        setForgotPasswordNew(event.target.value)
+                      }
                       disabled={isForgotPasswordSubmitting}
                       minLength={10}
                       required
@@ -1858,7 +1878,9 @@ export function AdminLoginHubPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="forgot-confirm-password">Confirm password</Label>
+                    <Label htmlFor="forgot-confirm-password">
+                      Confirm password
+                    </Label>
                     <PasswordInput
                       id="forgot-confirm-password"
                       placeholder="Confirm new password"
