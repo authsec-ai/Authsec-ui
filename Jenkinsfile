@@ -259,6 +259,8 @@ pipeline {
                     }
 
                     sh """
+                        rm -f /var/lib/jenkins/.kube/config
+                        mkdir -p /var/lib/jenkins/.kube
                         az login --service-principal \
                           -u "$AZURE_CLIENT_ID" \
                           -p "$AZURE_CLIENT_SECRET" \
