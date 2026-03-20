@@ -91,6 +91,7 @@ export interface ClientsTableActions {
   onDelete: (clientId: string) => void;
   onToggleStatus?: (clientId: string) => void;
   onViewSDK?: (clientId: string) => void;
+  onDelegateTrust?: (client: ClientWithAuthMethods) => void;
   onAddAuthMethod?: (clientId: string) => void;
   onShowAuthMethods?: (client: ClientWithAuthMethods) => void;
   onPreviewLogin?: (clientId: string) => void;

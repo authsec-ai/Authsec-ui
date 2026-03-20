@@ -85,8 +85,25 @@ export interface RegisterClientRequest {
   name: string;
   email: string;
   tenant_id: string;
-  project_id: string;
-  react_app_url: string;
+  client_type?: "application";
+  agent_type?: "mcp-agent";
+  platform?: string;
+  platform_config?: Partial<ClientPlatformConfig>;
+}
+
+export interface ClientPlatformConfig {
+  namespace: string;
+  service_account: string;
+}
+
+export interface RegisterAiAgentClientRequest {
+  tenant_id: string;
+  name: string;
+  email: string;
+  client_type: "ai_agent";
+  agent_type?: "mcp-agent";
+  platform: string;
+  platform_config: ClientPlatformConfig;
 }
 
 export interface RegisterClientResponse {
@@ -95,7 +112,8 @@ export interface RegisterClientResponse {
   tenant_id: string;
   project_id: string;
   name: string;
-  secret_id: string;
+  secret_id?: string;
+  spiffe_id?: string;
   email: string;
   active: boolean;
   created_at: string;
@@ -638,6 +656,30 @@ export const clientApi = baseApi.injectEndpoints({
           : [{ type: "Client" as const, id: "ALL" }],
     }),
 
+    // Register a new AI agent client (Tenant-scoped)
+    registerAiAgentClient: builder.mutation<
+      RegisterClientResponse,
+      RegisterAiAgentClientRequest
+    >({
+      query: ({ tenant_id, platform_config, ...body }) => ({
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
+        method: "POST",
+        body: {
+          ...body,
+          agent_type: body.agent_type ?? "mcp-agent",
+          platform_config: {
+            namespace: platform_config.namespace,
+            service_account: platform_config.service_account,
+          },
+        },
+        responseHandler: "text",
+      }),
+      transformResponse: (response: string) => {
+        return parseFirstValidJSON<RegisterClientResponse>(response);
+      },
+      invalidatesTags: [{ type: "Client", id: "LIST" }],
+    }),
+
     // Register a new client (Tenant-scoped)
     registerClient: builder.mutation<RegisterClientResponse, RegisterClientRequest>({
       query: (data) => {
@@ -736,6 +778,7 @@ export const {
   useGetClientsQuery,
   useGetAllClientsQuery,
   useRegisterClientMutation,
+  useRegisterAiAgentClientMutation,
   useDeleteClientCompleteMutation,
   useSetClientStatusMutation,
   useAddOIDCProviderMutation,

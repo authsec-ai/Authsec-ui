@@ -21,7 +21,13 @@ import { SessionManager } from "../../utils/sessionManager";
 import { toast } from "react-hot-toast";
 import { generateOAuth2AuthorizationUrl } from "../../utils/oauthUtils";
 
-import { FullPageErrorDisplay } from "../../components/ui/error-display";
+import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
+import {
+  trackClientDeleted,
+  trackClientStatusToggled,
+  trackClientPreviewLogin,
+  trackVoiceAgentConfigured,
+} from "@/utils/analytics";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { ClientAuthMethodsModal } from "./components/ClientAuthMethodsModal";
 import { OnboardClientModal } from "./components/OnboardClientModal";
@@ -56,7 +62,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/ui/table";
-import { TableCard, PaginationCard } from "@/theme/components/cards";
+import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
@@ -75,19 +81,14 @@ function mapClientDataToTableFormat(
     auth_methods_count: client.auth_methods_count,
   });
 
-  // Determine client type based on name patterns
-  const inferClientType = (name: string): ClientWithAuthMethods["type"] => {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes("mcp") || lowerName.includes("server"))
-      return "mcp_server";
-    if (lowerName.includes("app") || lowerName.includes("application"))
-      return "app";
-    if (lowerName.includes("api") || lowerName.includes("service"))
-      return "api";
-    return "other";
-  };
-
-  const clientType = inferClientType(client.name || "");
+  const backendClientType =
+    typeof client.client_type === "string" ? client.client_type : undefined;
+  const clientType: ClientWithAuthMethods["type"] =
+    backendClientType === "application"
+      ? "mcp_server"
+      : backendClientType === "ai_agent"
+        ? "other"
+        : "other";
   const email = client.email ?? "";
   const emailPrefix = email
     ? email.includes("@")
@@ -143,12 +144,13 @@ function mapClientDataToTableFormat(
   return {
     id: client.client_id,
     workspace_id: client.tenant_id,
-    secret_id: client.id,
+    secret_id: typeof client.secret_id === "string" ? client.secret_id : null,
     name: client.name || client.client_name || "Unnamed Client",
     description:
       client.description ||
       `Client: ${client.name || client.client_name || "Unnamed Client"}`,
     type: clientType,
+    client_type: backendClientType,
     tags:
       apiTags.length > 0
         ? apiTags.join(",")
@@ -161,6 +163,12 @@ function mapClientDataToTableFormat(
       email,
       org_id: client.org_id,
       hydra_client_id: client.hydra_client_id,
+      client_type: backendClientType,
+      agent_type: (client as any).agent_type,
+      platform: (client as any).platform,
+      platform_config: (client as any).platform_config,
+      secret_id: (client as any).secret_id,
+      spiffe_id: (client as any).spiffe_id,
       raw_client: {
         ...client,
         mfa_enabled: true, // Override: Always show MFA as ON
@@ -198,7 +206,7 @@ function mapClientDataToTableFormat(
  */
 export function ClientsPage() {
   const navigate = useNavigate();
-  const { user, currentProject } = useAuth();
+  const { currentProject } = useAuth();
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [drawerClient, setDrawerClient] =
     useState<ClientWithAuthMethods | null>(null);
@@ -351,34 +359,6 @@ export function ClientsPage() {
     }
   }, [tenantId, clientsResponse, clientsError, clientsLoading]); // Removed sessionData from dependencies
 
-  // Create pagination data
-  const pagination = React.useMemo(() => {
-    if (clientsResponse?.pagination) {
-      const { page, total_pages, limit, total } = clientsResponse.pagination;
-      const currentPage = page ?? 1;
-      const pageSize = limit ?? clients.length;
-      const totalItems = total ?? clients.length;
-
-      return {
-        currentPage,
-        totalPages: total_pages ?? 1,
-        pageSize,
-        total: totalItems,
-        hasMore: Boolean(
-          totalItems && pageSize && currentPage * pageSize < totalItems,
-        ),
-      };
-    }
-
-    return {
-      currentPage: 1,
-      totalPages: 1,
-      pageSize: clients.length,
-      total: clients.length,
-      hasMore: false,
-    };
-  }, [clients.length, clientsResponse?.pagination]);
-
   // Responsive card system
   const { mainAreaRef } = useResponsiveCards();
 
@@ -436,6 +416,19 @@ export function ClientsPage() {
           }
         }
 
+        // Client type filter
+        if (filtersState.client_type) {
+          const rawClientType =
+            typeof client.client_type === "string"
+              ? client.client_type
+              : typeof client.metadata?.raw_client?.client_type === "string"
+                ? client.metadata.raw_client.client_type
+                : undefined;
+          if (rawClientType !== filtersState.client_type) {
+            return false;
+          }
+        }
+
         return true;
       });
     }
@@ -489,6 +482,7 @@ export function ClientsPage() {
         client_id: deleteDialog.clientId,
       }).unwrap();
       toast.success("Client deleted successfully");
+      trackClientDeleted();
       // Optimistically update list
       setClients((prev) =>
         prev.filter((client) => client.client_id !== deleteDialog.clientId),
@@ -552,6 +546,7 @@ export function ClientsPage() {
       toast.success(
         `Client ${newStatus ? "activated" : "deactivated"} successfully`,
       );
+      trackClientStatusToggled(newStatus);
 
       // Explicitly refetch to ensure fresh data
       refetchClients();
@@ -639,6 +634,7 @@ export function ClientsPage() {
 
       window.open(authorizationUrl, "_blank", "noopener,noreferrer");
       toast.success("Opening end-user login preview in a new tab");
+      trackClientPreviewLogin();
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);
       toast.error("Failed to generate login preview URL");
@@ -647,7 +643,20 @@ export function ClientsPage() {
 
   const handleConfigureVoiceAgent = useCallback(
     (clientId: string) => {
+      trackVoiceAgentConfigured();
       navigate(`/clients/voice-agent?clientId=${clientId}`);
+    },
+    [navigate],
+  );
+
+  const handleTrustDelegation = useCallback(
+    (clientRecord: ClientWithAuthMethods) => {
+      navigate(
+        buildTrustDelegationPath("/trust-delegation/new", {
+          clientId: clientRecord.id,
+          agentType: "mcp-agent",
+        }),
+      );
     },
     [navigate],
   );
@@ -791,11 +800,11 @@ export function ClientsPage() {
                     selectedClients={selectedClients}
                     onSelectionChange={setSelectedClients}
                     onDeleteClient={handleDeleteClient}
-                    onCreateClient={handleCreateClient}
                     onToggleStatus={handleToggleStatus}
                     onViewSDK={(clientId) =>
                       navigate(`/sdk/clients/${clientId}`)
                     }
+                    onDelegateTrust={handleTrustDelegation}
                     onAddAuthMethod={handleAddAuthMethod}
                     onShowAuthMethods={handleShowAuthMethods}
                     onPreviewLogin={handlePreviewLogin}
@@ -806,7 +815,7 @@ export function ClientsPage() {
                     onDismissNewClient={handleDismissNewClient}
                     pageIndex={tablePageIndex}
                     onPageIndexChange={handlePageChange}
-                    serverTotalItems={pagination.total}
+                    serverTotalItems={clientsResponse?.pagination?.total ?? clientsResponse?.total ?? 0}
                   />
                   {loading && displayClients.length > 0 && (
                     <RefreshingSkeleton />
@@ -847,7 +856,7 @@ export function ClientsPage() {
         onSuccess={(clientId) => {
           // Compute the page where the new client appears (oldest-first sort, new item at end)
           const PAGE_SIZE = 10;
-          const targetPage = Math.max(1, Math.ceil((pagination.total + 1) / PAGE_SIZE));
+          const targetPage = Math.max(1, Math.ceil(((clientsResponse?.pagination?.total ?? clientsResponse?.total ?? 0) + 1) / PAGE_SIZE));
           setQueryPage(targetPage);       // RTK Query auto-refetches with new page
           setTablePageIndex(targetPage);  // Jump table UI to that page
           setNewClientStep(0);
