@@ -21,6 +21,7 @@ import {
   useLazyGetLoginPageDataQuery,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
+  useCompleteLocalLoginChallengeMutation,
   useRegisterCustomUserMutation,
   useCompleteCustomUserRegistrationMutation,
   useSamlLoginMutation,
@@ -47,6 +48,7 @@ import {
 import { useCustomLoginMutation } from "../../app/api/userAuthApi";
 import { useTheme } from "next-themes";
 import config from '../../config';
+import { getTenantDomainFromHostname } from "../../utils/oauthUtils";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthValuePanel } from "../components/AuthValuePanel";
 import { AuthActionPanel } from "../components/AuthActionPanel";
@@ -78,6 +80,7 @@ const OIDCLoginPageInner: React.FC = () => {
   const [getLoginPageData] = useLazyGetLoginPageDataQuery();
   const [initiateAuth] = useInitiateAuthMutation();
   const [checkCustomLoginStatus] = useCheckCustomLoginStatusMutation();
+  const [completeLocalLoginChallenge] = useCompleteLocalLoginChallengeMutation();
   const [registerCustomUser] = useRegisterCustomUserMutation();
   const [completeCustomUserRegistration] =
     useCompleteCustomUserRegistrationMutation();
@@ -101,7 +104,9 @@ const OIDCLoginPageInner: React.FC = () => {
     null
   );
   const tenantDomain =
-    typeof window !== "undefined" ? window.location.hostname : undefined;
+    typeof window !== "undefined"
+      ? getTenantDomainFromHostname()
+      : undefined;
 
   // WebAuthn state
   const [status, setStatus] = useState<
@@ -886,6 +891,43 @@ const OIDCLoginPageInner: React.FC = () => {
     setError(`WebAuthn authentication failed: ${error}`);
   };
 
+  const handleTokenDisplay = useCallback(
+    async (token: string) => {
+      const storedLoginChallenge =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("login_challenge")
+          : null;
+
+      if (!storedLoginChallenge || !token) {
+        return;
+      }
+
+      try {
+        const response = await completeLocalLoginChallenge({
+          login_challenge: storedLoginChallenge,
+          token,
+        }).unwrap();
+
+        if (response?.success && response?.redirect_to) {
+          sessionStorage.removeItem("login_challenge");
+          window.location.href = response.redirect_to;
+          return;
+        }
+
+        throw new Error(response?.error || "Failed to continue authorization flow");
+      } catch (err) {
+        console.error("Failed to complete local Hydra login:", err);
+        setStatus("error");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to continue authorization flow"
+        );
+      }
+    },
+    [completeLocalLoginChallenge]
+  );
+
   const getProviderIcon = (providerName: string) => {
     const iconProps = { size: 20, className: "text-current" };
 
@@ -1045,6 +1087,7 @@ const OIDCLoginPageInner: React.FC = () => {
       <OIDCWebAuthnRouter
         onAuthComplete={handleWebAuthnComplete}
         onAuthError={handleWebAuthnError}
+        onTokenDisplay={handleTokenDisplay}
       />
     );
   }

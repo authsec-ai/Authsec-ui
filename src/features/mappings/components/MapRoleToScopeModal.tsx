@@ -271,7 +271,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
             conditions: parsedConditions,
             scope: {
               id: "*",
-              type: selectedScope,
+              type: "*",
             },
           }).unwrap()
         );
@@ -288,7 +288,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
             conditions: parsedConditions,
             scope: {
               id: "*",
-              type: selectedScope,
+              type: "*",
             },
           }).unwrap()
         );
@@ -304,7 +304,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
           conditions: parsedConditions,
           scope: {
             id: "*",
-            type: selectedScope,
+            type: "*",
           },
         }).unwrap();
         toast.success(`Role mapped to scope "${selectedScope}" successfully.`);
@@ -314,7 +314,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
       onSuccess?.();
     } catch (error: any) {
       console.error("Failed to create binding:", error);
-      setFormError(error?.data?.message || "Failed to map role to scope. Please try again.");
+      setFormError(error?.data?.error || error?.data?.message || "Failed to map role to scope. Please try again.");
     }
   };
 

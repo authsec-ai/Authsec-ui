@@ -24,6 +24,21 @@ export interface BindingResponse {
   status: string;
 }
 
+function normalizeBindingScope(scope?: ScopeBinding): ScopeBinding | undefined {
+  if (!scope) {
+    return scope;
+  }
+
+  if (!scope.id || scope.id === "*") {
+    return {
+      id: "*",
+      type: "*",
+    };
+  }
+
+  return scope;
+}
+
 // List bindings query parameters
 export interface ListBindingsParams {
   user_id?: string;
@@ -90,7 +105,10 @@ export const bindingsApi = baseApi.injectEndpoints({
         return {
           url,
           method: "POST",
-          body: withSessionData(data),
+          body: withSessionData({
+            ...data,
+            scope: normalizeBindingScope(data.scope),
+          }),
         };
       },
       invalidatesTags: ["AdminUser", "AdminRBACRole", "AdminRBACScope"],

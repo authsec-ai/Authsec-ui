@@ -9,7 +9,7 @@
  *
  * Available Endpoints:
  * - POST   /uflow/admin/roles          - Create roles
- * - GET    /uflow/admin/roles/:tenant_id - Get all roles for tenant
+ * - GET    /uflow/admin/roles          - Get all roles for current tenant from JWT
  * - PUT    /uflow/admin/roles/:id      - Update a role
  * - DELETE /uflow/admin/roles          - Delete roles
  * - POST   /uflow/admin/roles/map      - Map roles to client/project
@@ -83,10 +83,11 @@ export const adminRolesApi = baseApi.injectEndpoints({
       invalidatesTags: ['AdminRBACRole'],
     }),
 
-    // GET /uflow/admin/roles/:tenant_id
+    // GET /uflow/admin/roles
     getRolesByTenant: builder.query<AdminRole[], string>({
-      query: (tenant_id) => `uflow/admin/roles/${tenant_id}`,
-      transformResponse: (response: { roles: AdminRole[] }) => response.roles,
+      query: () => 'uflow/admin/roles',
+      transformResponse: (response: AdminRole[] | { roles?: AdminRole[] }) =>
+        Array.isArray(response) ? response : (response.roles ?? []),
       providesTags: ['AdminRBACRole'],
     }),
 

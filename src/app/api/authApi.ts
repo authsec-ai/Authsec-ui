@@ -1,4 +1,5 @@
 import { baseApi } from "./baseApi";
+import { getTenantDomainFromHostname } from "../../utils/oauthUtils";
 
 export interface LoginRequest {
   email: string;
@@ -133,7 +134,7 @@ export const authApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginRequest>({
       query: (credentials) => {
-        const currentDomain = window.location.hostname;
+        const currentDomain = getTenantDomainFromHostname();
         const bodyWithDomain = {
           ...credentials,
           tenant_domain: credentials.tenant_domain ?? currentDomain,

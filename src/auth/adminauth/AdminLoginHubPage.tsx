@@ -1174,7 +1174,7 @@ export function AdminLoginHubPage() {
       return;
     }
 
-    try {
+      try {
       const response = await bootstrapAccount({
         email: currentEmail,
         password: newPassword,
@@ -1215,8 +1215,9 @@ export function AdminLoginHubPage() {
       if ("data" in result) {
         toast.success("Account verified successfully!");
 
-        // Redirect to tenant domain for login
-        if (tenantDomain && window.location.hostname !== tenantDomain) {
+        // Redirect to tenant domain for login (skip on localhost)
+        const isLocalhost = window.location.hostname === "localhost" || window.location.hostname.startsWith("127.");
+        if (tenantDomain && window.location.hostname !== tenantDomain && !isLocalhost) {
           const redirectUrl = buildRedirectUrl(
             tenantDomain,
             currentEmail,

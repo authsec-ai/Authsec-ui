@@ -220,6 +220,17 @@ export interface AdminOIDCExchangeSuccessResponse {
   client_id?: string;
 }
 
+export interface CompleteLocalLoginChallengeRequest {
+  login_challenge: string;
+  token: string;
+}
+
+export interface CompleteLocalLoginChallengeResponse {
+  success: boolean;
+  redirect_to?: string;
+  error?: string;
+}
+
 export interface AdminOIDCExchangeErrorResponse {
   error?: string;
   message?: string;
@@ -337,6 +348,21 @@ export const oidcApi = createApi({
       },
       providesTags: ["OIDC"],
     }),
+
+    completeLocalLoginChallenge: builder.mutation<
+      CompleteLocalLoginChallengeResponse,
+      CompleteLocalLoginChallengeRequest
+    >({
+      query: ({ login_challenge, token }) => ({
+        url: "/hmgr/login/complete-local",
+        method: "POST",
+        body: { login_challenge },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }),
+    }),
+
     // Initiate OAuth authentication
     // UPDATED: Now uses universal callback URL in the auth initiation
     initiateAuth: builder.mutation<
@@ -546,6 +572,7 @@ export const {
   useExchangeCodeForTokensMutation,
   useHandleCallbackMutation,
   useLazyGetLoginPageDataQuery,
+  useCompleteLocalLoginChallengeMutation,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
   useRegisterCustomUserMutation,

@@ -9,7 +9,7 @@
  *
  * Available Endpoints:
  * - POST   /uflow/admin/scopes                      - Create scopes
- * - GET    /uflow/admin/scopes/:tenant_id           - Get all scopes for tenant
+ * - GET    /uflow/admin/scopes                      - Get all scopes for current tenant from JWT
  * - GET    /uflow/admin/scopes/:tenant_id/:project_id - Get scopes for specific client
  * - PUT    /uflow/admin/scopes/:id                  - Update a scope
  * - DELETE /uflow/admin/scopes                      - Delete scopes
@@ -84,10 +84,11 @@ export const adminScopesApi = baseApi.injectEndpoints({
       invalidatesTags: ['AdminRBACScope'],
     }),
 
-    // GET /uflow/admin/scopes/:tenant_id
+    // GET /uflow/admin/scopes
     getScopesByTenant: builder.query<AdminScope[], string>({
-      query: (tenant_id) => `uflow/admin/scopes/${tenant_id}`,
-      transformResponse: (response: { scopes: AdminScope[] }) => response.scopes,
+      query: () => 'uflow/admin/scopes',
+      transformResponse: (response: AdminScope[] | { scopes?: AdminScope[] }) =>
+        Array.isArray(response) ? response : (response.scopes ?? []),
       providesTags: ['AdminRBACScope'],
     }),
 

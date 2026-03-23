@@ -45,7 +45,7 @@ cp .env.example .env
 Edit `.env` and set the URL of your AuthSec backend:
 
 ```env
-VITE_API_URL=http://localhost:3000
+VITE_API_URL=http://localhost:7468/authsec
 VITE_APP_NAME=AuthSec Enterprise IAM
 ```
 
@@ -93,7 +93,7 @@ If you'd prefer not to self-host, AuthSec is available as a managed service at *
 
 This frontend requires the AuthSec backend to be running and accessible. The backend provides the API endpoints for authentication, user management, client configuration, and all IAM features.
 
-Set `VITE_API_URL` to point to your backend instance.
+Set `VITE_API_URL` to point to your backend instance. For the local Docker Compose stack from the backend repo, use `http://localhost:7468/authsec`.
 
 ## License
 

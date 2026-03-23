@@ -171,56 +171,35 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Get user-defined roles for a tenant
     getAuthSecRoles: builder.query<AuthSecRole[], { tenant_id: string; audience?: 'admin' | 'endUser' }>({
       async queryFn(args, _api, _extraOptions, baseQuery) {
-        const tenantId = (args?.tenant_id ?? '').trim();
         const audience = args?.audience ?? 'admin';
 
         const basePath =
           audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles';
+        const result = await baseQuery(basePath);
 
-        const candidateEndpoints = [
-          tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
-          basePath,
-        ].filter((endpoint): endpoint is string => Boolean(endpoint));
+        if (result.error) {
+          return { error: result.error };
+        }
 
-        let lastError: unknown = null;
+        const response = result.data as any;
 
-        for (const endpoint of candidateEndpoints) {
-          const result = await baseQuery(endpoint);
-
-          if (result.error) {
-            lastError = result.error;
-            continue;
-          }
-
-          const response = result.data as any;
-
-          if (!response) {
-            return { data: [] };
-          }
-
-          // Common shapes: raw array, { roles: [...] }, { data: [...] }
-          if (Array.isArray(response)) {
-            return { data: response };
-          }
-
-          if (Array.isArray(response.roles)) {
-            return { data: response.roles };
-          }
-
-          if (Array.isArray(response.data)) {
-            return { data: response.data };
-          }
-
+        if (!response) {
           return { data: [] };
         }
 
-        return {
-          error:
-            (lastError as any) ?? {
-              status: 'CUSTOM_ERROR',
-              error: 'Unable to fetch roles',
-            },
-        };
+        if (Array.isArray(response)) {
+          return { data: response };
+        }
+
+        if (Array.isArray(response.roles)) {
+          return { data: response.roles };
+        }
+
+        if (Array.isArray(response.data)) {
+          return { data: response.data };
+        }
+
+        return { data: [] };
       },
       providesTags: ['UnifiedRBACRole'],
     }),
