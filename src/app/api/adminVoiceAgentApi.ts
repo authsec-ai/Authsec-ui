@@ -43,7 +43,7 @@ export const adminVoiceAgentApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getAdminCibaDevices: builder.query<AdminCibaDevicesResponse, void>({
       query: () => ({
-        url: "/authsec/uflow/auth/ciba/devices",
+        url: "uflow/auth/ciba/devices",
         method: "GET",
       }),
       transformResponse: (response: AdminCibaDevicesResponse) => ({
@@ -54,14 +54,14 @@ export const adminVoiceAgentApi = baseApi.injectEndpoints({
     }),
     deleteAdminCibaDevice: builder.mutation<{ success?: boolean; message?: string }, { deviceId: string }>({
       query: ({ deviceId }) => ({
-        url: `/authsec/uflow/auth/ciba/devices/${deviceId}`,
+        url: `uflow/auth/ciba/devices/${deviceId}`,
         method: "DELETE",
       }),
       invalidatesTags: [{ type: "Agent", id: "ADMIN_CIBA_DEVICES" }],
     }),
     getAdminTotpDevices: builder.query<AdminTotpDevicesResponse, void>({
       query: () => ({
-        url: "/authsec/uflow/auth/totp/devices",
+        url: "uflow/auth/totp/devices",
         method: "GET",
       }),
       transformResponse: (response: AdminTotpDevicesResponse) => ({

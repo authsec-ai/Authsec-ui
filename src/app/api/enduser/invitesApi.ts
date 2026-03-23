@@ -14,6 +14,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -78,21 +79,10 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // POST /uflow/invite
     // Invite an end-user
     inviteEndUser: builder.mutation<InviteResponse, InviteEndUser>({
-      query: (data) => ({
-        url: 'authsec/uflow/invite',
-        method: 'POST',
-        body: withSessionData({
-          email: data.email,
-          first_name: data.first_name,
-          last_name: data.last_name,
-          username: data.username,
-          roles: data.roles,
-          groups: data.groups || [],
-          tenant_domain: data.tenant_domain,
-          tenant_id: data.tenant_id,
-          client_id: data.client_id,
-          project_id: data.project_id,
-        }),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'End-user invite is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ['EndUser'],
     }),
@@ -101,7 +91,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Active Directory sync for end-users
     syncActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/ad/sync',
+        url: 'uflow/admin/ad/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -120,7 +110,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Azure Entra ID sync for end-users
     syncEntraID: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/entra/sync',
+        url: 'uflow/admin/entra/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -139,7 +129,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Active Directory sync to Admin Users list
     syncAdminUsersActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/admin-users/ad/sync',
+        url: 'uflow/admin/admin-users/ad/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -158,7 +148,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Azure Entra ID sync to Admin Users list
     syncAdminUsersEntraID: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/admin-users/entra/sync',
+        url: 'uflow/admin/admin-users/entra/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,

@@ -1,4 +1,5 @@
 import { baseApi, withSessionData } from './baseApi';
+import { unsupportedApiError } from './unsupported';
 import type {
   Role,
   RoleWithStats,
@@ -177,7 +178,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
           audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles';
 
         const candidateEndpoints = [
-          tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
+          args?.tenant_id ? `${basePath}/${encodeURIComponent(args.tenant_id)}` : null,
           basePath,
         ].filter((endpoint): endpoint is string => Boolean(endpoint));
 
@@ -186,26 +187,34 @@ export const authSecRolesApi = baseApi.injectEndpoints({
         for (const endpoint of candidateEndpoints) {
           const result = await baseQuery(endpoint);
 
-        if (result.error) {
-          return { error: result.error };
-        }
+          if (result.error) {
+            lastError = result.error;
+            continue;
+          }
 
-        const response = result.data as any;
+          const response = result.data as any;
 
-        if (!response) {
+          if (!response) {
+            return { data: [] };
+          }
+
+          if (Array.isArray(response)) {
+            return { data: response };
+          }
+
+          if (Array.isArray(response.roles)) {
+            return { data: response.roles };
+          }
+
+          if (Array.isArray(response.data)) {
+            return { data: response.data };
+          }
+
           return { data: [] };
         }
 
-        if (Array.isArray(response)) {
-          return { data: response };
-        }
-
-        if (Array.isArray(response.roles)) {
-          return { data: response.roles };
-        }
-
-        if (Array.isArray(response.data)) {
-          return { data: response.data };
+        if (lastError) {
+          return { error: lastError as any };
         }
 
         return { data: [] };
@@ -216,7 +225,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Add user-defined roles
     addUserDefinedRoles: builder.mutation<CreateUserDefinedRoleResponse, UserDefinedRoleRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'authsec/uflow/admin/roles' : 'authsec/uflow/user/rbac/roles',
+        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -226,7 +235,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Update a role
     updateUserDefinedRole: builder.mutation<{ message?: string; success?: boolean }, { id: string; data: { tenant_id: string; name: string; description?: string } }>({
       query: ({ id, data }) => ({
-        url: `authsec/uflow/admin/roles/${id}`,
+        url: `uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -236,7 +245,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Delete user-defined roles
     deleteUserDefinedRoles: builder.mutation<{ message?: string; success?: boolean }, DeleteRolesRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'authsec/uflow/admin/roles' : 'authsec/uflow/user/rbac/roles',
+        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -245,13 +254,10 @@ export const authSecRolesApi = baseApi.injectEndpoints({
 
     // Map roles to client
     mapRolesToClient: builder.mutation<{ message?: string; success?: boolean }, MapRolesRequest>({
-      query: (data) => ({
-        url: 'authsec/uflow/admin/roles/map',
-        method: 'POST',
-        body: withSessionData({
-          ...data,
-          project_id: data.project_id || data.client_id,
-        }),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Role-to-client mapping is no longer exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ['AuthSecClient', 'UnifiedRBACRole'],
     }),

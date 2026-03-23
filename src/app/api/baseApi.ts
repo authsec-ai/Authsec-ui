@@ -1,4 +1,10 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import type {
+  BaseQueryFn,
+  FetchArgs,
+  FetchBaseQueryError,
+  FetchBaseQueryMeta,
+} from "@reduxjs/toolkit/query";
 import config from '../../config';
 
 // Define base types for the API
@@ -29,7 +35,7 @@ export interface FilterParams {
 }
 
 // Helper function to get session data
-const getSessionData = () => {
+export const getSessionData = () => {
   const sessionData = localStorage.getItem("authsec_session_v2");
   if (sessionData) {
     try {
@@ -41,22 +47,62 @@ const getSessionData = () => {
   return null;
 };
 
+const ABSOLUTE_URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+export const normalizeApiPath = (url: string) => {
+  if (!url || ABSOLUTE_URL_PATTERN.test(url)) {
+    return url;
+  }
+
+  return url
+    .replace(/^\/?authsec\/+/i, "")
+    .replace(/^\/+/, "");
+};
+
+export const normalizeBaseQueryArgs = (args: string | FetchArgs) => {
+  if (typeof args === "string") {
+    return normalizeApiPath(args);
+  }
+
+  const normalizedUrl = normalizeApiPath(args.url);
+  if (normalizedUrl === args.url) {
+    return args;
+  }
+
+  return {
+    ...args,
+    url: normalizedUrl,
+  };
+};
+
+export const prepareAuthSecHeaders = (headers: Headers) => {
+  const session = getSessionData();
+  if (session?.token) {
+    headers.set("Authorization", `Bearer ${session.token}`);
+  }
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
+};
+
+export const createAuthSecBaseQuery = (
+  overrides: Partial<Parameters<typeof fetchBaseQuery>[0]> = {}
+): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError, {}, FetchBaseQueryMeta> => {
+  const rawBaseQuery = fetchBaseQuery({
+    baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
+    timeout: 30000,
+    credentials: "include",
+    prepareHeaders: prepareAuthSecHeaders,
+    ...overrides,
+  });
+
+  return async (args, api, extraOptions) =>
+    rawBaseQuery(normalizeBaseQueryArgs(args), api, extraOptions);
+};
+
 // Standard AuthSec API query function (clean, no auto-injection)
-const baseQuery = fetchBaseQuery({
-  baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
-  timeout: 30000, // 30 second timeout
-  credentials: "include", // Include cookies in requests
-  prepareHeaders: (headers) => {
-    const session = getSessionData();
-    if (session?.token) {
-      headers.set("Authorization", `Bearer ${session.token}`);
-    }
-    if (!headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-    return headers;
-  },
-});
+const baseQuery = createAuthSecBaseQuery();
 
 // Helper function to inject session data when needed
 export const withSessionData = (body: any) => {

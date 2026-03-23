@@ -26,13 +26,13 @@ export const adminApiOAuthScopesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // GET /uflow/admin/api_scopes
     getAdminApiOAuthScopes: builder.query<ApiOAuthScope[], void>({
-      query: () => "authsec/uflow/admin/api_scopes",
+      query: () => "uflow/admin/api_scopes",
       providesTags: ["AdminApiOAuthScope"],
     }),
 
     // GET /uflow/admin/api_scopes/:scope_id
     getAdminApiOAuthScope: builder.query<ApiOAuthScopeDetails, string>({
-      query: (scope_id) => `authsec/uflow/admin/api_scopes/${scope_id}`,
+      query: (scope_id) => `uflow/admin/api_scopes/${scope_id}`,
       providesTags: ["AdminApiOAuthScope"],
     }),
 
@@ -42,7 +42,7 @@ export const adminApiOAuthScopesApi = baseApi.injectEndpoints({
       CreateApiOAuthScopeMappingRequest
     >({
       query: (body) => ({
-        url: "authsec/uflow/admin/api_scopes",
+        url: "uflow/admin/api_scopes",
         method: "POST",
         body: withSessionData(body),
       }),
@@ -55,7 +55,7 @@ export const adminApiOAuthScopesApi = baseApi.injectEndpoints({
       UpdateApiOAuthScopeMappingRequest
     >({
       query: ({ scope_id, ...body }) => ({
-        url: `authsec/uflow/admin/api_scopes/${scope_id}`,
+        url: `uflow/admin/api_scopes/${scope_id}`,
         method: "PUT",
         body: withSessionData(body),
       }),
@@ -68,7 +68,7 @@ export const adminApiOAuthScopesApi = baseApi.injectEndpoints({
       DeleteApiOAuthScopeMappingRequest
     >({
       query: ({ scope_id }) => ({
-        url: `authsec/uflow/admin/api_scopes/${scope_id}`,
+        url: `uflow/admin/api_scopes/${scope_id}`,
         method: "DELETE",
         body: withSessionData({}),
       }),

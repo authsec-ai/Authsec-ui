@@ -530,7 +530,8 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         email: adminWebauthn.email,
         tenant_id: adminWebauthn.tenantId,
         secret: adminWebauthn.totpSecret,
-        code
+        code,
+        device_id: adminWebauthn.totpSetupData?.device_id,
       });
 
       if ('data' in result) {

@@ -37,7 +37,7 @@ export const groupsApi = baseApi.injectEndpoints({
     getGroups: builder.query<any[], UnifiedGetGroupsParams>({
       query: ({ tenant_id, audience, user_id }) => {
         if (audience === 'admin') {
-          return `authsec/uflow/admin/groups/${tenant_id}`;
+          return `uflow/admin/groups/${tenant_id}`;
         }
 
         if (user_id) {
@@ -47,7 +47,7 @@ export const groupsApi = baseApi.injectEndpoints({
           };
 
           return {
-            url: 'authsec/uflow/admin/groups/list',
+            url: 'uflow/admin/groups/list',
             method: 'POST',
             body: withSessionData(requestBody),
           };
@@ -55,7 +55,7 @@ export const groupsApi = baseApi.injectEndpoints({
 
         // End-user self-service call
         return {
-          url: 'authsec/uflow/user/groups/users',
+          url: 'uflow/user/groups/users',
           method: 'GET',
         };
       },

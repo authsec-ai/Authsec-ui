@@ -70,7 +70,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
 
     // GET /uflow/user/scopes
     getEndUserScopes: builder.query<EndUserScope[], void>({
-      query: () => "authsec/uflow/user/scopes",
+      query: () => "uflow/user/scopes",
       transformResponse: (response: EndUserScopesResponse | EndUserScope[]) => {
         const scopes = Array.isArray(response) ? response : response.scopes;
         return scopes.map(scope => ({
@@ -85,7 +85,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
 
     // GET /uflow/user/scopes/mappings
     getEndUserScopeMappings: builder.query<EndUserScopeMapping[], void>({
-      query: () => "authsec/uflow/user/scopes/mappings",
+      query: () => "uflow/user/scopes/mappings",
       transformResponse: (response: EndUserScopeMapping[]) => {
         if (!Array.isArray(response)) {
           console.warn('Invalid end-user scope mappings response format:', response);
@@ -103,7 +103,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
 
     // GET /uflow/user/scopes/:scope_id
     getEndUserScope: builder.query<EndUserScope, string>({
-      query: (scope_id) => `authsec/uflow/user/scopes/${scope_id}`,
+      query: (scope_id) => `uflow/user/scopes/${scope_id}`,
       transformResponse: (response: EndUserScope) => ({
         ...response,
         id: response.id || response.scope_name,
@@ -116,7 +116,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
     // POST /uflow/user/scopes
     createEndUserScope: builder.mutation<ApiResponse, CreateEndUserScopeRequest>({
       query: (body) => ({
-        url: "authsec/uflow/user/scopes",
+        url: "uflow/user/scopes",
         method: 'POST',
         body: withSessionData(body),
       }),
@@ -126,7 +126,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
     // PUT /uflow/user/scopes/:scope_id
     updateEndUserScope: builder.mutation<ApiResponse, UpdateEndUserScopeRequest>({
       query: ({ scope_id, ...body }) => ({
-        url: `authsec/uflow/user/scopes/${scope_id}`,
+        url: `uflow/user/scopes/${scope_id}`,
         method: 'PUT',
         body: withSessionData(body),
       }),
@@ -136,7 +136,7 @@ export const endUserScopesApi = baseApi.injectEndpoints({
     // DELETE /uflow/user/scopes/:scope_id
     deleteEndUserScope: builder.mutation<ApiResponse, DeleteEndUserScopeRequest>({
       query: ({ scope_id }) => ({
-        url: `authsec/uflow/user/scopes/${scope_id}`,
+        url: `uflow/user/scopes/${scope_id}`,
         method: 'DELETE',
         body: withSessionData({}),
       }),

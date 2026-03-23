@@ -1,4 +1,5 @@
 import { baseApi, withSessionData } from './baseApi';
+import { unsupportedApiError } from './unsupported';
 
 // Invite API interfaces
 export interface InviteUser {
@@ -46,7 +47,7 @@ export const invitesApi = baseApi.injectEndpoints({
     // Send individual user invite
     inviteUser: builder.mutation<any, InviteUser>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/invite',
+        url: 'uflow/admin/invite',
         method: 'POST',
         body: withSessionData({
           email: data.email,
@@ -62,14 +63,10 @@ export const invitesApi = baseApi.injectEndpoints({
 
     // Bulk CSV invite
     bulkInviteUsers: builder.mutation<any, CSVUpload>({
-      query: (data) => ({
-        url: 'authsec/uflow/bulk-invite',
-        method: 'POST',
-        body: withSessionData({
-          users: data.users,
-          roles: data.roles,
-          groups: data.groups || [],
-        }),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Bulk invite is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ['UnifiedUser'],
     }),
@@ -79,7 +76,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `authsec/uflow/${audiencePath}ad/sync`,
+          url: `uflow/${audiencePath}ad/sync`,
           method: 'POST',
           body: withSessionData({
             dry_run: data.dry_run || false,
@@ -95,7 +92,7 @@ export const invitesApi = baseApi.injectEndpoints({
       query: (data) => {
         const audiencePath = data.audience === 'admin' ? 'admin/' : '';
         return {
-          url: `authsec/uflow/${audiencePath}entra/sync`,
+          url: `uflow/${audiencePath}entra/sync`,
           method: 'POST',
           body: withSessionData({
             config: data.config,
@@ -108,34 +105,21 @@ export const invitesApi = baseApi.injectEndpoints({
 
     // Generic SCIM sync
     syncSCIM: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => {
-        const audiencePath = data.audience === 'admin' ? 'admin/' : '';
-        return {
-          url: `authsec/uflow/${audiencePath}scim/sync`,
-          method: 'POST',
-          body: withSessionData({
-            provider: data.provider,
-            config: data.config,
-            dry_run: data.dry_run || false,
-          }),
-        };
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'SCIM sync is not exposed by the backend.',
+        ) as any,
+      }),
       invalidatesTags: ['UnifiedUser'],
     }),
 
     // Okta sync
     syncOkta: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => {
-        const audiencePath = data.audience === 'admin' ? 'admin/' : '';
-        return {
-          url: `authsec/uflow/${audiencePath}okta/sync`,
-          method: 'POST',
-          body: withSessionData({
-            config: data.config,
-            dry_run: data.dry_run || false,
-          }),
-        };
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Okta sync is not exposed by the backend.',
+        ) as any,
+      }),
       invalidatesTags: ['UnifiedUser'],
     }),
   }),

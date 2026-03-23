@@ -476,6 +476,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
         tenant_id: oidcWebauthn.tenantId,
         secret: oidcWebauthn.totpSecret,
         code,
+        device_id: oidcWebauthn.totpSetupData?.device_id,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
 

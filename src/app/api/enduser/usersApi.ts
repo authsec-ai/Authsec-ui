@@ -13,6 +13,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -112,7 +113,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: 'authsec/uflow/admin/enduser/list',
+          url: 'uflow/admin/enduser/list',
           method: 'POST',
           body: payload,
         };
@@ -123,17 +124,31 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // GET /uflow/enduser/:id
     // Get single user by ID
     getUser: builder.query<any, string>({
-      query: (id) => `authsec/uflow/enduser/${id}`,
+      query: (id) => {
+        const sessionData = localStorage.getItem("authsec_session_v2");
+        let tenantId = "";
+
+        if (sessionData) {
+          try {
+            const session = JSON.parse(sessionData);
+            tenantId = session?.tenant_id || session?.jwtPayload?.tenant_id || "";
+          } catch {
+            tenantId = "";
+          }
+        }
+
+        return `uflow/user/enduser/${tenantId}/${id}`;
+      },
       providesTags: (result, error, id) => [{ type: 'EndUser', id }],
     }),
 
     // POST /uflow/admin/enduser/ad/status
     // Check Active Directory configuration status for end users
     checkADConfigStatus: builder.query<ConfigStatus, void>({
-      query: () => ({
-        url: 'authsec/uflow/admin/enduser/ad/status',
-        method: 'POST',
-        body: withSessionData({}),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'End-user directory configuration status endpoint is not exposed by the backend.',
+        ) as any,
       }),
       providesTags: ['EndUser'],
     }),
@@ -141,10 +156,10 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // POST /uflow/admin/enduser/entra/status
     // Check Azure Entra ID configuration status for end users
     checkEntraConfigStatus: builder.query<ConfigStatus, void>({
-      query: () => ({
-        url: 'authsec/uflow/admin/enduser/entra/status',
-        method: 'POST',
-        body: withSessionData({}),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'End-user Entra configuration status endpoint is not exposed by the backend.',
+        ) as any,
       }),
       providesTags: ['EndUser'],
     }),
@@ -155,7 +170,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Soft delete end user
     deleteUser: builder.mutation<any, { tenant_id: string; user_id: string }>({
       query: ({ tenant_id, user_id }) => ({
-        url: `authsec/uflow/user/enduser/${tenant_id}/${user_id}`,
+        url: `uflow/user/enduser/${tenant_id}/${user_id}`,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +183,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Activate/Deactivate user
     setUserActive: builder.mutation<any, { user_id: string; active: boolean }>({
       query: ({ user_id, active }) => ({
-        url: 'authsec/uflow/enduser/active',
+        url: 'uflow/user/enduser/active',
         method: 'POST',
         body: withSessionData({
           user_id,
@@ -182,7 +197,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Reset user password (admin)
     resetUserPassword: builder.mutation<any, { email: string; send_email?: boolean }>({
       query: ({ email, send_email = true }) => ({
-        url: 'authsec/uflow/admin/reset-password',
+        url: 'uflow/user/admin/reset-password',
         method: 'POST',
         body: withSessionData({
           email,
@@ -198,7 +213,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
     // Change user password (admin)
     changeUserPassword: builder.mutation<any, { email: string; new_password: string }>({
       query: ({ email, new_password }) => ({
-        url: 'authsec/uflow/admin/change-password',
+        url: 'uflow/user/admin/change-password',
         method: 'POST',
         body: withSessionData({
           email,

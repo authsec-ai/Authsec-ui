@@ -16,6 +16,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -76,7 +77,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // POST /uflow/admin/roles
     createRoles: builder.mutation<CreateRolesResponse, CreateRolesRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/roles',
+        url: 'uflow/admin/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -85,15 +86,16 @@ export const adminRolesApi = baseApi.injectEndpoints({
 
     // GET /uflow/admin/roles
     getRolesByTenant: builder.query<AdminRole[], string>({
-      query: (tenant_id) => `uflow/admin/roles/${tenant_id}`,
-      transformResponse: (response: { roles: AdminRole[] }) => response.roles,
+      query: () => 'uflow/admin/roles',
+      transformResponse: (response: { roles: AdminRole[] } | AdminRole[]) =>
+        Array.isArray(response) ? response : response.roles,
       providesTags: ['AdminRBACRole'],
     }),
 
     // PUT /uflow/admin/roles/:id
     updateRole: builder.mutation<ApiResponse, { id: string; data: UpdateRoleRequest }>({
       query: ({ id, data }) => ({
-        url: `authsec/uflow/admin/roles/${id}`,
+        url: `uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -103,7 +105,7 @@ export const adminRolesApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/roles
     deleteRoles: builder.mutation<ApiResponse, DeleteRolesRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/roles',
+        url: 'uflow/admin/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -112,10 +114,10 @@ export const adminRolesApi = baseApi.injectEndpoints({
 
     // POST /uflow/admin/roles/map
     mapRolesToClient: builder.mutation<ApiResponse, MapRolesToClientRequest>({
-      query: (data) => ({
-        url: 'authsec/uflow/admin/roles/map',
-        method: 'POST',
-        body: withSessionData(data),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Role-to-client mapping is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ['AdminRBACRole', 'AuthSecClient'],
     }),

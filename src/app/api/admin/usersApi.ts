@@ -11,6 +11,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -138,7 +139,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
         if (params.is_synced_user !== undefined) body.is_synced_user = params.is_synced_user;
 
         return {
-          url: 'authsec/uflow/admin/users/list',
+          url: 'uflow/admin/users/list',
           method: 'POST',
           body: withSessionData(body),
         };
@@ -149,17 +150,44 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // GET /uflow/admin/users/:user_id
     // Get a specific admin user by ID
     getAdminUser: builder.query<AdminUser, string>({
-      query: (user_id) => `authsec/uflow/admin/users/${user_id}`,
+      async queryFn(user_id, _api, _extraOptions, baseQuery) {
+        const listResult = await baseQuery({
+          url: 'uflow/admin/users/list',
+          method: 'POST',
+          body: withSessionData({
+            page: 1,
+            limit: 500,
+          }),
+        });
+
+        if (listResult.error) {
+          return { error: listResult.error as any };
+        }
+
+        const payload = listResult.data as AdminUsersResponse | undefined;
+        const user = payload?.users?.find((candidate) => candidate.id === user_id);
+
+        if (!user) {
+          return {
+            error: {
+              status: 404,
+              data: { message: 'Admin user not found' },
+            } as any,
+          };
+        }
+
+        return { data: user };
+      },
       providesTags: (result, error, id) => [{ type: 'AdminUser', id }],
     }),
 
     // POST /uflow/admin/users/ad/status
     // Check Active Directory configuration status for admin users
     checkADConfigStatus: builder.query<ConfigStatus, void>({
-      query: () => ({
-        url: 'authsec/uflow/admin/users/ad/status',
-        method: 'POST',
-        body: withSessionData({}),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Admin directory configuration status endpoint is not exposed by the backend.',
+        ) as any,
       }),
       providesTags: ['AdminUser'],
     }),
@@ -167,10 +195,10 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // POST /uflow/admin/users/entra/status
     // Check Azure Entra ID configuration status for admin users
     checkEntraConfigStatus: builder.query<ConfigStatus, void>({
-      query: () => ({
-        url: 'authsec/uflow/admin/users/entra/status',
-        method: 'POST',
-        body: withSessionData({}),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Admin Entra configuration status endpoint is not exposed by the backend.',
+        ) as any,
       }),
       providesTags: ['AdminUser'],
     }),
@@ -181,7 +209,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Soft delete admin user
     deleteAdminUser: builder.mutation<any, { user_id: string }>({
       query: ({ user_id }) => ({
-        url: `authsec/uflow/admin/users/${user_id}`,
+        url: `uflow/admin/users/${user_id}`,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +222,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Activate/Deactivate admin user
     setAdminUserActive: builder.mutation<any, { user_id: string; active: boolean }>({
       query: ({ user_id, active }) => ({
-        url: 'authsec/uflow/admin/users/active',
+        url: 'uflow/admin/users/active',
         method: 'POST',
         body: withSessionData({
           user_id,
@@ -208,7 +236,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Reset admin user password
     resetAdminUserPassword: builder.mutation<any, { email: string; send_email?: boolean }>({
       query: ({ email, send_email = true }) => ({
-        url: 'authsec/uflow/admin/reset-password',
+        url: 'uflow/user/admin/reset-password',
         method: 'POST',
         body: withSessionData({
           email,
@@ -224,7 +252,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Change admin user password
     changeAdminUserPassword: builder.mutation<any, { email: string; new_password: string }>({
       query: ({ email, new_password }) => ({
-        url: 'authsec/uflow/admin/change-password',
+        url: 'uflow/user/admin/change-password',
         method: 'POST',
         body: withSessionData({
           email,

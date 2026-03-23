@@ -3,8 +3,8 @@
  * Clean separation from OAuth and WebAuthn flows
  */
 
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import config from '../../config';
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { createAuthSecBaseQuery } from "./baseApi";
 
 export interface CustomLoginRequest {
   client_id: string;
@@ -24,15 +24,13 @@ export interface CustomLoginResponse {
 // RTK Query API for direct user authentication
 export const userAuthApi = createApi({
   reducerPath: 'userAuthApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: `${config.VITE_API_URL}`,
-  }),
+  baseQuery: createAuthSecBaseQuery(),
   tagTypes: ['UserAuth'],
   endpoints: (builder) => ({
     // Custom login for OIDC flow
     customLogin: builder.mutation<CustomLoginResponse, CustomLoginRequest>({
       query: (loginData) => ({
-        url: '/authsec/uflow/user/login',
+        url: 'uflow/user/login',
         method: 'POST',
         body: loginData,
       }),

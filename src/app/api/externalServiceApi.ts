@@ -87,7 +87,7 @@ export const externalServiceApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // GET /exsvc/services - list services (response shape: { services: RawExternalService[] })
     getExternalServices: builder.query<RawExternalService[], void>({
-      query: () => ({ url: "/authsec/exsvc/services", method: "GET" }),
+      query: () => ({ url: "exsvc/services", method: "GET" }),
       transformResponse: (response: { services: RawExternalService[] }) => {
         const items = Array.isArray((response as any)?.services) ? (response as any).services : [];
         return items;
@@ -103,14 +103,14 @@ export const externalServiceApi = baseApi.injectEndpoints({
 
     // GET /exsvc/services/{id}
     getExternalService: builder.query<ExternalService, string>({
-      query: (id) => ({ url: `/authsec/exsvc/services/${id}`, method: "GET" }),
+      query: (id) => ({ url: `exsvc/services/${id}`, method: "GET" }),
       transformResponse: (raw: RawExternalService) => mapRawToExternalService(raw),
       providesTags: (_res, _err, id) => [{ type: "ExternalService", id }],
     }),
 
     // GET /exsvc/services/{id}/credentials - fetch service credentials (requires MFA)
     getExternalServiceCredentials: builder.query<Record<string, any>, string>({
-      query: (id) => ({ url: `/authsec/exsvc/services/${id}/credentials`, method: "GET" }),
+      query: (id) => ({ url: `exsvc/services/${id}/credentials`, method: "GET" }),
       providesTags: (_res, _err, id) => [{ type: "ExternalService", id: `${id}-credentials` }],
     }),
 
@@ -152,7 +152,7 @@ export const externalServiceApi = baseApi.injectEndpoints({
 
         // Create the external service
         const result = await baseQuery({
-          url: "/authsec/exsvc/services",
+          url: "exsvc/services",
           method: "POST",
           body,
         });
@@ -173,7 +173,7 @@ export const externalServiceApi = baseApi.injectEndpoints({
       ExternalService,
       { id: string; body: ExternalServiceUpdateRequest }
     >({
-      query: ({ id, body }) => ({ url: `/authsec/exsvc/services/${id}`, method: "PATCH", body }),
+      query: ({ id, body }) => ({ url: `exsvc/services/${id}`, method: "PATCH", body }),
       transformResponse: (raw: RawExternalService) => mapRawToExternalService(raw),
       invalidatesTags: (_r, _e, arg) => [
         { type: "ExternalService", id: arg.id },
@@ -195,7 +195,7 @@ export const externalServiceApi = baseApi.injectEndpoints({
 
         // Delete the external service first
         const result = await baseQuery({
-          url: `/authsec/exsvc/services/${id}`,
+          url: `exsvc/services/${id}`,
           method: "DELETE",
         });
 

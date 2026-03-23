@@ -15,6 +15,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -81,26 +82,30 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // GET /uflow/user/roles
     // Get all roles assigned to the authenticated user (extracted from JWT)
     getMyRoles: builder.query<UserRole[], void>({
-      query: () => 'authsec/uflow/user/roles',
-      transformResponse: (response: GetMyRolesResponse) => response.roles,
+      query: () => 'uflow/user/rbac/roles',
+      transformResponse: (response: GetMyRolesResponse | UserRole[]) =>
+        Array.isArray(response) ? response : response.roles,
       providesTags: ['EndUserRBACRole', 'EndUser'],
     }),
 
     // GET /uflow/user/roles/available
     // Get all roles available in the tenant that can be requested
     getAvailableRoles: builder.query<AvailableRole[], void>({
-      query: () => 'authsec/uflow/user/roles/available',
-      transformResponse: (response: GetAvailableRolesResponse) => response.roles,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Available end-user role requests are not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: ['EndUserRBACRole'],
     }),
 
     // POST /uflow/user/roles/request
     // Request assignment of a role (creates a pending role request for admin approval)
     requestRoleAssignment: builder.mutation<RequestRoleAssignmentResponse, RequestRoleAssignmentRequest>({
-      query: (data) => ({
-        url: 'authsec/uflow/user/roles/request',
-        method: 'POST',
-        body: withSessionData(data),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'End-user role request submission is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ['EndUserRBACRole'],
     }),
@@ -108,8 +113,11 @@ export const endUserRolesApi = baseApi.injectEndpoints({
     // GET /uflow/user/roles/requests
     // Get all role requests made by the authenticated user
     getMyRoleRequests: builder.query<RoleRequest[], void>({
-      query: () => 'authsec/uflow/user/roles/requests',
-      transformResponse: (response: GetMyRoleRequestsResponse) => response.requests,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'End-user role request history is not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: ['EndUserRBACRole'],
     }),
 

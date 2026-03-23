@@ -16,6 +16,7 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
+import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -55,13 +56,16 @@ export interface ApiResponse {
 export const endUserResourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => {
     const buildPath = (tenant_id: string, suffix = "") =>
-      `authsec/uflow/admin/endusers/${tenant_id}/resources${suffix}`;
+      `uflow/admin/endusers/${tenant_id}/resources${suffix}`;
 
     return {
       // GET /admin/endusers/:tenant_id/resources - List all tenant resources
       getEndUserResources: builder.query<EndUserResource[], string>({
-        query: (tenant_id) => buildPath(tenant_id),
-        transformResponse: (response: { resources: EndUserResource[] }) => response.resources,
+        queryFn: async () => ({
+          error: unsupportedApiError(
+            "End-user resources management is not exposed by the backend.",
+          ) as any,
+        }),
         providesTags: ["EndUserRBACResource"],
       }),
 
@@ -70,7 +74,11 @@ export const endUserResourcesApi = baseApi.injectEndpoints({
         EndUserResource,
         { tenant_id: string; resource_id: string }
       >({
-        query: ({ tenant_id, resource_id }) => buildPath(tenant_id, `/${resource_id}`),
+        queryFn: async () => ({
+          error: unsupportedApiError(
+            "End-user resources management is not exposed by the backend.",
+          ) as any,
+        }),
         providesTags: (result, error, { resource_id }) => [
           { type: "EndUserRBACResource", id: resource_id },
         ],
@@ -81,10 +89,10 @@ export const endUserResourcesApi = baseApi.injectEndpoints({
         CreateResourcesResponse,
         { tenant_id: string; data: CreateResourceInput }
       >({
-        query: ({ tenant_id, data }) => ({
-          url: buildPath(tenant_id),
-          method: "POST",
-          body: withSessionData(data),
+        queryFn: async () => ({
+          error: unsupportedApiError(
+            "End-user resources management is not exposed by the backend.",
+          ) as any,
         }),
         invalidatesTags: ["EndUserRBACResource"],
       }),
@@ -94,10 +102,10 @@ export const endUserResourcesApi = baseApi.injectEndpoints({
         ApiResponse,
         { tenant_id: string; id: string; data: UpdateResourceRequest }
       >({
-        query: ({ tenant_id, id, data }) => ({
-          url: buildPath(tenant_id, `/${id}`),
-          method: "PUT",
-          body: withSessionData(data),
+        queryFn: async () => ({
+          error: unsupportedApiError(
+            "End-user resources management is not exposed by the backend.",
+          ) as any,
         }),
         invalidatesTags: (result, error, { id }) => [
           { type: "EndUserRBACResource", id },
@@ -110,9 +118,10 @@ export const endUserResourcesApi = baseApi.injectEndpoints({
         ApiResponse,
         { tenant_id: string; resource_id: string }
       >({
-        query: ({ tenant_id, resource_id }) => ({
-          url: buildPath(tenant_id, `/${resource_id}`),
-          method: "DELETE",
+        queryFn: async () => ({
+          error: unsupportedApiError(
+            "End-user resources management is not exposed by the backend.",
+          ) as any,
         }),
         invalidatesTags: ["EndUserRBACResource"],
       }),

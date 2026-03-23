@@ -22,12 +22,6 @@ import { toast } from "react-hot-toast";
 import { generateOAuth2AuthorizationUrl } from "../../utils/oauthUtils";
 
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
-import {
-  trackClientDeleted,
-  trackClientStatusToggled,
-  trackClientPreviewLogin,
-  trackVoiceAgentConfigured,
-} from "@/utils/analytics";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { ClientAuthMethodsModal } from "./components/ClientAuthMethodsModal";
 import { OnboardClientModal } from "./components/OnboardClientModal";
@@ -482,7 +476,6 @@ export function ClientsPage() {
         client_id: deleteDialog.clientId,
       }).unwrap();
       toast.success("Client deleted successfully");
-      trackClientDeleted();
       // Optimistically update list
       setClients((prev) =>
         prev.filter((client) => client.client_id !== deleteDialog.clientId),
@@ -546,7 +539,6 @@ export function ClientsPage() {
       toast.success(
         `Client ${newStatus ? "activated" : "deactivated"} successfully`,
       );
-      trackClientStatusToggled(newStatus);
 
       // Explicitly refetch to ensure fresh data
       refetchClients();
@@ -634,7 +626,6 @@ export function ClientsPage() {
 
       window.open(authorizationUrl, "_blank", "noopener,noreferrer");
       toast.success("Opening end-user login preview in a new tab");
-      trackClientPreviewLogin();
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);
       toast.error("Failed to generate login preview URL");
@@ -643,7 +634,6 @@ export function ClientsPage() {
 
   const handleConfigureVoiceAgent = useCallback(
     (clientId: string) => {
-      trackVoiceAgentConfigured();
       navigate(`/clients/voice-agent?clientId=${clientId}`);
     },
     [navigate],

@@ -3,8 +3,8 @@
  * Handles device registration, listing, and deletion for authenticated users
  */
 
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import config from '../../config';
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { createAuthSecBaseQuery } from "./baseApi";
 
 // ============ TOTP Device Types ============
 export interface TOTPDevice {
@@ -89,16 +89,7 @@ export interface CIBADeleteResponse {
 // ============ API Definition ============
 export const deviceApi = createApi({
   reducerPath: "deviceApi",
-  baseQuery: fetchBaseQuery({
-    baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
-    timeout: 30000,
-    credentials: "include",
-    prepareHeaders: (headers, { getState }) => {
-      // Token will be passed dynamically via endpoint args
-      headers.set("Content-Type", "application/json");
-      return headers;
-    },
-  }),
+  baseQuery: createAuthSecBaseQuery(),
   tagTypes: ["TOTPDevices", "CIBADevices"],
   endpoints: (builder) => ({
     // ============ TOTP Endpoints ============
@@ -106,7 +97,7 @@ export const deviceApi = createApi({
     // Get TOTP devices
     getTOTPDevices: builder.query<TOTPDevicesResponse, { token: string }>({
       query: ({ token }) => ({
-        url: "/authsec/uflow/auth/tenant/totp/devices",
+        url: "uflow/auth/tenant/totp/devices",
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -121,7 +112,7 @@ export const deviceApi = createApi({
       { token: string; data: TOTPRegisterRequest }
     >({
       query: ({ token, data }) => ({
-        url: "/authsec/uflow/auth/tenant/totp/register",
+        url: "uflow/auth/tenant/totp/register",
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -137,7 +128,7 @@ export const deviceApi = createApi({
       { token: string; data: TOTPConfirmRequest }
     >({
       query: ({ token, data }) => ({
-        url: "/authsec/uflow/auth/tenant/totp/confirm",
+        url: "uflow/auth/tenant/totp/confirm",
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -150,11 +141,12 @@ export const deviceApi = createApi({
     // Delete TOTP device
     deleteTOTPDevice: builder.mutation<TOTPDeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/authsec/uflow/auth/tenant/totp/devices/${deviceId}`,
-        method: "DELETE",
+        url: "uflow/auth/tenant/totp/devices/delete",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        body: { device_id: deviceId },
       }),
       invalidatesTags: ["TOTPDevices"],
     }),
@@ -164,7 +156,7 @@ export const deviceApi = createApi({
     // Get CIBA devices
     getCIBADevices: builder.query<CIBADevicesResponse, { token: string }>({
       query: ({ token }) => ({
-        url: "/authsec/uflow/auth/tenant/ciba/devices",
+        url: "uflow/auth/tenant/ciba/devices",
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -176,7 +168,7 @@ export const deviceApi = createApi({
     // Delete CIBA device
     deleteCIBADevice: builder.mutation<CIBADeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/authsec/uflow/auth/tenant/ciba/devices/${deviceId}`,
+        url: `uflow/auth/tenant/ciba/devices/${deviceId}`,
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -4,6 +4,7 @@
  */
 
 import { baseApi } from "./baseApi";
+import { unsupportedApiError } from "./unsupported";
 
 export interface WebAuthnRequest {
   email: string;
@@ -123,6 +124,7 @@ export interface TOTPConfirmRequest {
   client_id?: string;
   secret: string;
   code: string;
+  device_id?: string;
 }
 
 export interface TOTPVerifyRequest {
@@ -166,7 +168,7 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     getMFAStatusForLogin: builder.mutation<MFAStatusResponse, MFAStatusForLoginRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/enduser/mfa/loginStatus',
+        url: 'webauthn/enduser/mfa/loginStatus',
         method: 'POST',
         body: data,
       }),
@@ -176,7 +178,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // Admin MFA Status
     getAdminMFAStatus: builder.mutation<MFAStatusResponse, AdminMFAStatusRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/admin/mfa/loginStatus',
+        url: 'webauthn/admin/mfa/loginStatus',
         method: 'POST',
         body: data,
       }),
@@ -186,7 +188,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // Admin WebAuthn Registration Flow
     beginAdminRegistration: builder.mutation<any, AdminWebAuthnRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/admin/beginRegistration',
+        url: 'webauthn/admin/beginRegistration',
         method: 'POST',
         body: data,
       }),
@@ -194,7 +196,7 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     finishAdminRegistration: builder.mutation<any, AdminFinishRegistrationRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/admin/finishRegistration',
+        url: 'webauthn/admin/finishRegistration',
         method: 'POST',
         body: data,
       }),
@@ -204,7 +206,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // Admin WebAuthn Authentication Flow
     beginAdminAuthentication: builder.mutation<any, AdminWebAuthnRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/admin/beginAuthentication',
+        url: 'webauthn/admin/beginAuthentication',
         method: 'POST',
         body: data,
       }),
@@ -212,7 +214,7 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     finishAdminAuthentication: builder.mutation<any, AdminFinishAuthRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/admin/finishAuthentication',
+        url: 'webauthn/admin/finishAuthentication',
         method: 'POST',
         body: data,
       }),
@@ -221,7 +223,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // WebAuthn Authentication Flow
     beginWebAuthnAuth: builder.mutation<any, WebAuthnRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/enduser/beginAuthentication',
+        url: 'webauthn/enduser/beginAuthentication',
         method: 'POST',
         body: data,
       }),
@@ -229,7 +231,7 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     finishWebAuthnAuth: builder.mutation<any, FinishAuthRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/enduser/finishAuthentication',
+        url: 'webauthn/enduser/finishAuthentication',
         method: 'POST',
         body: data,
       }),
@@ -238,7 +240,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // WebAuthn Registration Flow - MFA method discovery
     beginWebAuthnRegistration: builder.mutation<any, WebAuthnRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/enduser/beginRegistration',
+        url: 'webauthn/enduser/beginRegistration',
         method: 'POST',
         body: data,
       }),
@@ -246,7 +248,7 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     finishWebAuthnRegistration: builder.mutation<any, FinishRegistrationRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/enduser/finishRegistration',
+        url: 'webauthn/enduser/finishRegistration',
         method: 'POST',
         body: data,
       }),
@@ -255,60 +257,64 @@ export const webauthnApi = baseApi.injectEndpoints({
 
     // Admin TOTP Setup Flow (endpoints WITH "Login")
     beginTOTPLoginSetup: builder.mutation<TOTPSetupResponse, TOTPSetupRequest>({
-      query: (data) => ({
-        url: '/authsec/webauthn/totp/beginLoginSetup',
-        method: 'POST',
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "Admin TOTP setup endpoints are not exposed by the backend.",
+        ) as any,
       }),
     }),
 
     confirmTOTPLoginSetup: builder.mutation<any, TOTPConfirmRequest>({
-      query: (data) => ({
-        url: '/authsec/webauthn/totp/confirmLoginSetup',
-        method: 'POST',
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "Admin TOTP setup endpoints are not exposed by the backend.",
+        ) as any,
       }),
       invalidatesTags: ['TOTP', 'MFA'],
     }),
 
     verifyTOTPLogin: builder.mutation<any, TOTPVerifyRequest>({
-      query: (data) => ({
-        url: '/authsec/webauthn/totp/verifyLogin',
-        method: 'POST',
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "Admin TOTP login verification is not exposed by the backend.",
+        ) as any,
       }),
     }),
 
     // End-User/OIDC TOTP Flow (simple endpoints WITHOUT "Login")
     beginTOTPSetup: builder.mutation<TOTPSetupResponse, TOTPSetupRequest>({
-      query: (data) => ({
-        url: '/authsec/webauthn/totp/beginSetup',
-        method: 'POST',
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "End-user TOTP setup endpoints are not exposed by the backend login flow.",
+        ) as any,
       }),
     }),
 
     confirmTOTPSetup: builder.mutation<any, TOTPConfirmRequest>({
-      query: (data) => ({
-        url: '/authsec/webauthn/totp/confirmSetup',
-        method: 'POST',
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "End-user TOTP setup endpoints are not exposed by the backend login flow.",
+        ) as any,
       }),
       invalidatesTags: ['TOTP', 'MFA'],
     }),
 
     verifyTOTP: builder.mutation<any, TOTPVerifyRequest>({
       query: (data) => ({
-        url: '/authsec/webauthn/totp/verify',
+        url: 'uflow/auth/tenant/totp/login',
         method: 'POST',
-        body: data,
+        body: {
+          client_id: data.client_id,
+          email: data.email,
+          totp_code: data.code,
+        },
       }),
     }),
 
     // WebAuthn Callback - Simple, explicit endpoint (Admin flow)
     webauthnCallback: builder.mutation<WebAuthnCallbackResponse, WebAuthnCallbackRequest>({
       query: (data) => ({
-        url: '/authsec/uflow/login/webauthn-callback',
+        url: 'uflow/login/webauthn-callback',
         method: 'POST',
         body: data,
       }),
@@ -318,7 +324,7 @@ export const webauthnApi = baseApi.injectEndpoints({
     // WebAuthn Callback - Enduser flow specific endpoint
     webauthnEnduserCallback: builder.mutation<WebAuthnCallbackResponse, WebAuthnCallbackRequest>({
       query: (data) => ({
-        url: '/authsec/uflow/auth/enduser/webauthn-callback',
+        url: 'uflow/auth/enduser/webauthn-callback',
         method: 'POST',
         body: data,
       }),

@@ -1,4 +1,5 @@
 import { baseApi, withSessionData } from './baseApi';
+import { unsupportedApiError } from './unsupported';
 
 // AuthSec Permissions API Interfaces
 export interface Permission {
@@ -74,9 +75,9 @@ export const permissionsApi = baseApi.injectEndpoints({
     getPermissionResources: builder.query<string[], { audience: 'admin' | 'endUser' }>({
       query: ({ audience }) => {
         if (audience === 'admin') {
-          return 'authsec/uflow/admin/permissions/resources';
+          return 'uflow/admin/permissions/resources';
         }
-        return 'authsec/uflow/user/rbac/permissions/resources';
+        return 'uflow/user/rbac/permissions/resources';
       },
       transformResponse: (response: ResourcesResponse) => {
         if (!response || !Array.isArray(response.resources)) {
@@ -92,9 +93,9 @@ export const permissionsApi = baseApi.injectEndpoints({
     getPermissions: builder.query<Permission[], { tenant_id: string; audience: 'admin' | 'endUser' }>({
       query: ({ audience }) => {
         if (audience === 'admin') {
-          return 'authsec/uflow/admin/permissions';
+          return 'uflow/admin/permissions';
         }
-        return 'authsec/uflow/user/rbac/permissions';
+        return 'uflow/user/rbac/permissions';
       },
       transformResponse: (response: any) => {
         if (!response) {
@@ -117,7 +118,7 @@ export const permissionsApi = baseApi.injectEndpoints({
     // Create an atomic permission (resource + action)
     createPermission: builder.mutation<CreatePermissionResponse, CreatePermissionRequest & { audience: 'admin' | 'endUser' }>({
       query: ({ audience, ...data }) => ({
-        url: audience === 'admin' ? "authsec/uflow/admin/permissions" : "authsec/uflow/user/rbac/permissions",
+        url: audience === 'admin' ? "uflow/admin/permissions" : "uflow/user/rbac/permissions",
         method: "POST",
         body: withSessionData(data),
       }),
@@ -126,10 +127,10 @@ export const permissionsApi = baseApi.injectEndpoints({
 
     // Bulk create permissions
     createPermissions: builder.mutation<PermissionsResponse, { permissions: CreatePermissionRequest[] }>({
-      query: (data) => ({
-        url: "authsec/uflow/admin/permissions/bulk",
-        method: "POST",
-        body: withSessionData(data),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "Bulk permission creation is not exposed by the backend.",
+        ) as any,
       }),
       invalidatesTags: ["UnifiedRBACPermission"],
     }),
@@ -137,7 +138,7 @@ export const permissionsApi = baseApi.injectEndpoints({
     // Delete permissions (legacy bulk delete)
     deletePermissions: builder.mutation<PermissionsResponse, DeletePermissionsRequest>({
       query: (data) => ({
-        url: "authsec/uflow/admin/permissions",
+        url: "uflow/admin/permissions",
         method: "DELETE",
         body: withSessionData(data),
       }),
@@ -148,7 +149,7 @@ export const permissionsApi = baseApi.injectEndpoints({
     // Deletes a permission using resource and action in body
     deletePermissionByBody: builder.mutation<GenericDeleteResponse, DeletePermissionByBodyRequest & { audience: 'admin' | 'endUser' }>({
       query: ({ audience, ...data }) => ({
-        url: audience === 'admin' ? "authsec/uflow/admin/permissions" : "authsec/uflow/user/rbac/permissions",
+        url: audience === 'admin' ? "uflow/admin/permissions" : "uflow/user/rbac/permissions",
         method: "DELETE",
         body: data,
       }),
@@ -159,7 +160,7 @@ export const permissionsApi = baseApi.injectEndpoints({
     // Deletes a permission by its ID
     deletePermissionById: builder.mutation<GenericDeleteResponse, { id: string; audience: 'admin' | 'endUser' }>({
       query: ({ id, audience }) => ({
-        url: audience === 'admin' ? `authsec/uflow/admin/permissions/${id}` : `authsec/uflow/user/rbac/permissions/${id}`,
+        url: audience === 'admin' ? `uflow/admin/permissions/${id}` : `uflow/user/rbac/permissions/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: ["UnifiedRBACPermission"],
@@ -167,27 +168,21 @@ export const permissionsApi = baseApi.injectEndpoints({
 
     // Get effective permissions for a user (including inherited from groups)
     getUserEffectivePermissions: builder.query<EffectivePermission[], { tenantId: string; userId: string }>({
-      query: ({ tenantId, userId }) => `authsec/uflow/user/permissions/${tenantId}/${userId}`,
-      transformResponse: (response: any) => {
-        if (!response || !Array.isArray(response.effective_permissions)) {
-          console.warn('Invalid effective permissions response:', response);
-          return [];
-        }
-        return response.effective_permissions;
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "User-specific effective permission lookup by tenant/user is not exposed by the backend.",
+        ) as any,
+      }),
       providesTags: ["UnifiedRBACPermission", "UnifiedRBACGroup"],
     }),
 
     // Get permissions by role
     getRolePermissions: builder.query<Permission[], { tenantId: string; roleId: string }>({
-      query: ({ tenantId, roleId }) => `authsec/uflow/admin/permissions/${tenantId}/role/${roleId}`,
-      transformResponse: (response: any) => {
-        if (!response || !Array.isArray(response)) {
-          console.warn('Invalid role permissions response:', response);
-          return [];
-        }
-        return response;
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "Role-specific permission lookup by tenant/role is not exposed by the backend.",
+        ) as any,
+      }),
       providesTags: ["UnifiedRBACPermission"],
     }),
   }),

@@ -1,4 +1,5 @@
 import { baseApi } from "./baseApi";
+import { unsupportedApiError } from "./unsupported";
 import type {
   AuthMethod,
   AuthMethodWithStats,
@@ -246,31 +247,28 @@ export const authMethodApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Authentication Methods CRUD
     getAuthMethods: builder.query<AuthMethod[], AuthMethodFilters>({
-      query: (params = {}) => {
-        const searchParams = new URLSearchParams();
-        if (params.search) searchParams.append("search", params.search);
-        if (params.status) searchParams.append("status", params.status);
-        if (params.method_type)
-          searchParams.append("method_type", params.method_type);
-        if (params.limit) searchParams.append("limit", params.limit.toString());
-        if (params.offset)
-          searchParams.append("offset", params.offset.toString());
-
-        return `auth-methods?${searchParams.toString()}`;
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method listing is not exposed by the backend. Use provider-specific OIDC/SAML endpoints.',
+        ) as any,
+      }),
       providesTags: ["AuthMethod"],
     }),
 
     getAuthMethod: builder.query<AuthMethod, string>({
-      query: (id) => `auth-methods/${id}`,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method details are not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: (result, error, id) => [{ type: "AuthMethod", id }],
     }),
 
     createAuthMethod: builder.mutation<AuthMethod, Partial<AuthMethod>>({
-      query: (data) => ({
-        url: "auth-methods",
-        method: "POST",
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method creation is not exposed by the backend. Use provider-specific OIDC/SAML endpoints.',
+        ) as any,
       }),
       invalidatesTags: ["AuthMethod"],
     }),
@@ -279,39 +277,49 @@ export const authMethodApi = baseApi.injectEndpoints({
       AuthMethod,
       { id: string; data: Partial<AuthMethod> }
     >({
-      query: ({ id, data }) => ({
-        url: `auth-methods/${id}`,
-        method: "PUT",
-        body: data,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method updates are not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: (result, error, { id }) => [{ type: "AuthMethod", id }],
     }),
 
     deleteAuthMethod: builder.mutation<void, string>({
-      query: (id) => ({
-        url: `auth-methods/${id}`,
-        method: "DELETE",
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method deletion is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: ["AuthMethod"],
     }),
 
     // Auth Method Stats
     getAuthMethodStats: builder.query<any, string>({
-      query: (projectId) => `auth-methods/stats?project_id=${projectId}`,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Auth-method stats are not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: ["AuthMethod"],
     }),
 
     // Auth Method Analytics
     getAuthMethodAnalytics: builder.query<AuthMethodAnalytics, string>({
-      query: (projectId) => `auth-methods/analytics?project_id=${projectId}`,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Auth-method analytics are not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: ["AuthMethod"],
     }),
 
     // Toggle auth method status
     toggleAuthMethodStatus: builder.mutation<AuthMethod, string>({
-      query: (id) => ({
-        url: `auth-methods/${id}/toggle-status`,
-        method: "POST",
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Generic auth-method status toggling is not exposed by the backend.',
+        ) as any,
       }),
       invalidatesTags: (result, error, id) => [
         { type: "AuthMethod", id },
@@ -321,7 +329,11 @@ export const authMethodApi = baseApi.injectEndpoints({
 
     // Get auth methods by project
     getAuthMethodsByProject: builder.query<AuthMethod[], string>({
-      query: (projectId) => `projects/${projectId}/auth-methods`,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          'Project-level auth-method listing is not exposed by the backend.',
+        ) as any,
+      }),
       providesTags: ["AuthMethod"],
     }),
 
@@ -331,7 +343,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       OidcProviderRequest
     >({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/add-provider",
+        url: "oocmgr/oidc/add-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -343,7 +355,7 @@ export const authMethodApi = baseApi.injectEndpoints({
 
     getOidcConfig: builder.query<OidcConfigResponse, OidcConfigRequest>({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/get-config",
+        url: "oocmgr/oidc/get-config",
         method: "POST",
         body: data,
       }),
@@ -362,7 +374,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       UpdateCompleteTenantRequest
     >({
       query: (data) => ({
-        url: "/authsec/oocmgr/tenant/update-complete",
+        url: "oocmgr/tenant/update-complete",
         method: "POST",
         body: data,
       }),
@@ -404,13 +416,13 @@ export const authMethodApi = baseApi.injectEndpoints({
         };
 
         console.log("[showAuthProviders] Sending request:", {
-          url: "/authsec/oocmgr/oidc/show-auth-providers",
+          url: "oocmgr/oidc/show-auth-providers",
           headers,
           body: requestBody,
         });
 
         return {
-          url: "/authsec/oocmgr/oidc/show-auth-providers",
+          url: "oocmgr/oidc/show-auth-providers",
           method: "POST",
           headers,
           body: requestBody,
@@ -431,7 +443,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       EditClientAuthProviderRequest
     >({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/edit-client-auth-provider",
+        url: "oocmgr/oidc/edit-client-auth-provider",
         method: "POST",
         body: data,
       }),
@@ -454,7 +466,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       UpdateProviderRequest
     >({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/update-provider",
+        url: "oocmgr/oidc/update-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -469,7 +481,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       DeleteProviderRequest
     >({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/delete-provider",
+        url: "oocmgr/oidc/delete-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -481,7 +493,7 @@ export const authMethodApi = baseApi.injectEndpoints({
 
     rawHydraDump: builder.query<RawHydraDumpResponse, RawHydraDumpRequest>({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/raw-hydra-dump",
+        url: "oocmgr/oidc/raw-hydra-dump",
         method: "POST",
         headers: {
           "Content-Type": "application/json",

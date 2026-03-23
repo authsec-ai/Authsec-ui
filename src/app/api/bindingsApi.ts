@@ -84,8 +84,8 @@ export const bindingsApi = baseApi.injectEndpoints({
 
         // Route based on audience
         const baseUrl = audience === "admin"
-          ? "authsec/uflow/admin/bindings"
-          : "authsec/uflow/user/rbac/bindings";
+          ? "uflow/admin/bindings"
+          : "uflow/user/rbac/bindings";
 
         return {
           url: `${baseUrl}${queryString ? `?${queryString}` : ""}`,
@@ -99,8 +99,8 @@ export const bindingsApi = baseApi.injectEndpoints({
       query: ({ audience = "admin", ...data }) => {
         // Route based on audience
         const url = audience === "admin"
-          ? "authsec/uflow/admin/bindings"
-          : "authsec/uflow/user/rbac/bindings";
+          ? "uflow/admin/bindings"
+          : "uflow/user/rbac/bindings";
 
         return {
           url,

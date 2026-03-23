@@ -45,7 +45,7 @@ export const adminInvitesApi = baseApi.injectEndpoints({
     // Invite an admin user
     inviteAdminUser: builder.mutation<InviteResponse, InviteAdminUser>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/invite',
+        url: 'uflow/admin/invite',
         method: 'POST',
         body: withSessionData({
           email: data.email,

@@ -184,14 +184,14 @@ export function normalizeDelegationPermissionCatalog(response: unknown): string[
 export const trustDelegationApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getDelegationPermissionCatalog: builder.query<string[], void>({
-      query: () => "authsec/uflow/admin/me/roles-permissions",
+      query: () => "uflow/admin/me/roles-permissions",
       transformResponse: (response: unknown) =>
         normalizeDelegationPermissionCatalog(response),
     }),
 
     listDelegationPolicies: builder.query<DelegationPolicyUI[], ListDelegationPoliciesParams | void>({
       query: (params) => ({
-        url: `authsec/uflow/delegation-policies${buildQueryString(params || {})}`,
+        url: `uflow/delegation-policies${buildQueryString(params || {})}`,
         responseHandler: "text",
       }),
       transformResponse: (response: unknown) => {
@@ -213,7 +213,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
     getDelegationPolicy: builder.query<DelegationPolicyUI, string>({
       query: (id) => ({
-        url: `authsec/uflow/delegation-policies/${id}`,
+        url: `uflow/delegation-policies/${id}`,
         responseHandler: "text",
       }),
       transformResponse: (response: unknown) => {
@@ -231,7 +231,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
     createDelegationPolicy: builder.mutation<DelegationPolicyUI, CreateDelegationPolicyRequest>({
       query: (body) => ({
-        url: "authsec/uflow/delegation-policies",
+        url: "uflow/delegation-policies",
         method: "POST",
         body,
       }),
@@ -245,7 +245,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
       { id: string; body: CreateDelegationPolicyRequest }
     >({
       query: ({ id, body }) => ({
-        url: `authsec/uflow/delegation-policies/${id}`,
+        url: `uflow/delegation-policies/${id}`,
         method: "PUT",
         body,
       }),
@@ -259,7 +259,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
     deleteDelegationPolicy: builder.mutation<{ message?: string }, string>({
       query: (id) => ({
-        url: `authsec/uflow/delegation-policies/${id}`,
+        url: `uflow/delegation-policies/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, id) => [

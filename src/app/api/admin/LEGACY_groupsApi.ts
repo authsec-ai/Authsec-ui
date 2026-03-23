@@ -82,7 +82,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
     // POST /uflow/admin/groups
     createGroups: builder.mutation<CreateGroupsResponse, CreateGroupsRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/groups',
+        url: 'uflow/admin/groups',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -91,7 +91,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
 
     // GET /uflow/admin/groups/:tenant_id
     getGroupsByTenant: builder.query<AdminGroup[], string>({
-      query: (tenant_id) => `authsec/uflow/admin/groups/${tenant_id}`,
+      query: (tenant_id) => `uflow/admin/groups/${tenant_id}`,
       transformResponse: (response: { groups: AdminGroup[] }) => response.groups,
       providesTags: ['AdminRBACGroup'],
     }),
@@ -99,7 +99,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
     // PUT /uflow/admin/groups/:id
     updateGroup: builder.mutation<ApiResponse, { id: string; data: UpdateGroupRequest }>({
       query: ({ id, data }) => ({
-        url: `authsec/uflow/admin/groups/${id}`,
+        url: `uflow/admin/groups/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -109,7 +109,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/groups
     deleteGroups: builder.mutation<ApiResponse, DeleteGroupsRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/groups',
+        url: 'uflow/admin/groups',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -119,7 +119,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
     // POST /uflow/admin/groups/map
     mapGroupsToClient: builder.mutation<ApiResponse, MapGroupsToClientRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/groups/map',
+        url: 'uflow/admin/groups/map',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -129,7 +129,7 @@ export const adminGroupsApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/groups/map
     unmapGroupsFromClient: builder.mutation<ApiResponse, UnmapGroupsFromClientRequest>({
       query: (data) => ({
-        url: 'authsec/uflow/admin/groups/map',
+        url: 'uflow/admin/groups/map',
         method: 'DELETE',
         body: withSessionData(data),
       }),

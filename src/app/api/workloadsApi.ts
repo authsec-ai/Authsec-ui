@@ -1,4 +1,5 @@
 import { baseApi, withSessionData } from "./baseApi";
+import { unsupportedApiError } from "./unsupported";
 
 // New K8s-style selectors object
 export interface K8sSelectors {
@@ -216,7 +217,7 @@ export const workloadsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listWorkloads: builder.query<ListWorkloadsResponse, void>({
       query: () => ({
-        url: "/spiresvc/v1/workloads",
+        url: "spire/registry/workloads",
         method: "GET",
       }),
       transformResponse: (
@@ -248,7 +249,7 @@ export const workloadsApi = baseApi.injectEndpoints({
       RegisterWorkloadRequest
     >({
       query: (body) => ({
-        url: "/spiresvc/v1/workloads",
+        url: "spire/registry/workloads",
         method: "POST",
         body: withSessionData(body),
       }),
@@ -264,10 +265,10 @@ export const workloadsApi = baseApi.injectEndpoints({
       UpdateWorkloadResponse,
       UpdateWorkloadRequest
     >({
-      query: ({ workload_id, ...body }) => ({
-        url: `/spiresvc/v1/workloads/${workload_id}`,
-        method: "PUT",
-        body: withSessionData(body),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE workload updates are not exposed by the backend route contract.",
+        ) as any,
       }),
       invalidatesTags: (result, error, arg) => [
         { type: "Workload", id: arg.workload_id },
@@ -278,61 +279,76 @@ export const workloadsApi = baseApi.injectEndpoints({
       DeleteWorkloadResponse,
       DeleteWorkloadRequest
     >({
-      query: ({ workload_id }) => ({
-        url: `/spiresvc/v1/workloads/${workload_id}`,
-        method: "DELETE",
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE workload deletion is not exposed by the backend route contract.",
+        ) as any,
       }),
       invalidatesTags: [{ type: "Workload", id: "LIST" }],
     }),
     getWorkload: builder.query<WorkloadRecord | null, { workload_id: string }>({
-      query: ({ workload_id }) => ({
-        url: `/spiresvc/v1/workloads/${workload_id}`,
-        method: "GET",
-      }),
-      transformResponse: (response: WorkloadEnvelope | WorkloadRecord) =>
-        extractWorkloadRecord(response),
+      async queryFn({ workload_id }, _api, _extraOptions, baseQuery) {
+        const result = await baseQuery({
+          url: "spire/registry/workloads",
+          method: "GET",
+        });
+
+        if (result.error) {
+          return { error: result.error as any };
+        }
+
+        const workloads = extractWorkloads(
+          result.data as ListWorkloadsEnvelope | WorkloadRecord[] | undefined,
+        );
+        const workload =
+          workloads.find(
+            (candidate) =>
+              candidate.id === workload_id ||
+              candidate.workload_id === workload_id ||
+              candidate.spiffe_id === workload_id ||
+              candidate.spiffeId === workload_id,
+          ) ?? null;
+
+        if (!workload) {
+          return {
+            error: {
+              status: 404,
+              data: { message: "Workload not found" },
+            } as any,
+          };
+        }
+
+        return { data: workload };
+      },
       providesTags: (result, error, arg) => [
         { type: "Workload", id: arg.workload_id },
       ],
     }),
     registerEntry: builder.mutation<EntryRecord, RegisterEntryRequest>({
-      query: (body) => ({
-        url: "/spiresvc/v1/entries",
-        method: "POST",
-        body,
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE entry management is not exposed by the backend.",
+        ) as any,
       }),
       invalidatesTags: [{ type: "Entry", id: "LIST" }],
     }),
     updateEntry: builder.mutation<EntryRecord, UpdateEntryRequest>({
-      query: ({ entry_id, tenant_id, ...body }) => {
-        const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
-        const queryString = searchParams.toString();
-        return {
-          url: `/spiresvc/v1/entries/${entry_id}${
-            queryString ? `?${queryString}` : ""
-          }`,
-          method: "PUT",
-          body,
-        };
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE entry management is not exposed by the backend.",
+        ) as any,
+      }),
       invalidatesTags: (result, error, arg) => [
         { type: "Entry", id: arg.entry_id },
         { type: "Entry", id: "LIST" },
       ],
     }),
     deleteEntry: builder.mutation<DeleteEntryResponse, DeleteEntryRequest>({
-      query: ({ entry_id, tenant_id }) => {
-        const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
-        const queryString = searchParams.toString();
-        return {
-          url: `/spiresvc/v1/entries/${entry_id}${
-            queryString ? `?${queryString}` : ""
-          }`,
-          method: "DELETE",
-        };
-      },
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE entry management is not exposed by the backend.",
+        ) as any,
+      }),
       invalidatesTags: (result, error, arg) => [
         { type: "Entry", id: arg.entry_id },
         { type: "Entry", id: "LIST" },
@@ -347,24 +363,11 @@ export const workloadsApi = baseApi.injectEndpoints({
         spiffe_id?: string;
       }
     >({
-      query: (params) => {
-        const searchParams = new URLSearchParams();
-        if (params.tenant_id)
-          searchParams.append("tenant_id", params.tenant_id);
-        if (params.limit !== undefined)
-          searchParams.append("limit", params.limit.toString());
-        if (params.offset !== undefined)
-          searchParams.append("offset", params.offset.toString());
-        if (params.spiffe_id)
-          searchParams.append("spiffe_id", params.spiffe_id);
-
-        return {
-          url: `/spiresvc/v1/entries?${searchParams.toString()}`,
-          method: "GET",
-        };
-      },
-      transformResponse: (response: { entries?: EntryRecord[] }) =>
-        response.entries || [],
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE entry management is not exposed by the backend.",
+        ) as any,
+      }),
       providesTags: (result) =>
         result
           ? [
@@ -380,31 +383,21 @@ export const workloadsApi = baseApi.injectEndpoints({
       EntryRecord | null,
       { entry_id: string; tenant_id?: string }
     >({
-      query: ({ entry_id, tenant_id }) => {
-        const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
-        const queryString = searchParams.toString();
-        return {
-          url: `/spiresvc/v1/entries/${entry_id}${
-            queryString ? `?${queryString}` : ""
-          }`,
-          method: "GET",
-        };
-      },
-      transformResponse: (response: EntryRecord | { entry?: EntryRecord }) =>
-        (response as { entry?: EntryRecord }).entry ||
-        (response as EntryRecord),
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE entry management is not exposed by the backend.",
+        ) as any,
+      }),
       providesTags: (result, _error, arg) => [
         { type: "Entry", id: arg.entry_id },
       ],
     }),
     listAgents: builder.query<AgentRecord[], void>({
-      query: () => ({
-        url: "/spiresvc/v1/agents",
-        method: "GET",
+      queryFn: async () => ({
+        error: unsupportedApiError(
+          "SPIRE agent inventory is not exposed by the backend.",
+        ) as any,
       }),
-      transformResponse: (response: { agents?: AgentRecord[] }) =>
-        response.agents || [],
       providesTags: (result) =>
         result
           ? [

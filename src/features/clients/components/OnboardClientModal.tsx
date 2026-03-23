@@ -25,7 +25,6 @@ import {
 } from "@/app/api/clientApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { useNavigate } from "react-router-dom";
-import { trackClientCreated } from "@/utils/analytics";
 import { cn } from "@/lib/utils";
 
 interface OnboardClientModalProps {
@@ -138,7 +137,6 @@ export function OnboardClientModal({
           ? `AI agent created. ${successLabel}: ${successDetail}`
           : `MCP server created. ${successLabel}: ${successDetail}`,
       );
-      trackClientCreated(trimmedName);
 
       onClose();
       onSuccess?.(response.client_id);
