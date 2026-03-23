@@ -55,7 +55,7 @@ export interface ApiResponse {
 export const endUserResourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => {
     const buildPath = (tenant_id: string, suffix = "") =>
-      `uflow/admin/endusers/${tenant_id}/resources${suffix}`;
+      `authsec/uflow/admin/endusers/${tenant_id}/resources${suffix}`;
 
     return {
       // GET /admin/endusers/:tenant_id/resources - List all tenant resources

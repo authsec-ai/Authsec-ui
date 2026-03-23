@@ -331,7 +331,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       OidcProviderRequest
     >({
       query: (data) => ({
-        url: "/oocmgr/oidc/add-provider",
+        url: "/authsec/oocmgr/oidc/add-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -343,7 +343,7 @@ export const authMethodApi = baseApi.injectEndpoints({
 
     getOidcConfig: builder.query<OidcConfigResponse, OidcConfigRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/get-config",
+        url: "/authsec/oocmgr/oidc/get-config",
         method: "POST",
         body: data,
       }),
@@ -362,7 +362,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       UpdateCompleteTenantRequest
     >({
       query: (data) => ({
-        url: "/oocmgr/tenant/update-complete",
+        url: "/authsec/oocmgr/tenant/update-complete",
         method: "POST",
         body: data,
       }),
@@ -404,13 +404,13 @@ export const authMethodApi = baseApi.injectEndpoints({
         };
 
         console.log("[showAuthProviders] Sending request:", {
-          url: "/oocmgr/oidc/show-auth-providers",
+          url: "/authsec/oocmgr/oidc/show-auth-providers",
           headers,
           body: requestBody,
         });
 
         return {
-          url: "/oocmgr/oidc/show-auth-providers",
+          url: "/authsec/oocmgr/oidc/show-auth-providers",
           method: "POST",
           headers,
           body: requestBody,
@@ -431,7 +431,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       EditClientAuthProviderRequest
     >({
       query: (data) => ({
-        url: "/oocmgr/oidc/edit-client-auth-provider",
+        url: "/authsec/oocmgr/oidc/edit-client-auth-provider",
         method: "POST",
         body: data,
       }),
@@ -454,7 +454,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       UpdateProviderRequest
     >({
       query: (data) => ({
-        url: "/oocmgr/oidc/update-provider",
+        url: "/authsec/oocmgr/oidc/update-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -469,7 +469,7 @@ export const authMethodApi = baseApi.injectEndpoints({
       DeleteProviderRequest
     >({
       query: (data) => ({
-        url: "/oocmgr/oidc/delete-provider",
+        url: "/authsec/oocmgr/oidc/delete-provider",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -481,7 +481,7 @@ export const authMethodApi = baseApi.injectEndpoints({
 
     rawHydraDump: builder.query<RawHydraDumpResponse, RawHydraDumpRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/raw-hydra-dump",
+        url: "/authsec/oocmgr/oidc/raw-hydra-dump",
         method: "POST",
         headers: {
           "Content-Type": "application/json",

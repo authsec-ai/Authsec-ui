@@ -54,7 +54,7 @@ export interface ApiResponse {
 
 export const adminResourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => {
-    const BASE_PATH = "uflow/admin/resources";
+    const BASE_PATH = "authsec/uflow/admin/resources";
 
     return {
       // GET /admin/resources - List all global admin resources

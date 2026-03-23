@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AuthSecMark } from "@/components/ui/authsec-logo";
+import authsecLogoWhite from "@/logos/AuthSec Logo White.png";
 import { useTheme } from "next-themes";
 import {
   useAdminLoginPrecheckMutation,
@@ -30,12 +30,15 @@ import { toast } from "react-hot-toast";
 import {
   useGetUFlowOIDCProvidersMutation,
   useInitiateUFlowOIDCMutation,
+  useLazyCheckTenantDomainQuery,
   type UFlowOIDCProvider,
   type UFlowOIDCCallbackData,
 } from "@/app/api/oidcApi";
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
 import config from "../../config";
+
+import { trackXSignupCompleted } from "@/utils/xPixel";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";
@@ -52,7 +55,6 @@ interface IdleNotice {
   tone: "info" | "error";
   message: string;
 }
-
 
 // Lightweight, URL-safe handoff token utilities for cross-tenant redirects
 // (moved to utils/handoff)
@@ -129,6 +131,13 @@ export function AdminLoginHubPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [tenantDomain, setTenantDomain] = useState("");
+  const [domainCheckStatus, setDomainCheckStatus] = useState<
+    "idle" | "checking" | "available" | "taken" | "error"
+  >("idle");
+  const [domainCheckMessage, setDomainCheckMessage] = useState<string | null>(
+    null,
+  );
+  const [checkTenantDomain] = useLazyCheckTenantDomainQuery();
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isPrecheckInProgress, setIsPrecheckInProgress] = useState(false);
 
@@ -215,6 +224,32 @@ export function AdminLoginHubPage() {
       setCanResend(true);
     }
   }, [timeLeft, canResend, flowStage]);
+
+  // Real-time domain availability check
+  useEffect(() => {
+    if (!tenantDomain || tenantDomain.length < 2) {
+      setDomainCheckStatus("idle");
+      setDomainCheckMessage(null);
+      return;
+    }
+    setDomainCheckStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkTenantDomain(tenantDomain).unwrap();
+        if (result.exists) {
+          setDomainCheckStatus("taken");
+          setDomainCheckMessage("This domain is already taken");
+        } else {
+          setDomainCheckStatus("available");
+          setDomainCheckMessage("Available");
+        }
+      } catch {
+        setDomainCheckStatus("error");
+        setDomainCheckMessage("Could not check availability");
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [tenantDomain, checkTenantDomain]);
 
   // Debug logging (development only)
   useEffect(() => {
@@ -681,7 +716,9 @@ export function AdminLoginHubPage() {
     response: AdminLoginPrecheckResponse,
   ): string | null => {
     const providers = response.available_providers ?? [];
-    const nonEmailProviders = providers.filter((provider) => provider !== "email");
+    const nonEmailProviders = providers.filter(
+      (provider) => provider !== "email",
+    );
     const allowsPassword =
       response.requires_password !== false && providers.includes("email");
 
@@ -694,7 +731,9 @@ export function AdminLoginHubPage() {
 
   const getPrecheckErrorMessage = (error: any) => {
     const rawMessage =
-      error?.data?.message || error?.error || "Unable to verify email right now";
+      error?.data?.message ||
+      error?.error ||
+      "Unable to verify email right now";
     const status = error?.status || error?.originalStatus;
 
     if (status === 429 || /too many|rate limit/i.test(rawMessage)) {
@@ -812,6 +851,8 @@ export function AdminLoginHubPage() {
     setCheckedEmail("");
     setExistingPassword("");
     setTenantDomain("");
+    setDomainCheckStatus("idle");
+    setDomainCheckMessage(null);
     setNewPassword("");
     setConfirmPassword("");
     setOtp("");
@@ -875,6 +916,7 @@ export function AdminLoginHubPage() {
         response?.message ||
           "If the email is registered, we'll send you an OTP to reset your password.",
       );
+      trackForgotPasswordRequested();
       setForgotPasswordStep("otp");
     } catch (error: unknown) {
       const apiError = error as { data?: { message?: string } };
@@ -940,6 +982,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Password reset successfully. Please sign in with your new password.",
       );
+      trackPasswordResetCompleted();
       resetForgotPasswordState();
       setEmailInput(normalizedEmail);
       setCheckedEmail(normalizedEmail);
@@ -963,6 +1006,7 @@ export function AdminLoginHubPage() {
   const handleUFlowProviderAuth = async (provider: UFlowOIDCProvider) => {
     try {
       setIdleNotice(null);
+      trackOAuthProviderClicked(provider.provider_name);
       setAuthenticatingProvider(provider.provider_name);
 
       const response = await initiateUFlowOIDC({
@@ -1115,6 +1159,7 @@ export function AdminLoginHubPage() {
 
     try {
       setIsPasswordSubmitting(true);
+      trackSignInAttempted("password");
       const tenantOverride = tenantDomain?.trim() || undefined;
       const result = await signIn(
         currentEmail,
@@ -1123,6 +1168,7 @@ export function AdminLoginHubPage() {
       );
 
       if (result.success) {
+        trackSignInSucceeded();
         // Already on the correct tenant domain (redirected in precheck), navigate locally
         if (result.requiresWebAuthn) {
           navigate("/admin/webauthn", { replace: true });
@@ -1196,11 +1242,15 @@ export function AdminLoginHubPage() {
       toast.success(
         "Account created! Check your inbox for the verification code.",
       );
+      trackWorkspaceCreated(tenantDomain.trim());
       safeSetFlowStage("otp");
       setTimeLeft(60);
       setCanResend(false);
     } catch (error: any) {
-      const message = error?.data?.message || "Failed to create account";
+      const message =
+        error?.data?.message ||
+        error?.data?.error ||
+        "Failed to create account";
       toast.error(message);
     }
   };
@@ -1214,6 +1264,8 @@ export function AdminLoginHubPage() {
 
       if ("data" in result) {
         toast.success("Account verified successfully!");
+        trackOtpVerified();
+        trackXSignupCompleted(currentEmail);
 
         // Redirect to tenant domain for login (skip on localhost)
         const isLocalhost = window.location.hostname === "localhost" || window.location.hostname.startsWith("127.");
@@ -1297,73 +1349,143 @@ export function AdminLoginHubPage() {
 
   return (
     <AuthSplitFrame
+      className="auth-shell--admin"
       valuePanel={
-        <AuthValuePanel
-          eyebrow="Identity & Access Management"
-          title="Authentication setup in minutes."
-          points={[
-            "Connect OAuth, social login, and SAML SSO.",
-            "Enforce MFA with WebAuthn and authenticator app fallback.",
-            "Review audit logs and apply policy controls.",
-            "Support GDPR, SOC 2, and enterprise compliance reviews.",
-          ]}
-        />
+        <div className="auth-value-panel--dark">
+          {/* Main content — vertically centered */}
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="flex items-center gap-2.5 brand-logo">
+              <img
+                src={authsecLogoWhite}
+                alt="AuthSec"
+                className="h-8 w-8 object-contain"
+              />
+              <span className="text-white font-bold text-2xl tracking-tight">
+                AuthSec
+              </span>
+            </div>
+            <AuthValuePanel
+              eyebrow="Admin Console"
+              title="Agentic auth for AI-native teams"
+              subtitle="The fastest way to add authentication to your AI agents, MCP servers, and voice interfaces."
+              points={[
+                "OAuth, SAML SSO, and social login in minutes",
+                "Headless & voice auth for AI agents and MCP servers",
+                "Full RBAC with audit logs and policy controls",
+                "Agent first. Developer first. Fully open source.",
+              ]}
+            />
+          </div>
+
+          {/* Footer — pinned to bottom */}
+          <div className="mt-auto pt-6 flex items-center justify-between mx-3">
+            <span className="text-white/35 text-xs">
+              © {new Date().getFullYear()} AuthSec. All rights reserved.
+            </span>
+            <div className="flex items-center gap-3">
+              <a
+                href="https://x.com/authsec"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/35 hover:text-white/70 transition-colors"
+                aria-label="X (Twitter)"
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </a>
+              <a
+                href="https://github.com/authsec-ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/35 hover:text-white/70 transition-colors"
+                aria-label="GitHub"
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
       }
     >
       <div className="space-y-4">
         <AuthActionPanel>
-          <div className="mb-5 flex items-center justify-center gap-3">
-            <AuthSecMark className="h-8 w-8 text-slate-900" />
-            <span className="text-sm font-medium text-slate-600">
-              AuthSec Admin Access
-            </span>
+          <div className="w-4/5 mx-auto mb-7">
+            {flowStage === "idle" && (
+              <h2 className="text-[1.6rem] mb-3 text-center font-bold tracking-tight text-slate-900 leading-tight">
+                Continue with your email
+              </h2>
+            )}
+            {flowStage === "idle" && (
+              <p className="mt-1.5 text-center text-sm text-slate-700">
+                Enter your work email to sign in or create an account
+              </p>
+            )}
           </div>
 
-          <AuthStepHeader
-            align="center"
-            title={flowCopy.title}
-            subtitle={flowCopy.description}
-          />
+          {flowStage !== "idle" && (
+            <AuthStepHeader
+              className="w-4/5 mx-auto text-center"
+              title={flowCopy.title}
+              subtitle={flowCopy.description}
+            />
+          )}
 
           <div className="space-y-6">
             {flowStage === "idle" && (
               <>
                 <form className="space-y-4" onSubmit={handleInlineEmailSubmit}>
-                  <Input
-                    id="inline-email"
-                    type="email"
-                    required
-                    aria-label="Work email"
-                    value={emailInput}
-                    onChange={(event) => {
-                      clearIdleState();
-                      setEmailInput(event.target.value);
-                    }}
-                    className="h-11 rounded-[12px] px-4 text-[15px]"
-                    placeholder="name@company.com"
-                  />
-                  <Button
-                    type="submit"
-                    className="h-11 w-full rounded-[12px] font-semibold"
-                    disabled={
-                      isPrecheckLoading ||
-                      (!!ssoProviderName && !ssoProvider) ||
-                      (idleNotice?.tone === "info" && !ssoProviderName)
-                    }
-                  >
-                    {isPrecheckLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Checking settings...
-                      </>
-                    ) : ssoProviderName ? (
-                      "Continue with SSO"
-                    ) : idleNotice?.tone === "info" ? (
-                      "Use your identity provider"
-                    ) : (
-                      "Continue"
-                    )}
-                  </Button>
+                  <div className="w-4/5 mx-auto space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="inline-email">Work email</Label>
+                      <Input
+                        id="inline-email"
+                        type="email"
+                        required
+                        value={emailInput}
+                        onChange={(event) => {
+                          clearIdleState();
+                          setEmailInput(event.target.value);
+                        }}
+                        className="h-11 rounded-[12px] px-4 text-[15px]"
+                        placeholder="name@company.com"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="h-11 w-full rounded-[12px] font-semibold"
+                      disabled={
+                        isPrecheckLoading ||
+                        (!!ssoProviderName && !ssoProvider) ||
+                        (idleNotice?.tone === "info" && !ssoProviderName)
+                      }
+                    >
+                      {isPrecheckLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Checking settings...
+                        </>
+                      ) : ssoProviderName ? (
+                        "Continue with SSO"
+                      ) : idleNotice?.tone === "info" ? (
+                        "Use your identity provider"
+                      ) : (
+                        "Continue"
+                      )}
+                    </Button>
+                  </div>
                 </form>
 
                 {idleNotice ? (
@@ -1387,7 +1509,7 @@ export function AdminLoginHubPage() {
                   <div className="auth-panel-divider" />
                 </div>
 
-                <div className="space-y-3">
+                <div className="flex flex-col items-center gap-3">
                   {orderedUflowProviders.map((provider) => {
                     const isLoading =
                       authenticatingProvider === provider.provider_name;
@@ -1405,7 +1527,7 @@ export function AdminLoginHubPage() {
                         key={provider.provider_name}
                         type="button"
                         size="lg"
-                        className="h-11 w-full justify-start gap-3 rounded-[12px] px-4 font-semibold"
+                        className="h-11 w-4/5 mx-auto justify-center gap-3 rounded-[12px] px-4 font-semibold cursor-pointer"
                         variant="outline"
                         onClick={() => handleUFlowProviderAuth(provider)}
                         disabled={authenticatingProvider !== null}
@@ -1438,13 +1560,13 @@ export function AdminLoginHubPage() {
 
             {flowStage === "existing" && (
               <form className="space-y-5" onSubmit={handleExistingSignIn}>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="existing-email">Email</Label>
                   <div className="auth-inline-note text-sm font-medium">
                     {currentEmail}
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="login-password">Password</Label>
                     <button
@@ -1466,7 +1588,7 @@ export function AdminLoginHubPage() {
                     placeholder="Enter your password"
                   />
                 </div>
-                <div className="flex items-center gap-3 pt-2">
+                <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
                   <Button
                     type="submit"
                     className="h-11 flex-1 rounded-xl font-semibold"
@@ -1492,24 +1614,57 @@ export function AdminLoginHubPage() {
 
             {flowStage === "register" && (
               <form className="space-y-5" onSubmit={handleBootstrap}>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="register-email">Email</Label>
                   <div className="auth-inline-note text-sm font-medium">
                     {currentEmail}
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="tenant-domain">Workspace Domain</Label>
                   <Input
                     id="tenant-domain"
                     placeholder="acme-cloud"
                     value={tenantDomain}
-                    onChange={(event) => setTenantDomain(event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(
+                        /[^a-zA-Z0-9]/g,
+                        "",
+                      );
+                      setTenantDomain(value);
+                    }}
                     required
-                    className="h-11 rounded-xl"
+                    className={`h-11 rounded-xl ${
+                      domainCheckStatus === "available"
+                        ? "border-green-500"
+                        : domainCheckStatus === "taken" ||
+                            domainCheckStatus === "error"
+                          ? "border-red-500"
+                          : ""
+                    }`}
                   />
+                  {domainCheckStatus === "checking" && (
+                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Checking availability...</span>
+                    </div>
+                  )}
+                  {domainCheckStatus === "available" && (
+                    <div className="flex items-center gap-1.5 text-sm text-green-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Available</span>
+                    </div>
+                  )}
+                  {(domainCheckStatus === "taken" ||
+                    domainCheckStatus === "error") &&
+                    domainCheckMessage && (
+                      <div className="flex items-center gap-1.5 text-sm text-red-600">
+                        <XCircle className="h-3.5 w-3.5" />
+                        <span>{domainCheckMessage}</span>
+                      </div>
+                    )}
                 </div>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="new-password">Password</Label>
                   <PasswordInput
                     id="new-password"
@@ -1520,7 +1675,7 @@ export function AdminLoginHubPage() {
                     placeholder="Choose a password"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="w-4/5 mx-auto space-y-2">
                   <Label htmlFor="confirm-password">Confirm Password</Label>
                   <PasswordInput
                     id="confirm-password"
@@ -1531,7 +1686,7 @@ export function AdminLoginHubPage() {
                     placeholder="Confirm your password"
                   />
                 </div>
-                <div className="flex items-center gap-3 pt-2">
+                <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
                   <Button
                     type="submit"
                     className="h-11 flex-1 rounded-xl font-semibold"
@@ -1556,7 +1711,7 @@ export function AdminLoginHubPage() {
             )}
 
             {flowStage === "otp" && (
-              <div className="space-y-5">
+              <div className="w-4/5 mx-auto space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="otp-email">Email</Label>
                   <div className="auth-inline-note text-sm font-medium">
@@ -1648,7 +1803,10 @@ export function AdminLoginHubPage() {
               </DialogHeader>
 
               {forgotPasswordStep === "email" && (
-                <form className="space-y-4" onSubmit={handleForgotPasswordRequest}>
+                <form
+                  className="space-y-4"
+                  onSubmit={handleForgotPasswordRequest}
+                >
                   <div className="space-y-2">
                     <Label htmlFor="forgot-email">Email</Label>
                     <Input
@@ -1677,7 +1835,9 @@ export function AdminLoginHubPage() {
                     <Button
                       type="submit"
                       className="flex-1 rounded-xl font-semibold"
-                      disabled={isForgotPasswordSubmitting || !forgotPasswordEmail}
+                      disabled={
+                        isForgotPasswordSubmitting || !forgotPasswordEmail
+                      }
                     >
                       {isForgotPasswordSubmitting ? (
                         <>
@@ -1737,7 +1897,8 @@ export function AdminLoginHubPage() {
                       type="submit"
                       className="flex-1 rounded-xl font-semibold"
                       disabled={
-                        isForgotPasswordSubmitting || forgotPasswordOtp.length !== 6
+                        isForgotPasswordSubmitting ||
+                        forgotPasswordOtp.length !== 6
                       }
                     >
                       {isForgotPasswordSubmitting ? (
@@ -1754,14 +1915,19 @@ export function AdminLoginHubPage() {
               )}
 
               {forgotPasswordStep === "reset" && (
-                <form className="space-y-4" onSubmit={handleForgotPasswordReset}>
+                <form
+                  className="space-y-4"
+                  onSubmit={handleForgotPasswordReset}
+                >
                   <div className="space-y-2">
                     <Label htmlFor="forgot-new-password">New password</Label>
                     <PasswordInput
                       id="forgot-new-password"
                       placeholder="Enter new password"
                       value={forgotPasswordNew}
-                      onChange={(event) => setForgotPasswordNew(event.target.value)}
+                      onChange={(event) =>
+                        setForgotPasswordNew(event.target.value)
+                      }
                       disabled={isForgotPasswordSubmitting}
                       minLength={10}
                       required
@@ -1769,7 +1935,9 @@ export function AdminLoginHubPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="forgot-confirm-password">Confirm password</Label>
+                    <Label htmlFor="forgot-confirm-password">
+                      Confirm password
+                    </Label>
                     <PasswordInput
                       id="forgot-confirm-password"
                       placeholder="Confirm new password"
@@ -1820,11 +1988,27 @@ export function AdminLoginHubPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="auth-card-footer" aria-label="Trust footer">
-          <span>Security & Compliance</span>
-          <span>Status</span>
-          <span>Privacy</span>
-          <span>Help</span>
+        <div className="auth-card-footer pb-3" aria-label="Trust footer">
+          <span>
+            <a href="https://authsec.ai/security" target="__blank">
+              Security & Compliance
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/terms-and-conditions" target="__blank">
+              Terms
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/privacy-policy" target="__blank">
+              Privacy
+            </a>
+          </span>
+          <span>
+            <a href="https://authsec.ai/contact" target="__blank">
+              Support
+            </a>
+          </span>
         </div>
       </div>
 

@@ -91,7 +91,7 @@ const OIDCCallbackPageInner: React.FC = () => {
       // This protects against backend/provider configs still pointing to /oidc/auth/callback.
       const uflowOAuthType = sessionStorage.getItem("uflow_oauth_type");
       if (uflowOAuthType === "admin") {
-        const adminCallbackUrl = `/uflow/oidc/callback${window.location.search || ""}`;
+        const adminCallbackUrl = `/authsec/uflow/oidc/callback${window.location.search || ""}`;
         console.log(
           "↪️ Admin OAuth callback detected on end-user route. Redirecting to admin callback:",
           adminCallbackUrl,

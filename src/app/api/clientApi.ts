@@ -85,8 +85,25 @@ export interface RegisterClientRequest {
   name: string;
   email: string;
   tenant_id: string;
-  project_id: string;
-  react_app_url: string;
+  client_type?: "application";
+  agent_type?: "mcp-agent";
+  platform?: string;
+  platform_config?: Partial<ClientPlatformConfig>;
+}
+
+export interface ClientPlatformConfig {
+  namespace: string;
+  service_account: string;
+}
+
+export interface RegisterAiAgentClientRequest {
+  tenant_id: string;
+  name: string;
+  email: string;
+  client_type: "ai_agent";
+  agent_type?: "mcp-agent";
+  platform: string;
+  platform_config: ClientPlatformConfig;
 }
 
 export interface RegisterClientResponse {
@@ -95,7 +112,8 @@ export interface RegisterClientResponse {
   tenant_id: string;
   project_id: string;
   name: string;
-  secret_id: string;
+  secret_id?: string;
+  spiffe_id?: string;
   email: string;
   active: boolean;
   created_at: string;
@@ -380,7 +398,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Delete a client completely
     deleteClientComplete: builder.mutation<DeleteClientResponse, DeleteClientRequest>({
       query: ({ tenant_id, client_id }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/delete-complete`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/delete-complete`,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: withSessionData({
@@ -394,7 +412,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Set client status (activate/deactivate)
     setClientStatus: builder.mutation<SetClientStatusResponse, SetClientStatusRequest>({
       query: (data) => ({
-        url: `/clientms/tenants/${data.tenant_id}/clients/set-status`,
+        url: `/authsec/clientms/tenants/${data.tenant_id}/clients/set-status`,
         method: "POST",
         body: data,
       }),
@@ -425,7 +443,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Get raw text to handle potential multiple JSON objects
@@ -491,7 +509,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Handle potential response format issues
@@ -638,12 +656,36 @@ export const clientApi = baseApi.injectEndpoints({
           : [{ type: "Client" as const, id: "ALL" }],
     }),
 
+    // Register a new AI agent client (Tenant-scoped)
+    registerAiAgentClient: builder.mutation<
+      RegisterClientResponse,
+      RegisterAiAgentClientRequest
+    >({
+      query: ({ tenant_id, platform_config, ...body }) => ({
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
+        method: "POST",
+        body: {
+          ...body,
+          agent_type: body.agent_type ?? "mcp-agent",
+          platform_config: {
+            namespace: platform_config.namespace,
+            service_account: platform_config.service_account,
+          },
+        },
+        responseHandler: "text",
+      }),
+      transformResponse: (response: string) => {
+        return parseFirstValidJSON<RegisterClientResponse>(response);
+      },
+      invalidatesTags: [{ type: "Client", id: "LIST" }],
+    }),
+
     // Register a new client (Tenant-scoped)
     registerClient: builder.mutation<RegisterClientResponse, RegisterClientRequest>({
       query: (data) => {
         const tenantId = data.tenant_id;
         return {
-          url: `/clientms/tenants/${tenantId}/clients/create`,
+          url: `/authsec/clientms/tenants/${tenantId}/clients/create`,
           method: "POST",
           body: data,
           responseHandler: "text", // Get raw text to handle multiple JSON objects
@@ -660,7 +702,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Add OIDC provider to a client
     addOIDCProvider: builder.mutation<AddProviderResponse, AddProviderRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/add-provider",
+        url: "/authsec/oocmgr/oidc/add-provider",
         method: "POST",
         body: data,
       }),
@@ -670,7 +712,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Get OIDC configuration for a tenant
     getOIDCConfig: builder.mutation<GetConfigResponse, GetConfigRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/get-config", 
+        url: "/authsec/oocmgr/oidc/get-config", 
         method: "POST",
         body: data,
       }),
@@ -736,6 +778,7 @@ export const {
   useGetClientsQuery,
   useGetAllClientsQuery,
   useRegisterClientMutation,
+  useRegisterAiAgentClientMutation,
   useDeleteClientCompleteMutation,
   useSetClientStatusMutation,
   useAddOIDCProviderMutation,

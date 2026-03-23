@@ -301,7 +301,7 @@
   --color-border-strong: rgba(255, 255, 255, 0.12);
 
   /* Single accent color - blue */
-  --color-primary: var(--brand-blue-300);
+  --color-primary: var(--brand-blue-600);
   --color-primary-strong: var(--brand-blue-400);
   --color-primary-soft: #102a56;
 
@@ -337,6 +337,8 @@
   --component-card-variant-pagination-shadow: none;
 
   /* Buttons */
+  --component-button-primary-bg: var(--brand-blue-600);
+  --component-button-primary-hover-bg: var(--brand-blue-700);
   --component-button-secondary-bg: var(--color-surface-subtle);
   --component-button-secondary-fg: var(--color-text-primary);
   --component-button-secondary-hover-bg: #2a2a2a;
@@ -371,9 +373,9 @@
   --component-input-disabled-foreground: rgba(255, 255, 255, 0.4);
 
   /* CTA Buttons */
-  --component-button-cta-bg: var(--color-primary);
+  --component-button-cta-bg: var(--brand-blue-600);
   --component-button-cta-fg: #ffffff;
-  --component-button-cta-hover-bg: var(--color-primary-strong);
+  --component-button-cta-hover-bg: var(--brand-blue-700);
   --component-button-cta-border: transparent;
   --component-button-cta-shadow: none;
   --component-button-cta-hover-shadow: none;

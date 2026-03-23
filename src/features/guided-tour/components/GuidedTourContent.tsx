@@ -127,7 +127,7 @@ export function GuidedTourContent({
           <Button
             size="sm"
             onClick={onNext}
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            className="bg-[var(--brand-blue-600)] text-white hover:bg-[var(--brand-blue-700)]"
           >
             {isLastStep ? "Got it" : "Next"}
           </Button>

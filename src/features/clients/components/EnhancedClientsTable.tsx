@@ -13,9 +13,9 @@ interface EnhancedClientsTableProps {
   selectedClients?: string[];
   onSelectionChange?: (clientIds: string[]) => void;
   onDeleteClient: (clientId: string) => void;
-  onCreateClient: () => void;
   onToggleStatus?: (clientId: string) => void;
   onViewSDK?: (clientId: string) => void;
+  onDelegateTrust?: (client: ClientWithAuthMethods) => void;
   onAddAuthMethod?: (clientId: string) => void;
   onShowAuthMethods?: (client: ClientWithAuthMethods) => void;
   onPreviewLogin?: (clientId: string) => void;
@@ -34,9 +34,9 @@ export function EnhancedClientsTable({
   selectedClients = [],
   onSelectionChange,
   onDeleteClient,
-  onCreateClient,
   onToggleStatus,
   onViewSDK,
+  onDelegateTrust,
   onAddAuthMethod,
   onShowAuthMethods,
   onPreviewLogin,
@@ -78,6 +78,7 @@ export function EnhancedClientsTable({
       onDelete: onDeleteClient,
       onToggleStatus: onToggleStatus,
       onViewSDK: onViewSDK,
+      onDelegateTrust,
       onAddAuthMethod,
       onShowAuthMethods,
       onPreviewLogin,
@@ -91,6 +92,7 @@ export function EnhancedClientsTable({
       onDeleteClient,
       onToggleStatus,
       onViewSDK,
+      onDelegateTrust,
       onAddAuthMethod,
       onShowAuthMethods,
       onPreviewLogin,

@@ -57,6 +57,13 @@ import { AddExternalServicePage } from "./features/external-services/AddExternal
 // Custom Domains
 import { CustomDomainsPage } from "./features/custom-domains";
 
+// Trust Delegation
+import {
+  TrustDelegationPoliciesPage,
+  TrustDelegationPolicyDetailPage,
+  TrustDelegationPolicyFormPage,
+} from "./features/trust-delegation";
+
 // LEGACY/OBSOLETE: SDK Manager has been deprecated
 // import { SDKManagerPage } from "./features/_LEGACY_sdk-manager/SDKManagerPage";
 
@@ -148,6 +155,16 @@ function ContextRouteSync() {
   return null;
 }
 
+function LegacyTrustDelegationPolicyDetailRedirect() {
+  const { policyId = "" } = useParams();
+  return <Navigate to={`/trust-delegation/${policyId}`} replace />;
+}
+
+function LegacyTrustDelegationPolicyEditRedirect() {
+  const { policyId = "" } = useParams();
+  return <Navigate to={`/trust-delegation/${policyId}/edit`} replace />;
+}
+
 function LegacyClientOnboardRedirect() {
   const { clientId } = useParams<{ clientId?: string }>();
   const target = clientId
@@ -197,7 +214,7 @@ function AppContent() {
                   />
                   <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
-                    path="/uflow/oidc/callback"
+                    path="/authsec/uflow/oidc/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
                   {/* Backward compat: backend renderOAuthCallbackHTML redirects here */}
@@ -796,6 +813,105 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               /> */}
+
+                  {/* Trust Delegation */}
+                  <Route
+                    path="/trust-delegation"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TrustDelegationPoliciesPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/active"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <Navigate to="/trust-delegation" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TrustDelegationPolicyFormPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/:policyId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TrustDelegationPolicyDetailPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/:policyId/edit"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TrustDelegationPolicyFormPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/policies"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <Navigate to="/trust-delegation" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/policies/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <Navigate to="/trust-delegation/new" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/policies/:policyId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <LegacyTrustDelegationPolicyDetailRedirect />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/policies/:policyId/edit"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <LegacyTrustDelegationPolicyEditRedirect />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/trust-delegation/logs"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <Navigate to="/trust-delegation" replace />
+                      </ProtectedRoute>
+                    }
+                  />
                 </Routes>
 
                 {/* Professional toast notification system */}

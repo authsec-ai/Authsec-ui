@@ -66,6 +66,11 @@ const STATIC_NAV_DATA = {
       icon: ShieldCheck,
     },
     {
+      title: "Trust Delegation",
+      url: "/trust-delegation",
+      icon: ShieldPlus,
+    },
+    {
       title: "SDK Hub",
       url: "/sdk",
       icon: Code2,

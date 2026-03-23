@@ -29,11 +29,11 @@
   }
 
   .dark {
-    --console-surface-page: #0f1116;
-    --console-surface-panel: #10161f;
-    --console-surface-stage: #141922;
-    --console-surface-rail: #171d26;
-    --console-surface-subsection: #151c26;
+    --console-surface-page: #111111;
+    --console-surface-panel: #161616;
+    --console-surface-stage: #1a1a1a;
+    --console-surface-rail: #1e1e1e;
+    --console-surface-subsection: #181818;
 
     --console-border-soft: rgba(255, 255, 255, 0.1);
     --console-border-strong: rgba(255, 255, 255, 0.16);
@@ -44,7 +44,7 @@
     --console-text-2: #c1c8d4;
     --console-text-3: #94a0b3;
 
-    --console-accent: var(--brand-blue-300);
+    --console-accent: var(--brand-blue-600);
 
     --console-hover-fill: color-mix(in srgb, var(--console-accent) 6%, var(--console-surface-panel));
     --console-hover-outline: color-mix(in srgb, var(--console-accent) 32%, var(--console-border-strong));

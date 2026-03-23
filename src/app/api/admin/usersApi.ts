@@ -138,7 +138,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
         if (params.is_synced_user !== undefined) body.is_synced_user = params.is_synced_user;
 
         return {
-          url: 'uflow/admin/users/list',
+          url: 'authsec/uflow/admin/users/list',
           method: 'POST',
           body: withSessionData(body),
         };
@@ -149,7 +149,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // GET /uflow/admin/users/:user_id
     // Get a specific admin user by ID
     getAdminUser: builder.query<AdminUser, string>({
-      query: (user_id) => `uflow/admin/users/${user_id}`,
+      query: (user_id) => `authsec/uflow/admin/users/${user_id}`,
       providesTags: (result, error, id) => [{ type: 'AdminUser', id }],
     }),
 
@@ -157,7 +157,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Check Active Directory configuration status for admin users
     checkADConfigStatus: builder.query<ConfigStatus, void>({
       query: () => ({
-        url: 'uflow/admin/users/ad/status',
+        url: 'authsec/uflow/admin/users/ad/status',
         method: 'POST',
         body: withSessionData({}),
       }),
@@ -168,7 +168,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Check Azure Entra ID configuration status for admin users
     checkEntraConfigStatus: builder.query<ConfigStatus, void>({
       query: () => ({
-        url: 'uflow/admin/users/entra/status',
+        url: 'authsec/uflow/admin/users/entra/status',
         method: 'POST',
         body: withSessionData({}),
       }),
@@ -181,7 +181,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Soft delete admin user
     deleteAdminUser: builder.mutation<any, { user_id: string }>({
       query: ({ user_id }) => ({
-        url: `uflow/admin/users/${user_id}`,
+        url: `authsec/uflow/admin/users/${user_id}`,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Activate/Deactivate admin user
     setAdminUserActive: builder.mutation<any, { user_id: string; active: boolean }>({
       query: ({ user_id, active }) => ({
-        url: 'uflow/admin/users/active',
+        url: 'authsec/uflow/admin/users/active',
         method: 'POST',
         body: withSessionData({
           user_id,
@@ -208,7 +208,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Reset admin user password
     resetAdminUserPassword: builder.mutation<any, { email: string; send_email?: boolean }>({
       query: ({ email, send_email = true }) => ({
-        url: 'uflow/admin/reset-password',
+        url: 'authsec/uflow/admin/reset-password',
         method: 'POST',
         body: withSessionData({
           email,
@@ -224,7 +224,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
     // Change admin user password
     changeAdminUserPassword: builder.mutation<any, { email: string; new_password: string }>({
       query: ({ email, new_password }) => ({
-        url: 'uflow/admin/change-password',
+        url: 'authsec/uflow/admin/change-password',
         method: 'POST',
         body: withSessionData({
           email,

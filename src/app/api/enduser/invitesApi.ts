@@ -79,7 +79,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Invite an end-user
     inviteEndUser: builder.mutation<InviteResponse, InviteEndUser>({
       query: (data) => ({
-        url: 'uflow/invite',
+        url: 'authsec/uflow/invite',
         method: 'POST',
         body: withSessionData({
           email: data.email,
@@ -101,7 +101,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Active Directory sync for end-users
     syncActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'uflow/admin/ad/sync',
+        url: 'authsec/uflow/admin/ad/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -120,7 +120,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Azure Entra ID sync for end-users
     syncEntraID: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'uflow/admin/entra/sync',
+        url: 'authsec/uflow/admin/entra/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -139,7 +139,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Active Directory sync to Admin Users list
     syncAdminUsersActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'uflow/admin/admin-users/ad/sync',
+        url: 'authsec/uflow/admin/admin-users/ad/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,
@@ -158,7 +158,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
     // Azure Entra ID sync to Admin Users list
     syncAdminUsersEntraID: builder.mutation<SyncResult, DirectorySync>({
       query: (data) => ({
-        url: 'uflow/admin/admin-users/entra/sync',
+        url: 'authsec/uflow/admin/admin-users/entra/sync',
         method: 'POST',
         body: withSessionData({
           config_id: data.config_id,

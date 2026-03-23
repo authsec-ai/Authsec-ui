@@ -32,7 +32,7 @@ export const userAuthApi = createApi({
     // Custom login for OIDC flow
     customLogin: builder.mutation<CustomLoginResponse, CustomLoginRequest>({
       query: (loginData) => ({
-        url: '/uflow/user/login',
+        url: '/authsec/uflow/user/login',
         method: 'POST',
         body: loginData,
       }),

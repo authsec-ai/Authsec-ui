@@ -24,7 +24,7 @@ export function RbacAudienceSwitcher({ className }: RbacAudienceSwitcherProps) {
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
           isAdmin
-            ? "bg-primary text-white shadow-sm"
+            ? "bg-[var(--brand-blue-600)] text-white shadow-sm"
             : "text-foreground/60 hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
         )}
         aria-label="Switch to Admin context"
@@ -40,7 +40,7 @@ export function RbacAudienceSwitcher({ className }: RbacAudienceSwitcherProps) {
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
           !isAdmin
-            ? "bg-primary text-white shadow-sm"
+            ? "bg-[var(--brand-blue-600)] text-white shadow-sm"
             : "text-foreground/60 hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
         )}
         aria-label="Switch to End User context"

@@ -116,7 +116,7 @@ export function DashboardHero({
             {primaryActionLabel && onPrimaryAction && (
               <Button
                 size="sm"
-                className="dash-btn-primary min-w-[8.5rem]"
+                className="bg-[var(--brand-blue-600)] text-white hover:bg-[var(--brand-blue-700)] min-w-[8.5rem]"
                 onClick={onPrimaryAction}
                 disabled={primaryActionDisabled}
               >

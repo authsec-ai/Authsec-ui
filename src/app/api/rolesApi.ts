@@ -175,7 +175,16 @@ export const authSecRolesApi = baseApi.injectEndpoints({
 
         const basePath =
           audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles';
-        const result = await baseQuery(basePath);
+
+        const candidateEndpoints = [
+          tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
+          basePath,
+        ].filter((endpoint): endpoint is string => Boolean(endpoint));
+
+        let lastError: unknown = null;
+
+        for (const endpoint of candidateEndpoints) {
+          const result = await baseQuery(endpoint);
 
         if (result.error) {
           return { error: result.error };
@@ -207,7 +216,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Add user-defined roles
     addUserDefinedRoles: builder.mutation<CreateUserDefinedRoleResponse, UserDefinedRoleRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
+        url: audience === 'admin' ? 'authsec/uflow/admin/roles' : 'authsec/uflow/user/rbac/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -217,7 +226,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Update a role
     updateUserDefinedRole: builder.mutation<{ message?: string; success?: boolean }, { id: string; data: { tenant_id: string; name: string; description?: string } }>({
       query: ({ id, data }) => ({
-        url: `uflow/admin/roles/${id}`,
+        url: `authsec/uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -227,7 +236,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Delete user-defined roles
     deleteUserDefinedRoles: builder.mutation<{ message?: string; success?: boolean }, DeleteRolesRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
+        url: audience === 'admin' ? 'authsec/uflow/admin/roles' : 'authsec/uflow/user/rbac/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -237,7 +246,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Map roles to client
     mapRolesToClient: builder.mutation<{ message?: string; success?: boolean }, MapRolesRequest>({
       query: (data) => ({
-        url: 'uflow/admin/roles/map',
+        url: 'authsec/uflow/admin/roles/map',
         method: 'POST',
         body: withSessionData({
           ...data,
