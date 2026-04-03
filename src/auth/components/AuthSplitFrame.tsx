@@ -8,6 +8,7 @@ export interface AuthSplitFrameProps {
   className?: string;
   valuePanelClassName?: string;
   actionPanelClassName?: string;
+  shellVariant?: "default" | "enduser-single-card";
 }
 
 export function AuthSplitFrame({
@@ -16,6 +17,7 @@ export function AuthSplitFrame({
   className,
   valuePanelClassName,
   actionPanelClassName,
+  shellVariant = "default",
 }: AuthSplitFrameProps) {
   const { setTheme, theme } = useTheme();
   const previousThemeRef = useRef<string | undefined>(undefined);
@@ -37,7 +39,13 @@ export function AuthSplitFrame({
   }, [setTheme]);
 
   return (
-    <div className={cn("auth-shell", className)}>
+    <div
+      className={cn(
+        "auth-shell",
+        shellVariant === "enduser-single-card" && "auth-shell--enduser-single-card",
+        className,
+      )}
+    >
       <div className="auth-shell__stage">
         <div className="auth-shell__grid">
           <aside className={cn("auth-shell__value", valuePanelClassName)}>

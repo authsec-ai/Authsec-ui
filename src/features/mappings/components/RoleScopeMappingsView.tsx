@@ -20,16 +20,18 @@ interface RoleScopeMappingsViewProps {
   searchQuery: string;
   isMapModalOpen: boolean;
   onMapModalOpenChange: (open: boolean) => void;
+  audience?: 'admin' | 'endUser';
 }
 
 export function RoleScopeMappingsView({
   searchQuery,
   isMapModalOpen,
   onMapModalOpenChange,
+  audience,
 }: RoleScopeMappingsViewProps) {
 
   // Fetch role bindings
-  const { data: bindings = [], isLoading: isLoadingBindings, refetch } = useListBindingsQuery();
+  const { data: bindings = [], isLoading: isLoadingBindings, refetch } = useListBindingsQuery({ audience: audience ?? "admin" });
 
   // Filter bindings based on search
   const filteredBindings = useMemo(() => {
@@ -202,6 +204,7 @@ export function RoleScopeMappingsView({
         open={isMapModalOpen}
         onOpenChange={onMapModalOpenChange}
         onSuccess={() => refetch()}
+        audience={audience}
       />
     </ResponsiveTableProvider>
   );

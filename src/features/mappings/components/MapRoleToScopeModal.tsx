@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import { useGetAdminUsersQuery } from "@/app/api/admin/usersApi";
+import { useGetEndUsersQuery } from "@/app/api/enduser/usersApi";
 import { useCreateBindingMutation } from "@/app/api/bindingsApi";
 import { useGetScopeMappingsQuery } from "@/app/api/scopesApi";
+import { useGetEndUserScopeMappingsQuery } from "@/app/api/enduser/scopesApi";
 import {
   Dialog,
   DialogContent,
@@ -39,9 +41,10 @@ interface MapRoleToScopeModalProps {
   onSuccess?: () => void;
   preselectedUsers?: Array<{ id: string; name: string; email?: string }>;
   preselectedRoles?: Array<{ id: string; name: string }>;
+  audience?: 'admin' | 'endUser';
 }
 
-export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselectedUsers, preselectedRoles }: MapRoleToScopeModalProps) {
+export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselectedUsers, preselectedRoles, audience = 'admin' }: MapRoleToScopeModalProps) {
   const sessionData = SessionManager.getSession();
   const tenantId =
     resolveTenantId() ??
@@ -49,6 +52,10 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
     (sessionData as any)?.tenantId ??
     sessionData?.jwtPayload?.tenant_id ??
     "";
+
+  const isEndUser = audience === 'endUser';
+  const hasPreselectedUsers = !!(preselectedUsers && preselectedUsers.length > 0);
+  const hasPreselectedRoles = !!(preselectedRoles && preselectedRoles.length > 0);
 
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState("");
@@ -58,36 +65,56 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
 
   // Initialize preselected values
   useEffect(() => {
-    if (open && preselectedUsers && preselectedUsers.length > 0) {
-      setSelectedUserId(preselectedUsers[0].id);
+    if (open && hasPreselectedUsers) {
+      setSelectedUserId(preselectedUsers![0].id);
     }
-    if (open && preselectedRoles && preselectedRoles.length > 0) {
-      setSelectedRoleId(preselectedRoles[0].id);
+    if (open && hasPreselectedRoles) {
+      setSelectedRoleId(preselectedRoles![0].id);
     }
   }, [open, preselectedUsers, preselectedRoles]);
 
+  // ── Users API: admin vs endUser ──
   const {
-    data: usersResponse,
-    isLoading: isLoadingUsers,
-    isFetching: isFetchingUsers,
-  } = useGetAdminUsersQuery({
-    page: 1,
-    limit: 100,
-  });
+    data: adminUsersResponse,
+    isLoading: isLoadingAdminUsers,
+    isFetching: isFetchingAdminUsers,
+  } = useGetAdminUsersQuery({ page: 1, limit: 100 }, { skip: isEndUser });
 
+  const {
+    data: endUsersResponse,
+    isLoading: isLoadingEndUsers,
+    isFetching: isFetchingEndUsers,
+  } = useGetEndUsersQuery({ page: 1, limit: 100 }, { skip: !isEndUser });
+
+  const usersResponse = isEndUser ? endUsersResponse : adminUsersResponse;
+  const isLoadingUsers = isEndUser ? isLoadingEndUsers : isLoadingAdminUsers;
+  const isFetchingUsers = isEndUser ? isFetchingEndUsers : isFetchingAdminUsers;
+
+  // ── Roles API: audience-aware ──
   const {
     data: rolesResponse = [],
     isLoading: isLoadingRoles,
     isFetching: isFetchingRoles,
   } = useGetAuthSecRolesQuery({
     tenant_id: tenantId,
-    audience: "admin",
+    audience: audience,
   });
 
-  const { data: scopeMappings = [], isFetching: isFetchingScopes } = useGetScopeMappingsQuery(undefined, {
+  // ── Scopes API: admin vs endUser ──
+  const { data: adminScopeMappings = [], isFetching: isFetchingAdminScopes } = useGetScopeMappingsQuery(undefined, {
+    skip: isEndUser,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
   });
+
+  const { data: endUserScopeMappings = [], isFetching: isFetchingEndUserScopes } = useGetEndUserScopeMappingsQuery(undefined, {
+    skip: !isEndUser,
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+  });
+
+  const scopeMappings = isEndUser ? endUserScopeMappings : adminScopeMappings;
+  const isFetchingScopes = isEndUser ? isFetchingEndUserScopes : isFetchingAdminScopes;
 
   // Extract scope names from mappings
   const scopeNames = useMemo(() => {
@@ -273,6 +300,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
               id: "*",
               type: selectedScope,
             },
+            audience: audience,
           }).unwrap()
         );
         await Promise.all(promises);
@@ -290,6 +318,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
               id: "*",
               type: selectedScope,
             },
+            audience: audience,
           }).unwrap()
         );
         await Promise.all(promises);
@@ -306,6 +335,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
             id: "*",
             type: selectedScope,
           },
+          audience: audience,
         }).unwrap();
         toast.success(`Role mapped to scope "${selectedScope}" successfully.`);
       }
@@ -332,43 +362,46 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Preselected Users Display */}
-          {preselectedUsers && preselectedUsers.length > 0 && (
+          {hasPreselectedUsers && (
             <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-md">
               <Label className="w-full text-xs text-foreground mb-1">Assigning to:</Label>
-              {preselectedUsers.slice(0, 5).map((user) => (
+              {preselectedUsers!.slice(0, 5).map((user) => (
                 <Badge key={user.id} variant="secondary" className="flex items-center gap-1">
                   <UserRound className="h-3 w-3" />
                   {user.name || user.email}
                 </Badge>
               ))}
-              {preselectedUsers.length > 5 && (
-                <Badge variant="outline">+{preselectedUsers.length - 5} more</Badge>
+              {preselectedUsers!.length > 5 && (
+                <Badge variant="outline">+{preselectedUsers!.length - 5} more</Badge>
               )}
             </div>
           )}
 
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm font-semibold">
-              <UserRound className="h-4 w-4 text-primary" />
-              User
-            </Label>
-            <SearchableSelect
-              options={userOptions}
-              value={selectedUserId}
-              onChange={(val) => setSelectedUserId(val ?? "")}
-              placeholder={busyLoading ? "Loading users..." : "Select a user..."}
-              searchPlaceholder="Search users..."
-              emptyText="No users found"
-              disabled={busyLoading || !!(preselectedUsers && preselectedUsers.length > 0)}
-              className="h-11"
-            />
-          </div>
+          {/* User selection — hidden when users are preselected */}
+          {!hasPreselectedUsers && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <UserRound className="h-4 w-4 text-primary" />
+                User
+              </Label>
+              <SearchableSelect
+                options={userOptions}
+                value={selectedUserId}
+                onChange={(val) => setSelectedUserId(val ?? "")}
+                placeholder={busyLoading ? "Loading users..." : "Select a user..."}
+                searchPlaceholder="Search users..."
+                emptyText="No users found"
+                disabled={busyLoading}
+                className="h-11"
+              />
+            </div>
+          )}
 
           {/* Preselected Roles Display */}
-          {preselectedRoles && preselectedRoles.length > 0 && (
+          {hasPreselectedRoles && (
             <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-md">
               <Label className="w-full text-xs text-foreground mb-1">Assigning to:</Label>
-              {preselectedRoles.map((role) => (
+              {preselectedRoles!.map((role) => (
                 <Badge key={role.id} variant="secondary" className="flex items-center gap-1">
                   <Shield className="h-3 w-3" />
                   {role.name}
@@ -377,22 +410,25 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
             </div>
           )}
 
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-sm font-semibold">
-              <Shield className="h-4 w-4 text-primary" />
-              Role
-            </Label>
-            <SearchableSelect
-              options={roleOptions}
-              value={selectedRoleId}
-              onChange={(val) => setSelectedRoleId(val ?? "")}
-              placeholder={busyLoading ? "Loading roles..." : "Select a role..."}
-              searchPlaceholder="Search roles..."
-              emptyText="No roles found"
-              disabled={busyLoading || !!(preselectedRoles && preselectedRoles.length > 0)}
-              className="h-11"
-            />
-          </div>
+          {/* Role selection — hidden when roles are preselected */}
+          {!hasPreselectedRoles && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <Shield className="h-4 w-4 text-primary" />
+                Role
+              </Label>
+              <SearchableSelect
+                options={roleOptions}
+                value={selectedRoleId}
+                onChange={(val) => setSelectedRoleId(val ?? "")}
+                placeholder={busyLoading ? "Loading roles..." : "Select a role..."}
+                searchPlaceholder="Search roles..."
+                emptyText="No roles found"
+                disabled={busyLoading}
+                className="h-11"
+              />
+            </div>
+          )}
 
           <div className="space-y-3">
             <Label className="flex items-center gap-2 text-sm font-semibold">

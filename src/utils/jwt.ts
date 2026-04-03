@@ -61,9 +61,6 @@ export const decodeJWT = (token: string): JWTPayload | null => {
       groups: Array.isArray(decoded.groups) ? decoded.groups : [],
     };
     
-    // Debug logging (can be removed in production)
-    console.warn('📦 JWT Payload decoded:', normalized);
-    
     return normalized;
   } catch (error) {
     console.error('Failed to decode JWT:', error);

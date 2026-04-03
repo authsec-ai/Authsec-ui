@@ -59,7 +59,9 @@ const CodeBlock = ({
 }) => (
   <div className="border border-border/60 rounded-lg overflow-hidden bg-background/50 backdrop-blur-sm">
     <div className="flex items-center justify-between border-b border-border/50 bg-muted/40 px-2.5 py-1">
-      <span className="text-[11px] font-semibold text-foreground/75">{label}</span>
+      <span className="text-[11px] font-semibold text-foreground/75">
+        {label}
+      </span>
       {onCopy && (
         <Button
           size="sm"
@@ -122,35 +124,59 @@ export function VoiceAgentSetupModal({
   };
 
   const activeClientId = client?.client_id || selectedClientId;
-  const activeClient = client || clients.find((c) => c.client_id === selectedClientId);
+  const activeClient =
+    client || clients.find((c) => c.client_id === selectedClientId);
 
-  const getInstallCode = () => `pip install git+https://github.com/authsec-ai/sdk-authsec.git`;
+  const getInstallCode = () => `pip install authsec-sdk`;
+
+  const getConfigCode =
+    () => `# Interactive setup — creates .authsec.json with your client_id
+authsec init
+
+# Or set manually via environment variables:
+export CLIENT_ID=${activeClientId || "your-client-id"}
+export CIBA_BASE_URL=https://dev.api.authsec.dev`;
 
   const getQuickStartCode = () => `from AuthSec_SDK import CIBAClient
 
 # Initialize with your client ID
-client = CIBAClient(client_id="${activeClientId || "your-client-id"}")
+ciba = CIBAClient(
+    client_id="${activeClientId || "your-client-id"}",
+    base_url="https://dev.api.authsec.dev",
+)
 
 # CIBA Flow: Push notification to user's app
-result = client.initiate_app_approval("user@example.com")
-approval = client.poll_for_approval("user@example.com", result["auth_req_id"])
+result = ciba.initiate_app_approval("user@example.com")
+approval = ciba.poll_for_approval(
+    email="user@example.com",
+    auth_req_id=result["auth_req_id"],
+    interval=5,
+    timeout=120,
+)
 
 if approval["status"] == "approved":
-    print(f"✅ Authenticated! Token: {approval['token']}")`;
+    print(f"✅ Authenticated! Token: {approval['token'][:50]}...")
+elif approval["status"] == "access_denied":
+    print("❌ User denied the request")
+elif approval["status"] == "timeout":
+    print("⏱️ Request timed out")`;
 
-  const getTotpCode = () => `# TOTP Flow: 6-digit code verification
-result = client.verify_totp("user@example.com", "123456")
+  const getTotpCode = () => `# TOTP Fallback (6-digit code)
+result = ciba.verify_totp("user@example.com", "123456")
 
 if result["success"]:
-    print(f"✅ Authenticated! Token: {result['token']}")
+    print(f"✅ Valid! Token: {result['token'][:50]}...")
 else:
-    print(f"❌ Invalid. {result['remaining']} attempts left")`;
+    print(f"❌ Invalid. {result['remaining']} attempts remaining")`;
 
   const getVoiceAssistantCode = () => `from AuthSec_SDK import CIBAClient
 
 class VoiceAssistant:
     def __init__(self):
-        self.ciba = CIBAClient(client_id="${activeClientId || "your-client-id"}")
+        self.ciba = CIBAClient(
+            client_id="${activeClientId || "your-client-id"}",
+            base_url="https://dev.api.authsec.dev",
+        )
     
     def authenticate_user(self, email):
         """Handle voice authentication"""
@@ -207,8 +233,8 @@ class VoiceAssistant:
             Voice Agent SDK Integration
           </DialogTitle>
           <DialogDescription>
-            Enable passwordless authentication for voice assistants and IoT devices using CIBA (push
-            notifications) and TOTP (6-digit codes).
+            Enable passwordless authentication for voice assistants and IoT
+            devices using CIBA (push notifications) and TOTP (6-digit codes).
           </DialogDescription>
         </DialogHeader>
 
@@ -226,7 +252,9 @@ class VoiceAssistant:
                 {step > s ? <Check className="h-4 w-4" /> : s}
               </div>
               {s < 3 && (
-                <div className={`w-12 h-0.5 mx-1 ${step > s ? "bg-primary" : "bg-muted"}`} />
+                <div
+                  className={`w-12 h-0.5 mx-1 ${step > s ? "bg-primary" : "bg-muted"}`}
+                />
               )}
             </div>
           ))}
@@ -242,7 +270,10 @@ class VoiceAssistant:
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="client-select">Select a Client</Label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+              <Select
+                value={selectedClientId}
+                onValueChange={setSelectedClientId}
+              >
                 <SelectTrigger id="client-select">
                   <SelectValue placeholder="Choose a client to configure" />
                 </SelectTrigger>
@@ -293,7 +324,11 @@ class VoiceAssistant:
             )}
 
             <div className="flex justify-end pt-4">
-              <Button onClick={() => setStep(2)} disabled={!selectedClientId} className="gap-2">
+              <Button
+                onClick={() => setStep(2)}
+                disabled={!selectedClientId}
+                className="gap-2"
+              >
                 Continue
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -308,10 +343,13 @@ class VoiceAssistant:
             <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
               <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-blue-800 dark:text-blue-200">Best Practice</p>
+                <p className="font-medium text-blue-800 dark:text-blue-200">
+                  Best Practice
+                </p>
                 <p className="text-blue-700 dark:text-blue-300 mt-1">
-                  Enable both CIBA and TOTP for maximum compatibility. TOTP serves as a fallback
-                  when users don't have the AuthSec mobile app.
+                  Enable both CIBA and TOTP for maximum compatibility. TOTP
+                  serves as a fallback when users don't have the AuthSec mobile
+                  app.
                 </p>
               </div>
             </div>
@@ -321,12 +359,16 @@ class VoiceAssistant:
               {/* CIBA Option */}
               <div
                 className={`p-4 rounded-lg border transition-colors ${
-                  cibaEnabled ? "border-primary/50 bg-primary/5" : "border-border"
+                  cibaEnabled
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border"
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${cibaEnabled ? "bg-primary/10" : "bg-muted"}`}>
+                    <div
+                      className={`p-2 rounded-lg ${cibaEnabled ? "bg-primary/10" : "bg-muted"}`}
+                    >
                       <Smartphone className="h-5 w-5 text-primary" />
                     </div>
                     <div>
@@ -337,32 +379,46 @@ class VoiceAssistant:
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Send push notifications to user's AuthSec mobile app for approval. Best for
-                        voice assistants and hands-free authentication.
+                        Send push notifications to user's AuthSec mobile app for
+                        approval. Best for voice assistants and hands-free
+                        authentication.
                       </p>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs gap-1 bg-background">
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 bg-background"
+                        >
                           <Phone className="h-3 w-3" /> Voice Assistants
                         </Badge>
-                        <Badge variant="outline" className="text-xs gap-1 bg-background">
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 bg-background"
+                        >
                           <Zap className="h-3 w-3" /> IoT Devices
                         </Badge>
                       </div>
                     </div>
                   </div>
-                  <Switch checked={cibaEnabled} onCheckedChange={setCibaEnabled} />
+                  <Switch
+                    checked={cibaEnabled}
+                    onCheckedChange={setCibaEnabled}
+                  />
                 </div>
               </div>
 
               {/* TOTP Option */}
               <div
                 className={`p-4 rounded-lg border transition-colors ${
-                  totpEnabled ? "border-primary/50 bg-primary/5" : "border-border"
+                  totpEnabled
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border"
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${totpEnabled ? "bg-primary/10" : "bg-muted"}`}>
+                    <div
+                      className={`p-2 rounded-lg ${totpEnabled ? "bg-primary/10" : "bg-muted"}`}
+                    >
                       <KeyRound className="h-5 w-5 text-primary" />
                     </div>
                     <div>
@@ -373,20 +429,29 @@ class VoiceAssistant:
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Verify 6-digit codes from authenticator apps. Perfect fallback when push
-                        notifications aren't available.
+                        Verify 6-digit codes from authenticator apps. Perfect
+                        fallback when push notifications aren't available.
                       </p>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs gap-1 bg-background">
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 bg-background"
+                        >
                           <MessageSquare className="h-3 w-3" /> CLI Tools
                         </Badge>
-                        <Badge variant="outline" className="text-xs gap-1 bg-background">
+                        <Badge
+                          variant="outline"
+                          className="text-xs gap-1 bg-background"
+                        >
                           <Zap className="h-3 w-3" /> Backup Auth
                         </Badge>
                       </div>
                     </div>
                   </div>
-                  <Switch checked={totpEnabled} onCheckedChange={setTotpEnabled} />
+                  <Switch
+                    checked={totpEnabled}
+                    onCheckedChange={setTotpEnabled}
+                  />
                 </div>
               </div>
             </div>
@@ -426,12 +491,28 @@ class VoiceAssistant:
               />
             </div>
 
+            {/* Configure AuthSec */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center">
+                  2
+                </span>
+                Configure AuthSec
+              </Label>
+              <CodeBlock
+                code={getConfigCode()}
+                label="Terminal"
+                onCopy={() => handleCopy(getConfigCode(), "config")}
+                copied={copiedSteps.has("config")}
+              />
+            </div>
+
             {/* Quick Start */}
             {cibaEnabled && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center">
-                    2
+                    3
                   </span>
                   CIBA Authentication (Push Notification)
                 </Label>
@@ -449,7 +530,7 @@ class VoiceAssistant:
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center">
-                    {cibaEnabled ? "3" : "2"}
+                    {cibaEnabled ? "4" : "3"}
                   </span>
                   TOTP Verification (6-Digit Code)
                 </Label>
@@ -473,7 +554,9 @@ class VoiceAssistant:
               <CodeBlock
                 code={getVoiceAssistantCode()}
                 label="voice_assistant.py"
-                onCopy={() => handleCopy(getVoiceAssistantCode(), "voice-assistant")}
+                onCopy={() =>
+                  handleCopy(getVoiceAssistantCode(), "voice-assistant")
+                }
                 copied={copiedSteps.has("voice-assistant")}
               />
             </div>
@@ -482,9 +565,12 @@ class VoiceAssistant:
             <div className="flex items-start gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
               <Check className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-medium text-green-800 dark:text-green-200">Ready to go!</p>
+                <p className="font-medium text-green-800 dark:text-green-200">
+                  Ready to go!
+                </p>
                 <p className="text-green-700 dark:text-green-300 mt-1">
-                  Your voice agent can now authenticate users securely using CIBA push notifications
+                  Your voice agent can now authenticate users securely using
+                  CIBA push notifications
                   {totpEnabled && " and TOTP codes as fallback"}.
                 </p>
               </div>
@@ -495,7 +581,11 @@ class VoiceAssistant:
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleViewFullDocs} className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleViewFullDocs}
+                  className="gap-2"
+                >
                   Full SDK Docs
                   <ExternalLink className="h-4 w-4" />
                 </Button>

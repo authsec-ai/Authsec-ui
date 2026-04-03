@@ -1,11 +1,21 @@
 /**
  * OIDC WebAuthn Router - For end-user authentication flow
  *
- * Orchestrates the OIDC WebAuthn authentication flow with token display
+ * Orchestrates the OIDC WebAuthn authentication flow.
+ * After MFA completes, the Context dispatches setDisplayToken which sets
+ * currentStep = "token_display".  This Router then decides what to do:
+ *
+ *   • claw_auth  → call onTokenDisplay(token) so the parent can redirect externally
+ *   • everything → call onAuthComplete() so the normal OIDC redirect continues
+ *
+ * IMPORTANT: onAuthComplete must NOT call executeCallback again — the token
+ * is already available via Redux (displayToken).  This eliminates the duplicate-
+ * callback race condition that existed before.
  */
 
-import React, { useEffect } from "react";
-import { useDispatch } from "react-redux";
+import React, { useEffect, useRef, useCallback } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../../app/store";
 import { setCurrentStep } from "../slices/oidcWebAuthnSlice";
 import { useEndUserAuth } from "../context/EndUserAuthContext";
 import { MFASelectionPage } from "../webauthn/MFASelectionPage";
@@ -20,78 +30,84 @@ import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthStepHeader } from "../components/AuthStepHeader";
 
 interface OIDCWebAuthnRouterProps {
+  /** Called for non-claw_auth clients after token is received. Token is in Redux displayToken. */
   onAuthComplete: () => void;
   onAuthError?: (error: string) => void;
+  /** Called for claw_auth clients with the JWT token for external redirect. */
   onTokenDisplay?: (token: string) => void;
 }
 
-/**
- * Inner router component that uses OIDC context
- */
 export function OIDCWebAuthnRouter({
-  onAuthComplete: _onAuthComplete,
+  onAuthComplete,
   onAuthError,
   onTokenDisplay,
 }: OIDCWebAuthnRouterProps) {
   const oidcWebauthn = useEndUserAuth();
   const dispatch = useDispatch();
+  const reduxClientType = useSelector((state: RootState) => state.oidcWebAuthn.clientType);
 
-  // Handle token display without re-triggering callback
+  // Guard: ensure we only fire the completion callback once
+  const completionFiredRef = useRef(false);
+
+  // ── Token Display / Completion Handler ──
+  // Fires exactly once when currentStep transitions to "token_display".
   useEffect(() => {
-    console.log("🔄 OIDC WebAuthn step changed to:", oidcWebauthn.currentStep);
+    if (oidcWebauthn.currentStep !== "token_display" || !oidcWebauthn.displayToken) return;
+    if (completionFiredRef.current) return; // already handled
+    completionFiredRef.current = true;
 
-    if (oidcWebauthn.currentStep === "token_display" && oidcWebauthn.displayToken) {
-      console.log("🎯 OIDC flow completed with token display");
-      if (onTokenDisplay) {
-        onTokenDisplay(oidcWebauthn.displayToken);
-      }
-      // Do not call onAuthComplete here to avoid duplicate webauthn-callback calls
+    const token = oidcWebauthn.displayToken;
+
+    if (reduxClientType === "claw_auth" && onTokenDisplay) {
+      // Claw auth: redirect to external URL with the token
+      console.log("[Router] claw_auth → onTokenDisplay, token length:", token.length);
+      onTokenDisplay(token);
+    } else {
+      // All other types (application, ai_agent, etc): just display the token on screen.
+      // The token is already in Redux (displayToken) and OIDCTokenDisplayComponent renders it.
+      // Do NOT call onAuthComplete — that would trigger a duplicate executeCallback + redirect.
+      console.log("[Router] client_type:", reduxClientType, "→ token displayed on screen (normal flow)");
     }
-  }, [oidcWebauthn.currentStep, oidcWebauthn.displayToken, onTokenDisplay]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oidcWebauthn.currentStep, oidcWebauthn.displayToken]);
+  // ↑ Intentionally minimal deps — callbacks read via closure at fire-time,
+  //   and completionFiredRef prevents re-entry even if deps change.
 
-  // Handle authentication errors
+  // ── Error Forwarding ──
   useEffect(() => {
     if (oidcWebauthn.authenticationError && onAuthError) {
       onAuthError(oidcWebauthn.authenticationError);
     }
   }, [oidcWebauthn.authenticationError, onAuthError]);
 
-  // If we arrive with user context set but step is still 'login', route to proper step
+  // ── Step Auto-Routing (login → mfa_selection / authentication) ──
   useEffect(() => {
     if (oidcWebauthn.currentStep === "login" && oidcWebauthn.email && oidcWebauthn.tenantId) {
-      const next = oidcWebauthn.isFirstLogin ? "mfa_selection" : "authentication";
-      dispatch(setCurrentStep(next));
+      dispatch(setCurrentStep(oidcWebauthn.isFirstLogin ? "mfa_selection" : "authentication"));
     }
-  }, [
-    oidcWebauthn.currentStep,
-    oidcWebauthn.email,
-    oidcWebauthn.tenantId,
-    oidcWebauthn.isFirstLogin,
-    dispatch,
-  ]);
+  }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.tenantId, oidcWebauthn.isFirstLogin, dispatch]);
 
-  // Prefetch MFA methods when entering authentication or selection
+  // ── MFA Method Prefetch ──
+  const mfaPrefetchedRef = useRef(false);
   useEffect(() => {
     if (!oidcWebauthn.email || !oidcWebauthn.tenantId) return;
-    if (
-      (oidcWebauthn.currentStep === "authentication" ||
-        oidcWebauthn.currentStep === "mfa_selection") &&
-      (!oidcWebauthn.availableMFAMethods || oidcWebauthn.availableMFAMethods.length === 0)
-    ) {
-      // Fire and forget; context handles errors/toasts
-      void oidcWebauthn.getMFAMethods();
-    }
+    if (oidcWebauthn.currentStep !== "authentication" && oidcWebauthn.currentStep !== "mfa_selection") return;
+    if (oidcWebauthn.availableMFAMethods.length > 0) return;
+    if (mfaPrefetchedRef.current) return;
+    mfaPrefetchedRef.current = true;
+    void oidcWebauthn.getMFAMethods();
   }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.tenantId]);
 
-  // Render lightweight loader if step is still 'login' to avoid blank screen during transition
+  // ── Loader while step is still "login" ──
   if (oidcWebauthn.currentStep === "login") {
     return (
       <AuthSplitFrame
+        shellVariant="enduser-single-card"
         valuePanel={
           <AuthValuePanel
             eyebrow="MFA Security"
             title="Preparing multi-factor authentication."
-            subtitle="Routing your callback into available verification methods."
+            subtitle="Getting your verification options ready."
             points={[
               "Available WebAuthn/TOTP methods are fetched per user.",
               "Step routing remains inside the OIDC auth context.",
@@ -102,7 +118,7 @@ export function OIDCWebAuthnRouter({
         <AuthActionPanel className="space-y-4">
           <AuthStepHeader
             title="Preparing authentication"
-            subtitle="Loading your MFA context..."
+            subtitle="Loading your verification options..."
           />
           <div className="auth-inline-note flex items-center gap-3 text-sm text-slate-700">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
@@ -115,17 +131,17 @@ export function OIDCWebAuthnRouter({
 
   return (
     <AuthSplitFrame
+      shellVariant="enduser-single-card"
       valuePanel={
         <AuthValuePanel
           eyebrow="MFA Security"
-          title="Verify identity with strong factors."
-          subtitle="This step secures callback completion with WebAuthn or TOTP and then hands back the access token."
+          title="Verify your identity."
+          subtitle="Choose a passkey or authenticator app to finish sign-in."
           points={[
             "Method availability is tenant and user specific.",
             "Passkey and authenticator app setup are both supported.",
             "Successful verification transitions to token output.",
           ]}
-          trustLabel={oidcWebauthn.email ? `User: ${oidcWebauthn.email}` : undefined}
         />
       }
     >
@@ -144,7 +160,7 @@ export function OIDCWebAuthnRouter({
             contextType="oidc"
             email={oidcWebauthn.email || ""}
             tenantId={oidcWebauthn.tenantId || ""}
-            onSuccess={() => {}} // Handled by context
+            onSuccess={() => {}}
             onError={onAuthError}
             onBack={oidcWebauthn.backToSelection}
             onSetup={oidcWebauthn.setupWebAuthn}
@@ -157,7 +173,7 @@ export function OIDCWebAuthnRouter({
             email={oidcWebauthn.email || ""}
             tenantId={oidcWebauthn.tenantId || ""}
             totpData={oidcWebauthn.totpSetupData}
-            onSuccess={() => {}} // Handled by context
+            onSuccess={() => {}}
             onError={onAuthError}
             onBack={oidcWebauthn.backToSelection}
             onSetup={oidcWebauthn.setupTOTP}
@@ -167,13 +183,12 @@ export function OIDCWebAuthnRouter({
 
         {oidcWebauthn.currentStep === "authentication" && (
           <>
-            {/* Prefer explicitly selected method if present */}
             {oidcWebauthn.selectedMFAMethod === "webauthn" ? (
               <WebAuthnAuthComponent
                 contextType="oidc"
                 email={oidcWebauthn.email || ""}
                 tenantId={oidcWebauthn.tenantId || ""}
-                onSuccess={() => {}} // Handled by context
+                onSuccess={() => {}}
                 onError={(error) => onAuthError?.(error)}
                 onAuthenticate={oidcWebauthn.authenticateWithWebAuthn}
               />
@@ -182,12 +197,11 @@ export function OIDCWebAuthnRouter({
                 contextType="oidc"
                 email={oidcWebauthn.email || ""}
                 tenantId={oidcWebauthn.tenantId || ""}
-                onSuccess={() => {}} // Handled by context
+                onSuccess={() => {}}
                 onError={(error) => onAuthError?.(error)}
                 onAuthenticate={oidcWebauthn.authenticateWithTOTP}
               />
             ) : (
-              // Fallback to checking enabled methods when nothing is selected
               <>
                 {oidcWebauthn.availableMFAMethods.length > 0 ? (
                   oidcWebauthn.availableMFAMethods.some(
@@ -197,7 +211,7 @@ export function OIDCWebAuthnRouter({
                       contextType="oidc"
                       email={oidcWebauthn.email || ""}
                       tenantId={oidcWebauthn.tenantId || ""}
-                      onSuccess={() => {}} // Handled by context
+                      onSuccess={() => {}}
                       onError={(error) => onAuthError?.(error)}
                       onAuthenticate={oidcWebauthn.authenticateWithWebAuthn}
                     />
@@ -206,7 +220,7 @@ export function OIDCWebAuthnRouter({
                       contextType="oidc"
                       email={oidcWebauthn.email || ""}
                       tenantId={oidcWebauthn.tenantId || ""}
-                      onSuccess={() => {}} // Handled by context
+                      onSuccess={() => {}}
                       onError={(error) => onAuthError?.(error)}
                       onAuthenticate={oidcWebauthn.authenticateWithTOTP}
                     />
@@ -216,7 +230,7 @@ export function OIDCWebAuthnRouter({
                     contextType="oidc"
                     email={oidcWebauthn.email || ""}
                     tenantId={oidcWebauthn.tenantId || ""}
-                    onSuccess={() => {}} // Handled by context
+                    onSuccess={() => {}}
                     onError={(error) => onAuthError?.(error)}
                     onAuthenticate={oidcWebauthn.authenticateWithTOTP}
                   />

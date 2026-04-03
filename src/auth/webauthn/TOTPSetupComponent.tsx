@@ -207,13 +207,6 @@ export function TOTPSetupComponent({
               ? "Enter the 6-digit code from your authenticator app to complete setup."
               : "You can now use your authenticator app to sign in securely."
         }
-        meta={
-          email ? (
-            <>
-              Setting up for: <span className="font-semibold text-slate-900">{email}</span>
-            </>
-          ) : undefined
-        }
       />
 
       {setupStep === "scan" && totpData && (
@@ -232,7 +225,7 @@ export function TOTPSetupComponent({
           </div>
 
           <div className="space-y-3 border-t border-[var(--auth-shell-border)] pt-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
               <Label className="text-sm font-medium">Manual entry key</Label>
               <Button
                 variant="ghost"
@@ -244,7 +237,7 @@ export function TOTPSetupComponent({
               </Button>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="auth-action-row sm:flex-row sm:items-center">
               <Input
                 value={showSecret ? totpData.manual_entry : "••••••••••••••••••••••••••••••••"}
                 readOnly
@@ -352,12 +345,12 @@ export function TOTPSetupComponent({
       {setupStep === "scan" && (
         <div className="border-t border-[var(--auth-shell-border)] pt-4">
           <div className="flex items-start space-x-3">
-            <QrCode className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
+            <QrCode className="h-5 w-5 flex-shrink-0 text-amber-700 mt-0.5" />
             <div className="text-sm">
-              <p className="font-medium text-amber-900 mb-2">
+              <p className="mb-2 font-medium text-amber-900">
                 Popular authenticator apps:
               </p>
-              <ul className="text-amber-800 space-y-1">
+              <ul className="space-y-1 text-amber-800">
                 <li>• Google Authenticator</li>
                 <li>• Microsoft Authenticator</li>
                 <li>• Authy</li>

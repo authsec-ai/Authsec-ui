@@ -29,6 +29,12 @@ export interface ClientData {
   roles?: string[] | null;
   oidc_enabled?: boolean;
   hydra_client_id?: string | null;
+  client_type?: "application" | "ai_agent" | string;
+  agent_type?: string | null;
+  platform?: string | null;
+  platform_config?: ClientPlatformConfig | null;
+  secret_id?: string | null;
+  spiffe_id?: string | null;
   created_at: string;
   updated_at: string;
   [key: string]: unknown;
@@ -39,6 +45,7 @@ export interface ClientsFilters {
   name?: string;
   status?: string;
   tags?: string[];
+  client_type?: "application" | "ai_agent" | "claw_auth";
   [key: string]: unknown;
 }
 
@@ -79,12 +86,15 @@ export interface GetAllClientsResponse {
   total: number;
   filters?: ClientsFilters;
   pagination?: ClientsPagination;
+  hydra_public_url?: string;
 }
 
 export interface RegisterClientRequest {
+  tenant_id: string;
   name: string;
   email: string;
-  tenant_id: string;
+  project_id?: string;
+  react_app_url?: string;
   client_type?: "application";
   agent_type?: "mcp-agent";
   platform?: string;
@@ -96,6 +106,16 @@ export interface ClientPlatformConfig {
   service_account: string;
 }
 
+export interface GetPlatformSelectorsRequest {
+  tenant_id: string;
+  platform: string;
+}
+
+export interface PlatformSelectorsResponse {
+  platform: string;
+  selector_keys: string[];
+}
+
 export interface RegisterAiAgentClientRequest {
   tenant_id: string;
   name: string;
@@ -103,7 +123,18 @@ export interface RegisterAiAgentClientRequest {
   client_type: "ai_agent";
   agent_type?: "mcp-agent";
   platform: string;
-  platform_config: ClientPlatformConfig;
+  selectors: Record<string, string>;
+}
+
+export interface RegisterClawAuthClientRequest {
+  tenant_id: string;
+  name: string;
+  email: string;
+  project_id?: string;
+  react_app_url?: string;
+  client_type: "claw_auth";
+  agent_type: "claw_auth";
+  redirect_url: string;
 }
 
 export interface RegisterClientResponse {
@@ -271,6 +302,8 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
           roles: null,
           oidc_enabled: false,
           hydra_client_id: null,
+          client_type:
+            typeof client.client_type === "string" ? client.client_type : undefined,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           // Store original minimal data for reference
@@ -393,12 +426,49 @@ const parseFirstValidJSON = <T>(response: unknown): T => {
   return response as T;
 };
 
+const getStringOrFallback = (
+  value: unknown,
+  fallback = "",
+): string => (typeof value === "string" ? value : fallback);
+
+const normalizeRegisterClientResponse = (
+  response: unknown,
+): RegisterClientResponse => {
+  const parsed = parseFirstValidJSON<unknown>(response);
+
+  if (!isRecord(parsed)) {
+    throw new Error("Invalid client registration response from server");
+  }
+
+  const id = getStringOrFallback(parsed.id);
+  const tenantId = getStringOrFallback(parsed.tenant_id);
+
+  return {
+    id,
+    client_id: getStringOrFallback(parsed.client_id, id),
+    tenant_id: tenantId,
+    project_id: getStringOrFallback(parsed.project_id, tenantId),
+    name: getStringOrFallback(parsed.name),
+    secret_id:
+      typeof parsed.secret_id === "string" ? parsed.secret_id : undefined,
+    spiffe_id:
+      typeof parsed.spiffe_id === "string" ? parsed.spiffe_id : undefined,
+    email: getStringOrFallback(parsed.email),
+    active: typeof parsed.active === "boolean" ? parsed.active : true,
+    created_at: getStringOrFallback(parsed.created_at),
+    message: getStringOrFallback(
+      parsed.message,
+      "Client registered successfully",
+    ),
+  };
+};
+
 export const clientApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Delete a client completely
     deleteClientComplete: builder.mutation<DeleteClientResponse, DeleteClientRequest>({
       query: ({ tenant_id, client_id }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/delete-complete`,
+        url: `/clientms/tenants/${tenant_id}/clients/delete-complete`,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: withSessionData({
@@ -412,7 +482,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Set client status (activate/deactivate)
     setClientStatus: builder.mutation<SetClientStatusResponse, SetClientStatusRequest>({
       query: (data) => ({
-        url: `/authsec/clientms/tenants/${data.tenant_id}/clients/set-status`,
+        url: `/clientms/tenants/${data.tenant_id}/clients/set-status`,
         method: "POST",
         body: data,
       }),
@@ -443,7 +513,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Get raw text to handle potential multiple JSON objects
@@ -509,7 +579,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Handle potential response format issues
@@ -589,6 +659,7 @@ export const clientApi = baseApi.injectEndpoints({
                 roles: client.roles || null,
                 oidc_enabled: client.oidc_enabled ?? false,
                 hydra_client_id: client.hydra_client_id || null,
+                client_type: client.client_type,
                 created_at: client.created_at || new Date().toISOString(),
                 updated_at: client.updated_at || new Date().toISOString(),
                 
@@ -609,14 +680,15 @@ export const clientApi = baseApi.injectEndpoints({
               total: parsed.pagination?.total || enhancedClients.length,
               filters: parsed.filters,
               pagination: parsed.pagination,
+              hydra_public_url: parsed.hydra_public_url,
             };
           }
-          
+
           // Fallback for old response format
           const normalizedResponse = normalizeClientsResponse(parsed);
           console.log('Normalized response (fallback):', normalizedResponse);
           console.log('First client in normalized response:', normalizedResponse.clients?.[0]);
-          
+
           const enhancedClients: EnhancedClientData[] = normalizedResponse.clients.map(client => {
             console.log('Processing client in API transform (fallback):', client);
             return {
@@ -633,6 +705,7 @@ export const clientApi = baseApi.injectEndpoints({
             total: enhancedClients.length,
             filters: normalizedResponse.filters,
             pagination: normalizedResponse.pagination,
+            hydra_public_url: parsed.hydra_public_url,
           };
         } catch (error) {
           console.error("Failed to parse getAllClients response:", error);
@@ -656,53 +729,97 @@ export const clientApi = baseApi.injectEndpoints({
           : [{ type: "Client" as const, id: "ALL" }],
     }),
 
-    // Register a new AI agent client (Tenant-scoped)
-    registerAiAgentClient: builder.mutation<
-      RegisterClientResponse,
-      RegisterAiAgentClientRequest
-    >({
-      query: ({ tenant_id, platform_config, ...body }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
-        method: "POST",
-        body: {
-          ...body,
-          agent_type: body.agent_type ?? "mcp-agent",
-          platform_config: {
-            namespace: platform_config.namespace,
-            service_account: platform_config.service_account,
-          },
-        },
-        responseHandler: "text",
-      }),
-      transformResponse: (response: string) => {
-        return parseFirstValidJSON<RegisterClientResponse>(response);
-      },
-      invalidatesTags: [{ type: "Client", id: "LIST" }],
-    }),
-
     // Register a new client (Tenant-scoped)
     registerClient: builder.mutation<RegisterClientResponse, RegisterClientRequest>({
       query: (data) => {
         const tenantId = data.tenant_id;
         return {
-          url: `/authsec/clientms/tenants/${tenantId}/clients/create`,
+          url: `/clientms/tenants/${tenantId}/clients/create`,
           method: "POST",
-          body: data,
+          body: {
+            name: data.name,
+            email: data.email,
+            project_id: data.project_id ?? "",
+            react_app_url: data.react_app_url ?? "",
+            client_type: "application",
+            agent_type: data.agent_type ?? "mcp-agent",
+            platform: data.platform ?? "",
+            platform_config: {
+              namespace: data.platform_config?.namespace ?? "",
+              service_account: data.platform_config?.service_account ?? "",
+            },
+          },
           responseHandler: "text", // Get raw text to handle multiple JSON objects
         };
       },
       transformResponse: (response: string) => {
-        // Backend may send multiple JSON objects concatenated
-        // Parse only the first valid one (success response)
-        return parseFirstValidJSON<RegisterClientResponse>(response);
+        return normalizeRegisterClientResponse(response);
       },
-      invalidatesTags: [{ type: "Client", id: "LIST" }],
+      invalidatesTags: [
+        { type: "Client", id: "LIST" },
+        { type: "Client", id: "ALL" },
+      ],
+    }),
+
+    registerAiAgentClient: builder.mutation<
+      RegisterClientResponse,
+      RegisterAiAgentClientRequest
+    >({
+      query: ({ tenant_id, selectors, ...body }) => ({
+        url: `/clientms/tenants/${tenant_id}/clients/create`,
+        method: "POST",
+        body: {
+          ...body,
+          agent_type: body.agent_type ?? "mcp-agent",
+          selectors,
+        },
+        responseHandler: "text",
+      }),
+      transformResponse: (response: string) => {
+        return normalizeRegisterClientResponse(response);
+      },
+      invalidatesTags: [
+        { type: "Client", id: "LIST" },
+        { type: "Client", id: "ALL" },
+      ],
+    }),
+
+    registerClawAuthClient: builder.mutation<
+      RegisterClientResponse,
+      RegisterClawAuthClientRequest
+    >({
+      query: ({ tenant_id, ...body }) => ({
+        url: `/clientms/tenants/${tenant_id}/clients/create`,
+        method: "POST",
+        body: {
+          name: body.name,
+          email: body.email,
+          project_id: body.project_id || "00000000-0000-0000-0000-000000000000",
+          react_app_url: body.react_app_url || "",
+          client_type: "claw_auth",
+          agent_type: "claw_auth",
+          redirect_url: body.redirect_url,
+          platform: "",
+          platform_config: {
+            namespace: "",
+            service_account: "",
+          },
+        },
+        responseHandler: "text",
+      }),
+      transformResponse: (response: string) => {
+        return normalizeRegisterClientResponse(response);
+      },
+      invalidatesTags: [
+        { type: "Client", id: "LIST" },
+        { type: "Client", id: "ALL" },
+      ],
     }),
 
     // Add OIDC provider to a client
     addOIDCProvider: builder.mutation<AddProviderResponse, AddProviderRequest>({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/add-provider",
+        url: "/oocmgr/oidc/add-provider",
         method: "POST",
         body: data,
       }),
@@ -712,7 +829,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Get OIDC configuration for a tenant
     getOIDCConfig: builder.mutation<GetConfigResponse, GetConfigRequest>({
       query: (data) => ({
-        url: "/authsec/oocmgr/oidc/get-config", 
+        url: "/oocmgr/oidc/get-config", 
         method: "POST",
         body: data,
       }),
@@ -771,6 +888,14 @@ export const clientApi = baseApi.injectEndpoints({
       },
       providesTags: ["Client"],
     }),
+
+    getPlatformSelectors: builder.query<PlatformSelectorsResponse, GetPlatformSelectorsRequest>({
+      query: ({ tenant_id, platform }) => ({
+        url: `/clientms/tenants/${tenant_id}/clients/platform-selectors`,
+        method: "GET",
+        params: { platform },
+      }),
+    }),
   }),
 });
 
@@ -779,6 +904,7 @@ export const {
   useGetAllClientsQuery,
   useRegisterClientMutation,
   useRegisterAiAgentClientMutation,
+  useRegisterClawAuthClientMutation,
   useDeleteClientCompleteMutation,
   useSetClientStatusMutation,
   useAddOIDCProviderMutation,
@@ -792,5 +918,7 @@ export const {
   useDetachAuthMethodMutation,
   useSetDefaultAuthMethodMutation,
   useGetClientAuthMethodsQuery,
+  useGetPlatformSelectorsQuery,
+  useLazyGetPlatformSelectorsQuery,
 } = clientApi;
 // Force rebuild

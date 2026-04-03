@@ -22,7 +22,12 @@ import type { EnhancedRole } from "@/types/entities";
 import type { ResponsiveColumnDef } from "@/components/ui/responsive-data-table";
 import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -64,16 +69,16 @@ export class RoleTableUtils {
 
   static getRoleLevel(roleName: string): string {
     const name = roleName.toLowerCase();
-    if (name.includes('admin') || name.includes('super')) {
-      return 'Admin';
+    if (name.includes("admin") || name.includes("super")) {
+      return "Admin";
     }
-    if (name.includes('manager') || name.includes('lead')) {
-      return 'Manager';
+    if (name.includes("manager") || name.includes("lead")) {
+      return "Manager";
     }
-    if (name.includes('user') || name.includes('member')) {
-      return 'User';
+    if (name.includes("user") || name.includes("member")) {
+      return "User";
     }
-    return 'Custom';
+    return "Custom";
   }
 }
 
@@ -81,7 +86,7 @@ export class RoleTableUtils {
 export function RoleNameCell({
   role,
   onToggleExpand,
-  isExpanded: _isExpanded
+  isExpanded: _isExpanded,
 }: {
   role: EnhancedRole;
   onToggleExpand?: () => void;
@@ -101,7 +106,9 @@ export function RoleNameCell({
     <div className="min-w-0">
       <p
         className={`truncate text-sm font-medium ${
-          onToggleExpand ? "cursor-pointer text-foreground hover:underline" : "text-foreground"
+          onToggleExpand
+            ? "cursor-pointer text-foreground hover:underline"
+            : "text-foreground"
         }`}
         title={role.name}
         onClick={handleToggle}
@@ -139,11 +146,19 @@ export function RoleActionsCell({
     <div className="flex items-center justify-end">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="admin-row-icon-btn h-8 w-8 p-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="admin-row-icon-btn h-8 w-8 p-0"
+          >
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" visualVariant="row-actions" className="w-48">
+        <DropdownMenuContent
+          align="end"
+          visualVariant="row-actions"
+          className="w-48"
+        >
           {actions.onViewSDK && (
             <DropdownMenuItem
               onClick={() => actions.onViewSDK?.(role)}
@@ -153,10 +168,6 @@ export function RoleActionsCell({
               View SDK Code
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => actions.onEdit(role.id)}>
-            <Edit className="mr-2 h-4 w-4" />
-            Edit Role
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => actions.onAssignUsers(role.id)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Assign Users
@@ -181,7 +192,9 @@ export function RoleExpandedRow({ role }: { role: EnhancedRole }) {
   const userIds = (role.userIds ?? []).map(String);
   const usersList = (userNames.length ? userNames : userIds).filter(Boolean);
   const usersAssignedRaw =
-    role.users_assigned ?? role.userCount ?? (userNames.length || userIds.length);
+    role.users_assigned ??
+    role.userCount ??
+    (userNames.length || userIds.length);
   const usersAssigned = Number.isFinite(Number(usersAssignedRaw))
     ? Number(usersAssignedRaw)
     : 0;
@@ -190,7 +203,9 @@ export function RoleExpandedRow({ role }: { role: EnhancedRole }) {
   const [userSearch, setUserSearch] = React.useState("");
   const filteredUsers = React.useMemo(() => {
     if (!userSearch) return usersList;
-    return usersList.filter((u) => u.toLowerCase().includes(userSearch.toLowerCase()));
+    return usersList.filter((u) =>
+      u.toLowerCase().includes(userSearch.toLowerCase()),
+    );
   }, [usersList, userSearch]);
 
   const previewUsers = usersList.slice(0, 5);
@@ -226,7 +241,12 @@ export function RoleExpandedRow({ role }: { role: EnhancedRole }) {
               </p>
             </div>
             {usersList.length > 5 && (
-              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setUsersModalOpen(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setUsersModalOpen(true)}
+              >
                 View all
               </Button>
             )}
@@ -236,7 +256,10 @@ export function RoleExpandedRow({ role }: { role: EnhancedRole }) {
             <div className="space-y-1">
               <ul className="space-y-1 text-foreground">
                 {previewUsers.map((user, idx) => (
-                  <li key={`${user}-${idx}`} className="flex items-center gap-2">
+                  <li
+                    key={`${user}-${idx}`}
+                    className="flex items-center gap-2"
+                  >
                     <span className="h-1.5 w-1.5 rounded-full bg-foreground/40" />
                     <span className="truncate">{user}</span>
                   </li>
@@ -299,7 +322,11 @@ export function RoleTypeStatusCell({ role }: { role: EnhancedRole }) {
   const typeLabel =
     role.type === "system" ? "System" : role.type === "custom" ? "Custom" : "—";
   const editableLabel =
-    role.isBuiltIn !== undefined ? (role.isBuiltIn ? "Built-in" : "Editable") : "—";
+    role.isBuiltIn !== undefined
+      ? role.isBuiltIn
+        ? "Built-in"
+        : "Editable"
+      : "—";
   const versionLabel = role.version !== undefined ? `v${role.version}` : "—";
 
   return (
@@ -344,7 +371,8 @@ export function RoleGroupCountCell({ role }: { role: EnhancedRole }) {
     role.groupCount !== undefined || role.groupIds !== undefined;
 
   const groups =
-    role.groupCount ?? (Array.isArray(role.groupIds) ? role.groupIds.length : undefined);
+    role.groupCount ??
+    (Array.isArray(role.groupIds) ? role.groupIds.length : undefined);
 
   if (!hasGroupData || groups === undefined) {
     return <div className="text-sm text-foreground">—</div>;
@@ -362,7 +390,7 @@ export function createRoleTableColumns(
   actions: RoleTableActions,
   expandedRows?: Set<string>,
   onToggleExpand?: (rowId: string) => void,
-  getRowId?: (row: EnhancedRole) => string
+  getRowId?: (row: EnhancedRole) => string,
 ): ResponsiveColumnDef<EnhancedRole, any>[] {
   return [
     {
@@ -372,12 +400,16 @@ export function createRoleTableColumns(
       resizable: true,
       responsive: true,
       cell: ({ row }: { row: any }) => {
-        const rowId = getRowId ? getRowId(row.original) : row.original.id.toString();
+        const rowId = getRowId
+          ? getRowId(row.original)
+          : row.original.id.toString();
         const isExpanded = expandedRows?.has(rowId) || false;
         return (
           <RoleNameCell
             role={row.original}
-            onToggleExpand={onToggleExpand ? () => onToggleExpand(rowId) : undefined}
+            onToggleExpand={
+              onToggleExpand ? () => onToggleExpand(rowId) : undefined
+            }
             isExpanded={isExpanded}
           />
         );
@@ -390,7 +422,9 @@ export function createRoleTableColumns(
       header: "Permissions",
       resizable: true,
       responsive: true,
-      cell: ({ row }: { row: any }) => <RolePermissionsCell role={row.original} />,
+      cell: ({ row }: { row: any }) => (
+        <RolePermissionsCell role={row.original} />
+      ),
     },
     {
       id: "usersCount",
@@ -416,7 +450,7 @@ export function createRoleTableColumns(
 
 // Legacy column definitions for backward compatibility
 export function createSimpleRoleTableColumns(
-  actions: RoleTableActions
+  actions: RoleTableActions,
 ): ResponsiveColumnDef<EnhancedRole, any>[] {
   return [
     {
@@ -438,7 +472,7 @@ export function createSimpleRoleTableColumns(
         const count = RoleTableUtils.getPermissionCount(row.original);
         return (
           <span className="text-sm text-foreground">
-            {count} {count === 1 ? 'permission' : 'permissions'}
+            {count} {count === 1 ? "permission" : "permissions"}
           </span>
         );
       },
@@ -450,7 +484,11 @@ export function createSimpleRoleTableColumns(
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="admin-row-icon-btn h-8 w-8 p-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="admin-row-icon-btn h-8 w-8 p-0"
+            >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

@@ -69,6 +69,7 @@ export function TrustDelegationPolicyDetailPage() {
     <TrustDelegationPageFrame
       title="Trust Delegation Detail"
       description="Inspect one saved trust delegation configuration and its current guardrails."
+      backTo="/trust-delegation"
       actions={
         <div className="flex flex-wrap gap-2">
           <Button

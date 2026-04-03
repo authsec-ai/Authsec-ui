@@ -54,8 +54,8 @@ const ProviderOption = ({
   const iconContainerClasses = selected
     ? "bg-primary/15 text-primary"
     : template.accent
-      ? cn(template.accent, "text-[color:var(--color-text-secondary)]")
-      : "bg-muted text-[color:var(--color-text-secondary)]";
+    ? cn(template.accent, "text-[color:var(--color-text-secondary)]")
+    : "bg-muted text-[color:var(--color-text-secondary)]";
 
   return (
     <button
@@ -66,13 +66,13 @@ const ProviderOption = ({
         "border-[var(--component-form-section-border)] bg-[color-mix(in_oklab,var(--component-card-background) 94%,transparent)] shadow-sm",
         "hover:border-primary/60 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/60",
         selected &&
-          "border-primary bg-primary/8 ring-2 ring-primary/25 shadow-md",
+          "border-primary bg-primary/8 ring-2 ring-primary/25 shadow-md"
       )}
     >
       <div
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors",
-          iconContainerClasses,
+          iconContainerClasses
         )}
       >
         <Icon className="h-5 w-5" />
@@ -196,7 +196,7 @@ export function CreateAuthMethodPage() {
 
   // ✅ make tenant reactive
   const [tenantId, setTenantId] = useState<string | null>(
-    SessionManager.getSession()?.tenant_id || null,
+    SessionManager.getSession()?.tenant_id || null
   );
   useEffect(() => {
     const session = SessionManager.getSession();
@@ -208,7 +208,7 @@ export function CreateAuthMethodPage() {
     const preSelectedProvider = searchParams.get("provider");
     if (preSelectedProvider && !selectedTemplate) {
       const template = OIDC_TEMPLATES.find(
-        (t) => t.id === preSelectedProvider.toLowerCase(),
+        (t) => t.id === preSelectedProvider.toLowerCase()
       );
       if (template) {
         console.log(`[Auth] Auto-selecting provider: ${template.name}`);
@@ -222,7 +222,7 @@ export function CreateAuthMethodPage() {
 
   const selectedProviderTemplate = useMemo(
     () => OIDC_TEMPLATES.find((template) => template.id === selectedTemplate),
-    [selectedTemplate],
+    [selectedTemplate]
   );
   const SelectedProviderIcon = selectedProviderTemplate?.icon;
 
@@ -280,13 +280,13 @@ export function CreateAuthMethodPage() {
     if (currentStepIndex === 0) {
       // All configuration must be complete
       return Boolean(
-        selectedTemplate && configData.providerConfig?.clientId?.trim(),
+        selectedTemplate && configData.providerConfig?.clientId?.trim()
       );
     }
     if (currentStepIndex === 1) {
       // Review step - same validation
       return Boolean(
-        tenantId && selectedTemplate && configData.providerConfig?.clientId,
+        tenantId && selectedTemplate && configData.providerConfig?.clientId
       );
     }
     return false;
@@ -340,7 +340,9 @@ export function CreateAuthMethodPage() {
       });
     } catch (error) {
       console.error("Failed to create OIDC provider:", error);
-      const ErrorMsg = error?.data?.error || "Failed to create OIDC provider.";
+        const ErrorMsg = 
+          error?.data?.error ||
+          "Failed to create OIDC provider.";
       toast.error(ErrorMsg);
     }
   };
@@ -469,7 +471,7 @@ export function CreateAuthMethodPage() {
                             placeholder="Your OAuth client ID"
                             value={configData.providerConfig?.clientId || ""}
                             onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>,
+                              e: React.ChangeEvent<HTMLInputElement>
                             ) => {
                               updateProviderConfig({
                                 clientId: e.target.value,
@@ -502,7 +504,7 @@ export function CreateAuthMethodPage() {
                                 configData.providerConfig?.clientSecret || ""
                               }
                               onChange={(
-                                e: React.ChangeEvent<HTMLInputElement>,
+                                e: React.ChangeEvent<HTMLInputElement>
                               ) =>
                                 updateProviderConfig({
                                   clientSecret: e.target.value,
@@ -649,7 +651,7 @@ export function CreateAuthMethodPage() {
                     className={cn(
                       "flex items-center gap-2 rounded-lg px-3 py-2",
                       isActive && "bg-primary/10",
-                      isCompleted && "opacity-60",
+                      isCompleted && "opacity-60"
                     )}
                   >
                     <div
@@ -659,7 +661,7 @@ export function CreateAuthMethodPage() {
                         isActive && "bg-primary/20 text-primary",
                         !isActive &&
                           !isCompleted &&
-                          "bg-muted text-muted-foreground",
+                          "bg-muted text-muted-foreground"
                       )}
                     >
                       {isCompleted ? (
@@ -672,7 +674,7 @@ export function CreateAuthMethodPage() {
                       className={cn(
                         "text-sm font-medium",
                         isActive && "text-foreground",
-                        !isActive && "text-muted-foreground",
+                        !isActive && "text-muted-foreground"
                       )}
                     >
                       {step.label}

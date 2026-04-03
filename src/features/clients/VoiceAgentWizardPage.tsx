@@ -26,7 +26,10 @@ import {
 } from "lucide-react";
 import { toast } from "../../lib/toast";
 import { cn } from "../../lib/utils";
-import { useGetAllClientsQuery, type EnhancedClientData } from "../../app/api/clientApi";
+import {
+  useGetAllClientsQuery,
+  type EnhancedClientData,
+} from "../../app/api/clientApi";
 import { SessionManager } from "../../utils/sessionManager";
 
 // ============================================================================
@@ -92,7 +95,9 @@ const ClientCard = ({
           </Badge>
         )}
       </div>
-      <p className="text-xs text-muted-foreground font-mono truncate">{client.client_id}</p>
+      <p className="text-xs text-muted-foreground font-mono truncate">
+        {client.client_id}
+      </p>
     </div>
     {selected && (
       <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
@@ -125,7 +130,9 @@ const AuthMethodCard = ({
   <div
     className={cn(
       "relative rounded-xl border p-5 transition-all duration-200",
-      enabled ? "border-primary/50 bg-primary/[0.03] shadow-sm" : "border-border/60 bg-card/30",
+      enabled
+        ? "border-primary/50 bg-primary/[0.03] shadow-sm"
+        : "border-border/60 bg-card/30",
     )}
   >
     <div className="flex items-start justify-between gap-4">
@@ -133,28 +140,39 @@ const AuthMethodCard = ({
         <div
           className={cn(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors",
-            enabled ? "bg-primary/15 text-primary" : "bg-muted/80 text-muted-foreground",
+            enabled
+              ? "bg-primary/15 text-primary"
+              : "bg-muted/80 text-muted-foreground",
           )}
         >
           <Icon className="h-6 w-6" />
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-[15px] text-foreground">{title}</h4>
+            <h4 className="font-semibold text-[15px] text-foreground">
+              {title}
+            </h4>
             {badge && (
-              <Badge variant={badgeVariant} className="text-[10px] px-1.5 py-0 h-5">
+              <Badge
+                variant={badgeVariant}
+                className="text-[10px] px-1.5 py-0 h-5"
+              >
                 {badge}
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed max-w-md">{description}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
+            {description}
+          </p>
           <div className="flex flex-wrap gap-2 pt-2">
             {features.map((feature, i) => (
               <div
                 key={i}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors",
-                  enabled ? "bg-primary/10 text-primary" : "bg-muted/60 text-muted-foreground",
+                  enabled
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted/60 text-muted-foreground",
                 )}
               >
                 <feature.icon className="h-3 w-3" />
@@ -240,12 +258,13 @@ export default function VoiceAgentWizardPage() {
   const tenantId = sessionData?.tenant_id || "";
 
   // Fetch clients
-  const { data: clientsResponse, isLoading: clientsLoading } = useGetAllClientsQuery(
-    { tenant_id: tenantId },
-    { skip: !tenantId },
-  );
+  const { data: clientsResponse, isLoading: clientsLoading } =
+    useGetAllClientsQuery({ tenant_id: tenantId }, { skip: !tenantId });
 
-  const clients = useMemo(() => clientsResponse?.clients || [], [clientsResponse]);
+  const clients = useMemo(
+    () => clientsResponse?.clients || [],
+    [clientsResponse],
+  );
 
   // Auto-select client from URL
   useEffect(() => {
@@ -313,21 +332,33 @@ export default function VoiceAgentWizardPage() {
   }, [currentStepIndex, config]);
 
   // Code snippets
-  const getInstallCode = () => `pip install git+https://github.com/authsec-ai/sdk-authsec.git`;
+  const getInstallCode = () => `pip install authsec-sdk`;
+
+  const getConfigCode =
+    () => `# Interactive setup — creates .authsec.json with your client_id
+authsec init
+
+# Or set manually via environment variables:
+export CLIENT_ID=${config.clientId || "your-client-id"}
+export CIBA_BASE_URL=https://dev.api.authsec.dev`;
 
   const getCibaCode = () => `from AuthSec_SDK import CIBAClient
 
 # Initialize with your client ID
-client = CIBAClient(client_id="${config.clientId || "your-client-id"}")
+ciba = CIBAClient(
+    client_id="${config.clientId || "your-client-id"}",
+    base_url="https://dev.api.authsec.dev",
+)
 
 # Send push notification to user's AuthSec mobile app
-result = client.initiate_app_approval("user@example.com")
+result = ciba.initiate_app_approval("user@example.com")
 
 # Wait for user approval (blocks until response or timeout)
-approval = client.poll_for_approval(
+approval = ciba.poll_for_approval(
     email="user@example.com",
     auth_req_id=result["auth_req_id"],
-    timeout=60  # seconds
+    interval=5,    # poll every 5 seconds
+    timeout=120,   # give up after 2 minutes
 )
 
 if approval["status"] == "approved":
@@ -337,8 +368,8 @@ elif approval["status"] == "access_denied":
 elif approval["status"] == "timeout":
     print("⏱️ Request timed out")`;
 
-  const getTotpCode = () => `# TOTP Verification (6-digit code fallback)
-result = client.verify_totp("user@example.com", "123456")
+  const getTotpCode = () => `# TOTP Fallback (6-digit code)
+result = ciba.verify_totp("user@example.com", "123456")
 
 if result["success"]:
     print(f"✅ Valid! Token: {result['token'][:50]}...")
@@ -349,8 +380,11 @@ else:
 
 class VoiceAssistant:
     def __init__(self):
-        self.ciba = CIBAClient(client_id="${config.clientId || "your-client-id"}")
-    
+        self.ciba = CIBAClient(
+            client_id="${config.clientId || "your-client-id"}",
+            base_url="https://dev.api.authsec.dev",
+        )
+
     def authenticate_user(self, email: str) -> str | None:
         """Handle voice authentication with CIBA + TOTP fallback"""
         
@@ -405,8 +439,12 @@ class VoiceAssistant:
               <Mic className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Configure Voice Agent</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{getStepSubtitle()}</p>
+              <h1 className="text-xl font-semibold tracking-tight">
+                Configure Voice Agent
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {getStepSubtitle()}
+              </p>
             </div>
           </div>
           <Button
@@ -436,16 +474,18 @@ class VoiceAssistant:
                     Voice Agent Authentication
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                    Enable passwordless authentication for voice assistants using CIBA (push
-                    notifications) and TOTP (6-digit codes). Perfect for hands-free, IoT, and
-                    conversational interfaces.
+                    Enable passwordless authentication for voice assistants
+                    using CIBA (push notifications) and TOTP (6-digit codes).
+                    Perfect for hands-free, IoT, and conversational interfaces.
                   </p>
                 </div>
               </div>
 
               {/* Client Selection */}
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Select a Client</h3>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Select a Client
+                </h3>
                 {clientsLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -476,7 +516,8 @@ class VoiceAssistant:
                           setConfig((prev) => ({
                             ...prev,
                             clientId: client.client_id,
-                            clientName: client.name || client.client_name || "Unnamed",
+                            clientName:
+                              client.name || client.client_name || "Unnamed",
                           }))
                         }
                       />
@@ -496,7 +537,9 @@ class VoiceAssistant:
                   <Bot className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-foreground">{config.clientName}</p>
+                  <p className="font-semibold text-sm text-foreground">
+                    {config.clientName}
+                  </p>
                   <p className="text-xs text-muted-foreground font-mono truncate">
                     {config.clientId}
                   </p>
@@ -516,7 +559,8 @@ class VoiceAssistant:
                     Recommended: Enable both methods
                   </p>
                   <p className="text-xs text-blue-600/80 dark:text-blue-400/80 mt-0.5">
-                    TOTP provides a fallback when users don't have the AuthSec mobile app installed.
+                    TOTP provides a fallback when users don't have the AuthSec
+                    mobile app installed.
                   </p>
                 </div>
               </div>
@@ -535,7 +579,9 @@ class VoiceAssistant:
                     { icon: Sparkles, label: "Hands-free" },
                   ]}
                   enabled={config.cibaEnabled}
-                  onToggle={(enabled) => setConfig((prev) => ({ ...prev, cibaEnabled: enabled }))}
+                  onToggle={(enabled) =>
+                    setConfig((prev) => ({ ...prev, cibaEnabled: enabled }))
+                  }
                 />
 
                 <AuthMethodCard
@@ -549,7 +595,9 @@ class VoiceAssistant:
                     { icon: Zap, label: "Backup Auth" },
                   ]}
                   enabled={config.totpEnabled}
-                  onToggle={(enabled) => setConfig((prev) => ({ ...prev, totpEnabled: enabled }))}
+                  onToggle={(enabled) =>
+                    setConfig((prev) => ({ ...prev, totpEnabled: enabled }))
+                  }
                 />
               </div>
             </div>
@@ -581,7 +629,9 @@ class VoiceAssistant:
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
                     1
                   </span>
-                  <h3 className="text-sm font-semibold text-foreground">Install the SDK</h3>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Install the SDK
+                  </h3>
                 </div>
                 <CodeBlock
                   code={`$ ${getInstallCode()}`}
@@ -591,12 +641,30 @@ class VoiceAssistant:
                 />
               </div>
 
+              {/* Configure AuthSec */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
+                    2
+                  </span>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Configure AuthSec
+                  </h3>
+                </div>
+                <CodeBlock
+                  code={getConfigCode()}
+                  label="Terminal"
+                  onCopy={() => handleCopy(getConfigCode(), "config")}
+                  copied={copiedSteps.has("config")}
+                />
+              </div>
+
               {/* CIBA Code */}
               {config.cibaEnabled && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
-                      2
+                      3
                     </span>
                     <h3 className="text-sm font-semibold text-foreground">
                       CIBA Push Authentication
@@ -616,7 +684,7 @@ class VoiceAssistant:
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-xs font-semibold">
-                      {config.cibaEnabled ? "3" : "2"}
+                      {config.cibaEnabled ? "4" : "3"}
                     </span>
                     <h3 className="text-sm font-semibold text-foreground">
                       TOTP Code Verification
@@ -687,7 +755,9 @@ class VoiceAssistant:
                         "flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors",
                         isCompleted && "bg-primary text-primary-foreground",
                         isActive && "bg-primary/20 text-primary",
-                        !isActive && !isCompleted && "bg-muted text-muted-foreground",
+                        !isActive &&
+                          !isCompleted &&
+                          "bg-muted text-muted-foreground",
                       )}
                     >
                       {isCompleted ? (
@@ -716,7 +786,11 @@ class VoiceAssistant:
 
           {/* Next/Finish Button */}
           {currentStepIndex < WIZARD_STEPS.length - 1 ? (
-            <Button onClick={handleNext} disabled={!canProceed} className="gap-2">
+            <Button
+              onClick={handleNext}
+              disabled={!canProceed}
+              className="gap-2"
+            >
               Continue
               <ChevronRight className="h-4 w-4" />
             </Button>

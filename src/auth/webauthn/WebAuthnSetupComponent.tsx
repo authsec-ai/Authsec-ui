@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 // Card components removed - using clean div-based design
 import { Button } from "../../components/ui/button";
 import { Alert, AlertDescription } from "../../components/ui/alert";
+import { getErrorMessage, getErrorName } from "../../lib/error-utils";
 import { useWebAuthnAuth } from "./useWebAuthnAuth";
 import { 
   Fingerprint, 
@@ -18,10 +19,10 @@ interface WebAuthnSetupComponentProps {
   contextType: "admin" | "oidc";
   email: string;
   tenantId: string;
-  onSuccess?: (token: string) => void;
+  onSuccess?: (token?: string) => void;
   onError?: (error: string) => void;
   onBack?: () => void;
-  onSetup?: (email: string, tenantId: string) => Promise<any>;
+  onSetup?: (email: string, tenantId: string) => Promise<unknown>;
 }
 
 /**
@@ -30,7 +31,7 @@ interface WebAuthnSetupComponentProps {
  * Handles biometric/security key registration for new users.
  * Pure component - flow logic handled by parent page
  */
-export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess, onError, onBack, onSetup }: WebAuthnSetupComponentProps) {
+export function WebAuthnSetupComponent({ contextType: _contextType, email, tenantId, onSuccess, onError, onBack, onSetup }: WebAuthnSetupComponentProps) {
   const { 
     registerUser, 
     handleCallback,
@@ -56,6 +57,7 @@ export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess
         // Use the context-specific setup function
         await onSetup(email, tenantId);
         setSetupState("success");
+        onSuccess?.();
       } else {
         // Fallback to local setup logic
         await registerUser(email, tenantId);
@@ -70,20 +72,24 @@ export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess
         }
       }
       
-    } catch (error: any) {
+    } catch (error) {
       setSetupState("error");
       let errorMsg: string;
+      const errorName = getErrorName(error);
       
-      if (error.name === 'NotSupportedError') {
+      if (errorName === 'NotSupportedError') {
         errorMsg = "Biometric authentication is not supported on this device or browser";
-      } else if (error.name === 'NotAllowedError') {
+      } else if (errorName === 'NotAllowedError') {
         errorMsg = "Permission was denied. Please try again and allow access to your biometric sensor";
-      } else if (error.name === 'InvalidStateError') {
+      } else if (errorName === 'InvalidStateError') {
         errorMsg = "A credential already exists for this device";
-      } else if (error.name === 'AbortError') {
+      } else if (errorName === 'AbortError') {
         errorMsg = "The operation was cancelled";
       } else {
-        errorMsg = error.message || "Failed to setup biometric authentication. Please try again";
+        errorMsg = getErrorMessage(
+          error,
+          "Failed to setup biometric authentication. Please try again",
+        );
       }
       
       setErrorMessage(errorMsg);
@@ -92,7 +98,9 @@ export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess
   };
 
   const handleBack = () => {
-    onBack && onBack(); // Go back to previous step
+    if (onBack) {
+      onBack();
+    }
   };
 
   const getSetupIcon = () => {
@@ -152,13 +160,6 @@ export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess
         align="center"
         title={getSetupTitle()}
         subtitle={getSetupDescription()}
-        meta={
-          email ? (
-            <>
-              Setting up for: <span className="font-semibold text-slate-900">{email}</span>
-            </>
-          ) : undefined
-        }
       />
 
       {setupState === "ready" && (
@@ -166,7 +167,7 @@ export function WebAuthnSetupComponent({ contextType, email, tenantId, onSuccess
           <div className="space-y-3 border-t border-[var(--auth-shell-border)] pt-4">
             <h4 className="font-semibold text-slate-900 mb-3 flex items-center">
               <Shield className="h-4 w-4 mr-2" />
-              What happens next
+              What to expect
             </h4>
             <ul className="space-y-2 text-sm text-slate-700">
               <li className="flex items-start gap-3">

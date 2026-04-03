@@ -23,6 +23,8 @@ interface OIDCWebAuthnState {
   tenantId: string | null;
   email: string | null;
   clientId: string | null; // Add client_id to capture from initial response
+  clientType: string | null; // e.g. "claw_auth", "application", "ai_agent"
+  redirectUris: string[] | null; // redirect URIs from login page data
 
   // MFA configuration
   availableMFAMethods: MFAMethod[];
@@ -55,6 +57,8 @@ const initialState: OIDCWebAuthnState = {
   tenantId: null,
   email: null,
   clientId: null,
+  clientType: null,
+  redirectUris: null,
   availableMFAMethods: [],
   selectedMFAMethod: null,
   totpSecret: null,
@@ -87,6 +91,14 @@ const oidcWebAuthnSlice = createSlice({
 
     setClientId: (state, action: PayloadAction<string>) => {
       state.clientId = action.payload;
+    },
+
+    setClientType: (state, action: PayloadAction<string>) => {
+      state.clientType = action.payload;
+    },
+
+    setRedirectUris: (state, action: PayloadAction<string[]>) => {
+      state.redirectUris = action.payload;
     },
     
     // MFA setup
@@ -144,6 +156,8 @@ export const {
   setCurrentStep,
   setLoginData,
   setClientId,
+  setClientType,
+  setRedirectUris,
   setAvailableMFAMethods,
   setSelectedMFAMethod,
   setTOTPSecret,

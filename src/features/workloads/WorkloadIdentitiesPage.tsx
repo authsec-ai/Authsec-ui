@@ -168,7 +168,7 @@ export function WorkloadIdentitiesPage() {
   });
   const { data: editEntry, error: editEntryError } = useGetEntryQuery(
     { entry_id: entryId || "", tenant_id: tenantId },
-    { skip: !isEditMode || !entryId }
+    { skip: !isEditMode || !entryId },
   );
 
   const isLoading = isRegistering || isUpdating;
@@ -181,7 +181,7 @@ export function WorkloadIdentitiesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDownstream, setIsDownstream] = useState(false);
   const [selectors, setSelectors] = useState<SelectorField[]>(
-    PLATFORM_TEMPLATES.kubernetes
+    PLATFORM_TEMPLATES.kubernetes,
   );
 
   // List state
@@ -193,16 +193,16 @@ export function WorkloadIdentitiesPage() {
     if (isEditMode) {
       if (editEntryError) {
         toast.error("Failed to load entry for editing");
-        navigate("/clients/workloads/create");
+        navigate("/clients/workloads");
       } else if (editEntry) {
         // Extract workload name from full SPIFFE ID
         const extractedName = editEntry.spiffe_id.replace(
           SPIFFE_DOMAIN_PREFIX,
-          ""
+          "",
         );
         setWorkloadName(extractedName);
         setParentId(editEntry.parent_id);
-        setTtl(editEntry.ttl.toString());
+        setTtl(editEntry.ttl != null ? editEntry.ttl.toString() : "");
         setIsAdmin(editEntry.admin || false);
         setIsDownstream(editEntry.downstream || false);
 
@@ -213,7 +213,7 @@ export function WorkloadIdentitiesPage() {
               id: crypto.randomUUID(),
               key,
               value: val as string,
-            })
+            }),
           );
           if (selectorEntries.length > 0) {
             setSelectors(selectorEntries);
@@ -236,7 +236,7 @@ export function WorkloadIdentitiesPage() {
   const handlePlatformChange = (value: string) => {
     setPlatform(value);
     setSelectors(
-      PLATFORM_TEMPLATES[value as keyof typeof PLATFORM_TEMPLATES] || []
+      PLATFORM_TEMPLATES[value as keyof typeof PLATFORM_TEMPLATES] || [],
     );
   };
 
@@ -256,10 +256,10 @@ export function WorkloadIdentitiesPage() {
   const handleSelectorChange = (
     id: string,
     field: "key" | "value",
-    value: string
+    value: string,
   ) => {
     setSelectors(
-      selectors.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+      selectors.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
     );
   };
 
@@ -278,7 +278,7 @@ export function WorkloadIdentitiesPage() {
     }
 
     const hasValidSelectors = selectors.some(
-      (s) => s.key.trim() && s.value.trim()
+      (s) => s.key.trim() && s.value.trim(),
     );
     if (!hasValidSelectors) {
       toast.error("At least one selector is required");
@@ -319,7 +319,7 @@ export function WorkloadIdentitiesPage() {
         }).unwrap();
 
         toast.success("Workload entry updated successfully!");
-        navigate("/clients/workloads/create");
+        navigate("/clients/workloads");
       } else {
         // CREATE mode
         await registerEntry({
@@ -349,7 +349,7 @@ export function WorkloadIdentitiesPage() {
   const handleDelete = async (entry: WorkloadEntry) => {
     if (
       !confirm(
-        `Are you sure you want to delete the entry "${entry.spiffe_id}"?`
+        `Are you sure you want to delete the entry "${entry.spiffe_id}"?`,
       )
     ) {
       return;
@@ -370,25 +370,25 @@ export function WorkloadIdentitiesPage() {
 
   const handleCancel = () => {
     if (isEditMode) {
-      navigate("/clients/workloads/create");
+      navigate("/clients/workloads");
     } else {
       navigate("/clients/workloads");
     }
   };
 
   const filteredEntries = entries.filter((entry) =>
-    entry.spiffe_id.toLowerCase().includes(searchQuery.toLowerCase())
+    entry.spiffe_id.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const hasValidSelectors = selectors.some(
-    (s) => s.key.trim() && s.value.trim()
+    (s) => s.key.trim() && s.value.trim(),
   );
   const canSubmit = Boolean(
     workloadName.trim() &&
-      (isEditMode || parentId) &&
-      hasValidSelectors &&
-      tenantId &&
-      !isLoading
+    (isEditMode || parentId) &&
+    hasValidSelectors &&
+    tenantId &&
+    !isLoading,
   );
 
   return (
@@ -577,7 +577,7 @@ export function WorkloadIdentitiesPage() {
                             handleSelectorChange(
                               selector.id,
                               "key",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="key"
@@ -589,7 +589,7 @@ export function WorkloadIdentitiesPage() {
                             handleSelectorChange(
                               selector.id,
                               "value",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           placeholder="value"

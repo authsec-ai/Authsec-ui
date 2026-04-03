@@ -6,7 +6,7 @@
 
 import React, { useState } from "react";
 import { Button } from "../../components/ui/button";
-import { IconCopy, IconCheck, IconCircleCheck } from "@tabler/icons-react";
+import { IconCopy, IconCheck } from "@tabler/icons-react";
 import { DeviceManagementPanel } from "./device-management";
 import { AuthStepHeader } from "../components/AuthStepHeader";
 
@@ -15,7 +15,7 @@ interface OIDCTokenDisplayComponentProps {
   email: string;
 }
 
-export function OIDCTokenDisplayComponent({ token, email }: OIDCTokenDisplayComponentProps) {
+export function OIDCTokenDisplayComponent({ token, email: _email }: OIDCTokenDisplayComponentProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyToken = async () => {
@@ -32,15 +32,7 @@ export function OIDCTokenDisplayComponent({ token, email }: OIDCTokenDisplayComp
     <div className="space-y-5">
       <AuthStepHeader
         title="Authentication successful"
-        subtitle="Your sign-in is complete and token is ready."
-        meta={
-          email ? (
-            <span className="inline-flex items-center gap-2">
-              <IconCircleCheck className="h-4 w-4 text-green-600" />
-              Authenticated as {email}
-            </span>
-          ) : undefined
-        }
+        subtitle="Your sign-in is complete. Your token is ready below."
       />
 
       <div className="space-y-3 auth-callout">

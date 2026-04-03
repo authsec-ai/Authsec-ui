@@ -4,7 +4,6 @@ import { CardContent } from "@/components/ui/card"
 import { FilterCard as ThemedFilterCard } from "@/theme/components/cards"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Search } from "lucide-react"
 import type { ClientsFilters } from "@/types/entities"
 
@@ -13,9 +12,9 @@ export function FilterCard({
 }: {
   setFilters: (filters: Partial<ClientsFilters>) => void;
 }) {
-  // Track search text and access filter; type/auth filters removed per latest UX
   const [searchQuery, setSearchQuery] = useState("")
   const [accessFilter, setAccessFilter] = useState("all")
+  const [clientTypeFilter, setClientTypeFilter] = useState("all")
 
   // Apply filters whenever any filter state changes
   // Use a debounced approach to prevent excessive updates
@@ -40,6 +39,10 @@ export function FilterCard({
         filters.access_status = accessFilter as "active" | "restricted" | "disabled";
       }
 
+      if (clientTypeFilter !== "all") {
+        filters.client_type = clientTypeFilter as "application" | "ai_agent" | "claw_auth";
+      }
+
       setFilters(filters);
     }, 300); // Debounce for 300ms
 
@@ -47,17 +50,20 @@ export function FilterCard({
   }, [
     searchQuery,
     accessFilter,
+    clientTypeFilter,
     setFilters
   ]);
 
   const activeFiltersCount = [
     searchQuery,
     accessFilter !== "all" ? accessFilter : "",
+    clientTypeFilter !== "all" ? clientTypeFilter : "",
   ].filter(Boolean).length
 
   const handleClearFilters = () => {
     setSearchQuery("");
     setAccessFilter("all");
+    setClientTypeFilter("all");
   };
 
   return (
@@ -101,6 +107,18 @@ export function FilterCard({
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="restricted">Restricted</SelectItem>
                 <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={clientTypeFilter} onValueChange={setClientTypeFilter}>
+              <SelectTrigger size="sm" className="w-[160px] h-9 text-sm">
+                <SelectValue placeholder="Client Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="application">MCP Server</SelectItem>
+                <SelectItem value="ai_agent">AI Agent</SelectItem>
+                <SelectItem value="claw_auth">Claw Bot</SelectItem>
               </SelectContent>
             </Select>
 

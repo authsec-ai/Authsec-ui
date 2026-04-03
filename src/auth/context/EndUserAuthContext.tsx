@@ -133,18 +133,20 @@ class OIDCCallbackHandler {
   async executeCallback(email: string, tenantId?: string, clientId?: string) {
     const sessionKey = `oidc-${email}-${tenantId ?? 'none'}-${clientId ?? 'none'}`;
 
+    // Dedup: return pending promise if one is already in-flight
     if (this.pendingCallbacks.has(sessionKey)) {
       return this.pendingCallbacks.get(sessionKey);
     }
 
+    // Dedup: return cached result if recent (prevents duplicate calls)
     const completed = this.completedResults.get(sessionKey);
-    if (completed && Date.now() - completed.ts < 15000) {
+    if (completed && Date.now() - completed.ts < 30000) {
       return completed.result;
     }
 
     const callbackPromise = this.performCallback(email, tenantId, clientId);
     this.pendingCallbacks.set(sessionKey, callbackPromise);
-    
+
     try {
       const result = await callbackPromise;
       if (result?.success && result?.token) {
@@ -165,21 +167,22 @@ class OIDCCallbackHandler {
         flow_context: 'enduser' as const,
         ...(clientId && { client_id: clientId })
       };
-      
+
       const result = await this.webauthnCallbackMutation(requestBody).unwrap();
+
       const token = (result && (result.token || (result as any).access_token || (result as any).jwt || (result as any).jwt_token || (result as any).id_token)) as string | undefined;
 
       if (token) {
         return { success: true, token };
       } else {
-        const successFlag = (result as any)?.success;
-        return { success: !!successFlag, error: (result as any)?.error || 'No token received' };
+        return { success: !!(result as any)?.success, error: (result as any)?.error || 'No token received' };
       }
-      
+
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      console.error("[Auth] webauthn-callback API error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -573,16 +576,14 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       };
 
       await finishWebAuthnAuth(finishPayload).unwrap();
-
       toast.success("Authentication successful!");
 
       const callbackResult = await callbackHandler.executeCallback(oidcWebauthn.email!, oidcWebauthn.tenantId!, oidcWebauthn.clientId || undefined);
+
       if (callbackResult.success && callbackResult.token) {
-        // Notify new user before displaying token (await to ensure it completes)
         if (oidcWebauthn.mfaRequired === false) {
           try {
             await notifyNewUser({}).unwrap();
-            console.log("[Auth] New user registration notification sent");
           } catch (err) {
             console.error("[Auth] Failed to send new user notification:", err);
           }

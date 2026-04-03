@@ -1,9 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CardContent } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -499,21 +506,33 @@ export function TrustDelegationPoliciesPage() {
         </CardContent>
       </FilterCard>
 
-      {deleteTarget && (
-        <Alert variant="destructive">
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-            Deleting this trust delegation stops future issuance but keeps historical audit records.
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDelete}>
-                Confirm delete
-              </Button>
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Trust Delegation
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              This action cannot be undone. Future token issuance will be stopped but historical audit records are preserved.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm">
+              <div className="font-medium text-foreground">{deleteTarget.roleName}</div>
+              <div className="mt-0.5 font-mono text-xs text-muted-foreground">ID: {deleteTarget.id}</div>
             </div>
-          </AlertDescription>
-        </Alert>
-      )}
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => { void handleDelete(); }}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <TableCard className="transition-all duration-500">
         <CardContent variant="flush">

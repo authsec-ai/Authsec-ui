@@ -133,11 +133,7 @@ export class SessionManager {
       // Clear all cookies
       SessionManager.clearAllCookies();
 
-      if (preserveOidc) {
-        console.log("✅ Session cleared; OIDC flow values preserved");
-      } else {
-        console.log("✅ Session and all authentication storage cleared");
-      }
+      // Session cleared successfully
     } catch (error) {
       console.error("Failed to clear session:", error);
     }

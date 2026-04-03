@@ -83,13 +83,6 @@ export function MFASelectionPage({
         align="center"
         title="Secure your account"
         subtitle="Choose your preferred method to keep your account safe."
-        meta={
-          email ? (
-            <>
-              Setting up for: <span className="font-semibold text-slate-900">{email}</span>
-            </>
-          ) : undefined
-        }
       />
 
       <div className="space-y-4">
@@ -134,7 +127,7 @@ export function MFASelectionPage({
                     {method.description}
                   </p>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {method.enabled ? (
                       <Badge variant="outline" className="border-green-300 bg-green-50 text-green-700">
                         Available
