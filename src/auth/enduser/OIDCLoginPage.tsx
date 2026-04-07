@@ -32,6 +32,8 @@ import {
   setCurrentStep,
   setLoginData,
   setClientId,
+  setClientType,
+  setRedirectUris,
 } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { OIDCWebAuthnRouter } from "./OIDCWebAuthnRouter";
@@ -64,9 +66,15 @@ const OIDCLoginPageInner: React.FC = () => {
     setTheme("light");
   }, [setTheme]);
 
-  // Get client_id from Redux state instead of local state
+  // Get client_id, client_type, redirect_uris from Redux state
   const clientId = useSelector(
     (state: RootState) => state.oidcWebAuthn.clientId
+  );
+  const reduxClientType = useSelector(
+    (state: RootState) => state.oidcWebAuthn.clientType
+  );
+  const reduxRedirectUris = useSelector(
+    (state: RootState) => state.oidcWebAuthn.redirectUris
   );
   const [loginPageData, setLoginPageData] = useState<LoginPageData | null>(
     null
@@ -417,31 +425,22 @@ const OIDCLoginPageInner: React.FC = () => {
         return;
       }
 
-      console.log("🔍 Fetching login data with challenge:", {
-        login_challenge: loginChallenge.substring(0, 20) + "...",
-        full_url: window.location.href,
-        has_saml_params: !!(
-          urlParams.get("client_id") || urlParams.get("user_email")
-        ),
-        saml_webauthn_complete: urlParams.get("saml_webauthn_complete"),
-      });
-
       const data = await getLoginPageData({
         login_challenge: loginChallenge,
-        extraQuery: rawSearch, // ✅ keep all other params
+        extraQuery: rawSearch,
       }).unwrap();
-
-      console.log("📥 Login data response:", {
-        success: data.success,
-        has_providers: !!data.providers,
-        client_id: data.client_id,
-        error: (data as any)?.error,
-      });
 
       const ok = (data as any)?.success !== false;
       if (ok) {
         setLoginPageData(data);
         if (data.client_id) dispatch(setClientId(data.client_id));
+        // Store client_type and redirect_uris in Redux for the Router to use
+        if (data.client_type != null) {
+          dispatch(setClientType(data.client_type));
+        }
+        if (data.redirect_uris) {
+          dispatch(setRedirectUris(data.redirect_uris));
+        }
       } else {
         console.error("❌ Login data fetch failed:", (data as any)?.error);
         setError((data as any)?.error || "Failed to load login data");
@@ -845,44 +844,13 @@ const OIDCLoginPageInner: React.FC = () => {
   };
 
   // Handle WebAuthn completion (redirect to OIDCCallbackPage with token)
+  // handleWebAuthnComplete — fallback for the Router's onAuthComplete.
+  // The Context already called executeCallback and set displayToken in Redux.
+  // This should NOT call executeCallback again (that was the race condition).
+  // For non-claw_auth, the Router no longer calls this — token just displays on screen.
+  // This only remains as a safety net.
   const handleWebAuthnComplete = async () => {
-    try {
-      // Use the integrated callback handler to prevent race conditions
-      const result = await executeCallback(
-        webauthnData?.email || email,
-        webauthnData?.tenantId
-      );
-
-      if (result.success && result.token) {
-        // Store the WebAuthn callback token in sessionStorage so OIDCCallbackPage can display it
-        sessionStorage.setItem("webauthn_callback_token", result.token);
-        sessionStorage.setItem(
-          "webauthn_callback_email",
-          webauthnData?.email || email
-        );
-
-        // Redirect to OIDCCallbackPage with a special parameter to indicate WebAuthn completion
-        const callbackUrl = `/oidc/auth/callback?webauthn_complete=true`;
-        window.location.href = callbackUrl;
-      } else {
-        setStatus("error");
-        setError(
-          result.error || "webauthn-callback failed without specific error"
-        );
-        console.error(
-          "❌ Integrated WebAuthn callback handler failed:",
-          result.error
-        );
-      }
-    } catch (error) {
-      setStatus("error");
-      setError(
-        `WebAuthn callback handler failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-      console.error("❌ Integrated WebAuthn callback handler error:", error);
-    }
+    console.log("[LoginPage] handleWebAuthnComplete called — this is a no-op now, token is in Redux");
   };
 
   // Handle WebAuthn error
@@ -891,42 +859,28 @@ const OIDCLoginPageInner: React.FC = () => {
     setError(`WebAuthn authentication failed: ${error}`);
   };
 
-  const handleTokenDisplay = useCallback(
-    async (token: string) => {
-      const storedLoginChallenge =
-        typeof window !== "undefined"
-          ? sessionStorage.getItem("login_challenge")
-          : null;
+  // Handle claw_auth token redirect.
+  // Only called by the Router when client_type === "claw_auth".
+  // Reads the second redirect_uri from Redux and redirects with ?auth_token=<jwt>.
+  const handleTokenDisplay = useCallback((token: string) => {
+    const uris = reduxRedirectUris;
+    if (!uris || uris.length < 2) {
+      console.error("[ClawAuth] No secondary redirect URI available, uris:", uris);
+      return;
+    }
 
-      if (!storedLoginChallenge || !token) {
-        return;
-      }
+    const clawRedirectUri = uris[1];
+    let baseUrl: string;
+    try {
+      baseUrl = new URL(clawRedirectUri).origin;
+    } catch {
+      baseUrl = clawRedirectUri;
+    }
 
-      try {
-        const response = await completeLocalLoginChallenge({
-          login_challenge: storedLoginChallenge,
-          token,
-        }).unwrap();
-
-        if (response?.success && response?.redirect_to) {
-          sessionStorage.removeItem("login_challenge");
-          window.location.href = response.redirect_to;
-          return;
-        }
-
-        throw new Error(response?.error || "Failed to continue authorization flow");
-      } catch (err) {
-        console.error("Failed to complete local Hydra login:", err);
-        setStatus("error");
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to continue authorization flow"
-        );
-      }
-    },
-    [completeLocalLoginChallenge]
-  );
+    const redirectTarget = `${baseUrl}/?auth_token=${encodeURIComponent(token)}`;
+    console.log("[ClawAuth] Redirecting to:", redirectTarget);
+    window.location.href = redirectTarget;
+  }, [reduxRedirectUris]);
 
   const getProviderIcon = (providerName: string) => {
     const iconProps = { size: 20, className: "text-current" };
@@ -986,6 +940,7 @@ const OIDCLoginPageInner: React.FC = () => {
   if (loading) {
     return (
       <AuthSplitFrame
+        shellVariant="enduser-single-card"
         valuePanel={
           <AuthValuePanel
             eyebrow="End-user Authentication"
@@ -1026,6 +981,7 @@ const OIDCLoginPageInner: React.FC = () => {
   if (error) {
     return (
       <AuthSplitFrame
+        shellVariant="enduser-single-card"
         valuePanel={
           <AuthValuePanel
             eyebrow="End-user Authentication"
@@ -1092,32 +1048,55 @@ const OIDCLoginPageInner: React.FC = () => {
     );
   }
 
+  const loginHeaderTitle = !showCustomLogin
+    ? "Sign in"
+    : !emailSubmitted
+      ? "Continue with email"
+      : userExists
+        ? showForgotPassword
+          ? forgotPasswordStep === "success"
+            ? "Password updated"
+            : "Reset password"
+          : "Enter your password"
+        : registrationStep === "otp"
+          ? "Verify your email"
+          : "Create your account";
+
+  const loginHeaderSubtitle = !showCustomLogin
+    ? sortedProviders.length > 0
+      ? "Choose a sign-in method."
+      : "Enter your email to continue."
+    : !emailSubmitted
+      ? "Enter your email to continue."
+      : userExists
+        ? showForgotPassword
+          ? forgotPasswordStep === "success"
+            ? "You can now return to sign in."
+            : "Follow the steps below to create a new password."
+          : "Use your password to continue."
+        : registrationStep === "otp"
+          ? "Enter the verification code we sent to your email."
+          : "Finish setting up your account.";
+
   return (
     <AuthSplitFrame
+      shellVariant="enduser-single-card"
       valuePanel={
         <AuthValuePanel
           eyebrow="End-user Authentication"
           title="Deliver secure sign-in to every customer."
-          subtitle="Unified social login, password-based access, registration, and MFA verification for your OIDC clients."
+          subtitle="One authentication flow for social login, passwords, registration, and MFA."
           points={[
             "Supports provider-based and custom email/password login.",
             "Built-in registration, OTP confirmation, and password recovery.",
             "Routes users into WebAuthn or TOTP when required.",
             "Preserves challenge context through callback handoff.",
           ]}
-          trustLabel={loginPageData.tenant_name ? `Tenant: ${loginPageData.tenant_name}` : undefined}
         />
       }
     >
       <AuthActionPanel className="space-y-6">
-        <AuthStepHeader
-          title="Sign in"
-          subtitle={
-            loginPageData.tenant_name
-              ? `Tenant: ${loginPageData.tenant_name}`
-              : "Choose a method to continue."
-          }
-        />
+        <AuthStepHeader title={loginHeaderTitle} subtitle={loginHeaderSubtitle} />
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1126,16 +1105,6 @@ const OIDCLoginPageInner: React.FC = () => {
         >
             {!showCustomLogin ? (
               <>
-                {/* Title Section */}
-                <div className="space-y-1">
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Sign In
-                  </h2>
-                  <p className="text-sm text-slate-600">
-                    Pick a method to continue
-                  </p>
-                </div>
-
                 {sortedProviders.length > 0 && (
                   <>
                     <div className="space-y-3">
@@ -1190,28 +1159,24 @@ const OIDCLoginPageInner: React.FC = () => {
                     >
                       Email
                     </Label>
-                    <div className="relative">
+                    <div className="space-y-3">
                       <Input
                         id="inline-email"
                         type="email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="h-12 rounded-xl border-slate-300 bg-white pr-14 text-base shadow-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/50 dark:focus:border-blue-500"
+                        className="h-12 rounded-xl border-slate-300 bg-white text-base shadow-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/50 dark:focus:border-blue-500"
                         placeholder="you@company.com"
                       />
-                      <button
-                        type="submit"
-                        disabled={customAuthenticating}
-                        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-blue-600 text-white transition-all hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-700"
-                        aria-label="Continue"
-                      >
+                      <Button type="submit" className="h-11 w-full rounded-xl" disabled={customAuthenticating}>
                         {customAuthenticating ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
-                          <ArrowRight className="h-4 w-4" />
+                          <ArrowRight className="mr-2 h-4 w-4" />
                         )}
-                      </button>
+                        Continue
+                      </Button>
                     </div>
                   </div>
                 </form>
@@ -1219,21 +1184,15 @@ const OIDCLoginPageInner: React.FC = () => {
             ) : (
               <>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {!emailSubmitted
-                        ? "Enter your email address"
-                        : userExists
-                        ? "Welcome back!"
-                        : "Create your account"}
-                    </p>
+                  <div className="flex justify-end">
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={handleToggleCustomLogin}
-                      className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 h-8 w-8"
+                      className="h-8 px-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
                     >
-                      <IconArrowLeft className="h-4 w-4" />
+                      <IconArrowLeft className="mr-2 h-4 w-4" />
+                      Back
                     </Button>
                   </div>
 
@@ -1279,11 +1238,11 @@ const OIDCLoginPageInner: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <IconMail className="mr-2 h-4 w-4 text-slate-500" />
-                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                      <div className="auth-inline-panel auth-inline-panel--compact dark:bg-slate-800/50">
+                        <div className="auth-summary-row">
+                          <div className="auth-summary-row__content">
+                            <IconMail className="h-4 w-4 flex-shrink-0 text-slate-500" />
+                            <span className="auth-summary-row__value text-sm text-slate-700 dark:text-slate-300">
                               {email}
                             </span>
                           </div>
@@ -1396,7 +1355,7 @@ const OIDCLoginPageInner: React.FC = () => {
                                       e.key === "Enter" && handleForgotSendOtp()
                                     }
                                   />
-                                  <div className="flex gap-2">
+                                  <div className="auth-action-row auth-action-row--stack-mobile sm:flex-row">
                                     <Button
                                       onClick={handleForgotSendOtp}
                                       className="h-10 flex-1 rounded-xl"
@@ -1447,7 +1406,7 @@ const OIDCLoginPageInner: React.FC = () => {
                                       handleForgotVerifyOtp()
                                     }
                                   />
-                                  <div className="flex gap-2">
+                                  <div className="auth-action-row auth-action-row--stack-mobile sm:flex-row">
                                     <Button
                                       onClick={handleForgotVerifyOtp}
                                       className="h-10 flex-1 rounded-xl"
@@ -1569,7 +1528,7 @@ const OIDCLoginPageInner: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  <div className="flex gap-2">
+                                  <div className="auth-action-row auth-action-row--stack-mobile sm:flex-row">
                                     <Button
                                       onClick={handleForgotResetPassword}
                                       className="h-10 flex-1 rounded-xl"

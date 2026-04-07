@@ -18,6 +18,9 @@ interface AdminUsersTableProps {
   onSelectionChange: (selectedIds: string[]) => void;
   onSelectAll: () => void;
   actions: AdminUserTableActions;
+  serverTotalItems?: number;
+  pageIndex?: number;
+  onPageIndexChange?: (page: number) => void;
 }
 
 export function AdminUsersTable({
@@ -26,6 +29,9 @@ export function AdminUsersTable({
   onSelectionChange,
   onSelectAll,
   actions,
+  serverTotalItems,
+  pageIndex,
+  onPageIndexChange,
 }: AdminUsersTableProps) {
   const columns = React.useMemo<AdaptiveColumn<EnhancedUser>[]>(
     () => [
@@ -110,6 +116,9 @@ export function AdminUsersTable({
         pageSizeOptions: [5, 10, 25, 50],
         alwaysVisible: true,
       }}
+      serverTotalItems={serverTotalItems}
+      pageIndex={pageIndex}
+      onPageIndexChange={onPageIndexChange}
     />
   );
 }

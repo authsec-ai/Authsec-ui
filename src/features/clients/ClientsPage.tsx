@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/context/AuthContext";
 import { Button } from "../../components/ui/button";
@@ -22,17 +22,15 @@ import { toast } from "react-hot-toast";
 import { generateOAuth2AuthorizationUrl } from "../../utils/oauthUtils";
 
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
+import {
+  trackClientDeleted,
+  trackClientStatusToggled,
+  trackClientPreviewLogin,
+  trackVoiceAgentConfigured,
+} from "@/utils/analytics";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { ClientAuthMethodsModal } from "./components/ClientAuthMethodsModal";
 import { OnboardClientModal } from "./components/OnboardClientModal";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
 import { Plus, ServerCog, ChevronsRight, Mic } from "lucide-react";
 
 // Import components
@@ -60,6 +58,13 @@ import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
+import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
+import {
+  trackClientDeleted,
+  trackClientStatusToggled,
+  trackClientPreviewLogin,
+  trackVoiceAgentConfigured,
+} from "@/utils/analytics";
 
 /**
  * Utility function to map API EnhancedClientData to ClientWithAuthMethods
@@ -158,11 +163,11 @@ function mapClientDataToTableFormat(
       org_id: client.org_id,
       hydra_client_id: client.hydra_client_id,
       client_type: backendClientType,
-      agent_type: (client as any).agent_type,
-      platform: (client as any).platform,
-      platform_config: (client as any).platform_config,
-      secret_id: (client as any).secret_id,
-      spiffe_id: (client as any).spiffe_id,
+      agent_type: client.agent_type,
+      platform: client.platform,
+      platform_config: client.platform_config,
+      secret_id: client.secret_id,
+      spiffe_id: client.spiffe_id,
       raw_client: {
         ...client,
         mfa_enabled: true, // Override: Always show MFA as ON
@@ -410,7 +415,6 @@ export function ClientsPage() {
           }
         }
 
-        // Client type filter
         if (filtersState.client_type) {
           const rawClientType =
             typeof client.client_type === "string"
@@ -418,6 +422,7 @@ export function ClientsPage() {
               : typeof client.metadata?.raw_client?.client_type === "string"
                 ? client.metadata.raw_client.client_type
                 : undefined;
+
           if (rawClientType !== filtersState.client_type) {
             return false;
           }
@@ -562,10 +567,6 @@ export function ClientsPage() {
     setTablePageIndex(1);
   }, []);
 
-  const handleCreateClient = () => {
-    setShowOnboardModal(true);
-  };
-
   const handleAddAuthMethod = useCallback(
     (clientId: string) => {
       navigate("/authentication/create", {
@@ -608,29 +609,37 @@ export function ClientsPage() {
       }
     }
 
+    // Use hydra_public_url from the API response if available
+    const hydraPublicUrl = clientsResponse?.hydra_public_url;
+
     // eslint-disable-next-line no-console
     console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
       clientId,
       tenantDomainFromSession: currentSession?.tenant_domain,
       tenantDomainFromHostname,
       finalTenantDomain: tenantDomainForOAuth,
+      hydraPublicUrl,
     });
 
     try {
       // Generate the OAuth2 authorization URL with PKCE
-      const { authorizationUrl } = await generateOAuth2AuthorizationUrl({
+      const { authorizationUrl, state, codeVerifier } = await generateOAuth2AuthorizationUrl({
         clientId,
         tenantDomain: tenantDomainForOAuth,
         scopes: ["openid", "profile", "email"],
+        hydraPublicUrl,
       });
 
-      window.open(authorizationUrl, "_blank", "noopener,noreferrer");
+      // Persist verifier so the callback can send it to exchange-token
+      sessionStorage.setItem(`pkce_cv_${state}`, codeVerifier);
+
+      window.open(authorizationUrl, "_blank");
       toast.success("Opening end-user login preview in a new tab");
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);
       toast.error("Failed to generate login preview URL");
     }
-  }, []);
+  }, [clientsResponse]);
 
   const handleConfigureVoiceAgent = useCallback(
     (clientId: string) => {

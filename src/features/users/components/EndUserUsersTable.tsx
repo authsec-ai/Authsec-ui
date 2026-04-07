@@ -38,6 +38,9 @@ interface EndUserUsersTableProps {
   onSelectionChange: (selectedIds: string[]) => void;
   onSelectAll: () => void;
   actions: UserTableActions;
+  serverTotalItems?: number;
+  pageIndex?: number;
+  onPageIndexChange?: (page: number) => void;
 }
 
 // User Cell Component
@@ -285,6 +288,9 @@ export function EndUserUsersTable({
   onSelectionChange,
   onSelectAll,
   actions,
+  serverTotalItems,
+  pageIndex,
+  onPageIndexChange,
 }: EndUserUsersTableProps) {
   const columns = React.useMemo<AdaptiveColumn<EnhancedUser>[]>(
     () => [
@@ -379,6 +385,9 @@ export function EndUserUsersTable({
         pageSizeOptions: [5, 10, 25, 50],
         alwaysVisible: true,
       }}
+      serverTotalItems={serverTotalItems}
+      pageIndex={pageIndex}
+      onPageIndexChange={onPageIndexChange}
     />
   );
 }

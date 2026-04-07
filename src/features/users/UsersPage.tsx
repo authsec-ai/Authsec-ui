@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { Card, CardContent } from "../../components/ui/card";
+import { CardContent } from "../../components/ui/card";
 import { TableCard } from "../../theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useAuth } from "../../auth/context/AuthContext";
 import { useResponsiveCards } from "../../hooks/use-mobile";
 // Import both admin and enduser user APIs
 import {
@@ -21,7 +20,6 @@ import {
   useChangeUserPasswordMutation,
   type UsersQueryParams,
 } from "@/app/api/enduser/usersApi";
-import type { SyncType } from "@/app/api/syncConfigsApi";
 import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
 import { useCrossPageNavigation } from "@/lib/cross-page-navigation";
 import { toast } from "@/lib/toast.ts";
@@ -55,6 +53,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
+import {
+  trackUserDeleted,
+  trackUserStatusChanged,
+  trackUserPasswordReset,
+  trackUserRoleAssigned,
+} from "@/utils/analytics";
+import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
 
 /**
  * Users page component - Manage users and team assignments with modern UI
@@ -76,9 +81,8 @@ export function UsersPage() {
     path: window.location.pathname
   });
 
-  const { currentProject } = useAuth();
   const navigate = useNavigate();
-  const { currentContext, navigateWithContext } = useCrossPageNavigation();
+  const { currentContext } = useCrossPageNavigation();
   const { isAdmin } = useRbacAudience();
   const location = useLocation();
   const isAdminView = useMemo(
@@ -162,7 +166,6 @@ export function UsersPage() {
   }, [isAdmin]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const projectName = currentProject?.name || "your project";
   const audienceCopy = useMemo(
     () =>
       isAdmin
@@ -481,6 +484,16 @@ export function UsersPage() {
 
   const enhancedUsersCount = enhancedUsers.length;
 
+  const totalItems = (usersResponse as any)?.total ?? enhancedUsersCount;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + enhancedUsersCount, totalItems);
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
+
   // Calculate counts for each source
   const adCount = useMemo(() => {
     return enhancedUsers.filter((user: any) =>
@@ -576,6 +589,7 @@ export function UsersPage() {
         await deleteEndUser({ tenant_id: tenantId, user_id: userId }).unwrap();
       }
       toast.success("User deletion requested; changes may take a moment to reflect.");
+      trackUserDeleted(isAdmin ? "admin" : "enduser");
       refetchUsers();
     } catch (error) {
       console.error("Failed to delete user:", error);
@@ -587,6 +601,7 @@ export function UsersPage() {
     try {
       await setUserActive({ user_id: userId, active }).unwrap();
       toast.success(`User ${active ? 'activated' : 'deactivated'} successfully`);
+      trackUserStatusChanged(active, isAdmin ? "admin" : "enduser");
       refetchUsers();
     } catch (error) {
       console.error("Failed to update user status:", error);
@@ -598,6 +613,7 @@ export function UsersPage() {
     try {
       await resetUserPassword({ email }).unwrap();
       toast.success("Password reset email sent");
+      trackUserPasswordReset(isAdmin ? "admin" : "enduser");
     } catch (error) {
       console.error("Failed to reset password:", error);
       toast.error("Failed to reset password");
@@ -763,9 +779,30 @@ export function UsersPage() {
 
   // Handler for single user assign role from row action
   const handleAssignRoleForUser = (userId: string, userName: string, userEmail: string) => {
+    trackUserRoleAssigned();
     setSingleUserForRole({ id: userId, name: userName, email: userEmail });
     setShowAssignRoleModal(true);
   };
+
+  const handleDelegateTrustForUser = useCallback(
+    (user: EnhancedUser) => {
+      const primaryRole = Array.isArray((user as any).roleNames) && (user as any).roleNames.length > 0
+        ? (user as any).roleNames[0]
+        : Array.isArray(user.roles) && user.roles.length > 0
+          ? typeof user.roles[0] === "string"
+            ? user.roles[0]
+            : ((user.roles[0] as { name?: string }).name ?? "")
+          : "";
+
+      navigate(
+        buildTrustDelegationPath("/trust-delegation/new", {
+          roleName: primaryRole || undefined,
+          userIds: user.id,
+        }),
+      );
+    },
+    [navigate],
+  );
 
   // Get users for modal - either selected users (bulk) or single user (row action)
   const usersForAssignRoleModal = useMemo(() => {
@@ -838,7 +875,6 @@ export function UsersPage() {
                 />
               }
             />
-
             {/* Filter/Search Card */}
             {isAdminView ? (
           <AdminUsersFilterCard
@@ -896,7 +932,11 @@ export function UsersPage() {
                       onResetPassword: handleResetPassword,
                       onChangePassword: handleChangePassword,
                       onAssignRole: handleAssignRoleForUser,
+                      onDelegateTrust: handleDelegateTrustForUser,
                     }}
+                    serverTotalItems={totalItems}
+                    pageIndex={currentPage}
+                    onPageIndexChange={setCurrentPage}
                   />
                 ) : (
                   <EndUserUsersTable
@@ -916,7 +956,11 @@ export function UsersPage() {
                       onResetPassword: handleResetPassword,
                       onChangePassword: handleChangePassword,
                       onAssignRole: handleAssignRoleForUser,
+                      onDelegateTrust: handleDelegateTrustForUser,
                     }}
+                    serverTotalItems={totalItems}
+                    pageIndex={currentPage}
+                    onPageIndexChange={setCurrentPage}
                   />
                 )}
                   {usersLoading && enhancedUsersCount > 0 && (
@@ -1006,6 +1050,7 @@ export function UsersPage() {
           }
         }}
         preselectedUsers={usersForAssignRoleModal}
+        audience={isAdminView ? "admin" : "endUser"}
         onSuccess={() => {
           setSelectedUsers([]);
           setSingleUserForRole(null);

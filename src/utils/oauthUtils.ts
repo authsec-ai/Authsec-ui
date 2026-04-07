@@ -150,6 +150,8 @@ export interface OAuth2AuthorizationUrlParams {
   codeChallengeMethod?: "S256" | "plain";
   /** The tenant's domain name (e.g., "dec10"), NOT the tenant UUID */
   tenantDomain?: string;
+  /** Hydra public URL from the API response — takes priority over getOAuthBaseUrl() */
+  hydraPublicUrl?: string;
 }
 
 export interface OAuth2AuthorizationUrlResult {
@@ -168,7 +170,7 @@ export interface OAuth2AuthorizationUrlResult {
 export async function generateOAuth2AuthorizationUrl(
   params: OAuth2AuthorizationUrlParams,
 ): Promise<OAuth2AuthorizationUrlResult> {
-  const { clientId, redirectUri, scopes = ["openid", "profile", "email"], tenantDomain } = params;
+  const { clientId, redirectUri, scopes = ["openid", "profile", "email"], tenantDomain, hydraPublicUrl } = params;
 
   // Generate PKCE values
   const codeVerifier = generateCodeVerifier();
@@ -183,8 +185,8 @@ export async function generateOAuth2AuthorizationUrl(
   // Determine redirect URI
   const finalRedirectUri = redirectUri || getRedirectUri(tenantDomain);
 
-  // Build the authorization URL
-  const baseUrl = getOAuthBaseUrl();
+  // Use hydra_public_url from API if available, otherwise derive from hostname
+  const baseUrl = hydraPublicUrl || getOAuthBaseUrl();
   const authUrl = new URL(`${baseUrl}/oauth2/auth`);
 
   authUrl.searchParams.set("response_type", "code");

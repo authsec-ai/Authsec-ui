@@ -4,21 +4,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import {
-  Search,
-  RefreshCw,
-  Eye,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Plus,
-  ServerCog,
-  ChevronRight,
-  Server,
-  Fingerprint,
-  Tags,
-  ChevronsRight,
-} from "lucide-react";
+import { RefreshCw, ServerCog, ChevronsRight } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { SessionManager } from "../../utils/sessionManager";
 import {
@@ -521,15 +507,6 @@ export function WorkloadCertificatePage() {
         <PageHeader
           title="Autonomous Workload"
           description="Monitor registered workload entries and their configurations"
-          actions={
-            <Button
-              onClick={() => navigate("/clients/workloads/create")}
-              data-tour-id="register-workload-button"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Register Workload
-            </Button>
-          }
         />
 
         {/* Informative Banner */}

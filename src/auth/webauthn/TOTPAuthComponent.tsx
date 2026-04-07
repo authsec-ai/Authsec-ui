@@ -143,13 +143,6 @@ export function TOTPAuthComponent({
         align="center"
         title="Enter authenticator code"
         subtitle="Open your authenticator app and type the 6-digit code."
-        meta={
-          email ? (
-            <>
-              Signing in as: <span className="font-semibold text-slate-900">{email}</span>
-            </>
-          ) : undefined
-        }
       />
 
       <div className="space-y-6">

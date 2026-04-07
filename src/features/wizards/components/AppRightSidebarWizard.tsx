@@ -215,23 +215,30 @@ function UserAuthCompletionView({
       }
     }
 
+    const hydraPublicUrl = clientsData?.hydra_public_url;
+
     // eslint-disable-next-line no-console
     console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
       clientId,
       tenantDomainFromSession: session?.tenant_domain,
       tenantDomainFromHostname,
       finalTenantDomain: tenantDomainForOAuth,
+      hydraPublicUrl,
     });
 
     try {
       // Generate the OAuth2 authorization URL with PKCE
-      const { authorizationUrl } = await generateOAuth2AuthorizationUrl({
+      const { authorizationUrl, state, codeVerifier } = await generateOAuth2AuthorizationUrl({
         clientId,
         tenantDomain: tenantDomainForOAuth,
         scopes: ["openid", "profile", "email"],
+        hydraPublicUrl,
       });
 
-      window.open(authorizationUrl, "_blank", "noopener,noreferrer");
+      // Persist verifier so the callback can send it to exchange-token
+      sessionStorage.setItem(`pkce_cv_${state}`, codeVerifier);
+
+      window.open(authorizationUrl, "_blank");
       toast.success("Opening login preview in a new tab");
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);

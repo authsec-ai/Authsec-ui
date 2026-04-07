@@ -27,7 +27,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 // Code Block Component with Tabs
 const CodeBlock = ({
   code,
-  language = "python",
+  language: _language = "python",
   label,
   onCopy,
   copied,
@@ -116,7 +116,7 @@ const CodeBlock = ({
 export default function OnboardingPage() {
   const { clientId } = useParams<{ clientId?: string }>();
   const location = useLocation();
-  const [clientType, setClientType] = useState<"MCP-Server" | "AI-Agent" | null>(null);
+  const [clientType, setClientType] = useState<"MCP-Server" | "AI-Agent" | "Claw-Bot" | null>(null);
   const [clientName, setClientName] = useState("My Client");
   const [copiedSteps, setCopiedSteps] = useState<Set<string>>(new Set());
   const [showExample, setShowExample] = useState(false);
@@ -156,7 +156,7 @@ export default function OnboardingPage() {
         setExistingClientName("Existing Client"); // This could be fetched from API in the future
         toast.success("Loaded existing client for SDK integration");
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [clientId]);
@@ -373,6 +373,26 @@ async def process_request(self, user_message: str):
     )
     
     return {"response": response.choices[0].message.content}`;
+    } else if (clientType === "Claw-Bot") {
+      const clientIdForExample = createdClientId ? `${createdClientId}` : "your-client-id";
+      return `from AuthSec_SDK import ClawAuthClient
+
+# Initialize Claw Auth client
+claw_client = ClawAuthClient(
+    client_id="${clientIdForExample}",
+    redirect_url="https://your-app.com/callback"
+)
+
+# Handle the auth callback
+@app.route("/callback")
+async def auth_callback(request):
+    """Handle the auth_token from redirect"""
+    auth_token = request.query_params.get("auth_token")
+
+    # Verify and decode the JWT token
+    user_info = claw_client.verify_token(auth_token)
+
+    return {"user": user_info, "authenticated": True}`;
     }
     return "# Select a client type above to see protection code";
   };
@@ -438,21 +458,21 @@ async def process_request(self, user_message: str):
                   className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl"
                   onSubmit={async (e) => {
                     e.preventDefault();
-                    if (!clientName || !email) {
-                      toast.error("Please provide name and email");
+                    if (!clientName.trim()) {
+                      toast.error("Please provide a client name");
                       return;
                     }
-                    if (!tenantId || !projectId) {
-                      toast.error("Missing tenant or project. Please sign in.");
+                    if (!tenantId || !email) {
+                      toast.error("Missing tenant or email. Please sign in.");
                       return;
                     }
                     try {
                       const res = await registerClient({
-                        name: clientName,
+                        name: clientName.trim(),
                         email,
                         tenant_id: tenantId,
                         project_id: projectId,
-                        react_app_url: window.location.origin,
+                        react_app_url: window.location.hostname,
                       }).unwrap();
                       setCreatedClientId(res.client_id);
                       toast.success("Client created successfully!");
@@ -472,27 +492,20 @@ async def process_request(self, user_message: str):
                       onChange={(e) => setClientName(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Contact Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tenant ID</Label>
-                    <Input value={tenantId} readOnly className="bg-muted/50" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Project ID</Label>
-                    <Input value={projectId} readOnly className="bg-muted/50" />
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Prefilled Context</Label>
+                    <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                      Using tenant <span className="font-mono text-foreground">{tenantId || "—"}</span> and
+                      contact email <span className="font-mono text-foreground"> {email || "—"}</span>.
+                    </div>
                   </div>
                   <div className="md:col-span-2">
-                    <Button type="submit" className="w-full md:w-auto">
-                      Create Client & Continue
+                    <Button
+                      type="submit"
+                      className="w-full md:w-auto"
+                      disabled={isCreating || !clientName.trim()}
+                    >
+                      {isCreating ? "Creating..." : "Create Client & Continue"}
                     </Button>
                   </div>
                 </form>
@@ -543,7 +556,7 @@ async def process_request(self, user_message: str):
                     <span>
                       Selected:{" "}
                       <span className="font-semibold text-foreground">
-                        {clientType === "MCP-Server" ? "MCP Server" : "AI Agent"}
+                        {clientType === "MCP-Server" ? "MCP Server" : clientType === "AI-Agent" ? "AI Agent" : "Claw Bot"}
                       </span>
                       {" · "}
                       <button
@@ -576,6 +589,16 @@ async def process_request(self, user_message: str):
                       <div>
                         <h3 className="font-medium text-sm">AI Agent</h3>
                         <p className="text-xs text-foreground">Agents & Chatbots</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setClientType("Claw-Bot")}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-md hover:bg-background transition-colors text-left flex-1"
+                    >
+                      <Shield className="h-5 w-5 text-primary flex-shrink-0" />
+                      <div>
+                        <h3 className="font-medium text-sm">Claw Bot</h3>
+                        <p className="text-xs text-foreground">Claw Auth Integration</p>
                       </div>
                     </button>
                   </div>
@@ -732,6 +755,41 @@ async def process_request(self, user_message: str):
                     <p className="text-xs text-green-700 dark:text-green-300">
                       Your AI agent now has enterprise-grade authentication. Users will be securely
                       authenticated before accessing your protected functions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Claw Bot Implementation */}
+          {(createdClientId || isExistingClient) && clientType === "Claw-Bot" && (
+            <div className="relative flex gap-6 mb-6">
+              <div className="relative z-10 flex-shrink-0">
+                <div className="w-12 h-12 rounded-full border-2 bg-background border-primary/30 flex items-center justify-center">
+                  <span className="text-sm font-semibold text-foreground">4</span>
+                </div>
+              </div>
+              <div className="flex-1 pt-2">
+                <p className="text-sm font-medium text-foreground/70 mb-3">Handle Auth Callback</p>
+
+                <div className="max-w-3xl space-y-2">
+                  <CodeBlock
+                    code={getProtectionCode()}
+                    label="Claw Auth Integration"
+                    onCopy={() => handleCopy(getProtectionCode(), "protection")}
+                    copied={copiedSteps.has("protection")}
+                    showTabs={true}
+                  />
+
+                  <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                    <h4 className="font-medium text-sm text-green-800 dark:text-green-200 mb-1 flex items-center gap-2">
+                      <Check className="h-4 w-4" />
+                      All Set!
+                    </h4>
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      Your Claw Bot is configured. After authentication, users will be redirected to
+                      your callback URL with an <code className="font-mono bg-green-100 dark:bg-green-900/40 px-1 rounded">auth_token</code> parameter containing their JWT.
                     </p>
                   </div>
                 </div>

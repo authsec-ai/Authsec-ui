@@ -17,15 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, X } from "lucide-react";
 import { toast } from "react-hot-toast";
-import {
-  useRegisterAiAgentClientMutation,
-  useRegisterClientMutation,
-} from "@/app/api/clientApi";
+import { useRegisterAiAgentClientMutation, useRegisterClientMutation, useRegisterClawAuthClientMutation, useLazyGetPlatformSelectorsQuery } from "@/app/api/clientApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+
+type SelectorField = { id: string; key: string; value: string };
 
 interface OnboardClientModalProps {
   isOpen: boolean;
@@ -44,18 +43,22 @@ export function OnboardClientModal({
   const session = SessionManager.getSession();
   const sessionEmail = session?.user?.email || session?.user?.email_id || "";
   const sessionTenantId = session?.tenant_id || "";
-  const [clientType, setClientType] = useState<"application" | "ai_agent">(
-    "application",
-  );
+  const [clientType, setClientType] = useState<"application" | "ai_agent" | "claw_auth">("application");
   const [clientName, setClientName] = useState("");
   const [platform, setPlatform] = useState("kubernetes");
-  const [namespace, setNamespace] = useState("authsec-prod");
-  const [serviceAccount, setServiceAccount] = useState("agent");
-  const [registerClient, { isLoading: isRegisteringApplication }] =
-    useRegisterClientMutation();
+  const [platformSelectorKeys, setPlatformSelectorKeys] = useState<string[]>([]);
+  const [selectors, setSelectors] = useState<SelectorField[]>([
+    { id: crypto.randomUUID(), key: "", value: "" },
+  ]);
+  const [isFetchingSelectors, setIsFetchingSelectors] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState("");
+  const [registerClient, { isLoading: isRegisteringApplication }] = useRegisterClientMutation();
   const [registerAiAgentClient, { isLoading: isRegisteringAiAgent }] =
     useRegisterAiAgentClientMutation();
-  const isLoading = isRegisteringApplication || isRegisteringAiAgent;
+  const [registerClawAuthClient, { isLoading: isRegisteringClawAuth }] =
+    useRegisterClawAuthClientMutation();
+  const [fetchPlatformSelectors] = useLazyGetPlatformSelectorsQuery();
+  const isLoading = isRegisteringApplication || isRegisteringAiAgent || isRegisteringClawAuth;
 
   // Reset form when modal opens
   useEffect(() => {
@@ -63,10 +66,46 @@ export function OnboardClientModal({
       setClientType("application");
       setClientName("");
       setPlatform("kubernetes");
-      setNamespace("authsec-prod");
-      setServiceAccount("agent");
+      setPlatformSelectorKeys([]);
+      setSelectors([{ id: crypto.randomUUID(), key: "", value: "" }]);
+      setRedirectUrl("");
     }
   }, [isOpen]);
+
+  // Fetch selector keys when platform changes (only when ai_agent type is selected)
+  useEffect(() => {
+    if (clientType !== "ai_agent" || !session?.tenant_id || !platform) return;
+    setIsFetchingSelectors(true);
+    fetchPlatformSelectors({ tenant_id: session.tenant_id, platform })
+      .unwrap()
+      .then((res) => {
+        setPlatformSelectorKeys(res.selector_keys);
+        setSelectors(
+          res.selector_keys.length > 0
+            ? res.selector_keys.map((k) => ({ id: crypto.randomUUID(), key: k, value: "" }))
+            : [{ id: crypto.randomUUID(), key: "", value: "" }]
+        );
+      })
+      .catch(() => {
+        setPlatformSelectorKeys([]);
+        setSelectors([{ id: crypto.randomUUID(), key: "", value: "" }]);
+      })
+      .finally(() => setIsFetchingSelectors(false));
+  }, [platform, clientType]);
+
+  const handleAddSelector = () => {
+    setSelectors((prev) => [...prev, { id: crypto.randomUUID(), key: "", value: "" }]);
+  };
+
+  const handleRemoveSelector = (id: string) => {
+    if (selectors.length > 1) {
+      setSelectors((prev) => prev.filter((s) => s.id !== id));
+    }
+  };
+
+  const handleSelectorChange = (id: string, field: "key" | "value", val: string) => {
+    setSelectors((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: val } : s)));
+  };
 
   const handleCreateClient = async () => {
     if (!clientName.trim()) {
@@ -81,7 +120,6 @@ export function OnboardClientModal({
       }
 
       const email = sessionEmail;
-
       if (!email) {
         toast.error("Missing email from session");
         return;
@@ -94,32 +132,57 @@ export function OnboardClientModal({
           toast.error("Please select a platform");
           return;
         }
-
-        if (!namespace.trim() || !serviceAccount.trim()) {
-          toast.error("Please provide namespace and service account");
+        const hasValid = selectors.some((s) => s.key.trim() && s.value.trim());
+        if (!hasValid) {
+          toast.error("Please fill in at least one selector key and value");
           return;
         }
       }
 
-      const response =
-        clientType === "ai_agent"
-          ? await registerAiAgentClient({
-              tenant_id: session.tenant_id,
-              name: trimmedName,
-              email,
-              client_type: "ai_agent",
-              agent_type: "mcp-agent",
-              platform: platform.trim(),
-              platform_config: {
-                namespace: namespace.trim(),
-                service_account: serviceAccount.trim(),
-              },
-            }).unwrap()
-          : await registerClient({
-              name: trimmedName,
-              email,
-              tenant_id: session.tenant_id,
-            }).unwrap();
+      if (clientType === "claw_auth") {
+        if (!redirectUrl.trim()) {
+          toast.error("Please provide a redirect URL");
+          return;
+        }
+      }
+
+      let response;
+      if (clientType === "ai_agent") {
+        const selectorsObj: Record<string, string> = {};
+        selectors.forEach((s) => {
+          if (s.key.trim() && s.value.trim()) {
+            selectorsObj[s.key.trim()] = s.value.trim();
+          }
+        });
+        response = await registerAiAgentClient({
+          tenant_id: session.tenant_id,
+          name: trimmedName,
+          email,
+          client_type: "ai_agent",
+          agent_type: "mcp-agent",
+          platform: platform.trim(),
+          selectors: selectorsObj,
+        }).unwrap();
+      } else if (clientType === "claw_auth") {
+        response = await registerClawAuthClient({
+          tenant_id: session.tenant_id,
+          name: trimmedName,
+          email,
+          project_id: session.project_id || "00000000-0000-0000-0000-000000000000",
+          react_app_url: window.location.hostname,
+          client_type: "claw_auth",
+          agent_type: "claw_auth",
+          redirect_url: redirectUrl.trim(),
+        }).unwrap();
+      } else {
+        response = await registerClient({
+          name: trimmedName,
+          email,
+          tenant_id: session.tenant_id,
+          project_id: session.project_id,
+          react_app_url: window.location.hostname,
+        }).unwrap();
+      }
 
       const successDetail =
         clientType === "ai_agent"
@@ -132,16 +195,19 @@ export function OnboardClientModal({
             ? "Secret ID"
             : "Client ID";
 
-      toast.success(
+      const typeLabel =
         clientType === "ai_agent"
-          ? `AI agent created. ${successLabel}: ${successDetail}`
-          : `MCP server created. ${successLabel}: ${successDetail}`,
-      );
+          ? "AI agent"
+          : clientType === "claw_auth"
+            ? "Claw Bot"
+            : "MCP server";
+      toast.success(`${typeLabel} created. ${successLabel}: ${successDetail}`);
+      trackClientCreated(trimmedName);
 
       onClose();
       onSuccess?.(response.client_id);
 
-      if (clientType === "application" && !preventNavigation) {
+      if ((clientType === "application" || clientType === "claw_auth") && !preventNavigation) {
         navigate(`/sdk/clients/${response.client_id}`);
       }
     } catch (err: any) {
@@ -151,40 +217,40 @@ export function OnboardClientModal({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !isLoading && clientName.trim()) {
       handleCreateClient();
     }
   };
 
   const clientTypeLabel =
-    clientType === "ai_agent" ? "AI Agent Name" : "MCP Server Name";
+    clientType === "ai_agent"
+      ? "AI Agent Name"
+      : clientType === "claw_auth"
+        ? "Claw Bot Name"
+        : "MCP Server Name";
   const clientTypePlaceholder =
     clientType === "ai_agent"
       ? "e.g., Customer Support"
-      : "e.g., My MCP Server";
+      : clientType === "claw_auth"
+        ? "e.g., My Claw Bot"
+        : "e.g., My MCP Server";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">
-            Onboard New Client
-          </DialogTitle>
+          <DialogTitle className="text-2xl font-bold">Onboard New Client</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">
-              What do you want to create?
-            </Label>
+            <Label className="text-sm font-semibold">What do you want to create?</Label>
             <RadioGroup
               value={clientType}
-              onValueChange={(value) =>
-                setClientType(value as "application" | "ai_agent")
-              }
+              onValueChange={(value) => setClientType(value as "application" | "ai_agent" | "claw_auth")}
             >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div
                   className={cn(
                     "flex items-start space-x-3 rounded-lg border p-4 cursor-pointer transition-all",
@@ -194,10 +260,7 @@ export function OnboardClientModal({
                 >
                   <RadioGroupItem value="application" id="client-type-application" />
                   <div className="flex-1">
-                    <Label
-                      htmlFor="client-type-application"
-                      className="cursor-pointer font-medium"
-                    >
+                    <Label htmlFor="client-type-application" className="cursor-pointer font-medium">
                       MCP Server
                     </Label>
                   </div>
@@ -212,11 +275,23 @@ export function OnboardClientModal({
                 >
                   <RadioGroupItem value="ai_agent" id="client-type-ai-agent" />
                   <div className="flex-1">
-                    <Label
-                      htmlFor="client-type-ai-agent"
-                      className="cursor-pointer font-medium"
-                    >
+                    <Label htmlFor="client-type-ai-agent" className="cursor-pointer font-medium">
                       AI Agent
+                    </Label>
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    "flex items-start space-x-3 rounded-lg border p-4 cursor-pointer transition-all",
+                    clientType === "claw_auth" && "border-primary bg-primary/5",
+                  )}
+                  onClick={() => setClientType("claw_auth")}
+                >
+                  <RadioGroupItem value="claw_auth" id="client-type-claw-auth" />
+                  <div className="flex-1">
+                    <Label htmlFor="client-type-claw-auth" className="cursor-pointer font-medium">
+                      Claw Bot
                     </Label>
                   </div>
                 </div>
@@ -233,15 +308,15 @@ export function OnboardClientModal({
               placeholder={clientTypePlaceholder}
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               className="h-12 text-base"
               autoFocus
             />
           </div>
 
           {clientType === "ai_agent" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
                 <Label htmlFor="platform" className="text-sm font-semibold">
                   Platform
                 </Label>
@@ -251,41 +326,96 @@ export function OnboardClientModal({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="kubernetes">Kubernetes</SelectItem>
+                    <SelectItem value="unix">Unix</SelectItem>
+                    <SelectItem value="docker">Docker</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="namespace" className="text-sm font-semibold">
-                  Namespace
-                </Label>
-                <Input
-                  id="namespace"
-                  placeholder="e.g., authsec-prod"
-                  value={namespace}
-                  onChange={(e) => setNamespace(e.target.value)}
-                  className="h-12 text-base"
-                />
-              </div>
+              {isFetchingSelectors ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading platform fields...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectors.map((selector, index) => (
+                    <div key={selector.id} className="flex gap-2 items-start">
+                      <div className="flex-1 grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          {index === 0 && (
+                            <Label className="text-xs font-medium text-foreground uppercase">Key</Label>
+                          )}
+                          <Input
+                            list={`selector-keys-${selector.id}`}
+                            value={selector.key}
+                            onChange={(e) => handleSelectorChange(selector.id, "key", e.target.value)}
+                            placeholder="e.g., k8s:ns"
+                            className="h-10 font-mono text-sm"
+                          />
+                          <datalist id={`selector-keys-${selector.id}`}>
+                            {platformSelectorKeys.map((k) => (
+                              <option key={k} value={k} />
+                            ))}
+                          </datalist>
+                        </div>
+                        <div className="space-y-1.5">
+                          {index === 0 && (
+                            <Label className="text-xs font-medium text-foreground uppercase">Value</Label>
+                          )}
+                          <Input
+                            value={selector.value}
+                            onChange={(e) => handleSelectorChange(selector.id, "value", e.target.value)}
+                            placeholder="e.g., production"
+                            className="h-10 font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                      {selectors.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveSelector(selector.id)}
+                          className={cn("text-destructive hover:text-destructive hover:bg-destructive/10", index === 0 ? "mt-6" : "mt-0")}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddSelector}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Selector
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
-              <div className="space-y-2">
-                <Label htmlFor="serviceAccount" className="text-sm font-semibold">
-                  Service Account
-                </Label>
-                <Input
-                  id="serviceAccount"
-                  placeholder="e.g., agent"
-                  value={serviceAccount}
-                  onChange={(e) => setServiceAccount(e.target.value)}
-                  className="h-12 text-base"
-                />
-              </div>
+          {clientType === "claw_auth" && (
+            <div className="space-y-2">
+              <Label htmlFor="redirectUrl" className="text-sm font-semibold">
+                Redirect URL
+              </Label>
+              <Input
+                id="redirectUrl"
+                placeholder="e.g., https://your-app.com/callback"
+                value={redirectUrl}
+                onChange={(e) => setRedirectUrl(e.target.value)}
+                className="h-12 text-base"
+              />
             </div>
           )}
 
           <p className="text-xs text-muted-foreground">
-            Using tenant <span className="font-mono">{sessionTenantId || "—"}</span> and
-            contact email <span className="font-mono">{sessionEmail || "—"}</span>.
+            Using tenant <span className="font-mono">{sessionTenantId || "—"}</span> and contact
+            email <span className="font-mono">{sessionEmail || "—"}</span>.
           </p>
         </div>
 

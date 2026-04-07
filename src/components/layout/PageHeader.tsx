@@ -7,6 +7,7 @@ interface PageHeaderProps {
   description?: string;
   actions?: React.ReactNode;
   badge?: React.ReactNode;
+  backButton?: React.ReactNode;
   className?: string;
   /** Use "inline" for simple buttons on the right, "below" for complex actions like tabs spanning full width */
   actionsPosition?: "inline" | "below";
@@ -17,6 +18,7 @@ export function PageHeader({
   description,
   actions,
   badge,
+  backButton,
   className,
   actionsPosition = "inline",
 }: PageHeaderProps) {
@@ -39,21 +41,24 @@ export function PageHeader({
           data-slot="page-header-main"
           className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
         >
-          <div data-slot="page-header-copy" className="min-w-0">
-            <div data-slot="page-header-title-row" className="flex items-center gap-3">
-              <h1
-                data-slot="page-header-title"
-                className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground"
-              >
-                {title}
-              </h1>
-              {badge}
+          <div data-slot="page-header-copy" className="flex min-w-0 items-start gap-3">
+            {backButton && <div className="shrink-0 pt-0.5">{backButton}</div>}
+            <div className="min-w-0">
+              <div data-slot="page-header-title-row" className="flex items-center gap-3">
+                <h1
+                  data-slot="page-header-title"
+                  className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground"
+                >
+                  {title}
+                </h1>
+                {badge}
+              </div>
+              {description && (
+                <p data-slot="page-header-description" className="mt-1 text-sm">
+                  {description}
+                </p>
+              )}
             </div>
-            {description && (
-              <p data-slot="page-header-description" className="mt-1 text-sm">
-                {description}
-              </p>
-            )}
           </div>
           {/* Inline actions on the right */}
           {actions && actionsPosition === "inline" && (

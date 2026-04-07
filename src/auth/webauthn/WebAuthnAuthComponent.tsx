@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 // Card components removed - using clean div-based design
 import { Button } from "../../components/ui/button";
 import { Alert, AlertDescription } from "../../components/ui/alert";
+import { getErrorMessage, getErrorName } from "../../lib/error-utils";
 import { useWebAuthnAuth } from "./useWebAuthnAuth";
 import { 
   Fingerprint, 
@@ -17,9 +18,9 @@ interface WebAuthnAuthComponentProps {
   contextType: "admin" | "oidc";
   email: string;
   tenantId: string;
-  onSuccess?: (token: string) => void;
+  onSuccess?: (token?: string) => void;
   onError?: (error: string) => void;
-  onAuthenticate?: (email: string, tenantId: string) => Promise<any>;
+  onAuthenticate?: (email: string, tenantId: string) => Promise<unknown>;
 }
 
 /**
@@ -28,7 +29,7 @@ interface WebAuthnAuthComponentProps {
  * Handles biometric authentication for returning users.
  * Pure component - flow logic handled by parent page
  */
-export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess, onError, onAuthenticate }: WebAuthnAuthComponentProps) {
+export function WebAuthnAuthComponent({ contextType: _contextType, email, tenantId, onSuccess, onError, onAuthenticate }: WebAuthnAuthComponentProps) {
   const { 
     authenticateUser, 
     handleCallback,
@@ -40,7 +41,7 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  const handleAuthenticate = async () => {
+  const handleAuthenticate = useCallback(async () => {
     setAuthState("waiting");
     setErrorMessage(null);
 
@@ -51,6 +52,7 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
         if (!ok) {
           throw new Error('Authentication failed');
         }
+        onSuccess?.();
       } else {
         // Local fallback: perform WebAuthn + callback via hook
         await authenticateUser(email, tenantId);
@@ -62,27 +64,32 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
         }
       }
       
-    } catch (error: any) {
+    } catch (error) {
       setAuthState("error");
       setRetryCount(prev => prev + 1);
       
-      const errorMsg = getErrorMessage(error);
+      const errorMsg = getAuthErrorMessage(error);
       setErrorMessage(errorMsg);
       onError?.(errorMsg);
     }
-  };
+  }, [authenticateUser, email, handleCallback, onAuthenticate, onError, onSuccess, tenantId]);
 
-  const getErrorMessage = (error: any): string => {
-    if (error.name === 'NotAllowedError') {
+  const getAuthErrorMessage = (error: unknown): string => {
+    const errorName = getErrorName(error);
+
+    if (errorName === 'NotAllowedError') {
       return "Authentication was cancelled. Please try again and allow access to your biometric sensor.";
-    } else if (error.name === 'InvalidStateError') {
+    } else if (errorName === 'InvalidStateError') {
       return "No registered credentials found. Please contact support or use an alternative authentication method.";
-    } else if (error.name === 'AbortError') {
+    } else if (errorName === 'AbortError') {
       return "Authentication timed out. Please try again.";
-    } else if (error.name === 'NotSupportedError') {
+    } else if (errorName === 'NotSupportedError') {
       return "Biometric authentication is not supported on this device or browser.";
     } else {
-      return error.message || "Authentication failed. Please try again or use an alternative method.";
+      return getErrorMessage(
+        error,
+        "Authentication failed. Please try again or use an alternative method.",
+      );
     }
   };
 
@@ -96,7 +103,7 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
     }, 500);
 
     return () => clearTimeout(timer);
-  }, []); // Only run on mount
+  }, [authState, handleAuthenticate]);
 
   const getAuthIcon = () => {
     switch (authState) {
@@ -116,7 +123,7 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
       case "error":
         return "Authentication failed";
       default:
-        return "Welcome back!";
+        return "Use your passkey";
     }
   };
 
@@ -138,13 +145,6 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
         align="center"
         title={getAuthTitle()}
         subtitle={getAuthDescription()}
-        meta={
-          email ? (
-            <>
-              Signing in as: <span className="font-semibold text-slate-900">{email}</span>
-            </>
-          ) : undefined
-        }
       />
 
       {authState === "ready" && (
@@ -226,7 +226,7 @@ export function WebAuthnAuthComponent({ contextType, email, tenantId, onSuccess,
           <div className="text-sm">
             <p className="font-medium text-amber-900 mb-1">Secure authentication</p>
             <p className="text-amber-800">
-              Your biometric data is processed locally on your device and never shared with our servers.
+              Your biometric data stays on your device and is never shared with our servers.
             </p>
           </div>
         </div>

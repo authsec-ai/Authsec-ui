@@ -104,25 +104,6 @@ const SearchableSelect = React.forwardRef<HTMLButtonElement, SearchableSelectPro
     const showSelectAll = isMultiple ? (props as MultiSelectProps).showSelectAll : false;
     const maxBadges = isMultiple ? ((props as MultiSelectProps).maxBadges ?? 3) : 1;
 
-    // Group options by their group property
-    const groupedOptions = React.useMemo(() => {
-      const groups: Record<string, SearchableSelectOption[]> = {};
-      const ungrouped: SearchableSelectOption[] = [];
-
-      options.forEach((option) => {
-        if (option.group) {
-          if (!groups[option.group]) {
-            groups[option.group] = [];
-          }
-          groups[option.group].push(option);
-        } else {
-          ungrouped.push(option);
-        }
-      });
-
-      return { groups, ungrouped };
-    }, [options]);
-
     // Get selected options
     const selectedOptions = React.useMemo(() => {
       if (isMultiple) {
@@ -312,7 +293,7 @@ const SearchableSelect = React.forwardRef<HTMLButtonElement, SearchableSelectPro
       : false;
 
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild>
           <Button
             ref={ref}

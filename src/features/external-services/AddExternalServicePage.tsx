@@ -22,6 +22,7 @@ interface ServiceFormData {
   auth_type: "oauth2" | "api_key" | "basic_auth" | "bearer_token" | "none";
   agent_accessible: boolean;
   api_key: string;
+  bearer_token: string;
   client_id: string;
   client_secret: string;
   webhook_secret: string;
@@ -42,6 +43,7 @@ export function AddExternalServicePage() {
     auth_type: "api_key",
     agent_accessible: true,
     api_key: "",
+    bearer_token: "",
     client_id: "",
     client_secret: "",
     webhook_secret: "",
@@ -77,6 +79,7 @@ export function AddExternalServicePage() {
           | "none",
         agent_accessible: existingService.agent_accessible,
         api_key: "",
+        bearer_token: "",
         client_id: "",
         client_secret: "",
         webhook_secret: "",
@@ -97,61 +100,29 @@ export function AddExternalServicePage() {
   };
 
   const getInstallCommand = () => {
-    return "pip install git+https://github.com/authsec-ai/sdk-authsec.git";
+    return "pip install authsec-sdk";
   };
 
   const getSDKUsageCode = () => {
-    return `from AuthSec_SDK import ServiceAccessSDK, ServiceAccessError
+    const serviceId = formData.name || "service-id";
+    return `from authsec_sdk import DelegationClient, ExternalServiceClient
 
-# Initialize SDK in your function at the beginning
-sdk = ServiceAccessSDK(session, timeout=10)
+# 1. Pull delegated token (SDK handles refresh, retry, etc.)
+delegation = DelegationClient(
+    client_id="<your-agent-client-id>",
+    userflow_url="https://dev.api.authsec.dev/uflow",
+)
+await delegation.pull_token()
 
-# Fetch ${formData.name || "service-name"} credentials & token
-try:
-    credentials = await sdk.get_service_credentials("${
-      formData.name || "service-name"
-    }")
-    token = credentials.credentials.get("access_token")
-except ServiceAccessError as e:
-    return [{"type": "text", "text": f"Failed to fetch credentials: {str(e)}"}]
+# 2. Get credentials for ${serviceId}
+exsvc = ExternalServiceClient(
+    base_url="https://dev.api.authsec.dev/exsvc",
+    delegation_client=delegation,
+)
+creds = await exsvc.get_credentials_by_name("${serviceId}")
 
-if not token:
-    return [{"type": "text", "text": "${
-      formData.name || "service-name"
-    } token not available"}]
-
-# Close SDK at the end of your function
-finally:
-    if sdk:
-        await sdk.close()`;
-  };
-
-  const getExampleCode = () => {
-    return `from AuthSec_SDK import ServiceAccessSDK, ServiceAccessError
-import aiohttp, json
-
-@protected_by_AuthSec("${
-      formData.name.toLowerCase().replace(/\\s+/g, "_") || "test_service"
-    }")
-async def ${
-      formData.name.toLowerCase().replace(/\\s+/g, "_") || "test_service"
-    }(arguments: dict, session) -> list:
-    sdk = ServiceAccessSDK(session, timeout=10)
-    try:
-        credentials = await sdk.get_service_credentials("${
-          formData.name || "service-name"
-        }")
-        token = credentials.credentials["access_token"]
-        
-        async with aiohttp.ClientSession() as http_session:
-            headers = {"Authorization": f"Bearer {token}"}
-            async with http_session.get("${
-              formData.url || "https://api.example.com"
-            }/endpoint", headers=headers) as response:
-                data = await response.json()
-                return [{"type": "text", "text": json.dumps(data, indent=2)}]
-    finally:
-        await sdk.close()`;
+# 3. Use the credentials
+api_key = creds.credentials["api_key"]`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -163,6 +134,9 @@ async def ${
       const secret_data: any = {};
       if (formData.auth_type === "api_key" && formData.api_key) {
         secret_data.api_key = formData.api_key;
+      }
+      if (formData.auth_type === "bearer_token" && formData.bearer_token) {
+        secret_data.access_token = formData.bearer_token;
       }
       if (formData.auth_type === "oauth2") {
         if (formData.client_id) secret_data.client_id = formData.client_id;
@@ -337,8 +311,8 @@ async def ${
                   label={`example_${formData.name
                     .toLowerCase()
                     .replace(/\s+/g, "_")}.py`}
-                  code={getExampleCode()}
-                  onCopy={() => handleCopy(getExampleCode(), "example")}
+                  code={getSDKUsageCode()}
+                  onCopy={() => handleCopy(getSDKUsageCode(), "example")}
                   copied={copiedSteps.has("example")}
                 />
               </div>
@@ -377,6 +351,7 @@ async def ${
                   auth_type: "api_key",
                   agent_accessible: true,
                   api_key: "",
+                  bearer_token: "",
                   client_id: "",
                   client_secret: "",
                   webhook_secret: "",
@@ -541,6 +516,23 @@ async def ${
                         setFormData((prev) => ({
                           ...prev,
                           api_key: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+
+                {formData.auth_type === "bearer_token" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="bearer_token">Bearer Token</Label>
+                    <Input
+                      id="bearer_token"
+                      placeholder="eyJhbGciOi..."
+                      value={formData.bearer_token}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          bearer_token: e.target.value,
                         }))
                       }
                     />

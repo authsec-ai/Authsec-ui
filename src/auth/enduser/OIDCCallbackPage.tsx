@@ -32,8 +32,10 @@ const OIDCCallbackPageInner: React.FC = () => {
   // No longer extract provider from URL path - it will come from state
   const urlParams = new URLSearchParams(window.location.search);
   const dispatch = useDispatch();
-  // Get client_id from Redux state (set during initial login page load)
+  // Get client_id, client_type, redirect_uris from Redux state (set during initial login page load)
   const reduxClientId = useSelector((state: RootState) => state.oidcWebAuthn.clientId);
+  const reduxClientType = useSelector((state: RootState) => state.oidcWebAuthn.clientType);
+  const reduxRedirectUris = useSelector((state: RootState) => state.oidcWebAuthn.redirectUris);
   const { executeCallback, captureClientId } = useEndUserAuth();
 
   // RTK Query hooks
@@ -91,7 +93,7 @@ const OIDCCallbackPageInner: React.FC = () => {
       // This protects against backend/provider configs still pointing to /oidc/auth/callback.
       const uflowOAuthType = sessionStorage.getItem("uflow_oauth_type");
       if (uflowOAuthType === "admin") {
-        const adminCallbackUrl = `/authsec/uflow/oidc/callback${window.location.search || ""}`;
+        const adminCallbackUrl = `/uflow/oidc/callback${window.location.search || ""}`;
         console.log(
           "↪️ Admin OAuth callback detected on end-user route. Redirecting to admin callback:",
           adminCallbackUrl,
@@ -427,6 +429,10 @@ const OIDCCallbackPageInner: React.FC = () => {
           return;
         }
 
+        // Read and consume the PKCE code_verifier stored before the Hydra redirect
+        const pkceCodeVerifier = sessionStorage.getItem(`pkce_cv_${state}`) || undefined;
+        sessionStorage.removeItem(`pkce_cv_${state}`);
+
         try {
           const response = await exchangeCodeForTokens({
             login_challenge: storedLoginChallenge,
@@ -434,6 +440,7 @@ const OIDCCallbackPageInner: React.FC = () => {
             state,
             provider: provider || "hydra",
             redirect_uri: redirectUri,
+            code_verifier: pkceCodeVerifier,
           }).unwrap();
 
           if (response) {
@@ -892,96 +899,54 @@ const OIDCCallbackPageInner: React.FC = () => {
     }
   };
 
-  // Handle WebAuthn completion
+  // Handle WebAuthn completion — called by the Router for non-claw_auth clients.
+  // The Context already called executeCallback and placed the token in Redux (displayToken).
+  // We do NOT call executeCallback again — that was the source of race conditions.
   const handleWebAuthnComplete = async () => {
-    console.log("WebAuthn flow completed successfully");
-    setMessage("Calling webauthn-callback to get final token...");
+    // For SAML + WebAuthn flows, redirect to the stored Hydra URL
+    if (isSamlWebAuthn && samlRedirectTo) {
+      setStatus("processing");
+      setMessage("Authentication completed! Redirecting to authorization server...");
 
-    try {
-      // Use the integrated callback handler to prevent race conditions
-      const result = await executeCallback(
-        webauthnData?.email || "unknown",
-        webauthnData?.tenantId,
-      );
+      // Clean up SAML parameters from sessionStorage
+      sessionStorage.removeItem("saml_client_id");
+      sessionStorage.removeItem("saml_user_email");
+      sessionStorage.removeItem("saml_tenant_id");
+      sessionStorage.removeItem("saml_user_id");
+      sessionStorage.removeItem("saml_provider");
+      sessionStorage.removeItem("saml_provider_id");
+      sessionStorage.removeItem("saml_project_id");
+      sessionStorage.removeItem("saml_success");
 
-      if (result.success && result.token) {
-        setWebauthnCallbackToken(result.token);
-
-        // Check if this is a SAML + WebAuthn flow
-        if (isSamlWebAuthn && samlRedirectTo) {
-          console.log(
-            "✅ SAML + WebAuthn flow complete, redirecting to Hydra with stored URL:",
-            samlRedirectTo,
-          );
-          setStatus("processing");
-          setMessage("Authentication completed! Redirecting to authorization server...");
-
-          setDebugInfo({
-            ...(debugInfo || {}),
-            webauthn_callback_service: "Integrated WebAuthn Callback Handler",
-            callback_flow_type: "saml-oidc-callback",
-            token_received: true,
-            token_preview: `${result.token.substring(0, 20)}...`,
-            saml_redirect_to: samlRedirectTo,
-            service_stats: {
-              callback_duration: 0,
-              callback_timestamp: Date.now(),
-            },
-          });
-
-          // Clean up SAML parameters from sessionStorage
-          sessionStorage.removeItem("saml_client_id");
-          sessionStorage.removeItem("saml_user_email");
-          sessionStorage.removeItem("saml_tenant_id");
-          sessionStorage.removeItem("saml_user_id");
-          sessionStorage.removeItem("saml_provider");
-          sessionStorage.removeItem("saml_provider_id");
-          sessionStorage.removeItem("saml_project_id");
-          sessionStorage.removeItem("saml_success");
-
-          // Redirect to Hydra with the stored SAML redirect_to URL
-          setTimeout(() => {
-            console.log("Redirecting to Hydra (SAML + WebAuthn):", samlRedirectTo);
-            window.location.href = samlRedirectTo;
-          }, 1500);
-        } else {
-          // Regular OIDC flow - show token on page
-          setStatus("success");
-          setMessage("Authentication completed! Token received from webauthn-callback.");
-
-          setDebugInfo({
-            ...(debugInfo || {}),
-            webauthn_callback_service: "Integrated WebAuthn Callback Handler",
-            callback_flow_type: "oidc-callback",
-            token_received: true,
-            token_preview: `${result.token.substring(0, 20)}...`,
-            service_stats: {
-              callback_duration: 0,
-              callback_timestamp: Date.now(),
-            },
-          });
-        }
-      } else {
-        setStatus("error");
-        setMessage(result.error || "webauthn-callback failed without specific error");
-        setDebugInfo({
-          ...(debugInfo || {}),
-          webauthn_callback_service: "Integrated WebAuthn Callback Handler",
-          callback_error: result.error,
-        });
-      }
-    } catch (error) {
-      console.error("❌ Integrated WebAuthn callback handler error:", error);
-      setStatus("error");
-      setMessage(
-        `WebAuthn callback handler failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-      setDebugInfo({
-        ...(debugInfo || {}),
-        webauthn_callback_service: "Integrated WebAuthn Callback Handler",
-        service_error: error instanceof Error ? error.message : "Unknown error",
-      });
+      setTimeout(() => {
+        window.location.href = samlRedirectTo;
+      }, 1500);
     }
+    // For all other non-claw_auth types, the token is already displayed
+    // by OIDCTokenDisplayComponent inside the Router — nothing else to do.
+  };
+
+  // Handle claw_auth token redirect — only called by the Router for claw_auth clients.
+  const handleTokenDisplay = (token: string) => {
+    const uris = reduxRedirectUris;
+    if (!uris || uris.length < 2) {
+      console.error("[ClawAuth] No secondary redirect URI available");
+      return;
+    }
+
+    const clawRedirectUri = uris[1];
+    let baseUrl: string;
+    try {
+      baseUrl = new URL(clawRedirectUri).origin;
+    } catch {
+      baseUrl = clawRedirectUri;
+    }
+
+    const redirectTarget = `${baseUrl}/?auth_token=${encodeURIComponent(token)}`;
+    console.log("[ClawAuth] Redirecting to:", redirectTarget);
+    setStatus("processing");
+    setMessage("Authentication completed! Redirecting...");
+    window.location.href = redirectTarget;
   };
 
   // Handle WebAuthn error
@@ -1073,66 +1038,32 @@ const OIDCCallbackPageInner: React.FC = () => {
       <OIDCWebAuthnRouter
         onAuthComplete={handleWebAuthnComplete}
         onAuthError={handleWebAuthnError}
+        onTokenDisplay={handleTokenDisplay}
       />
     );
   }
 
   return (
     <AuthSplitFrame
+      shellVariant="enduser-single-card"
       valuePanel={
         <AuthValuePanel
           eyebrow="OIDC Callback"
-          title="Completing the authentication handshake."
-          subtitle="This step validates provider response, exchanges code/tokens, and routes into MFA when required."
+          title="Finish the sign-in flow."
+          subtitle="The callback validates the response, completes any required verification, and returns control to the app."
           points={[
-            "State and challenge are validated before issuing session credentials.",
-            "Custom login and social providers use the same callback contract.",
-            "WebAuthn completion can return directly into this callback.",
+            "State and challenge are checked before issuing credentials.",
+            "Social sign-in and custom login use the same callback flow.",
+            "Extra verification can return directly into this step.",
           ]}
         />
       }
     >
       <AuthActionPanel className="space-y-6">
-        <AuthStepHeader
-          title={getStatusTitle()}
-          subtitle="Processing your authentication callback."
-          meta={`Provider: ${detectedProvider || "Unknown"}`}
-        />
+        <AuthStepHeader title={getStatusTitle()} subtitle={message} />
 
         <div className="space-y-6">
           <div className="flex justify-center">{getStatusIcon()}</div>
-
-          <motion.h2
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={`text-center text-xl font-semibold ${getStatusColor()}`}
-          >
-            {getStatusTitle()}
-          </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="text-center text-sm text-slate-600"
-          >
-            {message}
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="auth-inline-note"
-          >
-            <p className="text-sm text-slate-700">
-              <span className="font-medium">Provider:</span> {detectedProvider || "Unknown"}
-            </p>
-            <p className="text-xs text-slate-500">
-              Processing universal OAuth callback...
-            </p>
-          </motion.div>
 
           {status === "processing" && (
             <motion.div
@@ -1193,12 +1124,18 @@ const OIDCCallbackPageInner: React.FC = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="auth-callout"
+              className="auth-callout space-y-3"
             >
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-slate-800">
-                  Token from webauthn-callback
-                </h3>
+              <div className="space-y-1">
+                <p className={`text-sm font-medium ${getStatusColor()}`}>
+                  Sign-in complete.
+                </p>
+                <p className="text-sm text-slate-600">
+                  Your access token is ready to copy.
+                </p>
+              </div>
+              <div className="auth-action-row auth-action-row--stack-mobile sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-sm font-medium text-slate-800">Access token</h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1229,9 +1166,12 @@ const OIDCCallbackPageInner: React.FC = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="auth-callout"
+              className="auth-callout space-y-2"
             >
-              <h3 className="mb-2 text-sm font-medium text-slate-800">Token Response</h3>
+              <p className={`text-sm font-medium ${getStatusColor()}`}>
+                Sign-in complete.
+              </p>
+              <h3 className="text-sm font-medium text-slate-800">Technical response</h3>
               <pre className="max-h-60 overflow-auto rounded-md bg-white p-3 text-xs text-slate-700">
                 {JSON.stringify(tokenResponse, null, 2)}
               </pre>

@@ -17,6 +17,7 @@ import {
   Code2,
   Check,
   Copy,
+  ChevronsRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SessionManager } from "../../../utils/sessionManager";
@@ -25,6 +26,7 @@ import {
   type AgentRecord,
 } from "../../../app/api/workloadsApi";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
+import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import {
   Dialog,
@@ -1132,7 +1134,7 @@ function AgentFAQ() {
       <div
         className={cn(
           "fixed bottom-6 right-6 z-40 flex gap-2",
-          isOpen ? "items-end" : "items-center"
+          isOpen ? "items-end" : "items-center",
         )}
       >
         {showTooltip && !isOpen && (
@@ -1169,7 +1171,7 @@ function AgentFAQ() {
             "h-10 w-10 rounded-full shadow-lg transition-all duration-200 flex-shrink-0",
             "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-600",
             isOpen && "rotate-180",
-            "cursor-pointer"
+            "cursor-pointer",
           )}
           size="icon"
           onClick={toggleFAQ}
@@ -1233,7 +1235,7 @@ function AgentFAQ() {
                           ? () =>
                               handleCopy(
                                 step.code!,
-                                `method-${methodIdx}-${stepIdx}`
+                                `method-${methodIdx}-${stepIdx}`,
                               )
                           : undefined
                       }
@@ -1323,7 +1325,7 @@ export function AgentsPage() {
     const active = agents.filter(
       (a) =>
         a.status?.toLowerCase() === "active" ||
-        a.status?.toLowerCase() === "healthy"
+        a.status?.toLowerCase() === "healthy",
     ).length;
 
     return {
@@ -1370,6 +1372,32 @@ export function AgentsPage() {
             </div>
           </div>
         </HeaderCard>
+
+        {/* Info Banner */}
+        <PageInfoBanner
+          title="SPIRE Agent Infrastructure"
+          description="SPIRE agents run on each node and attest workload identities using platform-specific selectors. They connect to the SPIRE server to issue X.509-SVID certificates for secure service communication."
+          featuresTitle="Key capabilities:"
+          features={[
+            { text: "Node-level workload attestation" },
+            { text: "Automatic certificate issuance & rotation" },
+            { text: "Supports Kubernetes, Docker, and Unix platforms" },
+          ]}
+          primaryAction={{
+            label: "Read docs",
+            onClick: () =>
+              window.open(
+                "https://docs.authsec.dev/autonomous-agents/integrate-spire/overview",
+                "_blank",
+              ),
+            variant: "outline",
+            className:
+              "bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs",
+            icon: ChevronsRight,
+          }}
+          storageKey="agents-page"
+          dismissible={true}
+        />
 
         {/* Agents Table */}
         <div className="agents-table-container" data-tour-id="agents-table">

@@ -97,6 +97,7 @@ export function MappingsPage() {
             searchQuery={roleScopeSearch}
             isMapModalOpen={mapModalOpen}
             onMapModalOpenChange={setMapModalOpen}
+            audience={isAdmin ? "admin" : "endUser"}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { ShieldHalf, Plus, AlertTriangle, RefreshCw } from "lucide-react";
+import { Plus, AlertTriangle, RefreshCw } from "lucide-react";
 import { EnhancedRolesTable, BulkActionsBar } from "./components";
 import { MapRoleToScopeModal } from "@/features/mappings/components/MapRoleToScopeModal";
 import RolesFilterCard, {
@@ -17,7 +17,6 @@ import type { EnhancedRole } from "@/types/entities";
 import { SessionManager } from "../../utils/sessionManager";
 import { toast } from "@/lib/toast";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SDKQuickHelp, ROLES_SDK_HELP } from "@/features/sdk";
@@ -25,10 +24,11 @@ import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { Shield, Users, Layers } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { trackRoleDeleted } from "@/utils/analytics";
+import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
 
 const RECENT_ROLE_STORAGE_KEY = "authsec_recent_role_id";
 export function RolesPage() {
-  const contextualNavigate = useContextualNavigate();
   const standardNavigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,8 +58,7 @@ export function RolesPage() {
 
   // State
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [deleteRoles, { isLoading: deletingRoles }] =
-    useDeleteUserDefinedRolesMutation();
+  const [deleteRoles] = useDeleteUserDefinedRolesMutation();
   const [filters, setFilters] = useState<Partial<RolesQueryParams>>({});
 
   // Initialize guided tour
@@ -282,6 +281,7 @@ export function RolesPage() {
         role_ids: [roleId],
       }).unwrap();
       toast.success("Role deleted successfully");
+      trackRoleDeleted(1);
       setSelectedRoles((prev) => prev.filter((id) => id !== roleId));
     } catch (error: any) {
       toast.error(error?.data?.message || "Failed to delete role");
@@ -306,6 +306,7 @@ export function RolesPage() {
             role_ids: selectedRoles,
           }).unwrap();
           toast.success(`Deleted ${selectedRoles.length} roles`);
+          trackRoleDeleted(selectedRoles.length);
           setSelectedRoles([]);
         } catch (error: any) {
           toast.error(error?.data?.message || "Failed to delete roles");
@@ -329,6 +330,14 @@ export function RolesPage() {
       .filter((role) => selectedRoles.includes(role.id))
       .map((role) => ({ id: role.id, name: role.name }));
   }, [selectedRoles, filteredRoles]);
+
+  const selectedRoleForTrustDelegation = useMemo(
+    () =>
+      selectedRoles.length === 1
+        ? filteredRoles.find((role) => role.id === selectedRoles[0]) || null
+        : null,
+    [filteredRoles, selectedRoles],
+  );
 
   // State for single role assign users (from row action)
   const [singleRoleForUsers, setSingleRoleForUsers] = useState<{
@@ -363,13 +372,30 @@ export function RolesPage() {
             title={audienceCopy.title}
             description={audienceCopy.subtitle}
             actions={
-              <Button
-                onClick={handleCreateRole}
-                data-tour-id="create-role-button"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {audienceCopy.ctaLabel}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    standardNavigate(
+                      buildTrustDelegationPath(
+                        "/trust-delegation/new",
+                        {
+                          roleName: selectedRoleForTrustDelegation?.name,
+                        },
+                      ),
+                    )
+                  }
+                >
+                  Create trust delegation
+                </Button>
+                <Button
+                  onClick={handleCreateRole}
+                  data-tour-id="create-role-button"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {audienceCopy.ctaLabel}
+                </Button>
+              </div>
             }
           />
 
@@ -511,6 +537,7 @@ export function RolesPage() {
           }
         }}
         preselectedRoles={rolesForAssignUsersModal}
+        audience={audience}
         onSuccess={() => {
           setSelectedRoles([]);
           setSingleRoleForUsers(null);

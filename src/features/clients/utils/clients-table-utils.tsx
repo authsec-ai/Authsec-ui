@@ -145,6 +145,39 @@ export function ClientNameCell({ client }: { client: ClientWithAuthMethods }) {
   );
 }
 
+function getClientTypeLabel(clientType?: string | null) {
+  if (clientType === "ai_agent") {
+    return "AI Agent";
+  }
+
+  if (clientType === "application") {
+    return "MCP Server";
+  }
+
+  if (clientType === "claw_auth") {
+    return "Claw Bot";
+  }
+
+  return "Unknown";
+}
+
+export function ClientTypeCell({ client }: { client: ClientWithAuthMethods }) {
+  const rawClient =
+    (client.metadata?.raw_client as ClientData | undefined) ?? (client as unknown as ClientData);
+  const clientType =
+    typeof client.client_type === "string"
+      ? client.client_type
+      : typeof rawClient?.client_type === "string"
+        ? rawClient.client_type
+        : undefined;
+
+  return (
+    <Badge variant="outline" className="text-[12.5px] font-medium">
+      {getClientTypeLabel(clientType)}
+    </Badge>
+  );
+}
+
 // Cell: Authentication Type
 export function AuthTypeCell({ client }: { client: ClientWithAuthMethods }) {
   const authType = client.authentication_type || "custom"; // Default to custom if undefined
@@ -559,6 +592,16 @@ export function ActionsCell({
               </DropdownMenuItem>
             )}
 
+            {actions.onDelegateTrust && (
+              <DropdownMenuItem
+                onClick={() => actions.onDelegateTrust?.(client)}
+                className="admin-menu-item-accent px-3 py-2 text-[14px] cursor-pointer transition-colors rounded-sm"
+              >
+                <Shield className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                Trust Delegation
+              </DropdownMenuItem>
+            )}
+
             {actions.onAddAuthMethod && (
               <DropdownMenuItem
                 onClick={() => actions.onAddAuthMethod?.(clientId)}
@@ -777,10 +820,20 @@ export function createAdaptiveClientsTableColumns(
       cell: ({ row }) => <ClientNameCell client={row.original} />,
     },
     {
+      id: "clientType",
+      header: "Client Type",
+      accessorKey: "client_type",
+      priority: 1,
+      enableSorting: true,
+      resizable: true,
+      approxWidth: 140,
+      cell: ({ row }) => <ClientTypeCell client={row.original} />,
+    },
+    {
       id: "clientId",
       header: "Client ID",
       accessorKey: "id",
-      priority: 1,
+      priority: 5,
       enableSorting: true,
       resizable: true,
       approxWidth: 260,
@@ -847,6 +900,16 @@ export function createClientsTableColumns(
       minSize: 200,
       maxSize: 400,
       cellClassName: "max-w-0",
+    },
+    {
+      id: "clientType",
+      accessorKey: "client_type",
+      header: "Client Type",
+      resizable: true,
+      responsive: true,
+      cell: ({ row }) => <ClientTypeCell client={row.original} />,
+      minSize: 130,
+      maxSize: 160,
     },
     {
       id: "clientId",

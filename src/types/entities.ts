@@ -55,9 +55,11 @@ export interface Client {
   id: string;
   workspace_id: string;
   secret_id: string | null;
+  spiffe_id?: string | null;
   name: string;
   description: string | null;
   type: "mcp_server" | "app" | "api" | "other";
+  client_type?: "application" | "ai_agent" | string;
   tags: string;
   authentication_type: "sso" | "custom" | "saml2";
   metadata: Record<string, any>;
@@ -92,6 +94,7 @@ export interface ClientInsert {
   id?: string;
   workspace_id: string;
   secret_id?: string | null;
+  spiffe_id?: string | null;
   name: string;
   description?: string | null;
   type?: "mcp_server" | "app" | "api" | "other";
@@ -121,6 +124,7 @@ export interface ClientUpdate {
   id?: string;
   workspace_id?: string;
   secret_id?: string | null;
+  spiffe_id?: string | null;
   name?: string;
   description?: string | null;
   type?: "mcp_server" | "app" | "api" | "other";
@@ -151,6 +155,7 @@ export interface ClientsFilters {
   name?: string;
   email?: string;
   status?: string;
+  client_type?: "application" | "ai_agent" | "claw_auth";
   type?: "mcp_server" | "app" | "api" | "other";
   authentication_type?: "sso" | "custom" | "saml2";
   access_status?: "active" | "restricted" | "disabled";
