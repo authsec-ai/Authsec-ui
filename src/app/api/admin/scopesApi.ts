@@ -9,7 +9,7 @@
  *
  * Available Endpoints:
  * - POST   /uflow/admin/scopes                      - Create scopes
- * - GET    /uflow/admin/scopes                      - Get all scopes for current tenant from JWT
+ * - GET    /uflow/admin/scopes/:tenant_id           - Get all scopes for tenant
  * - GET    /uflow/admin/scopes/:tenant_id/:project_id - Get scopes for specific client
  * - PUT    /uflow/admin/scopes/:id                  - Update a scope
  * - DELETE /uflow/admin/scopes                      - Delete scopes
@@ -17,7 +17,6 @@
  */
 
 import { baseApi, withSessionData } from '../baseApi';
-import { unsupportedApiError } from '../unsupported';
 
 // ============================================================================
 // TYPES
@@ -78,44 +77,31 @@ export const adminScopesApi = baseApi.injectEndpoints({
     // POST /uflow/admin/scopes
     createScopes: builder.mutation<CreateScopesResponse, CreateScopesRequest>({
       query: (data) => ({
-        url: 'uflow/admin/scopes',
+        url: '/authsec/uflow/admin/scopes',
         method: 'POST',
         body: withSessionData(data),
       }),
       invalidatesTags: ['AdminRBACScope'],
     }),
 
-    // GET /uflow/admin/scopes
+    // GET /uflow/admin/scopes/:tenant_id
     getScopesByTenant: builder.query<AdminScope[], string>({
-      query: () => 'uflow/admin/scopes',
-      transformResponse: (response: string[]) =>
-        Array.isArray(response)
-          ? response.map((name) => ({
-              id: name,
-              tenant_id: '',
-              name,
-              description: '',
-              created_at: '',
-              updated_at: '',
-            }))
-          : [],
+      query: (tenant_id) => `/authsec/uflow/admin/scopes/${tenant_id}`,
+      transformResponse: (response: { scopes: AdminScope[] }) => response.scopes,
       providesTags: ['AdminRBACScope'],
     }),
 
     // GET /uflow/admin/scopes/:tenant_id/:project_id
     getScopesByClient: builder.query<AdminScope[], { tenant_id: string; project_id: string }>({
-      queryFn: async () => ({
-        error: unsupportedApiError(
-          'Client-specific scope mapping is not exposed by the backend.',
-        ) as any,
-      }),
+      query: ({ tenant_id, project_id }) => `/authsec/uflow/admin/scopes/${tenant_id}/${project_id}`,
+      transformResponse: (response: { scopes: AdminScope[] }) => response.scopes,
       providesTags: ['AdminRBACScope'],
     }),
 
     // PUT /uflow/admin/scopes/:id
     updateScope: builder.mutation<ApiResponse, { id: string; data: UpdateScopeRequest }>({
       query: ({ id, data }) => ({
-        url: `uflow/admin/scopes/${id}`,
+        url: `/authsec/uflow/admin/scopes/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -125,7 +111,7 @@ export const adminScopesApi = baseApi.injectEndpoints({
     // DELETE /uflow/admin/scopes
     deleteScopes: builder.mutation<ApiResponse, DeleteScopesRequest>({
       query: (data) => ({
-        url: 'uflow/admin/scopes',
+        url: '/authsec/uflow/admin/scopes',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -134,10 +120,10 @@ export const adminScopesApi = baseApi.injectEndpoints({
 
     // POST /uflow/admin/scopes/map
     mapScopesToClient: builder.mutation<ApiResponse, MapScopesToClientRequest>({
-      queryFn: async () => ({
-        error: unsupportedApiError(
-          'Scope-to-client mapping is not exposed by the backend.',
-        ) as any,
+      query: (data) => ({
+        url: '/authsec/uflow/admin/scopes/map',
+        method: 'POST',
+        body: withSessionData(data),
       }),
       invalidatesTags: ['AdminRBACScope', 'AuthSecClient'],
     }),

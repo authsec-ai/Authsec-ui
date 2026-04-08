@@ -54,19 +54,19 @@ export const resourcesApi = baseApi.injectEndpoints({
         if (params.limit) searchParams.append('limit', params.limit.toString());
         if (params.offset) searchParams.append('offset', params.offset.toString());
         
-        return `resources?${searchParams.toString()}`;
+        return `/authsec/resources?${searchParams.toString()}`;
       },
       providesTags: ['Resource'],
     }),
 
     getResource: builder.query<Resource, string>({
-      query: (id) => `resources/${id}`,
+      query: (id) => `/authsec/resources/${id}`,
       providesTags: (result, error, id) => [{ type: 'Resource', id }],
     }),
 
     createResource: builder.mutation<Resource, Partial<Resource>>({
       query: (data) => ({
-        url: 'resources',
+        url: '/authsec/resources',
         method: 'POST',
         body: data,
       }),
@@ -75,7 +75,7 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     updateResource: builder.mutation<Resource, { id: string; data: Partial<Resource> }>({
       query: ({ id, data }) => ({
-        url: `resources/${id}`,
+        url: `/authsec/resources/${id}`,
         method: 'PUT',
         body: data,
       }),
@@ -84,7 +84,7 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     deleteResource: builder.mutation<void, string>({
       query: (id) => ({
-        url: `resources/${id}`,
+        url: `/authsec/resources/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Resource'],
@@ -92,13 +92,13 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     // Resource scopes
     getResourceScopes: builder.query<Scope[], string>({
-      query: (resourceId) => `resources/${resourceId}/scopes`,
+      query: (resourceId) => `/authsec/resources/${resourceId}/scopes`,
       providesTags: ['Scope'],
     }),
 
     addResourceScope: builder.mutation<Scope, { resourceId: string; scope: Partial<Scope> }>({
       query: ({ resourceId, scope }) => ({
-        url: `resources/${resourceId}/scopes`,
+        url: `/authsec/resources/${resourceId}/scopes`,
         method: 'POST',
         body: scope,
       }),
@@ -107,7 +107,7 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     removeResourceScope: builder.mutation<void, { resourceId: string; scopeId: string }>({
       query: ({ resourceId, scopeId }) => ({
-        url: `resources/${resourceId}/scopes/${scopeId}`,
+        url: `/authsec/resources/${resourceId}/scopes/${scopeId}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Resource', 'Scope'],
@@ -116,7 +116,7 @@ export const resourcesApi = baseApi.injectEndpoints({
     // Bulk operations
     bulkUpdateResources: builder.mutation<BulkUpdateResult, { ids: string[]; data: Partial<Resource> }>({
       query: ({ ids, data }) => ({
-        url: 'resources/bulk-update',
+        url: '/authsec/resources/bulk-update',
         method: 'POST',
         body: { ids, data },
       }),
@@ -125,7 +125,7 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     bulkDeleteResources: builder.mutation<BulkDeleteResult, string[]>({
       query: (ids) => ({
-        url: 'resources/bulk-delete',
+        url: '/authsec/resources/bulk-delete',
         method: 'POST',
         body: { ids },
       }),
@@ -134,7 +134,7 @@ export const resourcesApi = baseApi.injectEndpoints({
 
     // Resource Analytics
     getResourceAnalytics: builder.query<ResourceAnalytics, string>({
-      query: (projectId) => `resources/analytics?project_id=${projectId}`,
+      query: (projectId) => `/authsec/resources/analytics?project_id=${projectId}`,
       providesTags: ['Resource'],
     }),
   }),

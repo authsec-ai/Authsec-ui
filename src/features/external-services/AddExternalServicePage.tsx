@@ -110,13 +110,13 @@ export function AddExternalServicePage() {
 # 1. Pull delegated token (SDK handles refresh, retry, etc.)
 delegation = DelegationClient(
     client_id="<your-agent-client-id>",
-    userflow_url="https://dev.api.authsec.dev/uflow",
+    userflow_url="https://prod.api.authsec.ai/uflow",
 )
 await delegation.pull_token()
 
 # 2. Get credentials for ${serviceId}
 exsvc = ExternalServiceClient(
-    base_url="https://dev.api.authsec.dev/exsvc",
+    base_url="https://prod.api.authsec.ai/exsvc",
     delegation_client=delegation,
 )
 creds = await exsvc.get_credentials_by_name("${serviceId}")

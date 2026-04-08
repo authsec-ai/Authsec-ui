@@ -1,6 +1,16 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Star,
+  Lock,
+  Globe,
+  Code2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,7 +47,6 @@ import {
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
 import config from "../../config";
-
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";
@@ -1214,7 +1223,7 @@ export function AdminLoginHubPage() {
       return;
     }
 
-      try {
+    try {
       const response = await bootstrapAccount({
         email: currentEmail,
         password: newPassword,
@@ -1258,9 +1267,8 @@ export function AdminLoginHubPage() {
       if ("data" in result) {
         toast.success("Account verified successfully!");
 
-        // Redirect to tenant domain for login (skip on localhost)
-        const isLocalhost = window.location.hostname === "localhost" || window.location.hostname.startsWith("127.");
-        if (tenantDomain && window.location.hostname !== tenantDomain && !isLocalhost) {
+        // Redirect to tenant domain for login
+        if (tenantDomain && window.location.hostname !== tenantDomain) {
           const redirectUrl = buildRedirectUrl(
             tenantDomain,
             currentEmail,
@@ -1343,33 +1351,61 @@ export function AdminLoginHubPage() {
       className="auth-shell--admin"
       valuePanel={
         <div className="auth-value-panel--dark">
-          {/* Main content — vertically centered */}
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="flex items-center gap-2.5 brand-logo">
+          {/* Header row: logo left + ADMIN badge right */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <img
                 src={authsecLogoWhite}
                 alt="AuthSec"
                 className="h-8 w-8 object-contain"
               />
-              <span className="text-white font-bold text-2xl tracking-tight">
+              <span className="text-white font-semibold text-xl tracking-tight">
                 AuthSec
               </span>
             </div>
+            <span className="bg-white text-[#0b0f19] text-xs font-bold tracking-wider rounded-full px-3.5 py-1 uppercase">
+              Admin
+            </span>
+          </div>
+
+          {/* Main content — vertically centered */}
+          <div className="flex-1 flex flex-col justify-center">
             <AuthValuePanel
-              eyebrow="Admin Console"
               title="Agentic auth for AI-native teams"
               subtitle="The fastest way to add authentication to your AI agents, MCP servers, and voice interfaces."
-              points={[
-                "OAuth, SAML SSO, and social login in minutes",
-                "Headless & voice auth for AI agents and MCP servers",
-                "Full RBAC with audit logs and policy controls",
-                "Agent first. Developer first. Fully open source.",
-              ]}
-            />
+            >
+              <ul className="auth-value-panel__list" aria-label="Highlights">
+                {[
+                  {
+                    Icon: Star,
+                    text: "OAuth, SAML SSO & social login in minutes",
+                  },
+                  { Icon: Lock, text: "Headless & voice auth for AI agents" },
+                  {
+                    Icon: Globe,
+                    text: "Full RBAC with audit logs & policy controls",
+                  },
+                  {
+                    Icon: Code2,
+                    text: "Agent first. Developer first. Open source.",
+                  },
+                ].map(({ Icon, text }) => (
+                  <li className="auth-value-panel__list-item" key={text}>
+                    <span className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                      <Icon
+                        className="w-5 h-5 text-gray-300"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ul>
+            </AuthValuePanel>
           </div>
 
           {/* Footer — pinned to bottom */}
-          <div className="mt-auto pt-6 flex items-center justify-between mx-3">
+          <div className="mt-auto pt-6 flex items-center justify-between">
             <span className="text-white/35 text-xs">
               © {new Date().getFullYear()} AuthSec. All rights reserved.
             </span>
@@ -1411,21 +1447,8 @@ export function AdminLoginHubPage() {
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="flex flex-col flex-1">
         <AuthActionPanel>
-          <div className="w-4/5 mx-auto mb-7">
-            {flowStage === "idle" && (
-              <h2 className="text-[1.6rem] mb-3 text-center font-bold tracking-tight text-slate-900 leading-tight">
-                Continue with your email
-              </h2>
-            )}
-            {flowStage === "idle" && (
-              <p className="mt-1.5 text-center text-sm text-slate-700">
-                Enter your work email to sign in or create an account
-              </p>
-            )}
-          </div>
-
           {flowStage !== "idle" && (
             <AuthStepHeader
               className="w-4/5 mx-auto text-center"
@@ -1436,47 +1459,57 @@ export function AdminLoginHubPage() {
 
           <div className="space-y-6">
             {flowStage === "idle" && (
-              <>
-                <form className="space-y-4" onSubmit={handleInlineEmailSubmit}>
-                  <div className="w-4/5 mx-auto space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="inline-email">Work email</Label>
-                      <Input
-                        id="inline-email"
-                        type="email"
-                        required
-                        value={emailInput}
-                        onChange={(event) => {
-                          clearIdleState();
-                          setEmailInput(event.target.value);
-                        }}
-                        className="h-11 rounded-[12px] px-4 text-[15px]"
-                        placeholder="name@company.com"
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      className="h-11 w-full rounded-[12px] font-semibold"
-                      disabled={
-                        isPrecheckLoading ||
-                        (!!ssoProviderName && !ssoProvider) ||
-                        (idleNotice?.tone === "info" && !ssoProviderName)
-                      }
-                    >
-                      {isPrecheckLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Checking settings...
-                        </>
-                      ) : ssoProviderName ? (
-                        "Continue with SSO"
-                      ) : idleNotice?.tone === "info" ? (
-                        "Use your identity provider"
-                      ) : (
-                        "Continue"
-                      )}
-                    </Button>
+              <div className="w-full max-w-sm mx-auto">
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold mb-2 tracking-tight text-slate-900">
+                    Get started with your email
+                  </h2>
+                  <p className="text-gray-800 text-sm">
+                    Enter your work email to sign in or create an account
+                  </p>
+                </div>
+
+                <form
+                  className="w-full mb-6"
+                  onSubmit={handleInlineEmailSubmit}
+                >
+                  <div className="space-y-1.5 mb-4">
+                    <Label htmlFor="inline-email">Work email</Label>
+                    <Input
+                      id="inline-email"
+                      type="email"
+                      required
+                      value={emailInput}
+                      onChange={(event) => {
+                        clearIdleState();
+                        setEmailInput(event.target.value);
+                      }}
+                      className="h-11 rounded-xl px-4 text-[15px]"
+                      placeholder="name@company.com"
+                    />
                   </div>
+                  <Button
+                    type="submit"
+                    className="h-12 w-full rounded-xl font-medium"
+                    disabled={
+                      isPrecheckLoading ||
+                      (!!ssoProviderName && !ssoProvider) ||
+                      (idleNotice?.tone === "info" && !ssoProviderName)
+                    }
+                  >
+                    {isPrecheckLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Checking settings...
+                      </>
+                    ) : ssoProviderName ? (
+                      "Continue with SSO"
+                    ) : idleNotice?.tone === "info" ? (
+                      "Use your identity provider"
+                    ) : (
+                      "Continue"
+                    )}
+                  </Button>
                 </form>
 
                 {idleNotice ? (
@@ -1492,15 +1525,15 @@ export function AdminLoginHubPage() {
                   </div>
                 ) : null}
 
-                <div className="auth-divider-row">
-                  <div className="auth-panel-divider" />
-                  <span className="auth-divider-copy">
-                    Or use your identity provider
+                <div className="flex items-center mb-6">
+                  <div className="flex-grow border-t border-gray-200" />
+                  <span className="flex-shrink-0 mx-4 text-sm text-gray-800">
+                    or use your identity provider
                   </span>
-                  <div className="auth-panel-divider" />
+                  <div className="flex-grow border-t border-gray-200" />
                 </div>
 
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col gap-3 mb-12">
                   {orderedUflowProviders.map((provider) => {
                     const isLoading =
                       authenticatingProvider === provider.provider_name;
@@ -1518,7 +1551,7 @@ export function AdminLoginHubPage() {
                         key={provider.provider_name}
                         type="button"
                         size="lg"
-                        className="h-11 w-4/5 mx-auto justify-center gap-3 rounded-[12px] px-4 font-semibold cursor-pointer"
+                        className="h-11 w-full justify-center gap-3 rounded-full px-4 font-medium cursor-pointer"
                         variant="outline"
                         onClick={() => handleUFlowProviderAuth(provider)}
                         disabled={authenticatingProvider !== null}
@@ -1546,7 +1579,7 @@ export function AdminLoginHubPage() {
                     );
                   })}
                 </div>
-              </>
+              </div>
             )}
 
             {flowStage === "existing" && (
@@ -1768,6 +1801,46 @@ export function AdminLoginHubPage() {
                 </div>
               </div>
             )}
+            <div
+              className="flex justify-center items-center gap-2 text-sm text-gray-500"
+              aria-label="Trust footer"
+            >
+              <a
+                href="https://authsec.ai/security"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Security &amp; Compliance
+              </a>
+              <span>|</span>
+              <a
+                href="https://authsec.ai/terms-and-conditions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Terms
+              </a>
+              <span>|</span>
+              <a
+                href="https://authsec.ai/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Privacy
+              </a>
+              <span>|</span>
+              <a
+                href="https://authsec.ai/contact"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Support
+              </a>
+            </div>
           </div>
         </AuthActionPanel>
 
@@ -1978,29 +2051,6 @@ export function AdminLoginHubPage() {
             </div>
           </DialogContent>
         </Dialog>
-
-        <div className="auth-card-footer pb-3" aria-label="Trust footer">
-          <span>
-            <a href="https://authsec.ai/security" target="__blank">
-              Security & Compliance
-            </a>
-          </span>
-          <span>
-            <a href="https://authsec.ai/terms-and-conditions" target="__blank">
-              Terms
-            </a>
-          </span>
-          <span>
-            <a href="https://authsec.ai/privacy-policy" target="__blank">
-              Privacy
-            </a>
-          </span>
-          <span>
-            <a href="https://authsec.ai/contact" target="__blank">
-              Support
-            </a>
-          </span>
-        </div>
       </div>
 
       {uflowCallbackData && (

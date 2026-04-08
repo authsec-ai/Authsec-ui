@@ -12,19 +12,14 @@ import {
 import {
   Calendar,
   Users,
-  Mail,
   Shield,
   MoreHorizontal,
-  Edit,
-  Copy,
   Settings,
   Trash2,
-  Lock,
   UserCheck,
   UserX,
   Key,
   RefreshCw,
-  AlertTriangle,
 } from "lucide-react";
 import type { User } from "../../../types/database";
 import type { EnhancedUser } from "../../../types/entities";
@@ -107,13 +102,14 @@ export interface UserTableActions {
   onResetPassword: (userId: string, email: string) => void;
   onChangePassword: (userId: string, email: string) => void;
   onAssignRole?: (userId: string, userName: string, userEmail: string) => void;
+  onDelegateTrust?: (user: EnhancedUser) => void;
 }
 
 // Reusable user cell component
 export function UserCell({
   user,
   onToggleExpand,
-  isExpanded
+  isExpanded: _isExpanded
 }: {
   user: EnhancedUser;
   onToggleExpand?: () => void;
@@ -355,6 +351,13 @@ export function ActionsCell({
             <Key className="mr-2 h-4 w-4" />
             Change Password
           </DropdownMenuItem>
+
+          {actions.onDelegateTrust && (
+            <DropdownMenuItem onClick={() => actions.onDelegateTrust?.(user)}>
+              <Shield className="mr-2 h-4 w-4" />
+              Delegate trust
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
           <DropdownMenuItem

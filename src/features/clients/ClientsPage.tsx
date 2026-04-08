@@ -21,13 +21,6 @@ import { SessionManager } from "../../utils/sessionManager";
 import { toast } from "react-hot-toast";
 import { generateOAuth2AuthorizationUrl } from "../../utils/oauthUtils";
 
-import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
-import {
-  trackClientDeleted,
-  trackClientStatusToggled,
-  trackClientPreviewLogin,
-  trackVoiceAgentConfigured,
-} from "@/utils/analytics";
 import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
 import { ClientAuthMethodsModal } from "./components/ClientAuthMethodsModal";
 import { OnboardClientModal } from "./components/OnboardClientModal";
@@ -59,13 +52,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
-import {
-  trackClientDeleted,
-  trackClientStatusToggled,
-  trackClientPreviewLogin,
-  trackVoiceAgentConfigured,
-} from "@/utils/analytics";
-
 /**
  * Utility function to map API EnhancedClientData to ClientWithAuthMethods
  */

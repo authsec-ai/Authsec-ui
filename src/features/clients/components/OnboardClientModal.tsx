@@ -202,7 +202,6 @@ export function OnboardClientModal({
             ? "Claw Bot"
             : "MCP server";
       toast.success(`${typeLabel} created. ${successLabel}: ${successDetail}`);
-      trackClientCreated(trimmedName);
 
       onClose();
       onSuccess?.(response.client_id);

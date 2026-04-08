@@ -78,6 +78,13 @@ export function SetupTourList() {
     userAuth.isCompleted,
   ]);
 
+  const tourIdToEventName: Record<string, string> = {
+    "m2m-auth": "m2m_auth",
+    rbac: "rbac_setup",
+    scopes: "scopes_setup",
+    "user-auth": "user_auth",
+  };
+
   // Map to card props
   const tours = sortedTours.map((config) => ({
     id: config.id,

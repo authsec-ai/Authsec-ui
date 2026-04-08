@@ -48,7 +48,7 @@ export const useUnifiedProviders = ({
       provider_type: 'oidc',
       provider_name: oidc.provider_name,
       display_name: oidc.display_name,
-      client_id: oidc.client_id,
+      client_id: oidc.client_ids || oidc.client_id || '',
       is_active: oidc.is_active,
       sort_order: oidc.sort_order,
       status: oidc.status,

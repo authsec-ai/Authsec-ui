@@ -18,11 +18,14 @@ import { setLoginData, setCurrentStep } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { OIDCWebAuthnRouter } from "./OIDCWebAuthnRouter";
 // OIDC WebAuthn functionality using dedicated OIDC context
-import { EndUserAuthProvider, useEndUserAuth } from "../context/EndUserAuthContext";
+import {
+  EndUserAuthProvider,
+  useEndUserAuth,
+} from "../context/EndUserAuthContext";
 import { decodeJWT } from "../../utils/jwt";
 // Device Management
 import { DeviceManagementPanel } from "./device-management";
-import config from '../../config';
+import config from "../../config";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthValuePanel } from "../components/AuthValuePanel";
 import { AuthActionPanel } from "../components/AuthActionPanel";
@@ -33,9 +36,15 @@ const OIDCCallbackPageInner: React.FC = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const dispatch = useDispatch();
   // Get client_id, client_type, redirect_uris from Redux state (set during initial login page load)
-  const reduxClientId = useSelector((state: RootState) => state.oidcWebAuthn.clientId);
-  const reduxClientType = useSelector((state: RootState) => state.oidcWebAuthn.clientType);
-  const reduxRedirectUris = useSelector((state: RootState) => state.oidcWebAuthn.redirectUris);
+  const reduxClientId = useSelector(
+    (state: RootState) => state.oidcWebAuthn.clientId,
+  );
+  const reduxClientType = useSelector(
+    (state: RootState) => state.oidcWebAuthn.clientType,
+  );
+  const reduxRedirectUris = useSelector(
+    (state: RootState) => state.oidcWebAuthn.redirectUris,
+  );
   const { executeCallback, captureClientId } = useEndUserAuth();
 
   // RTK Query hooks
@@ -44,13 +53,17 @@ const OIDCCallbackPageInner: React.FC = () => {
   const [sendTokenToOIDCLogin] = useSendTokenToOIDCLoginMutation();
   const [samlLogin] = useSamlLoginMutation();
 
-  const [status, setStatus] = useState<"processing" | "success" | "error" | "webauthn">(
-    "processing",
+  const [status, setStatus] = useState<
+    "processing" | "success" | "error" | "webauthn"
+  >("processing");
+  const [message, setMessage] = useState<string>(
+    "Processing authentication...",
   );
-  const [message, setMessage] = useState<string>("Processing authentication...");
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [tokenResponse, setTokenResponse] = useState<any>(null);
-  const [webauthnCallbackToken, setWebauthnCallbackToken] = useState<string | null>(null);
+  const [webauthnCallbackToken, setWebauthnCallbackToken] = useState<
+    string | null
+  >(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
   const [webauthnData, setWebauthnData] = useState<{
     tenantId: string;
@@ -75,7 +88,9 @@ const OIDCCallbackPageInner: React.FC = () => {
     try {
       // Check if state looks like valid base64 (contains only valid chars and proper padding)
       if (!/^[A-Za-z0-9+/=]+$/.test(state) || state.length % 4 !== 0) {
-        console.warn("State does not appear to be base64-encoded. Skipping extraction.");
+        console.warn(
+          "State does not appear to be base64-encoded. Skipping extraction.",
+        );
         return null;
       }
       const stateBytes = atob(state.replace(/-/g, "+").replace(/_/g, "/"));
@@ -92,21 +107,16 @@ const OIDCCallbackPageInner: React.FC = () => {
       // Admin OAuth callbacks should always be processed by the dedicated admin callback scene.
       // This protects against backend/provider configs still pointing to /oidc/auth/callback.
       const uflowOAuthType = sessionStorage.getItem("uflow_oauth_type");
-      if (uflowOAuthType === "admin") {
-        const adminCallbackUrl = `/uflow/oidc/callback${window.location.search || ""}`;
-        console.log(
-          "↪️ Admin OAuth callback detected on end-user route. Redirecting to admin callback:",
-          adminCallbackUrl,
-        );
-        window.location.replace(adminCallbackUrl);
-        return;
-      }
-
-      // Check if this is a UFlow OAuth callback
-      const isUFlowOAuth = uflowOAuthType === "true" || uflowOAuthType === "admin";
+      const isUFlowOAuth =
+        uflowOAuthType === "true" || uflowOAuthType === "admin";
 
       if (isUFlowOAuth) {
-        const isAdminFlow = uflowOAuthType === "admin";
+        // Determine if admin flow:
+        // - sessionStorage says "admin"
+        // - OR URL has no client_id (admin flows don't have client_id)
+        // - Default to admin if unclear
+        const hasClientId = urlParams.has("client_id");
+        const isAdminFlow = uflowOAuthType === "admin" || !hasClientId;
         console.log(
           `🔐 UFlow OAuth callback detected (${isAdminFlow ? "Admin" : "End-User"} flow)`,
         );
@@ -180,7 +190,9 @@ const OIDCCallbackPageInner: React.FC = () => {
             sessionStorage.setItem("admin_oauth_tenant", tenantDomain || "");
 
             setStatus("processing");
-            setMessage("OAuth authentication successful. Redirecting to complete login...");
+            setMessage(
+              "OAuth authentication successful. Redirecting to complete login...",
+            );
 
             setTimeout(() => {
               // Redirect to admin WebAuthn page
@@ -194,7 +206,9 @@ const OIDCCallbackPageInner: React.FC = () => {
 
             if (!tenantId || !clientId) {
               setStatus("error");
-              setMessage("Missing tenant or client information from OAuth callback");
+              setMessage(
+                "Missing tenant or client information from OAuth callback",
+              );
               sessionStorage.removeItem("uflow_oauth_type");
               sessionStorage.removeItem("uflow_oauth_provider");
               sessionStorage.removeItem("uflow_oauth_state");
@@ -213,7 +227,9 @@ const OIDCCallbackPageInner: React.FC = () => {
               firstLogin: false, // Existing user
             };
 
-            setMessage("OAuth authentication successful. Initiating security authentication...");
+            setMessage(
+              "OAuth authentication successful. Initiating security authentication...",
+            );
             setWebauthnData(webauthnFlowData);
             setStatus("webauthn");
 
@@ -257,13 +273,16 @@ const OIDCCallbackPageInner: React.FC = () => {
         const storedEmail = sessionStorage.getItem("webauthn_callback_email");
 
         // Check if this is a SAML + WebAuthn flow from OIDCLoginPage
-        const isSamlPostWebAuthn = sessionStorage.getItem("saml_post_webauthn") === "true";
+        const isSamlPostWebAuthn =
+          sessionStorage.getItem("saml_post_webauthn") === "true";
 
         if (isSamlPostWebAuthn) {
           console.log("🔐 SAML + WebAuthn flow detected from OIDCLoginPage");
 
           // Get stored SAML parameters
-          const samlLoginChallenge = sessionStorage.getItem("saml_login_challenge");
+          const samlLoginChallenge = sessionStorage.getItem(
+            "saml_login_challenge",
+          );
           const samlClientId = sessionStorage.getItem("saml_client_id");
           const samlUserEmail = sessionStorage.getItem("saml_user_email");
 
@@ -277,7 +296,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           if (storedToken && samlLoginChallenge) {
             setWebauthnCallbackToken(storedToken);
             setStatus("processing");
-            setMessage("SAML authentication with WebAuthn completed! Finalizing login...");
+            setMessage(
+              "SAML authentication with WebAuthn completed! Finalizing login...",
+            );
 
             setDebugInfo({
               flow_type: "SAML + WebAuthn from OIDCLoginPage",
@@ -309,7 +330,10 @@ const OIDCCallbackPageInner: React.FC = () => {
             // and issue the OAuth code. Redirect to a SAML continuation endpoint or back to login page.
             setTimeout(() => {
               const continuationUrl = `/oidc/login?login_challenge=${samlLoginChallenge}&saml_webauthn_complete=true`;
-              console.log("🔄 Redirecting to continue SAML OAuth flow:", continuationUrl);
+              console.log(
+                "🔄 Redirecting to continue SAML OAuth flow:",
+                continuationUrl,
+              );
               window.location.href = continuationUrl;
             }, 1500);
 
@@ -334,7 +358,9 @@ const OIDCCallbackPageInner: React.FC = () => {
             sessionStorage.removeItem("saml_project_id");
 
             setStatus("error");
-            setMessage("SAML WebAuthn flow missing required parameters. Please try again.");
+            setMessage(
+              "SAML WebAuthn flow missing required parameters. Please try again.",
+            );
             return;
           }
         }
@@ -344,7 +370,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           setWebauthnCallbackToken(storedToken);
           setStatus("success");
           setIsCustomLoginWebAuthn(true);
-          setMessage("Custom login WebAuthn authentication completed! Token received.");
+          setMessage(
+            "Custom login WebAuthn authentication completed! Token received.",
+          );
 
           setDebugInfo({
             flow_type: "Custom Login WebAuthn",
@@ -361,7 +389,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           return;
         } else {
           setStatus("error");
-          setMessage("WebAuthn completion detected but no token found in storage");
+          setMessage(
+            "WebAuthn completion detected but no token found in storage",
+          );
           return;
         }
       }
@@ -400,7 +430,12 @@ const OIDCCallbackPageInner: React.FC = () => {
       if (!code || !state) {
         setStatus("error");
         setMessage("Missing required parameters from OAuth provider");
-        setDebugInfo({ code: !!code, state: !!state, provider, url: window.location.href });
+        setDebugInfo({
+          code: !!code,
+          state: !!state,
+          provider,
+          url: window.location.href,
+        });
         return;
       }
 
@@ -430,7 +465,8 @@ const OIDCCallbackPageInner: React.FC = () => {
         }
 
         // Read and consume the PKCE code_verifier stored before the Hydra redirect
-        const pkceCodeVerifier = sessionStorage.getItem(`pkce_cv_${state}`) || undefined;
+        const pkceCodeVerifier =
+          sessionStorage.getItem(`pkce_cv_${state}`) || undefined;
         sessionStorage.removeItem(`pkce_cv_${state}`);
 
         try {
@@ -465,7 +501,9 @@ const OIDCCallbackPageInner: React.FC = () => {
                   expires_in: normalizedTokens?.expires_in || 3600,
                 }).unwrap();
               } catch (e) {
-                console.warn("OIDC login endpoint returned no body or non-standard shape");
+                console.warn(
+                  "OIDC login endpoint returned no body or non-standard shape",
+                );
               }
 
               const oidcData: any = oidcResponse
@@ -476,10 +514,13 @@ const OIDCCallbackPageInner: React.FC = () => {
               const firstLogin = Boolean(oidcData?.first_login);
 
               // Extract tenant/email from exchanged access token, prioritize Redux client_id
-                let clientId: string | null = reduxClientId; // Use Redux state first
-                const decoded: any = response.tokens?.access_token ? decodeJWT(response.tokens.access_token) : null;
-                if (decoded) {
-                tenantId = decoded?.ext?.tenant_id || decoded?.tenant_id || tenantId;
+              let clientId: string | null = reduxClientId; // Use Redux state first
+              const decoded: any = response.tokens?.access_token
+                ? decodeJWT(response.tokens.access_token)
+                : null;
+              if (decoded) {
+                tenantId =
+                  decoded?.ext?.tenant_id || decoded?.tenant_id || tenantId;
                 email = decoded?.ext?.email || decoded?.email_id || email;
 
                 // Only extract client_id from JWT as fallback if not in Redux
@@ -494,7 +535,9 @@ const OIDCCallbackPageInner: React.FC = () => {
 
               if (tenantId && email) {
                 const webauthnFlowData = { tenantId, email, firstLogin };
-                setMessage("OIDC login processed. Initiating MFA (WebAuthn/TOTP)...");
+                setMessage(
+                  "OIDC login processed. Initiating MFA (WebAuthn/TOTP)...",
+                );
                 setWebauthnData(webauthnFlowData);
                 setStatus("webauthn");
 
@@ -530,12 +573,16 @@ const OIDCCallbackPageInner: React.FC = () => {
                   webauthn_flow: "initiated",
                   webauthn_data: webauthnFlowData,
                   client_id: clientId,
-                  client_id_source: reduxClientId ? "Redux state" : "JWT fallback",
+                  client_id_source: reduxClientId
+                    ? "Redux state"
+                    : "JWT fallback",
                   jwt_decoded: decoded,
                 });
               } else {
                 setStatus("error");
-                setMessage("OIDC login did not return user info and token lacks required claims");
+                setMessage(
+                  "OIDC login did not return user info and token lacks required claims",
+                );
                 setDebugInfo({
                   reason: "missing_tenant_or_email",
                   oidc_login_response: oidcResponse,
@@ -552,14 +599,19 @@ const OIDCCallbackPageInner: React.FC = () => {
           setStatus("error");
           setMessage("Token exchange failed");
           setDebugInfo({
-            exchangeError: exchangeError instanceof Error ? exchangeError.message : "Unknown error",
+            exchangeError:
+              exchangeError instanceof Error
+                ? exchangeError.message
+                : "Unknown error",
           });
           sessionStorage.removeItem("login_challenge");
         }
         return;
       } else {
         console.log("State validation:", {
-          storedState: storedState ? `${storedState.substring(0, 10)}...` : null,
+          storedState: storedState
+            ? `${storedState.substring(0, 10)}...`
+            : null,
           receivedState: state ? `${state.substring(0, 10)}...` : null,
           stateMatch: storedState === state,
           providerMatch: storedProvider === provider,
@@ -570,7 +622,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           setStatus("error");
           setMessage("Invalid state parameter - possible security issue");
           setDebugInfo({
-            storedState: storedState ? `${storedState.substring(0, 10)}...` : null,
+            storedState: storedState
+              ? `${storedState.substring(0, 10)}...`
+              : null,
             receivedState: state ? `${state.substring(0, 10)}...` : null,
             stateMatch: storedState === state,
           });
@@ -624,7 +678,9 @@ const OIDCCallbackPageInner: React.FC = () => {
             const currentOrigin = window.location.origin;
             if (!response.redirect_to) {
               setStatus("error");
-              setMessage("Authentication flow error: No redirect URL provided by backend.");
+              setMessage(
+                "Authentication flow error: No redirect URL provided by backend.",
+              );
               setDebugInfo({
                 ...debugInfo,
                 error: "Missing redirect_to in response",
@@ -660,17 +716,23 @@ const OIDCCallbackPageInner: React.FC = () => {
               provider?.toLowerCase().includes("saml");
 
             if (isSamlProvider) {
-              console.log("🔐 SAML provider detected, checking for WebAuthn requirements...");
+              console.log(
+                "🔐 SAML provider detected, checking for WebAuthn requirements...",
+              );
               setMessage("Checking authentication requirements...");
 
               try {
                 // Get SAML parameters from sessionStorage (stored by OIDCLoginPage from URL params)
-                const samlStoredClientId = sessionStorage.getItem("saml_client_id");
-                const samlStoredEmail = sessionStorage.getItem("saml_user_email");
+                const samlStoredClientId =
+                  sessionStorage.getItem("saml_client_id");
+                const samlStoredEmail =
+                  sessionStorage.getItem("saml_user_email");
 
                 // Fallback to other sources if not in sessionStorage
                 const clientIdForSaml =
-                  samlStoredClientId || reduxClientId || sessionStorage.getItem("client_id");
+                  samlStoredClientId ||
+                  reduxClientId ||
+                  sessionStorage.getItem("client_id");
                 const userEmail = samlStoredEmail || response.user_info?.email;
 
                 console.log("📋 SAML parameters retrieved:", {
@@ -679,7 +741,8 @@ const OIDCCallbackPageInner: React.FC = () => {
                   client_id_final: clientIdForSaml,
                   email_final: userEmail,
                   fallback_to_redux: !samlStoredClientId && reduxClientId,
-                  fallback_to_response: !samlStoredEmail && response.user_info?.email,
+                  fallback_to_response:
+                    !samlStoredEmail && response.user_info?.email,
                 });
 
                 if (!clientIdForSaml) {
@@ -702,14 +765,16 @@ const OIDCCallbackPageInner: React.FC = () => {
                       response.redirect_to,
                     );
                     if (response.redirect_to) {
-                    window.location.href = response.redirect_to;
-                  }
+                      window.location.href = response.redirect_to;
+                    }
                   }, 1500);
                   return;
                 }
 
                 if (!userEmail) {
-                  console.error("❌ Cannot proceed with SAML WebAuthn check: email not available");
+                  console.error(
+                    "❌ Cannot proceed with SAML WebAuthn check: email not available",
+                  );
                   // Clean up SAML parameters
                   sessionStorage.removeItem("saml_client_id");
                   sessionStorage.removeItem("saml_user_email");
@@ -726,8 +791,8 @@ const OIDCCallbackPageInner: React.FC = () => {
                       response.redirect_to,
                     );
                     if (response.redirect_to) {
-                    window.location.href = response.redirect_to;
-                  }
+                      window.location.href = response.redirect_to;
+                    }
                   }, 1500);
                   return;
                 }
@@ -781,7 +846,9 @@ const OIDCCallbackPageInner: React.FC = () => {
                     console.log("🆕 First-time SAML user → MFA setup");
                     dispatch(setCurrentStep("mfa_selection"));
                   } else {
-                    console.log("🔑 Returning SAML user → WebAuthn authentication");
+                    console.log(
+                      "🔑 Returning SAML user → WebAuthn authentication",
+                    );
                     dispatch(setCurrentStep("authentication"));
                   }
 
@@ -803,8 +870,8 @@ const OIDCCallbackPageInner: React.FC = () => {
                   setTimeout(() => {
                     console.log("Redirecting to Hydra:", response.redirect_to);
                     if (response.redirect_to) {
-                    window.location.href = response.redirect_to;
-                  }
+                      window.location.href = response.redirect_to;
+                    }
                   }, 1500);
                 }
               } catch (samlLoginError) {
@@ -819,9 +886,14 @@ const OIDCCallbackPageInner: React.FC = () => {
                 sessionStorage.removeItem("saml_project_id");
                 sessionStorage.removeItem("saml_success");
                 // Fallback: proceed with redirect even if SAML login check fails
-                setMessage("Provider credentials accepted. Redirecting to authorization server...");
+                setMessage(
+                  "Provider credentials accepted. Redirecting to authorization server...",
+                );
                 setTimeout(() => {
-                  console.log("Redirecting to Hydra (SAML check failed):", response.redirect_to);
+                  console.log(
+                    "Redirecting to Hydra (SAML check failed):",
+                    response.redirect_to,
+                  );
                   if (response.redirect_to) {
                     window.location.href = response.redirect_to;
                   }
@@ -829,7 +901,9 @@ const OIDCCallbackPageInner: React.FC = () => {
               }
             } else {
               // Not a SAML provider or no email - proceed with normal redirect
-              setMessage("Provider credentials accepted. Redirecting to authorization server...");
+              setMessage(
+                "Provider credentials accepted. Redirecting to authorization server...",
+              );
               setTimeout(() => {
                 console.log("Redirecting to Hydra:", response.redirect_to);
                 if (response.redirect_to) {
@@ -842,7 +916,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           console.error("Callback processing error:", err);
           setStatus("error");
           setMessage(
-            err instanceof Error ? err.message : "Failed to process authentication callback",
+            err instanceof Error
+              ? err.message
+              : "Failed to process authentication callback",
           );
           setDebugInfo({ error: err });
         }
@@ -851,7 +927,9 @@ const OIDCCallbackPageInner: React.FC = () => {
       console.error("Callback processing error (outer):", outerErr);
       setStatus("error");
       setMessage(
-        outerErr instanceof Error ? outerErr.message : "Failed to process authentication callback",
+        outerErr instanceof Error
+          ? outerErr.message
+          : "Failed to process authentication callback",
       );
       setDebugInfo({ error: outerErr });
     }
@@ -906,7 +984,9 @@ const OIDCCallbackPageInner: React.FC = () => {
     // For SAML + WebAuthn flows, redirect to the stored Hydra URL
     if (isSamlWebAuthn && samlRedirectTo) {
       setStatus("processing");
-      setMessage("Authentication completed! Redirecting to authorization server...");
+      setMessage(
+        "Authentication completed! Redirecting to authorization server...",
+      );
 
       // Clean up SAML parameters from sessionStorage
       sessionStorage.removeItem("saml_client_id");
@@ -1074,17 +1154,31 @@ const OIDCCallbackPageInner: React.FC = () => {
             >
               <motion.div
                 animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 0.55, repeat: Infinity, repeatDelay: 0.25 }}
+                transition={{
+                  duration: 0.55,
+                  repeat: Infinity,
+                  repeatDelay: 0.25,
+                }}
                 className="h-2 w-2 rounded-full bg-slate-600"
               />
               <motion.div
                 animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 0.55, repeat: Infinity, repeatDelay: 0.25, delay: 0.1 }}
+                transition={{
+                  duration: 0.55,
+                  repeat: Infinity,
+                  repeatDelay: 0.25,
+                  delay: 0.1,
+                }}
                 className="h-2 w-2 rounded-full bg-slate-600"
               />
               <motion.div
                 animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 0.55, repeat: Infinity, repeatDelay: 0.25, delay: 0.2 }}
+                transition={{
+                  duration: 0.55,
+                  repeat: Infinity,
+                  repeatDelay: 0.25,
+                  delay: 0.2,
+                }}
                 className="h-2 w-2 rounded-full bg-slate-600"
               />
             </motion.div>
@@ -1101,7 +1195,11 @@ const OIDCCallbackPageInner: React.FC = () => {
                 <Button onClick={handleRetry} className="w-full sm:w-auto">
                   Try Again
                 </Button>
-                <Button variant="outline" onClick={handleGoBack} className="w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  onClick={handleGoBack}
+                  className="w-full sm:w-auto"
+                >
                   Go Back to Login
                 </Button>
               </div>
@@ -1135,7 +1233,9 @@ const OIDCCallbackPageInner: React.FC = () => {
                 </p>
               </div>
               <div className="auth-action-row auth-action-row--stack-mobile sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="text-sm font-medium text-slate-800">Access token</h3>
+                <h3 className="text-sm font-medium text-slate-800">
+                  Access token
+                </h3>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1171,30 +1271,38 @@ const OIDCCallbackPageInner: React.FC = () => {
               <p className={`text-sm font-medium ${getStatusColor()}`}>
                 Sign-in complete.
               </p>
-              <h3 className="text-sm font-medium text-slate-800">Technical response</h3>
+              <h3 className="text-sm font-medium text-slate-800">
+                Technical response
+              </h3>
               <pre className="max-h-60 overflow-auto rounded-md bg-white p-3 text-xs text-slate-700">
                 {JSON.stringify(tokenResponse, null, 2)}
               </pre>
             </motion.div>
           )}
 
-          {status === "success" && !isCustomLoginWebAuthn && !webauthnCallbackToken && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="flex justify-center"
-            >
-              <div className="inline-flex items-center text-sm text-slate-500">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="mr-2 h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-500"
-                />
-                Redirecting to application...
-              </div>
-            </motion.div>
-          )}
+          {status === "success" &&
+            !isCustomLoginWebAuthn &&
+            !webauthnCallbackToken && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="flex justify-center"
+              >
+                <div className="inline-flex items-center text-sm text-slate-500">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
+                    className="mr-2 h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-500"
+                  />
+                  Redirecting to application...
+                </div>
+              </motion.div>
+            )}
 
           {status === "success" && isCustomLoginWebAuthn && (
             <motion.div

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import config from "../../../config";
 import {
   EnhancedOidcProvidersTable,
   type ApiOidcProvider,
@@ -8,7 +9,7 @@ import {
 // Example data based on your API response
 const exampleOidcProviders: ApiOidcProvider[] = [
   {
-    callback_url: "https://dev.app.authsec.dev/oidc/auth/callback/github",
+    callback_url: `${config.VITE_API_URL}/authsec/oidc/auth/callback/github`,
     client_id: "e2eafae5-06a0-43e8-832a-713ea0d28cc2-github-oidc",
     created_at: "2025-09-10T08:36:45Z",
     display_name: "GitHub",
@@ -28,7 +29,7 @@ const exampleOidcProviders: ApiOidcProvider[] = [
     sort_order: 0,
   },
   {
-    callback_url: "https://dev.app.authsec.dev/oidc/auth/callback/google",
+    callback_url: `${config.VITE_API_URL}/authsec/oidc/auth/callback/google`,
     client_id: "e2eafae5-06a0-43e8-832a-713ea0d28cc2-google-oidc",
     created_at: "2025-09-08T17:33:43Z",
     display_name: "Google",
@@ -36,8 +37,8 @@ const exampleOidcProviders: ApiOidcProvider[] = [
     provider_config: {
       additional_params: null,
       auth_url: "https://accounts.google.com/o/oauth2/v2/auth",
-      client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
-      client_secret: "YOUR_GOOGLE_CLIENT_SECRET",
+      client_id: "your-google-client-id.apps.googleusercontent.com",
+      client_secret: "your-google-client-secret",
       issuer_url: "",
       jwks_url: "",
       scopes: ["openid", "profile", "email"],

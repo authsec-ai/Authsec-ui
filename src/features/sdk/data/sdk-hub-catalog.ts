@@ -1,3 +1,4 @@
+import config from "../../../config";
 import type { SDKHubModule } from "../utils/hub-routing";
 
 export type SDKCodeLanguage = "bash" | "typescript" | "python" | "json";
@@ -133,8 +134,8 @@ runMcpServerWithOAuth({
         label: "Runtime environment",
         language: "bash",
         code: `AUTHSEC_CLIENT_ID="YOUR_CLIENT_ID" \\
-AUTHSEC_AUTH_SERVICE_URL="https://dev.api.authsec.dev/sdkmgr/mcp-auth" \\
-AUTHSEC_SERVICES_URL="https://dev.api.authsec.dev/sdkmgr/services" \\
+AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth" \\
+AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services" \\
 node dist/server.js`,
       },
     ],
@@ -235,7 +236,7 @@ async function fetchServiceToken(args) {
 
 const client = new CIBAClient({
   clientId: process.env.AUTHSEC_CLIENT_ID,
-  baseUrl: "https://dev.api.authsec.dev",
+  baseUrl: "` + config.VITE_API_URL + `",
 });
 
 const init = await client.initiateAppApproval("user@example.com");
@@ -301,8 +302,8 @@ server.listen(8443);`,
         id: "ts-env",
         label: "Environment variables",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="https://dev.api.authsec.dev/sdkmgr/mcp-auth"
-AUTHSEC_SERVICES_URL="https://dev.api.authsec.dev/sdkmgr/services"
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth"
+AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services"
 AUTHSEC_TIMEOUT_SECONDS=15
 AUTHSEC_RETRIES=2
 AUTHSEC_TOOLS_LIST_TIMEOUT_SECONDS=8
@@ -400,8 +401,8 @@ if __name__ == "__main__":
         id: "py-mcp-env",
         label: "Runtime environment",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="https://dev.api.authsec.dev/sdkmgr/mcp-auth" \\
-AUTHSEC_SERVICES_URL="https://dev.api.authsec.dev/sdkmgr/services" \\
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth" \\
+AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services" \\
 python3 server.py`,
       },
     ],
@@ -542,8 +543,8 @@ print("SPIFFE ID", svid.spiffe_id)`,
         id: "py-env",
         label: "Environment variables",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="https://dev.api.authsec.dev/sdkmgr/mcp-auth"
-AUTHSEC_SERVICES_URL="https://dev.api.authsec.dev/sdkmgr/services"
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth"
+AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services"
 AUTHSEC_TIMEOUT_SECONDS=15
 AUTHSEC_RETRIES=2
 AUTHSEC_TOOLS_LIST_TIMEOUT_SECONDS=8`,

@@ -14,7 +14,6 @@ import { CheckSPIREAgentStep } from "./M2MWizardSteps";
 import { ContextSelectionStep } from "./RbacWizardSteps";
 import { useWizard } from "@/contexts/WizardContext";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
-
 interface WizardProgressProps {
   totalSteps: number;
   currentStep: number;
@@ -308,6 +307,10 @@ export function WizardProgress({
                         step.actionPayload.handler === "select-context" && (
                           <ContextSelectionStep
                             onComplete={(context) => {
+                              const normalizedContext = context === "admin" ? "admin" : "end_user";
+                              if (activeWizard === "scopes-wizard") {
+                              } else {
+                              }
                               handleStepCompletion(step.id, { selectedContext: context });
                             }}
                           />

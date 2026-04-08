@@ -96,6 +96,7 @@ export function DashboardPage() {
     userAuth.isCompleted ||
     (isUserAuthWizard && completedSteps.includes("integrate-sdk"));
 
+
   const setupSteps = React.useMemo(() => {
     const rbacConfigured = completedWizards.includes("rbac-wizard");
     const sdkDeployed = completedWizards.includes("m2m-workload-wizard");

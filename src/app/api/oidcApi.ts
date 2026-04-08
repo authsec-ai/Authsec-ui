@@ -4,8 +4,8 @@
  * Handles OAuth flows and final token exchange operations
  */
 
-import { createApi } from "@reduxjs/toolkit/query/react";
-import { createAuthSecBaseQuery, getSessionData } from "./baseApi";
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import config from "../../config";
 
 export interface OIDCTokenExchangeRequest {
   login_challenge: string;
@@ -80,6 +80,7 @@ export interface LoginPageData {
 
 export interface AuthInitiateRequest {
   login_challenge: string;
+  origin_domain?: string;
 }
 
 // add optional SAML fields
@@ -223,17 +224,6 @@ export interface AdminOIDCExchangeSuccessResponse {
   client_id?: string;
 }
 
-export interface CompleteLocalLoginChallengeRequest {
-  login_challenge: string;
-  token: string;
-}
-
-export interface CompleteLocalLoginChallengeResponse {
-  success: boolean;
-  redirect_to?: string;
-  error?: string;
-}
-
 export interface AdminOIDCExchangeErrorResponse {
   error?: string;
   message?: string;
@@ -241,16 +231,46 @@ export interface AdminOIDCExchangeErrorResponse {
   provider_data?: Omit<CompleteUFlowOIDCRegistrationRequest, "tenant_domain">;
 }
 
+// Helper function to get session data
+const getSessionData = () => {
+  const sessionData = localStorage.getItem("authsec_session_v2");
+  if (sessionData) {
+    try {
+      return JSON.parse(sessionData);
+    } catch {
+      console.error("Session data parsing failed - invalid JSON format");
+    }
+  }
+  return null;
+};
+
 // RTK Query API for OIDC/OAuth operations
 export const oidcApi = createApi({
   reducerPath: "oidcApi",
-  baseQuery: createAuthSecBaseQuery(),
+  baseQuery: fetchBaseQuery({
+    baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
+    timeout: 30000,
+    credentials: "include",
+    prepareHeaders: (headers) => {
+      const session = getSessionData();
+      if (session?.token) {
+        headers.set("Authorization", `Bearer ${session.token}`);
+      }
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      return headers;
+    },
+  }),
   tagTypes: ["OIDC", "Token"],
   endpoints: (builder) => ({
     // Exchange OAuth code for tokens (Hydra flow)
-    exchangeCodeForTokens: builder.mutation<OIDCTokenExchangeResponse, OIDCTokenExchangeRequest>({
+    exchangeCodeForTokens: builder.mutation<
+      OIDCTokenExchangeResponse,
+      OIDCTokenExchangeRequest
+    >({
       query: (data) => ({
-        url: "/hmgr/auth/exchange-token",
+        url: "/authsec/hmgr/auth/exchange-token",
         method: "POST",
         body: data,
       }),
@@ -259,7 +279,8 @@ export const oidcApi = createApi({
         if (res?.tokens?.access_token) {
           return res as OIDCTokenExchangeResponse;
         }
-        const access_token = res?.access_token || res?.id_token || res?.jwt || res?.jwt_token;
+        const access_token =
+          res?.access_token || res?.id_token || res?.jwt || res?.jwt_token;
         const expires_in = res?.expires_in ?? res?.token?.expires_in ?? 3600;
         const token_type = res?.token_type || "Bearer";
         const refresh_token = res?.refresh_token || "";
@@ -277,7 +298,7 @@ export const oidcApi = createApi({
     // Provider information is extracted from the state parameter on the backend
     handleCallback: builder.mutation<CallbackResponse, CallbackRequest>({
       query: (data) => ({
-        url: "/hmgr/auth/callback", // Universal callback URL - no provider parameter
+        url: "/authsec/hmgr/auth/callback", // Universal callback URL - no provider parameter
         method: "POST",
         body: data,
         credentials: "include",
@@ -296,7 +317,7 @@ export const oidcApi = createApi({
         const queryString = qs.toString();
 
         return {
-          url: `/hmgr/login/page-data${queryString ? `?${queryString}` : ""}`,
+          url: `/authsec/hmgr/login/page-data${queryString ? `?${queryString}` : ""}`,
           method: "GET",
           credentials: "include",
         };
@@ -318,7 +339,9 @@ export const oidcApi = createApi({
           client_name: res?.client_name || res?.client || "Client",
           client_id: clientId,
           client_type: res?.client_type || undefined,
-          redirect_uris: Array.isArray(res?.redirect_uris) ? res.redirect_uris : undefined,
+          redirect_uris: Array.isArray(res?.redirect_uris)
+            ? res.redirect_uris
+            : undefined,
           providers,
           base_url: res?.base_url || "",
           error,
@@ -326,26 +349,16 @@ export const oidcApi = createApi({
       },
       providesTags: ["OIDC"],
     }),
-
-    completeLocalLoginChallenge: builder.mutation<
-      CompleteLocalLoginChallengeResponse,
-      CompleteLocalLoginChallengeRequest
-    >({
-      query: ({ login_challenge, token }) => ({
-        url: "hmgr/login/complete-local",
-        method: "POST",
-        body: { login_challenge },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }),
-    }),
-
     // Initiate OAuth authentication
     // UPDATED: Now uses universal callback URL in the auth initiation
     initiateAuth: builder.mutation<
       AuthInitiateResponse,
-      { provider: string; login_challenge: string; isSaml?: boolean; extraQuery?: string }
+      {
+        provider: string;
+        login_challenge: string;
+        isSaml?: boolean;
+        extraQuery?: string;
+      }
     >({
       query: ({ provider, login_challenge, isSaml, extraQuery }) => {
         const qs = new URLSearchParams((extraQuery || "").replace(/^\?/, ""));
@@ -354,21 +367,29 @@ export const oidcApi = createApi({
 
         return {
           url:
-            (isSaml ? `/hmgr/saml/initiate/${provider}` : `/hmgr/auth/initiate/${provider}`) +
-            suffix,
+            (isSaml
+              ? `/authsec/hmgr/saml/initiate/${provider}`
+              : `/authsec/hmgr/auth/initiate/${provider}`) + suffix,
           method: "POST",
-          body: { login_challenge }, // keep for compatibility
+          body: {
+            login_challenge,
+            origin_domain:
+              typeof window !== "undefined" ? window.location.host : undefined,
+          },
           credentials: "include",
         };
       },
       transformResponse: (res: any): AuthInitiateResponse => {
         const sso_url = res?.sso_url || res?.ssoUrl || res?.ssourl;
-        const auth_url = sso_url || res?.auth_url || res?.url || res?.redirect || "";
+        const auth_url =
+          sso_url || res?.auth_url || res?.url || res?.redirect || "";
         const state = res?.state || res?.nonce || "";
         const providerName = res?.provider || res?.idp || "";
 
         // detect POST-binding payload if provided
-        const methodRaw = (res?.method || res?.http_method || "").toString().toUpperCase();
+        const methodRaw = (res?.method || res?.http_method || "")
+          .toString()
+          .toUpperCase();
         const method: "GET" | "POST" = methodRaw === "POST" ? "POST" : "GET";
 
         const form_params =
@@ -382,7 +403,8 @@ export const oidcApi = createApi({
               }
             : undefined);
 
-        const success = typeof res?.success === "boolean" ? res.success : Boolean(auth_url);
+        const success =
+          typeof res?.success === "boolean" ? res.success : Boolean(auth_url);
 
         return {
           success,
@@ -398,9 +420,12 @@ export const oidcApi = createApi({
     }),
 
     // Check custom login user status
-    checkCustomLoginStatus: builder.mutation<CustomLoginStatusResponse, CustomLoginStatusRequest>({
+    checkCustomLoginStatus: builder.mutation<
+      CustomLoginStatusResponse,
+      CustomLoginStatusRequest
+    >({
       query: (data) => ({
-        url: "/uflow/user/login/status",
+        url: "/authsec/uflow/user/login/status",
         method: "POST",
         body: data,
       }),
@@ -410,8 +435,8 @@ export const oidcApi = createApi({
           typeof responseVal === "boolean"
             ? responseVal
             : typeof responseVal === "string"
-            ? responseVal.toLowerCase() === "true"
-            : Boolean(responseVal);
+              ? responseVal.toLowerCase() === "true"
+              : Boolean(responseVal);
 
         const success = typeof res?.success === "boolean" ? res.success : true;
         const error = res?.error;
@@ -425,21 +450,28 @@ export const oidcApi = createApi({
     }),
 
     // Register custom login user
-    registerCustomUser: builder.mutation<CustomLoginRegisterResponse, CustomLoginRegisterRequest>({
+    registerCustomUser: builder.mutation<
+      CustomLoginRegisterResponse,
+      CustomLoginRegisterRequest
+    >({
       query: (data) => ({
-        url: "/uflow/user/register/initiate",
+        url: "/authsec/uflow/user/register/initiate",
         method: "POST",
         body: data,
       }),
       transformResponse: (res: any): CustomLoginRegisterResponse => {
         const message: string | undefined = res?.message;
         const hasPositiveMessage =
-          typeof message === "string" && /(initiated|otp|verification|success)/i.test(message);
+          typeof message === "string" &&
+          /(initiated|otp|verification|success)/i.test(message);
         const hasEmail = typeof res?.email === "string" && res.email.length > 3;
         const success =
-          typeof res?.success === "boolean" ? res.success : hasPositiveMessage || hasEmail;
+          typeof res?.success === "boolean"
+            ? res.success
+            : hasPositiveMessage || hasEmail;
         const error =
-          res?.error || (!success ? message || "Failed to initiate registration" : undefined);
+          res?.error ||
+          (!success ? message || "Failed to initiate registration" : undefined);
         return {
           success,
           message,
@@ -453,19 +485,23 @@ export const oidcApi = createApi({
       CustomLoginRegisterCompleteRequest
     >({
       query: (data) => ({
-        url: "/uflow/user/register/complete",
+        url: "/authsec/uflow/user/register/complete",
         method: "POST",
         body: data,
       }),
       transformResponse: (res: any): CustomLoginRegisterCompleteResponse => {
         const message: string | undefined = res?.message;
         const hasPositiveMessage =
-          typeof message === "string" && /(success|completed|verified)/i.test(message);
+          typeof message === "string" &&
+          /(success|completed|verified)/i.test(message);
         const hasEmail = typeof res?.email === "string" && res.email.length > 3;
         const success =
-          typeof res?.success === "boolean" ? res.success : hasPositiveMessage || hasEmail;
+          typeof res?.success === "boolean"
+            ? res.success
+            : hasPositiveMessage || hasEmail;
         const error =
-          res?.error || (!success ? message || "Failed to complete registration" : undefined);
+          res?.error ||
+          (!success ? message || "Failed to complete registration" : undefined);
         return {
           success,
           message,
@@ -478,35 +514,43 @@ export const oidcApi = createApi({
     // SAML login check (similar to custom login but for SAML flows)
     samlLogin: builder.mutation<SamlLoginResponse, SamlLoginRequest>({
       query: (data) => ({
-        url: "/uflow/user/saml/login",
+        url: "/authsec/uflow/user/saml/login",
         method: "POST",
         body: data,
       }),
     }),
 
     // Send token to OIDC login endpoint (enhanced)
-    sendTokenToOIDCLogin: builder.mutation<OIDCLoginResponse, OIDCLoginRequest>({
-      query: (data) => ({
-        url: "/uflow/user/oidc/login",
-        method: "POST",
-        body: data,
-        credentials: "include",
-      }),
-    }),
+    sendTokenToOIDCLogin: builder.mutation<OIDCLoginResponse, OIDCLoginRequest>(
+      {
+        query: (data) => ({
+          url: "/authsec/uflow/user/oidc/login",
+          method: "POST",
+          body: data,
+          credentials: "include",
+        }),
+      },
+    ),
 
     // UFlow OAuth Provider Endpoints
     // Get list of available OAuth providers
-    getUFlowOIDCProviders: builder.mutation<UFlowOIDCProvidersResponse, { email: string }>({
+    getUFlowOIDCProviders: builder.mutation<
+      UFlowOIDCProvidersResponse,
+      { email: string }
+    >({
       query: (_data) => ({
-        url: "/uflow/oidc/providers",
+        url: "/authsec/uflow/oidc/providers",
         method: "GET",
       }),
     }),
 
     // Initiate UFlow OAuth authentication
-    initiateUFlowOIDC: builder.mutation<UFlowOIDCInitiateResponse, UFlowOIDCInitiateRequest>({
+    initiateUFlowOIDC: builder.mutation<
+      UFlowOIDCInitiateResponse,
+      UFlowOIDCInitiateRequest
+    >({
       query: (data) => ({
-        url: "/uflow/oidc/initiate",
+        url: "/authsec/uflow/oidc/initiate",
         method: "POST",
         body: data,
       }),
@@ -518,7 +562,7 @@ export const oidcApi = createApi({
       AdminOIDCExchangeRequest
     >({
       query: (data) => ({
-        url: "/uflow/oidc/exchange-code",
+        url: "/authsec/uflow/oidc/exchange-code",
         method: "POST",
         body: data,
       }),
@@ -527,7 +571,7 @@ export const oidcApi = createApi({
     // Check tenant domain availability
     checkTenantDomain: builder.query<TenantDomainCheckResponse, string>({
       query: (domain) => ({
-        url: `/uflow/oidc/check-tenant?domain=${encodeURIComponent(domain)}`,
+        url: `/authsec/uflow/oidc/check-tenant?domain=${encodeURIComponent(domain)}`,
         method: "GET",
       }),
     }),
@@ -538,7 +582,7 @@ export const oidcApi = createApi({
       CompleteUFlowOIDCRegistrationRequest
     >({
       query: (data) => ({
-        url: "/uflow/oidc/complete-registration",
+        url: "/authsec/uflow/oidc/complete-registration",
         method: "POST",
         body: data,
       }),
@@ -550,7 +594,6 @@ export const {
   useExchangeCodeForTokensMutation,
   useHandleCallbackMutation,
   useLazyGetLoginPageDataQuery,
-  useCompleteLocalLoginChallengeMutation,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
   useRegisterCustomUserMutation,

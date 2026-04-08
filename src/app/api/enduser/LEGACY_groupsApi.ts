@@ -73,7 +73,7 @@ export const endUserGroupsApi = baseApi.injectEndpoints({
     // Add a user to multiple groups
     addUserToGroups: builder.mutation<ApiResponse, AddUserToGroupsRequest>({
       query: (data) => ({
-        url: 'uflow/user/groups/users/add',
+        url: '/authsec/uflow/user/groups/users/add',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -84,7 +84,7 @@ export const endUserGroupsApi = baseApi.injectEndpoints({
     // Remove a user from multiple groups
     removeUserFromGroups: builder.mutation<ApiResponse, RemoveUserFromGroupsRequest>({
       query: (data) => ({
-        url: 'uflow/user/groups/users/remove',
+        url: '/authsec/uflow/user/groups/users/remove',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -94,7 +94,7 @@ export const endUserGroupsApi = baseApi.injectEndpoints({
     // GET /uflow/user/groups/users
     // Get authenticated user's groups (JWT-based, no parameters needed)
     getMyGroups: builder.query<UserGroup[], void>({
-      query: () => 'uflow/user/groups/users',
+      query: () => '/authsec/uflow/user/groups/users',
       transformResponse: (response: GetUserGroupsResponse) => response.groups,
       providesTags: ['EndUserRBACGroup', 'EndUser'],
     }),
@@ -102,7 +102,7 @@ export const endUserGroupsApi = baseApi.injectEndpoints({
     // GET /uflow/user/groups/:tenant_id/:group_id/users
     // Get all users in a specific group
     getGroupUsers: builder.query<GroupUser[], { tenant_id: string; group_id: string }>({
-      query: ({ tenant_id, group_id }) => `uflow/user/groups/${tenant_id}/${group_id}/users`,
+      query: ({ tenant_id, group_id }) => `/authsec/uflow/user/groups/${tenant_id}/${group_id}/users`,
       transformResponse: (response: GetGroupUsersResponse) => response.users,
       providesTags: ['EndUserRBACGroup', 'EndUser'],
     }),

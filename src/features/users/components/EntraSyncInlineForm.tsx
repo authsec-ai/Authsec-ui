@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { getErrorMessage } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import { EntraConfigForm, type EntraConfigFormData } from "./EntraConfigForm";
 import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
@@ -41,22 +42,34 @@ interface EntraSyncInlineFormProps {
   editConfig?: SyncConfig | null;
 }
 
+type EntraSyncFallback = SyncConfig & {
+  tenant_id?: string;
+  client_id?: string;
+  client_secret?: string;
+  entra_tenant_id?: string;
+  entra_client_id?: string;
+  skip_verify?: boolean;
+};
+
 export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyncInlineFormProps) {
   const isEditing = !!editConfig;
 
-  const createDefaultConfig = (): EntraConfigFormData => ({
+  const createDefaultConfig = useCallback(
+    (): EntraConfigFormData => ({
     config_name: "",
     description: "",
     tenant_id: "",
     client_id: "",
     client_secret: "",
     skip_verify: true,
-  });
+    }),
+    []
+  );
 
-  const hydrateConfig = (source: SyncConfig): EntraConfigFormData => {
+  const hydrateConfig = useCallback((source: SyncConfig): EntraConfigFormData => {
     const defaults = createDefaultConfig();
-    const entra = source.entra_config || ({} as any);
-    const fallback = source as any;
+    const entra = source.entra_config ?? {};
+    const fallback: EntraSyncFallback = source;
 
     return {
       ...defaults,
@@ -67,7 +80,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       client_secret: entra.client_secret || fallback.client_secret || defaults.client_secret,
       skip_verify: entra.skip_verify ?? fallback.skip_verify ?? defaults.skip_verify,
     };
-  };
+  }, [createDefaultConfig]);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [entraConfig, setEntraConfig] = useState<EntraConfigFormData>(() =>
@@ -80,6 +93,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
   const [createConfig, { isLoading: isCreating }] = useCreateSyncConfigMutation();
   const [updateConfig, { isLoading: isUpdating }] = useUpdateSyncConfigMutation();
   const [syncEntra] = useSyncEntraIDMutation();
+  const isSaving = isCreating || isUpdating;
 
   // Update config when editConfig prop changes
   React.useEffect(() => {
@@ -91,7 +105,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     setCurrentStepIndex(0);
     setErrors({});
     setConnectionTested(false);
-  }, [editConfig]);
+  }, [createDefaultConfig, editConfig, hydrateConfig]);
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
 
@@ -113,7 +127,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     }
   }, [currentStepIndex, onClose]);
 
-  const handleNext = useCallback(() => {
+  const handleNext = () => {
     if (currentStepIndex === 0) {
       if (!validateForm()) {
         toast.error("Please fill in all required fields");
@@ -124,7 +138,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     if (currentStepIndex < WIZARD_STEPS.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     }
-  }, [currentStepIndex]);
+  };
 
   const handleTestConnection = async () => {
     if (!validateForm()) {
@@ -149,10 +163,8 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
 
       setConnectionTested(true);
       toast.success("Connection verified successfully");
-    } catch (error: any) {
-      toast.error(
-        `Connection test failed: ${error.data?.message || error.message || "Unknown error"}`
-      );
+    } catch (error: unknown) {
+      toast.error(`Connection test failed: ${getErrorMessage(error, "Unknown error")}`);
     } finally {
       setTestingConnection(false);
     }
@@ -190,8 +202,8 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       }
 
       onSuccess();
-    } catch (error: any) {
-      toast.error(`Failed to ${isEditing ? 'update' : 'create'} configuration: ${error.data?.message || error.message}`);
+    } catch (error: unknown) {
+      toast.error(`Failed to ${isEditing ? 'update' : 'create'} configuration: ${getErrorMessage(error, "Unknown error")}`);
     }
   };
 
@@ -425,13 +437,13 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
             ) : (
               <Button
                 onClick={handleFinish}
-                disabled={!connectionTested || isCreating}
+                disabled={!connectionTested || isSaving}
                 size="default"
               >
-                {isCreating ? (
+                {isSaving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {isEditing ? "Updating..." : "Creating..."}
                   </>
                 ) : (
                   <>

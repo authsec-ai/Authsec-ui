@@ -31,8 +31,8 @@ import { useGetAllClientsQuery } from "@/app/api/clientApi";
 import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import {
   useCreateDelegationPolicyMutation,
-  useGetDelegationPermissionCatalogQuery,
   useGetDelegationPolicyQuery,
+  useLazyGetDelegationPermissionCatalogQuery,
   useListDelegationPoliciesQuery,
   useUpdateDelegationPolicyMutation,
 } from "@/app/api/trustDelegationApi";
@@ -196,10 +196,14 @@ export function TrustDelegationPolicyFormPage() {
     { tenant_id: tenantId || "", active_only: false },
     { skip: !tenantId },
   );
-  const {
-    data: permissionCatalog = [],
-    error: permissionCatalogError,
-  } = useGetDelegationPermissionCatalogQuery();
+  const [
+    loadPermissionCatalog,
+    {
+      data: permissionCatalog = [],
+      error: permissionCatalogError,
+      isFetching: isLoadingPermissionCatalog,
+    },
+  ] = useLazyGetDelegationPermissionCatalogQuery();
   const {
     data: policy,
     isLoading: isLoadingPolicy,
@@ -253,6 +257,11 @@ export function TrustDelegationPolicyFormPage() {
       enabled: policy.enabled,
     });
   }, [form, policy]);
+
+  useEffect(() => {
+    if (currentStepIndex !== 1) return;
+    void loadPermissionCatalog();
+  }, [currentStepIndex, loadPermissionCatalog]);
 
   const values = form.watch();
   const currentStep = WIZARD_STEPS[currentStepIndex];
@@ -385,6 +394,10 @@ export function TrustDelegationPolicyFormPage() {
       const result = isEditMode
         ? await updatePolicy({ id: policyId || "", body }).unwrap()
         : await createPolicy(body).unwrap();
+
+      if (!result?.id) {
+        throw new Error("Trust delegation was saved but no policy ID was returned.");
+      }
 
       toast.success(
         isEditMode ? "Trust delegation updated" : "Trust delegation created",
@@ -539,6 +552,7 @@ export function TrustDelegationPolicyFormPage() {
                     onChange={field.onChange}
                     options={userOptions}
                     placeholder="Select users"
+                    showSelectAll
                     maxBadges={4}
                   />
                 )}
@@ -586,7 +600,16 @@ export function TrustDelegationPolicyFormPage() {
                   value={field.value}
                   onChange={field.onChange}
                   options={permissionOptions}
-                  placeholder="Choose allowed actions"
+                  placeholder={
+                    isLoadingPermissionCatalog
+                      ? "Loading allowed actions..."
+                      : "Choose allowed actions"
+                  }
+                  disabled={
+                    isLoadingPermissionCatalog &&
+                    permissionOptions.length === 0
+                  }
+                  showSelectAll
                   maxBadges={6}
                 />
               )}

@@ -1,13 +1,14 @@
 {
-  "name": "authsec-ui",
+  "name": "v2",
+  "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "audit:api-routes": "bash ./scripts/audit-api-routes.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "audit:api-routes": "bash ./scripts/audit-api-routes.sh",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",

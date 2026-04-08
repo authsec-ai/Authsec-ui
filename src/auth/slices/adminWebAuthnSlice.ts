@@ -34,7 +34,6 @@ interface AdminWebAuthnState {
     issuer: string;
     qr_code: string;
     secret: string;
-    device_id?: string;
   } | null;
   
   // UI state

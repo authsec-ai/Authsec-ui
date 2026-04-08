@@ -1,3 +1,4 @@
+import config from "../../../config";
 import type { SDKHelpItem } from "../types";
 
 export const SCOPES_SDK_HELP: SDKHelpItem[] = [
@@ -20,7 +21,7 @@ import os
 
 # Initialize
 client = AuthSecClient(
-    base_url="https://dev.api.authsec.dev",
+    base_url="${config.VITE_API_URL}",
     token=os.getenv('AUTHSEC_TOKEN')
 )
 
@@ -62,7 +63,7 @@ import os
 # Initialize
 admin = AdminHelper(
     token=os.getenv('AUTHSEC_ADMIN_TOKEN'),
-    base_url="https://dev.api.authsec.dev"
+    base_url="${config.VITE_API_URL}"
 )
 
 # --- CREATE: Create a new scope ---

@@ -9,7 +9,10 @@ import {
   ProviderExpandedRow,
   OidcProviderTableUtils,
 } from "../utils/oidc-provider-table-utils";
-import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  AdaptiveTable,
+  type AdaptiveColumn,
+} from "@/components/ui/adaptive-table";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Badge } from "@/components/ui/badge";
 
@@ -48,9 +51,7 @@ export function AuthProvidersTable({
         enableSorting: true,
         resizable: true,
         approxWidth: 160,
-        cell: ({ row }) => (
-          <StatusCell provider={row.original} />
-        ),
+        cell: ({ row }) => <StatusCell provider={row.original} />,
       },
       {
         id: "providerName",
@@ -62,11 +63,18 @@ export function AuthProvidersTable({
         approxWidth: 180,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <Badge variant={row.original.provider_type === 'oidc' ? 'default' : 'secondary'} className="text-xs">
+            <Badge
+              variant={
+                row.original.provider_type === "oidc" ? "default" : "secondary"
+              }
+              className="text-xs"
+            >
               {row.original.provider_type.toUpperCase()}
             </Badge>
             <span className="text-sm text-foreground truncate">
-              {OidcProviderTableUtils.formatProviderName(row.original.provider_name)}
+              {OidcProviderTableUtils.formatProviderName(
+                row.original.provider_name,
+              )}
             </span>
           </div>
         ),
@@ -74,33 +82,58 @@ export function AuthProvidersTable({
       {
         id: "clientId",
         header: "Client ID",
-        accessorKey: "client_id",
+        accessorKey: "client_ids",
         priority: 3,
-        enableSorting: true,
+        enableSorting: false,
         resizable: true,
         approxWidth: 220,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-mono truncate" title={row.original.client_id}>
-              {row.original.client_id}
-            </span>
-            <CopyButton text={row.original.client_id} label="Client ID" size="sm" variant="ghost" />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const raw: string =
+            row.original.client_ids ?? row.original.client_id ?? "";
+          const ids = raw
+            ? raw
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : [];
+          if (ids.length === 0)
+            return <span className="text-sm text-foreground">—</span>;
+          const visible = ids.slice(0, 2);
+          const overflow = ids.length - visible.length;
+          return (
+            <div className="flex flex-col gap-0.5 min-w-0">
+              {visible.map((id: string) => (
+                <span
+                  key={id}
+                  className="font-mono text-xs text-foreground"
+                  title={id}
+                >
+                  {id.substring(0, 24)}…
+                </span>
+              ))}
+              {overflow > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  +{overflow} more
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "callbackUrl",
         header: "Configuration",
-        accessorFn: (provider) => provider.callback_url || provider.entity_id || '',
+        accessorFn: (provider) =>
+          provider.callback_url || provider.entity_id || "",
         priority: 4,
         enableSorting: true,
         resizable: true,
         approxWidth: 240,
         cell: ({ row }) => {
           const provider = row.original;
-          const isOidc = provider.provider_type === 'oidc';
+          const isOidc = provider.provider_type === "oidc";
           const value = isOidc ? provider.callback_url : provider.entity_id;
-          const label = isOidc ? 'Callback URL' : 'Entity ID';
+          const label = isOidc ? "Callback URL" : "Entity ID";
 
           return (
             <div className="flex items-center gap-2 min-w-0">
@@ -110,7 +143,14 @@ export function AuthProvidersTable({
                   {value}
                 </span>
               </div>
-              {value && <CopyButton text={value} label={label} size="sm" variant="ghost" />}
+              {value && (
+                <CopyButton
+                  text={value}
+                  label={label}
+                  size="sm"
+                  variant="ghost"
+                />
+              )}
             </div>
           );
         },
@@ -124,7 +164,9 @@ export function AuthProvidersTable({
         resizable: true,
         approxWidth: 160,
         cell: ({ row }) => (
-          <span className="text-sm text-foreground capitalize">{row.original.status}</span>
+          <span className="text-sm text-foreground capitalize">
+            {row.original.status}
+          </span>
         ),
       },
       {
@@ -137,14 +179,18 @@ export function AuthProvidersTable({
         className: "w-[80px] text-right",
         cellClassName: "text-right",
         approxWidth: 100,
-        cell: ({ row }) => <ActionsCell provider={row.original} actions={actions} />,
+        cell: ({ row }) => (
+          <ActionsCell provider={row.original} actions={actions} />
+        ),
       },
     ];
   }, [actions]);
 
   const renderExpandedRow = React.useCallback(
-    (row: Row<UnifiedAuthProvider>) => <ProviderExpandedRow provider={row.original} />,
-    []
+    (row: Row<UnifiedAuthProvider>) => (
+      <ProviderExpandedRow provider={row.original} />
+    ),
+    [],
   );
 
   return (

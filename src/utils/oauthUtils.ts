@@ -4,22 +4,6 @@
  * Provides utilities for generating OAuth2 authorization URLs with PKCE support
  */
 
-declare global {
-  interface Window {
-    ENV?: {
-      VITE_OAUTH_BASE_URL?: string;
-    };
-  }
-}
-
-function getConfiguredOAuthBaseUrl(): string | undefined {
-  const raw =
-    window.ENV?.VITE_OAUTH_BASE_URL || import.meta.env.VITE_OAUTH_BASE_URL;
-  const trimmed = raw?.trim();
-
-  return trimmed ? trimmed.replace(/\/+$/, "") : undefined;
-}
-
 /**
  * Generates a cryptographically secure random string for state/nonce
  * Uses base64url encoding for URL safety
@@ -61,16 +45,11 @@ export async function generateCodeChallenge(codeVerifier: string): Promise<strin
  * Development (authsec.dev) uses oauth.authsec.dev
  */
 export function getOAuthBaseUrl(): string {
-  const configured = getConfiguredOAuthBaseUrl();
-  if (configured) {
-    return configured;
-  }
-
   const hostname = window.location.hostname;
 
   // Local development
   if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return "http://localhost:4444";
+    return "https://oauth.authsec.dev";
   }
 
   // Parse the domain to construct the OAuth URL
@@ -132,8 +111,12 @@ export function getTenantDomainFromHostname(): string | undefined {
 export function getRedirectUri(tenantDomain?: string): string {
   const hostname = window.location.hostname;
 
-  // Local development should always return to the local UI callback.
+  // Local development - use a staging callback
   if (hostname === "localhost" || hostname === "127.0.0.1") {
+    // For local dev, use the tenant domain if provided
+    if (tenantDomain) {
+      return `https://${tenantDomain}.app.authsec.dev/oidc/auth/callback`;
+    }
     return `${window.location.origin}/oidc/auth/callback`;
   }
 

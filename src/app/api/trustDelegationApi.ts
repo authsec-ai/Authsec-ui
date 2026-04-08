@@ -35,6 +35,15 @@ export interface ListDelegationPoliciesParams {
   client_id?: string;
 }
 
+type DelegationPolicyEnvelope =
+  | DelegationPolicyRecord
+  | DelegationPolicyRecord[]
+  | {
+      data?: DelegationPolicyRecord | DelegationPolicyRecord[];
+      policy?: DelegationPolicyRecord;
+      policies?: DelegationPolicyRecord[];
+    };
+
 function asArray<T>(value: unknown, key?: string) {
   if (Array.isArray(value)) return value as T[];
   if (value && typeof value === "object" && key && Array.isArray((value as UnknownRecord)[key])) {
@@ -97,6 +106,39 @@ function extractList<T>(response: unknown, keys: string[]) {
   return [] as T[];
 }
 
+function extractSinglePolicyRecord(response: DelegationPolicyEnvelope): DelegationPolicyRecord {
+  if (Array.isArray(response)) {
+    if (response.length > 0) {
+      return response[0] as DelegationPolicyRecord;
+    }
+    throw new Error("Server returned an unreadable response.");
+  }
+
+  if (isRecord(response)) {
+    if (Array.isArray(response.policies) && response.policies.length > 0) {
+      return response.policies[0] as DelegationPolicyRecord;
+    }
+
+    if (Array.isArray(response.data) && response.data.length > 0) {
+      return response.data[0] as DelegationPolicyRecord;
+    }
+
+    if (isRecord(response.policy)) {
+      return response.policy as DelegationPolicyRecord;
+    }
+
+    if (isRecord(response.data)) {
+      return response.data as DelegationPolicyRecord;
+    }
+
+    if (typeof response.id === "string" && response.id) {
+      return response as DelegationPolicyRecord;
+    }
+  }
+
+  throw new Error("Server returned an unreadable response.");
+}
+
 function buildQueryString(params: Record<string, unknown>) {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -141,57 +183,35 @@ function addPermissionKey(accumulator: Set<string>, candidate: unknown) {
   accumulator.add(permission);
 }
 
-function collectPermissionKeys(input: unknown, accumulator: Set<string>) {
-  if (Array.isArray(input)) {
-    input.forEach((item) => collectPermissionKeys(item, accumulator));
-    return;
-  }
-
-  if (!input || typeof input !== "object") return;
-
-  const record = input as UnknownRecord;
-
-  addPermissionKey(accumulator, record.full_permission_string);
-  addPermissionKey(accumulator, record.permission_string);
-  addPermissionKey(accumulator, record.permission);
-  addPermissionKey(accumulator, record.key);
-  addPermissionKey(accumulator, record.name);
-
-  const nestedKeys = [
-    "permissions",
-    "allowed_permissions",
-    "granted_permissions",
-    "effective_permissions",
-    "roles_permissions",
-    "roles",
-    "data",
-    "items",
-  ] as const;
-
-  nestedKeys.forEach((key) => {
-    if (key in record) {
-      collectPermissionKeys(record[key], accumulator);
-    }
-  });
-}
-
 export function normalizeDelegationPermissionCatalog(response: unknown): string[] {
   const permissions = new Set<string>();
-  collectPermissionKeys(response, permissions);
+
+  if (Array.isArray(response)) {
+    response.forEach((item) => addPermissionKey(permissions, item));
+    return Array.from(permissions).sort((left, right) => left.localeCompare(right));
+  }
+
+  if (isRecord(response) && Array.isArray(response.permissions)) {
+    response.permissions.forEach((item) => addPermissionKey(permissions, item));
+    return Array.from(permissions).sort((left, right) => left.localeCompare(right));
+  }
+
   return Array.from(permissions).sort((left, right) => left.localeCompare(right));
 }
 
 export const trustDelegationApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getDelegationPermissionCatalog: builder.query<string[], void>({
-      query: () => "uflow/admin/me/roles-permissions",
+      query: () => ({
+        url: "https://prod.api.authsec.ai/uflow/admin/me/roles-permissions",
+      }),
       transformResponse: (response: unknown) =>
         normalizeDelegationPermissionCatalog(response),
     }),
 
     listDelegationPolicies: builder.query<DelegationPolicyUI[], ListDelegationPoliciesParams | void>({
       query: (params) => ({
-        url: `uflow/delegation-policies${buildQueryString(params || {})}`,
+        url: `/authsec/uflow/delegation-policies${buildQueryString(params || {})}`,
         responseHandler: "text",
       }),
       transformResponse: (response: unknown) => {
@@ -213,30 +233,27 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
     getDelegationPolicy: builder.query<DelegationPolicyUI, string>({
       query: (id) => ({
-        url: `uflow/delegation-policies/${id}`,
+        url: `/authsec/uflow/delegation-policies/${id}`,
         responseHandler: "text",
       }),
       transformResponse: (response: unknown) => {
-        const parsed = parseFirstValidDelegationJSON<
-          DelegationPolicyRecord | { data?: DelegationPolicyRecord; policy?: DelegationPolicyRecord }
-        >(response);
-        return normalizeDelegationPolicy(
-          (parsed as { policy?: DelegationPolicyRecord }).policy ||
-            (parsed as { data?: DelegationPolicyRecord }).data ||
-            (parsed as DelegationPolicyRecord),
-        );
+        const parsed = parseFirstValidDelegationJSON<DelegationPolicyEnvelope>(response);
+        return normalizeDelegationPolicy(extractSinglePolicyRecord(parsed));
       },
       providesTags: (_result, _error, id) => [{ type: "DelegationPolicy", id }],
     }),
 
     createDelegationPolicy: builder.mutation<DelegationPolicyUI, CreateDelegationPolicyRequest>({
       query: (body) => ({
-        url: "uflow/delegation-policies",
+        url: "/authsec/uflow/delegation-policies",
         method: "POST",
         body,
+        responseHandler: "text",
       }),
-      transformResponse: (response: DelegationPolicyRecord) =>
-        normalizeDelegationPolicy(response),
+      transformResponse: (response: unknown) => {
+        const parsed = parseFirstValidDelegationJSON<DelegationPolicyEnvelope>(response);
+        return normalizeDelegationPolicy(extractSinglePolicyRecord(parsed));
+      },
       invalidatesTags: [{ type: "DelegationPolicy", id: "LIST" }],
     }),
 
@@ -245,12 +262,15 @@ export const trustDelegationApi = baseApi.injectEndpoints({
       { id: string; body: CreateDelegationPolicyRequest }
     >({
       query: ({ id, body }) => ({
-        url: `uflow/delegation-policies/${id}`,
+        url: `/authsec/uflow/delegation-policies/${id}`,
         method: "PUT",
         body,
+        responseHandler: "text",
       }),
-      transformResponse: (response: DelegationPolicyRecord) =>
-        normalizeDelegationPolicy(response),
+      transformResponse: (response: unknown) => {
+        const parsed = parseFirstValidDelegationJSON<DelegationPolicyEnvelope>(response);
+        return normalizeDelegationPolicy(extractSinglePolicyRecord(parsed));
+      },
       invalidatesTags: (_result, _error, { id }) => [
         { type: "DelegationPolicy", id },
         { type: "DelegationPolicy", id: "LIST" },
@@ -259,7 +279,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
     deleteDelegationPolicy: builder.mutation<{ message?: string }, string>({
       query: (id) => ({
-        url: `uflow/delegation-policies/${id}`,
+        url: `/authsec/uflow/delegation-policies/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, id) => [
@@ -273,6 +293,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
 
 export const {
   useGetDelegationPermissionCatalogQuery,
+  useLazyGetDelegationPermissionCatalogQuery,
   useListDelegationPoliciesQuery,
   useGetDelegationPolicyQuery,
   useCreateDelegationPolicyMutation,

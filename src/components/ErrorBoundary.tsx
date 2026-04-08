@@ -38,8 +38,9 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo,
     });
 
-    // Log error to console
+    // Log error to monitoring service
     console.error("Error caught by boundary:", error, errorInfo);
+
   }
 
   handleGoHome = () => {
@@ -63,7 +64,8 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
               <CardTitle className="text-xl">Something went wrong</CardTitle>
               <CardDescription>
-                We encountered an unexpected error. Please try refreshing the page.
+                We encountered an unexpected error. This has been logged and our team will
+                investigate.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -130,6 +132,7 @@ export function withErrorBoundary<P extends object>(
  */
 export function useErrorHandler() {
   return (error: Error, errorInfo?: ErrorInfo) => {
+    console.error("Manual error report:", error, errorInfo);
     console.error("Manual error report:", error, errorInfo);
   };
 }

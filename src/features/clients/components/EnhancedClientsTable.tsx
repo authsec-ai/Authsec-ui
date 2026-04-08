@@ -76,8 +76,8 @@ export function EnhancedClientsTable({
   const actions: ClientsTableActions = React.useMemo(
     () => ({
       onDelete: onDeleteClient,
-      onToggleStatus: onToggleStatus,
-      onViewSDK: onViewSDK,
+      onToggleStatus,
+      onViewSDK,
       onDelegateTrust,
       onAddAuthMethod,
       onShowAuthMethods,

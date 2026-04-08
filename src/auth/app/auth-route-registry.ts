@@ -20,7 +20,7 @@ export const AUTH_ROUTE_REGISTRY: AuthRouteDescriptor[] = [
     title: "Admin WebAuthn",
   },
   {
-    path: "/authsec/uflow/oidc/callback",
+    path: "/uflow/oidc/callback",
     sceneId: "admin-oidc-callback",
     entrypoint: "admin",
     title: "Admin OIDC Callback",

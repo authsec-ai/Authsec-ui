@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { DashboardHero } from "./DashboardHero";
-
 interface ActivationSectionProps {
   step1Done: boolean;
   step2Done: boolean;

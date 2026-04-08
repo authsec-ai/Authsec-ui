@@ -301,7 +301,7 @@
   --color-border-strong: rgba(255, 255, 255, 0.12);
 
   /* Single accent color - blue */
-  --color-primary: var(--brand-blue-600);
+  --color-primary: var(--brand-blue-300);
   --color-primary-strong: var(--brand-blue-400);
   --color-primary-soft: #102a56;
 

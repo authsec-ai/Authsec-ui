@@ -228,6 +228,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [adminWebauthn.email, adminWebauthn.mfaRequired, notifyNewUser]);
 
+
   const getMFAMethods = useCallback(async (): Promise<boolean> => {
     if (!adminWebauthn.email) {
       toast.error("Missing authentication data");
@@ -530,8 +531,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         email: adminWebauthn.email,
         tenant_id: adminWebauthn.tenantId,
         secret: adminWebauthn.totpSecret,
-        code,
-        device_id: adminWebauthn.totpSetupData?.device_id,
+        code
       });
 
       if ('data' in result) {

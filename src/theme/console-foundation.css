@@ -44,7 +44,7 @@
     --console-text-2: #c1c8d4;
     --console-text-3: #94a0b3;
 
-    --console-accent: var(--brand-blue-600);
+    --console-accent: var(--brand-blue-300);
 
     --console-hover-fill: color-mix(in srgb, var(--console-accent) 6%, var(--console-surface-panel));
     --console-hover-outline: color-mix(in srgb, var(--console-accent) 32%, var(--console-border-strong));

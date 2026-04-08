@@ -265,11 +265,15 @@ export function PageInfoBanner({
                             onClick={primaryAction.onClick}
                             size="sm"
                             className={cn(
-                              "border border-[var(--editorial-border-soft)] bg-[var(--editorial-panel)] px-4 py-2 text-sm font-medium text-[var(--editorial-text-1)] shadow-none transition-colors hover:bg-[var(--editorial-panel-alt)] cursor-pointer",
+                              "group border border-[var(--editorial-border-soft)] bg-[var(--editorial-panel)] px-4 py-2 text-sm font-medium text-[var(--editorial-text-1)] shadow-none transition-colors hover:bg-[var(--editorial-panel-alt)] cursor-pointer inline-flex items-center gap-1.5",
                               primaryAction.className,
                             )}
                           >
                             {primaryAction.label}
+                            {primaryAction.icon && (() => {
+                              const Icon = primaryAction.icon;
+                              return <Icon className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5" />;
+                            })()}
                           </Button>
                         </div>
                       )}

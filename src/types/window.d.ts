@@ -5,7 +5,7 @@ declare global {
   interface Window {
     ENV?: {
       VITE_API_URL: string;
-      VITE_HUBSPOT_ACCESS_TOKEN: string;
+      VITE_OAUTH_BASE_URL: string;
     };
   }
 }

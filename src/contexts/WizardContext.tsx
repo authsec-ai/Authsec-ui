@@ -10,7 +10,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { WizardStorage } from "@/features/wizards/utils/wizardStorage";
 import { getWizardConfig } from "@/features/wizards/configs";
 import type { WizardConfig, WizardStep } from "@/features/wizards/types";
-
 interface WizardContextValue {
   // State
   activeWizard: string | null;

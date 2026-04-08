@@ -847,7 +847,7 @@ export const logsApi = baseApi.injectEndpoints({
       ConfigureLogServiceRequest
     >({
       query: (config) => ({
-        url: "/logs/admin/fluent-bit", // Single endpoint for all services
+        url: "/authsec/logs/admin/fluent-bit", // Single endpoint for all services
         method: "POST",
         body: config,
       }),
@@ -860,7 +860,7 @@ export const logsApi = baseApi.injectEndpoints({
       ConfigureFluentbitRequest
     >({
       query: (config) => ({
-        url: "/logs/admin/fluent-bit",
+        url: "/authsec/logs/admin/fluent-bit",
         method: "POST",
         body: config,
       }),

@@ -1,4 +1,4 @@
-import { baseApi } from './baseApi';
+import { baseApi } from "./baseApi";
 
 // SAML Provider Types
 export interface SamlProviderConfig {
@@ -153,32 +153,38 @@ export interface GetSamlTemplatesResponse {
 }
 
 // Helper function to parse XML metadata
-export const parseMetadataXml = (xml: string): { entity_id: string; acs_url: string } => {
+export const parseMetadataXml = (
+  xml: string,
+): { entity_id: string; acs_url: string } => {
   const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(xml, 'text/xml');
+  const xmlDoc = parser.parseFromString(xml, "text/xml");
 
   // Extract Entity ID
-  const entityDescriptor = xmlDoc.querySelector('EntityDescriptor, md\\:EntityDescriptor');
-  const entity_id = entityDescriptor?.getAttribute('entityID') || '';
+  const entityDescriptor = xmlDoc.querySelector(
+    "EntityDescriptor, md\\:EntityDescriptor",
+  );
+  const entity_id = entityDescriptor?.getAttribute("entityID") || "";
 
   // Extract ACS URL (first AssertionConsumerService with isDefault="true" or index="1")
-  const acsServices = xmlDoc.querySelectorAll('AssertionConsumerService, md\\:AssertionConsumerService');
-  let acs_url = '';
+  const acsServices = xmlDoc.querySelectorAll(
+    "AssertionConsumerService, md\\:AssertionConsumerService",
+  );
+  let acs_url = "";
 
   for (let i = 0; i < acsServices.length; i++) {
     const service = acsServices[i];
-    const isDefault = service.getAttribute('isDefault') === 'true';
-    const index = service.getAttribute('index') === '1';
+    const isDefault = service.getAttribute("isDefault") === "true";
+    const index = service.getAttribute("index") === "1";
 
     if (isDefault || index) {
-      acs_url = service.getAttribute('Location') || '';
+      acs_url = service.getAttribute("Location") || "";
       break;
     }
   }
 
   // Fallback to first ACS if none marked as default
   if (!acs_url && acsServices.length > 0) {
-    acs_url = acsServices[0].getAttribute('Location') || '';
+    acs_url = acsServices[0].getAttribute("Location") || "";
   }
 
   return { entity_id, acs_url };
@@ -189,8 +195,8 @@ export const samlApi = baseApi.injectEndpoints({
     // Get SAML Metadata
     getSamlMetadata: builder.query<SamlMetadataResponse, SamlMetadataRequest>({
       query: ({ tenant_id, client_id }) => ({
-        url: `hmgr/saml/metadata/${tenant_id}/${client_id}`,
-        method: 'GET',
+        url: `/authsec/hmgr/saml/metadata/${tenant_id}/${client_id}`,
+        method: "GET",
         responseHandler: async (response) => {
           const xml = await response.text();
           const parsed = parseMetadataXml(xml);
@@ -201,92 +207,112 @@ export const samlApi = baseApi.injectEndpoints({
           };
         },
       }),
-      providesTags: ['SamlMetadata'],
+      providesTags: ["SamlMetadata"],
     }),
 
     // Add SAML Provider
-    addSamlProvider: builder.mutation<AddSamlProviderResponse, AddSamlProviderRequest>({
+    addSamlProvider: builder.mutation<
+      AddSamlProviderResponse,
+      AddSamlProviderRequest
+    >({
       query: (data) => ({
-        url: 'oocmgr/saml/add-provider',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/add-provider",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: data,
       }),
-      invalidatesTags: ['AuthMethodOIDCProvider', 'SamlProvider'],
+      invalidatesTags: ["AuthMethodOIDCProvider", "SamlProvider"],
     }),
 
     // List SAML Providers
-    listSamlProviders: builder.query<ListSamlProvidersResponse, ListSamlProvidersRequest>({
+    listSamlProviders: builder.query<
+      ListSamlProvidersResponse,
+      ListSamlProvidersRequest
+    >({
       query: (data) => ({
-        url: 'oocmgr/saml/list-providers',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/list-providers",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: data,
       }),
       providesTags: (result, error, arg) =>
         arg.client_id
-          ? [{ type: 'SamlProvider', id: arg.client_id }, { type: 'SamlProvider', id: 'LIST' }]
-          : [{ type: 'SamlProvider', id: 'LIST' }],
+          ? [
+              { type: "SamlProvider", id: arg.client_id },
+              { type: "SamlProvider", id: "LIST" },
+            ]
+          : [{ type: "SamlProvider", id: "LIST" }],
     }),
 
     // Get Specific SAML Provider
-    getSamlProvider: builder.query<GetSamlProviderResponse, GetSamlProviderRequest>({
+    getSamlProvider: builder.query<
+      GetSamlProviderResponse,
+      GetSamlProviderRequest
+    >({
       query: (data) => ({
-        url: 'oocmgr/saml/get-provider',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/get-provider",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: data,
       }),
-      providesTags: (result, error, arg) => [{ type: 'SamlProvider', id: arg.provider_id }],
+      providesTags: (result, error, arg) => [
+        { type: "SamlProvider", id: arg.provider_id },
+      ],
     }),
 
     // Update SAML Provider
-    updateSamlProvider: builder.mutation<UpdateSamlProviderResponse, UpdateSamlProviderRequest>({
+    updateSamlProvider: builder.mutation<
+      UpdateSamlProviderResponse,
+      UpdateSamlProviderRequest
+    >({
       query: (data) => ({
-        url: 'oocmgr/saml/update-provider',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/update-provider",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: data,
       }),
       invalidatesTags: (result, error, arg) => [
-        { type: 'SamlProvider', id: arg.provider_id },
-        { type: 'SamlProvider', id: 'LIST' },
-        'AuthMethodOIDCProvider', // Also invalidate OIDC to refresh unified list
+        { type: "SamlProvider", id: arg.provider_id },
+        { type: "SamlProvider", id: "LIST" },
+        "AuthMethodOIDCProvider", // Also invalidate OIDC to refresh unified list
       ],
     }),
 
     // Delete SAML Provider
-    deleteSamlProvider: builder.mutation<DeleteSamlProviderResponse, DeleteSamlProviderRequest>({
+    deleteSamlProvider: builder.mutation<
+      DeleteSamlProviderResponse,
+      DeleteSamlProviderRequest
+    >({
       query: (data) => ({
-        url: 'oocmgr/saml/delete-provider',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/delete-provider",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: data,
       }),
-      invalidatesTags: ['SamlProvider', 'AuthMethodOIDCProvider'],
+      invalidatesTags: ["SamlProvider", "AuthMethodOIDCProvider"],
     }),
 
     // Get SAML Templates
     getSamlTemplates: builder.query<GetSamlTemplatesResponse, {}>({
       query: () => ({
-        url: 'oocmgr/saml/templates',
-        method: 'POST',
+        url: "/authsec/oocmgr/saml/templates",
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: {},
       }),
-      providesTags: ['SamlTemplate'],
+      providesTags: ["SamlTemplate"],
     }),
   }),
 });

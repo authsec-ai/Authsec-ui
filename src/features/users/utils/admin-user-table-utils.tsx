@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +16,6 @@ import {
   UserX,
   User,
   Shield,
-  Calendar,
 } from "lucide-react";
 import type { EnhancedUser } from "../../../types/entities";
 import type { ResponsiveColumnDef } from "../../../components/ui/responsive-data-table";
@@ -32,6 +30,7 @@ export interface AdminUserTableActions {
   onResetPassword: (userId: string, email: string) => void;
   onChangePassword: (userId: string, email: string) => void;
   onAssignRole?: (userId: string, userName: string, userEmail: string) => void;
+  onDelegateTrust?: (user: EnhancedUser) => void;
 }
 
 // Format provider name
@@ -249,6 +248,13 @@ export function AdminActionsCell({
             <DropdownMenuItem onClick={() => actions.onAssignRole!(user.id, user.name || "", user.email)}>
               <Shield className="mr-2 h-4 w-4" />
               Assign Role
+            </DropdownMenuItem>
+          )}
+
+          {actions.onDelegateTrust && (
+            <DropdownMenuItem onClick={() => actions.onDelegateTrust?.(user)}>
+              <Shield className="mr-2 h-4 w-4" />
+              Delegate trust
             </DropdownMenuItem>
           )}
 

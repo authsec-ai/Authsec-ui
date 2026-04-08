@@ -2,14 +2,9 @@ import React, { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle, Loader2, Check, ChevronRight, Server, Settings, PlayCircle, X } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { getErrorMessage } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
-import {
-  FormRoot,
-  FormBody,
-  FormSection,
-  FormSectionHeader,
-  FormDivider,
-} from "@/theme";
+import { FormDivider, FormSectionHeader } from "@/theme";
 import { ADConfigForm, type ADConfigFormData } from "./ADConfigForm";
 import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
 import { useSyncActiveDirectoryMutation } from "@/app/api/enduser/invitesApi";
@@ -38,10 +33,24 @@ interface ADSyncInlineFormProps {
   editConfig?: SyncConfig | null;
 }
 
+type ADSyncFallback = SyncConfig & {
+  server?: string;
+  ad_server?: string;
+  username?: string;
+  ad_username?: string;
+  password?: string;
+  base_dn?: string;
+  ad_base_dn?: string;
+  filter?: string;
+  use_ssl?: boolean;
+  skip_verify?: boolean;
+};
+
 export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlineFormProps) {
   const isEditing = !!editConfig;
 
-  const createDefaultConfig = (): ADConfigFormData => ({
+  const createDefaultConfig = useCallback(
+    (): ADConfigFormData => ({
     config_name: '',
     description: '',
     server: '',
@@ -51,12 +60,14 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     filter: '(&(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
     use_ssl: false,
     skip_verify: true,
-  });
+    }),
+    []
+  );
 
-  const hydrateConfig = (source: SyncConfig): ADConfigFormData => {
+  const hydrateConfig = useCallback((source: SyncConfig): ADConfigFormData => {
     const defaults = createDefaultConfig();
-    const ad = source.ad_config || ({} as any);
-    const fallback = source as any;
+    const ad = source.ad_config ?? {};
+    const fallback: ADSyncFallback = source;
 
     return {
       ...defaults,
@@ -70,7 +81,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
       use_ssl: ad.use_ssl ?? fallback.use_ssl ?? defaults.use_ssl,
       skip_verify: ad.skip_verify ?? fallback.skip_verify ?? defaults.skip_verify,
     };
-  };
+  }, [createDefaultConfig]);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [adConfig, setAdConfig] = useState<ADConfigFormData>(() =>
@@ -83,6 +94,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
   const [createConfig, { isLoading: isCreating }] = useCreateSyncConfigMutation();
   const [updateConfig, { isLoading: isUpdating }] = useUpdateSyncConfigMutation();
   const [syncAD] = useSyncActiveDirectoryMutation();
+  const isSaving = isCreating || isUpdating;
 
   // Update config when editConfig prop changes
   React.useEffect(() => {
@@ -94,7 +106,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     setCurrentStepIndex(0);
     setErrors({});
     setConnectionTested(false);
-  }, [editConfig]);
+  }, [createDefaultConfig, editConfig, hydrateConfig]);
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
 
@@ -117,7 +129,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     }
   }, [currentStepIndex, onClose]);
 
-  const handleNext = useCallback(() => {
+  const handleNext = () => {
     if (currentStepIndex === 0) {
       if (!validateForm()) {
         toast.error("Please fill in all required fields");
@@ -128,7 +140,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     if (currentStepIndex < WIZARD_STEPS.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     }
-  }, [currentStepIndex]);
+  };
 
   const handleTestConnection = async () => {
     if (!validateForm()) {
@@ -155,8 +167,8 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
 
       setConnectionTested(true);
       toast.success('Connection verified successfully');
-    } catch (error: any) {
-      toast.error(`Connection test failed: ${error.data?.message || error.message || 'Unknown error'}`);
+    } catch (error: unknown) {
+      toast.error(`Connection test failed: ${getErrorMessage(error, 'Unknown error')}`);
     } finally {
       setTestingConnection(false);
     }
@@ -197,8 +209,8 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
       }
 
       onSuccess();
-    } catch (error: any) {
-      toast.error(`Failed to ${isEditing ? 'update' : 'create'} configuration: ${error.data?.message || error.message}`);
+    } catch (error: unknown) {
+      toast.error(`Failed to ${isEditing ? 'update' : 'create'} configuration: ${getErrorMessage(error, 'Unknown error')}`);
     }
   };
 
@@ -435,13 +447,13 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
             ) : (
               <Button
                 onClick={handleFinish}
-                disabled={!connectionTested || isCreating}
+                disabled={!connectionTested || isSaving}
                 size="default"
               >
-                {isCreating ? (
+                {isSaving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
+                    {isEditing ? "Updating..." : "Creating..."}
                   </>
                 ) : (
                   <>

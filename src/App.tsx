@@ -56,8 +56,6 @@ import { AddExternalServicePage } from "./features/external-services/AddExternal
 
 // Custom Domains
 import { CustomDomainsPage } from "./features/custom-domains";
-
-// Trust Delegation
 import {
   TrustDelegationPoliciesPage,
   TrustDelegationPolicyDetailPage,
@@ -80,6 +78,7 @@ import { PermissionResourcesPage } from "./features/resources/PermissionResource
 import SDKHubPage from "./features/sdk/SDKHubPage";
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
+import OIDCCallbackPage from "./auth/enduser/OIDCCallbackPage";
 
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
@@ -88,6 +87,17 @@ import { LandingPage } from "./pages/LandingPage";
  * Context Route Sync Component
  * Syncs URL context (admin/enduser) with RbacAudienceContext
  */
+
+function LegacyTrustDelegationPolicyDetailRedirect() {
+  const { policyId = "" } = useParams();
+  return <Navigate to={`/trust-delegation/${policyId}`} replace />;
+}
+
+function LegacyTrustDelegationPolicyEditRedirect() {
+  const { policyId = "" } = useParams();
+  return <Navigate to={`/trust-delegation/${policyId}/edit`} replace />;
+}
+
 function ContextRouteSync() {
   const { audience, setAudience } = useRbacAudience();
   const navigate = useNavigate();
@@ -155,16 +165,6 @@ function ContextRouteSync() {
   return null;
 }
 
-function LegacyTrustDelegationPolicyDetailRedirect() {
-  const { policyId = "" } = useParams();
-  return <Navigate to={`/trust-delegation/${policyId}`} replace />;
-}
-
-function LegacyTrustDelegationPolicyEditRedirect() {
-  const { policyId = "" } = useParams();
-  return <Navigate to={`/trust-delegation/${policyId}/edit`} replace />;
-}
-
 function LegacyClientOnboardRedirect() {
   const { clientId } = useParams<{ clientId?: string }>();
   const target = clientId
@@ -214,13 +214,14 @@ function AppContent() {
                   />
                   <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
-                    path="/authsec/uflow/oidc/callback"
+                    path="/uflow/oidc/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
-                  {/* Backward compat: backend renderOAuthCallbackHTML redirects here */}
+                  {/* OAuth callback route - backend redirects here with user data after provider auth
+                      Uses OIDCCallbackPage to handle UFlow OAuth with direct query parameters */}
                   <Route
                     path="/auth/callback"
-                    element={<UnifiedAuthFlowPage />}
+                    element={<OIDCCallbackPage />}
                   />
                   <Route
                     path="/admin/create-workspace"
@@ -802,19 +803,6 @@ function AppContent() {
                     }
                   />
 
-                  {/* LEGACY/OBSOLETE: SDK Manager route has been deprecated */}
-                  {/* <Route
-                path="/sdk/manager"
-                element={
-                  <ProtectedRoute requireProject>
-                    <AppLayout>
-                      <SDKManagerPage />
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              /> */}
-
-                  {/* Trust Delegation */}
                   <Route
                     path="/trust-delegation"
                     element={
@@ -912,6 +900,18 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* LEGACY/OBSOLETE: SDK Manager route has been deprecated */}
+                  {/* <Route
+                path="/sdk/manager"
+                element={
+                  <ProtectedRoute requireProject>
+                    <AppLayout>
+                      <SDKManagerPage />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              /> */}
                 </Routes>
 
                 {/* Professional toast notification system */}

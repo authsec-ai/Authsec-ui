@@ -16,7 +16,6 @@
  */
 
 import { baseApi, withSessionData } from "../baseApi";
-import { unsupportedApiError } from "../unsupported";
 
 // ============================================================================
 // TYPES
@@ -55,35 +54,28 @@ export interface ApiResponse {
 
 export const adminResourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => {
-    const BASE_PATH = "uflow/admin/resources";
+    const BASE_PATH = "/authsec/uflow/admin/resources";
 
     return {
       // GET /admin/resources - List all global admin resources
       getAdminResources: builder.query<AdminResource[], void>({
-        queryFn: async () => ({
-          error: unsupportedApiError(
-            "Admin resources management is not exposed by the backend.",
-          ) as any,
-        }),
+        query: () => BASE_PATH,
+        transformResponse: (response: { resources: AdminResource[] }) => response.resources,
         providesTags: ["AdminRBACResource"],
       }),
 
       // GET /admin/resources/:resource_id - Get specific admin resource
       getAdminResource: builder.query<AdminResource, string>({
-        queryFn: async () => ({
-          error: unsupportedApiError(
-            "Admin resources management is not exposed by the backend.",
-          ) as any,
-        }),
+        query: (resource_id) => `${BASE_PATH}/${resource_id}`,
         providesTags: (result, error, id) => [{ type: "AdminRBACResource", id }],
       }),
 
       // POST /admin/resources - Create admin resource
       createAdminResource: builder.mutation<CreateResourcesResponse, CreateResourceInput>({
-        queryFn: async () => ({
-          error: unsupportedApiError(
-            "Admin resources management is not exposed by the backend.",
-          ) as any,
+        query: (data) => ({
+          url: BASE_PATH,
+          method: "POST",
+          body: withSessionData(data),
         }),
         invalidatesTags: ["AdminRBACResource"],
       }),
@@ -93,10 +85,10 @@ export const adminResourcesApi = baseApi.injectEndpoints({
         ApiResponse,
         { id: string; data: UpdateResourceRequest }
       >({
-        queryFn: async () => ({
-          error: unsupportedApiError(
-            "Admin resources management is not exposed by the backend.",
-          ) as any,
+        query: ({ id, data }) => ({
+          url: `${BASE_PATH}/${id}`,
+          method: "PUT",
+          body: withSessionData(data),
         }),
         invalidatesTags: (result, error, { id }) => [
           { type: "AdminRBACResource", id },
@@ -106,10 +98,9 @@ export const adminResourcesApi = baseApi.injectEndpoints({
 
       // DELETE /admin/resources/:resource_id - Delete admin resource
       deleteAdminResource: builder.mutation<ApiResponse, string>({
-        queryFn: async () => ({
-          error: unsupportedApiError(
-            "Admin resources management is not exposed by the backend.",
-          ) as any,
+        query: (resource_id) => ({
+          url: `${BASE_PATH}/${resource_id}`,
+          method: "DELETE",
         }),
         invalidatesTags: ["AdminRBACResource"],
       }),

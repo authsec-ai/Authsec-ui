@@ -1,3 +1,4 @@
+import config from "../../../config";
 import type { SDKHelpItem } from "../types";
 
 export const ROLE_BINDINGS_SDK_HELP: SDKHelpItem[] = [
@@ -22,7 +23,7 @@ import os
 # Initialize
 admin = AdminHelper(
     token=os.getenv('AUTHSEC_ADMIN_TOKEN'),
-    base_url="https://dev.api.authsec.dev"
+    base_url="${config.VITE_API_URL}"
 )
 
 # Create tenant-wide role binding

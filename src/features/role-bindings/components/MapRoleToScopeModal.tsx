@@ -323,7 +323,7 @@ export function MapRoleToScopeModal({
             conditions: parsedConditions,
             scope: {
               id: "*",
-              type: "*",
+              type: selectedScope,
             },
             audience,
           }).unwrap()
@@ -341,7 +341,7 @@ export function MapRoleToScopeModal({
             conditions: parsedConditions,
             scope: {
               id: "*",
-              type: "*",
+              type: selectedScope,
             },
             audience,
           }).unwrap()
@@ -358,7 +358,7 @@ export function MapRoleToScopeModal({
           conditions: parsedConditions,
           scope: {
             id: "*",
-            type: "*",
+            type: selectedScope,
           },
           audience,
         }).unwrap();
@@ -369,7 +369,7 @@ export function MapRoleToScopeModal({
       onSuccess?.();
     } catch (error: any) {
       console.error("Failed to create binding:", error);
-      setFormError(error?.data?.error || error?.data?.message || "Failed to map role to scope. Please try again.");
+      setFormError(error?.data?.message || "Failed to map role to scope. Please try again.");
     }
   };
 

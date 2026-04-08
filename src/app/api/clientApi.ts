@@ -65,15 +65,17 @@ export interface GetClientsResponse {
 
 // Enhanced client data with authentication methods for /clients/all endpoint
 export interface EnhancedClientData extends ClientData {
-  authentication_methods?: Array<{
-    id: string;
-    name: string;
-    type: string;
-    is_default?: boolean;
-    enabled: boolean;
-    provider?: string;
-    metadata?: Record<string, any>;
-  }> | string; // Can be string from API or array of objects
+  authentication_methods?:
+    | Array<{
+        id: string;
+        name: string;
+        type: string;
+        is_default?: boolean;
+        enabled: boolean;
+        provider?: string;
+        metadata?: Record<string, any>;
+      }>
+    | string; // Can be string from API or array of objects
   auth_methods_count?: number;
   client_name?: string; // Alternative name field
   description?: string;
@@ -272,62 +274,83 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
   // The API is returning: { client_name, user_count, authentication_methods: "password", enabled }
   // But we need full ClientData with client_id, tenant_id, etc.
   if (Array.isArray(response.clients)) {
-    const hasClientId = response.clients.length > 0 && 'client_id' in response.clients[0];
-    
+    const hasClientId =
+      response.clients.length > 0 && "client_id" in response.clients[0];
+
     if (!hasClientId && response.clients.length > 0) {
       // API is returning broken format - transform it
-      console.warn('⚠️ CRITICAL: API returning incomplete client data. Generating placeholder IDs.');
-      console.warn('⚠️ This will break authentication provider dropdown and other features!');
-      console.warn('⚠️ Backend team needs to fix /clients/getClients endpoint ASAP!');
-      
-      const transformedClients = response.clients.map((client: any, index: number) => {
-        // Generate a deterministic ID from client_name to maintain consistency
-        const deterministicId = `client-${client.client_name?.toLowerCase().replace(/\s+/g, '-') || index}`;
-        
-        return {
-          id: deterministicId,
-          client_id: deterministicId, // This is WRONG but API doesn't provide real UUID
-          tenant_id: '', // API doesn't provide this
-          project_id: '', // API doesn't provide this
-          owner_id: null,
-          org_id: null,
-          name: client.client_name || 'Unnamed Client',
-          status: client.enabled ? 'active' : 'inactive',
-          email: null,
-          tags: null,
-          active: client.enabled ?? true,
-          mfa_enabled: true, // Default to ON as per requirement
-          mfa_method: 'password',
-          mfa_verified: false,
-          roles: null,
-          oidc_enabled: false,
-          hydra_client_id: null,
-          client_type:
-            typeof client.client_type === "string" ? client.client_type : undefined,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          // Store original minimal data for reference
-          _original_api_data: client,
-        } as ClientData;
-      });
-      
+      console.warn(
+        "⚠️ CRITICAL: API returning incomplete client data. Generating placeholder IDs.",
+      );
+      console.warn(
+        "⚠️ This will break authentication provider dropdown and other features!",
+      );
+      console.warn(
+        "⚠️ Backend team needs to fix /clients/getClients endpoint ASAP!",
+      );
+
+      const transformedClients = response.clients.map(
+        (client: any, index: number) => {
+          // Generate a deterministic ID from client_name to maintain consistency
+          const deterministicId = `client-${client.client_name?.toLowerCase().replace(/\s+/g, "-") || index}`;
+
+          return {
+            id: deterministicId,
+            client_id: deterministicId, // This is WRONG but API doesn't provide real UUID
+            tenant_id: "", // API doesn't provide this
+            project_id: "", // API doesn't provide this
+            owner_id: null,
+            org_id: null,
+            name: client.client_name || "Unnamed Client",
+            status: client.enabled ? "active" : "inactive",
+            email: null,
+            tags: null,
+            active: client.enabled ?? true,
+            mfa_enabled: true, // Default to ON as per requirement
+            mfa_method: "password",
+            mfa_verified: false,
+            roles: null,
+            oidc_enabled: false,
+            hydra_client_id: null,
+            client_type:
+              typeof client.client_type === "string"
+                ? client.client_type
+                : undefined,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            // Store original minimal data for reference
+            _original_api_data: client,
+          } as ClientData;
+        },
+      );
+
       return {
         clients: transformedClients,
-        filters: isRecord(response.filters) ? (response.filters as ClientsFilters) : undefined,
-        pagination: isRecord(response.pagination) ? (response.pagination as ClientsPagination) : undefined,
+        filters: isRecord(response.filters)
+          ? (response.filters as ClientsFilters)
+          : undefined,
+        pagination: isRecord(response.pagination)
+          ? (response.pagination as ClientsPagination)
+          : undefined,
       };
     }
-    
+
     return {
       clients: response.clients as ClientData[],
-      filters: isRecord(response.filters) ? (response.filters as ClientsFilters) : undefined,
-      pagination: isRecord(response.pagination) ? (response.pagination as ClientsPagination) : undefined,
+      filters: isRecord(response.filters)
+        ? (response.filters as ClientsFilters)
+        : undefined,
+      pagination: isRecord(response.pagination)
+        ? (response.pagination as ClientsPagination)
+        : undefined,
     };
   }
 
   const data = response.data;
   if (isRecord(data)) {
-    const clients = Array.isArray(data.clients) ? (data.clients as ClientData[]) : [];
+    const clients = Array.isArray(data.clients)
+      ? (data.clients as ClientData[])
+      : [];
 
     let filters: ClientsFilters | undefined;
     if (isRecord(data.filters)) {
@@ -346,10 +369,11 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
         typeof data.limit === "number"
           ? data.limit
           : typeof data.page_size === "number"
-          ? data.page_size
-          : undefined;
+            ? data.page_size
+            : undefined;
       const pageValue = typeof data.page === "number" ? data.page : undefined;
-      const totalValue = typeof data.count === "number" ? data.count : undefined;
+      const totalValue =
+        typeof data.count === "number" ? data.count : undefined;
       const totalPagesValue =
         typeof data.total_pages === "number" ? data.total_pages : undefined;
 
@@ -377,7 +401,9 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
 
   return {
     clients: [],
-    filters: isRecord(response.filters) ? (response.filters as ClientsFilters) : undefined,
+    filters: isRecord(response.filters)
+      ? (response.filters as ClientsFilters)
+      : undefined,
     pagination: isRecord(response.pagination)
       ? (response.pagination as ClientsPagination)
       : undefined,
@@ -395,7 +421,7 @@ const parseFirstValidJSON = <T>(response: unknown): T => {
   }
 
   // If response is a string, try to parse multiple JSON objects
-  if (typeof response === 'string') {
+  if (typeof response === "string") {
     // Split on pattern }{ or }\n{ to detect multiple JSON objects
     const jsonPattern = /\}\s*\{/g;
     const matches = response.match(jsonPattern);
@@ -408,8 +434,8 @@ const parseFirstValidJSON = <T>(response: unknown): T => {
       try {
         return JSON.parse(firstJsonStr) as T;
       } catch (e) {
-        console.error('Failed to parse first JSON object:', e);
-        throw new Error('Invalid JSON response from server');
+        console.error("Failed to parse first JSON object:", e);
+        throw new Error("Invalid JSON response from server");
       }
     }
 
@@ -417,8 +443,8 @@ const parseFirstValidJSON = <T>(response: unknown): T => {
     try {
       return JSON.parse(response) as T;
     } catch (e) {
-      console.error('Failed to parse JSON response:', e);
-      throw new Error('Invalid JSON response from server');
+      console.error("Failed to parse JSON response:", e);
+      throw new Error("Invalid JSON response from server");
     }
   }
 
@@ -426,10 +452,8 @@ const parseFirstValidJSON = <T>(response: unknown): T => {
   return response as T;
 };
 
-const getStringOrFallback = (
-  value: unknown,
-  fallback = "",
-): string => (typeof value === "string" ? value : fallback);
+const getStringOrFallback = (value: unknown, fallback = ""): string =>
+  typeof value === "string" ? value : fallback;
 
 const normalizeRegisterClientResponse = (
   response: unknown,
@@ -466,9 +490,12 @@ const normalizeRegisterClientResponse = (
 export const clientApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Delete a client completely
-    deleteClientComplete: builder.mutation<DeleteClientResponse, DeleteClientRequest>({
+    deleteClientComplete: builder.mutation<
+      DeleteClientResponse,
+      DeleteClientRequest
+    >({
       query: ({ tenant_id, client_id }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/delete-complete`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/delete-complete`,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: withSessionData({
@@ -480,9 +507,12 @@ export const clientApi = baseApi.injectEndpoints({
     }),
 
     // Set client status (activate/deactivate)
-    setClientStatus: builder.mutation<SetClientStatusResponse, SetClientStatusRequest>({
+    setClientStatus: builder.mutation<
+      SetClientStatusResponse,
+      SetClientStatusRequest
+    >({
       query: (data) => ({
-        url: `/clientms/tenants/${data.tenant_id}/clients/set-status`,
+        url: `/authsec/clientms/tenants/${data.tenant_id}/clients/set-status`,
         method: "POST",
         body: data,
       }),
@@ -513,7 +543,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Get raw text to handle potential multiple JSON objects
@@ -522,16 +552,18 @@ export const clientApi = baseApi.injectEndpoints({
       transformResponse: (response: string) => {
         // Parse first valid JSON if backend sends duplicates
         const parsed = parseFirstValidJSON<unknown>(response);
-        
+
         // CRITICAL: Backend API is returning incomplete data structure
         // The /clients/getClients endpoint now returns:
         // { client_name, user_count, authentication_methods: string, enabled }
         // But we need: client_id, tenant_id, id, and full ClientData fields
         //
         // This is a TEMPORARY WORKAROUND - Backend needs to fix this endpoint!
-        console.warn('⚠️ WARNING: /clients/getClients endpoint returning incomplete data without client_id');
-        console.log('Raw API response simplified:', parsed);
-        
+        console.warn(
+          "⚠️ WARNING: /clients/getClients endpoint returning incomplete data without client_id",
+        );
+        console.log("Raw API response simplified:", parsed);
+
         return normalizeClientsResponse(parsed);
       },
       providesTags: (result) =>
@@ -579,7 +611,7 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
           method: "GET",
           params,
           responseHandler: "text", // Handle potential response format issues
@@ -589,91 +621,108 @@ export const clientApi = baseApi.injectEndpoints({
         try {
           // Parse the regular clients response and transform it to enhanced format
           const parsed = parseFirstValidJSON<any>(response);
-          console.log('Raw API response after parsing:', parsed);
-          
+          console.log("Raw API response after parsing:", parsed);
+
           // Handle the actual API response structure which has different fields
           if (parsed.clients && Array.isArray(parsed.clients)) {
-            const enhancedClients: EnhancedClientData[] = parsed.clients.map((client: any, index: number) => {
-              console.log('Processing client in API transform:', client);
-              
-              // Handle authentication_methods - can be string, array of strings, or array of objects
-              let authMethodsArray: Array<{id: string; name: string; type: string; is_default: boolean; enabled: boolean}> = [];
-              
-              if (typeof client.authentication_methods === 'string') {
-                // String format: "password" or "password,oidc"
-                authMethodsArray = client.authentication_methods.split(',').map((method: string, methodIndex: number) => ({
-                  id: `auth-${index}-${methodIndex}`,
-                  name: method.trim(),
-                  type: method.trim(),
-                  is_default: methodIndex === 0, // First method is default
-                  enabled: client.active ?? true,
-                }));
-              } else if (Array.isArray(client.authentication_methods)) {
-                // Check if array contains strings or objects
-                authMethodsArray = client.authentication_methods.map((method: any, methodIndex: number) => {
-                  if (typeof method === 'string') {
-                    // Array of strings: ["password", "oidc"]
-                    return {
+            const enhancedClients: EnhancedClientData[] = parsed.clients.map(
+              (client: any, index: number) => {
+                console.log("Processing client in API transform:", client);
+
+                // Handle authentication_methods - can be string, array of strings, or array of objects
+                let authMethodsArray: Array<{
+                  id: string;
+                  name: string;
+                  type: string;
+                  is_default: boolean;
+                  enabled: boolean;
+                }> = [];
+
+                if (typeof client.authentication_methods === "string") {
+                  // String format: "password" or "password,oidc"
+                  authMethodsArray = client.authentication_methods
+                    .split(",")
+                    .map((method: string, methodIndex: number) => ({
                       id: `auth-${index}-${methodIndex}`,
-                      name: method,
-                      type: method,
-                      is_default: methodIndex === 0,
+                      name: method.trim(),
+                      type: method.trim(),
+                      is_default: methodIndex === 0, // First method is default
                       enabled: client.active ?? true,
-                    };
-                  } else if (typeof method === 'object' && method !== null) {
-                    // Array of objects: [{id, name, type, ...}]
-                    return {
-                      id: method.id || `auth-${index}-${methodIndex}`,
-                      name: method.name || method.type || 'Unknown',
-                      type: method.type || method.name || 'Unknown',
-                      is_default: method.is_default ?? (methodIndex === 0),
-                      enabled: method.enabled ?? (client.active ?? true),
-                    };
-                  }
-                  return {
-                    id: `auth-${index}-${methodIndex}`,
-                    name: 'Unknown',
-                    type: 'Unknown',
-                    is_default: methodIndex === 0,
-                    enabled: client.active ?? true,
-                  };
-                });
-              }
+                    }));
+                } else if (Array.isArray(client.authentication_methods)) {
+                  // Check if array contains strings or objects
+                  authMethodsArray = client.authentication_methods.map(
+                    (method: any, methodIndex: number) => {
+                      if (typeof method === "string") {
+                        // Array of strings: ["password", "oidc"]
+                        return {
+                          id: `auth-${index}-${methodIndex}`,
+                          name: method,
+                          type: method,
+                          is_default: methodIndex === 0,
+                          enabled: client.active ?? true,
+                        };
+                      } else if (
+                        typeof method === "object" &&
+                        method !== null
+                      ) {
+                        // Array of objects: [{id, name, type, ...}]
+                        return {
+                          id: method.id || `auth-${index}-${methodIndex}`,
+                          name: method.name || method.type || "Unknown",
+                          type: method.type || method.name || "Unknown",
+                          is_default: method.is_default ?? methodIndex === 0,
+                          enabled: method.enabled ?? client.active ?? true,
+                        };
+                      }
+                      return {
+                        id: `auth-${index}-${methodIndex}`,
+                        name: "Unknown",
+                        type: "Unknown",
+                        is_default: methodIndex === 0,
+                        enabled: client.active ?? true,
+                      };
+                    },
+                  );
+                }
 
-              return {
-                // Map from actual API response fields
-                id: client.id || client.client_id || `client-${index}`,
-                client_id: client.client_id || `client-${index}`,
-                tenant_id: client.tenant_id || '',
-                project_id: client.project_id || '',
-                owner_id: client.owner_id || null,
-                org_id: client.org_id || null,
-                name: client.name || client.client_name || 'Unnamed Client',
-                status: client.status || (client.active ? 'Active' : 'Inactive'),
-                email: client.email || null,
-                tags: client.tags || null,
-                active: client.active ?? true,
-                mfa_enabled: client.mfa_enabled ?? true, // Default to true as per requirement
-                mfa_method: client.mfa_method || null,
-                mfa_verified: client.mfa_verified ?? false,
-                roles: client.roles || null,
-                oidc_enabled: client.oidc_enabled ?? false,
-                hydra_client_id: client.hydra_client_id || null,
-                client_type: client.client_type,
-                created_at: client.created_at || new Date().toISOString(),
-                updated_at: client.updated_at || new Date().toISOString(),
-                
-                // Enhanced fields
-                authentication_methods: authMethodsArray,
-                auth_methods_count: authMethodsArray.length,
-                client_name: client.name || client.client_name || 'Unnamed Client',
-                description: `Client: ${client.name || client.client_name || 'Unnamed Client'}`,
-                user_count: client.user_count || 0,
-                enabled: client.active ?? true,
-              } as EnhancedClientData;
-            });
+                return {
+                  // Map from actual API response fields
+                  id: client.id || client.client_id || `client-${index}`,
+                  client_id: client.client_id || `client-${index}`,
+                  tenant_id: client.tenant_id || "",
+                  project_id: client.project_id || "",
+                  owner_id: client.owner_id || null,
+                  org_id: client.org_id || null,
+                  name: client.name || client.client_name || "Unnamed Client",
+                  status:
+                    client.status || (client.active ? "Active" : "Inactive"),
+                  email: client.email || null,
+                  tags: client.tags || null,
+                  active: client.active ?? true,
+                  mfa_enabled: client.mfa_enabled ?? true, // Default to true as per requirement
+                  mfa_method: client.mfa_method || null,
+                  mfa_verified: client.mfa_verified ?? false,
+                  roles: client.roles || null,
+                  oidc_enabled: client.oidc_enabled ?? false,
+                  hydra_client_id: client.hydra_client_id || null,
+                  client_type: client.client_type,
+                  created_at: client.created_at || new Date().toISOString(),
+                  updated_at: client.updated_at || new Date().toISOString(),
 
-            console.log('Enhanced clients after :', enhancedClients);
+                  // Enhanced fields
+                  authentication_methods: authMethodsArray,
+                  auth_methods_count: authMethodsArray.length,
+                  client_name:
+                    client.name || client.client_name || "Unnamed Client",
+                  description: `Client: ${client.name || client.client_name || "Unnamed Client"}`,
+                  user_count: client.user_count || 0,
+                  enabled: client.active ?? true,
+                } as EnhancedClientData;
+              },
+            );
+
+            console.log("Enhanced clients after :", enhancedClients);
 
             return {
               clients: enhancedClients,
@@ -686,19 +735,26 @@ export const clientApi = baseApi.injectEndpoints({
 
           // Fallback for old response format
           const normalizedResponse = normalizeClientsResponse(parsed);
-          console.log('Normalized response (fallback):', normalizedResponse);
-          console.log('First client in normalized response:', normalizedResponse.clients?.[0]);
+          console.log("Normalized response (fallback):", normalizedResponse);
+          console.log(
+            "First client in normalized response:",
+            normalizedResponse.clients?.[0],
+          );
 
-          const enhancedClients: EnhancedClientData[] = normalizedResponse.clients.map(client => {
-            console.log('Processing client in API transform (fallback):', client);
-            return {
-              ...client,
-              authentication_methods: [],
-              auth_methods_count: 0,
-              client_name: client.name,
-              description: `Client: ${client.name}`,
-            };
-          });
+          const enhancedClients: EnhancedClientData[] =
+            normalizedResponse.clients.map((client) => {
+              console.log(
+                "Processing client in API transform (fallback):",
+                client,
+              );
+              return {
+                ...client,
+                authentication_methods: [],
+                auth_methods_count: 0,
+                client_name: client.name,
+                description: `Client: ${client.name}`,
+              };
+            });
 
           return {
             clients: enhancedClients,
@@ -730,11 +786,14 @@ export const clientApi = baseApi.injectEndpoints({
     }),
 
     // Register a new client (Tenant-scoped)
-    registerClient: builder.mutation<RegisterClientResponse, RegisterClientRequest>({
+    registerClient: builder.mutation<
+      RegisterClientResponse,
+      RegisterClientRequest
+    >({
       query: (data) => {
         const tenantId = data.tenant_id;
         return {
-          url: `/clientms/tenants/${tenantId}/clients/create`,
+          url: `/authsec/clientms/tenants/${tenantId}/clients/create`,
           method: "POST",
           body: {
             name: data.name,
@@ -766,7 +825,7 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterAiAgentClientRequest
     >({
       query: ({ tenant_id, selectors, ...body }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/create`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
         method: "POST",
         body: {
           ...body,
@@ -789,7 +848,7 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClawAuthClientRequest
     >({
       query: ({ tenant_id, ...body }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/create`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
         method: "POST",
         body: {
           name: body.name,
@@ -819,7 +878,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Add OIDC provider to a client
     addOIDCProvider: builder.mutation<AddProviderResponse, AddProviderRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/add-provider",
+        url: "/authsec/oocmgr/oidc/add-provider",
         method: "POST",
         body: data,
       }),
@@ -829,7 +888,7 @@ export const clientApi = baseApi.injectEndpoints({
     // Get OIDC configuration for a tenant
     getOIDCConfig: builder.mutation<GetConfigResponse, GetConfigRequest>({
       query: (data) => ({
-        url: "/oocmgr/oidc/get-config", 
+        url: "/authsec/oocmgr/oidc/get-config",
         method: "POST",
         body: data,
       }),
@@ -844,16 +903,23 @@ export const clientApi = baseApi.injectEndpoints({
       invalidatesTags: ["Client"],
     }),
 
-    updateClient: builder.mutation<Client, { id: string; updates: Partial<Client> }>({
+    updateClient: builder.mutation<
+      Client,
+      { id: string; updates: Partial<Client> }
+    >({
       queryFn: async () => {
-        return { error: { status: 501, data: "Not implemented in AuthSec API" } };
+        return {
+          error: { status: 501, data: "Not implemented in AuthSec API" },
+        };
       },
       invalidatesTags: ["Client"],
     }),
 
     deleteClient: builder.mutation<void, { id: string }>({
       queryFn: async () => {
-        return { error: { status: 501, data: "Not implemented in AuthSec API" } };
+        return {
+          error: { status: 501, data: "Not implemented in AuthSec API" },
+        };
       },
       invalidatesTags: ["Client"],
     }),
@@ -868,16 +934,26 @@ export const clientApi = baseApi.injectEndpoints({
       invalidatesTags: ["Client"],
     }),
 
-    detachAuthMethod: builder.mutation<void, { clientId: string; authMethodId: string }>({
+    detachAuthMethod: builder.mutation<
+      void,
+      { clientId: string; authMethodId: string }
+    >({
       queryFn: async () => {
-        return { error: { status: 501, data: "Not implemented in AuthSec API" } };
+        return {
+          error: { status: 501, data: "Not implemented in AuthSec API" },
+        };
       },
       invalidatesTags: ["Client"],
     }),
 
-    setDefaultAuthMethod: builder.mutation<void, { clientId: string; authMethodId: string }>({
+    setDefaultAuthMethod: builder.mutation<
+      void,
+      { clientId: string; authMethodId: string }
+    >({
       queryFn: async () => {
-        return { error: { status: 501, data: "Not implemented in AuthSec API" } };
+        return {
+          error: { status: 501, data: "Not implemented in AuthSec API" },
+        };
       },
       invalidatesTags: ["Client"],
     }),
@@ -889,9 +965,12 @@ export const clientApi = baseApi.injectEndpoints({
       providesTags: ["Client"],
     }),
 
-    getPlatformSelectors: builder.query<PlatformSelectorsResponse, GetPlatformSelectorsRequest>({
+    getPlatformSelectors: builder.query<
+      PlatformSelectorsResponse,
+      GetPlatformSelectorsRequest
+    >({
       query: ({ tenant_id, platform }) => ({
-        url: `/clientms/tenants/${tenant_id}/clients/platform-selectors`,
+        url: `/authsec/clientms/tenants/${tenant_id}/clients/platform-selectors`,
         method: "GET",
         params: { platform },
       }),
@@ -909,7 +988,7 @@ export const {
   useSetClientStatusMutation,
   useAddOIDCProviderMutation,
   useGetOIDCConfigMutation,
-  
+
   // Legacy hooks for backward compatibility
   useCreateClientMutation,
   useUpdateClientMutation,

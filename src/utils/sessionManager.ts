@@ -58,61 +58,9 @@ export class SessionManager {
   }
 
   /**
-   * Bootstrap a full session from a raw `jwt_token` localStorage key.
-   * Only runs when no structured session exists yet.
-   */
-  static bootstrapFromRawToken(): void {
-    if (localStorage.getItem(SESSION_KEY)) return;
-
-    const rawToken = localStorage.getItem("jwt_token");
-    if (!rawToken) return;
-
-    const jwtPayload = decodeJWT(rawToken);
-    if (!jwtPayload) return;
-
-    const now = Date.now();
-    if (now >= jwtPayload.exp * 1000) return; // token already expired
-
-    const user = {
-      id: jwtPayload.client_id,
-      email: jwtPayload.email || jwtPayload.email_id,
-    };
-    const project = {
-      id: jwtPayload.project_id,
-      name: "Default Project",
-      description: "Your default project",
-      slug: `project-${jwtPayload.project_id?.slice(0, 8)}`,
-      ownerId: jwtPayload.client_id,
-      role: "owner" as const,
-    };
-
-    SessionManager.saveSession({
-      token: rawToken,
-      jwtPayload,
-      user,
-      projects: [project],
-      currentProject: project,
-      tenant_id: jwtPayload.tenant_id,
-      tenant_domain: jwtPayload.tenant_domain,
-      project_id: jwtPayload.project_id,
-      client_id: jwtPayload.client_id,
-      user_id: jwtPayload.client_id,
-      roles: jwtPayload.roles || [],
-      resources: jwtPayload.resources || [],
-      scopes: jwtPayload.scopes || [],
-      groups: jwtPayload.groups || [],
-      expiresAt: jwtPayload.exp * 1000,
-    });
-
-    localStorage.removeItem("jwt_token"); // migrated into structured session
-    console.log("✅ Session bootstrapped from jwt_token");
-  }
-
-  /**
    * Check if current session is valid
    */
   static isSessionValid(): boolean {
-    SessionManager.bootstrapFromRawToken();
     const session = SessionManager.getSession();
     if (!session) return false;
 

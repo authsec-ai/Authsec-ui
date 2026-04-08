@@ -1,6 +1,5 @@
 import { baseApi, withSessionData } from './baseApi';
 import { SessionManager } from '@/utils/sessionManager';
-import { unsupportedApiError } from './unsupported';
 
 // AuthSec Scopes API Interfaces (Updated to match new spec)
 
@@ -140,7 +139,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Returns array of unique scope names
     getScopeNames: builder.query<string[], void>({
       query: () => ({
-        url: "uflow/admin/scopes",
+        url: "/authsec/uflow/admin/scopes",
         method: "GET",
         headers: {
           tenant_id: getTenantId(),
@@ -160,7 +159,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Returns scopes with their associated resources
     getScopeMappings: builder.query<ScopeMapping[], void>({
       query: () => ({
-        url: "uflow/admin/scopes/mappings",
+        url: "/authsec/uflow/admin/scopes/mappings",
         method: "GET",
         headers: {
           tenant_id: getTenantId(),
@@ -182,7 +181,7 @@ export const scopesApi = baseApi.injectEndpoints({
       query: (data) => {
         const tenantId = getTenantId();
         return {
-          url: "uflow/admin/scopes",
+          url: "/authsec/uflow/admin/scopes",
           method: "POST",
           headers: {
             tenant_id: tenantId,
@@ -200,7 +199,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Updates resources associated with a scope
     updateScopeResources: builder.mutation<GenericResponse, { scope_name: string; resources: string[] }>({
       query: ({ scope_name, resources }) => ({
-        url: `uflow/admin/scopes/${encodeURIComponent(scope_name)}`,
+        url: `/authsec/uflow/admin/scopes/${encodeURIComponent(scope_name)}`,
         method: "PUT",
         headers: {
           tenant_id: getTenantId(),
@@ -214,7 +213,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Deletes a scope and all its resource mappings
     deleteScopeByName: builder.mutation<GenericResponse, string>({
       query: (scope_name) => ({
-        url: `uflow/admin/scopes/${encodeURIComponent(scope_name)}`,
+        url: `/authsec/uflow/admin/scopes/${encodeURIComponent(scope_name)}`,
         method: "DELETE",
         headers: {
           tenant_id: getTenantId(),
@@ -229,7 +228,7 @@ export const scopesApi = baseApi.injectEndpoints({
     getScopes: builder.query<Scope[], { tenant_id: string; audience: 'admin' | 'endUser' }>({
       query: ({ tenant_id, audience }) => {
         const audiencePath = audience === 'admin' ? 'admin' : 'enduser';
-        return `uflow/${audiencePath}/scopes/${tenant_id}`;
+        return `/authsec/uflow/${audiencePath}/scopes/${tenant_id}`;
       },
       transformResponse: (response: any) => {
         if (!response || typeof response !== 'object') {
@@ -248,7 +247,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Legacy: Create scopes
     createScopes: builder.mutation<ScopesResponse, UserDefinedScopesRequest>({
       query: (data) => ({
-        url: "uflow/admin/scopes",
+        url: "/authsec/uflow/admin/scopes",
         method: "POST",
         body: withSessionData(data),
       }),
@@ -258,7 +257,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Legacy: Update a scope
     updateScope: builder.mutation<ScopesResponse, { id: string; data: UpdateScopeRequest }>({
       query: ({ id, data }) => ({
-        url: `uflow/admin/scopes/${id}`,
+        url: `/authsec/uflow/admin/scopes/${id}`,
         method: "PUT",
         body: withSessionData(data),
       }),
@@ -268,7 +267,7 @@ export const scopesApi = baseApi.injectEndpoints({
     // Legacy: Delete scopes
     deleteScopes: builder.mutation<ScopesResponse, DeleteScopesRequest>({
       query: (data) => ({
-        url: "uflow/admin/scopes",
+        url: "/authsec/uflow/admin/scopes",
         method: "DELETE",
         body: withSessionData(data),
       }),
@@ -277,21 +276,31 @@ export const scopesApi = baseApi.injectEndpoints({
 
     // Legacy: Map scopes to client
     mapScopes: builder.mutation<ScopesResponse, MapScopesRequest>({
-      queryFn: async () => ({
-        error: unsupportedApiError(
-          "Scope-to-client mapping is no longer exposed by the backend.",
-        ) as any,
+      query: (data) => ({
+        url: "/authsec/uflow/admin/scopes/map",
+        method: "POST",
+        body: withSessionData({
+          ...data,
+          project_id: data.project_id || data.client_id,
+        }),
       }),
       invalidatesTags: ["UnifiedRBACScope", "AuthSecClient"],
     }),
 
     // Legacy: Get scopes for a specific client
     getClientScopes: builder.query<Scope[], { tenantId: string; clientId: string }>({
-      queryFn: async () => ({
-        error: unsupportedApiError(
-          "Client-specific scope mapping is no longer exposed by the backend.",
-        ) as any,
-      }),
+      query: ({ tenantId, clientId }) => `/authsec/uflow/admin/scopes/${tenantId}/${clientId}`,
+      transformResponse: (response: any) => {
+        if (!response || typeof response !== 'object') {
+          console.warn('Invalid client scopes API response format:', response);
+          return [];
+        }
+        if (!Array.isArray(response.scopes)) {
+          console.warn('Client scopes response missing scopes array:', response);
+          return [];
+        }
+        return response.scopes;
+      },
       providesTags: ["UnifiedRBACScope"],
     }),
   }),

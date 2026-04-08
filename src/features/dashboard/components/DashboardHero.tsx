@@ -121,7 +121,9 @@ export function DashboardHero({
                 disabled={primaryActionDisabled}
               >
                 {primaryActionLabel}
-                {!primaryActionDisabled && <ArrowRight className="h-3.5 w-3.5" />}
+                {!primaryActionDisabled && (
+                  <ArrowRight className="h-3.5 w-3.5" />
+                )}
               </Button>
             )}
             {secondaryActionLabel && onSecondaryAction && (
@@ -186,7 +188,9 @@ export function DashboardHero({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium dash-text-1">{step.title}</p>
+                  <p className="text-sm font-medium dash-text-1">
+                    {step.title}
+                  </p>
                   <p className="text-xs dash-text-2 line-clamp-2">
                     {step.description}
                   </p>

@@ -1,5 +1,4 @@
 import { baseApi, withSessionData } from './baseApi';
-import { unsupportedApiError } from './unsupported';
 import type {
   Role,
   RoleWithStats,
@@ -66,19 +65,19 @@ export const rolesApi = baseApi.injectEndpoints({
         if (params.limit) searchParams.append('limit', params.limit.toString());
         if (params.offset) searchParams.append('offset', params.offset.toString());
         
-        return `roles?${searchParams.toString()}`;
+        return `/authsec/roles?${searchParams.toString()}`;
       },
       providesTags: ['Role'],
     }),
 
     getRole: builder.query<Role, string>({
-      query: (id) => `roles/${id}`,
+      query: (id) => `/authsec/roles/${id}`,
       providesTags: (result, error, id) => [{ type: 'Role', id }],
     }),
 
     createRole: builder.mutation<Role, Partial<Role>>({
       query: (data) => ({
-        url: 'roles',
+        url: '/authsec/roles',
         method: 'POST',
         body: data,
       }),
@@ -87,7 +86,7 @@ export const rolesApi = baseApi.injectEndpoints({
 
     updateRole: builder.mutation<Role, { id: string; data: Partial<Role> }>({
       query: ({ id, data }) => ({
-        url: `roles/${id}`,
+        url: `/authsec/roles/${id}`,
         method: 'PUT',
         body: data,
       }),
@@ -96,7 +95,7 @@ export const rolesApi = baseApi.injectEndpoints({
 
     deleteRole: builder.mutation<void, string>({
       query: (id) => ({
-        url: `roles/${id}`,
+        url: `/authsec/roles/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Role'],
@@ -104,13 +103,13 @@ export const rolesApi = baseApi.injectEndpoints({
 
     // Role permissions
     getRolePermissions: builder.query<RolePermission[], string>({
-      query: (roleId) => `roles/${roleId}/permissions`,
+      query: (roleId) => `/authsec/roles/${roleId}/permissions`,
       providesTags: ['RolePermission'],
     }),
 
     addRolePermission: builder.mutation<RolePermission, { roleId: string; permission: Partial<RolePermission> }>({
       query: ({ roleId, permission }) => ({
-        url: `roles/${roleId}/permissions`,
+        url: `/authsec/roles/${roleId}/permissions`,
         method: 'POST',
         body: permission,
       }),
@@ -119,7 +118,7 @@ export const rolesApi = baseApi.injectEndpoints({
 
     removeRolePermission: builder.mutation<void, { roleId: string; permissionId: string }>({
       query: ({ roleId, permissionId }) => ({
-        url: `roles/${roleId}/permissions/${permissionId}`,
+        url: `/authsec/roles/${roleId}/permissions/${permissionId}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Role', 'RolePermission'],
@@ -128,7 +127,7 @@ export const rolesApi = baseApi.injectEndpoints({
     // Bulk operations
     bulkUpdateRoles: builder.mutation<BulkUpdateResult, { ids: string[]; data: Partial<Role> }>({
       query: ({ ids, data }) => ({
-        url: 'roles/bulk-update',
+        url: '/authsec/roles/bulk-update',
         method: 'POST',
         body: { ids, data },
       }),
@@ -137,7 +136,7 @@ export const rolesApi = baseApi.injectEndpoints({
 
     bulkDeleteRoles: builder.mutation<BulkDeleteResult, string[]>({
       query: (ids) => ({
-        url: 'roles/bulk-delete',
+        url: '/authsec/roles/bulk-delete',
         method: 'POST',
         body: { ids },
       }),
@@ -146,7 +145,7 @@ export const rolesApi = baseApi.injectEndpoints({
 
     // Role Analytics
     getRoleAnalytics: builder.query<RoleAnalytics, string>({
-      query: (projectId) => `roles/analytics?project_id=${projectId}`,
+      query: (projectId) => `/authsec/roles/analytics?project_id=${projectId}`,
       providesTags: ['Role'],
     }),
   }),
@@ -172,13 +171,14 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Get user-defined roles for a tenant
     getAuthSecRoles: builder.query<AuthSecRole[], { tenant_id: string; audience?: 'admin' | 'endUser' }>({
       async queryFn(args, _api, _extraOptions, baseQuery) {
+        const tenantId = (args?.tenant_id ?? '').trim();
         const audience = args?.audience ?? 'admin';
 
         const basePath =
-          audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles';
+          audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles';
 
         const candidateEndpoints = [
-          args?.tenant_id ? `${basePath}/${encodeURIComponent(args.tenant_id)}` : null,
+          tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
           basePath,
         ].filter((endpoint): endpoint is string => Boolean(endpoint));
 
@@ -198,6 +198,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
             return { data: [] };
           }
 
+          // Common shapes: raw array, { roles: [...] }, { data: [...] }
           if (Array.isArray(response)) {
             return { data: response };
           }
@@ -213,11 +214,13 @@ export const authSecRolesApi = baseApi.injectEndpoints({
           return { data: [] };
         }
 
-        if (lastError) {
-          return { error: lastError as any };
-        }
-
-        return { data: [] };
+        return {
+          error:
+            (lastError as any) ?? {
+              status: 'CUSTOM_ERROR',
+              error: 'Unable to fetch roles',
+            },
+        };
       },
       providesTags: ['UnifiedRBACRole'],
     }),
@@ -225,7 +228,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Add user-defined roles
     addUserDefinedRoles: builder.mutation<CreateUserDefinedRoleResponse, UserDefinedRoleRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
+        url: audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -235,7 +238,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Update a role
     updateUserDefinedRole: builder.mutation<{ message?: string; success?: boolean }, { id: string; data: { tenant_id: string; name: string; description?: string } }>({
       query: ({ id, data }) => ({
-        url: `uflow/admin/roles/${id}`,
+        url: `/authsec/uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
@@ -245,7 +248,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     // Delete user-defined roles
     deleteUserDefinedRoles: builder.mutation<{ message?: string; success?: boolean }, DeleteRolesRequest>({
       query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? 'uflow/admin/roles' : 'uflow/user/rbac/roles',
+        url: audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -254,10 +257,13 @@ export const authSecRolesApi = baseApi.injectEndpoints({
 
     // Map roles to client
     mapRolesToClient: builder.mutation<{ message?: string; success?: boolean }, MapRolesRequest>({
-      queryFn: async () => ({
-        error: unsupportedApiError(
-          'Role-to-client mapping is no longer exposed by the backend.',
-        ) as any,
+      query: (data) => ({
+        url: '/authsec/uflow/admin/roles/map',
+        method: 'POST',
+        body: withSessionData({
+          ...data,
+          project_id: data.project_id || data.client_id,
+        }),
       }),
       invalidatesTags: ['AuthSecClient', 'UnifiedRBACRole'],
     }),

@@ -21,7 +21,6 @@ import {
   useLazyGetLoginPageDataQuery,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
-  useCompleteLocalLoginChallengeMutation,
   useRegisterCustomUserMutation,
   useCompleteCustomUserRegistrationMutation,
   useSamlLoginMutation,
@@ -50,7 +49,6 @@ import {
 import { useCustomLoginMutation } from "../../app/api/userAuthApi";
 import { useTheme } from "next-themes";
 import config from '../../config';
-import { getTenantDomainFromHostname } from "../../utils/oauthUtils";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthValuePanel } from "../components/AuthValuePanel";
 import { AuthActionPanel } from "../components/AuthActionPanel";
@@ -88,7 +86,6 @@ const OIDCLoginPageInner: React.FC = () => {
   const [getLoginPageData] = useLazyGetLoginPageDataQuery();
   const [initiateAuth] = useInitiateAuthMutation();
   const [checkCustomLoginStatus] = useCheckCustomLoginStatusMutation();
-  const [completeLocalLoginChallenge] = useCompleteLocalLoginChallengeMutation();
   const [registerCustomUser] = useRegisterCustomUserMutation();
   const [completeCustomUserRegistration] =
     useCompleteCustomUserRegistrationMutation();
@@ -112,9 +109,7 @@ const OIDCLoginPageInner: React.FC = () => {
     null
   );
   const tenantDomain =
-    typeof window !== "undefined"
-      ? getTenantDomainFromHostname()
-      : undefined;
+    typeof window !== "undefined" ? window.location.hostname : undefined;
 
   // WebAuthn state
   const [status, setStatus] = useState<
