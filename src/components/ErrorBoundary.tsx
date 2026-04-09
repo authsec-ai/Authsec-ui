@@ -1,5 +1,6 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { logReactError } from "../utils/telemetry";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { AlertTriangle, Home } from "lucide-react";
@@ -41,6 +42,8 @@ export class ErrorBoundary extends Component<Props, State> {
     // Log error to monitoring service
     console.error("Error caught by boundary:", error, errorInfo);
 
+    // Send to OTEL collector → Loki → Grafana
+    logReactError(error, errorInfo);
   }
 
   handleGoHome = () => {
@@ -133,6 +136,6 @@ export function withErrorBoundary<P extends object>(
 export function useErrorHandler() {
   return (error: Error, errorInfo?: ErrorInfo) => {
     console.error("Manual error report:", error, errorInfo);
-    console.error("Manual error report:", error, errorInfo);
+    logReactError(error, errorInfo ?? { componentStack: null, digest: undefined });
   };
 }

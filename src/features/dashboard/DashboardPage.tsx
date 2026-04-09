@@ -19,6 +19,8 @@ import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useWizardStatus } from "./hooks/useWizardStatus";
+import { useHubSpotPqlUpdate } from "./hooks/useHubSpotPqlUpdate";
+import { trackDashboardQuickActionClicked } from "../../utils/analytics";
 import { useDashboardOverview } from "./hooks/useDashboardOverview";
 
 import { ActivationSection } from "./components/ActivationSection";
@@ -96,6 +98,7 @@ export function DashboardPage() {
     userAuth.isCompleted ||
     (isUserAuthWizard && completedSteps.includes("integrate-sdk"));
 
+  useHubSpotPqlUpdate(userAuth.isCompleted, dashboardLoading);
 
   const setupSteps = React.useMemo(() => {
     const rbacConfigured = completedWizards.includes("rbac-wizard");

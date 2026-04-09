@@ -10,6 +10,7 @@ import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthValuePanel } from "../components/AuthValuePanel";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthStepHeader } from "../components/AuthStepHeader";
+import { trackXSignupCompleted } from "@/utils/xPixel";
 
 interface LocationState {
   email?: string;
@@ -57,6 +58,7 @@ export const OTPVerificationPage: React.FC = () => {
       const result = await verifyOtp({ email, otp });
       
       if ('data' in result) {
+        trackXSignupCompleted(email);
         toast.success("Account verified! Please login to continue.");
         const tenantDomain = location.state?.tenantDomain;
         if (tenantDomain) {

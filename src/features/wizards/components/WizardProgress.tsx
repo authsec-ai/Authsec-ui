@@ -14,6 +14,12 @@ import { CheckSPIREAgentStep } from "./M2MWizardSteps";
 import { ContextSelectionStep } from "./RbacWizardSteps";
 import { useWizard } from "@/contexts/WizardContext";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
+import {
+  trackWizardUserAuthMethodSelected,
+  trackWizardRbacContextSelected,
+  trackWizardScopesContextSelected,
+} from "@/utils/analytics";
+
 interface WizardProgressProps {
   totalSteps: number;
   currentStep: number;
@@ -265,6 +271,7 @@ export function WizardProgress({
                         step.actionPayload.handler === "choose-auth-method" && (
                           <ChooseAuthMethodStep
                             onComplete={(methodType) => {
+                              trackWizardUserAuthMethodSelected(methodType);
                               handleStepCompletion(step.id, { authMethodType: methodType });
                             }}
                           />
@@ -309,7 +316,9 @@ export function WizardProgress({
                             onComplete={(context) => {
                               const normalizedContext = context === "admin" ? "admin" : "end_user";
                               if (activeWizard === "scopes-wizard") {
+                                trackWizardScopesContextSelected(normalizedContext);
                               } else {
+                                trackWizardRbacContextSelected(normalizedContext);
                               }
                               handleStepCompletion(step.id, { selectedContext: context });
                             }}

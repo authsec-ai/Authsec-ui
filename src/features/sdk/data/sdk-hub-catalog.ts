@@ -236,7 +236,7 @@ async function fetchServiceToken(args) {
 
 const client = new CIBAClient({
   clientId: process.env.AUTHSEC_CLIENT_ID,
-  baseUrl: "` + config.VITE_API_URL + `",
+  baseUrl: \`\${config.VITE_API_URL}\`,
 });
 
 const init = await client.initiateAppApproval("user@example.com");

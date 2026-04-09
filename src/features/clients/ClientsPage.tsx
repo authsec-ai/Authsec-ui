@@ -52,6 +52,13 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
+import {
+  trackClientDeleted,
+  trackClientStatusToggled,
+  trackClientPreviewLogin,
+  trackVoiceAgentConfigured,
+} from "@/utils/analytics";
+
 /**
  * Utility function to map API EnhancedClientData to ClientWithAuthMethods
  */
@@ -168,7 +175,7 @@ function mapClientDataToTableFormat(
     successful_authentications: null, // No data available from API
     denied_authentications: null, // No data available from API
     view_policies_applicable: [],
-    endpoint: `/clientms/clients/${client.client_id}`,
+    endpoint: `/authsec/clientms/clients/${client.client_id}`,
     access_status: isActive ? ("active" as const) : ("disabled" as const),
     access_level: "internal" as const,
     total_requests: null, // No data available from API
@@ -467,6 +474,7 @@ export function ClientsPage() {
         client_id: deleteDialog.clientId,
       }).unwrap();
       toast.success("Client deleted successfully");
+      trackClientDeleted();
       // Optimistically update list
       setClients((prev) =>
         prev.filter((client) => client.client_id !== deleteDialog.clientId),
@@ -530,6 +538,7 @@ export function ClientsPage() {
       toast.success(
         `Client ${newStatus ? "activated" : "deactivated"} successfully`,
       );
+      trackClientStatusToggled(newStatus);
 
       // Explicitly refetch to ensure fresh data
       refetchClients();
@@ -621,6 +630,7 @@ export function ClientsPage() {
 
       window.open(authorizationUrl, "_blank");
       toast.success("Opening end-user login preview in a new tab");
+      trackClientPreviewLogin();
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);
       toast.error("Failed to generate login preview URL");
@@ -629,6 +639,7 @@ export function ClientsPage() {
 
   const handleConfigureVoiceAgent = useCallback(
     (clientId: string) => {
+      trackVoiceAgentConfigured();
       navigate(`/clients/voice-agent?clientId=${clientId}`);
     },
     [navigate],

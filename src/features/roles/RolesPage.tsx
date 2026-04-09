@@ -24,6 +24,7 @@ import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { Shield, Users, Layers } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { trackRoleDeleted } from "@/utils/analytics";
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
 
 const RECENT_ROLE_STORAGE_KEY = "authsec_recent_role_id";
@@ -280,6 +281,7 @@ export function RolesPage() {
         role_ids: [roleId],
       }).unwrap();
       toast.success("Role deleted successfully");
+      trackRoleDeleted(1);
       setSelectedRoles((prev) => prev.filter((id) => id !== roleId));
     } catch (error: any) {
       toast.error(error?.data?.message || "Failed to delete role");
@@ -304,6 +306,7 @@ export function RolesPage() {
             role_ids: selectedRoles,
           }).unwrap();
           toast.success(`Deleted ${selectedRoles.length} roles`);
+          trackRoleDeleted(selectedRoles.length);
           setSelectedRoles([]);
         } catch (error: any) {
           toast.error(error?.data?.message || "Failed to delete roles");

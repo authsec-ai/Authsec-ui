@@ -47,6 +47,17 @@ import {
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
 import config from "../../config";
+import {
+  trackSignInAttempted,
+  trackSignInSucceeded,
+  trackSignUpStarted,
+  trackWorkspaceCreated,
+  trackOtpVerified,
+  trackOAuthProviderClicked,
+  trackForgotPasswordRequested,
+  trackPasswordResetCompleted,
+} from "@/utils/analytics";
+import { trackXSignupCompleted } from "@/utils/xPixel";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";
@@ -924,6 +935,7 @@ export function AdminLoginHubPage() {
         response?.message ||
           "If the email is registered, we'll send you an OTP to reset your password.",
       );
+      trackForgotPasswordRequested();
       setForgotPasswordStep("otp");
     } catch (error: unknown) {
       const apiError = error as { data?: { message?: string } };
@@ -989,6 +1001,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Password reset successfully. Please sign in with your new password.",
       );
+      trackPasswordResetCompleted();
       resetForgotPasswordState();
       setEmailInput(normalizedEmail);
       setCheckedEmail(normalizedEmail);
@@ -1012,6 +1025,7 @@ export function AdminLoginHubPage() {
   const handleUFlowProviderAuth = async (provider: UFlowOIDCProvider) => {
     try {
       setIdleNotice(null);
+      trackOAuthProviderClicked(provider.provider_name);
       setAuthenticatingProvider(provider.provider_name);
 
       const response = await initiateUFlowOIDC({
@@ -1164,6 +1178,7 @@ export function AdminLoginHubPage() {
 
     try {
       setIsPasswordSubmitting(true);
+      trackSignInAttempted("password");
       const tenantOverride = tenantDomain?.trim() || undefined;
       const result = await signIn(
         currentEmail,
@@ -1172,6 +1187,7 @@ export function AdminLoginHubPage() {
       );
 
       if (result.success) {
+        trackSignInSucceeded();
         // Already on the correct tenant domain (redirected in precheck), navigate locally
         if (result.requiresWebAuthn) {
           navigate("/admin/webauthn", { replace: true });
@@ -1224,6 +1240,7 @@ export function AdminLoginHubPage() {
     }
 
     try {
+      trackSignUpStarted();
       const response = await bootstrapAccount({
         email: currentEmail,
         password: newPassword,
@@ -1245,6 +1262,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Account created! Check your inbox for the verification code.",
       );
+      trackWorkspaceCreated(tenantDomain.trim());
       safeSetFlowStage("otp");
       setTimeLeft(60);
       setCanResend(false);
@@ -1266,6 +1284,8 @@ export function AdminLoginHubPage() {
 
       if ("data" in result) {
         toast.success("Account verified successfully!");
+        trackOtpVerified();
+        trackXSignupCompleted(currentEmail);
 
         // Redirect to tenant domain for login
         if (tenantDomain && window.location.hostname !== tenantDomain) {

@@ -10,6 +10,14 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { WizardStorage } from "@/features/wizards/utils/wizardStorage";
 import { getWizardConfig } from "@/features/wizards/configs";
 import type { WizardConfig, WizardStep } from "@/features/wizards/types";
+import {
+  trackWizardStarted,
+  trackWizardStepCompleted,
+  trackWizardCompleted,
+  trackWizardDismissed,
+  trackWizardSkipped,
+} from "@/utils/analytics";
+
 interface WizardContextValue {
   // State
   activeWizard: string | null;
@@ -279,6 +287,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
     setIsAwaitingPlatformAction(false);
 
     WizardStorage.startWizard(wizardId);
+    trackWizardStarted(wizardId);
     console.log(`[Wizard] Started wizard: ${wizardId}`);
   };
 
@@ -295,6 +304,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
       });
     }
 
+    if (activeWizard) trackWizardStepCompleted(activeWizard, stepId);
     console.log(`[Wizard] Completed step: ${stepId}`);
     if (wizardConfig && wizardConfig.steps[currentStep]?.id === stepId) {
       const nextStepIndex = currentStep + 1;
@@ -347,6 +357,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
       wizardConfig.onSkip();
     }
 
+    trackWizardSkipped(activeWizard);
     setActiveWizard(null);
     setWizardConfig(null);
     setCurrentStep(0);
@@ -367,6 +378,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
       wizardConfig.onDismiss();
     }
 
+    trackWizardDismissed(activeWizard, currentStep);
     setActiveWizard(null);
     setWizardConfig(null);
     setIsCompleted(false);
@@ -387,6 +399,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
     console.log("[Wizard] Stored completion data:", completionDataWithWizardId);
 
     WizardStorage.completeWizard(activeWizard);
+    trackWizardCompleted(activeWizard);
 
     if (wizardConfig?.onComplete) {
       wizardConfig.onComplete();

@@ -13,7 +13,7 @@
  * - DELETE /uflow/user/scopes/:scope_id      - Delete end-user scope
  */
 
-import { baseApi, withSessionData } from "../baseApi";
+import { baseApi, withSessionData } from '../baseApi';
 
 // ============================================================================
 // TYPES
@@ -67,40 +67,38 @@ export interface ApiResponse {
 
 export const endUserScopesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+
     // GET /uflow/user/scopes
     getEndUserScopes: builder.query<EndUserScope[], void>({
       query: () => "/authsec/uflow/user/scopes",
       transformResponse: (response: EndUserScopesResponse | EndUserScope[]) => {
         const scopes = Array.isArray(response) ? response : response.scopes;
-        return scopes.map((scope) => ({
+        return scopes.map(scope => ({
           ...scope,
           id: scope.id || scope.scope_name,
           name: scope.scope_name,
           resources: scope.resources || [],
         }));
       },
-      providesTags: ["EndUserRBACScope"],
+      providesTags: ['EndUserRBACScope'],
     }),
 
-    // GET /uflow/user/scopes/mappings
+    // GET /authsec/uflow/user/scopes/mappings
     getEndUserScopeMappings: builder.query<EndUserScopeMapping[], void>({
       query: () => "/authsec/uflow/user/scopes/mappings",
       transformResponse: (response: EndUserScopeMapping[]) => {
         if (!Array.isArray(response)) {
-          console.warn(
-            "Invalid end-user scope mappings response format:",
-            response,
-          );
+          console.warn('Invalid end-user scope mappings response format:', response);
           return [];
         }
-        return response.map((mapping) => ({
+        return response.map(mapping => ({
           ...mapping,
           // Add computed name field for component compatibility
           name: mapping.scope_name,
           id: mapping.scope_name,
         })) as unknown as EndUserScopeMapping[];
       },
-      providesTags: ["EndUserRBACScope"],
+      providesTags: ['EndUserRBACScope'],
     }),
 
     // GET /uflow/user/scopes/:scope_id
@@ -112,47 +110,39 @@ export const endUserScopesApi = baseApi.injectEndpoints({
         name: response.scope_name,
         resources: response.resources || [],
       }),
-      providesTags: ["EndUserRBACScope"],
+      providesTags: ['EndUserRBACScope'],
     }),
 
     // POST /uflow/user/scopes
-    createEndUserScope: builder.mutation<
-      ApiResponse,
-      CreateEndUserScopeRequest
-    >({
+    createEndUserScope: builder.mutation<ApiResponse, CreateEndUserScopeRequest>({
       query: (body) => ({
         url: "/authsec/uflow/user/scopes",
-        method: "POST",
+        method: 'POST',
         body: withSessionData(body),
       }),
-      invalidatesTags: ["EndUserRBACScope"],
+      invalidatesTags: ['EndUserRBACScope'],
     }),
 
     // PUT /uflow/user/scopes/:scope_id
-    updateEndUserScope: builder.mutation<
-      ApiResponse,
-      UpdateEndUserScopeRequest
-    >({
+    updateEndUserScope: builder.mutation<ApiResponse, UpdateEndUserScopeRequest>({
       query: ({ scope_id, ...body }) => ({
         url: `/authsec/uflow/user/scopes/${scope_id}`,
-        method: "PUT",
+        method: 'PUT',
         body: withSessionData(body),
       }),
-      invalidatesTags: ["EndUserRBACScope"],
+      invalidatesTags: ['EndUserRBACScope'],
     }),
 
     // DELETE /uflow/user/scopes/:scope_id
-    deleteEndUserScope: builder.mutation<
-      ApiResponse,
-      DeleteEndUserScopeRequest
-    >({
+    deleteEndUserScope: builder.mutation<ApiResponse, DeleteEndUserScopeRequest>({
       query: ({ scope_id }) => ({
         url: `/authsec/uflow/user/scopes/${scope_id}`,
-        method: "DELETE",
+        method: 'DELETE',
         body: withSessionData({}),
       }),
-      invalidatesTags: ["EndUserRBACScope"],
+      invalidatesTags: ['EndUserRBACScope'],
     }),
+
   }),
 });
 

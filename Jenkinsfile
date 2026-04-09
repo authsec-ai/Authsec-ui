@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         // --- 1. GLOBAL CONFIGURATION (Edit this per service) ---
-        SERVICE_NAME = 'authsec'  
-        GITHUB_REPO = 'https://github.com/authsec-ai/Authsec-ui.git'
+        SERVICE_NAME = 'ui'  
+        GITHUB_REPO = 'https://github.com/authsec-ai/UI.git'
         
         // --- 2. STATIC VARIABLES (Do not edit until and unless you need to) ---
         DOCKER_REGISTRY = 'docker-repo.authsec.ai'
@@ -63,7 +63,7 @@ pipeline {
                         env.DOCKER_IMAGE = "${env.DOCKER_REGISTRY}/${SERVICE_NAME}:production"
                         env.DOCKER_IMAGE_PUBLIC = "${env.DOCKER_REGISTRY_PUBLIC}/${SERVICE_NAME}:1.0.0" 
                         
-                    } else if (env.BRANCH_NAME == 'authsec-dev' || env.BRANCH_NAME == 'development' || env.BRANCH_NAME == 'test') {
+                    } else if (env.BRANCH_NAME == 'authsec-dev' || env.BRANCH_NAME == 'development') {
                         echo "Configuring for DEVELOPMENT environment..."
                         env.IS_PROD_BRANCH = 'false'
                         env.AKS_ENV = 'authsec'
@@ -259,8 +259,6 @@ pipeline {
                     }
 
                     sh """
-                        rm -f /var/lib/jenkins/.kube/config
-                        mkdir -p /var/lib/jenkins/.kube
                         az login --service-principal \
                           -u "$AZURE_CLIENT_ID" \
                           -p "$AZURE_CLIENT_SECRET" \
@@ -271,8 +269,7 @@ pipeline {
                         az aks get-credentials \
                           --resource-group "$resourceGroup" \
                           --admin \
-                          --name "$aksCluster" \
-                          --overwrite-existing
+                          --name "$aksCluster"
                     """
                 }
             }

@@ -39,6 +39,7 @@ import { useGetClientsQuery } from "../../app/api/clientApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { useUnifiedProviders } from "./hooks/useUnifiedProviders";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
+import { trackAuthProviderDeleted } from "@/utils/analytics";
 
 /**
  * Authentication Methods page component - Identity-centric management console
@@ -271,6 +272,7 @@ export function AuthenticationPage() {
       }
 
       toast.success(`${provider.display_name} deleted successfully`);
+      trackAuthProviderDeleted(provider.provider_type === "saml" ? "saml" : "oidc");
       setDeleteDialog({
         open: false,
         providerId: "",

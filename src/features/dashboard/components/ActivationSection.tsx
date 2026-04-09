@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { DashboardHero } from "./DashboardHero";
+import {
+  trackDashboardStartSetup,
+  trackDashboardContinueSetup,
+  trackDashboardActivationCompleted,
+  trackDashboardActivationDismissed,
+} from "../../../utils/analytics";
+
 interface ActivationSectionProps {
   step1Done: boolean;
   step2Done: boolean;
@@ -26,6 +33,7 @@ export function ActivationSection({
   const isComplete = step1Done && step2Done;
 
   const handleDismiss = () => {
+    trackDashboardActivationDismissed(isComplete);
     setIsDismissed(true);
     try {
       localStorage.setItem(DISMISS_KEY, "true");
@@ -45,6 +53,7 @@ export function ActivationSection({
   useEffect(() => {
     if (isComplete && !isDismissed && !hasFiredConfetti.current) {
       hasFiredConfetti.current = true;
+      trackDashboardActivationCompleted();
       try {
         sessionStorage.setItem(CONFETTI_KEY, "true");
       } catch {}

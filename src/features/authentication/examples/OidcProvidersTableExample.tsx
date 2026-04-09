@@ -9,7 +9,7 @@ import {
 // Example data based on your API response
 const exampleOidcProviders: ApiOidcProvider[] = [
   {
-    callback_url: `${config.VITE_API_URL}/authsec/oidc/auth/callback/github`,
+    callback_url: `${config.VITE_API_URL}/oidc/auth/callback/github`,
     client_id: "e2eafae5-06a0-43e8-832a-713ea0d28cc2-github-oidc",
     created_at: "2025-09-10T08:36:45Z",
     display_name: "GitHub",
@@ -29,7 +29,7 @@ const exampleOidcProviders: ApiOidcProvider[] = [
     sort_order: 0,
   },
   {
-    callback_url: `${config.VITE_API_URL}/authsec/oidc/auth/callback/google`,
+    callback_url: `${config.VITE_API_URL}/oidc/auth/callback/google`,
     client_id: "e2eafae5-06a0-43e8-832a-713ea0d28cc2-google-oidc",
     created_at: "2025-09-08T17:33:43Z",
     display_name: "Google",
@@ -52,7 +52,8 @@ const exampleOidcProviders: ApiOidcProvider[] = [
 
 export function OidcProvidersTableExample() {
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
-  const [providers, setProviders] = useState<ApiOidcProvider[]>(exampleOidcProviders);
+  const [providers, setProviders] =
+    useState<ApiOidcProvider[]>(exampleOidcProviders);
 
   // Table action handlers
   const handleDuplicateProvider = (providerId: string) => {
@@ -84,7 +85,9 @@ export function OidcProvidersTableExample() {
     console.log("Toggle provider status:", providerId, isActive);
     // Implement status toggle logic
     setProviders(
-      providers.map((p) => (p.client_id === providerId ? { ...p, is_active: isActive } : p))
+      providers.map((p) =>
+        p.client_id === providerId ? { ...p, is_active: isActive } : p,
+      ),
     );
   };
 
@@ -97,8 +100,8 @@ export function OidcProvidersTableExample() {
         `Configuration for ${provider.display_name}:\n${JSON.stringify(
           provider.provider_config,
           null,
-          2
-        )}`
+          2,
+        )}`,
       );
     }
   };
@@ -120,13 +123,17 @@ export function OidcProvidersTableExample() {
 
   const handleSelectProvider = (providerId: string) => {
     setSelectedProviders((prev) =>
-      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId]
+      prev.includes(providerId)
+        ? prev.filter((id) => id !== providerId)
+        : [...prev, providerId],
     );
   };
 
   const handleSelectAll = () => {
     setSelectedProviders(
-      selectedProviders.length === providers.length ? [] : providers.map((p) => p.client_id)
+      selectedProviders.length === providers.length
+        ? []
+        : providers.map((p) => p.client_id),
     );
   };
 
@@ -165,12 +172,15 @@ export function OidcProvidersTableExample() {
       {selectedProviders.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h3 className="font-semibold text-blue-900 mb-2">
-            {selectedProviders.length} provider{selectedProviders.length !== 1 ? "s" : ""} selected
+            {selectedProviders.length} provider
+            {selectedProviders.length !== 1 ? "s" : ""} selected
           </h3>
           <div className="flex gap-2">
             <button
               onClick={() => {
-                selectedProviders.forEach((id) => handleToggleActive(id, false));
+                selectedProviders.forEach((id) =>
+                  handleToggleActive(id, false),
+                );
                 setSelectedProviders([]);
               }}
               className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
@@ -188,8 +198,16 @@ export function OidcProvidersTableExample() {
             </button>
             <button
               onClick={() => {
-                if (window.confirm(`Delete ${selectedProviders.length} selected providers?`)) {
-                  setProviders(providers.filter((p) => !selectedProviders.includes(p.client_id)));
+                if (
+                  window.confirm(
+                    `Delete ${selectedProviders.length} selected providers?`,
+                  )
+                ) {
+                  setProviders(
+                    providers.filter(
+                      (p) => !selectedProviders.includes(p.client_id),
+                    ),
+                  );
                   setSelectedProviders([]);
                 }
               }}
@@ -204,7 +222,9 @@ export function OidcProvidersTableExample() {
       {/* Provider statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white border rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-600">{providers.length}</div>
+          <div className="text-2xl font-bold text-blue-600">
+            {providers.length}
+          </div>
           <div className="text-sm text-foreground">Total Providers</div>
         </div>
         <div className="bg-white border rounded-lg p-4">
