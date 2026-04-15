@@ -29,7 +29,7 @@ import { UsersPage } from "./features/users/UsersPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
-import { ClientsPage } from "./features/clients/ClientsPage";
+import ResourceServersPage from "./features/resource-servers/ResourceServersPage";
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
 import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
 import { AgentsPage } from "./features/workloads/components/AgentsPage";
@@ -78,7 +78,6 @@ import { PermissionResourcesPage } from "./features/resources/PermissionResource
 import SDKHubPage from "./features/sdk/SDKHubPage";
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
-import OIDCCallbackPage from "./auth/enduser/OIDCCallbackPage";
 
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
@@ -168,8 +167,8 @@ function ContextRouteSync() {
 function LegacyClientOnboardRedirect() {
   const { clientId } = useParams<{ clientId?: string }>();
   const target = clientId
-    ? `/sdk/clients/${encodeURIComponent(clientId)}`
-    : "/sdk/clients";
+    ? `/resource-servers/${encodeURIComponent(clientId)}`
+    : "/resource-servers/new";
 
   return <Navigate to={target} replace />;
 }
@@ -177,8 +176,20 @@ function LegacyClientOnboardRedirect() {
 function LegacyExternalServiceSdkRedirect() {
   const { serviceId } = useParams<{ serviceId?: string }>();
   const target = serviceId
-    ? `/sdk/external-services/${encodeURIComponent(serviceId)}`
-    : "/sdk/external-services";
+    ? `/developer/sdk-guides/external-services/${encodeURIComponent(serviceId)}`
+    : "/developer/sdk-guides/external-services";
+
+  return <Navigate to={target} replace />;
+}
+
+function LegacySDKGuidesRedirect() {
+  const { surface, entityId } = useParams<{
+    surface?: string;
+    entityId?: string;
+  }>();
+  const target = ["/developer/sdk-guides", surface, entityId]
+    .filter(Boolean)
+    .join("/");
 
   return <Navigate to={target} replace />;
 }
@@ -214,14 +225,16 @@ function AppContent() {
                   />
                   <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
-                    path="/uflow/oidc/callback"
+                    path="/admin/auth/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
-                  {/* OAuth callback route - backend redirects here with user data after provider auth
-                      Uses OIDCCallbackPage to handle UFlow OAuth with direct query parameters */}
                   <Route
                     path="/auth/callback"
-                    element={<OIDCCallbackPage />}
+                    element={<Navigate to="/admin/auth/callback" replace />}
+                  />
+                  <Route
+                    path="/uflow/oidc/callback"
+                    element={<Navigate to="/admin/auth/callback" replace />}
                   />
                   <Route
                     path="/admin/create-workspace"
@@ -282,6 +295,8 @@ function AppContent() {
                     path="/oidc/auth/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
+                  <Route path="/oidc/mfa" element={<UnifiedAuthFlowPage />} />
+                  <Route path="/oidc/error" element={<UnifiedAuthFlowPage />} />
 
                   {/* Root route - handles authentication redirect */}
                   <Route path="/" element={<LandingPage />} />
@@ -299,18 +314,55 @@ function AppContent() {
                     }
                   />
 
-                  {/* Redirect /clients to /clients/mcp */}
                   <Route
                     path="/clients"
-                    element={<Navigate to="/clients/mcp" replace />}
+                    element={<Navigate to="/resource-servers" replace />}
                   />
 
                   <Route
                     path="/clients/mcp"
+                    element={<Navigate to="/resource-servers" replace />}
+                  />
+
+                  <Route
+                    path="/resource-servers"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <ClientsPage />
+                          <ResourceServersPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServersPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServersPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/:id/clients"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServersPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -318,7 +370,7 @@ function AppContent() {
 
                   <Route
                     path="/clients/onboard"
-                    element={<Navigate to="/sdk/clients" replace />}
+                    element={<Navigate to="/resource-servers/new" replace />}
                   />
 
                   <Route
@@ -430,7 +482,7 @@ function AppContent() {
                     element={<Navigate to="/admin/users" replace />}
                   />
 
-                  {/* Context-aware RBAC routes */}
+                  {/* Context-aware RBAC and OAuth routes */}
                   <Route path="/:context">
                     <Route
                       path="users"
@@ -474,105 +526,132 @@ function AppContent() {
                   }
                 /> */}
 
-                    <Route
-                      path="roles"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <RolesPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
-                    />
-
+                    <Route path="roles" element={<Navigate to="authz/roles" replace />} />
                     <Route
                       path="scopes"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <ScopesPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="authz/internal-scopes" replace />}
                     />
-
                     <Route
                       path="api-oauth-scopes"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <ApiOAuthScopesPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="oauth/resource-scopes" replace />}
                     />
-
                     <Route
                       path="permissions"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <PermissionsPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="authz/permissions" replace />}
                     />
-
                     <Route
                       path="resources"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <PermissionResourcesPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="authz/resources" replace />}
                     />
-
                     <Route
                       path="role-bindings"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <RoleBindingsPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="authz/role-bindings" replace />}
                     />
+
+                    <Route path="authz">
+                      <Route
+                        path="roles"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <RolesPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="internal-scopes"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <ScopesPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="permissions"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <PermissionsPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="resources"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <PermissionResourcesPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="role-bindings"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <RoleBindingsPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                    </Route>
+
+                    <Route path="oauth">
+                      <Route
+                        path="resource-scopes"
+                        element={
+                          <ProtectedRoute requireProject>
+                            <AppLayout>
+                              <ApiOAuthScopesPage />
+                            </AppLayout>
+                          </ProtectedRoute>
+                        }
+                      />
+                    </Route>
                   </Route>
 
                   {/* Legacy redirects - redirect old paths to admin context */}
                   <Route
                     path="/roles"
-                    element={<Navigate to="/admin/roles" replace />}
+                    element={<Navigate to="/admin/authz/roles" replace />}
                   />
                   <Route
                     path="/scopes"
-                    element={<Navigate to="/admin/scopes" replace />}
+                    element={<Navigate to="/admin/authz/internal-scopes" replace />}
                   />
                   <Route
                     path="/api-oauth-scopes"
-                    element={<Navigate to="/admin/api-oauth-scopes" replace />}
+                    element={<Navigate to="/admin/oauth/resource-scopes" replace />}
                   />
                   <Route
                     path="/permissions"
-                    element={<Navigate to="/admin/permissions" replace />}
+                    element={<Navigate to="/admin/authz/permissions" replace />}
                   />
                   <Route
                     path="/resources"
-                    element={<Navigate to="/admin/resources" replace />}
+                    element={<Navigate to="/admin/authz/resources" replace />}
                   />
                   <Route
                     path="/mappings"
-                    element={<Navigate to="/admin/role-bindings" replace />}
+                    element={<Navigate to="/admin/authz/role-bindings" replace />}
                   />
                   <Route
                     path="/role-bindings"
-                    element={<Navigate to="/admin/role-bindings" replace />}
+                    element={<Navigate to="/admin/authz/role-bindings" replace />}
                   />
 
                   <Route
                     path="/authentication"
+                    element={<Navigate to="/identity-providers" replace />}
+                  />
+
+                  <Route
+                    path="/identity-providers"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -584,6 +663,11 @@ function AppContent() {
 
                   <Route
                     path="/authentication/create"
+                    element={<Navigate to="/identity-providers/create" replace />}
+                  />
+
+                  <Route
+                    path="/identity-providers/create"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -595,6 +679,11 @@ function AppContent() {
 
                   <Route
                     path="/authentication/saml/create"
+                    element={<Navigate to="/identity-providers/saml/create" replace />}
+                  />
+
+                  <Route
+                    path="/identity-providers/saml/create"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -606,6 +695,17 @@ function AppContent() {
 
                   <Route
                     path="/authentication/saml/edit/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EditSamlMethodPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/identity-providers/saml/edit/:id"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -688,13 +788,7 @@ function AppContent() {
 
                   <Route
                     path="/roles"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <RolesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/admin/authz/roles" replace />}
                   />
 
                   <Route
@@ -711,24 +805,12 @@ function AppContent() {
                   {/* RBAC Routes */}
                   <Route
                     path="/scopes"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ScopesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/admin/authz/internal-scopes" replace />}
                   />
 
                   <Route
                     path="/permissions"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <PermissionsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/admin/authz/permissions" replace />}
                   />
 
                   <Route
@@ -760,17 +842,21 @@ function AppContent() {
 
                   <Route
                     path="/sdk"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <SDKHubPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacySDKGuidesRedirect />}
                   />
 
                   <Route
                     path="/sdk/:surface"
+                    element={<LegacySDKGuidesRedirect />}
+                  />
+
+                  <Route
+                    path="/sdk/:surface/:entityId"
+                    element={<LegacySDKGuidesRedirect />}
+                  />
+
+                  <Route
+                    path="/developer/sdk-guides"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -781,7 +867,18 @@ function AppContent() {
                   />
 
                   <Route
-                    path="/sdk/:surface/:entityId"
+                    path="/developer/sdk-guides/:surface"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <SDKHubPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/developer/sdk-guides/:surface/:entityId"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>

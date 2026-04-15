@@ -19,6 +19,7 @@ export interface CustomLoginResponse {
   first_login: boolean;
   otp_required: boolean;
   mfa_required: boolean;
+  token?: string;
 }
 
 // RTK Query API for direct user authentication

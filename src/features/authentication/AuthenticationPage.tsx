@@ -41,7 +41,7 @@ import { useUnifiedProviders } from "./hooks/useUnifiedProviders";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 
 /**
- * Authentication Methods page component - Identity-centric management console
+ * Identity Providers page component - provider-centric management console
  *
  * Focus areas:
  * - Inventory: Which auth methods exist and are enabled
@@ -360,15 +360,15 @@ export function AuthenticationPage() {
       <div className="space-y-4 p-6 max-w-10xl mx-auto">
         {/* Header */}
         <PageHeader
-          title="Authentication Methods"
-          description="Manage identity providers, monitor reliability, and track secret expiry"
+          title="Identity Providers"
+          description="Manage OIDC and SAML providers used by your workforce and end-user authentication flows."
           actions={
             <Button
               onClick={() => setIsAddMethodModalOpen(true)}
               data-tour-id="create-auth-method-button"
             >
               <IconPlus className="h-4 w-4 mr-2" />
-              Add Method
+              Add Provider
             </Button>
           }
         />

@@ -42,6 +42,17 @@ export interface OIDCLoginResponse {
   error?: string;
 }
 
+export interface CompleteLocalLoginRequest {
+  login_challenge: string;
+  access_token: string;
+}
+
+export interface CompleteLocalLoginResponse {
+  success: boolean;
+  redirect_to?: string;
+  error?: string;
+}
+
 // Updated: Removed provider from CallbackRequest since it comes from state
 export interface CallbackRequest {
   code: string;
@@ -349,6 +360,22 @@ export const oidcApi = createApi({
       },
       providesTags: ["OIDC"],
     }),
+    completeLocalLogin: builder.mutation<
+      CompleteLocalLoginResponse,
+      CompleteLocalLoginRequest
+    >({
+      query: (data) => ({
+        url: "/authsec/hmgr/login/complete-local",
+        method: "POST",
+        body: {
+          login_challenge: data.login_challenge,
+        },
+        headers: {
+          Authorization: `Bearer ${data.access_token}`,
+        },
+        credentials: "include",
+      }),
+    }),
     // Initiate OAuth authentication
     // UPDATED: Now uses universal callback URL in the auth initiation
     initiateAuth: builder.mutation<
@@ -594,6 +621,7 @@ export const {
   useExchangeCodeForTokensMutation,
   useHandleCallbackMutation,
   useLazyGetLoginPageDataQuery,
+  useCompleteLocalLoginMutation,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
   useRegisterCustomUserMutation,

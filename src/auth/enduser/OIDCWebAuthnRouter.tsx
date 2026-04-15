@@ -6,7 +6,7 @@
  * currentStep = "token_display".  This Router then decides what to do:
  *
  *   • claw_auth  → call onTokenDisplay(token) so the parent can redirect externally
- *   • everything → call onAuthComplete() so the normal OIDC redirect continues
+ *   • everything → call onAuthComplete() so the PAR-backed browser flow continues
  *
  * IMPORTANT: onAuthComplete must NOT call executeCallback again — the token
  * is already available via Redux (displayToken).  This eliminates the duplicate-
@@ -23,7 +23,6 @@ import { WebAuthnSetupComponent } from "../webauthn/WebAuthnSetupComponent";
 import { TOTPSetupComponent } from "../webauthn/TOTPSetupComponent";
 import { WebAuthnAuthComponent } from "../webauthn/WebAuthnAuthComponent";
 import { TOTPAuthComponent } from "../webauthn/TOTPAuthComponent";
-import { OIDCTokenDisplayComponent } from "./OIDCTokenDisplayComponent";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthValuePanel } from "../components/AuthValuePanel";
 import { AuthActionPanel } from "../components/AuthActionPanel";
@@ -63,10 +62,8 @@ export function OIDCWebAuthnRouter({
       console.log("[Router] claw_auth → onTokenDisplay, token length:", token.length);
       onTokenDisplay(token);
     } else {
-      // All other types (application, ai_agent, etc): just display the token on screen.
-      // The token is already in Redux (displayToken) and OIDCTokenDisplayComponent renders it.
-      // Do NOT call onAuthComplete — that would trigger a duplicate executeCallback + redirect.
-      console.log("[Router] client_type:", reduxClientType, "→ token displayed on screen (normal flow)");
+      console.log("[Router] client_type:", reduxClientType, "→ continuing browser login flow");
+      onAuthComplete();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [oidcWebauthn.currentStep, oidcWebauthn.displayToken]);
@@ -140,7 +137,7 @@ export function OIDCWebAuthnRouter({
           points={[
             "Method availability is tenant and user specific.",
             "Passkey and authenticator app setup are both supported.",
-            "Successful verification transitions to token output.",
+            "Successful verification continues the browser login flow.",
           ]}
         />
       }
@@ -240,11 +237,11 @@ export function OIDCWebAuthnRouter({
           </>
         )}
 
-        {oidcWebauthn.currentStep === "token_display" && (
-          <OIDCTokenDisplayComponent
-            token={oidcWebauthn.displayToken || ""}
-            email={oidcWebauthn.email || ""}
-          />
+        {oidcWebauthn.currentStep === "token_display" && reduxClientType !== "claw_auth" && (
+          <div className="auth-inline-note flex items-center gap-3 text-sm text-slate-700">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+            <span>Finalizing secure sign-in…</span>
+          </div>
         )}
 
         {oidcWebauthn.isLoading && (

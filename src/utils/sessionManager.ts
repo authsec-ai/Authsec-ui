@@ -111,7 +111,8 @@ export class SessionManager {
         const path = window.location?.pathname || "";
         const isOidcRoute =
           path.startsWith("/oidc/login") ||
-          path.startsWith("/oidc/auth/callback");
+          path.startsWith("/oidc/auth/callback") ||
+          path.startsWith("/oidc/mfa");
         const params = new URLSearchParams(window.location?.search || "");
         const hasOidcParams =
           params.has("login_challenge") ||

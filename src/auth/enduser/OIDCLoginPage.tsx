@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -19,6 +20,7 @@ import {
 import { Loader2, ArrowRight } from "lucide-react";
 import {
   useLazyGetLoginPageDataQuery,
+  useCompleteLocalLoginMutation,
   useInitiateAuthMutation,
   useCheckCustomLoginStatusMutation,
   useRegisterCustomUserMutation,
@@ -35,7 +37,6 @@ import {
   setRedirectUris,
 } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
-import { OIDCWebAuthnRouter } from "./OIDCWebAuthnRouter";
 // OIDC WebAuthn functionality using dedicated OIDC context
 import {
   EndUserAuthProvider,
@@ -56,7 +57,8 @@ import { AuthStepHeader } from "../components/AuthStepHeader";
 
 const OIDCLoginPageInner: React.FC = () => {
   const dispatch = useDispatch();
-  const { executeCallback } = useEndUserAuth();
+  const navigate = useNavigate();
+  useEndUserAuth();
 
   // Force light theme on OIDC login page
   const { setTheme } = useTheme();
@@ -84,6 +86,7 @@ const OIDCLoginPageInner: React.FC = () => {
   // RTK Query hooks
   const [customLogin] = useCustomLoginMutation();
   const [getLoginPageData] = useLazyGetLoginPageDataQuery();
+  const [completeLocalLogin] = useCompleteLocalLoginMutation();
   const [initiateAuth] = useInitiateAuthMutation();
   const [checkCustomLoginStatus] = useCheckCustomLoginStatusMutation();
   const [registerCustomUser] = useRegisterCustomUserMutation();
@@ -112,14 +115,7 @@ const OIDCLoginPageInner: React.FC = () => {
     typeof window !== "undefined" ? window.location.hostname : undefined;
 
   // WebAuthn state
-  const [status, setStatus] = useState<
-    "idle" | "processing" | "webauthn" | "success" | "error"
-  >("idle");
-  const [webauthnData, setWebauthnData] = useState<{
-    tenantId: string;
-    email: string;
-    firstLogin: boolean;
-  } | null>(null);
+  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
 
   // Forgot Password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -266,6 +262,27 @@ const OIDCLoginPageInner: React.FC = () => {
   const urlParams = new URLSearchParams(rawSearch);
   const loginChallenge = urlParams.get("login_challenge");
 
+  const transitionToMfa = useCallback(
+    (data: { tenantId: string; email: string; firstLogin: boolean }, nextClientId?: string) => {
+      const params = new URLSearchParams({
+        tenant_id: data.tenantId,
+        email: data.email,
+        first_login: String(data.firstLogin),
+      });
+
+      const effectiveClientId = nextClientId || clientId || undefined;
+      if (loginChallenge) params.set("login_challenge", loginChallenge);
+      if (effectiveClientId) params.set("client_id", effectiveClientId);
+      if (reduxClientType) params.set("client_type", reduxClientType);
+      if (reduxRedirectUris?.length) {
+        params.set("redirect_uris", reduxRedirectUris.join(","));
+      }
+
+      navigate(`/oidc/mfa?${params.toString()}`, { replace: true });
+    },
+    [clientId, loginChallenge, navigate, reduxClientType, reduxRedirectUris],
+  );
+
   // Extract SAML-related parameters from URL (if present after SAML callback)
   const samlClientId = urlParams.get("client_id");
   const samlUserEmail = urlParams.get("user_email");
@@ -333,9 +350,7 @@ const OIDCLoginPageInner: React.FC = () => {
               dispatch(setCurrentStep("authentication"));
             }
 
-            // Switch UI into WebAuthn router
-            setWebauthnData(webauthnFlowData);
-            setStatus("webauthn");
+            transitionToMfa(webauthnFlowData, samlClientId);
 
             // Store SAML parameters for use after WebAuthn completion
             sessionStorage.setItem("saml_post_webauthn", "true");
@@ -743,6 +758,29 @@ const OIDCLoginPageInner: React.FC = () => {
         userData.email !== undefined &&
         userData.first_login !== undefined
       ) {
+        if (
+          loginChallenge &&
+          userData.mfa_required !== true &&
+          userData.otp_required !== true &&
+          userData.token
+        ) {
+          const completionResponse = await completeLocalLogin({
+            login_challenge: loginChallenge,
+            access_token: userData.token,
+          }).unwrap();
+
+          if (completionResponse?.success && completionResponse?.redirect_to) {
+            window.location.replace(completionResponse.redirect_to);
+            return;
+          }
+
+          setError(
+            completionResponse?.error ||
+              "Login succeeded but failed to continue the OAuth flow."
+          );
+          return;
+        }
+
         // If first_login is false, we need to initiate the WebAuthn flow
         if (!userData.first_login) {
           // Set WebAuthn data
@@ -765,9 +803,7 @@ const OIDCLoginPageInner: React.FC = () => {
           // Since first_login is false, go directly to authentication step
           dispatch(setCurrentStep("authentication"));
 
-          // Now switch UI into WebAuthn router
-          setWebauthnData(webauthnFlowData);
-          setStatus("webauthn");
+          transitionToMfa(webauthnFlowData, clientId || undefined);
         } else {
           // First-time login - initiate MFA setup flow
           const webauthnFlowData = {
@@ -789,9 +825,7 @@ const OIDCLoginPageInner: React.FC = () => {
           // First-time login - go to MFA selection step
           dispatch(setCurrentStep("mfa_selection"));
 
-          // Now switch UI into WebAuthn router
-          setWebauthnData(webauthnFlowData);
-          setStatus("webauthn");
+          transitionToMfa(webauthnFlowData, clientId || undefined);
         }
       } else {
         // If we don't have the expected structure, log it and show error
@@ -832,50 +866,10 @@ const OIDCLoginPageInner: React.FC = () => {
     setUserExists(null);
     setEmailSubmitted(false);
     setStatus("idle");
-    setWebauthnData(null);
     setRegistrationStep("details");
     setRegistrationOtp("");
     setRegistrationMessage(null);
   };
-
-  // Handle WebAuthn completion (redirect to OIDCCallbackPage with token)
-  // handleWebAuthnComplete — fallback for the Router's onAuthComplete.
-  // The Context already called executeCallback and set displayToken in Redux.
-  // This should NOT call executeCallback again (that was the race condition).
-  // For non-claw_auth, the Router no longer calls this — token just displays on screen.
-  // This only remains as a safety net.
-  const handleWebAuthnComplete = async () => {
-    console.log("[LoginPage] handleWebAuthnComplete called — this is a no-op now, token is in Redux");
-  };
-
-  // Handle WebAuthn error
-  const handleWebAuthnError = (error: string) => {
-    setStatus("error");
-    setError(`WebAuthn authentication failed: ${error}`);
-  };
-
-  // Handle claw_auth token redirect.
-  // Only called by the Router when client_type === "claw_auth".
-  // Reads the second redirect_uri from Redux and redirects with ?auth_token=<jwt>.
-  const handleTokenDisplay = useCallback((token: string) => {
-    const uris = reduxRedirectUris;
-    if (!uris || uris.length < 2) {
-      console.error("[ClawAuth] No secondary redirect URI available, uris:", uris);
-      return;
-    }
-
-    const clawRedirectUri = uris[1];
-    let baseUrl: string;
-    try {
-      baseUrl = new URL(clawRedirectUri).origin;
-    } catch {
-      baseUrl = clawRedirectUri;
-    }
-
-    const redirectTarget = `${baseUrl}/?auth_token=${encodeURIComponent(token)}`;
-    console.log("[ClawAuth] Redirecting to:", redirectTarget);
-    window.location.href = redirectTarget;
-  }, [reduxRedirectUris]);
 
   const getProviderIcon = (providerName: string) => {
     const iconProps = { size: 20, className: "text-current" };
@@ -1031,17 +1025,6 @@ const OIDCLoginPageInner: React.FC = () => {
   }
 
   if (!loginPageData) return null;
-
-  // If WebAuthn flow is active, render the WebAuthn Router instead
-  if (status === "webauthn" && webauthnData) {
-    return (
-      <OIDCWebAuthnRouter
-        onAuthComplete={handleWebAuthnComplete}
-        onAuthError={handleWebAuthnError}
-        onTokenDisplay={handleTokenDisplay}
-      />
-    );
-  }
 
   const loginHeaderTitle = !showCustomLogin
     ? "Sign in"

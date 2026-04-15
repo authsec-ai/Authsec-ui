@@ -5,6 +5,8 @@ import AdminOIDCCallbackPage from "../adminauth/AdminOIDCCallbackPage";
 import { CreateWorkspacePage } from "../adminauth/CreateWorkspacePage";
 import { OIDCLoginPage } from "../enduser/OIDCLoginPage";
 import OIDCCallbackPage from "../enduser/OIDCCallbackPage";
+import OIDCMfaPage from "../enduser/OIDCMfaPage";
+import OIDCErrorPage from "../enduser/OIDCErrorPage";
 import type { AuthRouteDescriptor } from "./auth-flow-types";
 
 export interface AuthSceneRendererProps {
@@ -27,6 +29,10 @@ export function AuthSceneRenderer({ descriptor }: AuthSceneRendererProps) {
       return <OIDCLoginPage />;
     case "enduser-oidc-callback":
       return <OIDCCallbackPage />;
+    case "enduser-mfa":
+      return <OIDCMfaPage />;
+    case "enduser-error":
+      return <OIDCErrorPage />;
     default:
       return null;
   }

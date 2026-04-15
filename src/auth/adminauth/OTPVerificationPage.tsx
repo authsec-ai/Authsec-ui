@@ -25,9 +25,12 @@ export const OTPVerificationPage: React.FC = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
 
   const state = location.state as LocationState;
-  const email = state?.email;
+  const email = state?.email || searchParams.get("email") || undefined;
+  const tenantDomain =
+    state?.tenantDomain || searchParams.get("tenant_domain") || undefined;
   
   const [verifyOtp] = useRegisterVerifyMutation();
   const [resendOtpMutation] = useResendOtpMutation();
@@ -58,11 +61,13 @@ export const OTPVerificationPage: React.FC = () => {
       
       if ('data' in result) {
         toast.success("Account verified! Please login to continue.");
-        const tenantDomain = location.state?.tenantDomain;
         if (tenantDomain) {
           window.location.href = `https://${tenantDomain}.app.authsec.dev/admin/login`;
         } else {
-          navigate("/admin/login", { state: { email, verificationComplete: true } });
+          navigate(
+            `/admin/login?email=${encodeURIComponent(email)}&verification_complete=true`,
+            { replace: true },
+          );
         }
       } else if ('error' in result) {
         const error = result.error as any;

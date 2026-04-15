@@ -163,7 +163,7 @@ function SDKHubHeader({
     <section className="sdk-hub-header flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-semibold tracking-tight dash-text-1">SDK Hub</h1>
+          <h1 className="text-xl font-semibold tracking-tight dash-text-1">SDK Guides</h1>
           <p className="text-sm dash-text-2">Language + module examples</p>
         </div>
       </div>

@@ -148,6 +148,8 @@ export const baseApi = createApi({
     "DelegationPolicy",
     "Delegation",
     "DelegationLog",
+    "ResourceServer",
+    "ResourceServerClient",
   ],
   endpoints: () => ({}),
 });

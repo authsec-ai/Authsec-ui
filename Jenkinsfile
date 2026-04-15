@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // --- 1. GLOBAL CONFIGURATION (Edit this per service) ---
-        SERVICE_NAME = 'authsec'  
+        SERVICE_NAME = 'ui'  
         GITHUB_REPO = 'https://github.com/authsec-ai/Authsec-ui.git'
         
         // --- 2. STATIC VARIABLES (Do not edit until and unless you need to) ---
@@ -70,7 +70,7 @@ pipeline {
                         
                         // Assuming you have a dev namespace. Change 'authsec-dev' if different.
                         env.K8S_NAMESPACE = 'authsec-dev'
-                        env.APP_LABEL = "dev2-${SERVICE_NAME}"
+                        env.APP_LABEL = "dev-${SERVICE_NAME}"
                         
                         // Dev images get unique tags so they don't overwrite prod
                         env.DOCKER_IMAGE = "${env.DOCKER_REGISTRY}/${SERVICE_NAME}:development"
@@ -278,12 +278,13 @@ pipeline {
             }
         }
 
-        stage('Delete Existing Pods') {
+        stage('Rollout Restart Deployment') {
             steps {
-                // Dynamically deletes pods in the correct namespace (Dev or Prod)
-                // Uses dynamic label to target specific service pods
-                echo "Restarting pods with label 'app=${APP_LABEL}' in ${K8S_NAMESPACE}..."
-                sh "kubectl delete pods -l app=${APP_LABEL} -n ${K8S_NAMESPACE} --ignore-not-found=true"
+                echo "Restarting deployment ${APP_LABEL} in ${K8S_NAMESPACE}..."
+                sh """
+                    kubectl rollout restart deployment/${APP_LABEL} -n ${K8S_NAMESPACE}
+                    kubectl rollout status deployment/${APP_LABEL} -n ${K8S_NAMESPACE} --timeout=300s
+                """
             }
         }
     }   

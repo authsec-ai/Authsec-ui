@@ -134,8 +134,8 @@ runMcpServerWithOAuth({
         label: "Runtime environment",
         language: "bash",
         code: `AUTHSEC_CLIENT_ID="YOUR_CLIENT_ID" \\
-AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth" \\
-AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services" \\
+AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/oauth" \\
+AUTHSEC_RESOURCE_SERVERS_URL="${config.VITE_API_URL}/authsec/resource-servers" \\
 node dist/server.js`,
       },
     ],
@@ -144,7 +144,7 @@ node dist/server.js`,
     key: "rbac",
     title: "RBAC (TypeScript)",
     summary:
-      "Attach roles/scopes/resources/permissions per tool and let SDK Manager enforce access.",
+      "Attach roles/scopes/resources/permissions per tool and let AuthSec enforce access.",
     highlights: [
       "Supports roles, groups, resources, scopes, permissions",
       "OR and requireAll matching modes",
@@ -302,8 +302,8 @@ server.listen(8443);`,
         id: "ts-env",
         label: "Environment variables",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth"
-AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services"
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/oauth"
+AUTHSEC_RESOURCE_SERVERS_URL="${config.VITE_API_URL}/authsec/resource-servers"
 AUTHSEC_TIMEOUT_SECONDS=15
 AUTHSEC_RETRIES=2
 AUTHSEC_TOOLS_LIST_TIMEOUT_SECONDS=8
@@ -350,7 +350,7 @@ const pythonSections: SDKHubSection[] = [
     key: "mcp-oauth",
     title: "MCP OAuth (Python)",
     summary:
-      "Protect Python MCP tools with decorators and run with OAuth delegated to SDK Manager.",
+      "Protect Python MCP tools with decorators and run with OAuth delegated to AuthSec.",
     highlights: [
       "@mcp_tool for public tools",
       "@protected_by_AuthSec for guarded tools",
@@ -401,8 +401,8 @@ if __name__ == "__main__":
         id: "py-mcp-env",
         label: "Runtime environment",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth" \\
-AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services" \\
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/oauth" \\
+AUTHSEC_RESOURCE_SERVERS_URL="${config.VITE_API_URL}/authsec/resource-servers" \\
 python3 server.py`,
       },
     ],
@@ -543,8 +543,8 @@ print("SPIFFE ID", svid.spiffe_id)`,
         id: "py-env",
         label: "Environment variables",
         language: "bash",
-        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/authsec/sdkmgr/mcp-auth"
-AUTHSEC_SERVICES_URL="${config.VITE_API_URL}/authsec/sdkmgr/services"
+        code: `AUTHSEC_AUTH_SERVICE_URL="${config.VITE_API_URL}/oauth"
+AUTHSEC_RESOURCE_SERVERS_URL="${config.VITE_API_URL}/authsec/resource-servers"
 AUTHSEC_TIMEOUT_SECONDS=15
 AUTHSEC_RETRIES=2
 AUTHSEC_TOOLS_LIST_TIMEOUT_SECONDS=8`,

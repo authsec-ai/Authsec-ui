@@ -25,7 +25,6 @@ import {
   Users,
   UserPlus,
   Workflow,
-  Bot,
 } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavDocuments } from "@/components/nav-documents";
@@ -61,8 +60,8 @@ const STATIC_NAV_DATA = {
   ],
   navSecurity: [
     {
-      title: "Authentication",
-      url: "/authentication",
+      title: "Identity Providers",
+      url: "/identity-providers",
       icon: ShieldCheck,
     },
     {
@@ -71,8 +70,8 @@ const STATIC_NAV_DATA = {
       icon: ShieldPlus,
     },
     {
-      title: "SDK Hub",
-      url: "/sdk",
+      title: "SDK Guides",
+      url: "/developer/sdk-guides",
       icon: Code2,
     },
     {
@@ -88,14 +87,14 @@ const STATIC_NAV_DATA = {
   ],
   navClients: [
     {
-      title: "Clients",
+      title: "Resource Servers",
       url: "#",
       icon: Server,
       items: [
         {
-          title: "MCP Servers / AI Agents",
-          url: "/clients/mcp",
-          icon: Bot,
+          title: "Resource Servers",
+          url: "/resource-servers",
+          icon: Server,
         },
       ],
     },
@@ -155,33 +154,33 @@ const CONTEXT_AWARE_NAV = [
 
 const CONTEXT_AWARE_RBAC = [
   {
-    title: "RBAC",
+    title: "Authz / RBAC",
     url: "#",
     icon: Key,
     items: [
       {
-        title: "Permissions and Resources",
-        url: "/permissions",
+        title: "Permissions",
+        url: "/authz/permissions",
         icon: ShieldPlus,
       },
       {
-        title: "Roles and mapped permissions",
-        url: "/roles",
+        title: "Roles",
+        url: "/authz/roles",
         icon: UserCog,
       },
       {
-        title: "Scopes",
-        url: "/scopes",
+        title: "Internal Scope Bundles",
+        url: "/authz/internal-scopes",
         icon: Crosshair,
       },
       {
         title: "Role Bindings",
-        url: "/role-bindings",
+        url: "/authz/role-bindings",
         icon: UserPlus,
       },
       {
-        title: "API/OAuth Scopes",
-        url: "/api-oauth-scopes",
+        title: "Resource Scopes",
+        url: "/oauth/resource-scopes",
         icon: GlobeLock,
       },
     ],
@@ -286,7 +285,7 @@ export function AppSidebar({
         updateActiveStates(addContextToUrls(CONTEXT_AWARE_NAV, contextPrefix)),
       ),
       navRbac: addNavigationHandlers(
-        addContextToUrls(CONTEXT_AWARE_RBAC, contextPrefix),
+        updateActiveStates(addContextToUrls(CONTEXT_AWARE_RBAC, contextPrefix)),
       ),
       navSecurity: addNavigationHandlers(
         updateActiveStates(STATIC_NAV_DATA.navSecurity),

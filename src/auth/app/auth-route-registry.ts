@@ -20,13 +20,7 @@ export const AUTH_ROUTE_REGISTRY: AuthRouteDescriptor[] = [
     title: "Admin WebAuthn",
   },
   {
-    path: "/uflow/oidc/callback",
-    sceneId: "admin-oidc-callback",
-    entrypoint: "admin",
-    title: "Admin OIDC Callback",
-  },
-  {
-    path: "/auth/callback",
+    path: "/admin/auth/callback",
     sceneId: "admin-oidc-callback",
     entrypoint: "admin",
     title: "Admin OIDC Callback",
@@ -48,6 +42,18 @@ export const AUTH_ROUTE_REGISTRY: AuthRouteDescriptor[] = [
     sceneId: "enduser-oidc-callback",
     entrypoint: "enduser",
     title: "OIDC Callback",
+  },
+  {
+    path: "/oidc/mfa",
+    sceneId: "enduser-mfa",
+    entrypoint: "enduser",
+    title: "OIDC MFA",
+  },
+  {
+    path: "/oidc/error",
+    sceneId: "enduser-error",
+    entrypoint: "enduser",
+    title: "OIDC Error",
   },
 ];
 

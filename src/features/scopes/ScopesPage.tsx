@@ -24,7 +24,7 @@ export interface ScopesQueryParams {
 }
 
 /**
- * Scopes page component - Manage access scopes/permissions
+ * Internal Scope Bundles page component - Manage internal scope groupings
  *
  * Features:
  * - Modern design based on Groups/Roles pages
@@ -45,12 +45,12 @@ export function ScopesPage() {
     () =>
       isAdmin
         ? {
-            title: "Scopes",
-            subtitle: "This Defines permissions boundary in a project",
+            title: "Internal Scope Bundles",
+            subtitle: "Group internal resources into named bundles for RBAC policy use.",
           }
         : {
-            title: "Scopes",
-            subtitle: "This Defines permissions boundary in a project",
+            title: "Internal Scope Bundles",
+            subtitle: "Group internal resources into named bundles for RBAC policy use.",
           },
     [isAdmin]
   );
@@ -186,7 +186,7 @@ export function ScopesPage() {
         {/* Info Banner */}
         <PageInfoBanner
           title="Understanding Scopes"
-          description="Scopes define the boundaries of permissions within your system. They determine what level of access a role has, such as 'read', 'write', or 'delete' capabilities."
+          description="Internal scope bundles group related resources or policy boundaries inside AuthSec. They are distinct from OAuth resource scopes shown to third-party clients during authorization."
           features={[
             {
               text: "Define permission boundaries and access levels",
@@ -196,7 +196,10 @@ export function ScopesPage() {
               text: "Control what actions are allowed on resources",
               icon: Eye,
             },
-            { text: "Create OAuth-compatible scope definitions", icon: Key },
+            {
+              text: "Keep internal scope bundles separate from OAuth resource scopes",
+              icon: Key,
+            },
           ]}
           featuresTitle="Key Features"
           faqs={[
@@ -204,13 +207,13 @@ export function ScopesPage() {
               id: "1",
               question: "What are scopes?",
               answer:
-                "Scopes define the level of access granted by a permission. Common scopes include 'read' (view only), 'write' (create/edit), 'delete' (remove), and 'admin' (full control). They work with roles to create granular permissions.",
+                "Internal scope bundles group related resources or policy boundaries inside AuthSec. They are separate from OAuth resource scopes requested by third-party clients.",
             },
             {
               id: "2",
               question: "How do scopes differ from permissions?",
               answer:
-                "Scopes are the 'verbs' of your permission system. While permissions combine role + scope + resource, scopes specifically define the action level. For example, a 'read' scope on 'documents' means view-only access.",
+                "Permissions are the atomic resource/action pairs. Internal scope bundles are a separate RBAC concept, while OAuth resource scopes live on the Resource Scopes page.",
             },
             {
               id: "3",

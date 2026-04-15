@@ -7,7 +7,9 @@ export type AuthSceneId =
   | "admin-oidc-callback"
   | "admin-create-workspace"
   | "enduser-login"
-  | "enduser-oidc-callback";
+  | "enduser-oidc-callback"
+  | "enduser-mfa"
+  | "enduser-error";
 
 export interface AuthRouteDescriptor {
   path: string;

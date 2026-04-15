@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
   IconCircleCheck,
@@ -16,7 +17,6 @@ import {
 } from "../../app/api/oidcApi";
 import { setLoginData, setCurrentStep } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
-import { OIDCWebAuthnRouter } from "./OIDCWebAuthnRouter";
 // OIDC WebAuthn functionality using dedicated OIDC context
 import {
   EndUserAuthProvider,
@@ -35,6 +35,7 @@ const OIDCCallbackPageInner: React.FC = () => {
   // No longer extract provider from URL path - it will come from state
   const urlParams = new URLSearchParams(window.location.search);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   // Get client_id, client_type, redirect_uris from Redux state (set during initial login page load)
   const reduxClientId = useSelector(
     (state: RootState) => state.oidcWebAuthn.clientId,
@@ -45,7 +46,7 @@ const OIDCCallbackPageInner: React.FC = () => {
   const reduxRedirectUris = useSelector(
     (state: RootState) => state.oidcWebAuthn.redirectUris,
   );
-  const { executeCallback, captureClientId } = useEndUserAuth();
+  const { captureClientId } = useEndUserAuth();
 
   // RTK Query hooks
   const [handleCallback] = useHandleCallbackMutation();
@@ -53,9 +54,7 @@ const OIDCCallbackPageInner: React.FC = () => {
   const [sendTokenToOIDCLogin] = useSendTokenToOIDCLoginMutation();
   const [samlLogin] = useSamlLoginMutation();
 
-  const [status, setStatus] = useState<
-    "processing" | "success" | "error" | "webauthn"
-  >("processing");
+  const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [message, setMessage] = useState<string>(
     "Processing authentication...",
   );
@@ -65,15 +64,36 @@ const OIDCCallbackPageInner: React.FC = () => {
     string | null
   >(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
-  const [webauthnData, setWebauthnData] = useState<{
-    tenantId: string;
-    email: string;
-    firstLogin: boolean;
-  } | null>(null);
   const [isCustomLoginWebAuthn, setIsCustomLoginWebAuthn] = useState(false);
-  const [isSamlWebAuthn, setIsSamlWebAuthn] = useState(false);
   const [detectedProvider, setDetectedProvider] = useState<string | null>(null);
-  const [samlRedirectTo, setSamlRedirectTo] = useState<string | null>(null);
+
+  const transitionToMfa = useCallback(
+    (
+      data: { tenantId: string; email: string; firstLogin: boolean },
+      nextClientId?: string | null,
+      redirectTo?: string | null,
+    ) => {
+      const params = new URLSearchParams({
+        tenant_id: data.tenantId,
+        email: data.email,
+        first_login: String(data.firstLogin),
+      });
+
+      const loginChallenge = sessionStorage.getItem("login_challenge");
+      if (loginChallenge) params.set("login_challenge", loginChallenge);
+      if (nextClientId) params.set("client_id", nextClientId);
+      if (reduxClientType) params.set("client_type", reduxClientType);
+      if (reduxRedirectUris?.length) {
+        params.set("redirect_uris", reduxRedirectUris.join(","));
+      }
+      if (redirectTo) {
+        params.set("redirect_to", redirectTo);
+      }
+
+      navigate(`/oidc/mfa?${params.toString()}`, { replace: true });
+    },
+    [navigate, reduxClientType, reduxRedirectUris],
+  );
 
   useEffect(() => {
     console.log("Universal CallbackPage mounted");
@@ -230,8 +250,6 @@ const OIDCCallbackPageInner: React.FC = () => {
             setMessage(
               "OAuth authentication successful. Initiating security authentication...",
             );
-            setWebauthnData(webauthnFlowData);
-            setStatus("webauthn");
 
             // Initialize WebAuthn flow in Redux
             dispatch(
@@ -245,6 +263,7 @@ const OIDCCallbackPageInner: React.FC = () => {
 
             // Set to authentication step for existing users
             dispatch(setCurrentStep("authentication"));
+            transitionToMfa(webauthnFlowData, clientId);
 
             setDebugInfo({
               flow_type: "UFlow OAuth - Existing User",
@@ -538,8 +557,6 @@ const OIDCCallbackPageInner: React.FC = () => {
                 setMessage(
                   "OIDC login processed. Initiating MFA (WebAuthn/TOTP)...",
                 );
-                setWebauthnData(webauthnFlowData);
-                setStatus("webauthn");
 
                 // Ensure client_id is captured (from Redux or JWT fallback)
                 if (clientId && clientId !== reduxClientId) {
@@ -562,6 +579,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                 } else {
                   dispatch(setCurrentStep("authentication"));
                 }
+                transitionToMfa(webauthnFlowData, clientId || undefined);
 
                 setDebugInfo({
                   codeType: "Hydra Authorization Code",
@@ -811,10 +829,6 @@ const OIDCCallbackPageInner: React.FC = () => {
 
                 // Check if WebAuthn is needed based on first_login
                 if (samlLoginResponse.first_login !== undefined) {
-                  // Store the redirect_to URL for later use after WebAuthn
-                  setSamlRedirectTo(response.redirect_to);
-                  setIsSamlWebAuthn(true);
-
                   // Set up WebAuthn flow data
                   const webauthnFlowData = {
                     tenantId: samlLoginResponse.tenant_id,
@@ -823,8 +837,6 @@ const OIDCCallbackPageInner: React.FC = () => {
                   };
 
                   setMessage("Initiating multi-factor authentication...");
-                  setWebauthnData(webauthnFlowData);
-                  setStatus("webauthn");
 
                   // Ensure client_id is captured
                   if (clientIdForSaml !== reduxClientId) {
@@ -851,6 +863,11 @@ const OIDCCallbackPageInner: React.FC = () => {
                     );
                     dispatch(setCurrentStep("authentication"));
                   }
+                  transitionToMfa(
+                    webauthnFlowData,
+                    clientIdForSaml,
+                    response.redirect_to,
+                  );
 
                   return; // Don't redirect yet, wait for WebAuthn completion
                 } else {
@@ -977,69 +994,6 @@ const OIDCCallbackPageInner: React.FC = () => {
     }
   };
 
-  // Handle WebAuthn completion — called by the Router for non-claw_auth clients.
-  // The Context already called executeCallback and placed the token in Redux (displayToken).
-  // We do NOT call executeCallback again — that was the source of race conditions.
-  const handleWebAuthnComplete = async () => {
-    // For SAML + WebAuthn flows, redirect to the stored Hydra URL
-    if (isSamlWebAuthn && samlRedirectTo) {
-      setStatus("processing");
-      setMessage(
-        "Authentication completed! Redirecting to authorization server...",
-      );
-
-      // Clean up SAML parameters from sessionStorage
-      sessionStorage.removeItem("saml_client_id");
-      sessionStorage.removeItem("saml_user_email");
-      sessionStorage.removeItem("saml_tenant_id");
-      sessionStorage.removeItem("saml_user_id");
-      sessionStorage.removeItem("saml_provider");
-      sessionStorage.removeItem("saml_provider_id");
-      sessionStorage.removeItem("saml_project_id");
-      sessionStorage.removeItem("saml_success");
-
-      setTimeout(() => {
-        window.location.href = samlRedirectTo;
-      }, 1500);
-    }
-    // For all other non-claw_auth types, the token is already displayed
-    // by OIDCTokenDisplayComponent inside the Router — nothing else to do.
-  };
-
-  // Handle claw_auth token redirect — only called by the Router for claw_auth clients.
-  const handleTokenDisplay = (token: string) => {
-    const uris = reduxRedirectUris;
-    if (!uris || uris.length < 2) {
-      console.error("[ClawAuth] No secondary redirect URI available");
-      return;
-    }
-
-    const clawRedirectUri = uris[1];
-    let baseUrl: string;
-    try {
-      baseUrl = new URL(clawRedirectUri).origin;
-    } catch {
-      baseUrl = clawRedirectUri;
-    }
-
-    const redirectTarget = `${baseUrl}/?auth_token=${encodeURIComponent(token)}`;
-    console.log("[ClawAuth] Redirecting to:", redirectTarget);
-    setStatus("processing");
-    setMessage("Authentication completed! Redirecting...");
-    window.location.href = redirectTarget;
-  };
-
-  // Handle WebAuthn error
-  const handleWebAuthnError = (error: string) => {
-    console.error("WebAuthn flow error:", error);
-    setStatus("error");
-    setMessage(`WebAuthn authentication failed: ${error}`);
-    setDebugInfo({
-      ...debugInfo,
-      webauthn_error: error,
-    });
-  };
-
   const getStatusIcon = () => {
     switch (status) {
       case "processing":
@@ -1049,17 +1003,6 @@ const OIDCCallbackPageInner: React.FC = () => {
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             className="h-12 w-12 rounded-full border-2 border-slate-300 border-t-slate-600"
           />
-        );
-      case "webauthn":
-        return (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100"
-          >
-            <IconCircleCheck className="h-6 w-6 text-blue-600" />
-          </motion.div>
         );
       case "success":
         return (
@@ -1090,8 +1033,6 @@ const OIDCCallbackPageInner: React.FC = () => {
     switch (status) {
       case "processing":
         return "text-slate-700";
-      case "webauthn":
-        return "text-blue-700";
       case "success":
         return "text-green-700";
       case "error":
@@ -1103,25 +1044,12 @@ const OIDCCallbackPageInner: React.FC = () => {
     switch (status) {
       case "processing":
         return "Processing Authentication";
-      case "webauthn":
-        return "WebAuthn Authentication";
       case "success":
         return "Authentication Successful!";
       case "error":
         return "Authentication Failed";
     }
   };
-
-  // If WebAuthn flow is active, render the WebAuthn Router instead
-  if (status === "webauthn" && webauthnData) {
-    return (
-      <OIDCWebAuthnRouter
-        onAuthComplete={handleWebAuthnComplete}
-        onAuthError={handleWebAuthnError}
-        onTokenDisplay={handleTokenDisplay}
-      />
-    );
-  }
 
   return (
     <AuthSplitFrame

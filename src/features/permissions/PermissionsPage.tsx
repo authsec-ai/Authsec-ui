@@ -52,7 +52,7 @@ interface SimpleResource {
 }
 
 /**
- * Permissions page component - Manage RBAC permissions (Role + Scope + Resource)
+ * Permissions page component - Manage RBAC permissions (resource + action)
  *
  * Features:
  * - Define permissions linking roles, scopes, and resources
@@ -163,14 +163,16 @@ export function PermissionsPage() {
     () =>
       isAdmin
         ? {
-            title: "Permissions and Resources",
-            subtitle: "Create permissions and resources",
-            ctaLabel: "Create Permission and resources",
+            title: "Permissions",
+            subtitle:
+              "Manage atomic resource and action pairs used by roles and OAuth scope mappings.",
+            ctaLabel: "Create Permission",
           }
         : {
-            title: "Permissions and Resources",
-            subtitle: "Create permissions and resources",
-            ctaLabel: "Create Permission and resources",
+            title: "Permissions",
+            subtitle:
+              "Manage atomic resource and action pairs used by roles and OAuth scope mappings.",
+            ctaLabel: "Create Permission",
           },
     [isAdmin],
   );
@@ -369,7 +371,7 @@ export function PermissionsPage() {
             {/* Info Banner */}
             <PageInfoBanner
               title="Understanding Permissions"
-              description="Permissions define what actions users can perform on specific resources. They combine roles, scopes, and resources to create fine-grained access control policies."
+              description="Permissions define the atomic actions users can perform on specific resources. Roles, bindings, and OAuth resource-scope mappings reference these permissions."
               features={[
                 {
                   text: "Link roles with specific scopes and resources",

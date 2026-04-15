@@ -164,7 +164,12 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     setStatus("processing");
     setStatusMessage("Redirecting to security verification...");
 
-    navigate(`/admin/webauthn?email=${encodeURIComponent(data.email)}`, { replace: true });
+    const params = new URLSearchParams({
+      email: data.email,
+      tenant_id: data.tenant_id,
+      first_login: String(data.first_login),
+    });
+    navigate(`/admin/webauthn?${params.toString()}`, { replace: true });
   };
 
   const handleExchangeError = (error: FetchBaseQueryError | SerializedError) => {
@@ -228,7 +233,12 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     );
     dispatch(setCurrentStep("login"));
 
-    navigate(`/admin/webauthn?email=${encodeURIComponent(providerData.email)}`, { replace: true });
+    const params = new URLSearchParams({
+      email: providerData.email,
+      tenant_id: result.tenant_id,
+      first_login: "true",
+    });
+    navigate(`/admin/webauthn?${params.toString()}`, { replace: true });
   };
 
   const getStatusTitle = () => {
@@ -252,8 +262,8 @@ export const AdminOIDCCallbackPage: React.FC = () => {
           subtitle="We’re validating your provider response and preparing secure workspace authentication."
           points={[
             "Provider identity is exchanged for tenant-safe context.",
-            "Cross-tenant handoff is signed before redirect.",
-            "MFA routing is preserved before admin access.",
+            "Same-domain MFA resumes from query-backed callback state.",
+            "Cross-domain handoff remains a temporary fallback only when needed.",
           ]}
         />
       }

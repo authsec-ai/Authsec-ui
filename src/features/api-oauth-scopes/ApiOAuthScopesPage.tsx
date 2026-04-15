@@ -46,12 +46,12 @@ export function ApiOAuthScopesPage() {
     () =>
       isAdmin
         ? {
-            title: "API/OAuth Scopes",
-            subtitle: "Manage OAuth scope mappings for API authorization",
+            title: "Resource Scopes",
+            subtitle: "Manage the OAuth scopes exposed by your protected resource servers.",
           }
         : {
-            title: "API/OAuth Scopes",
-            subtitle: "Configure OAuth scopes for your applications",
+            title: "Resource Scopes",
+            subtitle: "Manage the OAuth scopes exposed by your protected resource servers.",
           },
     [isAdmin],
   );
@@ -155,8 +155,8 @@ export function ApiOAuthScopesPage() {
 
         {/* Info Banner */}
         <PageInfoBanner
-          title="Understanding API/OAuth Scopes"
-          description="API/OAuth scopes define what resources and actions third-party applications can access on behalf of users. They're essential for secure API authorization and OAuth flows."
+          title="Understanding Resource Scopes"
+          description="Resource scopes define what OAuth clients can request from protected resource servers. They are the external scopes shown during authorization and mapped to internal permissions."
           features={[
             {
               text: "Define OAuth scope mappings for secure authorization",
@@ -172,15 +172,15 @@ export function ApiOAuthScopesPage() {
           faqs={[
             {
               id: "1",
-              question: "What are API/OAuth scopes?",
+              question: "What are resource scopes?",
               answer:
                 "API/OAuth scopes are standardized permission strings (like 'read:users' or 'write:documents') that external applications request when users authorize them. They limit what the application can do on the user's behalf.",
             },
             {
               id: "2",
-              question: "How are OAuth scopes different from regular scopes?",
+              question: "How are resource scopes different from internal scopes?",
               answer:
-                "OAuth scopes are specifically designed for third-party API access and follow OAuth 2.1 standards. They're presented to users during authorization ('This app wants to...') and control what external applications can access.",
+                "Resource scopes are the OAuth-facing scopes requested by third-party clients. Internal scope bundles used by Authz/RBAC remain separate and should not share the same UI surface.",
             },
             {
               id: "3",

@@ -31,9 +31,25 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   const dispatch = useDispatch();
   const location = useLocation();
 
-  // Apply cross-tenant handoff context if present (when redirected from OIDC callback)
+  // Apply resumable query context first; keep handoff as cross-domain fallback only.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const email = params.get("email");
+    const tenantId = params.get("tenant_id");
+    const firstLogin = params.get("first_login");
+
+    if (email && tenantId) {
+      dispatch(setCurrentStep("login"));
+      dispatch(
+        setLoginData({
+          tenantId,
+          email,
+          isFirstLogin: firstLogin === "true",
+        })
+      );
+      return;
+    }
+
     const handoff = params.get("handoff");
     if (!handoff) return;
 
