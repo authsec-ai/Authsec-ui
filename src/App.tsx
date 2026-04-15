@@ -30,6 +30,10 @@ import { UsersPage } from "./features/users/UsersPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
 import ResourceServersPage from "./features/resource-servers/ResourceServersPage";
+import ResourceServerDetailsPage from "./features/resource-servers/ResourceServerDetailsPage";
+import ResourceServerClientsPage from "./features/resource-servers/ResourceServerClientsPage";
+import ResourceServerSDKPage from "./features/resource-servers/ResourceServerSDKPage";
+import ResourceServerPromptPage from "./features/resource-servers/ResourceServerPromptPage";
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
 import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
 import { AgentsPage } from "./features/workloads/components/AgentsPage";
@@ -351,7 +355,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <ResourceServersPage />
+                          <ResourceServerDetailsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -362,7 +366,29 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <ResourceServersPage />
+                          <ResourceServerClientsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/:id/sdk"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServerSDKPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/:id/prompt"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServerPromptPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

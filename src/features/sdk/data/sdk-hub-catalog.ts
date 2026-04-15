@@ -1,8 +1,8 @@
 import config from "../../../config";
 import type { SDKHubModule } from "../utils/hub-routing";
 
-export type SDKCodeLanguage = "bash" | "typescript" | "python" | "json";
-export type SDKId = "typescript" | "python";
+export type SDKCodeLanguage = "bash" | "typescript" | "python" | "go" | "json";
+export type SDKId = "typescript" | "python" | "go";
 
 export interface SDKHubSnippet {
   id: string;
@@ -559,7 +559,153 @@ AUTHSEC_TOOLS_LIST_TIMEOUT_SECONDS=8`,
   },
 ];
 
+const goSections: SDKHubSection[] = [
+  {
+    key: "overview",
+    title: "Go SDK Overview",
+    summary:
+      "Use the AuthSec Go SDK to wrap an existing MCP HTTP handler with protected-resource metadata, token validation, and scope-aware tool filtering.",
+    highlights: [
+      "Package: github.com/authsec-ai/sdk-authsec/packages/go-sdk",
+      "Designed for wrapping an existing MCP HTTP handler",
+      "Keeps protected-resource metadata and bearer challenges inside the SDK runtime",
+    ],
+    snippets: [
+      {
+        id: "go-install",
+        label: "Install Go SDK",
+        language: "bash",
+        code: "go get github.com/authsec-ai/sdk-authsec/packages/go-sdk",
+      },
+      {
+        id: "go-imports",
+        label: "Core imports",
+        language: "go",
+        code: `import (
+	authsecsdk "github.com/authsec-ai/sdk-authsec/packages/go-sdk"
+)`,
+      },
+    ],
+  },
+  {
+    key: "mcp-oauth",
+    title: "MCP OAuth (Go)",
+    summary:
+      "Wrap the MCP handler once and let the SDK own protected-resource metadata, bearer challenges, token validation, and scope-gated tool filtering.",
+    highlights: [
+      "Mount the wrapped handler on the MCP path",
+      "Provide issuer, introspection, and resource metadata values",
+      "Use StaticPolicy or OverrideToolPolicy for tool-to-scope mapping",
+    ],
+    snippets: [
+      {
+        id: "go-wrap",
+        label: "Wrap the MCP handler",
+        language: "go",
+        code: `protected, err := authsecsdk.WrapMCPHTTP(existingMCPHandler, authsecsdk.Config{
+	Issuer:                    "${config.VITE_OAUTH_BASE_URL}",
+	AuthorizationServer:       "${config.VITE_OAUTH_BASE_URL}",
+	JWKSURL:                   "${config.VITE_API_URL}/oauth/jwks",
+	IntrospectionURL:          "${config.VITE_API_URL}/oauth/introspect",
+	IntrospectionClientID:     "<resource-server-client-id>",
+	IntrospectionClientSecret: "<introspection-secret>",
+	ResourceURI:               "https://mcp.example.com/mcp",
+	ResourceName:              "My MCP Server",
+	SupportedScopes:           []string{"tools:read", "tools:write"},
+	Policy: authsecsdk.StaticPolicy{
+		"tools/list": {AnyOfScopes: []string{"tools:read"}},
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}`,
+      },
+      {
+        id: "go-mux",
+        label: "Mount the wrapped route",
+        language: "go",
+        code: `mux := http.NewServeMux()
+mux.Handle("/mcp", protected)
+mux.Handle("/mcp/", protected)
+
+log.Fatal(http.ListenAndServe(":8080", mux))`,
+      },
+    ],
+  },
+  {
+    key: "rbac",
+    title: "Policy (Go)",
+    summary:
+      "Keep the root SDK generic. Define tool rules with StaticPolicy or extend a base policy with OverrideToolPolicy.",
+    highlights: [
+      "Generic root package primitives only",
+      "No GitHub-specific helpers required for the common path",
+      "Map your actual tool names to resource-server scopes",
+    ],
+    snippets: [
+      {
+        id: "go-policy",
+        label: "Static policy",
+        language: "go",
+        code: `policy := authsecsdk.StaticPolicy{
+	"list_repositories": {AnyOfScopes: []string{"repos:read"}},
+	"create_issue":      {AnyOfScopes: []string{"issues:write"}},
+}`,
+      },
+      {
+        id: "go-policy-override",
+        label: "Override an existing policy",
+        language: "go",
+        code: `policy := authsecsdk.OverrideToolPolicy(
+	authsecsdk.StaticPolicy{
+		"tools/list": {AnyOfScopes: []string{"tools:read"}},
+	},
+	map[string]authsecsdk.ToolRule{
+		"delete_issue": {AnyOfScopes: []string{"issues:write"}},
+	},
+)`,
+      },
+    ],
+  },
+  {
+    key: "env",
+    title: "Environment (Go)",
+    summary:
+      "Keep AuthSec URLs and the one-time introspection secret outside code so the server can move from local to dev and prod without rewrites.",
+    highlights: [
+      "Issuer and authorization server should point at AuthSec",
+      "Use the resource URI registered in AuthSec",
+      "Store the introspection secret in a secure environment variable",
+    ],
+    snippets: [
+      {
+        id: "go-env",
+        label: "Environment variables",
+        language: "bash",
+        code: `AUTHSEC_ISSUER="${config.VITE_OAUTH_BASE_URL}"
+AUTHSEC_AUTHORIZATION_SERVER="${config.VITE_OAUTH_BASE_URL}"
+AUTHSEC_JWKS_URL="${config.VITE_API_URL}/oauth/jwks"
+AUTHSEC_INTROSPECTION_URL="${config.VITE_API_URL}/oauth/introspect"
+AUTHSEC_INTROSPECTION_CLIENT_ID="resource-server"
+AUTHSEC_INTROSPECTION_CLIENT_SECRET="<one-time-secret>"`,
+      },
+    ],
+  },
+];
+
 export const SDK_CATALOG: SDKCatalogItem[] = [
+  {
+    id: "go",
+    name: "Go SDK",
+    packageName: "github.com/authsec-ai/sdk-authsec/packages/go-sdk",
+    runtime: "Go 1.22+",
+    version: "4.0.0",
+    packagePath: "/Users/pc/Desktop/authnull/sdk-authsec/packages/go-sdk",
+    installCommand: "go get github.com/authsec-ai/sdk-authsec/packages/go-sdk",
+    docsUrl: "https://docs.authsec.dev/sdk/clients/mcp-servers",
+    repoUrl: "https://github.com/authsec-ai/sdk-authsec/tree/main/packages/go-sdk",
+    sections: goSections,
+  },
   {
     id: "typescript",
     name: "TypeScript SDK",

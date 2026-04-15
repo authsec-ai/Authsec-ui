@@ -5,6 +5,7 @@ import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import tsLanguage from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
 import pythonLanguage from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import goLanguage from "react-syntax-highlighter/dist/esm/languages/prism/go";
 import bashLanguage from "react-syntax-highlighter/dist/esm/languages/prism/bash";
 import jsonLanguage from "react-syntax-highlighter/dist/esm/languages/prism/json";
 
@@ -27,22 +28,25 @@ import {
 import { inferHubModuleFromSurface, isSDKHubModule } from "./utils/hub-routing";
 import "./sdk-editorial-theme.css";
 
-const SDK_TAB_ORDER: SDKId[] = ["typescript", "python"];
-const SNIPPET_DISPLAY_ORDER: SDKCodeLanguage[] = ["typescript", "python", "bash", "json"];
+const SDK_TAB_ORDER: SDKId[] = ["go", "typescript", "python"];
+const SNIPPET_DISPLAY_ORDER: SDKCodeLanguage[] = ["go", "typescript", "python", "bash", "json"];
 
 const LANGUAGE_LABELS: Record<SDKCodeLanguage, string> = {
   bash: "Bash",
+  go: "Go",
   typescript: "TypeScript",
   python: "Python",
   json: "JSON",
 };
 
 const SDK_TAB_LABELS: Record<SDKId, string> = {
+  go: "Go",
   typescript: "TypeScript",
   python: "Python",
 };
 
 const SYNTAX_LANGUAGE_MAP: Record<SDKCodeLanguage, string> = {
+  go: "go",
   typescript: "typescript",
   python: "python",
   bash: "bash",
@@ -58,6 +62,7 @@ const SNIPPET_TABS_LIST_CLASS =
 const SNIPPET_TABS_TRIGGER_CLASS =
   "sdk-editorial-tabs-trigger sdk-editorial-tabs-trigger--snippet h-6 min-w-[118px] rounded-sm border border-transparent px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-border/70 data-[state=active]:bg-background data-[state=active]:text-foreground";
 
+SyntaxHighlighter.registerLanguage("go", goLanguage);
 SyntaxHighlighter.registerLanguage("typescript", tsLanguage);
 SyntaxHighlighter.registerLanguage("python", pythonLanguage);
 SyntaxHighlighter.registerLanguage("bash", bashLanguage);
@@ -108,7 +113,7 @@ interface SnippetTabsProps {
 }
 
 function isSDKId(value: string | null | undefined): value is SDKId {
-  return value === "typescript" || value === "python";
+  return value === "go" || value === "typescript" || value === "python";
 }
 
 function buildSDKBasePath(surface?: string, entityId?: string): string {
