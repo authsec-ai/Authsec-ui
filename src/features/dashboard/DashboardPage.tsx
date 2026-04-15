@@ -187,7 +187,7 @@ export function DashboardPage() {
       setShowClientSelection(true);
     } else {
       toast.error("No clients present. Create a client first.");
-      navigate("/clients/mcp");
+      navigate("/resource-servers");
     }
   };
 
@@ -204,7 +204,7 @@ export function DashboardPage() {
   const handleRecommendationClick = React.useCallback(() => {
     switch (overview.setup.nextStepId) {
       case "create-client":
-        navigate("/clients/mcp");
+        navigate("/resource-servers");
         return;
       case "configure-authentication":
         userAuth.launch();
@@ -219,7 +219,7 @@ export function DashboardPage() {
         handleAuthSDKClick();
         return;
       default:
-        navigate("/clients/mcp");
+        navigate("/resource-servers");
     }
   }, [
     overview.setup.nextStepId,

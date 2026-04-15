@@ -215,7 +215,7 @@ class VoiceAssistant:
 
   const handleViewFullDocs = () => {
     onClose();
-    navigate(`/sdk/clients/${activeClientId}?module=ciba`);
+    navigate(`/developer/sdk-guides/clients/${activeClientId}?module=ciba`);
   };
 
   return (

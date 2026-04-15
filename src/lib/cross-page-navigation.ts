@@ -8,7 +8,7 @@ export const NAVIGATION_ROUTES = {
   groups: "/groups",
   roles: "/roles",
   resources: "/resources",
-  clients: "/clients",
+  clients: "/resource-servers",
 } as const;
 
 // Context keys for storing navigation state

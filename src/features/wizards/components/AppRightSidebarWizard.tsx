@@ -190,7 +190,7 @@ function UserAuthCompletionView({
 
   const handleViewClient = () => {
     setIsAwaitingPlatformAction(true);
-    navigate("/clients/mcp");
+    navigate("/resource-servers");
   };
 
   const handlePreviewLogin = async () => {

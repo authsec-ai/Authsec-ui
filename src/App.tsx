@@ -412,6 +412,11 @@ function AppContent() {
               /> */}
                   <Route
                     path="/clients/agents"
+                    element={<Navigate to="/agents" replace />}
+                  />
+
+                  <Route
+                    path="/agents"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -467,6 +472,39 @@ function AppContent() {
 
                   <Route
                     path="/clients/workloads"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <WorkloadCertificatePage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/workloads/create"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <WorkloadIdentitiesPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/workloads/edit/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <WorkloadIdentitiesPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/workloads"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>

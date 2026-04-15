@@ -91,7 +91,7 @@ export function WorkloadDetailsPage() {
       }
       await deleteWorkload({ workload_id: id }).unwrap();
       toast.success("Workload deleted successfully");
-      navigate("/clients/workloads");
+      navigate("/workloads");
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -100,7 +100,7 @@ export function WorkloadDetailsPage() {
   const handleEdit = () => {
     if (!workload) return;
     const id = workload.id || workload.workload_id;
-    navigate(`/clients/workloads/edit/${id}`);
+    navigate(`/workloads/edit/${id}`);
   };
 
   const handleExport = () => {
@@ -153,7 +153,7 @@ export function WorkloadDetailsPage() {
                 {error ? getErrorMessage(error) : "The requested workload could not be found."}
               </p>
             </div>
-            <Button onClick={() => navigate("/clients/workloads")} variant="outline">
+            <Button onClick={() => navigate("/workloads")} variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Workloads
             </Button>
@@ -201,7 +201,7 @@ export function WorkloadDetailsPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/clients/workloads")}
+              onClick={() => navigate("/workloads")}
               className="h-8 px-2"
             >
               <ArrowLeft className="h-4 w-4" />

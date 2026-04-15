@@ -107,12 +107,12 @@ const STATIC_NAV_DATA = {
       items: [
         {
           title: "Autonomous Workloads",
-          url: "/clients/workloads",
+          url: "/workloads",
           icon: Award,
         },
         {
           title: "SPIRE Agents",
-          url: "/clients/agents",
+          url: "/agents",
           icon: Network,
         },
       ],

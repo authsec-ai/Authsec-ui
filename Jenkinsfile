@@ -29,6 +29,9 @@ pipeline {
         // // --- 3. DYNAMIC VARIABLES (Calculated automatically in Initialize stage) ---
         // K8S_NAMESPACE = ''
         // DOCKER_IMAGE = ''
+        // DOCKER_IMAGE_IMMUTABLE = ''
+        // GIT_SHA = ''
+        // IMAGE_TAG = ''
         // DOCKER_IMAGE_PUBLIC = ''
         // APP_LABEL = '' 
         // IS_PROD_BRANCH = 'false'
@@ -113,6 +116,11 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                script {
+                    env.GIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.IMAGE_TAG = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}-${env.GIT_SHA}".replaceAll("[^A-Za-z0-9_.-]", "-")
+                    env.DOCKER_IMAGE_IMMUTABLE = "${env.DOCKER_REGISTRY}/${env.SERVICE_NAME}:${env.IMAGE_TAG}"
+                }
             }
         }
         
@@ -144,7 +152,7 @@ pipeline {
                     )
                 ]) {
                         // Uses the DOCKER_IMAGE variable set in 'Initialize'
-                        sh "docker build --build-arg GITHUB_TOKEN=${GITHUB_TOKEN} -t ${env.DOCKER_IMAGE} ."
+                        sh "docker build --build-arg GITHUB_TOKEN=${GITHUB_TOKEN} -t ${env.DOCKER_IMAGE_IMMUTABLE} -t ${env.DOCKER_IMAGE} ."
                     }
                 }
             }
@@ -153,7 +161,7 @@ pipeline {
             steps {
                 script {
                     def scanExit = sh(
-                        script: "osv-scanner scan image ${env.DOCKER_IMAGE} --output osv-docker-scan.json",
+                        script: "osv-scanner scan image ${env.DOCKER_IMAGE_IMMUTABLE} --output osv-docker-scan.json",
                         returnStatus: true
                     )
                     if (scanExit != 0) {
@@ -198,7 +206,10 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                sh "docker push ${env.DOCKER_IMAGE}"
+                sh """
+                    docker push ${env.DOCKER_IMAGE_IMMUTABLE}
+                    docker push ${env.DOCKER_IMAGE}
+                """
             }
         }
 
@@ -229,6 +240,7 @@ pipeline {
 
         stage('Remove Docker Image') {
             steps {
+                sh "docker rmi ${env.DOCKER_IMAGE_IMMUTABLE} || true"
                 sh "docker rmi ${env.DOCKER_IMAGE} || true"
                 script {
                     if (env.IS_PROD_BRANCH == 'true') {
@@ -278,13 +290,29 @@ pipeline {
             }
         }
 
-        stage('Rollout Restart Deployment') {
+        stage('Deploy Immutable Image') {
             steps {
-                echo "Restarting deployment ${APP_LABEL} in ${K8S_NAMESPACE}..."
-                sh """
-                    kubectl rollout restart deployment/${APP_LABEL} -n ${K8S_NAMESPACE}
-                    kubectl rollout status deployment/${APP_LABEL} -n ${K8S_NAMESPACE} --timeout=300s
-                """
+                script {
+                    def envArgs = []
+                    envArgs << "APP_GIT_SHA=${env.GIT_SHA}"
+                    envArgs << "APP_GIT_BRANCH=${env.BRANCH_NAME}"
+                    envArgs << "APP_BUILD_NUMBER=${env.BUILD_NUMBER}"
+                    if (env.APP_LABEL == 'dev-ui' && env.K8S_NAMESPACE == 'authsec-dev') {
+                        envArgs << "VITE_API_URL=https://dev.api.authsec.dev"
+                        envArgs << "VITE_OAUTH_BASE_URL=https://oauth.dev.authsec.dev"
+                    }
+                    def joinedEnvArgs = envArgs.collect { "\"${it}\"" }.join(" ")
+                    sh """
+                        kubectl set image deployment/${APP_LABEL} ${APP_LABEL}=${env.DOCKER_IMAGE_IMMUTABLE} -n ${K8S_NAMESPACE}
+                        kubectl set env deployment/${APP_LABEL} ${joinedEnvArgs} -n ${K8S_NAMESPACE}
+                        kubectl annotate deployment/${APP_LABEL} \
+                          authsec.ai/git-sha=${env.GIT_SHA} \
+                          authsec.ai/git-branch=${env.BRANCH_NAME} \
+                          authsec.ai/build-number=${env.BUILD_NUMBER} \
+                          --overwrite -n ${K8S_NAMESPACE}
+                        kubectl rollout status deployment/${APP_LABEL} -n ${K8S_NAMESPACE} --timeout=300s
+                    """
+                }
             }
         }
     }   

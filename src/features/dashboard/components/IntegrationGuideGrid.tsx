@@ -188,7 +188,7 @@ export function IntegrationGuideGrid({
       secondaryAction: isUserAuthWizardCompleted()
         ? {
             label: "View Clients",
-            link: "/clients/mcp",
+            link: "/resource-servers",
           }
         : undefined,
       gradient:
@@ -210,7 +210,7 @@ export function IntegrationGuideGrid({
       secondaryAction: isM2MWizardCompleted()
         ? {
             label: "View Workloads",
-            link: "/clients/workloads",
+            link: "/workloads",
           }
         : undefined,
       gradient:

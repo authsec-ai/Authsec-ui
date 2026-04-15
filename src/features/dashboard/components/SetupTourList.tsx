@@ -20,7 +20,7 @@ export function SetupTourList() {
       description:
         "Set up machine-to-machine authentication with workload identities",
       wizard: m2m,
-      route: "/clients/workloads",
+      route: "/workloads",
       routeLabel: "Workloads",
       color: "blue" as const,
       sortOrder: 1,
@@ -56,7 +56,7 @@ export function SetupTourList() {
       description:
         "Set up user authentication with OAuth, SAML, and social providers",
       wizard: userAuth,
-      route: "/clients/mcp",
+      route: "/resource-servers",
       routeLabel: "Clients",
       color: "green" as const,
       sortOrder: 4,

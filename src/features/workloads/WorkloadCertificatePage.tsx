@@ -469,7 +469,7 @@ export function WorkloadCertificatePage() {
   };
 
   const handleEditClick = (workload: DisplayWorkload) => {
-    navigate(`/clients/workloads/edit/${workload.id}`);
+    navigate(`/workloads/edit/${workload.id}`);
   };
 
   const handleDeleteClick = (workload: DisplayWorkload) => {

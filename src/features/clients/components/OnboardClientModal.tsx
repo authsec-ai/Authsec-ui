@@ -207,7 +207,7 @@ export function OnboardClientModal({
       onSuccess?.(response.client_id);
 
       if ((clientType === "application" || clientType === "claw_auth") && !preventNavigation) {
-        navigate(`/sdk/clients/${response.client_id}`);
+        navigate(`/developer/sdk-guides/clients/${response.client_id}`);
       }
     } catch (err: any) {
       console.error(err);

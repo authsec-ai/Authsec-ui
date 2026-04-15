@@ -231,7 +231,7 @@ export function CreateWorkloadPage() {
 
         await updateWorkload(updatePayload).unwrap();
         toast.success("Workload updated successfully!");
-        navigate("/clients/workloads");
+        navigate("/workloads");
       } else {
         const payload: RegisterWorkloadRequest = {
           selectors: selectorsObj,
@@ -254,7 +254,7 @@ export function CreateWorkloadPage() {
 
         await registerWorkload(payload).unwrap();
         toast.success("Workload registered successfully!");
-        navigate("/clients/workloads");
+        navigate("/workloads");
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -282,7 +282,7 @@ export function CreateWorkloadPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/clients/workloads")}
+                onClick={() => navigate("/workloads")}
                 className="h-8 px-2"
               >
                 <ArrowLeft className="h-4 w-4" />

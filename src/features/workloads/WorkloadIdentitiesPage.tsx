@@ -193,7 +193,7 @@ export function WorkloadIdentitiesPage() {
     if (isEditMode) {
       if (editEntryError) {
         toast.error("Failed to load entry for editing");
-        navigate("/clients/workloads");
+        navigate("/workloads");
       } else if (editEntry) {
         // Extract workload name from full SPIFFE ID
         const extractedName = editEntry.spiffe_id.replace(
@@ -319,7 +319,7 @@ export function WorkloadIdentitiesPage() {
         }).unwrap();
 
         toast.success("Workload entry updated successfully!");
-        navigate("/clients/workloads");
+        navigate("/workloads");
       } else {
         // CREATE mode
         await registerEntry({
@@ -335,7 +335,7 @@ export function WorkloadIdentitiesPage() {
         toast.success("Workload entry registered successfully!");
 
         // Navigate to workload certificates page with success state for wizard
-        navigate("/clients/workloads", { state: { workloadCreated: true } });
+        navigate("/workloads", { state: { workloadCreated: true } });
       }
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -343,7 +343,7 @@ export function WorkloadIdentitiesPage() {
   };
 
   const handleEdit = (entry: WorkloadEntry) => {
-    navigate(`/clients/workloads/edit/${entry.id}`);
+    navigate(`/workloads/edit/${entry.id}`);
   };
 
   const handleDelete = async (entry: WorkloadEntry) => {
@@ -370,9 +370,9 @@ export function WorkloadIdentitiesPage() {
 
   const handleCancel = () => {
     if (isEditMode) {
-      navigate("/clients/workloads");
+      navigate("/workloads");
     } else {
-      navigate("/clients/workloads");
+      navigate("/workloads");
     }
   };
 

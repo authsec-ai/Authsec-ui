@@ -40,7 +40,7 @@ export function ClientSelectionModal({
 
   const handleContinue = () => {
     if (selectedClient) {
-      navigate(`/sdk/clients/${selectedClient}`);
+      navigate(`/developer/sdk-guides/clients/${selectedClient}`);
       onClose();
     }
   };

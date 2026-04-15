@@ -31,7 +31,7 @@ export const m2mWorkloadWizard: WizardConfig = {
       actionLabel: "Create Workload",
       actionType: "navigate",
       actionPayload: {
-        route: "/clients/workloads/create",
+        route: "/workloads/create",
       },
       completionTrigger: "navigation-return",
     },

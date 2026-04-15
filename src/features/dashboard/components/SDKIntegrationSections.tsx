@@ -36,7 +36,7 @@ export function SDKIntegrationSections() {
     } else {
       // Show toast and navigate to clients page
       toast.error("No clients present. Create a client first.");
-      navigate("/clients/mcp");
+      navigate("/resource-servers");
     }
   };
 
@@ -53,7 +53,7 @@ export function SDKIntegrationSections() {
   };
 
   const handleRBACClick = () => {
-    navigate("/sdk/rbac?module=rbac");
+    navigate("/developer/sdk-guides/rbac?module=rbac");
   };
 
   const sdkCards = [

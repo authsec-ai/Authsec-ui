@@ -787,7 +787,7 @@ export function ClientsPage() {
                     onDeleteClient={handleDeleteClient}
                     onToggleStatus={handleToggleStatus}
                     onViewSDK={(clientId) =>
-                      navigate(`/sdk/clients/${clientId}`)
+                      navigate(`/developer/sdk-guides/clients/${clientId}`)
                     }
                     onDelegateTrust={handleTrustDelegation}
                     onAddAuthMethod={handleAddAuthMethod}

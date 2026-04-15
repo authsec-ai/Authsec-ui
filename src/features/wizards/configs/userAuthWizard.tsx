@@ -59,7 +59,7 @@ export const userAuthWizard: WizardConfig = {
       actionLabel: "View SDK Integration",
       actionType: "navigate",
       actionPayload: {
-        route: "/sdk/clients/:clientId",
+        route: "/developer/sdk-guides/clients/:clientId",
       },
       completionTrigger: "navigation-return",
     },

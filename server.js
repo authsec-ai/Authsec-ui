@@ -13,7 +13,7 @@ app.use((req, res, next) => {
 // Dynamic config endpoint
 app.get("/config.js", (req, res) => {
   const config = {
-    VITE_API_URL: process.env.VITE_API_URL || "http://localhost:7468/authsec",
+    VITE_API_URL: process.env.VITE_API_URL || "http://localhost:7468",
     VITE_OAUTH_BASE_URL:
       process.env.VITE_OAUTH_BASE_URL || "http://localhost:4444",
     VITE_HUBSPOT_ACCESS_TOKEN: process.env.VITE_HUBSPOT_ACCESS_TOKEN || "",
