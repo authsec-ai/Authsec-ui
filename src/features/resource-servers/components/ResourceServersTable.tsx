@@ -2,10 +2,8 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  Code2,
   Edit,
   KeyRound,
-  MessageSquareText,
   MoreHorizontal,
   ShieldCheck,
   Trash2,
@@ -13,6 +11,7 @@ import {
 
 import type { ResourceServer } from "@/app/api/resourceServersApi";
 import { Badge } from "@/components/ui/badge";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,28 +20,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  ResponsiveDataTable,
-  type ResponsiveColumnDef,
-  type ResponsiveTableConfig,
-} from "@/components/ui/responsive-data-table";
-import { ResponsiveTableProvider } from "@/components/ui/responsive-table";
-
-import {
-  summarizeList,
-} from "../resource-server-utils";
 import { ResourceServerExpandedRow } from "./ResourceServerDetailsPanel";
 
 interface ResourceServersTableProps {
   resourceServers: ResourceServer[];
-  expandedRowIds: string[];
-  onExpandedRowsChange: (ids: string[]) => void;
   onDetails: (server: ResourceServer) => void;
   onEdit: (server: ResourceServer) => void;
   onRegisteredOAuthClients: (server: ResourceServer) => void;
   onRotateSecret: (server: ResourceServer) => void;
-  onViewSDK: (server: ResourceServer) => void;
-  onGeneratePrompt: (server: ResourceServer) => void;
   onDelete: (server: ResourceServer) => void;
 }
 
@@ -83,12 +68,8 @@ function RowActions({
   onEdit,
   onRegisteredOAuthClients,
   onRotateSecret,
-  onViewSDK,
-  onGeneratePrompt,
   onDelete,
-}: Omit<ResourceServersTableProps, "resourceServers" | "expandedRowIds" | "onExpandedRowsChange"> & {
-  server: ResourceServer;
-}) {
+}: Omit<ResourceServersTableProps, "resourceServers"> & { server: ResourceServer }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -114,14 +95,6 @@ function RowActions({
           <KeyRound className="mr-2 h-4 w-4" />
           Rotate Introspection Secret
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onViewSDK(server)}>
-          <Code2 className="mr-2 h-4 w-4" />
-          View SDK
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onGeneratePrompt(server)}>
-          <MessageSquareText className="mr-2 h-4 w-4" />
-          Generate Prompt
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => onDelete(server)}
@@ -136,19 +109,24 @@ function RowActions({
 }
 
 export function ResourceServersTable(props: ResourceServersTableProps) {
-  const columns = useMemo<ResponsiveColumnDef<ResourceServer, unknown>[]>(
+  const columns = useMemo<AdaptiveColumn<ResourceServer>[]>(
     () => [
       {
         id: "name",
         header: "Name",
+        accessorKey: "name",
         cell: ({ row }) => <ResourceServerNameCell server={row.original} />,
-        responsive: true,
+        alwaysVisible: true,
+        enableSorting: true,
         resizable: true,
-        cellClassName: "max-w-0 min-w-[240px]",
+        approxWidth: 260,
       },
       {
         id: "resource_uri",
         header: "Resource URI",
+        accessorKey: "resource_uri",
+        priority: 1,
+        enableSorting: false,
         cell: ({ row }) => (
           <Link
             to={`/resource-servers/${row.original.id}`}
@@ -159,83 +137,97 @@ export function ResourceServersTable(props: ResourceServersTableProps) {
             {row.original.resource_uri}
           </Link>
         ),
-        responsive: true,
         resizable: true,
-        cellClassName: "max-w-[320px]",
+        approxWidth: 280,
       },
       {
         id: "status",
         header: "Status",
+        accessorKey: "active",
+        priority: 2,
+        enableSorting: false,
         cell: ({ row }) => (
-          <Badge variant={row.original.active ? "default" : "secondary"}>
-            {row.original.active ? "active" : "inactive"}
-          </Badge>
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+              row.original.active
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-foreground/60"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                row.original.active ? "bg-emerald-500" : "bg-foreground/40"
+              }`}
+            />
+            {row.original.active ? "Active" : "Inactive"}
+          </span>
         ),
-        responsive: true,
         resizable: true,
+        approxWidth: 140,
       },
       {
         id: "scopes",
         header: "Scopes",
+        accessorKey: "scopes_supported",
+        priority: 3,
+        enableSorting: false,
         cell: ({ row }) => (
           <CompactBadgeList
             items={row.original.scopes_supported ?? []}
             emptyLabel="No scopes"
           />
         ),
-        responsive: true,
         resizable: true,
+        approxWidth: 220,
       },
       {
         id: "registration_modes",
         header: "Registration Modes",
+        accessorKey: "registration_modes",
+        priority: 4,
+        enableSorting: false,
         cell: ({ row }) => (
           <CompactBadgeList
             items={row.original.registration_modes ?? []}
             emptyLabel="No modes"
           />
         ),
-        responsive: true,
         resizable: true,
+        approxWidth: 220,
       },
       {
         id: "actions",
         header: "Actions",
+        alwaysVisible: true,
         cell: ({ row }) => <RowActions server={row.original} {...props} />,
         enableSorting: false,
-        responsive: false,
-        className: "w-[80px]",
-        cellClassName: "text-center",
+        resizable: false,
+        size: 80,
+        className: "w-[80px] text-right",
+        cellClassName: "text-right",
+        approxWidth: 100,
       },
     ],
     [props],
   );
 
-  const tableConfig: ResponsiveTableConfig<ResourceServer> = {
-    data: props.resourceServers,
-    columns,
-    features: {
-      selection: false,
-      dragDrop: false,
-      expandable: true,
-      pagination: true,
-      sorting: true,
-      resizing: true,
-    },
-    pagination: {
-      pageSize: 10,
-      pageSizeOptions: [10, 25, 50],
-      alwaysVisible: true,
-    },
-    expandedRowIds: props.expandedRowIds,
-    onExpandedRowsChange: props.onExpandedRowsChange,
-    renderExpandedRow: (row) => <ResourceServerExpandedRow server={row.original} />,
-    getRowId: (row) => row.id,
-  };
-
   return (
-    <ResponsiveTableProvider tableType="resource-servers">
-      <ResponsiveDataTable {...tableConfig} />
-    </ResponsiveTableProvider>
+    <AdaptiveTable
+      tableId="resource-servers"
+      data={props.resourceServers}
+      columns={columns}
+      rowClassName={() => "[&_td]:py-3.5 [&_td]:px-4 [&_td]:align-middle"}
+      enableSelection={false}
+      enableExpansion
+      renderExpandedRow={(row) => <ResourceServerExpandedRow server={row.original} />}
+      getRowId={(server) => server.id}
+      enableSorting
+      enablePagination
+      pagination={{
+        pageSize: 10,
+        pageSizeOptions: [5, 10, 25, 50],
+        alwaysVisible: true,
+      }}
+    />
   );
 }

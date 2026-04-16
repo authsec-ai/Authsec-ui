@@ -21,12 +21,10 @@ function DetailLine({
 }) {
   if (!value) return null;
   return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs font-medium text-foreground">{label}</span>
       <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-sm text-foreground" title={value}>
+        <span className="truncate font-mono text-xs text-foreground" title={value}>
           {value}
         </span>
         {copyable ? <CopyButton text={value} label={label} size="sm" /> : null}
@@ -58,45 +56,61 @@ export function ResourceServerDetailsPanel({
     <div
       className={cn(
         "grid gap-6",
-        compact ? "lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.9fr)]" : "xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]",
+        compact
+          ? "md:grid-cols-2"
+          : "xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]",
       )}
     >
       <div className="space-y-5">
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-foreground">Protected resource details</h3>
-            <Badge variant={server.active ? "default" : "secondary"}>
-              {server.active ? "active" : "inactive"}
-            </Badge>
-          </div>
-          <div className="grid gap-3">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            Protected Resource Details
+          </h4>
+          <div className="space-y-3 text-sm">
             <DetailLine label="Name" value={server.name} />
             <DetailLine label="Public base URL" value={server.public_base_url} copyable />
             <DetailLine label="Protected base path" value={server.protected_base_path} copyable />
             <DetailLine label="Resource URI" value={server.resource_uri} copyable />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-foreground">Status</span>
+              <span
+                className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                  server.active
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-foreground/60"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    server.active ? "bg-emerald-500" : "bg-foreground/40"
+                  }`}
+                />
+                {server.active ? "Active" : "Inactive"}
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Supported scopes</h4>
+          <h4 className="text-sm font-semibold text-foreground">Supported Scopes</h4>
           <BadgeGroup items={server.scopes_supported ?? []} />
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Registration modes</h4>
+          <h4 className="text-sm font-semibold text-foreground">Registration Modes</h4>
           <BadgeGroup items={server.registration_modes ?? []} />
         </div>
       </div>
 
-      <div className="space-y-5 rounded-xl border bg-muted/20 p-4">
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-foreground">Operational metadata</h4>
-          <div className="grid gap-3">
+      <div className={cn("space-y-4", !compact && "rounded-xl border bg-muted/20 p-4")}>
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          Operational Metadata
+        </h4>
+        <div className="space-y-3 text-sm">
             <DetailLine label="Resource server ID" value={server.id} copyable />
             <DetailLine label="Tenant ID" value={server.tenant_id} copyable />
             <DetailLine label="Created" value={formatTimestamp(server.created_at)} />
             <DetailLine label="Updated" value={formatTimestamp(server.updated_at)} />
-          </div>
         </div>
       </div>
     </div>

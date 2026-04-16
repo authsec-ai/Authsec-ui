@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, RefreshCcw } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -12,7 +12,6 @@ import {
   type ResourceServer,
 } from "@/app/api/resourceServersApi";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { Button } from "@/components/ui/button";
 import { TableCard } from "@/theme/components/cards";
 
@@ -28,22 +27,21 @@ import {
 
 type ResourceServerLocationState = {
   latestSecret?: ResourceServerSecretState;
-  focusId?: string;
 };
 
 export default function ResourceServersPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isCreateRoute = location.pathname.endsWith("/new");
+  const [searchParams] = useSearchParams();
+  const isCreateOpen = searchParams.get("create") === "1";
 
   const { data: resourceServers = [], isLoading, refetch } = useListResourceServersQuery();
   const [createResourceServer, { isLoading: isCreating }] = useCreateResourceServerMutation();
   const [updateResourceServer, { isLoading: isUpdating }] = useUpdateResourceServerMutation();
-  const [deleteResourceServer, { isLoading: isDeleting }] = useDeleteResourceServerMutation();
-  const [rotateSecret, { isLoading: isRotating }] = useRotateResourceServerSecretMutation();
+  const [deleteResourceServer] = useDeleteResourceServerMutation();
+  const [rotateSecret] = useRotateResourceServerSecretMutation();
 
   const [editingServer, setEditingServer] = useState<ResourceServer | null>(null);
-  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [latestSecret, setLatestSecret] = useState<ResourceServerSecretState | null>(null);
 
   const locationState = (location.state as ResourceServerLocationState | null) ?? null;
@@ -52,13 +50,10 @@ export default function ResourceServersPage() {
     if (locationState?.latestSecret) {
       setLatestSecret(locationState.latestSecret);
     }
-    if (locationState?.focusId) {
-      setExpandedRowIds([locationState.focusId]);
-    }
     if (locationState) {
-      navigate(location.pathname, { replace: true });
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     }
-  }, [location.pathname, locationState, navigate]);
+  }, [location.pathname, location.search, locationState, navigate]);
 
   const handleCreate = async (
     payload: ReturnType<typeof buildResourceServerPayload>,
@@ -76,7 +71,6 @@ export default function ResourceServersPage() {
                 resourceServerId: response.id,
               }
             : undefined,
-          focusId: response.id,
         } satisfies ResourceServerLocationState,
       });
     } catch (error: any) {
@@ -105,7 +99,6 @@ export default function ResourceServersPage() {
     try {
       await deleteResourceServer(server.id).unwrap();
       toast.success("Resource server deleted.");
-      setExpandedRowIds((current) => current.filter((id) => id !== server.id));
       if (editingServer?.id === server.id) {
         setEditingServer(null);
       }
@@ -123,7 +116,6 @@ export default function ResourceServersPage() {
         resourceServerId: server.id,
       });
       toast.success("Introspection secret rotated.");
-      setExpandedRowIds([server.id]);
     } catch (error: any) {
       toast.error(error?.data?.error || "Failed to rotate introspection secret.");
     }
@@ -146,24 +138,12 @@ export default function ResourceServersPage() {
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={() => navigate("/resource-servers/new")}>
+              <Button onClick={() => navigate("/resource-servers?create=1")}>
                 <Plus className="mr-2 h-4 w-4" />
                 New Resource Server
               </Button>
             </div>
           }
-        />
-
-        <PageInfoBanner
-          title="Resource Servers are the canonical protected-resource object."
-          description="Manage protected MCP resources in the same operational table model as the rest of the product. Expand rows to inspect details, use row actions for operational tasks, and keep SDK/prompt generation scoped to the selected resource."
-          features={[
-            { text: "Calls the canonical /authsec/resource-servers backend." },
-            { text: "Uses row expansion and canonical row-action menus." },
-            { text: "Shows one-time introspection secrets only after create or rotate." },
-          ]}
-          dismissible
-          storageKey="resource-servers-info"
         />
 
         {latestSecret ? (
@@ -181,30 +161,26 @@ export default function ResourceServersPage() {
           ) : (
             <ResourceServersTable
               resourceServers={resourceServers}
-              expandedRowIds={expandedRowIds}
-              onExpandedRowsChange={setExpandedRowIds}
               onDetails={(server) => navigate(`/resource-servers/${server.id}`)}
               onEdit={(server) => setEditingServer(server)}
               onRegisteredOAuthClients={(server) =>
                 navigate(`/resource-servers/${server.id}/clients`)
               }
               onRotateSecret={handleRotateSecret}
-              onViewSDK={(server) => navigate(`/resource-servers/${server.id}/sdk`)}
-              onGeneratePrompt={(server) => navigate(`/resource-servers/${server.id}/prompt`)}
               onDelete={handleDelete}
             />
           )}
 
           {!isLoading && resourceServers.length === 0 ? (
             <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-              No resource servers yet. Create one to begin MCP OAuth and AuthSec SDK testing.
+              No resource servers yet. Create one to begin protected MCP resource testing.
             </div>
           ) : null}
         </TableCard>
       </div>
 
       <ResourceServerFormDialog
-        open={isCreateRoute}
+        open={isCreateOpen}
         onOpenChange={(open) => !open && navigate("/resource-servers")}
         mode="create"
         onSubmit={handleCreate}
