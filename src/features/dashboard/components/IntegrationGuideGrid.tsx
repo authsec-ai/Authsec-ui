@@ -136,41 +136,6 @@ export function IntegrationGuideGrid({
     return "default";
   };
 
-  // Handler for Scopes wizard
-  const handleStartScopesWizard = () => {
-    // If already completed, clear completion state to allow restart
-    if (isScopesWizardCompleted()) {
-      clearWizardCompletion("scopes-wizard");
-    }
-
-    const wizardConfig = getWizardConfig("scopes-wizard");
-    if (wizardConfig) {
-      startWizard("scopes-wizard", wizardConfig);
-    }
-  };
-
-  // Check if Scopes wizard is completed
-  const isScopesWizardCompleted = () => {
-    try {
-      const stored = localStorage.getItem("authsec_wizards");
-      if (!stored) return false;
-      const data = JSON.parse(stored);
-      return data.completedWizards?.includes("scopes-wizard") || false;
-    } catch {
-      return false;
-    }
-  };
-
-  const getScopesBadge = () => {
-    if (isScopesWizardCompleted()) return "Completed";
-    return "Get Started";
-  };
-
-  const getScopesColor = (): "success" | "warning" | "info" | "default" => {
-    if (isScopesWizardCompleted()) return "success";
-    return "default";
-  };
-
   const integrationGuides = [
     {
       id: "user-auth-setup",
@@ -239,28 +204,6 @@ export function IntegrationGuideGrid({
         "from-blue-50 to-cyan-50 dark:from-neutral-800/50 dark:to-neutral-700/30",
       iconBg: "bg-blue-500/10 dark:bg-blue-400/20",
       iconColor: "text-blue-600 dark:text-blue-400",
-    },
-    {
-      id: "scopes-setup",
-      icon: Shield,
-      title: "Scopes Setup",
-      description:
-        "Define permission scopes and boundaries for your RBAC system",
-      ctaLabel: isScopesWizardCompleted() ? "Setup Another" : "Setup Scopes",
-      ctaLink: "#",
-      onCustomAction: handleStartScopesWizard,
-      statusBadge: isLoading ? "..." : getScopesBadge(),
-      statusColor: getScopesColor(),
-      secondaryAction: isScopesWizardCompleted()
-        ? {
-            label: "View Scopes",
-            link: "/admin/scopes",
-          }
-        : undefined,
-      gradient:
-        "from-amber-50 to-yellow-50 dark:from-neutral-800/50 dark:to-neutral-700/30",
-      iconBg: "bg-amber-500/10 dark:bg-amber-400/20",
-      iconColor: "text-amber-600 dark:text-amber-400",
     },
   ];
 

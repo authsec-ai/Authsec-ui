@@ -39,7 +39,7 @@ export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: 
   const handleNotifications = () => {};
 
   const shouldShowRbacSwitcher = useMemo(() => {
-    const RBAC_SEGMENTS = ["users", "groups", "roles", "resources", "permissions", "scopes", "api-oauth-scopes", "role-bindings"];
+    const RBAC_SEGMENTS = ["users", "groups", "roles", "resources", "permissions", "role-bindings", "consent-grants"];
     const segments = location.pathname.split("/").filter(Boolean);
 
     return segments.some((segment) => RBAC_SEGMENTS.includes(segment));

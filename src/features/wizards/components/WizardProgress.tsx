@@ -79,18 +79,14 @@ export function WizardProgress({
               route = route.replace(":clientId", wizardStepData.clientId);
             }
 
-            // Check if this wizard uses context-aware navigation (RBAC or Scopes wizard)
+            // Check if this wizard uses context-aware navigation (RBAC wizard)
             // These wizards have "select-context" as their first step
             const usesContextAwareNav = steps[0]?.id === "select-context";
 
             // Determine wizard ID from the wizard configuration
-            // For context-aware wizards, we need to determine which one it is
             let activeWizardId = "user-auth-wizard"; // default
             if (usesContextAwareNav) {
-              // Check if this is RBAC wizard (has 3+ steps with permissions/roles/bindings)
-              // or Scopes wizard (has 2 steps with create-scope)
-              const hasCreateScope = steps.some(s => s.id === "create-scope");
-              activeWizardId = hasCreateScope ? "scopes-wizard" : "rbac-wizard";
+              activeWizardId = "rbac-wizard";
             }
 
             const navState = {
@@ -307,10 +303,6 @@ export function WizardProgress({
                         step.actionPayload.handler === "select-context" && (
                           <ContextSelectionStep
                             onComplete={(context) => {
-                              const normalizedContext = context === "admin" ? "admin" : "end_user";
-                              if (activeWizard === "scopes-wizard") {
-                              } else {
-                              }
                               handleStepCompletion(step.id, { selectedContext: context });
                             }}
                           />

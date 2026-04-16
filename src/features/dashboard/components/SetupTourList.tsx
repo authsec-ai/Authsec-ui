@@ -1,5 +1,5 @@
 import React from "react";
-import { ScanSearch, Server, ShieldCheck, User } from "lucide-react";
+import { Server, ShieldCheck, User } from "lucide-react";
 import { useWizardStatus } from "../hooks/useWizardStatus";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { DashboardSection } from "./DashboardSection";
@@ -9,7 +9,6 @@ export function SetupTourList() {
   const { audience } = useRbacAudience();
   const m2m = useWizardStatus("m2m-workload-wizard");
   const rbac = useWizardStatus("rbac-wizard");
-  const scopes = useWizardStatus("scopes-wizard");
   const userAuth = useWizardStatus("user-auth-wizard");
 
   const toursConfig = [
@@ -38,18 +37,6 @@ export function SetupTourList() {
       sortOrder: 2,
     },
     {
-      id: "scopes",
-      icon: ScanSearch,
-      title: "Scopes Setup",
-      description:
-        "Define permission scopes and boundaries for your RBAC system",
-      wizard: scopes,
-      route: `/${audience}/scopes`,
-      routeLabel: "Scopes",
-      color: "amber" as const,
-      sortOrder: 3,
-    },
-    {
       id: "user-auth",
       icon: User,
       title: "User Auth",
@@ -74,14 +61,12 @@ export function SetupTourList() {
   }, [
     m2m.isCompleted,
     rbac.isCompleted,
-    scopes.isCompleted,
     userAuth.isCompleted,
   ]);
 
   const tourIdToEventName: Record<string, string> = {
     "m2m-auth": "m2m_auth",
     rbac: "rbac_setup",
-    scopes: "scopes_setup",
     "user-auth": "user_auth",
   };
 

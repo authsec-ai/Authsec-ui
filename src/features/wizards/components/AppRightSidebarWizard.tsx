@@ -123,48 +123,6 @@ function RbacCompletionView({ onClose }: { onClose: () => void }) {
   );
 }
 
-// Scopes Wizard Completion View
-function ScopesCompletionView({ onClose }: { onClose: () => void }) {
-  const contextualNavigate = useContextualNavigate();
-  const { setIsAwaitingPlatformAction } = useWizard();
-
-  const handleViewScopes = () => {
-    setIsAwaitingPlatformAction(true);
-    contextualNavigate("scopes");
-  };
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background">
-      <div className="max-w-md text-center space-y-4">
-        {/* Success icon */}
-        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-          <CheckCircle className="w-8 h-8 text-primary" />
-        </div>
-
-        {/* Title and message */}
-        <h2 className="text-2xl font-semibold text-foreground">
-          Scopes Setup Complete!
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          You've successfully created a scope. Scopes define permission
-          boundaries in your RBAC system.
-        </p>
-
-        {/* Action buttons */}
-        <div className="flex flex-col gap-2 mt-6">
-          <Button onClick={handleViewScopes} className="w-full">
-            <Shield className="mr-2 h-4 w-4" />
-            View Scopes
-          </Button>
-          <Button variant="outline" onClick={onClose} className="w-full">
-            Close
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // User Auth Wizard Completion View
 function UserAuthCompletionView({
   clientId,
@@ -459,8 +417,6 @@ export function AppRightSidebarWizard({
           <M2MCompletionView onClose={onClose} />
         ) : wizardId === "rbac-wizard" ? (
           <RbacCompletionView onClose={onClose} />
-        ) : wizardId === "scopes-wizard" ? (
-          <ScopesCompletionView onClose={onClose} />
         ) : (
           /* Fallback for unknown wizards */
           <M2MCompletionView onClose={onClose} />

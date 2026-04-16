@@ -210,29 +210,6 @@ export function WizardProvider({ children }: WizardProviderProps) {
       }
     }
 
-    // Handle Scopes wizard navigation-return triggers
-    if (
-      activeWizard === "scopes-wizard" &&
-      currentStepConfig.actionType === "navigate" &&
-      currentStepConfig.completionTrigger === "navigation-return"
-    ) {
-      const locationState = location.state as any;
-      const isBackOnRoot = location.pathname === "/" || location.pathname === "/dashboard";
-
-      // Check for scope creation flag
-      if (
-        currentStepConfig.id === "create-scope" &&
-        locationState?.scopeCreated === true &&
-        isBackOnRoot &&
-        !completedSteps.includes(currentStepConfig.id)
-      ) {
-        console.log(
-          `[Wizard] Auto-completing step "${currentStepConfig.id}" - scope created`
-        );
-        completeStep(currentStepConfig.id);
-      }
-    }
-
     previousLocation.current = location;
   }, [location, activeWizard, currentStep, wizardConfig, completedSteps]);
 
