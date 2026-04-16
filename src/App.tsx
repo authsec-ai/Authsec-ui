@@ -172,7 +172,7 @@ function LegacyClientOnboardRedirect() {
   const { clientId } = useParams<{ clientId?: string }>();
   const target = clientId
     ? `/resource-servers/${encodeURIComponent(clientId)}`
-    : "/resource-servers/new";
+    : "/resource-servers?create=1";
 
   return <Navigate to={target} replace />;
 }
@@ -341,13 +341,7 @@ function AppContent() {
 
                   <Route
                     path="/resource-servers/new"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServersPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/resource-servers?create=1" replace />}
                   />
 
                   <Route
@@ -396,7 +390,7 @@ function AppContent() {
 
                   <Route
                     path="/clients/onboard"
-                    element={<Navigate to="/resource-servers/new" replace />}
+                    element={<Navigate to="/resource-servers?create=1" replace />}
                   />
 
                   <Route
