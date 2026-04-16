@@ -9,7 +9,6 @@ import {
   Code2,
   ClipboardList,
   CloudCog,
-  Crosshair,
   FileLock2,
   Globe,
   GlobeLock,
@@ -169,18 +168,13 @@ const CONTEXT_AWARE_RBAC = [
         icon: UserCog,
       },
       {
-        title: "Internal Scope Bundles",
-        url: "/authz/internal-scopes",
-        icon: Crosshair,
-      },
-      {
         title: "Role Bindings",
         url: "/authz/role-bindings",
         icon: UserPlus,
       },
       {
-        title: "Resource Scopes",
-        url: "/oauth/resource-scopes",
+        title: "Consent Grants",
+        url: "/consent-grants",
         icon: GlobeLock,
       },
     ],

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   Edit,
+  Grid3X3,
   KeyRound,
   MoreHorizontal,
   ShieldCheck,
@@ -26,6 +27,7 @@ interface ResourceServersTableProps {
   resourceServers: ResourceServer[];
   onDetails: (server: ResourceServer) => void;
   onEdit: (server: ResourceServer) => void;
+  onScopeMatrix: (server: ResourceServer) => void;
   onRegisteredOAuthClients: (server: ResourceServer) => void;
   onRotateSecret: (server: ResourceServer) => void;
   onDelete: (server: ResourceServer) => void;
@@ -66,6 +68,7 @@ function RowActions({
   server,
   onDetails,
   onEdit,
+  onScopeMatrix,
   onRegisteredOAuthClients,
   onRotateSecret,
   onDelete,
@@ -86,6 +89,10 @@ function RowActions({
         <DropdownMenuItem onClick={() => onEdit(server)}>
           <Edit className="mr-2 h-4 w-4" />
           Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onScopeMatrix(server)}>
+          <Grid3X3 className="mr-2 h-4 w-4" />
+          Scope Matrix
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onRegisteredOAuthClients(server)}>
           <ShieldCheck className="mr-2 h-4 w-4" />

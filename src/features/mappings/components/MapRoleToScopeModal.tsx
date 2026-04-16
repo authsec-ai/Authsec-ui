@@ -3,8 +3,7 @@ import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import { useGetAdminUsersQuery } from "@/app/api/admin/usersApi";
 import { useGetEndUsersQuery } from "@/app/api/enduser/usersApi";
 import { useCreateBindingMutation } from "@/app/api/bindingsApi";
-import { useGetScopeMappingsQuery } from "@/app/api/scopesApi";
-import { useGetEndUserScopeMappingsQuery } from "@/app/api/enduser/scopesApi";
+import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import {
   Dialog,
   DialogContent,
@@ -100,26 +99,19 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
     audience: audience,
   });
 
-  // ── Scopes API: admin vs endUser ──
-  const { data: adminScopeMappings = [], isFetching: isFetchingAdminScopes } = useGetScopeMappingsQuery(undefined, {
-    skip: isEndUser,
-    refetchOnMountOrArgChange: true,
-    refetchOnFocus: true,
-  });
+  // Fetch resource servers to get scopes across all RS
+  const { data: resourceServers = [], isFetching: isFetchingScopes } = useListResourceServersQuery();
 
-  const { data: endUserScopeMappings = [], isFetching: isFetchingEndUserScopes } = useGetEndUserScopeMappingsQuery(undefined, {
-    skip: !isEndUser,
-    refetchOnMountOrArgChange: true,
-    refetchOnFocus: true,
-  });
-
-  const scopeMappings = isEndUser ? endUserScopeMappings : adminScopeMappings;
-  const isFetchingScopes = isEndUser ? isFetchingEndUserScopes : isFetchingAdminScopes;
-
-  // Extract scope names from mappings
+  // Extract unique scope strings from all resource servers
   const scopeNames = useMemo(() => {
-    return scopeMappings.map((mapping) => mapping.scope_name);
-  }, [scopeMappings]);
+    const allScopes = new Set<string>();
+    for (const rs of resourceServers) {
+      for (const scope of rs.scopes_supported ?? []) {
+        allScopes.add(scope);
+      }
+    }
+    return Array.from(allScopes).sort();
+  }, [resourceServers]);
 
   const [createBinding, { isLoading: isCreatingBinding }] = useCreateBindingMutation();
 

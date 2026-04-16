@@ -163,6 +163,9 @@ export default function ResourceServersPage() {
               resourceServers={resourceServers}
               onDetails={(server) => navigate(`/resource-servers/${server.id}`)}
               onEdit={(server) => setEditingServer(server)}
+              onScopeMatrix={(server) =>
+                navigate(`/resource-servers/${server.id}/scope-matrix`)
+              }
               onRegisteredOAuthClients={(server) =>
                 navigate(`/resource-servers/${server.id}/clients`)
               }

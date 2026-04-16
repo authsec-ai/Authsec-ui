@@ -74,10 +74,10 @@ import {
 // import { AddResourcePage } from "./features/resources/AddResourcePage";
 
 // RBAC pages
-import { ScopesPage } from "./features/scopes/ScopesPage";
-import { ApiOAuthScopesPage } from "./features/api-oauth-scopes/ApiOAuthScopesPage";
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
+import { ScopeMatrixPage } from "./features/scope-matrix/ScopeMatrixPage";
+import { ConsentGrantsPage } from "./features/consent-grants/ConsentGrantsPage";
 import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
 import SDKHubPage from "./features/sdk/SDKHubPage";
 
@@ -389,6 +389,17 @@ function AppContent() {
                   />
 
                   <Route
+                    path="/resource-servers/:id/scope-matrix"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ScopeMatrixPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
                     path="/clients/onboard"
                     element={<Navigate to="/resource-servers?create=1" replace />}
                   />
@@ -587,11 +598,11 @@ function AppContent() {
                     <Route path="roles" element={<Navigate to="authz/roles" replace />} />
                     <Route
                       path="scopes"
-                      element={<Navigate to="authz/internal-scopes" replace />}
+                      element={<Navigate to="/resource-servers" replace />}
                     />
                     <Route
                       path="api-oauth-scopes"
-                      element={<Navigate to="oauth/resource-scopes" replace />}
+                      element={<Navigate to="/resource-servers" replace />}
                     />
                     <Route
                       path="permissions"
@@ -619,13 +630,7 @@ function AppContent() {
                       />
                       <Route
                         path="internal-scopes"
-                        element={
-                          <ProtectedRoute requireProject>
-                            <AppLayout>
-                              <ScopesPage />
-                            </AppLayout>
-                          </ProtectedRoute>
-                        }
+                        element={<Navigate to="/resource-servers" replace />}
                       />
                       <Route
                         path="permissions"
@@ -662,15 +667,20 @@ function AppContent() {
                     <Route path="oauth">
                       <Route
                         path="resource-scopes"
-                        element={
-                          <ProtectedRoute requireProject>
-                            <AppLayout>
-                              <ApiOAuthScopesPage />
-                            </AppLayout>
-                          </ProtectedRoute>
-                        }
+                        element={<Navigate to="/resource-servers" replace />}
                       />
                     </Route>
+
+                    <Route
+                      path="consent-grants"
+                      element={
+                        <ProtectedRoute requireProject>
+                          <AppLayout>
+                            <ConsentGrantsPage />
+                          </AppLayout>
+                        </ProtectedRoute>
+                      }
+                    />
                   </Route>
 
                   {/* Legacy redirects - redirect old paths to admin context */}
@@ -680,11 +690,11 @@ function AppContent() {
                   />
                   <Route
                     path="/scopes"
-                    element={<Navigate to="/admin/authz/internal-scopes" replace />}
+                    element={<Navigate to="/resource-servers" replace />}
                   />
                   <Route
                     path="/api-oauth-scopes"
-                    element={<Navigate to="/admin/oauth/resource-scopes" replace />}
+                    element={<Navigate to="/resource-servers" replace />}
                   />
                   <Route
                     path="/permissions"
@@ -863,7 +873,7 @@ function AppContent() {
                   {/* RBAC Routes */}
                   <Route
                     path="/scopes"
-                    element={<Navigate to="/admin/authz/internal-scopes" replace />}
+                    element={<Navigate to="/resource-servers" replace />}
                   />
 
                   <Route

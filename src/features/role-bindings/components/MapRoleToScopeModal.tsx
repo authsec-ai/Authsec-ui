@@ -3,8 +3,8 @@ import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import { useGetAdminUsersQuery } from "@/app/api/admin/usersApi";
 import { useGetEndUsersQuery } from "@/app/api/enduser/usersApi";
 import { useCreateBindingMutation, type RbacAudience } from "@/app/api/bindingsApi";
-import { useGetScopeMappingsQuery } from "@/app/api/scopesApi";
-import { useGetEndUserScopeMappingsQuery } from "@/app/api/enduser/scopesApi";
+import { useListResourceServerScopesQuery } from "@/app/api/scopeMatrixApi";
+import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import {
   Dialog,
   DialogContent,
@@ -115,35 +115,19 @@ export function MapRoleToScopeModal({
     audience,
   });
 
-  // Admin scope mappings - skip when endUser
-  const { data: adminScopeMappings = [], isFetching: isFetchingAdminScopes } = useGetScopeMappingsQuery(undefined, {
-    skip: audience === 'endUser',
-    refetchOnMountOrArgChange: true,
-    refetchOnFocus: true,
-  });
+  // Fetch resource servers to get scopes across all RS
+  const { data: resourceServers = [], isFetching: isFetchingScopes } = useListResourceServersQuery();
 
-  // End-user scope mappings - skip when admin
-  const { data: endUserScopeMappings = [], isFetching: isFetchingEndUserScopes } = useGetEndUserScopeMappingsQuery(undefined, {
-    skip: audience === 'admin',
-    refetchOnMountOrArgChange: true,
-    refetchOnFocus: true,
-  });
-
-  // Combined fetching state
-  const isFetchingScopes = isFetchingAdminScopes || isFetchingEndUserScopes;
-
-  // Use appropriate scope mappings based on audience
-  const scopeMappings = useMemo(() => {
-    if (audience === 'admin') {
-      return adminScopeMappings;
-    }
-    return endUserScopeMappings;
-  }, [audience, adminScopeMappings, endUserScopeMappings]);
-
-  // Extract scope names from mappings
+  // Extract unique scope strings from all resource servers
   const scopeNames = useMemo(() => {
-    return scopeMappings.map((mapping) => mapping.scope_name);
-  }, [scopeMappings]);
+    const allScopes = new Set<string>();
+    for (const rs of resourceServers) {
+      for (const scope of rs.scopes_supported ?? []) {
+        allScopes.add(scope);
+      }
+    }
+    return Array.from(allScopes).sort();
+  }, [resourceServers]);
 
   const [createBinding, { isLoading: isCreatingBinding }] = useCreateBindingMutation();
 

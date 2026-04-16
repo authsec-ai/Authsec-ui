@@ -152,32 +152,6 @@ export const TOUR_REGISTRY: Record<string, TourConfig> = {
     ],
   },
 
-  "scopes-management": {
-    tourId: "scopes-management",
-    pageId: "scopes",
-    autoStart: true,
-    steps: [
-      {
-        id: "create-scope-button",
-        target: '[data-tour-id="create-scope-button"]',
-        heading: "Define Permission Scopes",
-        description:
-          "Scopes define the boundaries of permissions within your projects. Create scopes to organize and limit access to specific areas of your application.",
-        position: "bottom",
-        spotlightPadding: 12,
-      },
-      // {
-      //   id: "scopes-table",
-      //   target: '[data-tour-id="scopes-table"]',
-      //   heading: "Manage Scopes",
-      //   description:
-      //     "View all scopes and their associated resources. Click on any scope to edit its configuration or delete it.",
-      //   position: "top",
-      //   spotlightPadding: 16,
-      // },
-    ],
-  },
-
   "role-bindings-management": {
     tourId: "role-bindings-management",
     pageId: "role-bindings",
@@ -276,32 +250,6 @@ export const TOUR_REGISTRY: Record<string, TourConfig> = {
       //   heading: "Manage Certificates",
       //   description:
       //     "View all SPIFFE certificates issued to your workloads. Monitor expiration dates, rotation status, and certificate health. Click on any certificate to view full details.",
-      //   position: "top",
-      //   spotlightPadding: 16,
-      // },
-    ],
-  },
-
-  "api-oauth-scopes-intro": {
-    tourId: "api-oauth-scopes-intro",
-    pageId: "api-oauth-scopes",
-    autoStart: true,
-    steps: [
-      {
-        id: "create-scope-button",
-        target: '[data-tour-id="create-api-scope-button"]',
-        heading: "Define API Scopes",
-        description:
-          "Create OAuth 2.0 scopes to define what permissions external applications can request when accessing your API.",
-        position: "bottom",
-        spotlightPadding: 12,
-      },
-      // {
-      //   id: "scopes-table",
-      //   target: '[data-tour-id="api-scopes-table"]',
-      //   heading: "Manage OAuth Scopes",
-      //   description:
-      //     "View all OAuth scopes defined for your API. Each scope represents a specific permission that can be granted to client applications.",
       //   position: "top",
       //   spotlightPadding: 16,
       // },
