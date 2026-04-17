@@ -198,6 +198,11 @@ function LegacySDKGuidesRedirect() {
   return <Navigate to={target} replace />;
 }
 
+function RedirectWithQuery({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+}
+
 /**
  * App content component that uses session initialization
  */
@@ -258,19 +263,19 @@ function AppContent() {
                   />
                   <Route
                     path="/auth/callback"
-                    element={<Navigate to="/admin/auth/callback" replace />}
+                    element={<RedirectWithQuery to="/admin/auth/callback" />}
                   />
                   <Route
                     path="/authsec/auth/callback"
-                    element={<Navigate to="/authsec/admin/auth/callback" replace />}
+                    element={<RedirectWithQuery to="/authsec/admin/auth/callback" />}
                   />
                   <Route
                     path="/uflow/oidc/callback"
-                    element={<Navigate to="/admin/auth/callback" replace />}
+                    element={<RedirectWithQuery to="/admin/auth/callback" />}
                   />
                   <Route
                     path="/authsec/uflow/oidc/callback"
-                    element={<Navigate to="/authsec/admin/auth/callback" replace />}
+                    element={<RedirectWithQuery to="/authsec/admin/auth/callback" />}
                   />
                   <Route
                     path="/admin/create-workspace"
