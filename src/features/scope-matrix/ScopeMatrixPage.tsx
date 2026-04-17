@@ -55,7 +55,8 @@ export function ScopeMatrixPage() {
     );
   }
 
-  const unmappedCount = matrixData.unmapped_scopes.length;
+  const unmappedScopes = matrixData.unmapped_scopes ?? [];
+  const unmappedCount = unmappedScopes.length;
 
   return (
     <div className="min-h-screen">
@@ -136,8 +137,8 @@ export function ScopeMatrixPage() {
           </div>
           <ToolScopeGrid
             rsId={rsId}
-            tools={matrixData.tools}
-            allScopes={allScopes || []}
+            tools={matrixData.tools ?? []}
+            allScopes={allScopes ?? []}
             onScopeClick={handleScopeClick}
           />
         </TableCard>
@@ -145,7 +146,7 @@ export function ScopeMatrixPage() {
         {/* Unmapped Scopes Panel */}
         {unmappedCount > 0 && (
           <UnmappedScopesPanel
-            unmappedScopes={matrixData.unmapped_scopes}
+            unmappedScopes={unmappedScopes}
             onScopeClick={handleScopeClick}
           />
         )}

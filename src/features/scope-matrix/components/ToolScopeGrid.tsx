@@ -67,7 +67,7 @@ export function ToolScopeGrid({ rsId, tools, allScopes, onScopeClick }: ToolScop
   };
 
   const getAvailableScopes = (tool: MCPToolResponse) => {
-    const mappedScopeIds = new Set(tool.scopes.map((s) => s.scope_id));
+    const mappedScopeIds = new Set((tool.scopes ?? []).map((s) => s.scope_id));
     return allScopes.filter((scope) => !mappedScopeIds.has(scope.id));
   };
 
@@ -140,10 +140,10 @@ export function ToolScopeGrid({ rsId, tools, allScopes, onScopeClick }: ToolScop
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {tool.scopes.length === 0 ? (
+              {(tool.scopes ?? []).length === 0 ? (
                 <span className="text-sm text-muted-foreground">No scopes mapped</span>
               ) : (
-                tool.scopes.map((scope) => (
+                (tool.scopes ?? []).map((scope) => (
                   <div key={scope.scope_id} className="group relative inline-flex items-center">
                     <Badge
                       variant="outline"
