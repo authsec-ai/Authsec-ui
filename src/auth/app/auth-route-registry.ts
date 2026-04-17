@@ -59,10 +59,17 @@ export const AUTH_ROUTE_REGISTRY: AuthRouteDescriptor[] = [
 
 const normalizeAuthPath = (pathname: string): string => {
   if (!pathname) return "/";
-  if (pathname.length > 1 && pathname.endsWith("/")) {
-    return pathname.slice(0, -1);
+  let normalizedPath = pathname;
+  if (normalizedPath.length > 1 && normalizedPath.endsWith("/")) {
+    normalizedPath = normalizedPath.slice(0, -1);
   }
-  return pathname;
+  if (normalizedPath === "/authsec") {
+    return "/";
+  }
+  if (normalizedPath.startsWith("/authsec/")) {
+    return normalizedPath.slice("/authsec".length);
+  }
+  return normalizedPath;
 };
 
 export const resolveAuthRouteDescriptor = (

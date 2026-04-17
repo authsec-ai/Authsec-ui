@@ -216,20 +216,44 @@ function AppContent() {
                   {/* Auth routes - accessible without authentication */}
                   <Route path="/admin/login" element={<UnifiedAuthFlowPage />} />
                   <Route
+                    path="/authsec/admin/login"
+                    element={<UnifiedAuthFlowPage />}
+                  />
+                  <Route
                     path="/admin/signin"
                     element={<Navigate to="/admin/login" replace />}
+                  />
+                  <Route
+                    path="/authsec/admin/signin"
+                    element={<Navigate to="/authsec/admin/login" replace />}
                   />
                   <Route
                     path="/admin/signup"
                     element={<Navigate to="/admin/login" replace />}
                   />
                   <Route
+                    path="/authsec/admin/signup"
+                    element={<Navigate to="/authsec/admin/login" replace />}
+                  />
+                  <Route
                     path="/admin/verify-otp"
+                    element={<UnifiedAuthFlowPage />}
+                  />
+                  <Route
+                    path="/authsec/admin/verify-otp"
                     element={<UnifiedAuthFlowPage />}
                   />
                   <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
+                    path="/authsec/admin/webauthn"
+                    element={<UnifiedAuthFlowPage />}
+                  />
+                  <Route
                     path="/admin/auth/callback"
+                    element={<UnifiedAuthFlowPage />}
+                  />
+                  <Route
+                    path="/authsec/admin/auth/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
                   <Route
@@ -237,11 +261,27 @@ function AppContent() {
                     element={<Navigate to="/admin/auth/callback" replace />}
                   />
                   <Route
+                    path="/authsec/auth/callback"
+                    element={<Navigate to="/authsec/admin/auth/callback" replace />}
+                  />
+                  <Route
                     path="/uflow/oidc/callback"
                     element={<Navigate to="/admin/auth/callback" replace />}
                   />
                   <Route
+                    path="/authsec/uflow/oidc/callback"
+                    element={<Navigate to="/authsec/admin/auth/callback" replace />}
+                  />
+                  <Route
                     path="/admin/create-workspace"
+                    element={
+                      <ProtectedRoute requireProject={false}>
+                        <UnifiedAuthFlowPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/authsec/admin/create-workspace"
                     element={
                       <ProtectedRoute requireProject={false}>
                         <UnifiedAuthFlowPage />
@@ -295,12 +335,22 @@ function AppContent() {
 
                   {/* OIDC login page matching backend template design */}
                   <Route path="/oidc/login" element={<UnifiedAuthFlowPage />} />
+                  <Route path="/authsec/oidc/login" element={<UnifiedAuthFlowPage />} />
                   <Route
                     path="/oidc/auth/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
+                  <Route
+                    path="/authsec/oidc/auth/callback"
+                    element={<UnifiedAuthFlowPage />}
+                  />
                   <Route path="/oidc/mfa" element={<UnifiedAuthFlowPage />} />
+                  <Route path="/authsec/oidc/mfa" element={<UnifiedAuthFlowPage />} />
                   <Route path="/oidc/error" element={<UnifiedAuthFlowPage />} />
+                  <Route
+                    path="/authsec/oidc/error"
+                    element={<UnifiedAuthFlowPage />}
+                  />
 
                   {/* Root route - handles authentication redirect */}
                   <Route path="/" element={<LandingPage />} />
