@@ -22,6 +22,7 @@ import {
 import { GuidedTourProvider, GuidedTourOverlay } from "./features/guided-tour";
 import { WizardProvider } from "./contexts/WizardContext";
 import React, { useEffect, useRef } from "react";
+import { usePageViewTracking } from "./hooks/usePageViewTracking";
 
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 
@@ -79,6 +80,7 @@ import SDKHubPage from "./features/sdk/SDKHubPage";
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
 import OIDCCallbackPage from "./auth/enduser/OIDCCallbackPage";
+import { getOAuthBaseUrl } from "./utils/oauthUtils";
 
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
@@ -87,6 +89,21 @@ import { LandingPage } from "./pages/LandingPage";
  * Context Route Sync Component
  * Syncs URL context (admin/enduser) with RbacAudienceContext
  */
+/**
+ * Component that tracks page views in Amplitude
+ */
+function PageViewTracker() {
+  usePageViewTracking();
+  return null;
+}
+
+function HydraAuthRedirect() {
+  useEffect(() => {
+    const hydraUrl = getOAuthBaseUrl();
+    window.location.replace(`${hydraUrl}/oauth2/auth${window.location.search}`);
+  }, []);
+  return null;
+}
 
 function LegacyTrustDelegationPolicyDetailRedirect() {
   const { policyId = "" } = useParams();
@@ -193,13 +210,17 @@ function AppContent() {
     <AuthProvider>
       <RbacAudienceProvider>
         <Router>
+          <PageViewTracker />
           <WizardProvider>
             <GuidedTourProvider>
               <ContextRouteSync />
               <div className="min-h-screen bg-background text-foreground">
                 <Routes>
                   {/* Auth routes - accessible without authentication */}
-                  <Route path="/admin/login" element={<UnifiedAuthFlowPage />} />
+                  <Route
+                    path="/admin/login"
+                    element={<UnifiedAuthFlowPage />}
+                  />
                   <Route
                     path="/admin/signin"
                     element={<Navigate to="/admin/login" replace />}
@@ -212,17 +233,17 @@ function AppContent() {
                     path="/admin/verify-otp"
                     element={<UnifiedAuthFlowPage />}
                   />
-                  <Route path="/admin/webauthn" element={<UnifiedAuthFlowPage />} />
                   <Route
-                    path="/uflow/oidc/callback"
+                    path="/admin/webauthn"
+                    element={<UnifiedAuthFlowPage />}
+                  />
+                  <Route
+                    path="/authsec/uflow/oidc/callback"
                     element={<UnifiedAuthFlowPage />}
                   />
                   {/* OAuth callback route - backend redirects here with user data after provider auth
                       Uses OIDCCallbackPage to handle UFlow OAuth with direct query parameters */}
-                  <Route
-                    path="/auth/callback"
-                    element={<OIDCCallbackPage />}
-                  />
+                  <Route path="/auth/callback" element={<OIDCCallbackPage />} />
                   <Route
                     path="/admin/create-workspace"
                     element={
@@ -276,8 +297,17 @@ function AppContent() {
                     element={<Navigate to="/admin/login" replace />}
                   />
 
+                  {/* Hydra login_verifier redirect — Hydra sends the browser back to
+                      /oauth2/auth?login_verifier=... on the tenant domain after login
+                      acceptance. Since this SPA doesn't serve Hydra, forward the
+                      request to the real Hydra public endpoint. */}
+                  <Route path="/oauth2/auth" element={<HydraAuthRedirect />} />
+
                   {/* OIDC login page matching backend template design */}
-                  <Route path="/oidc/login" element={<UnifiedAuthFlowPage />} />
+                  <Route
+                    path="/oidc/login"
+                    element={<UnifiedAuthFlowPage />}
+                  />
                   <Route
                     path="/oidc/auth/callback"
                     element={<UnifiedAuthFlowPage />}

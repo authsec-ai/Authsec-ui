@@ -20,7 +20,7 @@ export const AUTH_ROUTE_REGISTRY: AuthRouteDescriptor[] = [
     title: "Admin WebAuthn",
   },
   {
-    path: "/uflow/oidc/callback",
+    path: "/authsec/uflow/oidc/callback",
     sceneId: "admin-oidc-callback",
     entrypoint: "admin",
     title: "Admin OIDC Callback",
@@ -63,5 +63,7 @@ export const resolveAuthRouteDescriptor = (
   pathname: string,
 ): AuthRouteDescriptor | null => {
   const normalizedPath = normalizeAuthPath(pathname);
-  return AUTH_ROUTE_REGISTRY.find((route) => route.path === normalizedPath) ?? null;
+  return (
+    AUTH_ROUTE_REGISTRY.find((route) => route.path === normalizedPath) ?? null
+  );
 };

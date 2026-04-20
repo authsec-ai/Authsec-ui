@@ -32,7 +32,9 @@ export function generateCodeVerifier(): string {
 /**
  * Generates a PKCE code challenge from a code verifier using SHA-256
  */
-export async function generateCodeChallenge(codeVerifier: string): Promise<string> {
+export async function generateCodeChallenge(
+  codeVerifier: string,
+): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(codeVerifier);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -59,12 +61,18 @@ export function getOAuthBaseUrl(): string {
   if (parts.length >= 2) {
     // Get the base domain (e.g., authsec.ai or authsec.dev)
     const baseDomain = parts.slice(-2).join(".");
-    
+
     // Production domain uses oauth.prod.authsec.ai
     if (baseDomain === "authsec.ai") {
       return "https://oauth.prod.authsec.ai";
     }
-    
+
+    // Tenant subdomains: {tenant}.{env}.authsec.dev (4+ parts)
+    // Replace the tenant prefix with "oauth" to get oauth.{env}.authsec.dev
+    if (parts.length >= 4) {
+      return `https://oauth.${parts.slice(1).join(".")}`;
+    }
+
     // Development and other environments
     return `https://oauth.${baseDomain}`;
   }
@@ -94,7 +102,11 @@ export function getTenantDomainFromHostname(): string | undefined {
   if (parts.length >= 4) {
     const tenantDomain = parts[0];
     // Make sure it's not 'app' or 'www' (main domain indicators)
-    if (tenantDomain !== "app" && tenantDomain !== "www" && tenantDomain !== "oauth") {
+    if (
+      tenantDomain !== "app" &&
+      tenantDomain !== "www" &&
+      tenantDomain !== "oauth"
+    ) {
       return tenantDomain;
     }
   }
@@ -153,7 +165,13 @@ export interface OAuth2AuthorizationUrlResult {
 export async function generateOAuth2AuthorizationUrl(
   params: OAuth2AuthorizationUrlParams,
 ): Promise<OAuth2AuthorizationUrlResult> {
-  const { clientId, redirectUri, scopes = ["openid", "profile", "email"], tenantDomain, hydraPublicUrl } = params;
+  const {
+    clientId,
+    redirectUri,
+    scopes = ["openid", "profile", "email"],
+    tenantDomain,
+    hydraPublicUrl,
+  } = params;
 
   // Generate PKCE values
   const codeVerifier = generateCodeVerifier();
@@ -163,7 +181,9 @@ export async function generateOAuth2AuthorizationUrl(
   const state = generateRandomString(32);
 
   // Build the OAuth2 client ID with suffix
-  const oauthClientId = clientId.endsWith("-main-client") ? clientId : `${clientId}-main-client`;
+  const oauthClientId = clientId.endsWith("-main-client")
+    ? clientId
+    : `${clientId}-main-client`;
 
   // Determine redirect URI
   const finalRedirectUri = redirectUri || getRedirectUri(tenantDomain);

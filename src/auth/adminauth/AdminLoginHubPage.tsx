@@ -1,16 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  Loader2,
-  ArrowLeft,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Star,
-  Lock,
-  Globe,
-  Code2,
-} from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import authsecLogoWhite from "@/logos/AuthSec Logo White.png";
+import authsecLogoBlack from "@/logos/AuthSec Logo Black.png";
 import { useTheme } from "next-themes";
 import {
   useAdminLoginPrecheckMutation,
@@ -47,6 +38,17 @@ import {
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
 import config from "../../config";
+import {
+  trackSignInAttempted,
+  trackSignInSucceeded,
+  trackSignUpStarted,
+  trackWorkspaceCreated,
+  trackOtpVerified,
+  trackOAuthProviderClicked,
+  trackForgotPasswordRequested,
+  trackPasswordResetCompleted,
+} from "@/utils/analytics";
+import { trackXSignupCompleted } from "@/utils/xPixel";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";
@@ -924,6 +926,7 @@ export function AdminLoginHubPage() {
         response?.message ||
           "If the email is registered, we'll send you an OTP to reset your password.",
       );
+      trackForgotPasswordRequested();
       setForgotPasswordStep("otp");
     } catch (error: unknown) {
       const apiError = error as { data?: { message?: string } };
@@ -989,6 +992,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Password reset successfully. Please sign in with your new password.",
       );
+      trackPasswordResetCompleted();
       resetForgotPasswordState();
       setEmailInput(normalizedEmail);
       setCheckedEmail(normalizedEmail);
@@ -1012,6 +1016,7 @@ export function AdminLoginHubPage() {
   const handleUFlowProviderAuth = async (provider: UFlowOIDCProvider) => {
     try {
       setIdleNotice(null);
+      trackOAuthProviderClicked(provider.provider_name);
       setAuthenticatingProvider(provider.provider_name);
 
       const response = await initiateUFlowOIDC({
@@ -1164,6 +1169,7 @@ export function AdminLoginHubPage() {
 
     try {
       setIsPasswordSubmitting(true);
+      trackSignInAttempted("password");
       const tenantOverride = tenantDomain?.trim() || undefined;
       const result = await signIn(
         currentEmail,
@@ -1172,6 +1178,7 @@ export function AdminLoginHubPage() {
       );
 
       if (result.success) {
+        trackSignInSucceeded();
         // Already on the correct tenant domain (redirected in precheck), navigate locally
         if (result.requiresWebAuthn) {
           navigate("/admin/webauthn", { replace: true });
@@ -1224,6 +1231,7 @@ export function AdminLoginHubPage() {
     }
 
     try {
+      trackSignUpStarted();
       const response = await bootstrapAccount({
         email: currentEmail,
         password: newPassword,
@@ -1245,6 +1253,7 @@ export function AdminLoginHubPage() {
       toast.success(
         "Account created! Check your inbox for the verification code.",
       );
+      trackWorkspaceCreated(tenantDomain.trim());
       safeSetFlowStage("otp");
       setTimeLeft(60);
       setCanResend(false);
@@ -1266,6 +1275,8 @@ export function AdminLoginHubPage() {
 
       if ("data" in result) {
         toast.success("Account verified successfully!");
+        trackOtpVerified();
+        trackXSignupCompleted(currentEmail);
 
         // Redirect to tenant domain for login
         if (tenantDomain && window.location.hostname !== tenantDomain) {
@@ -1351,92 +1362,99 @@ export function AdminLoginHubPage() {
       className="auth-shell--admin"
       valuePanel={
         <div className="auth-value-panel--dark">
-          {/* Header row: logo left + ADMIN badge right */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img
-                src={authsecLogoWhite}
-                alt="AuthSec"
-                className="h-8 w-8 object-contain"
-              />
-              <span className="text-white font-semibold text-xl tracking-tight">
-                AuthSec
-              </span>
-            </div>
-            <span className="bg-white text-[#0b0f19] text-xs font-bold tracking-wider rounded-full px-3.5 py-1 uppercase">
-              Admin
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mb-auto pb-8">
+            <img
+              src={authsecLogoWhite}
+              alt="AuthSec"
+              className="h-7 w-7 object-contain"
+            />
+            <span className="text-white font-semibold text-lg tracking-tight">
+              AuthSec
             </span>
           </div>
 
           {/* Main content — vertically centered */}
           <div className="flex-1 flex flex-col justify-center">
             <AuthValuePanel
-              title="Agentic auth for AI-native teams"
-              subtitle="The fastest way to add authentication to your AI agents, MCP servers, and voice interfaces."
+              eyebrow="The Standard"
+              title={
+                <>
+                  Agentic Auth
+                  <br />
+                  for AI-native teams
+                </>
+              }
             >
-              <ul className="auth-value-panel__list" aria-label="Highlights">
+              <div className="auth-feature-list" aria-label="Highlights">
                 {[
                   {
-                    Icon: Star,
-                    text: "OAuth, SAML SSO & social login in minutes",
-                  },
-                  { Icon: Lock, text: "Headless & voice auth for AI agents" },
-                  {
-                    Icon: Globe,
-                    text: "Full RBAC with audit logs & policy controls",
+                    title: "OAuth, SAML SSO & Social Login",
+                    desc: "Add enterprise SSO and social login to your app in minutes.",
                   },
                   {
-                    Icon: Code2,
-                    text: "Agent first. Developer first. Open source.",
+                    title: "Headless & Voice Auth",
+                    desc: "Native authentication for AI agents and voice interfaces.",
                   },
-                ].map(({ Icon, text }) => (
-                  <li className="auth-value-panel__list-item" key={text}>
-                    <span className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-gray-800/50 border border-gray-700/50">
-                      <Icon
-                        className="w-5 h-5 text-gray-300"
-                        aria-hidden="true"
-                      />
-                    </span>
-                    <span>{text}</span>
-                  </li>
+                  {
+                    title: "Full RBAC & Audit Logs",
+                    desc: "Granular policy controls with a complete audit trail built-in.",
+                  },
+                  {
+                    title: "Agent First. Developer First.",
+                    desc: "Open source and built for modern engineering teams.",
+                  },
+                ].map((item, i) => (
+                  <div className="auth-feature-item" key={item.title}>
+                    <span className="auth-feature-num">{i + 1}</span>
+                    <div className="auth-feature-body">
+                      <p className="auth-feature-title">{item.title}</p>
+                      <p className="auth-feature-desc">{item.desc}</p>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </AuthValuePanel>
           </div>
 
-          {/* Footer — pinned to bottom */}
+          {/* Footer — CTA + social links */}
           <div className="mt-auto pt-6 flex items-center justify-between">
-            <span className="text-white/35 text-xs">
-              © {new Date().getFullYear()} AuthSec. All rights reserved.
-            </span>
-            <div className="flex items-center gap-3">
+            <a
+              href="https://authsec.ai/contact"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/40 hover:text-white/70 transition-colors text-sm font-medium"
+            >
+              TALK TO AN ENGINEER →
+            </a>
+            <div className="flex items-center gap-4">
               <a
                 href="https://x.com/authsec"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-white/35 hover:text-white/70 transition-colors"
-                aria-label="X (Twitter)"
+                aria-label="Follow us on X"
+                className="text-white/30 hover:text-white/60 transition-colors"
               >
                 <svg
-                  className="h-4 w-4"
                   viewBox="0 0 24 24"
                   fill="currentColor"
+                  className="w-4 h-4"
                   aria-hidden="true"
                 >
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.742l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                 </svg>
               </a>
               <a
                 href="https://github.com/authsec-ai"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-white/35 hover:text-white/70 transition-colors"
-                aria-label="GitHub"
+                aria-label="View us on GitHub"
+                className="text-white/30 hover:text-white/60 transition-colors"
               >
                 <svg
-                  className="h-4 w-4"
                   viewBox="0 0 24 24"
                   fill="currentColor"
+                  className="w-4 h-4"
                   aria-hidden="true"
                 >
                   <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
@@ -1448,92 +1466,21 @@ export function AdminLoginHubPage() {
       }
     >
       <div className="flex flex-col flex-1">
-        <AuthActionPanel>
-          {flowStage !== "idle" && (
-            <AuthStepHeader
-              className="w-4/5 mx-auto text-center"
-              title={flowCopy.title}
-              subtitle={flowCopy.description}
-            />
-          )}
+        {flowStage === "idle" ? (
+          <div className="flex flex-col flex-1 px-8 py-10">
+            {/* Form content — vertically centered */}
+            <div className="flex-1 flex flex-col justify-center max-w-[380px] mx-auto w-full">
+              <h2 className="text-[1.75rem] font-bold mb-2 tracking-tight text-slate-900 whitespace-nowrap">
+                Create your AuthSec account
+              </h2>
+              <p className="text-gray-500 text-[0.9375rem] leading-relaxed mb-7">
+                The fastest way to add enterprise auth, SSO, and AI identity to
+                your stack — start in minutes, scale to millions.
+              </p>
 
-          <div className="space-y-6">
-            {flowStage === "idle" && (
-              <div className="w-full max-w-sm mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold mb-2 tracking-tight text-slate-900">
-                    Get started with your email
-                  </h2>
-                  <p className="text-gray-800 text-sm">
-                    Enter your work email to sign in or create an account
-                  </p>
-                </div>
-
-                <form
-                  className="w-full mb-6"
-                  onSubmit={handleInlineEmailSubmit}
-                >
-                  <div className="space-y-1.5 mb-4">
-                    <Label htmlFor="inline-email">Work email</Label>
-                    <Input
-                      id="inline-email"
-                      type="email"
-                      required
-                      value={emailInput}
-                      onChange={(event) => {
-                        clearIdleState();
-                        setEmailInput(event.target.value);
-                      }}
-                      className="h-11 rounded-xl px-4 text-[15px]"
-                      placeholder="name@company.com"
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="h-12 w-full rounded-xl font-medium"
-                    disabled={
-                      isPrecheckLoading ||
-                      (!!ssoProviderName && !ssoProvider) ||
-                      (idleNotice?.tone === "info" && !ssoProviderName)
-                    }
-                  >
-                    {isPrecheckLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Checking settings...
-                      </>
-                    ) : ssoProviderName ? (
-                      "Continue with SSO"
-                    ) : idleNotice?.tone === "info" ? (
-                      "Use your identity provider"
-                    ) : (
-                      "Continue"
-                    )}
-                  </Button>
-                </form>
-
-                {idleNotice ? (
-                  <div
-                    className={`auth-inline-alert ${
-                      idleNotice.tone === "error"
-                        ? "auth-inline-alert--error"
-                        : "auth-inline-alert--info"
-                    }`}
-                    role={idleNotice.tone === "error" ? "alert" : "status"}
-                  >
-                    {idleNotice.message}
-                  </div>
-                ) : null}
-
-                <div className="flex items-center mb-6">
-                  <div className="flex-grow border-t border-gray-200" />
-                  <span className="flex-shrink-0 mx-4 text-sm text-gray-800">
-                    or use your identity provider
-                  </span>
-                  <div className="flex-grow border-t border-gray-200" />
-                </div>
-
-                <div className="flex flex-col gap-3 mb-12">
+              {/* OAuth buttons */}
+              {orderedUflowProviders.length > 0 && (
+                <div className="flex flex-col gap-3 mb-5">
                   {orderedUflowProviders.map((provider) => {
                     const isLoading =
                       authenticatingProvider === provider.provider_name;
@@ -1551,7 +1498,7 @@ export function AdminLoginHubPage() {
                         key={provider.provider_name}
                         type="button"
                         size="lg"
-                        className="h-11 w-full justify-center gap-3 rounded-full px-4 font-medium cursor-pointer"
+                        className="h-11 w-full justify-center gap-3 rounded-sm px-4 font-medium cursor-pointer"
                         variant="outline"
                         onClick={() => handleUFlowProviderAuth(provider)}
                         disabled={authenticatingProvider !== null}
@@ -1572,485 +1519,538 @@ export function AdminLoginHubPage() {
                                 className="h-5 w-5"
                               />
                             ) : null}
-                            {getProviderDisplayName(provider)}
+                            Continue with {getProviderDisplayName(provider)}
                           </>
                         )}
                       </Button>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
 
-            {flowStage === "existing" && (
-              <form className="space-y-5" onSubmit={handleExistingSignIn}>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <Label htmlFor="existing-email">Email</Label>
-                  <div className="auth-inline-note text-sm font-medium">
-                    {currentEmail}
-                  </div>
+              {/* OR divider */}
+              {orderedUflowProviders.length > 0 && (
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="flex-grow border-t border-gray-200" />
+                  <span className="flex-shrink-0 text-sm text-gray-400 font-medium">
+                    or
+                  </span>
+                  <div className="flex-grow border-t border-gray-200" />
                 </div>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="login-password">Password</Label>
-                    <button
-                      type="button"
-                      onClick={handleForgotPasswordOpen}
-                      className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <PasswordInput
-                    id="login-password"
-                    required
-                    value={existingPassword}
-                    onChange={(event) =>
-                      setExistingPassword(event.target.value)
-                    }
-                    className="h-11 rounded-xl"
-                    placeholder="Enter your password"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
-                  <Button
-                    type="submit"
-                    className="h-11 flex-1 rounded-xl font-semibold"
-                    disabled={isPasswordSubmitting}
-                  >
-                    {isPasswordSubmitting && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Sign in
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 rounded-xl"
-                    onClick={resetFlow}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                </div>
-              </form>
-            )}
+              )}
 
-            {flowStage === "register" && (
-              <form className="space-y-5" onSubmit={handleBootstrap}>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <Label htmlFor="register-email">Email</Label>
-                  <div className="auth-inline-note text-sm font-medium">
-                    {currentEmail}
-                  </div>
-                </div>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <Label htmlFor="tenant-domain">Workspace Domain</Label>
+              {/* Email + Continue */}
+              <form className="space-y-3" onSubmit={handleInlineEmailSubmit}>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="inline-email"
+                    className="text-sm font-medium text-slate-700"
+                  >
+                    Work email
+                  </Label>
                   <Input
-                    id="tenant-domain"
-                    placeholder="acme-cloud"
-                    value={tenantDomain}
+                    id="inline-email"
+                    type="email"
+                    required
+                    value={emailInput}
                     onChange={(event) => {
-                      const value = event.target.value.replace(
-                        /[^a-zA-Z0-9]/g,
-                        "",
-                      );
-                      setTenantDomain(value);
+                      clearIdleState();
+                      setEmailInput(event.target.value);
                     }}
-                    required
-                    className={`h-11 rounded-xl ${
-                      domainCheckStatus === "available"
-                        ? "border-green-500"
-                        : domainCheckStatus === "taken" ||
-                            domainCheckStatus === "error"
-                          ? "border-red-500"
-                          : ""
-                    }`}
-                  />
-                  {domainCheckStatus === "checking" && (
-                    <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Checking availability...</span>
-                    </div>
-                  )}
-                  {domainCheckStatus === "available" && (
-                    <div className="flex items-center gap-1.5 text-sm text-green-600">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Available</span>
-                    </div>
-                  )}
-                  {(domainCheckStatus === "taken" ||
-                    domainCheckStatus === "error") &&
-                    domainCheckMessage && (
-                      <div className="flex items-center gap-1.5 text-sm text-red-600">
-                        <XCircle className="h-3.5 w-3.5" />
-                        <span>{domainCheckMessage}</span>
-                      </div>
-                    )}
-                </div>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <Label htmlFor="new-password">Password</Label>
-                  <PasswordInput
-                    id="new-password"
-                    required
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    className="h-11 rounded-xl"
-                    placeholder="Choose a password"
+                    className="h-11 rounded-sm px-4 text-[15px]"
+                    placeholder="name@company.com"
                   />
                 </div>
-                <div className="w-4/5 mx-auto space-y-2">
-                  <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <PasswordInput
-                    id="confirm-password"
-                    required
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    className="h-11 rounded-xl"
-                    placeholder="Confirm your password"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
-                  <Button
-                    type="submit"
-                    className="h-11 flex-1 rounded-xl font-semibold"
-                    disabled={isBootstrapLoading}
-                  >
-                    {isBootstrapLoading && (
+                <Button
+                  type="submit"
+                  className="h-12 w-full rounded-sm font-semibold tracking-wide"
+                  disabled={
+                    isPrecheckLoading ||
+                    (!!ssoProviderName && !ssoProvider) ||
+                    (idleNotice?.tone === "info" && !ssoProviderName)
+                  }
+                >
+                  {isPrecheckLoading ? (
+                    <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Create workspace
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 rounded-xl"
-                    onClick={resetFlow}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                </div>
-              </form>
-            )}
-
-            {flowStage === "otp" && (
-              <div className="w-4/5 mx-auto space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="otp-email">Email</Label>
-                  <div className="auth-inline-note text-sm font-medium">
-                    {currentEmail}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <Label htmlFor="otp">Verification Code</Label>
-                  <OTPInput
-                    value={otp}
-                    onChange={setOtp}
-                    onComplete={handleOtpComplete}
-                    disabled={isVerifyingOtp}
-                    length={6}
-                  />
-                  <p className="text-center text-xs text-slate-600">
-                    {flowCopy.description}
-                  </p>
-                </div>
-
-                <div className="text-center space-y-2">
-                  {!canResend ? (
-                    <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
-                      <Clock className="h-4 w-4" />
-                      <span>Resend code in {timeLeft}s</span>
-                    </div>
+                      Checking settings...
+                    </>
+                  ) : ssoProviderName ? (
+                    "CONTINUE WITH SSO"
+                  ) : idleNotice?.tone === "info" ? (
+                    "USE YOUR IDENTITY PROVIDER"
                   ) : (
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={isResending}
-                      className="text-sm font-medium text-slate-700 hover:text-slate-950"
-                    >
-                      {isResending ? "Sending..." : "Resend code"}
-                    </button>
+                    "CONTINUE"
                   )}
-                </div>
+                </Button>
+              </form>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <Button
-                    onClick={handleVerifyOtp}
-                    className="h-11 flex-1 rounded-xl font-semibold"
-                    disabled={isVerifyingOtp || otp.length !== 6}
-                  >
-                    {isVerifyingOtp ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      "Verify code"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 rounded-xl"
-                    onClick={resetFlow}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Use different email
-                  </Button>
+              {idleNotice ? (
+                <div
+                  className={`auth-inline-alert mt-3 ${
+                    idleNotice.tone === "error"
+                      ? "auth-inline-alert--error"
+                      : "auth-inline-alert--info"
+                  }`}
+                  role={idleNotice.tone === "error" ? "alert" : "status"}
+                >
+                  {idleNotice.message}
                 </div>
-              </div>
-            )}
-            <div
-              className="flex justify-center items-center gap-2 text-sm text-gray-500"
-              aria-label="Trust footer"
-            >
-              <a
-                href="https://authsec.ai/security"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
-              >
-                Security &amp; Compliance
-              </a>
-              <span>|</span>
-              <a
-                href="https://authsec.ai/terms-and-conditions"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
-              >
-                Terms
-              </a>
-              <span>|</span>
-              <a
-                href="https://authsec.ai/privacy-policy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
-              >
-                Privacy
-              </a>
-              <span>|</span>
-              <a
-                href="https://authsec.ai/contact"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
-              >
-                Support
-              </a>
+              ) : null}
             </div>
           </div>
-        </AuthActionPanel>
+        ) : (
+          <>
+            <div className="flex flex-col flex-1 items-center justify-center px-8 py-10">
+              <div className="w-full max-w-[420px]">
+                <AuthStepHeader
+                  className="text-center mb-6"
+                  title={flowCopy.title}
+                  subtitle={flowCopy.description}
+                />
 
-        <Dialog
-          open={isForgotPasswordOpen}
-          onOpenChange={handleForgotPasswordDialogChange}
-        >
-          <DialogContent className="sm:max-w-lg border-none bg-transparent shadow-none p-0">
-            <div className="auth-action-panel space-y-5">
-              <DialogHeader className="space-y-2 text-left">
-                <DialogTitle className="text-2xl font-semibold text-slate-900">
-                  {forgotPasswordStep === "email" && "Reset your password"}
-                  {forgotPasswordStep === "otp" && "Verify it’s you"}
-                  {forgotPasswordStep === "reset" && "Choose a new password"}
-                </DialogTitle>
-                <DialogDescription className="text-sm text-slate-600">
-                  {forgotPasswordStep === "email" &&
-                    "Enter your admin email and we'll send you a secure verification code."}
-                  {forgotPasswordStep === "otp" &&
-                    "Type the six-digit code we sent to your inbox to continue."}
-                  {forgotPasswordStep === "reset" &&
-                    "Use at least 10 characters with a mix of upper, lower, number, and symbol."}
-                </DialogDescription>
-              </DialogHeader>
+                <div className="space-y-6">
+                  {flowStage === "existing" && (
+                    <form className="space-y-5" onSubmit={handleExistingSignIn}>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <Label htmlFor="existing-email">Email</Label>
+                        <div className="auth-inline-note text-sm font-medium">
+                          {currentEmail}
+                        </div>
+                      </div>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="login-password">Password</Label>
+                          <button
+                            type="button"
+                            onClick={handleForgotPasswordOpen}
+                            className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                        <PasswordInput
+                          id="login-password"
+                          required
+                          value={existingPassword}
+                          onChange={(event) =>
+                            setExistingPassword(event.target.value)
+                          }
+                          className="h-11 rounded-xl"
+                          placeholder="Enter your password"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
+                        <Button
+                          type="submit"
+                          className="h-11 flex-1 rounded-xl font-semibold"
+                          disabled={isPasswordSubmitting}
+                        >
+                          {isPasswordSubmitting && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Sign in
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-11 rounded-xl"
+                          onClick={resetFlow}
+                        >
+                          <ArrowLeft className="mr-2 h-4 w-4" />
+                          Back
+                        </Button>
+                      </div>
+                    </form>
+                  )}
 
-              {forgotPasswordStep === "email" && (
-                <form
-                  className="space-y-4"
-                  onSubmit={handleForgotPasswordRequest}
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-email">Email</Label>
-                    <Input
-                      id="forgot-email"
-                      type="email"
-                      placeholder="you@company.com"
-                      value={forgotPasswordEmail}
-                      onChange={(event) =>
-                        setForgotPasswordEmail(event.target.value)
-                      }
-                      disabled={isForgotPasswordSubmitting}
-                      required
-                      className="h-11 rounded-xl"
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-xl"
-                      onClick={resetForgotPasswordState}
-                      disabled={isForgotPasswordSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1 rounded-xl font-semibold"
-                      disabled={
-                        isForgotPasswordSubmitting || !forgotPasswordEmail
-                      }
-                    >
-                      {isForgotPasswordSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        "Send OTP"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
+                  {flowStage === "register" && (
+                    <form className="space-y-5" onSubmit={handleBootstrap}>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <Label htmlFor="register-email">Email</Label>
+                        <div className="auth-inline-note text-sm font-medium">
+                          {currentEmail}
+                        </div>
+                      </div>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <Label htmlFor="tenant-domain">Workspace Domain</Label>
+                        <Input
+                          id="tenant-domain"
+                          placeholder="acme-cloud"
+                          value={tenantDomain}
+                          onChange={(event) => {
+                            const value = event.target.value.replace(
+                              /[^a-zA-Z0-9]/g,
+                              "",
+                            );
+                            setTenantDomain(value);
+                          }}
+                          required
+                          className={`h-11 rounded-xl ${
+                            domainCheckStatus === "available"
+                              ? "border-green-500"
+                              : domainCheckStatus === "taken" ||
+                                  domainCheckStatus === "error"
+                                ? "border-red-500"
+                                : ""
+                          }`}
+                        />
+                        {domainCheckStatus === "checking" && (
+                          <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Checking availability...</span>
+                          </div>
+                        )}
+                        {domainCheckStatus === "available" && (
+                          <div className="flex items-center gap-1.5 text-sm text-green-600">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Available</span>
+                          </div>
+                        )}
+                        {(domainCheckStatus === "taken" ||
+                          domainCheckStatus === "error") &&
+                          domainCheckMessage && (
+                            <div className="flex items-center gap-1.5 text-sm text-red-600">
+                              <XCircle className="h-3.5 w-3.5" />
+                              <span>{domainCheckMessage}</span>
+                            </div>
+                          )}
+                      </div>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <Label htmlFor="new-password">Password</Label>
+                        <PasswordInput
+                          id="new-password"
+                          required
+                          value={newPassword}
+                          onChange={(event) =>
+                            setNewPassword(event.target.value)
+                          }
+                          className="h-11 rounded-xl"
+                          placeholder="Choose a password"
+                        />
+                      </div>
+                      <div className="w-4/5 mx-auto space-y-2">
+                        <Label htmlFor="confirm-password">
+                          Confirm Password
+                        </Label>
+                        <PasswordInput
+                          id="confirm-password"
+                          required
+                          value={confirmPassword}
+                          onChange={(event) =>
+                            setConfirmPassword(event.target.value)
+                          }
+                          className="h-11 rounded-xl"
+                          placeholder="Confirm your password"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3 pt-2 w-4/5 mx-auto">
+                        <Button
+                          type="submit"
+                          className="h-11 flex-1 rounded-xl font-semibold"
+                          disabled={isBootstrapLoading}
+                        >
+                          {isBootstrapLoading && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Create workspace
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-11 rounded-xl"
+                          onClick={resetFlow}
+                        >
+                          <ArrowLeft className="mr-2 h-4 w-4" />
+                          Back
+                        </Button>
+                      </div>
+                    </form>
+                  )}
 
-              {forgotPasswordStep === "otp" && (
-                <form
-                  className="space-y-4"
-                  onSubmit={handleForgotPasswordOtpVerification}
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-otp">Verification code</Label>
-                    <Input
-                      id="forgot-otp"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="Enter 6-digit OTP"
-                      value={forgotPasswordOtp}
-                      onChange={(event) =>
-                        setForgotPasswordOtp(
-                          event.target.value.replace(/\D/g, "").slice(0, 6),
-                        )
-                      }
-                      disabled={isForgotPasswordSubmitting}
-                      required
-                      maxLength={6}
-                      className="h-11 rounded-xl"
-                    />
-                    <p className="text-xs text-slate-500">
-                      OTP sent to {forgotPasswordEmail || "your email"}
-                    </p>
-                  </div>
-                  <div className="flex gap-3 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-xl"
-                      onClick={() => {
-                        setForgotPasswordStep("email");
-                        setForgotPasswordOtp("");
-                      }}
-                      disabled={isForgotPasswordSubmitting}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1 rounded-xl font-semibold"
-                      disabled={
-                        isForgotPasswordSubmitting ||
-                        forgotPasswordOtp.length !== 6
-                      }
-                    >
-                      {isForgotPasswordSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Verifying...
-                        </>
-                      ) : (
-                        "Verify OTP"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
+                  {flowStage === "otp" && (
+                    <div className="w-4/5 mx-auto space-y-5">
+                      <div className="space-y-2">
+                        <Label htmlFor="otp-email">Email</Label>
+                        <div className="auth-inline-note text-sm font-medium">
+                          {currentEmail}
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <Label htmlFor="otp">Verification Code</Label>
+                        <OTPInput
+                          value={otp}
+                          onChange={setOtp}
+                          onComplete={handleOtpComplete}
+                          disabled={isVerifyingOtp}
+                          length={6}
+                        />
+                        <p className="text-center text-xs text-slate-600">
+                          {flowCopy.description}
+                        </p>
+                      </div>
 
-              {forgotPasswordStep === "reset" && (
-                <form
-                  className="space-y-4"
-                  onSubmit={handleForgotPasswordReset}
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-new-password">New password</Label>
-                    <PasswordInput
-                      id="forgot-new-password"
-                      placeholder="Enter new password"
-                      value={forgotPasswordNew}
-                      onChange={(event) =>
-                        setForgotPasswordNew(event.target.value)
-                      }
-                      disabled={isForgotPasswordSubmitting}
-                      minLength={10}
-                      required
-                      className="h-11 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-confirm-password">
-                      Confirm password
-                    </Label>
-                    <PasswordInput
-                      id="forgot-confirm-password"
-                      placeholder="Confirm new password"
-                      value={forgotPasswordConfirm}
-                      onChange={(event) =>
-                        setForgotPasswordConfirm(event.target.value)
-                      }
-                      disabled={isForgotPasswordSubmitting}
-                      minLength={10}
-                      required
-                      className="h-11 rounded-xl"
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1 rounded-xl"
-                      onClick={() => setForgotPasswordStep("otp")}
-                      disabled={isForgotPasswordSubmitting}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1 rounded-xl font-semibold"
-                      disabled={
-                        isForgotPasswordSubmitting ||
-                        !forgotPasswordNew ||
-                        !forgotPasswordConfirm ||
-                        forgotPasswordNew !== forgotPasswordConfirm ||
-                        forgotPasswordNew.length < 10
-                      }
-                    >
-                      {isForgotPasswordSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Resetting...
-                        </>
-                      ) : (
-                        "Reset password"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
+                      <div className="text-center space-y-2">
+                        {!canResend ? (
+                          <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
+                            <Clock className="h-4 w-4" />
+                            <span>Resend code in {timeLeft}s</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleResendOtp}
+                            disabled={isResending}
+                            className="text-sm font-medium text-slate-700 hover:text-slate-950"
+                          >
+                            {isResending ? "Sending..." : "Resend code"}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <Button
+                          onClick={handleVerifyOtp}
+                          className="h-11 flex-1 rounded-xl font-semibold"
+                          disabled={isVerifyingOtp || otp.length !== 6}
+                        >
+                          {isVerifyingOtp ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            "Verify code"
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-11 rounded-xl"
+                          onClick={resetFlow}
+                        >
+                          <ArrowLeft className="mr-2 h-4 w-4" />
+                          Use different email
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </DialogContent>
-        </Dialog>
+
+            <Dialog
+              open={isForgotPasswordOpen}
+              onOpenChange={handleForgotPasswordDialogChange}
+            >
+              <DialogContent className="sm:max-w-lg border-none bg-transparent shadow-none p-0">
+                <div className="auth-action-panel space-y-5">
+                  <DialogHeader className="space-y-2 text-left">
+                    <DialogTitle className="text-2xl font-semibold text-slate-900">
+                      {forgotPasswordStep === "email" && "Reset your password"}
+                      {forgotPasswordStep === "otp" && "Verify it’s you"}
+                      {forgotPasswordStep === "reset" &&
+                        "Choose a new password"}
+                    </DialogTitle>
+                    <DialogDescription className="text-sm text-slate-600">
+                      {forgotPasswordStep === "email" &&
+                        "Enter your admin email and we'll send you a secure verification code."}
+                      {forgotPasswordStep === "otp" &&
+                        "Type the six-digit code we sent to your inbox to continue."}
+                      {forgotPasswordStep === "reset" &&
+                        "Use at least 10 characters with a mix of upper, lower, number, and symbol."}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {forgotPasswordStep === "email" && (
+                    <form
+                      className="space-y-4"
+                      onSubmit={handleForgotPasswordRequest}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-email">Email</Label>
+                        <Input
+                          id="forgot-email"
+                          type="email"
+                          placeholder="you@company.com"
+                          value={forgotPasswordEmail}
+                          onChange={(event) =>
+                            setForgotPasswordEmail(event.target.value)
+                          }
+                          disabled={isForgotPasswordSubmitting}
+                          required
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 rounded-xl"
+                          onClick={resetForgotPasswordState}
+                          disabled={isForgotPasswordSubmitting}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="flex-1 rounded-xl font-semibold"
+                          disabled={
+                            isForgotPasswordSubmitting || !forgotPasswordEmail
+                          }
+                        >
+                          {isForgotPasswordSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            "Send OTP"
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {forgotPasswordStep === "otp" && (
+                    <form
+                      className="space-y-4"
+                      onSubmit={handleForgotPasswordOtpVerification}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-otp">Verification code</Label>
+                        <Input
+                          id="forgot-otp"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="Enter 6-digit OTP"
+                          value={forgotPasswordOtp}
+                          onChange={(event) =>
+                            setForgotPasswordOtp(
+                              event.target.value.replace(/\D/g, "").slice(0, 6),
+                            )
+                          }
+                          disabled={isForgotPasswordSubmitting}
+                          required
+                          maxLength={6}
+                          className="h-11 rounded-xl"
+                        />
+                        <p className="text-xs text-slate-500">
+                          OTP sent to {forgotPasswordEmail || "your email"}
+                        </p>
+                      </div>
+                      <div className="flex gap-3 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 rounded-xl"
+                          onClick={() => {
+                            setForgotPasswordStep("email");
+                            setForgotPasswordOtp("");
+                          }}
+                          disabled={isForgotPasswordSubmitting}
+                        >
+                          Back
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="flex-1 rounded-xl font-semibold"
+                          disabled={
+                            isForgotPasswordSubmitting ||
+                            forgotPasswordOtp.length !== 6
+                          }
+                        >
+                          {isForgotPasswordSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            "Verify OTP"
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+
+                  {forgotPasswordStep === "reset" && (
+                    <form
+                      className="space-y-4"
+                      onSubmit={handleForgotPasswordReset}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-new-password">
+                          New password
+                        </Label>
+                        <PasswordInput
+                          id="forgot-new-password"
+                          placeholder="Enter new password"
+                          value={forgotPasswordNew}
+                          onChange={(event) =>
+                            setForgotPasswordNew(event.target.value)
+                          }
+                          disabled={isForgotPasswordSubmitting}
+                          minLength={10}
+                          required
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="forgot-confirm-password">
+                          Confirm password
+                        </Label>
+                        <PasswordInput
+                          id="forgot-confirm-password"
+                          placeholder="Confirm new password"
+                          value={forgotPasswordConfirm}
+                          onChange={(event) =>
+                            setForgotPasswordConfirm(event.target.value)
+                          }
+                          disabled={isForgotPasswordSubmitting}
+                          minLength={10}
+                          required
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1 rounded-xl"
+                          onClick={() => setForgotPasswordStep("otp")}
+                          disabled={isForgotPasswordSubmitting}
+                        >
+                          Back
+                        </Button>
+                        <Button
+                          type="submit"
+                          className="flex-1 rounded-xl font-semibold"
+                          disabled={
+                            isForgotPasswordSubmitting ||
+                            !forgotPasswordNew ||
+                            !forgotPasswordConfirm ||
+                            forgotPasswordNew !== forgotPasswordConfirm ||
+                            forgotPasswordNew.length < 10
+                          }
+                        >
+                          {isForgotPasswordSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Resetting...
+                            </>
+                          ) : (
+                            "Reset password"
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
       </div>
 
       {uflowCallbackData && (

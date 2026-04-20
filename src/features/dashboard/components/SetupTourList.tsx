@@ -4,6 +4,7 @@ import { useWizardStatus } from "../hooks/useWizardStatus";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { DashboardSection } from "./DashboardSection";
 import { DashboardTaskRow } from "./DashboardTaskRow";
+import { trackDashboardTourCardClicked } from "../../../utils/analytics";
 
 export function SetupTourList() {
   const { audience } = useRbacAudience();
@@ -93,6 +94,10 @@ export function SetupTourList() {
     description: config.description,
     isCompleted: config.wizard.isCompleted,
     onPrimaryAction: () => {
+      trackDashboardTourCardClicked(
+        tourIdToEventName[config.id] ?? config.id,
+        config.wizard.isCompleted,
+      );
       config.wizard.launch();
     },
     color: config.color,

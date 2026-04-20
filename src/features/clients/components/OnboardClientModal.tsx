@@ -22,6 +22,7 @@ import { toast } from "react-hot-toast";
 import { useRegisterAiAgentClientMutation, useRegisterClientMutation, useRegisterClawAuthClientMutation, useLazyGetPlatformSelectorsQuery } from "@/app/api/clientApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { useNavigate } from "react-router-dom";
+import { trackClientCreated } from "@/utils/analytics";
 import { cn } from "@/lib/utils";
 
 type SelectorField = { id: string; key: string; value: string };
@@ -202,6 +203,7 @@ export function OnboardClientModal({
             ? "Claw Bot"
             : "MCP server";
       toast.success(`${typeLabel} created. ${successLabel}: ${successDetail}`);
+      trackClientCreated(trimmedName);
 
       onClose();
       onSuccess?.(response.client_id);

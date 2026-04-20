@@ -4,7 +4,7 @@ import { Card, CardContent } from "../../components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { RefreshCw, ServerCog, ChevronsRight } from "lucide-react";
+import { RefreshCw, ServerCog, ChevronsRight, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { SessionManager } from "../../utils/sessionManager";
 import {
@@ -507,6 +507,12 @@ export function WorkloadCertificatePage() {
         <PageHeader
           title="Autonomous Workload"
           description="Monitor registered workload entries and their configurations"
+          actions={
+            <Button onClick={() => navigate("/clients/workloads/create")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Register Workload
+            </Button>
+          }
         />
 
         {/* Informative Banner */}
@@ -523,7 +529,7 @@ export function WorkloadCertificatePage() {
             label: "Read docs",
             onClick: () =>
               window.open(
-                "https://docs.authsec.dev/autonomous-agents/configure-workload",
+                "https://docs.authsec.dev/autonomous-agents/integrate-spire/register-workloads",
                 "_blank",
               ),
             variant: "outline",

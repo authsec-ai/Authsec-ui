@@ -33,6 +33,8 @@ import {
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
 import { completeWebAuthnAuthentication } from "../slices/authSlice";
+import { setAmplitudeUserId } from "@/utils/analytics";
+import { createHubSpotContact } from "@/utils/hubspot";
 import { NIL } from "uuid";
 import type { MFAStatusMethod } from "../../app/api/webauthnApi";
 
@@ -209,6 +211,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Using a ref avoids stale closure issues when setupWebAuthn calls getMFAMethods again.
   const mfaRequiredSetRef = React.useRef(false);
   const notifiedUsersRef = React.useRef<Set<string>>(new Set());
+  const hubspotSyncedUsersRef = React.useRef<Set<string>>(new Set());
 
   const notifyNewUserIfNeeded = useCallback(async (token?: string) => {
     const emailKey = (adminWebauthn.email ?? "").trim().toLowerCase();
@@ -228,6 +231,39 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [adminWebauthn.email, adminWebauthn.mfaRequired, notifyNewUser]);
 
+  const syncHubSpotForNewUserIfNeeded = useCallback((token?: string) => {
+    const emailKey = (adminWebauthn.email ?? "").trim().toLowerCase();
+    // Only sync for brand new users during first-login onboarding.
+    if (
+      !emailKey ||
+      !token ||
+      adminWebauthn.isFirstLogin !== true ||
+      adminWebauthn.mfaRequired !== false
+    ) {
+      return;
+    }
+    if (hubspotSyncedUsersRef.current.has(emailKey)) {
+      return;
+    }
+
+    hubspotSyncedUsersRef.current.add(emailKey);
+    const tenantDomain =
+      typeof window !== "undefined" ? window.location.hostname : "";
+
+    void createHubSpotContact(
+      {
+        email: emailKey,
+        tenant_domain: tenantDomain,
+        tenant_id: adminWebauthn.tenantId || "",
+      },
+      token,
+    );
+  }, [
+    adminWebauthn.email,
+    adminWebauthn.isFirstLogin,
+    adminWebauthn.mfaRequired,
+    adminWebauthn.tenantId,
+  ]);
 
   const getMFAMethods = useCallback(async (): Promise<boolean> => {
     if (!adminWebauthn.email) {
@@ -639,7 +675,11 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           token: callbackResult.token,
         }));
 
+        // Set Amplitude user ID so all events are associated with this user
+        setAmplitudeUserId(adminWebauthn.email!);
         await notifyNewUserIfNeeded(callbackResult.token);
+        syncHubSpotForNewUserIfNeeded(callbackResult.token);
+
         dispatch(setCurrentStep("completed"));
 
         return true;
@@ -655,7 +695,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, beginAdminAuthentication, finishAdminAuthentication, dispatch, callbackHandler, notifyNewUserIfNeeded]);
+  }, [adminWebauthn.tenantId, adminWebauthn.email, beginAdminAuthentication, finishAdminAuthentication, dispatch, callbackHandler, notifyNewUserIfNeeded, syncHubSpotForNewUserIfNeeded]);
 
   const authenticateWithTOTP = useCallback(async (code: string): Promise<boolean> => {
     if (!adminWebauthn.tenantId || !adminWebauthn.email) {
@@ -691,7 +731,11 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             token: token,
           }));
 
+          // Set Amplitude user ID so all events are associated with this user
+          setAmplitudeUserId(adminWebauthn.email!);
           await notifyNewUserIfNeeded(token);
+          syncHubSpotForNewUserIfNeeded(token);
+
           dispatch(setCurrentStep("completed"));
           return true;
         } else {
@@ -706,7 +750,11 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               token: callbackResult.token,
             }));
 
+            // Set Amplitude user ID so all events are associated with this user
+            setAmplitudeUserId(adminWebauthn.email!);
             await notifyNewUserIfNeeded(callbackResult.token);
+            syncHubSpotForNewUserIfNeeded(callbackResult.token);
+
             dispatch(setCurrentStep("completed"));
 
             return true;
@@ -727,7 +775,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, totpVerifyLogin, dispatch, callbackHandler, notifyNewUserIfNeeded]);
+  }, [adminWebauthn.tenantId, adminWebauthn.email, totpVerifyLogin, dispatch, callbackHandler, notifyNewUserIfNeeded, syncHubSpotForNewUserIfNeeded]);
 
   const resetFlow = useCallback(() => {
     dispatch(resetAdminWebAuthnState());

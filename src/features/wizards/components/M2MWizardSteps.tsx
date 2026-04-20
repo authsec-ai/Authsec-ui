@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Server, AlertCircle, CheckCircle, ChevronRight, RefreshCw } from "lucide-react";
 import { useListAgentsQuery } from "@/app/api/workloadsApi";
 import { SPIREAgentFAQDialog } from "./SPIREAgentFAQDialog";
+import { trackWizardM2MSpireFaqOpened, trackWizardM2MSpireRecheck } from "@/utils/analytics";
 
 interface CheckSPIREAgentStepProps {
   onComplete: () => void;
@@ -58,12 +59,14 @@ export function CheckSPIREAgentStep({ onComplete }: CheckSPIREAgentStepProps) {
 
   // Handle "View Setup Guide" button
   const handleViewGuide = () => {
+    trackWizardM2MSpireFaqOpened();
     setShowFAQDialog(true);
     setShowError(false);
   };
 
   // Handle "Recheck" button on the error alert
   const handleRecheck = async () => {
+    trackWizardM2MSpireRecheck();
     setShowError(false);
     const result = await refetch();
     if (result.data && result.data.length > 0) {

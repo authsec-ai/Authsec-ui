@@ -53,6 +53,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
+import {
+  trackUserDeleted,
+  trackUserStatusChanged,
+  trackUserPasswordReset,
+  trackUserRoleAssigned,
+} from "@/utils/analytics";
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
 
 /**
@@ -583,6 +589,7 @@ export function UsersPage() {
         await deleteEndUser({ tenant_id: tenantId, user_id: userId }).unwrap();
       }
       toast.success("User deletion requested; changes may take a moment to reflect.");
+      trackUserDeleted(isAdmin ? "admin" : "enduser");
       refetchUsers();
     } catch (error) {
       console.error("Failed to delete user:", error);
@@ -594,6 +601,7 @@ export function UsersPage() {
     try {
       await setUserActive({ user_id: userId, active }).unwrap();
       toast.success(`User ${active ? 'activated' : 'deactivated'} successfully`);
+      trackUserStatusChanged(active, isAdmin ? "admin" : "enduser");
       refetchUsers();
     } catch (error) {
       console.error("Failed to update user status:", error);
@@ -605,6 +613,7 @@ export function UsersPage() {
     try {
       await resetUserPassword({ email }).unwrap();
       toast.success("Password reset email sent");
+      trackUserPasswordReset(isAdmin ? "admin" : "enduser");
     } catch (error) {
       console.error("Failed to reset password:", error);
       toast.error("Failed to reset password");
@@ -770,6 +779,7 @@ export function UsersPage() {
 
   // Handler for single user assign role from row action
   const handleAssignRoleForUser = (userId: string, userName: string, userEmail: string) => {
+    trackUserRoleAssigned();
     setSingleUserForRole({ id: userId, name: userName, email: userEmail });
     setShowAssignRoleModal(true);
   };

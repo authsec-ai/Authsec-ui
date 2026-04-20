@@ -412,23 +412,6 @@ export function WorkloadIdentitiesPage() {
                 </p>
               </div>
             </div>
-            <Button
-              type="submit"
-              form="workload-form"
-              disabled={!canSubmit}
-              className="min-w-[140px]"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isEditMode ? "Updating..." : "Registering..."}
-                </>
-              ) : isEditMode ? (
-                "Update Workload"
-              ) : (
-                "Register Workload"
-              )}
-            </Button>
           </div>
         </header>
 
@@ -622,6 +605,26 @@ export function WorkloadIdentitiesPage() {
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Selector
+                  </Button>
+                </div>
+
+                {/* Submit Button */}
+                <div className="flex justify-end pt-4">
+                  <Button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="min-w-40"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {isEditMode ? "Updating..." : "Registering..."}
+                      </>
+                    ) : isEditMode ? (
+                      "Update Workload"
+                    ) : (
+                      "Register Workload"
+                    )}
                   </Button>
                 </div>
               </form>

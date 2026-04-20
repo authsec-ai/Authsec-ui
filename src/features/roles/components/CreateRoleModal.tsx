@@ -23,6 +23,7 @@ import { resolveTenantId } from "@/utils/workspace";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { CreatePermissionModal } from "../../permissions/components/CreatePermissionModal";
+import { trackRoleCreated } from "@/utils/analytics";
 
 interface CreateRoleModalProps {
   open: boolean;
@@ -119,6 +120,7 @@ export function CreateRoleModal({ open, onOpenChange, onRoleCreated, onSuccess }
       }
 
       toast.success(`Role "${name}" created successfully`);
+      trackRoleCreated(name);
       onSuccess?.();
       onOpenChange(false);
     } catch (error: any) {
