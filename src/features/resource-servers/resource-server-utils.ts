@@ -4,6 +4,8 @@ import type {
   ResourceServer,
 } from "@/app/api/resourceServersApi";
 
+const PROTECTED_RESOURCE_PREFIX = "/.well-known/oauth-protected-resource";
+
 export type ResourceServerFormState = {
   name: string;
   public_base_url: string;
@@ -63,6 +65,56 @@ export function computeResourceURI(
   return base ? `${base}${path.startsWith("/") ? path : `/${path}`}` : path;
 }
 
+export function computeMetadataPath(resourceURI: string): string {
+  try {
+    const parsed = new URL(resourceURI);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    if (!path || path === "/") {
+      return PROTECTED_RESOURCE_PREFIX;
+    }
+    return `${PROTECTED_RESOURCE_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
+  } catch {
+    return PROTECTED_RESOURCE_PREFIX;
+  }
+}
+
+export function computeMetadataURL(resourceURI: string): string {
+  try {
+    const parsed = new URL(resourceURI);
+    return `${parsed.origin}${computeMetadataPath(resourceURI)}`;
+  } catch {
+    return computeMetadataPath(resourceURI);
+  }
+}
+
+export function computeMcpEndpointURL(server: ResourceServer): string {
+  return server.resource_uri || computeResourceURI(server.public_base_url, server.protected_base_path);
+}
+
+export function computeOAuthIssuerURL(): string {
+  return config.VITE_OAUTH_BASE_URL.replace(/\/+$/, "");
+}
+
+export function computeJwksURL(): string {
+  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/jwks`;
+}
+
+export function computeIntrospectionURL(): string {
+  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/introspect`;
+}
+
+export function computeResourceServerRegistryURL(): string {
+  return `${config.VITE_API_URL.replace(/\/+$/, "")}/authsec/resource-servers`;
+}
+
+export function computeAuthorizeURL(): string {
+  return `${computeOAuthIssuerURL()}/oauth/authorize`;
+}
+
+export function computeTokenURL(): string {
+  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/token`;
+}
+
 export function formFromServer(server: ResourceServer): ResourceServerFormState {
   return {
     name: server.name,
@@ -98,32 +150,35 @@ type ResourceServerSDKContent = {
 };
 
 const GO_IMPORT = `import (
+	"log"
+	"net/http"
+
 	authsecsdk "github.com/authsec-ai/sdk-authsec/packages/go-sdk"
 )`;
 
 const GO_WRAP = (server: ResourceServer) => `cfg := authsecsdk.Config{
-	Issuer:                    "${config.VITE_OAUTH_BASE_URL}",
-	AuthorizationServer:       "${config.VITE_OAUTH_BASE_URL}",
-	JWKSURL:                   "${config.VITE_API_URL}/oauth/jwks",
-	IntrospectionURL:          "${config.VITE_API_URL}/oauth/introspect",
-	IntrospectionClientID:     "<resource-server-client-id>",
+	Issuer:                    "${computeOAuthIssuerURL()}",
+	AuthorizationServer:       "${computeOAuthIssuerURL()}",
+	JWKSURL:                   "${computeJwksURL()}",
+	IntrospectionURL:          "${computeIntrospectionURL()}",
+	IntrospectionClientID:     "${server.id}",
 	IntrospectionClientSecret: "<one-time-introspection-secret>",
+	ResourceServerID:          "${server.id}",
 	ResourceURI:               "${server.resource_uri}",
 	ResourceName:              "${server.name}",
 	SupportedScopes:           []string{${server.scopes_supported.map((scope) => `"${scope}"`).join(", ")}},
-	Policy: authsecsdk.StaticPolicy{
-		"tools/list": {AnyOfScopes: []string{"${server.scopes_supported[0] ?? "tools:read"}"}},
-	},
+	PolicyMode:                authsecsdk.PolicyModeRemoteRequired,
+	ValidationMode:            authsecsdk.ValidationModeJWTAndIntrospect,
 }
 
-protected, err := authsecsdk.WrapMCPHTTP(existingMCPHandler, cfg)
-if err != nil {
+// MountMCP is the canonical integration path. It registers the MCP route and
+// the protected-resource metadata route derived from ResourceURI.
+mux := http.NewServeMux()
+if err := authsecsdk.MountMCP(mux, "${server.protected_base_path}", existingMCPHandler, cfg); err != nil {
 	log.Fatal(err)
 }
 
-mux := http.NewServeMux()
-mux.Handle("${server.protected_base_path}", protected)
-mux.Handle("${server.protected_base_path}/", protected)`;
+log.Fatal(http.ListenAndServe(":8080", mux))`;
 
 const TS_WRAP = (server: ResourceServer) => `import { runMcpServerWithOAuth, protectedByAuthSec } from "@authsec/sdk";
 
@@ -177,10 +232,13 @@ export function buildSDKContent(
   language: IntegrationLanguage,
   server: ResourceServer,
 ): ResourceServerSDKContent {
+  const metadataURL = computeMetadataURL(server.resource_uri);
+  const metadataPath = computeMetadataPath(server.resource_uri);
   const intro = [
     "AuthSec owns protected-resource metadata, OAuth discovery/challenges, token validation, RBAC-backed scope enforcement, and auditability.",
     "Your MCP server still owns tool registration, upstream service credentials, tool execution, and any domain-specific authorization logic beyond scope-to-tool gating.",
     "The access token presented to your MCP server is an AuthSec user token. It is not your upstream service credential and must not be forwarded to GitHub or any other provider.",
+    `For this protected resource, clients discover metadata at ${metadataURL}. Path-based resources use the alias-only route ${metadataPath}.`,
   ];
 
   if (language === "go") {
@@ -196,7 +254,7 @@ export function buildSDKContent(
           code: GO_IMPORT,
         },
         {
-          title: "Wrap the MCP handler",
+          title: "Mount the MCP handler",
           code: GO_WRAP(server),
         },
       ],
@@ -238,6 +296,9 @@ export function buildIntegrationPrompt(
   language: IntegrationLanguage,
   server: ResourceServer,
 ): string {
+  const metadataPath = computeMetadataPath(server.resource_uri);
+  const metadataURL = computeMetadataURL(server.resource_uri);
+  const mcpEndpointURL = computeMcpEndpointURL(server);
   const installLine =
     language === "go"
       ? "Install the SDK with: go get github.com/authsec-ai/sdk-authsec/packages/go-sdk"
@@ -259,12 +320,17 @@ Use these exact AuthSec and resource server values:
 - Public base URL: ${server.public_base_url}
 - Protected base path: ${server.protected_base_path}
 - Resource URI: ${server.resource_uri}
+- MCP endpoint URL: ${mcpEndpointURL}
+- Metadata path: ${metadataPath}
+- Metadata URL: ${metadataURL}
 - Supported scopes: ${(server.scopes_supported ?? []).join(", ") || "none declared"}
 - Registration modes: ${(server.registration_modes ?? []).join(", ") || "none declared"}
-- OAuth issuer / authorization server: ${config.VITE_OAUTH_BASE_URL}
-- JWKS endpoint: ${config.VITE_API_URL}/oauth/jwks
-- Introspection endpoint: ${config.VITE_API_URL}/oauth/introspect
-- Resource server registry endpoint: ${config.VITE_API_URL}/authsec/resource-servers
+- OAuth issuer / authorization server: ${computeOAuthIssuerURL()}
+- Authorization endpoint: ${computeAuthorizeURL()}
+- Token endpoint: ${computeTokenURL()}
+- JWKS endpoint: ${computeJwksURL()}
+- Introspection endpoint: ${computeIntrospectionURL()}
+- Resource server registry endpoint: ${computeResourceServerRegistryURL()}
 
 AuthSec responsibilities:
 - Serve the authorization server for MCP OAuth and PAR-backed login flows
@@ -285,21 +351,25 @@ Use this import baseline:
 ${importGuidance}
 
 Implement the integration in this order:
-1. Wrap the MCP HTTP handler with the AuthSec SDK runtime instead of hand-writing MCP protected-resource metadata.
-2. Configure issuer, authorization server, JWKS URL, introspection URL, resource URI, resource name, and the one-time introspection secret from AuthSec.
-3. Define tool-to-scope policy rules for the server's actual tool names.
+1. Use the Go SDK's MountMCP path as the canonical integration path for Go servers. Do not hand-wire protected-resource metadata when the SDK can mount it.
+2. Configure issuer, authorization server, JWKS URL, introspection URL, resource server ID, resource URI, resource name, and the one-time introspection secret from AuthSec.
+3. Preserve existing non-AuthSec server behavior unless AuthSec mode is explicitly enabled.
 4. Keep the upstream service credential separate from AuthSec tokens.
-5. Expose the protected MCP path at ${server.protected_base_path}.
-6. Verify unauthenticated requests receive a Bearer challenge pointing clients to AuthSec metadata.
-7. Verify authenticated requests can only see tools permitted by granted scopes.
+5. Expose the protected MCP path at ${server.protected_base_path} and let the SDK derive metadata from ${server.resource_uri}.
+6. Treat ${metadataURL} as the discovery URL. For this path-based resource, the bare /.well-known/oauth-protected-resource path is not the canonical metadata route.
+7. Verify unauthenticated requests receive a Bearer challenge pointing clients to AuthSec metadata.
+8. Verify authenticated requests can only see tools permitted by granted scopes.
 
 Validation checklist:
 - tools/list hides unauthorized tools
 - tools/call returns insufficient_scope for blocked tools
-- the server emits protected-resource metadata without custom manual route wiring
+- the server emits protected-resource metadata at ${metadataURL}
+- the server uses MountMCP as the default setup path; use WrapMCPHTTP only for advanced manual mux wiring
 - tokens are validated against AuthSec
 - upstream provider calls still use server-side credentials only
 - the configured resource URI remains ${server.resource_uri}
+
+If the resource server is a GitHub MCP server, keep the GitHub PAT or installation token server-side. The AuthSec principal should only decide whether the tool is allowed; it should not replace the upstream GitHub credential.
 
 Generate production-grade integration code, not pseudocode.`;
 }

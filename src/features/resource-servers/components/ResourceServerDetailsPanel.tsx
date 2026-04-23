@@ -3,7 +3,12 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { cn } from "@/lib/utils";
 import type { ResourceServer } from "@/app/api/resourceServersApi";
 
-import { formatTimestamp } from "../resource-server-utils";
+import {
+  computeMcpEndpointURL,
+  computeMetadataPath,
+  computeMetadataURL,
+  formatTimestamp,
+} from "../resource-server-utils";
 
 interface ResourceServerDetailsPanelProps {
   server: ResourceServer;
@@ -52,6 +57,10 @@ export function ResourceServerDetailsPanel({
   server,
   compact = false,
 }: ResourceServerDetailsPanelProps) {
+  const mcpEndpointURL = computeMcpEndpointURL(server);
+  const metadataPath = computeMetadataPath(server.resource_uri);
+  const metadataURL = computeMetadataURL(server.resource_uri);
+
   return (
     <div
       className={cn(
@@ -71,6 +80,9 @@ export function ResourceServerDetailsPanel({
             <DetailLine label="Public base URL" value={server.public_base_url} copyable />
             <DetailLine label="Protected base path" value={server.protected_base_path} copyable />
             <DetailLine label="Resource URI" value={server.resource_uri} copyable />
+            <DetailLine label="MCP endpoint URL" value={mcpEndpointURL} copyable />
+            <DetailLine label="Metadata path" value={metadataPath} copyable />
+            <DetailLine label="Metadata URL" value={metadataURL} copyable />
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-foreground">Status</span>
               <span

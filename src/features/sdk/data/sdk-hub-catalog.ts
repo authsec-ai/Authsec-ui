@@ -564,10 +564,10 @@ const goSections: SDKHubSection[] = [
     key: "overview",
     title: "Go SDK Overview",
     summary:
-      "Use the AuthSec Go SDK to wrap an existing MCP HTTP handler with protected-resource metadata, token validation, and scope-aware tool filtering.",
+      "Use the AuthSec Go SDK to mount an existing MCP HTTP handler with protected-resource metadata, token validation, and scope-aware tool filtering.",
     highlights: [
       "Package: github.com/authsec-ai/sdk-authsec/packages/go-sdk",
-      "Designed for wrapping an existing MCP HTTP handler",
+      "MountMCP is the canonical integration path",
       "Keeps protected-resource metadata and bearer challenges inside the SDK runtime",
     ],
     snippets: [
@@ -582,6 +582,9 @@ const goSections: SDKHubSection[] = [
         label: "Core imports",
         language: "go",
         code: `import (
+	"log"
+	"net/http"
+
 	authsecsdk "github.com/authsec-ai/sdk-authsec/packages/go-sdk"
 )`,
       },
@@ -591,44 +594,51 @@ const goSections: SDKHubSection[] = [
     key: "mcp-oauth",
     title: "MCP OAuth (Go)",
     summary:
-      "Wrap the MCP handler once and let the SDK own protected-resource metadata, bearer challenges, token validation, and scope-gated tool filtering.",
+      "Mount the MCP handler once and let the SDK own protected-resource metadata, bearer challenges, token validation, and scope-gated tool filtering.",
     highlights: [
-      "Mount the wrapped handler on the MCP path",
-      "Provide issuer, introspection, and resource metadata values",
-      "Use StaticPolicy or OverrideToolPolicy for tool-to-scope mapping",
+      "MountMCP registers the MCP route and the metadata route derived from ResourceURI",
+      "Provide issuer, introspection, resource server, and resource metadata values",
+      "Path-based resources publish metadata at /.well-known/oauth-protected-resource/<path>",
     ],
     snippets: [
       {
-        id: "go-wrap",
-        label: "Wrap the MCP handler",
+        id: "go-mount",
+        label: "Mount the MCP handler",
         language: "go",
-        code: `protected, err := authsecsdk.WrapMCPHTTP(existingMCPHandler, authsecsdk.Config{
+        code: `mux := http.NewServeMux()
+
+cfg := authsecsdk.Config{
 	Issuer:                    "${config.VITE_OAUTH_BASE_URL}",
 	AuthorizationServer:       "${config.VITE_OAUTH_BASE_URL}",
 	JWKSURL:                   "${config.VITE_API_URL}/oauth/jwks",
 	IntrospectionURL:          "${config.VITE_API_URL}/oauth/introspect",
-	IntrospectionClientID:     "<resource-server-client-id>",
+	IntrospectionClientID:     "<resource-server-id>",
 	IntrospectionClientSecret: "<introspection-secret>",
+	ResourceServerID:          "<resource-server-id>",
 	ResourceURI:               "https://mcp.example.com/mcp",
 	ResourceName:              "My MCP Server",
 	SupportedScopes:           []string{"tools:read", "tools:write"},
-	Policy: authsecsdk.StaticPolicy{
-		"tools/list": {AnyOfScopes: []string{"tools:read"}},
-	},
-})
-if err != nil {
+	PolicyMode:                authsecsdk.PolicyModeRemoteRequired,
+	ValidationMode:            authsecsdk.ValidationModeJWTAndIntrospect,
+}
+
+if err := authsecsdk.MountMCP(mux, "/mcp", existingMCPHandler, cfg); err != nil {
 	log.Fatal(err)
-}`,
-      },
-      {
-        id: "go-mux",
-        label: "Mount the wrapped route",
-        language: "go",
-        code: `mux := http.NewServeMux()
-mux.Handle("/mcp", protected)
-mux.Handle("/mcp/", protected)
+}
 
 log.Fatal(http.ListenAndServe(":8080", mux))`,
+      },
+      {
+        id: "go-metadata",
+        label: "Metadata route resolution",
+        language: "go",
+        code: `metadataPath := authsecsdk.BuildResourceMetadataPath("https://mcp.example.com/mcp")
+fmt.Println(metadataPath)
+// Output: /.well-known/oauth-protected-resource/mcp
+
+metadataURL := authsecsdk.BuildResourceMetadataURL("https://mcp.example.com/mcp")
+fmt.Println(metadataURL)
+// Output: https://mcp.example.com/.well-known/oauth-protected-resource/mcp`,
       },
     ],
   },
@@ -636,34 +646,46 @@ log.Fatal(http.ListenAndServe(":8080", mux))`,
     key: "rbac",
     title: "Policy (Go)",
     summary:
-      "Keep the root SDK generic. Define tool rules with StaticPolicy or extend a base policy with OverrideToolPolicy.",
+      "Use AuthSec Scope Matrix as the source of truth, or define an explicit local ToolScopes map when you need local-only or fallback policy.",
     highlights: [
-      "Generic root package primitives only",
-      "No GitHub-specific helpers required for the common path",
-      "Map your actual tool names to resource-server scopes",
+      "RemoteRequired is the default when ResourceServerID is set",
+      "Absent tools are denied when a policy exists",
+      "An explicit empty slice marks a tool as public",
     ],
     snippets: [
       {
-        id: "go-policy",
-        label: "Static policy",
+        id: "go-policy-local",
+        label: "Local ToolScopes policy",
         language: "go",
-        code: `policy := authsecsdk.StaticPolicy{
-	"list_repositories": {AnyOfScopes: []string{"repos:read"}},
-	"create_issue":      {AnyOfScopes: []string{"issues:write"}},
+        code: `cfg := authsecsdk.Config{
+	Issuer:                    "${config.VITE_OAUTH_BASE_URL}",
+	AuthorizationServer:       "${config.VITE_OAUTH_BASE_URL}",
+	JWKSURL:                   "${config.VITE_API_URL}/oauth/jwks",
+	IntrospectionURL:          "${config.VITE_API_URL}/oauth/introspect",
+	IntrospectionClientID:     "<resource-server-id>",
+	IntrospectionClientSecret: "<introspection-secret>",
+	ResourceURI:               "https://mcp.example.com/mcp",
+	ResourceName:              "My MCP Server",
+	PolicyMode:                authsecsdk.PolicyModeLocalOnly,
+	ToolScopes: authsecsdk.ToolScopeMap{
+		"list_repositories": {"repos:read"},
+		"create_issue":      {"issues:write"},
+		"healthcheck":       {},
+	},
 }`,
       },
       {
-        id: "go-policy-override",
-        label: "Override an existing policy",
+        id: "go-policy-fallback",
+        label: "Remote policy with local fallback",
         language: "go",
-        code: `policy := authsecsdk.OverrideToolPolicy(
-	authsecsdk.StaticPolicy{
-		"tools/list": {AnyOfScopes: []string{"tools:read"}},
+        code: `cfg := authsecsdk.Config{
+	ResourceServerID:          "<resource-server-id>",
+	PolicyMode:                authsecsdk.PolicyModeRemoteWithLocalFallback,
+	ToolScopes: authsecsdk.ToolScopeMap{
+		"list_repositories": {"repos:read"},
+		"healthcheck":       {},
 	},
-	map[string]authsecsdk.ToolRule{
-		"delete_issue": {AnyOfScopes: []string{"issues:write"}},
-	},
-)`,
+}`,
       },
     ],
   },
@@ -686,7 +708,7 @@ log.Fatal(http.ListenAndServe(":8080", mux))`,
 AUTHSEC_AUTHORIZATION_SERVER="${config.VITE_OAUTH_BASE_URL}"
 AUTHSEC_JWKS_URL="${config.VITE_API_URL}/oauth/jwks"
 AUTHSEC_INTROSPECTION_URL="${config.VITE_API_URL}/oauth/introspect"
-AUTHSEC_INTROSPECTION_CLIENT_ID="resource-server"
+AUTHSEC_INTROSPECTION_CLIENT_ID="<resource-server-id>"
 AUTHSEC_INTROSPECTION_CLIENT_SECRET="<one-time-secret>"`,
       },
     ],
