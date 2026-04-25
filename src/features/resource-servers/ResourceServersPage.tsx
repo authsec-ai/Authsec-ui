@@ -61,7 +61,7 @@ export default function ResourceServersPage() {
     try {
       const response = await createResourceServer(payload).unwrap();
       toast.success("Resource server created.");
-      navigate("/resource-servers", {
+      navigate(`/resource-servers/${response.id}/onboarding`, {
         replace: true,
         state: {
           latestSecret: response.introspection_secret
@@ -161,6 +161,7 @@ export default function ResourceServersPage() {
           ) : (
             <ResourceServersTable
               resourceServers={resourceServers}
+              onOnboarding={(server) => navigate(`/resource-servers/${server.id}/onboarding`)}
               onDetails={(server) => navigate(`/resource-servers/${server.id}`)}
               onEdit={(server) => setEditingServer(server)}
               onScopeMatrix={(server) =>

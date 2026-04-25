@@ -56,6 +56,12 @@ export function formatTimestamp(value?: string): string {
   return new Date(value).toLocaleString();
 }
 
+export type ResourceServerReadinessItem = {
+  key: "configured" | "discovered" | "default_access" | "client_ready" | "validated";
+  label: string;
+  ready: boolean;
+};
+
 export function computeResourceURI(
   publicBaseURL: string,
   protectedBasePath: string,
@@ -113,6 +119,36 @@ export function computeAuthorizeURL(): string {
 
 export function computeTokenURL(): string {
   return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/token`;
+}
+
+export function buildReadinessItems(server: ResourceServer): ResourceServerReadinessItem[] {
+  return [
+    {
+      key: "configured",
+      label: "Configured",
+      ready: Boolean(server.active && server.resource_uri),
+    },
+    {
+      key: "discovered",
+      label: "Discovered",
+      ready: Number(server.last_successful_generation || 0) > 0,
+    },
+    {
+      key: "default_access",
+      label: "Default Access",
+      ready: Boolean(server.access_policy_enabled),
+    },
+    {
+      key: "client_ready",
+      label: "Client Ready",
+      ready: Number(server.client_count || 0) > 0,
+    },
+    {
+      key: "validated",
+      label: "Validated",
+      ready: server.last_validation_status === "passed",
+    },
+  ];
 }
 
 export function formFromServer(server: ResourceServer): ResourceServerFormState {

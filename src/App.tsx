@@ -32,6 +32,7 @@ import { UsersPage } from "./features/users/UsersPage";
 import ResourceServersPage from "./features/resource-servers/ResourceServersPage";
 import ResourceServerDetailsPage from "./features/resource-servers/ResourceServerDetailsPage";
 import ResourceServerClientsPage from "./features/resource-servers/ResourceServerClientsPage";
+import ResourceServerOnboardingPage from "./features/resource-servers/ResourceServerOnboardingPage";
 import ResourceServerSDKPage from "./features/resource-servers/ResourceServerSDKPage";
 import ResourceServerPromptPage from "./features/resource-servers/ResourceServerPromptPage";
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
@@ -416,6 +417,17 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <ResourceServerClientsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/resource-servers/:id/onboarding"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ResourceServerOnboardingPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

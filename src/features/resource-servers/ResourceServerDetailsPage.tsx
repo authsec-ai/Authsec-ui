@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Code2, Edit, KeyRound, MessageSquareText, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Code2, Edit, KeyRound, ListChecks, MessageSquareText, ShieldCheck, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
@@ -96,6 +96,10 @@ export function ResourceServerDetailsPage() {
               </Button>
               {server ? (
                 <>
+                  <Button variant="outline" onClick={() => navigate(`/resource-servers/${server.id}/onboarding`)}>
+                    <ListChecks className="mr-2 h-4 w-4" />
+                    Open Onboarding
+                  </Button>
                   <Button variant="outline" onClick={() => navigate(`/resource-servers/${server.id}/clients`)}>
                     <ShieldCheck className="mr-2 h-4 w-4" />
                     Registered OAuth Clients

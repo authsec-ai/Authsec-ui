@@ -5,6 +5,7 @@ import {
   Edit,
   Grid3X3,
   KeyRound,
+  ListChecks,
   MoreHorizontal,
   ShieldCheck,
   Trash2,
@@ -22,9 +23,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ResourceServerExpandedRow } from "./ResourceServerDetailsPanel";
+import { buildReadinessItems } from "../resource-server-utils";
 
 interface ResourceServersTableProps {
   resourceServers: ResourceServer[];
+  onOnboarding: (server: ResourceServer) => void;
   onDetails: (server: ResourceServer) => void;
   onEdit: (server: ResourceServer) => void;
   onScopeMatrix: (server: ResourceServer) => void;
@@ -54,11 +57,20 @@ function CompactBadgeList({ items, emptyLabel }: { items: string[]; emptyLabel: 
 }
 
 function ResourceServerNameCell({ server }: { server: ResourceServer }) {
+  const readinessItems = buildReadinessItems(server);
+
   return (
     <div className="space-y-1">
       <div className="font-medium text-foreground">{server.name}</div>
       <div className="truncate text-xs text-muted-foreground" title={server.public_base_url}>
         {server.public_base_url}
+      </div>
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        {readinessItems.map((item) => (
+          <Badge key={item.key} variant={item.ready ? "default" : "secondary"} className="text-[10px]">
+            {item.label}
+          </Badge>
+        ))}
       </div>
     </div>
   );
@@ -66,6 +78,7 @@ function ResourceServerNameCell({ server }: { server: ResourceServer }) {
 
 function RowActions({
   server,
+  onOnboarding,
   onDetails,
   onEdit,
   onScopeMatrix,
@@ -82,6 +95,10 @@ function RowActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" visualVariant="row-actions" className="w-56">
+        <DropdownMenuItem onClick={() => onOnboarding(server)}>
+          <ListChecks className="mr-2 h-4 w-4" />
+          Open Onboarding
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onDetails(server)}>
           <ArrowRight className="mr-2 h-4 w-4" />
           Details

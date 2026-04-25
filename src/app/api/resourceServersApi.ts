@@ -12,6 +12,18 @@ export interface ResourceServer {
   introspection_secret?: string;
   introspection_secret_hash?: string;
   active: boolean;
+  client_count?: number;
+  access_policy_enabled?: boolean;
+  access_policy_role_name?: string;
+  last_scan_status?: string;
+  last_scan_error?: string;
+  scan_generation?: number;
+  last_successful_generation?: number;
+  last_scan_started_at?: string;
+  last_scan_completed_at?: string;
+  last_validated_at?: string;
+  last_validation_status?: string;
+  last_validation_error?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -53,6 +65,43 @@ export interface PreRegisterResourceServerClientRequest {
 export interface PreRegisterResourceServerClientResponse {
   client_id: string;
   client_name: string;
+}
+
+export interface ResourceServerRoleOption {
+  role_id: string;
+  name: string;
+  description?: string;
+  is_generated: boolean;
+  recommended: boolean;
+  permissions: number;
+}
+
+export interface ResourceServerAccessPolicy {
+  enabled: boolean;
+  default_role_id?: string;
+  default_role_name?: string;
+  assignment_trigger: string;
+  assignment_source: string;
+  role_options: ResourceServerRoleOption[];
+}
+
+export interface UpdateResourceServerAccessPolicyRequest {
+  enabled: boolean;
+  default_role_id?: string;
+}
+
+export interface ResourceServerValidationCheck {
+  key: string;
+  label: string;
+  status: string;
+  message: string;
+  observed?: string;
+}
+
+export interface ResourceServerValidationResult {
+  status: string;
+  last_validated_at: string;
+  checks: ResourceServerValidationCheck[];
 }
 
 export const resourceServersApi = baseApi.injectEndpoints({
@@ -150,6 +199,8 @@ export const resourceServersApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "ResourceServerClient", id },
+        { type: "ResourceServer", id },
+        { type: "ResourceServer", id: "LIST" },
       ],
     }),
 
@@ -163,6 +214,42 @@ export const resourceServersApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "ResourceServerClient", id },
+        { type: "ResourceServer", id },
+        { type: "ResourceServer", id: "LIST" },
+      ],
+    }),
+
+    getResourceServerAccessPolicy: builder.query<ResourceServerAccessPolicy, string>({
+      query: (id) => ({
+        url: `/authsec/resource-servers/${id}/access-policy`,
+        method: "GET",
+      }),
+      providesTags: (_result, _error, id) => [{ type: "ResourceServer", id }],
+    }),
+
+    updateResourceServerAccessPolicy: builder.mutation<
+      ResourceServerAccessPolicy,
+      { id: string; body: UpdateResourceServerAccessPolicyRequest }
+    >({
+      query: ({ id, body }) => ({
+        url: `/authsec/resource-servers/${id}/access-policy`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "ResourceServer", id },
+        { type: "ResourceServer", id: "LIST" },
+      ],
+    }),
+
+    validateResourceServer: builder.mutation<ResourceServerValidationResult, string>({
+      query: (id) => ({
+        url: `/authsec/resource-servers/${id}/validate`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: "ResourceServer", id },
+        { type: "ResourceServer", id: "LIST" },
       ],
     }),
   }),
@@ -178,4 +265,7 @@ export const {
   useListResourceServerClientsQuery,
   usePreRegisterResourceServerClientMutation,
   useRevokeResourceServerClientMutation,
+  useGetResourceServerAccessPolicyQuery,
+  useUpdateResourceServerAccessPolicyMutation,
+  useValidateResourceServerMutation,
 } = resourceServersApi;
