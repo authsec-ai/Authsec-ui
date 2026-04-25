@@ -214,7 +214,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
               </div>
             </div>
             <p className="text-xs text-slate-500">
-              Workspace URL: <span className="font-mono">{domain || 'your-domain'}.app.authsec.dev</span>
+              Workspace domain: <span className="font-mono">{domain || 'your-domain'}</span>
             </p>
           </div>
 

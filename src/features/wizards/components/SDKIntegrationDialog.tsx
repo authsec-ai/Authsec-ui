@@ -109,7 +109,7 @@ interface ClientResponse {
   clientName: string,
   description: string
 ): Promise<ClientResponse | null> {
-  const url = 'https://api.authsec.dev/api/v1/clients';
+  const url = 'https://dev.api.authsec.dev/api/v1/clients';
 
   const headers = {
     'Authorization': \`Bearer \${token}\`,

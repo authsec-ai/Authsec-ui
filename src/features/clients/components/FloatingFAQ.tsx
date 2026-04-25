@@ -61,7 +61,7 @@ async function authenticateClient(
   clientId: string,
   clientSecret: string
 ): Promise<string | null> {
-  const url = 'https://api.authsec.dev/auth/token';
+  const url = 'https://dev.api.authsec.dev/auth/token';
 
   try {
     const response = await axios.post<TokenResponse>(url, {
@@ -141,7 +141,7 @@ async function authenticateClient(
   clientId: string,
   clientSecret: string
 ): Promise<string | null> {
-  const url = 'https://api.authsec.dev/auth/token';
+  const url = 'https://dev.api.authsec.dev/auth/token';
 
   try {
     const response = await axios.post<TokenResponse>(url, {

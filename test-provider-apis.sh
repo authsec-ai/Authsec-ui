@@ -3,7 +3,7 @@
 # Test script for update-provider and delete-provider APIs
 # Make sure to replace the placeholder values with actual data
 
-API_BASE="https://stage.api.authsec.dev"
+API_BASE="https://dev.api.authsec.dev"
 
 # Color codes for output
 GREEN='\033[0;32m'

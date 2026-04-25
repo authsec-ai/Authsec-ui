@@ -38,6 +38,8 @@ const arrayBufferToBase64Url = (buffer: ArrayBuffer): string =>
     .replace(/\//g, '_')
     .replace(/=/g, '');
 
+const fallbackRpId = () => window.location.hostname;
+
 export function useWebAuthnAuth(): UseWebAuthnAuthResult {
   // RTK Query mutations
   const [beginAuth, { isLoading: isBeginningAuth }] = useBeginWebAuthnAuthMutation();
@@ -63,7 +65,7 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
       const credential = await navigator.credentials.get({
         publicKey: {
           challenge: Uint8Array.from(atob((pk.challenge as string).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)).buffer,
-          rpId: pk.rpId || "app.authsec.dev",
+          rpId: pk.rpId || fallbackRpId(),
           allowCredentials: pk.allowCredentials?.map((cred: any) => ({
             ...cred,
             id: Uint8Array.from(atob((cred.id as string).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)).buffer,

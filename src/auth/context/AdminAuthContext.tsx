@@ -593,7 +593,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const credential = await navigator.credentials.get({
         publicKey: {
           challenge: base64UrlToArrayBuffer(publicKeyData.challenge),
-          rpId: publicKeyData.rpId || "app.authsec.dev",
+          rpId: publicKeyData.rpId || window.location.hostname,
           allowCredentials: publicKeyData.allowCredentials?.map((cred: any) => ({
             ...cred,
             id: base64UrlToArrayBuffer(cred.id)

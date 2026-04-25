@@ -3,6 +3,7 @@
  *
  * Provides utilities for generating OAuth2 authorization URLs with PKCE support
  */
+import config from "../config";
 
 /**
  * Generates a cryptographically secure random string for state/nonce
@@ -40,42 +41,16 @@ export async function generateCodeChallenge(codeVerifier: string): Promise<strin
 }
 
 /**
- * Gets the OAuth2 authorization base URL based on the current environment
- * Production (authsec.ai) uses oauth.prod.authsec.ai
- * Development (authsec.dev) uses oauth.authsec.dev
+ * Gets the OAuth2 authorization base URL from the configured runtime contract.
+ * The SPA host and the OAuth issuer can differ in hosted deployments.
  */
 export function getOAuthBaseUrl(): string {
-  const hostname = window.location.hostname;
-
-  // Local development
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return "https://oauth.authsec.dev";
-  }
-
-  // Parse the domain to construct the OAuth URL
-  // Pattern: {tenant}.app.authsec.ai -> oauth.prod.authsec.ai (production)
-  // Pattern: {tenant}.app.authsec.dev -> oauth.authsec.dev (development)
-  const parts = hostname.split(".");
-  if (parts.length >= 2) {
-    // Get the base domain (e.g., authsec.ai or authsec.dev)
-    const baseDomain = parts.slice(-2).join(".");
-    
-    // Production domain uses oauth.prod.authsec.ai
-    if (baseDomain === "authsec.ai") {
-      return "https://oauth.prod.authsec.ai";
-    }
-    
-    // Development and other environments
-    return `https://oauth.${baseDomain}`;
-  }
-
-  // Fallback
-  return "https://oauth.authsec.dev";
+  return config.VITE_OAUTH_BASE_URL.replace(/\/+$/, "");
 }
 
 /**
- * Extracts the tenant domain from the current hostname
- * Pattern: {tenantDomain}.app.authsec.dev -> tenantDomain
+ * Extracts a tenant/workspace prefix from the current hostname when the app is
+ * mounted on a prefixed subdomain.
  *
  * @returns The tenant domain (e.g., "dec10") or undefined if not on a tenant subdomain
  */
@@ -87,14 +62,17 @@ export function getTenantDomainFromHostname(): string | undefined {
     return undefined;
   }
 
-  // Parse hostname: {tenantDomain}.app.authsec.dev
   const parts = hostname.split(".");
 
-  // Need at least 4 parts: tenant.app.authsec.dev
-  if (parts.length >= 4) {
+  if (parts.length >= 3) {
     const tenantDomain = parts[0];
-    // Make sure it's not 'app' or 'www' (main domain indicators)
-    if (tenantDomain !== "app" && tenantDomain !== "www" && tenantDomain !== "oauth") {
+    if (
+      tenantDomain !== "app" &&
+      tenantDomain !== "www" &&
+      tenantDomain !== "oauth" &&
+      tenantDomain !== "dev" &&
+      tenantDomain !== "api"
+    ) {
       return tenantDomain;
     }
   }
@@ -103,25 +81,15 @@ export function getTenantDomainFromHostname(): string | undefined {
 }
 
 /**
- * Gets the redirect URI for OAuth callback based on the current environment
- * Pattern: https://{tenantDomain}.app.authsec.dev/oidc/auth/callback
+ * Gets the redirect URI for the browser callback scene. The UI remains
+ * root-mounted; callback handling should always land back on the current app
+ * origin rather than deriving a second host.
  *
  * @param tenantDomain - The tenant's domain name (e.g., "dec10"), NOT the tenant UUID
  */
 export function getRedirectUri(tenantDomain?: string): string {
-  const hostname = window.location.hostname;
-
-  // Local development - use a staging callback
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    // For local dev, use the tenant domain if provided
-    if (tenantDomain) {
-      return `https://${tenantDomain}.app.authsec.dev/oidc/auth/callback`;
-    }
-    return `${window.location.origin}/oidc/auth/callback`;
-  }
-
-  // Use the current hostname for the redirect (it should already include tenant subdomain if applicable)
-  return `https://${hostname}/oidc/auth/callback`;
+  void tenantDomain;
+  return `${window.location.origin}/oidc/auth/callback`;
 }
 
 export interface OAuth2AuthorizationUrlParams {
@@ -148,7 +116,7 @@ export interface OAuth2AuthorizationUrlResult {
  * Generates a complete OAuth2 authorization URL with PKCE
  *
  * Example output:
- * https://oauth.authsec.dev/oauth2/auth?response_type=code&client_id=xxx-main-client&redirect_uri=...&scope=openid+profile+email&state=...&code_challenge=...&code_challenge_method=S256
+ * https://dev.api.authsec.dev/oauth2/auth?response_type=code&client_id=xxx-main-client&redirect_uri=...&scope=openid+profile+email&state=...&code_challenge=...&code_challenge_method=S256
  */
 export async function generateOAuth2AuthorizationUrl(
   params: OAuth2AuthorizationUrlParams,

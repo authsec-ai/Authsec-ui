@@ -45,7 +45,8 @@ cp .env.example .env
 Edit `.env` and set the URL of your AuthSec backend:
 
 ```env
-VITE_API_URL=http://localhost:7468/authsec
+VITE_API_URL=http://localhost:7468
+VITE_OAUTH_BASE_URL=http://localhost:7468
 VITE_APP_NAME=AuthSec Enterprise IAM
 ```
 
@@ -61,8 +62,9 @@ The app will be available at [http://localhost:5173](http://localhost:5173).
 
 | Variable        | Required | Description                                                          |
 | --------------- | -------- | -------------------------------------------------------------------- |
-| `VITE_API_URL`  | Yes      | URL of the AuthSec backend API                                       |
-| `VITE_APP_NAME` | No       | Application name shown in the UI (default: `AuthSec Enterprise IAM`) |
+| `VITE_API_URL`        | Yes      | URL of the AuthSec backend/API host. UI API calls use `VITE_API_URL + /authsec/...`. |
+| `VITE_OAUTH_BASE_URL` | No       | OAuth/OIDC issuer host used for discovery, SDK snippets, and auth-server links. Defaults to `VITE_API_URL` when unset. |
+| `VITE_APP_NAME`       | No       | Application name shown in the UI (default: `AuthSec Enterprise IAM`) |
 
 ## Available Scripts
 
@@ -93,7 +95,14 @@ If you'd prefer not to self-host, AuthSec is available as a managed service at *
 
 This frontend requires the AuthSec backend to be running and accessible. The backend provides the API endpoints for authentication, user management, client configuration, and all IAM features.
 
-Set `VITE_API_URL` to point to your backend instance. For the local Docker Compose stack from the backend repo, use `http://localhost:7468/authsec`.
+Set `VITE_API_URL` to point to your backend instance. For the local backend repo, use `http://localhost:7468`.
+
+For the dev hosted environment, the intended contract is:
+
+- App host: `https://dev.authsec.dev`
+- API and OAuth issuer host: `https://dev.api.authsec.dev`
+
+The UI should not expect OAuth discovery or introspection from the app host.
 
 ## License
 

@@ -43,7 +43,7 @@ const getSessionData = () => {
 
 // Standard AuthSec API query function (clean, no auto-injection)
 const baseQuery = fetchBaseQuery({
-  baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
+  baseUrl: config.VITE_API_URL || "http://localhost:7468",
   timeout: 30000, // 30 second timeout
   credentials: "include", // Include cookies in requests
   prepareHeaders: (headers) => {
@@ -69,7 +69,7 @@ export const withSessionData = (body: any) => {
   };
 };
 
-// Create the base API (stage.api.authsec.dev) - using clean baseQuery
+// Create the base API using the configured runtime origin.
 export const baseApi = createApi({
   reducerPath: "baseApi",
   baseQuery,

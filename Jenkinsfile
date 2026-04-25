@@ -299,7 +299,7 @@ pipeline {
                     envArgs << "APP_BUILD_NUMBER=${env.BUILD_NUMBER}"
                     if (env.APP_LABEL == 'dev-ui' && env.K8S_NAMESPACE == 'authsec-dev') {
                         envArgs << "VITE_API_URL=https://dev.api.authsec.dev"
-                        envArgs << "VITE_OAUTH_BASE_URL=https://oauth.dev.authsec.dev"
+                        envArgs << "VITE_OAUTH_BASE_URL=https://dev.api.authsec.dev"
                     }
                     def joinedEnvArgs = envArgs.collect { "\"${it}\"" }.join(" ")
                     sh """

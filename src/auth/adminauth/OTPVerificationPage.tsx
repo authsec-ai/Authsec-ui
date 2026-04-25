@@ -62,7 +62,11 @@ export const OTPVerificationPage: React.FC = () => {
       if ('data' in result) {
         toast.success("Account verified! Please login to continue.");
         if (tenantDomain) {
-          window.location.href = `https://${tenantDomain}.app.authsec.dev/admin/login`;
+          const nextUrl = new URL("/admin/login", window.location.origin);
+          nextUrl.searchParams.set("tenant_domain", tenantDomain);
+          nextUrl.searchParams.set("email", email);
+          nextUrl.searchParams.set("verification_complete", "true");
+          window.location.href = nextUrl.toString();
         } else {
           navigate(
             `/admin/login?email=${encodeURIComponent(email)}&verification_complete=true`,

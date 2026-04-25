@@ -259,7 +259,7 @@ const getSessionData = () => {
 export const oidcApi = createApi({
   reducerPath: "oidcApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: config.VITE_API_URL || "https://test.api.authsec.dev",
+    baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
     prepareHeaders: (headers) => {

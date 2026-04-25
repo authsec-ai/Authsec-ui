@@ -164,7 +164,7 @@ data:
       renewal_threshold: "6h"
 
     icp_service:
-      address: "https://test.api.authsec.dev/spiresvc"
+      address: "https://dev.api.authsec.dev/spiresvc"
       trust_bundle_path: "/etc/icp-agent/ca-bundle.pem"
       timeout: 30
       max_retries: 3
@@ -551,7 +551,7 @@ services:
       - ICP_AGENT_AGENT__NODE_ID=docker-prod-host-01
 
       # ICP Server connection
-      - ICP_AGENT_ICP_SERVICE__ADDRESS=https://test.api.authsec.dev/spiresvc
+      - ICP_AGENT_ICP_SERVICE__ADDRESS=https://dev.api.authsec.dev/spiresvc
 
       # Attestation
       - ICP_AGENT_ATTESTATION__TYPE=auto
@@ -764,7 +764,7 @@ curl http://localhost:8080/healthz`,
             {
               label: "Step 4: Register Workloads",
               code: `# Set variables
-export ICP_SERVER_URL="https://test.api.authsec.dev/spiresvc"
+export ICP_SERVER_URL="https://dev.api.authsec.dev/spiresvc"
 export TENANT_ID="your-tenant-id-here"
 export NODE_ID="docker-prod-host-01"
 
@@ -847,7 +847,7 @@ curl http://localhost:8080/call-api`,
               code: `# Download and run installer
 curl -fsSL https://install.authsec.ai/icp-agent.sh | sudo bash -s -- \\
   --tenant-id "your-tenant-id-here" \\
-  --icp-server "https://test.api.authsec.dev/spiresvc" \\
+  --icp-server "https://dev.api.authsec.dev/spiresvc" \\
   --node-id "vm-prod-web-01"`,
             },
             {

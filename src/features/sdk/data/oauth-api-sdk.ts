@@ -19,7 +19,7 @@ export const OAUTH_API_SDK_HELP: SDKHelpItem[] = [
 # Initialize with token
 admin = AdminHelper(
     token="your-admin-token",
-    base_url="https://test.api.authsec.dev"
+    base_url="https://dev.api.authsec.dev"
 )
 
 # Create an OAuth/API scope
@@ -59,7 +59,7 @@ scope = admin.create_scope(
   // # Initialize with token
   // admin = AdminHelper(
   //     token="your-admin-token",
-  //     base_url="https://test.api.authsec.dev"
+  //     base_url="https://dev.api.authsec.dev"
   // )
 
   // # List all OAuth/API scopes
