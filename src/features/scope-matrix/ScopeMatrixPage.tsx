@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, ShieldAlert, Boxes, Grid3x3 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, ShieldAlert, Boxes, Grid3x3 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,11 @@ export function ScopeMatrixPage() {
 
   const unmappedScopes = matrixData.unmapped_scopes ?? [];
   const unmappedCount = unmappedScopes.length;
+  const protectedDiscovery =
+    matrixData.resource_server.status === "degraded" &&
+    matrixData.resource_server.last_scan_status === "success" &&
+    Number(matrixData.total_tools ?? 0) === 0 &&
+    unmappedCount > 0;
 
   return (
     <div className="min-h-screen">
@@ -132,9 +137,21 @@ export function ScopeMatrixPage() {
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-foreground">Tool Scope Mappings</h2>
             <p className="text-sm text-muted-foreground">
-              Click on a scope to view details or use the dropdown to add new mappings
+              {protectedDiscovery
+                ? "The server is protected, so unauthenticated discovery cannot enumerate tools yet."
+                : "Click on a scope to view details or use the dropdown to add new mappings"}
             </p>
           </div>
+          {protectedDiscovery ? (
+            <div className="mb-4 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                AuthSec confirmed the MCP endpoint responds with an OAuth bearer challenge. The scopes below came from
+                protected-resource metadata, but no tools are visible because the scanner does not yet have a service token for
+                <code className="mx-1 rounded bg-white/60 px-1 py-0.5 font-mono text-xs dark:bg-black/20">tools/list</code>.
+              </div>
+            </div>
+          ) : null}
           <ToolScopeGrid
             rsId={rsId}
             tools={matrixData.tools ?? []}

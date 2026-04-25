@@ -80,6 +80,12 @@ export interface ScopeMatrixResourceServer {
   id: string;
   name: string;
   url: string;
+  status?: string;
+  last_scan_status?: string | null;
+  scan_generation?: number;
+  last_successful_generation?: number;
+  last_scan_started_at?: string | null;
+  last_scan_completed_at?: string | null;
 }
 
 export interface ScopeMatrixResponse {

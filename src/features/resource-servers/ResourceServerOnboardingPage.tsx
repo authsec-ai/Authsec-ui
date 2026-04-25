@@ -137,6 +137,11 @@ export default function ResourceServerOnboardingPage() {
   const validationChecks = validationResult?.checks ?? [];
   const assignableUsers = adminUsersResponse?.users ?? [];
   const matchedUser = assignableUsers.find((user) => user.email?.toLowerCase() === assignEmail.trim().toLowerCase());
+  const protectedDiscovery =
+    server.status === "degraded" &&
+    server.last_scan_status === "success" &&
+    Number(scopeMatrix?.total_tools ?? 0) === 0 &&
+    Number(scopeMatrix?.unmapped_scopes?.length ?? 0) > 0;
 
   const handleSavePolicy = async () => {
     if (!server) return;
@@ -326,7 +331,12 @@ export default function ResourceServerOnboardingPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-xl border p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Server status</div>
-              <div className="mt-2 text-lg font-semibold text-foreground">{server.status}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-lg font-semibold text-foreground">
+                  {protectedDiscovery ? "protected" : server.status}
+                </span>
+                {protectedDiscovery ? <Badge variant="secondary">Tool auth needed</Badge> : null}
+              </div>
             </div>
             <div className="rounded-xl border p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Last scan</div>
@@ -352,6 +362,15 @@ export default function ResourceServerOnboardingPage() {
               <div className="mt-1 text-sm text-muted-foreground">{formatTimestamp(server.last_scan_completed_at)}</div>
             </div>
           </div>
+
+          {protectedDiscovery ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+              Discovery reached this MCP server and confirmed it is OAuth-protected, but the scanner cannot call
+              <code className="mx-1 rounded bg-white/60 px-1 py-0.5 font-mono text-xs dark:bg-black/20">tools/list</code>
+              without an AuthSec access token. The listed scopes are advertised by protected-resource metadata; tools will appear after authenticated
+              discovery is configured.
+            </div>
+          ) : null}
         </TableCard>
 
         <TableCard className="space-y-4 p-6">

@@ -62,6 +62,10 @@ export type ResourceServerReadinessItem = {
   ready: boolean;
 };
 
+export function getDeclaredScopes(server: Pick<ResourceServer, "scopes_supported">): string[] {
+  return Array.isArray(server.scopes_supported) ? server.scopes_supported : [];
+}
+
 export function computeResourceURI(
   publicBaseURL: string,
   protectedBasePath: string,
@@ -156,7 +160,7 @@ export function formFromServer(server: ResourceServer): ResourceServerFormState 
     name: server.name,
     public_base_url: server.public_base_url,
     protected_base_path: server.protected_base_path,
-    scopes_supported: (server.scopes_supported ?? []).join("\n"),
+    scopes_supported: getDeclaredScopes(server).join("\n"),
     registration_modes: (server.registration_modes ?? []).join("\n"),
     active: server.active,
   };
@@ -192,7 +196,9 @@ const GO_IMPORT = `import (
 	authsecsdk "github.com/authsec-ai/sdk-authsec/packages/go-sdk"
 )`;
 
-const GO_WRAP = (server: ResourceServer) => `cfg := authsecsdk.Config{
+const GO_WRAP = (server: ResourceServer) => {
+  const scopes = getDeclaredScopes(server);
+  return `cfg := authsecsdk.Config{
 	Issuer:                    "${computeOAuthIssuerURL()}",
 	AuthorizationServer:       "${computeOAuthIssuerURL()}",
 	JWKSURL:                   "${computeJwksURL()}",
@@ -202,7 +208,7 @@ const GO_WRAP = (server: ResourceServer) => `cfg := authsecsdk.Config{
 	ResourceServerID:          "${server.id}",
 	ResourceURI:               "${server.resource_uri}",
 	ResourceName:              "${server.name}",
-	SupportedScopes:           []string{${server.scopes_supported.map((scope) => `"${scope}"`).join(", ")}},
+	SupportedScopes:           []string{${scopes.map((scope) => `"${scope}"`).join(", ")}},
 	PolicyMode:                authsecsdk.PolicyModeRemoteRequired,
 	ValidationMode:            authsecsdk.ValidationModeJWTAndIntrospect,
 }
@@ -215,6 +221,7 @@ if err := authsecsdk.MountMCP(mux, "${server.protected_base_path}", existingMCPH
 }
 
 log.Fatal(http.ListenAndServe(":8080", mux))`;
+};
 
 const TS_WRAP = (server: ResourceServer) => `import { runMcpServerWithOAuth, protectedByAuthSec } from "@authsec/sdk";
 
@@ -222,7 +229,7 @@ const tools = [
   protectedByAuthSec(
     {
       toolName: "list_repositories",
-      scopes: ["${server.scopes_supported[0] ?? "tools:read"}"],
+      scopes: ["${getDeclaredScopes(server)[0] ?? "tools:read"}"],
       description: "Example protected MCP tool",
       inputSchema: { type: "object", properties: {}, required: [] },
     },
@@ -246,7 +253,7 @@ tools = [
     protected_by_authsec(
         {
             "tool_name": "list_repositories",
-            "scopes": ["${server.scopes_supported[0] ?? "tools:read"}"],
+            "scopes": ["${getDeclaredScopes(server)[0] ?? "tools:read"}"],
             "description": "Example protected MCP tool",
             "input_schema": {"type": "object", "properties": {}, "required": []},
         },
@@ -359,7 +366,7 @@ Use these exact AuthSec and resource server values:
 - MCP endpoint URL: ${mcpEndpointURL}
 - Metadata path: ${metadataPath}
 - Metadata URL: ${metadataURL}
-- Supported scopes: ${(server.scopes_supported ?? []).join(", ") || "none declared"}
+- Supported scopes: ${getDeclaredScopes(server).join(", ") || "none declared"}
 - Registration modes: ${(server.registration_modes ?? []).join(", ") || "none declared"}
 - OAuth issuer / authorization server: ${computeOAuthIssuerURL()}
 - Authorization endpoint: ${computeAuthorizeURL()}
