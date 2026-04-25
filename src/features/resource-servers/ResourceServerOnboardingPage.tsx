@@ -138,8 +138,8 @@ export default function ResourceServerOnboardingPage() {
   const assignableUsers = adminUsersResponse?.users ?? [];
   const matchedUser = assignableUsers.find((user) => user.email?.toLowerCase() === assignEmail.trim().toLowerCase());
   const protectedDiscovery =
-    server.status === "degraded" &&
-    server.last_scan_status === "success" &&
+    server?.status === "degraded" &&
+    server?.last_scan_status === "success" &&
     Number(scopeMatrix?.total_tools ?? 0) === 0 &&
     Number(scopeMatrix?.unmapped_scopes?.length ?? 0) > 0;
 
