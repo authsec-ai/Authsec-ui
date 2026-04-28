@@ -93,6 +93,34 @@ export interface MarkToolPublicRequest {
   confirmation_token?: string;
 }
 
+export interface RSRole {
+  id: string;
+  name: string;
+  description?: string;
+  is_default: boolean;
+  permissions: number;
+  bindings: number;
+}
+
+export interface RSBinding {
+  id: string;
+  user_id: string;
+  username: string;
+  user_email: string;
+  role_id: string;
+  role_name: string;
+  scope_type?: string | null;
+  scope_id?: string | null;
+  created_at: string;
+  assignment_source?: string;
+}
+
+export interface EligibleUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
 export interface TestLoginResponse {
   resource_server: {
     id: string;
@@ -216,6 +244,55 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
+    // GET /authsec/resource-servers/:id/roles
+    listRSRoles: builder.query<{ roles: RSRole[] }, string>({
+      query: (rsId) => `/authsec/resource-servers/${rsId}/roles`,
+      providesTags: (_result, _error, rsId) => [
+        { type: "ResourceServer" as const, id: `${rsId}-roles` },
+      ],
+    }),
+
+    // GET /authsec/resource-servers/:id/bindings
+    listRSBindings: builder.query<{ bindings: RSBinding[] }, string>({
+      query: (rsId) => `/authsec/resource-servers/${rsId}/bindings`,
+      providesTags: (_result, _error, rsId) => [
+        { type: "ResourceServer" as const, id: `${rsId}-bindings` },
+      ],
+    }),
+
+    // POST /authsec/resource-servers/:id/bindings
+    createRSBinding: builder.mutation<
+      { id: string; user_id: string; role_id: string; role_name: string },
+      { rsId: string; userId: string; roleId: string }
+    >({
+      query: ({ rsId, userId, roleId }) => ({
+        url: `/authsec/resource-servers/${rsId}/bindings`,
+        method: "POST",
+        body: { user_id: userId, role_id: roleId },
+      }),
+      invalidatesTags: (_result, _error, { rsId }) => [
+        { type: "ResourceServer" as const, id: `${rsId}-bindings` },
+        { type: "ResourceServer" as const, id: `${rsId}-roles` },
+      ],
+    }),
+
+    // DELETE /authsec/resource-servers/:id/bindings/:binding_id
+    deleteRSBinding: builder.mutation<{ status: string }, { rsId: string; bindingId: string }>({
+      query: ({ rsId, bindingId }) => ({
+        url: `/authsec/resource-servers/${rsId}/bindings/${bindingId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _error, { rsId }) => [
+        { type: "ResourceServer" as const, id: `${rsId}-bindings` },
+        { type: "ResourceServer" as const, id: `${rsId}-roles` },
+      ],
+    }),
+
+    // GET /authsec/resource-servers/:id/eligible-users
+    listEligibleUsers: builder.query<{ users: EligibleUser[] }, string>({
+      query: (rsId) => `/authsec/resource-servers/${rsId}/eligible-users`,
+    }),
+
     // POST /authsec/resource-servers/:id/tools
     // Manual tool entry — wizard "Path C" escape hatch. inventory_source is
     // forced to 'manual' on the backend; admin override of mcp_scan or
@@ -252,4 +329,9 @@ export const {
   useTestLoginMutation,
   useScanWithMCPTokenMutation,
   useCreateManualToolMutation,
+  useListRSRolesQuery,
+  useListRSBindingsQuery,
+  useCreateRSBindingMutation,
+  useDeleteRSBindingMutation,
+  useListEligibleUsersQuery,
 } = setupWizardApi;

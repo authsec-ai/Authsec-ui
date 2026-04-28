@@ -109,7 +109,14 @@ export function ToolsTab({ rsId, onChange }: Props) {
       await markToolPublic({
         rsId,
         toolId: tool.id,
-        body: { is_public: mode === "public" },
+        body: {
+          is_public: mode === "public",
+          // Backend requires confirmation_token = tool.name when toggling public
+          // (audit hardening). The window.confirm() above is the user's
+          // acknowledgement; we forward the tool name as the typed token so
+          // the gate passes while the UX stays a single-click confirm.
+          ...(mode === "public" ? { confirmation_token: tool.name } : {}),
+        },
       }).unwrap();
       onChange?.();
     } catch (err) {
