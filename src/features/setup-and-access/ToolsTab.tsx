@@ -11,6 +11,7 @@ import type {
   MCPToolResponse,
   ScopeMapEntry,
 } from "../../app/api/types/scopeMatrix";
+import { ToolInventoryStep } from "./ToolInventoryStep";
 
 interface Props {
   rsId: string;
@@ -37,7 +38,7 @@ function pendingSuggestions(tool: MCPToolResponse): ScopeMapEntry[] {
 }
 
 export function ToolsTab({ rsId, onChange }: Props) {
-  const { data: matrix, isLoading } = useGetScopeMatrixQuery(rsId);
+  const { data: matrix, isLoading, refetch: refetchMatrix } = useGetScopeMatrixQuery(rsId);
   const { data: scopes = [] } = useListResourceServerScopesQuery(rsId);
   const [updateMap, { isLoading: saving }] = useUpdateToolScopeMapMutation();
   const [markToolPublic] = useMarkToolPublicMutation();
@@ -45,17 +46,43 @@ export function ToolsTab({ rsId, onChange }: Props) {
   // Search filter for the tool list — useful when the RS exposes many tools.
   const [filter, setFilter] = useState("");
 
+  const allTools = matrix?.tools ?? [];
   const tools = useMemo(() => {
-    const list = matrix?.tools ?? [];
-    if (!filter.trim()) return list;
+    if (!filter.trim()) return allTools;
     const q = filter.toLowerCase();
-    return list.filter(
+    return allTools.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         (t.title ?? "").toLowerCase().includes(q) ||
         (t.description ?? "").toLowerCase().includes(q),
     );
-  }, [matrix, filter]);
+  }, [allTools, filter]);
+
+  // When there are 0 tools, mapping is moot — surface the three ingestion
+  // paths instead. This catches both the wizard-step-2 case and the
+  // post-activation drift where an RS reaches ready before tools are loaded.
+  if (!isLoading && allTools.length === 0) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Tools</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            This resource server has no tools registered yet. Pick a path below
+            to ingest the tool inventory — once tools exist, this tab switches
+            to the scope-mapping grid.
+          </p>
+        </div>
+        <ToolInventoryStep
+          rsId={rsId}
+          toolCount={0}
+          onRefresh={() => {
+            refetchMatrix();
+            onChange?.();
+          }}
+        />
+      </div>
+    );
+  }
 
   const scopeByID = useMemo(() => {
     const m = new Map<string, (typeof scopes)[number]>();
