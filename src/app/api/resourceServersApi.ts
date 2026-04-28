@@ -24,6 +24,8 @@ export interface ResourceServer {
   last_validated_at?: string;
   last_validation_status?: string;
   last_validation_error?: string;
+  state?: "pending_scan" | "needs_setup" | "ready" | "scan_failed";
+  setup_completed_at?: string;
   created_at?: string;
   updated_at?: string;
 }

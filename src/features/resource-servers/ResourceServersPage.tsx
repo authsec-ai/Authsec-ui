@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCcw } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -11,6 +11,7 @@ import {
   useUpdateResourceServerMutation,
   type ResourceServer,
 } from "@/app/api/resourceServersApi";
+import { useGetSetupChecklistQuery } from "@/app/api/setupWizardApi";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { TableCard } from "@/theme/components/cards";
@@ -28,6 +29,75 @@ import {
 type ResourceServerLocationState = {
   latestSecret?: ResourceServerSecretState;
 };
+
+function TenantHealthRow({
+  server,
+  onNavigate,
+}: {
+  server: ResourceServer;
+  onNavigate: (path: string) => void;
+}) {
+  const { data: checklist } = useGetSetupChecklistQuery(server.id, {
+    skip: server.state === "ready" || server.state === "pending_scan",
+  });
+
+  const firstFailing = checklist?.steps.find((s) => !s.complete && s.step < 6);
+  const stepLabel = firstFailing
+    ? `step ${firstFailing.step}: ${firstFailing.name.toLowerCase()}`
+    : server.state === "scan_failed"
+    ? "scan failed"
+    : "setup incomplete";
+
+  const wizardPath = `/resource-servers/${server.id}/onboarding`;
+
+  return (
+    <div className="flex items-center justify-between rounded-md border border-yellow-300 bg-yellow-50 px-4 py-2.5 text-sm dark:border-yellow-700 dark:bg-yellow-950/30">
+      <div className="flex items-center gap-2 text-yellow-900 dark:text-yellow-300">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          <span className="font-medium">{server.name}</span>
+          {" — "}
+          {stepLabel}
+        </span>
+      </div>
+      <button
+        onClick={() => onNavigate(wizardPath)}
+        className="ml-4 shrink-0 text-xs font-medium text-yellow-700 underline hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-200"
+      >
+        Open wizard →
+      </button>
+    </div>
+  );
+}
+
+function TenantHealthStrip({
+  resourceServers,
+  onNavigate,
+}: {
+  resourceServers: ResourceServer[];
+  onNavigate: (path: string) => void;
+}) {
+  const blocking = resourceServers.filter(
+    (rs) => rs.state === "needs_setup" || rs.state === "scan_failed",
+  );
+
+  if (blocking.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-yellow-800 dark:text-yellow-300">
+        <AlertTriangle className="h-4 w-4" />
+        <span>
+          {blocking.length} resource server{blocking.length !== 1 ? "s" : ""} need
+          {blocking.length === 1 ? "s" : ""} attention before end-users can log in
+        </span>
+      </div>
+      {blocking.map((rs) => (
+        <TenantHealthRow key={rs.id} server={rs} onNavigate={onNavigate} />
+      ))}
+    </div>
+  );
+}
 
 export default function ResourceServersPage() {
   const navigate = useNavigate();
@@ -152,6 +222,10 @@ export default function ResourceServersPage() {
             onDismiss={() => setLatestSecret(null)}
           />
         ) : null}
+
+        {!isLoading && (
+          <TenantHealthStrip resourceServers={resourceServers} onNavigate={navigate} />
+        )}
 
         <TableCard className="space-y-4 p-4 sm:p-6">
           {isLoading ? (

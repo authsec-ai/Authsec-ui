@@ -56,6 +56,50 @@ function CompactBadgeList({ items, emptyLabel }: { items: string[]; emptyLabel: 
   );
 }
 
+type RSState = ResourceServer["state"];
+
+const STATE_CONFIG: Record<
+  NonNullable<RSState>,
+  { label: string; className: string }
+> = {
+  pending_scan: {
+    label: "Pending Scan",
+    className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  },
+  needs_setup: {
+    label: "Needs Setup",
+    className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+  },
+  ready: {
+    label: "Ready",
+    className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  },
+  scan_failed: {
+    label: "Scan Failed",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  },
+};
+
+const STATE_ICON: Record<NonNullable<RSState>, string> = {
+  pending_scan: "⏳",
+  needs_setup: "🟡",
+  ready: "🟢",
+  scan_failed: "🔴",
+};
+
+function ReadinessPill({ state }: { state?: RSState }) {
+  if (!state) return <span className="text-xs text-muted-foreground">—</span>;
+  const cfg = STATE_CONFIG[state];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}
+    >
+      <span>{STATE_ICON[state]}</span>
+      {cfg.label}
+    </span>
+  );
+}
+
 function ResourceServerNameCell({ server }: { server: ResourceServer }) {
   const readinessItems = buildReadinessItems(server);
 
@@ -188,6 +232,16 @@ export function ResourceServersTable(props: ResourceServersTableProps) {
         ),
         resizable: true,
         approxWidth: 140,
+      },
+      {
+        id: "readiness",
+        header: "Readiness",
+        accessorKey: "state",
+        priority: 2,
+        enableSorting: false,
+        cell: ({ row }) => <ReadinessPill state={row.original.state} />,
+        resizable: true,
+        approxWidth: 160,
       },
       {
         id: "scopes",
