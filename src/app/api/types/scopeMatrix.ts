@@ -56,12 +56,18 @@ export interface UpdateOAuthScopeRequest {
 
 // ── MCP Tool ──
 
+export type ScopeMapSource = "sdk_suggested" | "admin_override";
+
+export type InventorySource = "mcp_scan" | "sdk_manifest" | "manual";
+
 export interface ScopeMapEntry {
   scope_id: string;
   scope_string: string;
   display_name: string;
   risk_level: RiskLevel;
   auto_matched: boolean;
+  /** "admin_override" mappings are runtime-effective; "sdk_suggested" is advisory only. */
+  source?: ScopeMapSource;
 }
 
 export interface MCPToolResponse {
@@ -72,6 +78,12 @@ export interface MCPToolResponse {
   input_schema?: Record<string, unknown>;
   annotations?: Record<string, unknown>;
   scopes: ScopeMapEntry[];
+  /** When true, the tool is callable by any token with audience=this RS, regardless of scope. */
+  is_public?: boolean;
+  /** Source of the tool itself: mcp_scan (auto), sdk_manifest (SDK-published), or manual (admin-typed). */
+  inventory_source?: InventorySource;
+  /** SDK-suggested scopes that haven't been promoted to admin_override yet (advisory). */
+  suggested_scopes?: string[];
 }
 
 // ── Scope Matrix ──

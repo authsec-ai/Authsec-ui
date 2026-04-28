@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useGetSetupChecklistQuery } from "../../app/api/setupWizardApi";
 import type { ChecklistStep } from "../../app/api/setupWizardApi";
 import { ToolInventoryStep } from "./ToolInventoryStep";
+import { ScopesTab } from "./ScopesTab";
+import { ToolsTab } from "./ToolsTab";
 import { ActivationReviewScreen } from "./ActivationReviewScreen";
 import { DriftBanner } from "./DriftBanner";
 
@@ -72,6 +74,14 @@ export function SetupWizard({ rsId, rsName, rsState, onActivated }: Props) {
           />
         )}
 
+        {activeStep === 3 && (
+          <ScopesTab rsId={rsId} onChange={refetchChecklist} />
+        )}
+
+        {activeStep === 4 && (
+          <ToolsTab rsId={rsId} onChange={refetchChecklist} />
+        )}
+
         {activeStep === 6 && (
           <ActivationReviewScreen
             rsId={rsId}
@@ -80,12 +90,15 @@ export function SetupWizard({ rsId, rsName, rsState, onActivated }: Props) {
           />
         )}
 
-        {activeStep !== 2 && activeStep !== 6 && (
-          <StepPlaceholder
-            step={steps.find((s) => s.step === activeStep)}
-            onContinue={() => setActiveStep((s) => Math.min(s + 1, 6))}
-          />
-        )}
+        {activeStep !== 2 &&
+          activeStep !== 3 &&
+          activeStep !== 4 &&
+          activeStep !== 6 && (
+            <StepPlaceholder
+              step={steps.find((s) => s.step === activeStep)}
+              onContinue={() => setActiveStep((s) => Math.min(s + 1, 6))}
+            />
+          )}
       </div>
     </div>
   );
