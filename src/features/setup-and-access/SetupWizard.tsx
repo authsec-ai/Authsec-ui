@@ -7,6 +7,7 @@ import { ToolsTab } from "./ToolsTab";
 import { RolesAccessTab } from "./RolesAccessTab";
 import { ActivationReviewScreen } from "./ActivationReviewScreen";
 import { DriftBanner } from "./DriftBanner";
+import { TestLoginPanel } from "./TestLoginPanel";
 
 interface Props {
   rsId: string;
@@ -15,8 +16,13 @@ interface Props {
   onActivated: () => void;
 }
 
+// Manage-mode tab keys for a ready RS.
+type ManageTab = "overview" | "tools" | "scopes" | "roles" | "test";
+
 export function SetupWizard({ rsId, rsName, rsState, onActivated }: Props) {
   const [activeStep, setActiveStep] = useState(rsState === "ready" ? 6 : 1);
+  const [manageTab, setManageTab] = useState<ManageTab>("overview");
+
   const { data: checklist, refetch: refetchChecklist } = useGetSetupChecklistQuery(rsId, {
     pollingInterval: rsState !== "ready" ? 10_000 : 0,
   });
@@ -24,18 +30,56 @@ export function SetupWizard({ rsId, rsName, rsState, onActivated }: Props) {
   const steps = checklist?.steps ?? [];
   const currentStep = steps.find((s) => !s.complete && s.step < 6) ?? steps[5];
 
+  // Ready RS: render the management UI (status header + DriftBanner + tab strip).
   if (rsState === "ready") {
     return (
       <div className="space-y-4">
         <DriftBanner rsId={rsId} />
+
         <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-          <strong>Setup complete.</strong> {rsName} is active. End-users can log in.
-          <button
-            className="ml-2 text-green-700 underline text-xs"
-            onClick={() => setActiveStep(1)}
-          >
-            Reconfigure
-          </button>
+          <strong>Setup complete.</strong> {rsName} is active. End-users can log
+          in. Manage the running configuration below.
+        </div>
+
+        {/* Tab strip */}
+        <div className="flex gap-1 border-b border-gray-200">
+          {(
+            [
+              { key: "overview", label: "Overview" },
+              { key: "tools", label: "Tools" },
+              { key: "scopes", label: "Scopes" },
+              { key: "roles", label: "Roles & access" },
+              { key: "test", label: "Test login" },
+            ] as { key: ManageTab; label: string }[]
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setManageTab(t.key)}
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-[2px] ${
+                manageTab === t.key
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-gray-600 hover:text-gray-800"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="pt-2">
+          {manageTab === "overview" && (
+            <ReadyOverview rsId={rsId} steps={steps} />
+          )}
+          {manageTab === "tools" && (
+            <ToolsTab rsId={rsId} onChange={refetchChecklist} />
+          )}
+          {manageTab === "scopes" && (
+            <ScopesTab rsId={rsId} onChange={refetchChecklist} />
+          )}
+          {manageTab === "roles" && (
+            <RolesAccessTab rsId={rsId} onChange={refetchChecklist} />
+          )}
+          {manageTab === "test" && <TestLoginPanel rsId={rsId} />}
         </div>
       </div>
     );
@@ -171,6 +215,52 @@ function StepPlaceholder({
       >
         Continue →
       </button>
+    </div>
+  );
+}
+
+// Ready-state overview: re-uses the checklist steps as a config summary.
+// Each row shows the same detail text the wizard rail used during setup, but
+// with a "manage" call-to-action that jumps to the corresponding tab.
+function ReadyOverview({ rsId, steps }: { rsId: string; steps: ChecklistStep[] }) {
+  return (
+    <div className="rounded-md border border-gray-200 bg-white">
+      <div className="border-b border-gray-200 px-4 py-3">
+        <h3 className="text-sm font-semibold text-gray-800">
+          Configuration summary
+        </h3>
+        <p className="mt-1 text-xs text-gray-500">
+          A snapshot of what was activated. Use the tabs above to make changes —
+          edits to a ready RS take effect immediately and may surface drift
+          events for end-users still holding tokens.
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-100 px-4">
+        {steps.map((s) => (
+          <li key={s.step} className="flex items-start justify-between gap-4 py-3 text-sm">
+            <div className="min-w-0">
+              <div className="font-medium text-gray-900">
+                {s.step}. {s.name}
+              </div>
+              {s.detail && (
+                <div className="mt-0.5 text-xs text-gray-500">{s.detail}</div>
+              )}
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                s.complete
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-yellow-100 text-yellow-800"
+              }`}
+            >
+              {s.complete ? "✓ complete" : "incomplete"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-400">
+        RS ID: <code className="font-mono">{rsId}</code>
+      </div>
     </div>
   );
 }
