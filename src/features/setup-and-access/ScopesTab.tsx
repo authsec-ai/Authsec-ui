@@ -27,7 +27,8 @@ function riskTone(level: RiskLevel | undefined): string {
 }
 
 export function ScopesTab({ rsId, onChange }: Props) {
-  const { data: scopes = [], isLoading } = useListResourceServerScopesQuery(rsId);
+  const { data: scopesData, isLoading } = useListResourceServerScopesQuery(rsId);
+  const scopes = scopesData ?? [];
   // Scope matrix gives us per-tool scope mappings — we use it to compute the
   // "used by N tools" counter per scope without an extra round-trip.
   const { data: matrix } = useGetScopeMatrixQuery(rsId);

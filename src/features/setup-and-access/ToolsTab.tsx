@@ -39,14 +39,15 @@ function pendingSuggestions(tool: MCPToolResponse): ScopeMapEntry[] {
 
 export function ToolsTab({ rsId, onChange }: Props) {
   const { data: matrix, isLoading, refetch: refetchMatrix } = useGetScopeMatrixQuery(rsId);
-  const { data: scopes = [] } = useListResourceServerScopesQuery(rsId);
+  const { data: scopesData } = useListResourceServerScopesQuery(rsId);
+  const scopes = scopesData ?? [];
   const [updateMap, { isLoading: saving }] = useUpdateToolScopeMapMutation();
   const [markToolPublic] = useMarkToolPublicMutation();
 
   // Search filter for the tool list — useful when the RS exposes many tools.
   const [filter, setFilter] = useState("");
 
-  const allTools = matrix?.tools ?? [];
+  const allTools = matrix?.tools ?? []; // matrix.tools may be JSON null on empty
   const tools = useMemo(() => {
     if (!filter.trim()) return allTools;
     const q = filter.toLowerCase();

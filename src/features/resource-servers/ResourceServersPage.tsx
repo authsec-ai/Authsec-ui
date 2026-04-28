@@ -41,7 +41,11 @@ function TenantHealthRow({
     skip: server.state === "ready" || server.state === "pending_scan",
   });
 
-  const firstFailing = checklist?.steps.find((s) => !s.complete && s.step < 6);
+  // checklist?.steps can be null when the backend emits JSON null for an
+  // empty array — coerce so .find doesn't crash the table render.
+  const firstFailing = (checklist?.steps ?? []).find(
+    (s) => !s.complete && s.step < 6,
+  );
   const stepLabel = firstFailing
     ? `step ${firstFailing.step}: ${firstFailing.name.toLowerCase()}`
     : server.state === "scan_failed"
@@ -105,7 +109,10 @@ export default function ResourceServersPage() {
   const [searchParams] = useSearchParams();
   const isCreateOpen = searchParams.get("create") === "1";
 
-  const { data: resourceServers = [], isLoading, refetch } = useListResourceServersQuery();
+  const { data: rsData, isLoading, refetch } = useListResourceServersQuery();
+  // Coerce nil → [] (Go backends can emit JSON null for empty slices, and
+  // destructuring defaults only catch undefined).
+  const resourceServers = rsData ?? [];
   const [createResourceServer, { isLoading: isCreating }] = useCreateResourceServerMutation();
   const [updateResourceServer, { isLoading: isUpdating }] = useUpdateResourceServerMutation();
   const [deleteResourceServer] = useDeleteResourceServerMutation();

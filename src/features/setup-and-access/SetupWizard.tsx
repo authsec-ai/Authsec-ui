@@ -27,7 +27,9 @@ export function SetupWizard({ rsId, rsName, rsState, onActivated }: Props) {
     pollingInterval: rsState !== "ready" ? 10_000 : 0,
   });
 
-  const steps = checklist?.steps ?? [];
+  // Coerce nil → [] so .find/.map are safe even when the backend emits
+  // JSON null for an empty steps array.
+  const steps: ChecklistStep[] = checklist?.steps ?? [];
   const currentStep = steps.find((s) => !s.complete && s.step < 6) ?? steps[5];
 
   // Ready RS: render the management UI (status header + DriftBanner + tab strip).
