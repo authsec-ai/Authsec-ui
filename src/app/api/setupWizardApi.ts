@@ -195,6 +195,49 @@ export const setupWizardApi = baseApi.injectEndpoints({
         method: "POST",
       }),
     }),
+
+    // POST /authsec/resource-servers/:id/rescan
+    // Authenticated-scan: pass a one-shot bearer token in the body so the
+    // backend forwards it to the MCP server's tools/list. The token must be
+    // in the body, not the Authorization header (which is reserved for the
+    // admin's JWT). The token is never persisted.
+    scanWithMCPToken: builder.mutation<
+      { status?: string; result?: unknown; last_scan_status?: string },
+      { rsId: string; mcpToken?: string }
+    >({
+      query: ({ rsId, mcpToken }) => ({
+        url: `/authsec/resource-servers/${rsId}/rescan`,
+        method: "POST",
+        body: mcpToken ? { mcp_token: mcpToken } : {},
+      }),
+      invalidatesTags: (_result, _error, { rsId }) => [
+        { type: "ResourceServer" as const, id: rsId },
+        { type: "ScopeMatrix" as const, id: rsId },
+      ],
+    }),
+
+    // POST /authsec/resource-servers/:id/tools
+    // Manual tool entry — wizard "Path C" escape hatch. inventory_source is
+    // forced to 'manual' on the backend; admin override of mcp_scan or
+    // sdk_manifest tools is not allowed through this route.
+    createManualTool: builder.mutation<
+      { tool_id: string; name: string; inventory_source: string },
+      { rsId: string; name: string; description?: string }
+    >({
+      query: ({ rsId, name, description }) => ({
+        url: `/authsec/resource-servers/${rsId}/tools`,
+        method: "POST",
+        body: {
+          name,
+          description: description ?? "",
+          inventory_source: "manual",
+        },
+      }),
+      invalidatesTags: (_result, _error, { rsId }) => [
+        { type: "ResourceServer" as const, id: rsId },
+        { type: "ScopeMatrix" as const, id: rsId },
+      ],
+    }),
   }),
 });
 
@@ -207,4 +250,6 @@ export const {
   useGetDriftEventsQuery,
   useDismissDriftEventMutation,
   useTestLoginMutation,
+  useScanWithMCPTokenMutation,
+  useCreateManualToolMutation,
 } = setupWizardApi;

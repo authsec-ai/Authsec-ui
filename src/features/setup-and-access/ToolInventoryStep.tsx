@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { useGetSDKManifestStatusQuery } from "../../app/api/setupWizardApi";
-import { useCreateResourceServerScopeMutation } from "../../app/api/scopeMatrixApi";
+import {
+  useGetSDKManifestStatusQuery,
+  useScanWithMCPTokenMutation,
+  useCreateManualToolMutation,
+} from "../../app/api/setupWizardApi";
 import type { SDKManifestStatusResponse } from "../../app/api/setupWizardApi";
 import toast from "react-hot-toast";
 
@@ -17,8 +20,11 @@ export function ToolInventoryStep({ rsId, toolCount, onRefresh }: Props) {
   const [scanToken, setScanToken] = useState("");
   const [manualToolName, setManualToolName] = useState("");
   const [manualToolDesc, setManualToolDesc] = useState("");
-  const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+
+  // RTK Query mutations (handle admin auth via baseApi).
+  const [scanWithMCPToken, { isLoading: scanLoading }] = useScanWithMCPTokenMutation();
+  const [createManualTool, { isLoading: manualSaving }] = useCreateManualToolMutation();
 
   // SDK manifest status — polls every 5s while this path is open.
   const { data: manifestStatus, refetch: refetchManifest } =
@@ -34,64 +40,48 @@ export function ToolInventoryStep({ rsId, toolCount, onRefresh }: Props) {
       setScanError("Please paste a bearer token.");
       return;
     }
-    setScanLoading(true);
     setScanError(null);
     try {
-      const res = await fetch(
-        `/authsec/resource-servers/${rsId}/rescan`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${scanToken}`,
-          },
-        }
-      );
-      if (res.status === 401) {
+      await scanWithMCPToken({ rsId, mcpToken: scanToken }).unwrap();
+      toast.success("Scan complete");
+      setScanToken(""); // never persist the token
+      onRefresh();
+    } catch (err) {
+      // RTK Query surfaces fetch errors with status + data shape.
+      const apiErr = err as { status?: number; data?: { error?: string } };
+      if (apiErr?.status === 401) {
         setScanError(
           "AuthSec couldn't list tools with that token. The MCP server returned 401. Paste a fresh, unexpired token from the RS owner."
         );
-      } else if (res.status === 403) {
+      } else if (apiErr?.status === 403) {
         setScanError(
           "The token authenticated, but the MCP server returned 403 on tools/list. The token needs at least read access to the tool inventory."
         );
-      } else if (res.status === 504 || res.status === 408) {
+      } else if (apiErr?.status === 504 || apiErr?.status === 408) {
         setScanError(
           "AuthSec couldn't reach the MCP server within 30s. Check public_base_url and try again."
         );
-      } else if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setScanError(body?.error ?? `Scan failed (HTTP ${res.status}).`);
       } else {
-        toast.success("Scan complete");
-        setScanToken(""); // never persist the token
-        onRefresh();
+        setScanError(apiErr?.data?.error ?? "Scan failed. Check the public base URL and try again.");
       }
-    } catch {
-      setScanError("Network error. Check public_base_url and try again.");
-    } finally {
-      setScanLoading(false);
     }
   };
 
   const handleManualAdd = async () => {
     if (!manualToolName.trim()) return;
     try {
-      await fetch(`/authsec/resource-servers/${rsId}/tools`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: manualToolName,
-          description: manualToolDesc,
-          inventory_source: "manual",
-        }),
-      });
+      await createManualTool({
+        rsId,
+        name: manualToolName,
+        description: manualToolDesc,
+      }).unwrap();
       toast.success(`Tool "${manualToolName}" added`);
       setManualToolName("");
       setManualToolDesc("");
       onRefresh();
-    } catch {
-      toast.error("Failed to add tool");
+    } catch (err) {
+      const apiErr = err as { status?: number; data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Failed to add tool");
     }
   };
 
@@ -193,9 +183,10 @@ export function ToolInventoryStep({ rsId, toolCount, onRefresh }: Props) {
           />
           <button
             onClick={handleManualAdd}
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white"
+            disabled={manualSaving || !manualToolName.trim()}
+            className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
           >
-            Add tool
+            {manualSaving ? "Adding…" : "Add tool"}
           </button>
         </div>
       )}
