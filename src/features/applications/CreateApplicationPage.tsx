@@ -15,15 +15,15 @@
 
 import { useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle, Layers, PlugZap, Settings } from "lucide-react";
+import { CheckCircle, Layers, PlugZap, Settings, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { useCreateApplicationMutation } from "@/app/api/applicationsApi";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { TrustDelegationWizardShell } from "@/features/trust-delegation/components/TrustDelegationWizardShell";
 
 import {
   buildResourceServerPayload,
@@ -191,171 +191,247 @@ export default function CreateApplicationPage() {
     .map((mode) => mode.registrationMode)
     .join(", ");
 
-  return (
-    <TrustDelegationWizardShell
-      title="Create application"
-      description={
-        currentStep.id === "application"
-          ? "Tell AuthSec what endpoint will be protected."
-          : currentStep.id === "template"
-            ? "Start from suggested access labels without granting anything yet."
-            : currentStep.id === "clients"
-              ? "Choose how OAuth clients can discover or register for this application."
-              : "Review the exact backend payload before creating the application."
-      }
-      steps={WIZARD_STEPS}
-      currentStepIndex={currentStepIndex}
-      onClose={() => navigate("/applications")}
-      onBack={handleBack}
-      onPrimaryAction={
-        currentStepIndex < WIZARD_STEPS.length - 1 ? handleNext : handleSubmit
-      }
-      primaryActionLabel={
-        currentStepIndex < WIZARD_STEPS.length - 1
-          ? "Next"
-          : isLoading
-            ? "Creating..."
-            : "Create application"
-      }
-      primaryActionIcon={currentStepIndex < WIZARD_STEPS.length - 1 ? undefined : CheckCircle}
-      primaryActionDisabled={isLoading}
-      primaryActionLoading={isLoading}
-      primaryActionLoadingLabel="Creating..."
-    >
-      <div className="mx-auto max-w-4xl space-y-4">
-        {currentStep.id === "application" && (
-        <Section
-          title="What are you protecting?"
-          subtitle="The protected URL becomes the OAuth Resource URI. (Advanced — you usually don't need to edit it.)"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Application name" htmlFor="app-name">
-              <Input
-                id="app-name"
-                value={form.name}
-                onChange={handleField("name")}
-                placeholder="GitHub MCP"
-              />
-            </Field>
-            <Field label="Public base URL" htmlFor="app-base-url">
-              <Input
-                id="app-base-url"
-                value={form.public_base_url}
-                onChange={handleField("public_base_url")}
-                placeholder="https://mcp.example.com"
-              />
-            </Field>
-            <Field label="Protected path" htmlFor="app-path">
-              <Input
-                id="app-path"
-                value={form.protected_base_path}
-                onChange={handleField("protected_base_path")}
-                placeholder="/github/mcp"
-              />
-            </Field>
-          </div>
-          <div className="mt-4 rounded-md border border-[color:color-mix(in_oklch,var(--color-primary)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)] px-3 py-2">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-primary)]">
-              Protected URL
-            </p>
-            <p className="mt-0.5 break-all font-mono text-sm font-semibold text-foreground">
-              {protectedUrl || "https://…/path"}
-            </p>
-          </div>
-        </Section>
-        )}
+  const primaryLabel =
+    currentStepIndex < WIZARD_STEPS.length - 1
+      ? "Next"
+      : isLoading
+        ? "Creating..."
+        : "Create application";
 
-        {currentStep.id === "template" && (
-        <Section
-          title="Starting template (optional)"
-          subtitle="Templates suggest access labels and tool groups. They never grant access."
-        >
-          <div className="flex flex-wrap gap-2">
-            {TEMPLATES.map((option) => {
-              const selected = option.id === template;
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-6xl space-y-5 p-6">
+        <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              New protected application
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+              Create application
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Register the endpoint first. SDK install, tool mapping, access,
+              testing, and launch happen after creation.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close"
+            onClick={() => navigate("/applications")}
+          >
+            <X className="size-4" />
+          </Button>
+        </header>
+
+        <div className="grid gap-5 lg:grid-cols-[15rem_1fr_20rem]">
+          <nav aria-label="Create application steps" className="space-y-2">
+            {WIZARD_STEPS.map((step, index) => {
+              const Icon = step.icon;
+              const active = index === currentStepIndex;
+              const complete = index < currentStepIndex;
               return (
                 <button
-                  key={option.id}
+                  key={step.id}
                   type="button"
-                  onClick={() => handleTemplate(option.id)}
+                  onClick={() => {
+                    if (index <= currentStepIndex) setCurrentStepIndex(index);
+                  }}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                    selected
-                      ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_10%,transparent)] text-[var(--color-primary)]"
-                      : "border-border bg-card text-muted-foreground hover:bg-muted/40",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-        )}
-
-        {currentStep.id === "clients" && (
-        <Section title="How will clients connect?">
-          <div className="space-y-2">
-            {CONNECTION_MODES.map((mode) => {
-              const selected = connectionModeIds.has(mode.id);
-              return (
-                <label
-                  key={mode.id}
-                  className={cn(
-                    "flex items-start gap-3 rounded-md border p-3 transition-colors",
-                    selected
-                      ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_5%,transparent)]"
+                    "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                    active
+                      ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)]"
                       : "border-border bg-card hover:bg-muted/40",
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleConnectionMode(mode.id)}
-                    className="mt-1 size-4 accent-[var(--color-primary)]"
-                  />
+                  <span
+                    className={cn(
+                      "inline-flex size-7 shrink-0 items-center justify-center rounded-md border",
+                      complete || active
+                        ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                        : "border-border text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                  </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-foreground">
-                      {mode.label}
+                      {step.label}
                     </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {mode.description}
+                    <span className="block text-[11px] text-muted-foreground">
+                      {complete ? "Complete" : active ? "Current" : "Next"}
                     </span>
                   </span>
-                </label>
+                </button>
               );
             })}
-          </div>
-        </Section>
-        )}
+          </nav>
 
-        {currentStep.id === "review" && (
-          <Section
-            title="Review"
-            subtitle="These are the fields sent to the existing resource-server create API. Scopes come from the optional template only."
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ReviewItem label="Name" value={form.name || "—"} />
-              <ReviewItem label="Public base URL" value={form.public_base_url || "—"} />
-              <ReviewItem label="Protected path" value={form.protected_base_path || "—"} />
-              <ReviewItem label="Protected URL" value={protectedUrl || "—"} mono />
-              <ReviewItem label="Template" value={TEMPLATES.find((item) => item.id === template)?.label ?? "None"} />
-              <ReviewItem label="Registration modes" value={reviewRegistrationModes || "—"} />
-            </div>
-            {form.scopes_supported.trim() && (
-              <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Suggested access labels
-                </p>
-                <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-foreground">
-                  {form.scopes_supported}
-                </pre>
-              </div>
+          <main className="min-w-0 space-y-4">
+            {currentStep.id === "application" && (
+              <Section
+                title="What are you protecting?"
+                subtitle="The protected URL becomes the OAuth Resource URI."
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Application name" htmlFor="app-name">
+                    <Input
+                      id="app-name"
+                      value={form.name}
+                      onChange={handleField("name")}
+                      placeholder="GitHub MCP"
+                    />
+                  </Field>
+                  <Field label="Public base URL" htmlFor="app-base-url">
+                    <Input
+                      id="app-base-url"
+                      value={form.public_base_url}
+                      onChange={handleField("public_base_url")}
+                      placeholder="https://mcp.example.com"
+                    />
+                  </Field>
+                  <Field label="Protected path" htmlFor="app-path">
+                    <Input
+                      id="app-path"
+                      value={form.protected_base_path}
+                      onChange={handleField("protected_base_path")}
+                      placeholder="/mcp"
+                    />
+                  </Field>
+                </div>
+              </Section>
             )}
-          </Section>
-        )}
+
+            {currentStep.id === "template" && (
+              <Section
+                title="Starting template"
+                subtitle="Templates suggest access labels. They do not grant access."
+              >
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {TEMPLATES.map((option) => {
+                    const selected = option.id === template;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleTemplate(option.id)}
+                        className={cn(
+                          "rounded-md border p-3 text-left transition-colors",
+                          selected
+                            ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)]"
+                            : "border-border bg-card hover:bg-muted/40",
+                        )}
+                      >
+                        <span className="text-sm font-semibold text-foreground">
+                          {option.label}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {option.scopes
+                            ? `${option.scopes.split("\n").length} suggested scopes`
+                            : "No scope suggestions"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+
+            {currentStep.id === "clients" && (
+              <Section title="How will clients connect?">
+                <div className="space-y-2">
+                  {CONNECTION_MODES.map((mode) => {
+                    const selected = connectionModeIds.has(mode.id);
+                    return (
+                      <label
+                        key={mode.id}
+                        className={cn(
+                          "flex items-start gap-3 rounded-md border p-3 transition-colors",
+                          selected
+                            ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_5%,transparent)]"
+                            : "border-border bg-card hover:bg-muted/40",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleConnectionMode(mode.id)}
+                          className="mt-1 size-4 accent-[var(--color-primary)]"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-foreground">
+                            {mode.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {mode.description}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Section>
+            )}
+
+            {currentStep.id === "review" && (
+              <Section
+                title="Review"
+                subtitle="These fields are sent to the resource-server create API."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ReviewItem label="Name" value={form.name || "—"} />
+                  <ReviewItem label="Public base URL" value={form.public_base_url || "—"} />
+                  <ReviewItem label="Protected path" value={form.protected_base_path || "—"} />
+                  <ReviewItem label="Protected URL" value={protectedUrl || "—"} mono />
+                  <ReviewItem label="Template" value={TEMPLATES.find((item) => item.id === template)?.label ?? "None"} />
+                  <ReviewItem label="Registration modes" value={reviewRegistrationModes || "—"} />
+                </div>
+              </Section>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="outline" onClick={handleBack}>
+                {currentStepIndex === 0 ? "Cancel" : "Back"}
+              </Button>
+              <Button
+                onClick={
+                  currentStepIndex < WIZARD_STEPS.length - 1
+                    ? handleNext
+                    : handleSubmit
+                }
+                disabled={isLoading}
+              >
+                {currentStepIndex === WIZARD_STEPS.length - 1 && (
+                  <CheckCircle className="mr-2 size-4" />
+                )}
+                {primaryLabel}
+              </Button>
+            </div>
+          </main>
+
+          <aside className="space-y-3">
+            <Card className="p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Protected URL
+              </p>
+              <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
+                {protectedUrl || "https://.../mcp"}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                After create
+              </p>
+              <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                <li>Copy the one-time introspection secret.</li>
+                <li>Install the Go SDK with manifest publishing enabled.</li>
+                <li>Map discovered tools before launch.</li>
+              </ul>
+            </Card>
+          </aside>
+        </div>
       </div>
-    </TrustDelegationWizardShell>
+    </div>
   );
 }
 

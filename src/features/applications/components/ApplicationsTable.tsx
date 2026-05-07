@@ -3,11 +3,10 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import type { Application, ReadinessArea, ReadinessState } from "../types";
+import type { Application, Readiness, ReadinessArea, ReadinessState } from "../types";
 import type { computeReadiness } from "../lib/computeReadiness";
 
 export interface ApplicationTableRow {
@@ -63,6 +62,28 @@ function StatePill({ area }: { area: ReadinessArea }) {
   );
 }
 
+function StatusStack({ readiness }: { readiness: Readiness }) {
+  const items = [
+    { label: "Protection", area: readiness.protection },
+    { label: "Tools", area: readiness.tools },
+    { label: "Access", area: readiness.access },
+    { label: "Launch", area: readiness.launch },
+  ];
+
+  return (
+    <div className="grid min-w-0 grid-cols-2 gap-1.5">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+            {item.label}
+          </p>
+          <StatePill area={item.area} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ApplicationsTable({
   rows,
   onOpenApplication,
@@ -77,7 +98,7 @@ export function ApplicationsTable({
       accessorFn: (row) => row.application.name,
       alwaysVisible: true,
       enableSorting: true,
-      approxWidth: 320,
+      approxWidth: 420,
       cell: ({ row }) => {
         const application = row.original.application;
         return (
@@ -95,63 +116,20 @@ export function ApplicationsTable({
       },
     },
     {
-      id: "type",
-      header: "Type",
-      accessorFn: () => "MCP",
-      priority: 4,
-      enableSorting: true,
-      approxWidth: 120,
-      cell: () => (
-        <Badge
-          variant="outline"
-          className="rounded-full border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"
-        >
-          MCP
-        </Badge>
-      ),
-    },
-    {
-      id: "protection",
-      header: "Protection",
-      accessorFn: (row) => row.readiness.protection.status,
-      priority: 1,
-      enableSorting: true,
-      approxWidth: 180,
-      cell: ({ row }) => <StatePill area={row.original.readiness.protection} />,
-    },
-    {
-      id: "tools",
-      header: "Tools",
-      accessorFn: (row) => row.readiness.tools.status,
-      priority: 2,
-      enableSorting: true,
-      approxWidth: 180,
-      cell: ({ row }) => <StatePill area={row.original.readiness.tools} />,
-    },
-    {
-      id: "access",
-      header: "Access",
-      accessorFn: (row) => row.readiness.access.status,
-      priority: 3,
-      enableSorting: true,
-      approxWidth: 220,
-      cell: ({ row }) => <StatePill area={row.original.readiness.access} />,
-    },
-    {
-      id: "launch",
-      header: "Launch",
+      id: "status",
+      header: "Status",
       accessorFn: (row) => row.readiness.launch.status,
-      priority: 5,
-      enableSorting: true,
-      approxWidth: 160,
-      cell: ({ row }) => <StatePill area={row.original.readiness.launch} />,
+      priority: 1,
+      enableSorting: false,
+      approxWidth: 380,
+      cell: ({ row }) => <StatusStack readiness={row.original.readiness} />,
     },
     {
       id: "next",
       header: "Next action",
       alwaysVisible: true,
       enableSorting: false,
-      approxWidth: 190,
+      approxWidth: 210,
       className: "text-right",
       cellClassName: "text-right",
       cell: ({ row }) => {
@@ -181,6 +159,7 @@ export function ApplicationsTable({
       enableSelection={false}
       enableExpansion={false}
       enableSorting
+      enableResizing={false}
       enablePagination
       getRowId={(row) => row.application.id}
       onRowClick={(row) => onOpenApplication(row.application)}

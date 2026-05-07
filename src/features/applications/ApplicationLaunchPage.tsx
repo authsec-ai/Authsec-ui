@@ -139,7 +139,7 @@ export default function ApplicationLaunchPage() {
       {/* Status banner */}
       <Card
         className={cn(
-          "flex items-start gap-4 border-l-4 p-5",
+          "flex flex-col gap-4 border-l-4 p-4 md:flex-row md:items-center",
           banner.tone === "ok" &&
             "border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)]",
           banner.tone === "warn" &&
@@ -150,23 +150,23 @@ export default function ApplicationLaunchPage() {
       >
         <BannerIcon
           className={cn(
-            "mt-1 size-6 shrink-0",
+            "size-5 shrink-0",
             banner.tone === "ok" && "text-[var(--color-success)]",
             banner.tone === "warn" && "text-[var(--color-warning)]",
             banner.tone === "err" && "text-[var(--color-danger)]",
           )}
           aria-hidden
         />
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
             Status
           </p>
-          <h3 className="text-xl font-semibold tracking-tight text-foreground">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">
             {banner.title}
           </h3>
           <p className="text-sm text-muted-foreground">{banner.subtitle}</p>
         </div>
-        <div className="flex shrink-0 flex-col items-stretch gap-1">
+        <div className="flex shrink-0 flex-col items-stretch gap-1 md:items-end">
           {banner.showActivate ? (
             <Button
               onClick={banner.primaryAction}

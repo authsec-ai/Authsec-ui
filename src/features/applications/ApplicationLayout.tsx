@@ -18,7 +18,6 @@ import { Card } from "@/components/ui/card";
 
 import { ApplicationDetailTabs } from "./components/ApplicationDetailTabs";
 import { ApplicationHeader } from "./components/ApplicationHeader";
-import { ReadinessRibbon } from "./components/ReadinessRibbon";
 import { computeReadiness } from "./lib/computeReadiness";
 import type { ApplicationOutletContext } from "./useApplicationContext";
 
@@ -64,11 +63,10 @@ export default function ApplicationLayout() {
     <div className="min-h-screen">
       <div className="mx-auto max-w-10xl space-y-3 p-6">
         <ApplicationHeader application={application} readiness={readiness} />
-        <ReadinessRibbon
+        <ApplicationDetailTabs
           applicationId={application.id}
           readiness={readiness}
         />
-        <ApplicationDetailTabs applicationId={application.id} />
         <div className="pt-2">
           <Outlet
             context={{ application, readiness } satisfies ApplicationOutletContext}

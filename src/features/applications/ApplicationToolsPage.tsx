@@ -21,7 +21,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { KeyRound, Loader2, Plus, RefreshCcw } from "lucide-react";
+import { KeyRound, Loader2, Plus, RefreshCcw, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,7 @@ export default function ApplicationToolsPage() {
   const [scanToken, setScanToken] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualDescription, setManualDescription] = useState("");
+  const [query, setQuery] = useState("");
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix]);
 
@@ -137,15 +138,27 @@ export default function ApplicationToolsPage() {
   }, [tools]);
 
   const visibleTools = useMemo(() => {
-    if (filter === "all") return tools;
+    const q = query.trim().toLowerCase();
     return tools.filter((t) => {
       const c = classifyTool(t);
-      if (filter === "needs-review") return c === "unmapped" || c === "advisory";
-      if (filter === "mapped") return c === "mapped";
-      if (filter === "public") return c === "public";
-      return true;
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "needs-review" && (c === "unmapped" || c === "advisory")) ||
+        (filter === "mapped" && c === "mapped") ||
+        (filter === "public" && c === "public");
+      if (!matchesFilter) return false;
+      if (!q) return true;
+      return [
+        t.name,
+        t.title,
+        t.description,
+        ...(t.suggested_scopes ?? []),
+        ...t.scopes.map((s) => s.scope_string),
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [tools, filter]);
+  }, [tools, filter, query]);
 
   const handleRescan = async () => {
     try {
@@ -221,45 +234,48 @@ export default function ApplicationToolsPage() {
         </Button>
       </header>
 
-      {/* Filter chips */}
-      <Card className="flex flex-wrap items-center gap-2 p-2">
-        {FILTER_DEFS.map((f) => {
-          const active = filter === f.key;
-          const count =
-            f.key === "all"
-              ? counts.all
-              : f.key === "needs-review"
-                ? counts.unmapped
-                : f.key === "mapped"
-                  ? counts.mapped
-                  : counts.public;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                active
-                  ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_10%,transparent)] text-[var(--color-primary)]"
-                  : "border-border bg-card text-foreground hover:bg-muted/40",
-              )}
-            >
-              <span className={cn("size-1.5 rounded-full", FILTER_DOT[f.tone])} aria-hidden />
-              {f.label}
-              <span
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {FILTER_DEFS.map((f) => {
+            const active = filter === f.key;
+            const count =
+              f.key === "all"
+                ? counts.all
+                : f.key === "needs-review"
+                  ? counts.unmapped
+                  : f.key === "mapped"
+                    ? counts.mapped
+                    : counts.public;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
                 className={cn(
-                  "ml-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-px text-[10px] tabular-nums",
+                  "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors",
                   active
-                    ? "bg-[var(--color-primary)] text-white"
-                    : "bg-muted text-muted-foreground",
+                    ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_10%,transparent)] text-[var(--color-primary)]"
+                    : "border-border bg-card text-foreground hover:bg-muted/40",
                 )}
               >
-                {isLoading ? "…" : count}
-              </span>
-            </button>
-          );
-        })}
+                <span className={cn("size-1.5 rounded-full", FILTER_DOT[f.tone])} aria-hidden />
+                {f.label}
+                <span className="tabular-nums text-muted-foreground">
+                  {isLoading ? "…" : count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="relative min-w-[16rem] flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search tools or scopes"
+            className="pl-8"
+          />
+        </div>
       </Card>
 
       <Card className="grid gap-4 p-4 lg:grid-cols-2">

@@ -231,49 +231,38 @@ export default function ApplicationAccessPage() {
         </Card>
 
         {/* RIGHT — Activation preview slice (real) */}
-        <Card className="space-y-3 p-5">
+        <Card className="space-y-4 p-5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            What policy will look like
+            Policy preview
           </p>
-          <h3 className="text-sm font-semibold text-foreground">
-            Activation preview
-          </h3>
           {!preview ? (
             <p className="text-xs text-muted-foreground">
               <Loader2 className="mr-1 inline size-3 animate-spin" />
               Loading preview…
             </p>
           ) : (
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Default role grants
-                </dt>
-                <dd className="mt-1 break-all font-mono text-xs text-foreground">
-                  {preview.first_time_user_grant.length
-                    ? preview.first_time_user_grant.join(", ")
-                    : "(no scopes)"}
-                </dd>
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <PolicyStat label="Tools" value={preview.tools.total} />
+                <PolicyStat label="Scopes" value={preview.scope_count} />
+                <PolicyStat label="Mapped" value={preview.tools.mapped} tone="ok" />
+                <PolicyStat
+                  label="Unmapped"
+                  value={preview.tools.unmapped}
+                  tone={preview.tools.unmapped > 0 ? "warn" : "muted"}
+                />
               </div>
-              <div>
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Viewer scopes (computed)
-                </dt>
-                <dd className="mt-1 break-all font-mono text-xs text-foreground">
-                  {preview.viewer_scopes.length
-                    ? preview.viewer_scopes.join(", ")
-                    : "(none)"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Tools / scopes registered
-                </dt>
-                <dd className="mt-1 text-foreground">
-                  {preview.tools.total} tools · {preview.scope_count} scopes
-                </dd>
-              </div>
-            </dl>
+              <PreviewScopeList
+                label="Default role grants"
+                values={preview.first_time_user_grant}
+                empty="No scopes"
+              />
+              <PreviewScopeList
+                label="Viewer scopes"
+                values={preview.viewer_scopes}
+                empty="None"
+              />
+            </>
           )}
           <Button asChild variant="outline" className="w-full justify-center">
             <Link to={`/applications/${application.id}/test`}>
@@ -384,6 +373,70 @@ export default function ApplicationAccessPage() {
           />
         </Card>
       </section>
+    </div>
+  );
+}
+
+function PolicyStat({
+  label,
+  value,
+  tone = "muted",
+}: {
+  label: string;
+  value: number;
+  tone?: "ok" | "warn" | "muted";
+}) {
+  const toneClass = {
+    ok: "text-[var(--color-success)]",
+    warn: "text-[var(--color-warning)]",
+    muted: "text-foreground",
+  }[tone];
+
+  return (
+    <div className="rounded-md border border-border bg-muted/20 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={cn("mt-1 text-xl font-semibold tabular-nums", toneClass)}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PreviewScopeList({
+  label,
+  values,
+  empty,
+}: {
+  label: string;
+  values: string[];
+  empty: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {values.length === 0 ? (
+          <span className="text-xs italic text-muted-foreground">{empty}</span>
+        ) : (
+          values.slice(0, 6).map((value) => (
+            <span
+              key={value}
+              className="max-w-full truncate rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-[10px] text-foreground"
+            >
+              {value}
+            </span>
+          ))
+        )}
+        {values.length > 6 && (
+          <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+            +{values.length - 6}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

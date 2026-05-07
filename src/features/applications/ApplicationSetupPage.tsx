@@ -68,6 +68,7 @@ export default function ApplicationSetupPage() {
 
   const [secretValue, setSecretValue] = useState<string | null>(createSecret);
   const [secretVisible, setSecretVisible] = useState(Boolean(createSecret));
+  const [secretAcknowledged, setSecretAcknowledged] = useState(false);
 
   const envBlock = useMemo(
     () => buildEnvBlock(application, secretValue),
@@ -128,6 +129,7 @@ export default function ApplicationSetupPage() {
       <SecretBanner
         secret={secretValue}
         visible={secretVisible}
+        acknowledged={secretAcknowledged}
         onToggleVisible={() => setSecretVisible((current) => !current)}
         onCopy={() =>
           handleCopy(
@@ -135,6 +137,7 @@ export default function ApplicationSetupPage() {
             "Introspection secret",
           )
         }
+        onAcknowledge={() => setSecretAcknowledged(true)}
         onRotate={handleRotate}
         rotating={rotating}
       />
@@ -310,22 +313,51 @@ function buildGoConfig(server: {
 function SecretBanner({
   secret,
   visible,
+  acknowledged,
   onToggleVisible,
   onCopy,
+  onAcknowledge,
   onRotate,
   rotating,
 }: {
   secret: string | null;
   visible: boolean;
+  acknowledged: boolean;
   onToggleVisible: () => void;
   onCopy: () => void;
+  onAcknowledge: () => void;
   onRotate: () => void;
   rotating: boolean;
 }) {
+  if (!secret || acknowledged) {
+    return (
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Introspection secret
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {secret
+              ? "Secret copied and collapsed. Rotate if this deployment needs a new value."
+              : "AuthSec only shows the secret at creation time or immediately after rotation."}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={onRotate} disabled={rotating}>
+          {rotating ? (
+            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+          ) : (
+            <RefreshCcw className="mr-1.5 size-3.5" />
+          )}
+          Rotate secret
+        </Button>
+      </Card>
+    );
+  }
+
   return (
     <Card
       className={cn(
-        "flex flex-col gap-3 border-l-4 p-4",
+        "flex flex-col gap-3 border-l-4 p-3",
         "border-l-[var(--color-warning)] bg-[color:color-mix(in_oklch,var(--color-warning)_8%,transparent)]",
       )}
     >
@@ -355,6 +387,9 @@ function SecretBanner({
             <RefreshCcw className="mr-1.5 size-3.5" />
           )}
           Rotate
+        </Button>
+        <Button size="sm" onClick={onAcknowledge}>
+          I copied this
         </Button>
       </div>
       <p className="text-[11px] italic text-muted-foreground">
