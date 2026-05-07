@@ -30,6 +30,7 @@ interface AdaptiveTableProps<TData> {
   expandedRowIds?: string[];
   onExpandedRowsChange?: (expandedIds: string[]) => void;
   renderExpandedRow?: (row: Row<TData>) => React.ReactNode;
+  onRowClick?: ResponsiveTableConfig<TData>["onRowClick"];
   enableSorting?: boolean;
   enableResizing?: boolean;
   enablePagination?: boolean;
@@ -58,6 +59,7 @@ export function AdaptiveTable<TData>({
   expandedRowIds,
   onExpandedRowsChange,
   renderExpandedRow,
+  onRowClick,
   enableSorting = true,
   enableResizing = true,
   enablePagination = true,
@@ -186,6 +188,7 @@ export function AdaptiveTable<TData>({
       expandedRowIds,
       onExpandedRowsChange,
       renderExpandedRow,
+      onRowClick,
       getRowId,
       rowClassName,
       className,
@@ -199,6 +202,7 @@ export function AdaptiveTable<TData>({
       enableSelection,
       enableExpansion,
       renderExpandedRow,
+      onRowClick,
       enablePagination,
       enableSorting,
       enableResizing,

@@ -52,6 +52,7 @@ import ApplicationActivityPage from "./features/applications/ApplicationActivity
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
 import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
 import { AgentsPage } from "./features/workloads/components/AgentsPage";
+import { ClientsPage } from "./features/clients/ClientsPage";
 
 import VoiceAgentWizardPage from "./features/clients/VoiceAgentWizardPage";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
@@ -396,7 +397,13 @@ function AppContent() {
                        with their original components below. */}
                   <Route
                     path="/clients"
-                    element={<Navigate to="/applications" replace />}
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ClientsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
                   />
                   <Route
                     path="/clients/mcp"

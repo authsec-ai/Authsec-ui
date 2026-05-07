@@ -15,15 +15,15 @@
 
 import { useMemo, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { CheckCircle, Layers, PlugZap, Settings } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { useCreateApplicationMutation } from "@/app/api/applicationsApi";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { TrustDelegationWizardShell } from "@/features/trust-delegation/components/TrustDelegationWizardShell";
 
 import {
   buildResourceServerPayload,
@@ -71,6 +71,13 @@ const TEMPLATES: { id: Template; label: string; scopes?: string }[] = [
   { id: "custom-mcp", label: "Custom MCP", scopes: "tools:read\ntools:write" },
 ];
 
+const WIZARD_STEPS = [
+  { id: "application", label: "Application", icon: Layers },
+  { id: "template", label: "Template", icon: Settings },
+  { id: "clients", label: "Clients", icon: PlugZap },
+  { id: "review", label: "Review", icon: CheckCircle },
+];
+
 export default function CreateApplicationPage() {
   const navigate = useNavigate();
   const [createApplication, { isLoading }] = useCreateApplicationMutation();
@@ -80,6 +87,8 @@ export default function CreateApplicationPage() {
   const [connectionModeIds, setConnectionModeIds] = useState<Set<string>>(
     new Set(["discover"]),
   );
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const currentStep = WIZARD_STEPS[currentStepIndex];
 
   const protectedUrl = useMemo(
     () => computeResourceURI(form.public_base_url, form.protected_base_path),
@@ -93,9 +102,7 @@ export default function CreateApplicationPage() {
   const handleTemplate = (t: Template) => {
     setTemplate(t);
     const found = TEMPLATES.find((item) => item.id === t);
-    if (found?.scopes) {
-      setForm((prev) => ({ ...prev, scopes_supported: found.scopes! }));
-    }
+    setForm((prev) => ({ ...prev, scopes_supported: found?.scopes ?? "" }));
   };
 
   const toggleConnectionMode = (id: string) => {
@@ -109,6 +116,39 @@ export default function CreateApplicationPage() {
       }
       return next;
     });
+  };
+
+  const validateCurrentStep = () => {
+    if (currentStep.id === "application") {
+      if (!form.name.trim()) {
+        toast.error("Application name is required.");
+        return false;
+      }
+      if (!form.public_base_url.trim()) {
+        toast.error("Public base URL is required.");
+        return false;
+      }
+    }
+    if (currentStep.id === "clients" && connectionModeIds.size === 0) {
+      toast.error("Choose at least one client connection mode.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleBack = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex((step) => step - 1);
+      return;
+    }
+    navigate("/applications");
+  };
+
+  const handleNext = () => {
+    if (!validateCurrentStep()) return;
+    if (currentStepIndex < WIZARD_STEPS.length - 1) {
+      setCurrentStepIndex((step) => step + 1);
+    }
   };
 
   const handleSubmit = async () => {
@@ -145,32 +185,45 @@ export default function CreateApplicationPage() {
     }
   };
 
+  const reviewRegistrationModes = CONNECTION_MODES.filter((mode) =>
+    connectionModeIds.has(mode.id),
+  )
+    .map((mode) => mode.registrationMode)
+    .join(", ");
+
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/applications")}
-            className="-ml-2"
-          >
-            <ArrowLeft className="mr-1 size-4" />
-            Applications
-          </Button>
-        </div>
-
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Create application
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tell AuthSec what you're protecting. You'll install protection
-            right after.
-          </p>
-        </header>
-
-        {/* SECTION 1 — What are you protecting? */}
+    <TrustDelegationWizardShell
+      title="Create application"
+      description={
+        currentStep.id === "application"
+          ? "Tell AuthSec what endpoint will be protected."
+          : currentStep.id === "template"
+            ? "Start from suggested access labels without granting anything yet."
+            : currentStep.id === "clients"
+              ? "Choose how OAuth clients can discover or register for this application."
+              : "Review the exact backend payload before creating the application."
+      }
+      steps={WIZARD_STEPS}
+      currentStepIndex={currentStepIndex}
+      onClose={() => navigate("/applications")}
+      onBack={handleBack}
+      onPrimaryAction={
+        currentStepIndex < WIZARD_STEPS.length - 1 ? handleNext : handleSubmit
+      }
+      primaryActionLabel={
+        currentStepIndex < WIZARD_STEPS.length - 1
+          ? "Next"
+          : isLoading
+            ? "Creating..."
+            : "Create application"
+      }
+      primaryActionIcon={currentStepIndex < WIZARD_STEPS.length - 1 ? undefined : CheckCircle}
+      primaryActionDisabled={isLoading}
+      primaryActionLoading={isLoading}
+      primaryActionLoadingLabel="Creating..."
+    >
+      <div className="mx-auto max-w-4xl space-y-4">
+        {currentStep.id === "application" && (
         <Section
           title="What are you protecting?"
           subtitle="The protected URL becomes the OAuth Resource URI. (Advanced — you usually don't need to edit it.)"
@@ -210,8 +263,9 @@ export default function CreateApplicationPage() {
             </p>
           </div>
         </Section>
+        )}
 
-        {/* SECTION 2 — Starting template */}
+        {currentStep.id === "template" && (
         <Section
           title="Starting template (optional)"
           subtitle="Templates suggest access labels and tool groups. They never grant access."
@@ -237,8 +291,9 @@ export default function CreateApplicationPage() {
             })}
           </div>
         </Section>
+        )}
 
-        {/* SECTION 4 — How will clients connect */}
+        {currentStep.id === "clients" && (
         <Section title="How will clients connect?">
           <div className="space-y-2">
             {CONNECTION_MODES.map((mode) => {
@@ -272,17 +327,35 @@ export default function CreateApplicationPage() {
             })}
           </div>
         </Section>
+        )}
 
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <Button variant="outline" onClick={() => navigate("/applications")}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? "Creating…" : "Create application →"}
-          </Button>
-        </div>
+        {currentStep.id === "review" && (
+          <Section
+            title="Review"
+            subtitle="These are the fields sent to the existing resource-server create API. Scopes come from the optional template only."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ReviewItem label="Name" value={form.name || "—"} />
+              <ReviewItem label="Public base URL" value={form.public_base_url || "—"} />
+              <ReviewItem label="Protected path" value={form.protected_base_path || "—"} />
+              <ReviewItem label="Protected URL" value={protectedUrl || "—"} mono />
+              <ReviewItem label="Template" value={TEMPLATES.find((item) => item.id === template)?.label ?? "None"} />
+              <ReviewItem label="Registration modes" value={reviewRegistrationModes || "—"} />
+            </div>
+            {form.scopes_supported.trim() && (
+              <div className="mt-4 rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Suggested access labels
+                </p>
+                <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-foreground">
+                  {form.scopes_supported}
+                </pre>
+              </div>
+            )}
+          </Section>
+        )}
       </div>
-    </div>
+    </TrustDelegationWizardShell>
   );
 }
 
@@ -307,6 +380,32 @@ function Section({
       </div>
       {children}
     </Card>
+  );
+}
+
+function ReviewItem({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-card px-3 py-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-1 break-all text-sm font-semibold text-foreground",
+          mono && "font-mono text-xs",
+        )}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
 

@@ -3,23 +3,22 @@
  *
  * Layout (Launch Control IA):
  *   Dashboard
- *   Protect : Applications, Clients
+ *   Protect : Applications, Clients, AI Agents
  *   Access  : Users, Roles, Permissions, Assignments, Consent Grants
- *   Monitor : Audit Logs, Settings
- *
- * Legacy entries (Identity Providers, Trust Delegation, SDK Guides as
- * standalone, External Services, Custom Domains, Workloads, Auth/M2M
- * Logs, the "Authz / RBAC" group label) are no longer surfaced in
- * navigation. Their routes remain registered in `App.tsx` for back-compat
- * — direct URLs still resolve so external bookmarks don't 404.
+ *   Configure : Identity Providers, Trust Delegation, Secrets, SDK Guides
+ *   Monitor : Audit Logs
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
+  Bot,
+  BookOpen,
   ClipboardList,
+  Fingerprint,
   GlobeLock,
+  KeyRound,
   LayoutDashboard,
   Layers,
   PlugZap,
@@ -68,6 +67,7 @@ const NAV_DASHBOARD: NavItem[] = [
 const NAV_PROTECT: NavItem[] = [
   { title: "Applications", url: "/applications", icon: Layers },
   { title: "Clients", url: "/clients", icon: PlugZap },
+  { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
 const NAV_ACCESS: NavItem[] = [
@@ -80,6 +80,13 @@ const NAV_ACCESS: NavItem[] = [
 
 const NAV_MONITOR: NavItem[] = [
   { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList },
+];
+
+const NAV_CONFIGURE: NavItem[] = [
+  { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
+  { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock },
+  { title: "Secrets", url: "/external-services", icon: KeyRound },
+  { title: "SDK Guides", url: "/developer/sdk-guides", icon: BookOpen },
 ];
 
 export function AppSidebar({
@@ -150,6 +157,7 @@ export function AppSidebar({
       protect: attachHandlers(markActive(NAV_PROTECT)),
       access: attachHandlers(markActive(prefixUrls(NAV_ACCESS, contextPrefix))),
       monitor: attachHandlers(markActive(NAV_MONITOR)),
+      configure: attachHandlers(markActive(NAV_CONFIGURE)),
     }),
     [contextPrefix, prefixUrls, markActive, attachHandlers],
   );
@@ -225,6 +233,7 @@ export function AppSidebar({
         <NavMain items={nav.dashboard} />
         <NavMain title="Protect" items={nav.protect} />
         <NavMain title="Access" items={nav.access} />
+        <NavMain title="Configure" items={nav.configure} />
         <NavMain title="Monitor" items={nav.monitor} />
       </SidebarContent>
 
