@@ -1,32 +1,39 @@
+/**
+ * `AppSidebar` — production sidebar for AuthSec.
+ *
+ * Layout (Launch Control IA):
+ *   Dashboard
+ *   Protect : Applications, Clients
+ *   Access  : Users, Roles, Permissions, Assignments, Consent Grants
+ *   Monitor : Audit Logs, Settings
+ *
+ * Legacy entries (Identity Providers, Trust Delegation, SDK Guides as
+ * standalone, External Services, Custom Domains, Workloads, Auth/M2M
+ * Logs, the "Authz / RBAC" group label) are no longer surfaced in
+ * navigation. Their routes remain registered in `App.tsx` for back-compat
+ * — direct URLs still resolve so external bookmarks don't 404.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import {
+  ClipboardList,
+  GlobeLock,
+  LayoutDashboard,
+  Layers,
+  PlugZap,
+  ShieldPlus,
+  UserCog,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
 import { useAppDispatch } from "../../app/hooks";
 import { setCurrentPage } from "../../app/slices/uiSlice";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { toast } from "react-hot-toast";
-import {
-  Award,
-  Code2,
-  ClipboardList,
-  CloudCog,
-  FileLock2,
-  Globe,
-  GlobeLock,
-  Key,
-  LayoutDashboard,
-  Network,
-  ScrollText,
-  Server,
-  ServerCog,
-  ShieldCheck,
-  ShieldPlus,
-  UserCog,
-  Users,
-  UserPlus,
-  Workflow,
-} from "lucide-react";
 import { NavMain } from "@/components/nav-main";
-import { NavDocuments } from "@/components/nav-documents";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -41,144 +48,38 @@ import { AuthSecLogo } from "@/components/ui/authsec-logo";
 import { resolveTenantId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
 
-type NavItem = {
+interface NavItem {
   title: string;
   url: string;
-  icon: any;
+  icon: LucideIcon;
   isActive?: boolean;
-  items?: { title: string; url: string; icon?: any }[];
-};
+  onClick?: () => void;
+}
 
-const STATIC_NAV_DATA = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: LayoutDashboard,
-    },
-  ],
-  navSecurity: [
-    {
-      title: "Identity Providers",
-      url: "/identity-providers",
-      icon: ShieldCheck,
-    },
-    {
-      title: "Trust Delegation",
-      url: "/trust-delegation",
-      icon: ShieldPlus,
-    },
-    {
-      title: "SDK Guides",
-      url: "/developer/sdk-guides",
-      icon: Code2,
-    },
-    {
-      title: "External Services & Secrets",
-      url: "/external-services",
-      icon: CloudCog,
-    },
-    {
-      title: "Custom Domains",
-      url: "/custom-domains",
-      icon: Globe,
-    },
-  ],
-  navClients: [
-    {
-      title: "Resource Servers",
-      url: "#",
-      icon: Server,
-      items: [
-        {
-          title: "Resource Servers",
-          url: "/resource-servers",
-          icon: Server,
-        },
-      ],
-    },
-  ],
-  navM2M: [
-    {
-      title: "Workloads",
-      url: "#",
-      icon: Workflow,
-      items: [
-        {
-          title: "Autonomous Workloads",
-          url: "/workloads",
-          icon: Award,
-        },
-        {
-          title: "SPIRE Agents",
-          url: "/agents",
-          icon: Network,
-        },
-      ],
-    },
-  ],
-  documents: [
-    {
-      name: "Logs",
-      url: "#",
-      icon: ScrollText,
-      items: [
-        {
-          title: "Auth Logs",
-          url: "/logs/auth",
-          icon: FileLock2,
-        },
-        {
-          title: "Audit Logs",
-          url: "/logs/audit",
-          icon: ClipboardList,
-        },
-        {
-          title: "M2M Logs",
-          url: "/logs/m2m",
-          icon: ServerCog,
-        },
-      ],
-    },
-  ],
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar IA. URLs in NAV_ACCESS are prefixed at render time with the active
+// audience (`/admin` or `/enduser`) so the audience switcher continues to work.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const CONTEXT_AWARE_NAV = [
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-  },
+const NAV_DASHBOARD: NavItem[] = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
 ];
 
-const CONTEXT_AWARE_RBAC = [
-  {
-    title: "Authz / RBAC",
-    url: "#",
-    icon: Key,
-    items: [
-      {
-        title: "Permissions",
-        url: "/authz/permissions",
-        icon: ShieldPlus,
-      },
-      {
-        title: "Roles",
-        url: "/authz/roles",
-        icon: UserCog,
-      },
-      {
-        title: "Role Bindings",
-        url: "/authz/role-bindings",
-        icon: UserPlus,
-      },
-      {
-        title: "Consent Grants",
-        url: "/consent-grants",
-        icon: GlobeLock,
-      },
-    ],
-  },
+const NAV_PROTECT: NavItem[] = [
+  { title: "Applications", url: "/applications", icon: Layers },
+  { title: "Clients", url: "/clients", icon: PlugZap },
+];
+
+const NAV_ACCESS: NavItem[] = [
+  { title: "Users", url: "/users", icon: Users },
+  { title: "Roles", url: "/authz/roles", icon: UserCog },
+  { title: "Permissions", url: "/authz/permissions", icon: ShieldPlus },
+  { title: "Assignments", url: "/authz/role-bindings", icon: UserPlus },
+  { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock },
+];
+
+const NAV_MONITOR: NavItem[] = [
+  { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList },
 ];
 
 export function AppSidebar({
@@ -212,86 +113,45 @@ export function AppSidebar({
     [navigate, dispatch],
   );
 
-  const addContextToUrls = useCallback(
-    (items: NavItem[], prefix: string): NavItem[] => {
-      return items.map((item) => ({
-        ...item,
-        url: item.url === "#" ? item.url : `${prefix}${item.url}`,
-        items: item.items?.map((subItem) => ({
-          ...subItem,
-          url: `${prefix}${subItem.url}`,
-        })),
-      }));
-    },
+  const prefixUrls = useCallback(
+    (items: NavItem[], prefix: string): NavItem[] =>
+      items.map((item) => ({ ...item, url: `${prefix}${item.url}` })),
     [],
   );
 
-  const updateActiveStates = useCallback(
-    (items: NavItem[]): NavItem[] => {
-      return items.map((item) => ({
+  const markActive = useCallback(
+    (items: NavItem[]): NavItem[] =>
+      items.map((item) => ({
         ...item,
         isActive:
           location.pathname === item.url ||
-          (item.url !== "#" &&
-            item.url !== "/" &&
-            location.pathname.startsWith(`${item.url}/`)) ||
+          location.pathname.startsWith(`${item.url}/`) ||
           (item.url === "/dashboard" && location.pathname === "/"),
-      }));
-    },
+      })),
     [location.pathname],
   );
 
-  const addNavigationHandlers = useCallback(
-    (items: any[]) => {
-      return items.map((item) => ({
+  const attachHandlers = useCallback(
+    (items: NavItem[]): NavItem[] =>
+      items.map((item) => ({
         ...item,
-        onClick:
-          item.url !== "#"
-            ? () =>
-                handleNavigation(
-                  item.url,
-                  (item.title || item.name || "")
-                    .toLowerCase()
-                    .replace(/\s+/g, "-"),
-                )
-            : undefined,
-        items: item.items?.map((subItem) => ({
-          ...subItem,
-          onClick: () =>
-            handleNavigation(
-              subItem.url,
-              subItem.title.toLowerCase().replace(/\s+/g, "-"),
-            ),
-        })),
-      }));
-    },
+        onClick: () =>
+          handleNavigation(
+            item.url,
+            item.title.toLowerCase().replace(/\s+/g, "-"),
+          ),
+      })),
     [handleNavigation],
   );
 
-  const navData = useMemo(
+  const nav = useMemo(
     () => ({
-      navMain: addNavigationHandlers(
-        updateActiveStates(STATIC_NAV_DATA.navMain),
-      ),
-      navClients: addNavigationHandlers(STATIC_NAV_DATA.navClients),
-      navM2M: addNavigationHandlers(STATIC_NAV_DATA.navM2M),
-      navContextAware: addNavigationHandlers(
-        updateActiveStates(addContextToUrls(CONTEXT_AWARE_NAV, contextPrefix)),
-      ),
-      navRbac: addNavigationHandlers(
-        updateActiveStates(addContextToUrls(CONTEXT_AWARE_RBAC, contextPrefix)),
-      ),
-      navSecurity: addNavigationHandlers(
-        updateActiveStates(STATIC_NAV_DATA.navSecurity),
-      ),
-      documents: addNavigationHandlers(STATIC_NAV_DATA.documents),
+      dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
+      protect: attachHandlers(markActive(NAV_PROTECT)),
+      access: attachHandlers(markActive(prefixUrls(NAV_ACCESS, contextPrefix))),
+      monitor: attachHandlers(markActive(NAV_MONITOR)),
     }),
-    [
-      contextPrefix,
-      addContextToUrls,
-      updateActiveStates,
-      addNavigationHandlers,
-    ],
+    [contextPrefix, prefixUrls, markActive, attachHandlers],
   );
 
   const handleTenantIdClick = useCallback(
@@ -362,13 +222,10 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain items={navData.navMain} />
-        <NavDocuments items={navData.navClients} />
-        <NavDocuments items={navData.navM2M} />
-        <NavMain items={navData.navContextAware} />
-        <NavDocuments items={navData.navRbac} />
-        <NavMain items={navData.navSecurity} />
-        <NavDocuments items={navData.documents} />
+        <NavMain items={nav.dashboard} />
+        <NavMain title="Protect" items={nav.protect} />
+        <NavMain title="Access" items={nav.access} />
+        <NavMain title="Monitor" items={nav.monitor} />
       </SidebarContent>
 
       <SidebarFooter className="mt-auto gap-0 border-t border-[var(--app-shell-border)]">

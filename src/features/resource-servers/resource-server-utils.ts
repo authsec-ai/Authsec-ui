@@ -105,16 +105,20 @@ export function computeOAuthIssuerURL(): string {
   return config.VITE_OAUTH_BASE_URL.replace(/\/+$/, "");
 }
 
+export function computeAuthSecAPIOrigin(): string {
+  return config.VITE_API_URL.replace(/\/+$/, "");
+}
+
 export function computeJwksURL(): string {
-  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/jwks`;
+  return `${computeAuthSecAPIOrigin()}/oauth/jwks`;
 }
 
 export function computeIntrospectionURL(): string {
-  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/introspect`;
+  return `${computeAuthSecAPIOrigin()}/oauth/introspect`;
 }
 
 export function computeResourceServerRegistryURL(): string {
-  return `${config.VITE_API_URL.replace(/\/+$/, "")}/authsec/resource-servers`;
+  return `${computeAuthSecAPIOrigin()}/authsec/resource-servers`;
 }
 
 export function computeAuthorizeURL(): string {
@@ -122,7 +126,7 @@ export function computeAuthorizeURL(): string {
 }
 
 export function computeTokenURL(): string {
-  return `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/token`;
+  return `${computeAuthSecAPIOrigin()}/oauth/token`;
 }
 
 export function buildReadinessItems(server: ResourceServer): ResourceServerReadinessItem[] {
@@ -200,7 +204,7 @@ const GO_WRAP = (server: ResourceServer) => {
   const scopes = getDeclaredScopes(server);
   return `cfg := authsecsdk.Config{
 	Issuer:                    "${computeOAuthIssuerURL()}",
-	AuthorizationServer:       "${computeOAuthIssuerURL()}",
+	AuthorizationServer:       "${computeAuthSecAPIOrigin()}",
 	JWKSURL:                   "${computeJwksURL()}",
 	IntrospectionURL:          "${computeIntrospectionURL()}",
 	IntrospectionClientID:     "${server.id}",
@@ -211,6 +215,7 @@ const GO_WRAP = (server: ResourceServer) => {
 	SupportedScopes:           []string{${scopes.map((scope) => `"${scope}"`).join(", ")}},
 	PolicyMode:                authsecsdk.PolicyModeRemoteRequired,
 	ValidationMode:            authsecsdk.ValidationModeJWTAndIntrospect,
+	PublishManifest:           true,
 }
 
 // MountMCP is the canonical integration path. It registers the MCP route and
@@ -368,7 +373,8 @@ Use these exact AuthSec and resource server values:
 - Metadata URL: ${metadataURL}
 - Supported scopes: ${getDeclaredScopes(server).join(", ") || "none declared"}
 - Registration modes: ${(server.registration_modes ?? []).join(", ") || "none declared"}
-- OAuth issuer / authorization server: ${computeOAuthIssuerURL()}
+- OAuth issuer: ${computeOAuthIssuerURL()}
+- AuthSec API / SDK policy server: ${computeAuthSecAPIOrigin()}
 - Authorization endpoint: ${computeAuthorizeURL()}
 - Token endpoint: ${computeTokenURL()}
 - JWKS endpoint: ${computeJwksURL()}

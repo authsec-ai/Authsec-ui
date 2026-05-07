@@ -29,12 +29,26 @@ import { UsersPage } from "./features/users/UsersPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
-import ResourceServersPage from "./features/resource-servers/ResourceServersPage";
+// Resource-server detail/clients/onboarding/SDK/prompt remain as
+// implementation surfaces the Launch Control Setup tab links into. The
+// list and details list-views are gone — `/resource-servers` now redirects
+// to `/applications`.
 import ResourceServerDetailsPage from "./features/resource-servers/ResourceServerDetailsPage";
 import ResourceServerClientsPage from "./features/resource-servers/ResourceServerClientsPage";
 import ResourceServerOnboardingPage from "./features/resource-servers/ResourceServerOnboardingPage";
 import ResourceServerSDKPage from "./features/resource-servers/ResourceServerSDKPage";
 import ResourceServerPromptPage from "./features/resource-servers/ResourceServerPromptPage";
+import ApplicationsPage from "./features/applications/ApplicationsPage";
+import CreateApplicationPage from "./features/applications/CreateApplicationPage";
+import ApplicationLayout from "./features/applications/ApplicationLayout";
+import ApplicationOverviewPage from "./features/applications/ApplicationOverviewPage";
+import ApplicationSetupPage from "./features/applications/ApplicationSetupPage";
+import ApplicationToolsPage from "./features/applications/ApplicationToolsPage";
+import ApplicationAccessPage from "./features/applications/ApplicationAccessPage";
+import ApplicationClientsPage from "./features/applications/ApplicationClientsPage";
+import ApplicationTestPage from "./features/applications/ApplicationTestPage";
+import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage";
+import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
 import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
 import { AgentsPage } from "./features/workloads/components/AgentsPage";
@@ -374,32 +388,28 @@ function AppContent() {
                     }
                   />
 
+                  {/* ───── Legacy URL redirects ────────────────────────────
+                       Pre-Launch-Control bookmarks resolve to their new
+                       /applications/* equivalent. The SDK / Prompt /
+                       Onboarding sub-pages are still real surfaces (the
+                       new Setup tab links to them) so they stay registered
+                       with their original components below. */}
                   <Route
                     path="/clients"
-                    element={<Navigate to="/resource-servers" replace />}
+                    element={<Navigate to="/applications" replace />}
                   />
-
                   <Route
                     path="/clients/mcp"
-                    element={<Navigate to="/resource-servers" replace />}
+                    element={<Navigate to="/applications" replace />}
                   />
-
                   <Route
                     path="/resource-servers"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServersPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
-
                   <Route
                     path="/resource-servers/new"
-                    element={<Navigate to="/resource-servers?create=1" replace />}
+                    element={<Navigate to="/applications/new" replace />}
                   />
-
                   <Route
                     path="/resource-servers/:id"
                     element={
@@ -410,7 +420,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-
                   <Route
                     path="/resource-servers/:id/clients"
                     element={
@@ -422,6 +431,12 @@ function AppContent() {
                     }
                   />
 
+                  {/* Sub-pages still owned by the resource-servers feature.
+                       The Launch Control Setup tab links into these. They
+                       can be migrated into the applications feature in a
+                       follow-up; for now they're the production surface for
+                       SDK guidance, prompt generation, and the legacy
+                       onboarding wizard. */}
                   <Route
                     path="/resource-servers/:id/onboarding"
                     element={
@@ -432,7 +447,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-
                   <Route
                     path="/resource-servers/:id/sdk"
                     element={
@@ -443,7 +457,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-
                   <Route
                     path="/resource-servers/:id/prompt"
                     element={
@@ -454,7 +467,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-
                   <Route
                     path="/resource-servers/:id/scope-matrix"
                     element={
@@ -465,6 +477,51 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* ───── Launch Control ──────────────────────────────────
+                       The chrome (header + readiness ribbon + tabs) renders
+                       once via `ApplicationLayout`; nested routes only
+                       swap the <Outlet> content. */}
+                  <Route
+                    path="/applications"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ApplicationsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/applications/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <CreateApplicationPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/applications/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ApplicationLayout />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Navigate to="overview" replace />} />
+                    <Route path="overview" element={<ApplicationOverviewPage />} />
+                    <Route path="setup" element={<ApplicationSetupPage />} />
+                    <Route path="tools" element={<ApplicationToolsPage />} />
+                    <Route path="access" element={<ApplicationAccessPage />} />
+                    <Route path="clients" element={<ApplicationClientsPage />} />
+                    <Route path="test" element={<ApplicationTestPage />} />
+                    <Route path="launch" element={<ApplicationLaunchPage />} />
+                    <Route path="activity" element={<ApplicationActivityPage />} />
+                  </Route>
 
                   <Route
                     path="/clients/onboard"

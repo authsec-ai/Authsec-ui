@@ -23,7 +23,7 @@ import {
   type IntegrationLanguage,
 } from "./resource-server-utils";
 
-const LANGUAGES: IntegrationLanguage[] = ["go", "typescript", "python"];
+const LANGUAGES: IntegrationLanguage[] = ["go"];
 
 export function ResourceServerSDKPage() {
   const navigate = useNavigate();
@@ -157,14 +157,19 @@ curl -i -X POST ${derivedValues?.mcpEndpointURL} \\
             </TableCard>
 
             <TableCard className="space-y-6 p-6">
-              <Tabs value={language} onValueChange={(value) => setLanguage(value as IntegrationLanguage)}>
-                <TabsList>
-                  {LANGUAGES.map((item) => (
+                  <Tabs value={language} onValueChange={(value) => setLanguage(value as IntegrationLanguage)}>
+                    <TabsList>
+                      {LANGUAGES.map((item) => (
                     <TabsTrigger key={item} value={item}>
                       {INTEGRATION_LANGUAGE_LABELS[item]}
                     </TabsTrigger>
                   ))}
-                </TabsList>
+                    </TabsList>
+                    <p className="pt-3 text-xs italic text-muted-foreground">
+                      Go is the canonical resource-server protection path today.
+                      TypeScript and Python snippets stay out of this guide until
+                      their resource-server OAuth helpers match this contract.
+                    </p>
 
                 {LANGUAGES.map((item) => (
                   <TabsContent key={item} value={item} className="space-y-6 pt-4">
