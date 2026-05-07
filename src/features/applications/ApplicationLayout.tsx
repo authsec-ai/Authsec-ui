@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 
 import { ApplicationDetailTabs } from "./components/ApplicationDetailTabs";
 import { ApplicationHeader } from "./components/ApplicationHeader";
+import { consolePage } from "./components/ApplicationConsole";
 import { computeReadiness } from "./lib/computeReadiness";
 import type { ApplicationOutletContext } from "./useApplicationContext";
 
@@ -60,14 +61,14 @@ export default function ApplicationLayout() {
   const readiness = computeReadiness(application);
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-10xl space-y-3 p-6">
+    <div className="min-h-screen bg-slate-50/70">
+      <div className={consolePage}>
         <ApplicationHeader application={application} readiness={readiness} />
         <ApplicationDetailTabs
           applicationId={application.id}
           readiness={readiness}
         />
-        <div className="pt-2">
+        <div>
           <Outlet
             context={{ application, readiness } satisfies ApplicationOutletContext}
           />

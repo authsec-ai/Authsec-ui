@@ -14,7 +14,6 @@
 import { Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   useGetActivationPreviewQuery,
@@ -25,6 +24,10 @@ import { cn } from "@/lib/utils";
 import { useApplicationContext } from "./useApplicationContext";
 import { ReadinessGate } from "./components/ReadinessGate";
 import type { ReadinessArea } from "./types";
+import {
+  DecisionBanner,
+  Surface,
+} from "./components/ApplicationConsole";
 
 export default function ApplicationOverviewPage() {
   const { application } = useApplicationContext();
@@ -35,31 +38,52 @@ export default function ApplicationOverviewPage() {
     useGetActivationPreviewQuery(application.id);
 
   const firstFailing = checklist?.steps.find((s) => !s.complete);
+  const firstFailingHref = firstFailing
+    ? `/applications/${application.id}/${tabForStep(firstFailing.step)}`
+    : `/applications/${application.id}/setup`;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
+    <div className="space-y-5">
+      <DecisionBanner
+        tone={checklist?.can_activate ? "success" : firstFailing ? "warning" : "info"}
+        title={
+          checklist?.can_activate
+            ? "Ready to launch"
+            : firstFailing
+              ? `${firstFailing.name} is blocking launch`
+              : "Reading launch readiness"
+        }
+        body={
+          firstFailing?.detail ??
+          "AuthSec turns setup state into launch gates so protected resources stay fail-closed until policy is complete."
+        }
+        actionLabel={checklist?.can_activate ? "Open launch" : firstFailing ? "Fix blocker" : "Open setup"}
+        actionHref={checklist?.can_activate ? `/applications/${application.id}/launch` : firstFailingHref}
+      />
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
       {/* LEFT — real setup checklist */}
-      <Card className="p-4 sm:p-6">
+      <Surface className="p-5">
         <header className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-foreground">
+            <h2 className="text-base font-semibold text-slate-950">
               Launch readiness
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Backend setup checklist. Click any incomplete step to jump to
-              the tab that resolves it.
+            <p className="mt-1 text-sm text-slate-600">
+              Click the first incomplete gate to jump directly to the screen
+              that resolves it.
             </p>
           </div>
         </header>
         <div className="-mx-2">
           {checklistLoading && !checklist && (
-            <div className="px-2 py-6 text-sm text-muted-foreground">
+            <div className="px-2 py-6 text-sm text-slate-500">
               <Loader2 className="mr-2 inline size-4 animate-spin" />
               Loading checklist…
             </div>
           )}
           {!checklistLoading && (checklist?.steps.length ?? 0) === 0 && (
-            <div className="px-2 py-6 text-sm text-muted-foreground">
+            <div className="px-2 py-6 text-sm text-slate-500">
               Backend returned no checklist steps yet.
             </div>
           )}
@@ -75,25 +99,25 @@ export default function ApplicationOverviewPage() {
             />
           ))}
         </div>
-      </Card>
+      </Surface>
 
       {/* RIGHT — NBA + real activation preview */}
-      <div className="flex flex-col gap-3">
+      <div className="sticky top-4 flex h-max flex-col gap-3">
         <NextActionCard
           firstFailing={firstFailing}
           canActivate={checklist?.can_activate ?? false}
           applicationId={application.id}
           loading={checklistLoading}
         />
-        <Card className="p-4 sm:p-6">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        <Surface className="p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
             Activation preview
           </p>
-          <h3 className="mt-1 text-sm font-semibold text-foreground">
+          <h3 className="mt-2 text-base font-semibold text-slate-950">
             What policy will look like
           </h3>
           {previewLoading && !preview && (
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-xs text-slate-500">
               <Loader2 className="mr-1 inline size-3 animate-spin" />
               Loading preview…
             </p>
@@ -122,10 +146,11 @@ export default function ApplicationOverviewPage() {
               />
             </ul>
           )}
-          <p className="mt-3 text-[11px] italic text-muted-foreground">
+          <p className="mt-4 text-xs text-slate-500">
             New tools after launch are denied by default until mapped.
           </p>
-        </Card>
+        </Surface>
+      </div>
       </div>
     </div>
   );
@@ -146,28 +171,28 @@ function NextActionCard({
 }) {
   if (loading) {
     return (
-      <Card className="p-6">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+      <Surface className="p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
           Next best action
         </p>
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-slate-500">
           <Loader2 className="mr-1 inline size-3 animate-spin" />
           Reading checklist…
         </p>
-      </Card>
+      </Surface>
     );
   }
 
   if (canActivate) {
     return (
-      <Card className="border-[color:color-mix(in_oklch,var(--color-success)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)] p-6">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-success)]">
+      <Surface className="border-emerald-200 bg-emerald-50 p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-emerald-700">
           Ready to launch
         </p>
-        <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+        <h2 className="mt-2 text-lg font-semibold text-slate-950">
           Launch this application
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-slate-600">
           All setup steps are complete. Activation publishes runtime policy
           to the SDK.
         </p>
@@ -176,55 +201,55 @@ function NextActionCard({
             Open Launch  →
           </Link>
         </Button>
-      </Card>
+      </Surface>
     );
   }
 
   if (firstFailing) {
     const href = `/applications/${applicationId}/${tabForStep(firstFailing.step)}`;
     return (
-      <Card className="border-[color:color-mix(in_oklch,var(--color-primary)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_6%,transparent)] p-6">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-primary)]">
+      <Surface className="border-blue-200 bg-blue-50 p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-blue-700">
           Next best action
         </p>
-        <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+        <h2 className="mt-2 text-lg font-semibold text-slate-950">
           {firstFailing.name}
         </h2>
         {firstFailing.detail ? (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-slate-600">
             {firstFailing.detail}
           </p>
         ) : (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-slate-600">
             This is the first incomplete step in your setup checklist.
           </p>
         )}
         <Button asChild className="mt-5 w-full justify-center">
           <Link to={href}>Open  →</Link>
         </Button>
-        <p className="mt-3 text-[11px] italic text-muted-foreground">
+        <p className="mt-3 text-xs text-slate-500">
           The backend won't let you launch until every step is complete.
         </p>
-      </Card>
+      </Surface>
     );
   }
 
   // Backend returned no steps — be honest
   return (
-    <Card className="p-6">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+    <Surface className="p-5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
         Next best action
       </p>
-      <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+      <h2 className="mt-2 text-lg font-semibold text-slate-950">
         Open Setup
       </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="mt-2 text-sm text-slate-600">
         Backend hasn't returned any setup steps yet.
       </p>
       <Button asChild variant="outline" className="mt-5 w-full justify-center">
         <Link to={`/applications/${applicationId}/setup`}>Open Setup</Link>
       </Button>
-    </Card>
+    </Surface>
   );
 }
 
@@ -246,15 +271,10 @@ function RuntimeStat({
   };
   return (
     <li className="flex items-baseline gap-3">
-      <span
-        className={cn(
-          "min-w-[2.5rem] text-lg font-semibold tabular-nums",
-          TONE[tone],
-        )}
-      >
+      <span className={cn("min-w-[2.5rem] text-lg font-semibold tabular-nums", TONE[tone])}>
         {value}
       </span>
-      <span className="text-xs leading-snug text-muted-foreground">
+      <span className="text-xs leading-snug text-slate-600">
         {label}
       </span>
     </li>

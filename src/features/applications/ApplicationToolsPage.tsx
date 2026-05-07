@@ -52,6 +52,12 @@ import type {
 import { cn } from "@/lib/utils";
 
 import { useApplicationContext } from "./useApplicationContext";
+import {
+  DecisionBanner,
+  InlineStat,
+  StatusBadge,
+  Surface,
+} from "./components/ApplicationConsole";
 
 type FilterKey = "all" | "needs-review" | "mapped" | "public";
 type ToolDecision = "public" | "mapped" | "advisory" | "unmapped";
@@ -64,9 +70,9 @@ const FILTER_DEFS: { key: FilterKey; label: string; tone: "info" | "warn" | "ok"
 ];
 
 const FILTER_DOT: Record<"info" | "warn" | "ok", string> = {
-  info: "bg-[var(--color-primary)]",
-  warn: "bg-[var(--color-warning)]",
-  ok: "bg-[var(--color-success)]",
+  info: "bg-blue-600",
+  warn: "bg-amber-500",
+  ok: "bg-emerald-600",
 };
 
 const RISK_TONE: Record<RiskLevel, { chip: string; text: string }> = {
@@ -209,13 +215,13 @@ export default function ApplicationToolsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-950">
             Review tool access
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-3xl text-sm leading-5 text-slate-600">
             Tools and their scope mappings come from{" "}
             <code className="font-mono text-xs">/scope-matrix</code>.
             Unmapped tools are denied at runtime.
@@ -234,8 +240,41 @@ export default function ApplicationToolsPage() {
         </Button>
       </header>
 
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <DecisionBanner
+        tone={counts.unmapped > 0 ? "warning" : "success"}
+        title={
+          counts.unmapped > 0
+            ? `${counts.unmapped} tools need a runtime decision`
+            : "Tool inventory is mapped"
+        }
+        body={
+          counts.unmapped > 0
+            ? "Keep new or unmapped tools denied until an admin maps them to access labels or marks them explicitly public."
+            : "All discovered tools have an explicit policy decision. Rescan after SDK or upstream changes."
+        }
+        actionLabel="Rescan"
+        onAction={handleRescan}
+      />
+
+      <Surface className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <InlineStat label="tools" value={isLoading ? "..." : counts.all} tone="info" />
+            <InlineStat label="need review" value={isLoading ? "..." : counts.unmapped} tone={counts.unmapped > 0 ? "warning" : "success"} />
+            <InlineStat label="mapped" value={isLoading ? "..." : counts.mapped} tone="success" />
+            <InlineStat label="public" value={isLoading ? "..." : counts.public} tone="info" />
+          </div>
+          <div className="relative w-full sm:w-[22rem]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search tools or scopes"
+              className="h-9 pl-9"
+            />
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {FILTER_DEFS.map((f) => {
             const active = filter === f.key;
             const count =
@@ -252,10 +291,10 @@ export default function ApplicationToolsPage() {
                 type="button"
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                  "inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold transition-colors",
                   active
-                    ? "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_10%,transparent)] text-[var(--color-primary)]"
-                    : "border-border bg-card text-foreground hover:bg-muted/40",
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                 )}
               >
                 <span className={cn("size-1.5 rounded-full", FILTER_DOT[f.tone])} aria-hidden />
@@ -267,26 +306,24 @@ export default function ApplicationToolsPage() {
             );
           })}
         </div>
-        <div className="relative min-w-[16rem] flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tools or scopes"
-            className="pl-8"
-          />
-        </div>
-      </Card>
+      </Surface>
 
-      <Card className="grid gap-4 p-4 lg:grid-cols-2">
+      <details className="group rounded-lg border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.02)]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-950">
+          Discovery fallbacks
+          <span className="text-xs font-medium text-slate-500 group-open:hidden">
+            Authenticated scan and manual entry
+          </span>
+        </summary>
+        <div className="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-2">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <KeyRound className="size-4 text-[var(--color-primary)]" aria-hidden />
-            <h3 className="text-sm font-semibold text-foreground">
+            <KeyRound className="size-4 text-blue-600" aria-hidden />
+            <h3 className="text-sm font-semibold text-slate-950">
               Authenticated scan
             </h3>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs leading-5 text-slate-600">
             Use this when <code className="font-mono">tools/list</code> is
             protected and unauthenticated rescan cannot see inventory. The
             token is sent once and is not stored.
@@ -316,12 +353,12 @@ export default function ApplicationToolsPage() {
 
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Plus className="size-4 text-[var(--color-primary)]" aria-hidden />
-            <h3 className="text-sm font-semibold text-foreground">
+            <Plus className="size-4 text-blue-600" aria-hidden />
+            <h3 className="text-sm font-semibold text-slate-950">
               Manual tool entry
             </h3>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs leading-5 text-slate-600">
             Use only as a fallback for closed servers. Manual tools still
             need an admin mapping before runtime allows them.
           </p>
@@ -352,28 +389,35 @@ export default function ApplicationToolsPage() {
             </Button>
           </div>
         </div>
-      </Card>
+        </div>
+      </details>
 
       {/* Tools table */}
-      <Card className="overflow-hidden p-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2 text-xs">
-          <span className="font-bold text-foreground">
-            Filtered:{" "}
+      <Surface className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs">
+          <span className="font-semibold text-slate-950">
             {FILTER_DEFS.find((f) => f.key === filter)?.label} ({visibleTools.length})
           </span>
-          <span className="italic text-muted-foreground">
+          <span className="text-slate-500">
             Click any row to inspect mapping and decide.
           </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div>
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-[26%]" />
+              <col className="w-[10%]" />
+              <col className="w-[39%]" />
+              <col className="w-[14%]" />
+              <col className="w-[11%]" />
+            </colgroup>
             <thead>
-              <tr className="text-left text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-2">Tool</th>
-                <th className="px-4 py-2">Risk</th>
-                <th className="px-4 py-2">Mapped scopes</th>
-                <th className="px-4 py-2">Decision</th>
-                <th className="px-4 py-2 text-right" aria-label="Action" />
+              <tr className="border-b border-slate-200 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                <th className="px-4 py-3">Tool</th>
+                <th className="px-4 py-3">Risk</th>
+                <th className="px-4 py-3">Mapped scopes</th>
+                <th className="px-4 py-3">Decision</th>
+                <th className="px-4 py-3 text-right" aria-label="Action" />
               </tr>
             </thead>
             <tbody>
@@ -390,7 +434,7 @@ export default function ApplicationToolsPage() {
                   <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                     {tools.length === 0
                       ? "No tools discovered yet. Rescan after deploying the SDK."
-                      : "No tools match this filter."}
+                    : "No tools match this filter."}
                   </td>
                 </tr>
               )}
@@ -404,7 +448,7 @@ export default function ApplicationToolsPage() {
             </tbody>
           </table>
         </div>
-      </Card>
+      </Surface>
 
       <ToolInspectorDrawer
         tool={selected}
@@ -430,13 +474,20 @@ function ToolRowRender({
   const riskTone = RISK_TONE[risk];
   return (
     <tr
-      className="cursor-pointer border-t border-border/60 transition-colors hover:bg-muted/30"
+      className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50/40"
       onClick={onInspect}
     >
-      <td className="px-4 py-2.5 font-mono text-xs font-semibold text-foreground">
-        {tool.name}
+      <td className="px-4 py-3">
+        <div className="truncate font-mono text-xs font-semibold text-slate-950">
+          {tool.name}
+        </div>
+        {tool.title ? (
+          <div className="mt-0.5 truncate text-xs text-slate-500">
+            {tool.title}
+          </div>
+        ) : null}
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-3">
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
@@ -448,29 +499,29 @@ function ToolRowRender({
           {risk}
         </span>
       </td>
-      <td className="px-4 py-2.5">
+      <td className="px-4 py-3">
         {tool.scopes.length === 0 ? (
-          <span className="text-xs italic text-muted-foreground">
+          <span className="text-xs italic text-slate-500">
             {tool.is_public ? "(public — no scope check)" : "—"}
           </span>
         ) : (
-          <span className="font-mono text-xs text-foreground">
+          <span className="block truncate font-mono text-xs text-slate-700" title={tool.scopes.map((s) => s.scope_string).join(", ")}>
             {tool.scopes.map((s) => s.scope_string).join(", ")}
           </span>
         )}
       </td>
-      <td className="px-4 py-2.5 text-xs italic">
+      <td className="px-4 py-3">
         {decision === "public" ? (
-          <span className="text-[var(--color-primary)]">public</span>
+          <StatusBadge tone="info">public</StatusBadge>
         ) : decision === "mapped" ? (
-          <span className="text-[var(--color-success)]">mapped</span>
+          <StatusBadge tone="success">mapped</StatusBadge>
         ) : decision === "advisory" ? (
-          <span className="text-[var(--color-warning)]">suggested only</span>
+          <StatusBadge tone="warning">suggested</StatusBadge>
         ) : (
-          <span className="text-[var(--color-warning)]">unmapped (denied)</span>
+          <StatusBadge tone="warning">denied</StatusBadge>
         )}
       </td>
-      <td className="px-4 py-2.5 text-right">
+      <td className="px-4 py-3 text-right">
         <Button
           variant="outline"
           size="sm"

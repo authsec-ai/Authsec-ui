@@ -15,9 +15,10 @@
 
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import type { Application, Readiness } from "../types";
 import { isLaunched } from "../lib/computeReadiness";
+import { computeNextBestAction, nextActionHref } from "../lib/computeNextBestAction";
+import { StatusBadge, toneFromReadiness } from "./ApplicationConsole";
 
 export interface ApplicationHeaderProps {
   application: Pick<
@@ -49,24 +50,19 @@ function summariseLaunch(
   return { label: "Not launched", tone: "warn", href: launchHref };
 }
 
-const TONE_CLASSES: Record<LaunchSummary["tone"], string> = {
-  ok: "border-[color:color-mix(in_oklch,var(--color-success)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_10%,transparent)] text-[var(--color-success)]",
-  warn: "border-[color:color-mix(in_oklch,var(--color-warning)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_10%,transparent)] text-[var(--color-warning)]",
-  err: "border-[color:color-mix(in_oklch,var(--color-danger)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-danger)_10%,transparent)] text-[var(--color-danger)]",
-  neutral: "border-border bg-muted text-muted-foreground",
-};
-
 export function ApplicationHeader({
   application,
+  readiness,
   typeLabel = "MCP",
   className,
 }: ApplicationHeaderProps) {
   const summary = summariseLaunch(application);
+  const next = readiness ? computeNextBestAction(application as Application, readiness) : null;
   return (
     <header
       data-slot="application-header"
       className={cn(
-        "flex flex-col gap-1 px-1 py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6",
+        "flex flex-col gap-4 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_1px_rgba(15,23,42,0.02)] lg:flex-row lg:items-center lg:justify-between",
         className,
       )}
     >
@@ -74,38 +70,40 @@ export function ApplicationHeader({
         <div className="flex items-center gap-3">
           <h1
             data-slot="application-name"
-            className="truncate text-2xl font-semibold tracking-tight text-foreground"
+            className="truncate text-[24px] font-semibold leading-8 tracking-normal text-slate-950"
           >
             {application.name}
           </h1>
           {typeLabel && (
-            <Badge
-              variant="outline"
-              className="rounded-full border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"
-            >
-              {typeLabel}
-            </Badge>
+            <StatusBadge>{typeLabel}</StatusBadge>
           )}
         </div>
         {application.resource_uri && (
-          <p className="mt-1 truncate text-sm text-muted-foreground">
-            <span className="font-medium text-muted-foreground/80">
-              Protected URL:{" "}
-            </span>
-            <span className="font-mono">{application.resource_uri}</span>
+          <p className="mt-1 truncate font-mono text-sm text-slate-500">
+            {application.resource_uri}
           </p>
         )}
       </div>
-      <Link
-        to={summary.href}
-        className={cn(
-          "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:opacity-90",
-          TONE_CLASSES[summary.tone],
-        )}
-      >
-        <span aria-hidden className="size-1.5 rounded-full bg-current" />
-        {summary.label}
-      </Link>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Link to={summary.href}>
+          <StatusBadge tone={summary.tone === "ok" ? "success" : summary.tone === "err" ? "danger" : "warning"}>
+            {summary.label}
+          </StatusBadge>
+        </Link>
+        {readiness?.tools ? (
+          <StatusBadge tone={toneFromReadiness(readiness.tools.state)}>
+            {readiness.tools.state === "ok" ? "Tools reviewed" : readiness.tools.status}
+          </StatusBadge>
+        ) : null}
+        {next ? (
+          <Link
+            to={nextActionHref(application.id, next)}
+            className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            {next.primary}
+          </Link>
+        ) : null}
+      </div>
     </header>
   );
 }

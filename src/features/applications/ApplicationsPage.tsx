@@ -15,11 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, RefreshCcw } from "lucide-react";
 
 import { useListApplicationsQuery } from "@/app/api/applicationsApi";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
-import { cn } from "@/lib/utils";
 
 import { computeReadiness, isLaunched } from "./lib/computeReadiness";
 import {
@@ -30,6 +26,13 @@ import {
   ApplicationsTable,
   type ApplicationTableRow,
 } from "./components/ApplicationsTable";
+import {
+  consolePage,
+  DecisionBanner,
+  InlineStat,
+  SectionHeader,
+  Surface,
+} from "./components/ApplicationConsole";
 
 type AppRow = ApplicationTableRow;
 
@@ -84,36 +87,63 @@ export default function ApplicationsPage() {
     return c;
   }, [rows]);
 
+  const firstBlocked = rows.find((row) => bucketRow(row) !== "active");
+
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-10xl space-y-4 p-6">
-        <PageHeader
+    <div className="min-h-screen bg-slate-50/70">
+      <div className={consolePage}>
+        <SectionHeader
           title="Applications"
-          description="Protect MCP servers, APIs, and services with AuthSec."
+          description="Triage protected MCP servers, APIs, and services by launch readiness and runtime risk."
           actions={
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => refetch()}>
+            <>
+              <Button variant="outline" onClick={() => refetch()} className="h-9">
                 <RefreshCcw className="mr-2 size-4" />
                 Refresh
               </Button>
-              <Button onClick={() => navigate("/applications/new")}>
+              <Button onClick={() => navigate("/applications/new")} className="h-9">
                 <Plus className="mr-2 size-4" />
                 Create application
               </Button>
-            </div>
+            </>
           }
         />
 
-        <SummaryStrip counts={counts} loading={isLoading} />
+        <DecisionBanner
+          tone={counts.blocked > 0 || counts.inSetup > 0 ? "warning" : "success"}
+          title={
+            isLoading
+              ? "Reading application readiness"
+              : counts.blocked > 0
+                ? `${counts.blocked} application${counts.blocked === 1 ? "" : "s"} blocked`
+                : counts.inSetup > 0
+                  ? `${counts.inSetup} application${counts.inSetup === 1 ? "" : "s"} need setup`
+                  : "All applications healthy"
+          }
+          body={
+            firstBlocked
+              ? `${firstBlocked.application.name} is the next resource to resolve. AuthSec keeps unreviewed tools denied until launch gates pass.`
+              : "Runtime policy is active for every launched application."
+          }
+          actionLabel={firstBlocked ? firstBlocked.next.label : "Create app"}
+          actionHref={firstBlocked ? firstBlocked.next.href : "/applications/new"}
+        />
 
-        <TableCard className="p-0">
+        <Surface className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+          <InlineStat label="applications" value={loadingValue(isLoading, counts.total)} tone="info" />
+          <InlineStat label="live" value={loadingValue(isLoading, counts.active)} tone="success" />
+          <InlineStat label="need setup" value={loadingValue(isLoading, counts.inSetup)} tone="warning" />
+          <InlineStat label="blocked" value={loadingValue(isLoading, counts.blocked)} tone="danger" />
+        </Surface>
+
+        <div>
           {isLoading ? (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            <Surface className="px-4 py-12 text-center text-sm text-slate-500">
               Loading applications…
-            </div>
+            </Surface>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-12 text-center">
-              <p className="text-sm text-muted-foreground">
+            <Surface className="px-4 py-12 text-center">
+              <p className="text-sm text-slate-500">
                 No applications yet.
               </p>
               <Button
@@ -122,7 +152,7 @@ export default function ApplicationsPage() {
               >
                 Create the first application
               </Button>
-            </div>
+            </Surface>
           ) : (
             <ApplicationsTable
               rows={rows}
@@ -131,57 +161,12 @@ export default function ApplicationsPage() {
               }
             />
           )}
-        </TableCard>
+        </div>
       </div>
     </div>
   );
 }
 
-function SummaryStrip({
-  counts,
-  loading,
-}: {
-  counts: BucketCounts;
-  loading: boolean;
-}) {
-  const cells = [
-    { label: "Total", value: counts.total, tone: "info" as const, hint: "applications" },
-    { label: "Active", value: counts.active, tone: "ok" as const, hint: "protecting traffic" },
-    { label: "In setup", value: counts.inSetup, tone: "warn" as const, hint: "need attention" },
-    { label: "Blocked", value: counts.blocked, tone: "err" as const, hint: "can't launch" },
-  ];
-
-  const TONE: Record<typeof cells[number]["tone"], { dot: string; text: string }> = {
-    ok: { dot: "bg-[var(--color-success)]", text: "text-[var(--color-success)]" },
-    warn: { dot: "bg-[var(--color-warning)]", text: "text-[var(--color-warning)]" },
-    err: { dot: "bg-[var(--color-danger)]", text: "text-[var(--color-danger)]" },
-    info: { dot: "bg-[var(--color-primary)]", text: "text-[var(--color-primary)]" },
-  };
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {cells.map((cell) => {
-        const tone = TONE[cell.tone];
-        return (
-          <Card key={cell.label} className="flex items-center gap-3 p-4">
-            <span
-              aria-hidden
-              className={cn("size-2 shrink-0 rounded-full", tone.dot)}
-            />
-            <div className="min-w-0">
-              <p className={cn("text-[10px] font-bold uppercase tracking-wide", tone.text)}>
-                {cell.label}
-              </p>
-              <p className="mt-1 flex items-baseline gap-2">
-                <span className="text-2xl font-semibold leading-none text-foreground">
-                  {loading ? "…" : cell.value}
-                </span>
-                <span className="text-xs text-muted-foreground">{cell.hint}</span>
-              </p>
-            </div>
-          </Card>
-        );
-      })}
-    </div>
-  );
+function loadingValue(loading: boolean, value: number) {
+  return loading ? "…" : value;
 }

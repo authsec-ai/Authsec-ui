@@ -1,13 +1,14 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
-import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-import type { Application, Readiness, ReadinessArea, ReadinessState } from "../types";
+import type { Application } from "../types";
 import type { computeReadiness } from "../lib/computeReadiness";
+import {
+  StatusBadge,
+  Surface,
+  toneFromReadiness,
+} from "./ApplicationConsole";
 
 export interface ApplicationTableRow {
   application: Application;
@@ -19,69 +20,23 @@ export interface ApplicationTableRow {
   };
 }
 
-const STATE_PILL: Record<
-  ReadinessState,
-  { dot: string; chip: string; chipText: string }
-> = {
-  ok: {
-    dot: "bg-[var(--color-success)]",
-    chip: "border-[color:color-mix(in_oklch,var(--color-success)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_10%,transparent)]",
-    chipText: "text-[var(--color-success)]",
-  },
-  warn: {
-    dot: "bg-[var(--color-warning)]",
-    chip: "border-[color:color-mix(in_oklch,var(--color-warning)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_10%,transparent)]",
-    chipText: "text-[var(--color-warning)]",
-  },
-  err: {
-    dot: "bg-[color:color-mix(in_oklch,var(--color-danger)_85%,black)]",
-    chip: "border-[color:color-mix(in_oklch,var(--color-danger)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-danger)_10%,transparent)]",
-    chipText: "text-[var(--color-danger)]",
-  },
-  none: {
-    dot: "bg-muted-foreground/40",
-    chip: "border-border bg-muted",
-    chipText: "text-muted-foreground",
-  },
-};
-
-function StatePill({ area }: { area: ReadinessArea }) {
-  const tone = STATE_PILL[area.state];
-  return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center gap-1.5 truncate rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-        tone.chip,
-        tone.chipText,
-      )}
-      title={area.detail}
-    >
-      <span className={cn("size-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
-      {area.status}
-    </span>
-  );
+function readinessCopy(row: ApplicationTableRow) {
+  if (row.readiness.launch.state === "ok") return "Ready to launch";
+  if (row.readiness.protection.state !== "ok") return "Protection not verified";
+  if (row.readiness.tools.state !== "ok") return "Tools need review";
+  if (row.readiness.access.state !== "ok") return "Access needs setup";
+  return row.readiness.launch.status;
 }
 
-function StatusStack({ readiness }: { readiness: Readiness }) {
-  const items = [
-    { label: "Protection", area: readiness.protection },
-    { label: "Tools", area: readiness.tools },
-    { label: "Access", area: readiness.access },
-    { label: "Launch", area: readiness.launch },
-  ];
-
-  return (
-    <div className="grid min-w-0 grid-cols-2 gap-1.5">
-      {items.map((item) => (
-        <div key={item.label} className="min-w-0">
-          <p className="mb-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-            {item.label}
-          </p>
-          <StatePill area={item.area} />
-        </div>
-      ))}
-    </div>
-  );
+function riskTone(row: ApplicationTableRow): "danger" | "warning" | "success" | "neutral" {
+  if (row.readiness.launch.state === "err" || row.readiness.tools.state === "err") {
+    return "danger";
+  }
+  if (row.readiness.tools.state === "warn" || row.readiness.launch.state === "warn") {
+    return "warning";
+  }
+  if (row.readiness.launch.state === "ok") return "success";
+  return "neutral";
 }
 
 export function ApplicationsTable({
@@ -91,83 +46,91 @@ export function ApplicationsTable({
   rows: ApplicationTableRow[];
   onOpenApplication: (application: Application) => void;
 }) {
-  const columns = React.useMemo<AdaptiveColumn<ApplicationTableRow>[]>(() => [
-    {
-      id: "application",
-      header: "Application",
-      accessorFn: (row) => row.application.name,
-      alwaysVisible: true,
-      enableSorting: true,
-      approxWidth: 420,
-      cell: ({ row }) => {
-        const application = row.original.application;
-        return (
-          <div className="min-w-0">
-            <div className="truncate font-semibold text-foreground">
-              {application.name}
-            </div>
-            {application.resource_uri && (
-              <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                {application.resource_uri}
-              </div>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "status",
-      header: "Status",
-      accessorFn: (row) => row.readiness.launch.status,
-      priority: 1,
-      enableSorting: false,
-      approxWidth: 380,
-      cell: ({ row }) => <StatusStack readiness={row.original.readiness} />,
-    },
-    {
-      id: "next",
-      header: "Next action",
-      alwaysVisible: true,
-      enableSorting: false,
-      approxWidth: 210,
-      className: "text-right",
-      cellClassName: "text-right",
-      cell: ({ row }) => {
-        const { next } = row.original;
-        return (
-          <Button
-            asChild
-            size="sm"
-            variant={next.primary ? "default" : "outline"}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Link to={next.href}>
-              {next.label}
-              <ArrowRight className="ml-1.5 size-3.5" />
-            </Link>
-          </Button>
-        );
-      },
-    },
-  ], []);
-
   return (
-    <AdaptiveTable
-      tableId="applications"
-      data={rows}
-      columns={columns}
-      enableSelection={false}
-      enableExpansion={false}
-      enableSorting
-      enableResizing={false}
-      enablePagination
-      getRowId={(row) => row.application.id}
-      onRowClick={(row) => onOpenApplication(row.application)}
-      pagination={{
-        pageSize: 10,
-        pageSizeOptions: [5, 10, 25, 50],
-        alwaysVisible: true,
-      }}
-    />
+    <Surface className="overflow-hidden p-0">
+      <table className="w-full table-fixed">
+        <colgroup>
+          <col className="w-[32%]" />
+          <col className="w-[18%]" />
+          <col className="w-[14%]" />
+          <col className="w-[18%]" />
+          <col className="w-[18%]" />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-slate-200 bg-slate-50/80 text-left">
+            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Application
+            </th>
+            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Readiness
+            </th>
+            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Risk
+            </th>
+            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Last signal
+            </th>
+            <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Next action
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.application.id}
+              onClick={() => onOpenApplication(row.application)}
+              className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50/80 last:border-b-0"
+            >
+              <td className="px-4 py-4">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-950">
+                    {row.application.name}
+                  </div>
+                  <div className="mt-1 truncate font-mono text-[12px] text-slate-500">
+                    {row.application.resource_uri}
+                  </div>
+                </div>
+              </td>
+              <td className="px-4 py-4">
+                <StatusBadge tone={toneFromReadiness(row.readiness.launch.state)}>
+                  {readinessCopy(row)}
+                </StatusBadge>
+              </td>
+              <td className="px-4 py-4">
+                <StatusBadge tone={riskTone(row)}>
+                  {riskTone(row) === "danger"
+                    ? "High"
+                    : riskTone(row) === "warning"
+                      ? "Needs review"
+                      : "Low"}
+                </StatusBadge>
+              </td>
+              <td className="px-4 py-4 text-sm text-slate-600">
+                {row.application.last_scan_completed_at
+                  ? `Manifest ${new Date(row.application.last_scan_completed_at).toLocaleDateString()}`
+                  : row.application.last_validated_at
+                    ? `Checked ${new Date(row.application.last_validated_at).toLocaleDateString()}`
+                    : "No runtime signal"}
+              </td>
+              <td className="px-4 py-4 text-right">
+                <Button
+                  asChild
+                  size="sm"
+                  variant={row.next.primary ? "default" : "outline"}
+                  className="h-9"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Link to={row.next.href}>
+                    {row.next.label}
+                    <ArrowRight className="ml-1.5 size-3.5" />
+                  </Link>
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Surface>
   );
 }

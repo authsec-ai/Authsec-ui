@@ -2,24 +2,23 @@
  * `ApplicationDetailTabs` — the single workspace navigation for an
  * Application detail page.
  *
- * This intentionally carries both the section navigation and readiness
- * state. Keeping those separate created two horizontal bars that competed
- * for attention and wasted the first viewport.
+ * Compact lifecycle navigation. Status detail belongs in the page body;
+ * tabs only carry a small semantic dot.
  */
 
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import type { Readiness, ReadinessArea, ReadinessState } from "../types";
+import type { Readiness, ReadinessState } from "../types";
 
 const TABS = [
   { key: "overview", label: "Overview", readinessKey: null },
-  { key: "setup", label: "SDK", readinessKey: "protection" },
+  { key: "setup", label: "Protect", readinessKey: "protection" },
   { key: "tools", label: "Tools", readinessKey: "tools" },
   { key: "access", label: "Access", readinessKey: "access" },
   { key: "clients", label: "Clients", readinessKey: "clients" },
   { key: "test", label: "Test", readinessKey: "test" },
   { key: "launch", label: "Launch", readinessKey: "launch" },
-  { key: "activity", label: "Activity", readinessKey: null },
+  { key: "activity", label: "Monitor", readinessKey: null },
 ] as const;
 
 export interface ApplicationDetailTabsProps {
@@ -35,19 +34,6 @@ const STATE_DOT_CLASS: Record<ReadinessState, string> = {
   none: "bg-muted-foreground/40",
 };
 
-function ReadinessHint({ area }: { area?: ReadinessArea }) {
-  if (!area) return null;
-  return (
-    <span className="mt-0.5 flex min-w-0 items-center justify-center gap-1.5 text-[10px] font-medium leading-none text-muted-foreground">
-      <span
-        aria-hidden
-        className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT_CLASS[area.state])}
-      />
-      <span className="truncate">{area.status}</span>
-    </span>
-  );
-}
-
 export function ApplicationDetailTabs({
   applicationId,
   readiness,
@@ -58,33 +44,36 @@ export function ApplicationDetailTabs({
       aria-label="Application sections"
       data-slot="application-detail-tabs"
       className={cn(
-        "grid w-full grid-cols-2 gap-1 rounded-md border border-border bg-card p-1 sm:grid-cols-4 xl:grid-cols-8",
+        "flex h-12 w-full items-center gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white px-2 shadow-[0_1px_1px_rgba(15,23,42,0.02)]",
         className,
       )}
     >
-      {TABS.map((tab) => (
-        <NavLink
-          key={tab.key}
-          to={`/applications/${applicationId}/${tab.key}`}
-          className={({ isActive }) =>
-            cn(
-              "flex min-h-11 min-w-0 flex-col items-center justify-center rounded-sm px-2 py-1.5 text-center text-xs font-semibold transition-colors",
-              isActive
-                ? "bg-[color:color-mix(in_oklch,var(--color-primary)_12%,transparent)] text-[var(--color-primary)]"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            )
-          }
-        >
-          <span className="truncate">{tab.label}</span>
-          <ReadinessHint
-            area={
-              tab.readinessKey
-                ? readiness?.[tab.readinessKey]
-                : undefined
+      {TABS.map((tab) => {
+        const area = tab.readinessKey ? readiness?.[tab.readinessKey] : undefined;
+        return (
+          <NavLink
+            key={tab.key}
+            to={`/applications/${applicationId}/${tab.key}`}
+            title={area?.detail ?? area?.status ?? tab.label}
+            className={({ isActive }) =>
+              cn(
+                "inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+              )
             }
-          />
-        </NavLink>
-      ))}
+          >
+            {area ? (
+              <span
+                aria-hidden
+                className={cn("size-1.5 rounded-full", STATE_DOT_CLASS[area.state])}
+              />
+            ) : null}
+            {tab.label}
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }

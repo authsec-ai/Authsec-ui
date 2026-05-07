@@ -47,6 +47,9 @@ import {
   computeOAuthIssuerURL,
   getDeclaredScopes,
 } from "../resource-servers/resource-server-utils";
+import {
+  DecisionBanner,
+} from "./components/ApplicationConsole";
 
 const SECRET_PLACEHOLDER = "<paste the one-time introspection secret>";
 const UPSTREAM_PLACEHOLDER = "<your upstream service credential, e.g. GitHub PAT>";
@@ -69,6 +72,7 @@ export default function ApplicationSetupPage() {
   const [secretValue, setSecretValue] = useState<string | null>(createSecret);
   const [secretVisible, setSecretVisible] = useState(Boolean(createSecret));
   const [secretAcknowledged, setSecretAcknowledged] = useState(false);
+  const [visibleCode, setVisibleCode] = useState<"env" | "go">("env");
 
   const envBlock = useMemo(
     () => buildEnvBlock(application, secretValue),
@@ -115,16 +119,28 @@ export default function ApplicationSetupPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">
-          Install protection
+        <h2 className="text-[22px] font-semibold leading-7 text-slate-950">
+          Protect endpoint
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Add the AuthSec SDK so this application blocks unauthenticated
-          calls, publishes its tool manifest, and fetches runtime policy.
+        <p className="text-sm text-slate-600">
+          Install AuthSec enforcement, publish the MCP tool manifest, and
+          verify that unauthenticated calls fail closed.
         </p>
       </header>
+
+      <DecisionBanner
+        tone={manifest?.last_success ? "success" : "warning"}
+        title={manifest?.last_success ? "SDK manifest received" : "Protection not verified"}
+        body={
+          manifest?.last_success
+            ? `AuthSec last received ${manifest.last_success.tool_count ?? "the"} tools from the SDK manifest.`
+            : "Unauthenticated calls should return a Bearer challenge and the SDK must publish a tool manifest before launch."
+        }
+        actionLabel={validating ? "Checking..." : "Run protection check"}
+        onAction={handleValidate}
+      />
 
       <SecretBanner
         secret={secretValue}
@@ -150,12 +166,12 @@ export default function ApplicationSetupPage() {
       />
 
       <section>
-        <h3 className="text-sm font-semibold text-foreground">
-          Choose your install path
+        <h3 className="text-base font-semibold text-slate-950">
+          Choose install path
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          All three result in the same protection. Coding-agent is the
-          fastest if your team uses Claude or Cursor.
+        <p className="mt-1 text-sm text-slate-600">
+          Coding-agent is primary; manual SDK and environment values are
+          supporting paths for production deploys.
         </p>
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
           <InstallCard
@@ -194,27 +210,46 @@ export default function ApplicationSetupPage() {
         </div>
       </section>
 
-      {/* Real env block + Go config — both visible so admins can copy
-          either, no hidden fields. */}
-      <section className="grid gap-3 lg:grid-cols-2">
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-slate-950">
+            Deployment values
+          </h3>
+          <div className="inline-flex rounded-md border border-slate-200 bg-white p-1">
+            {[
+              ["env", ".env"],
+              ["go", "Go wrapper"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setVisibleCode(key as "env" | "go")}
+                className={cn(
+                  "h-7 rounded px-3 text-xs font-semibold",
+                  visibleCode === key
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-600 hover:bg-slate-50",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <CodeBlock
-          title=".env"
-          subtitle="Map these into your deployment's secret manager."
-          value={envBlock}
-          onCopy={() => handleCopy(envBlock, ".env block")}
-        />
-        <CodeBlock
-          title="Go SDK config"
+          title={visibleCode === "env" ? ".env" : "Go SDK wrapper"}
           subtitle={
-            <>
-              Maps to{" "}
-              <code className="font-mono">authsecsdk.Config</code>.
-              <code className="ml-1 font-mono">PublishManifest: true</code>{" "}
-              is required for tool discovery.
-            </>
+            visibleCode === "env"
+              ? "Map these into your deployment's secret manager."
+              : "MountMCP wraps the existing handler, validates tokens, and publishes the manifest."
           }
-          value={goConfig}
-          onCopy={() => handleCopy(goConfig, "Go SDK config")}
+          value={visibleCode === "env" ? envBlock : goConfig}
+          onCopy={() =>
+            handleCopy(
+              visibleCode === "env" ? envBlock : goConfig,
+              visibleCode === "env" ? ".env block" : "Go SDK config",
+            )
+          }
         />
       </section>
 
@@ -534,22 +569,27 @@ function CodeBlock({
   onCopy: () => void;
 }) {
   return (
-    <Card className="space-y-2 p-4">
-      <div className="flex items-center justify-between gap-3">
+    <Card className="overflow-hidden border-slate-800 bg-slate-950 p-0">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-300">
             {title}
           </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-[11px] text-slate-400">
             {subtitle}
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={onCopy}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onCopy}
+          className="border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+        >
           <Copy className="mr-1.5 size-3.5" />
           Copy
         </Button>
       </div>
-      <pre className="max-h-72 overflow-auto rounded-md bg-foreground/[0.04] p-3 font-mono text-[11px] leading-relaxed text-foreground">
+      <pre className="max-h-[28rem] overflow-auto p-4 font-mono text-[12px] leading-6 text-slate-100">
         {value}
       </pre>
     </Card>
