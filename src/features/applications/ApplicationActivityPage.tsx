@@ -11,12 +11,10 @@
  */
 
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   useDismissDriftEventMutation,
@@ -26,6 +24,7 @@ import {
 
 import { useApplicationContext } from "./useApplicationContext";
 import { isLaunched } from "./lib/computeReadiness";
+import { DecisionBanner, Surface } from "./components/ApplicationConsole";
 
 const EVENT_TYPE_LABEL: Record<string, string> = {
   new_tool_discovered: "New tool discovered",
@@ -82,24 +81,17 @@ export default function ApplicationActivityPage() {
       </header>
 
       {!launched && (
-        <Card className="border-[color:color-mix(in_oklch,var(--color-warning)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_6%,transparent)] p-5">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-warning)]">
-            Application not launched
-          </p>
-          <p className="mt-1 text-sm text-foreground">
-            Drift only accumulates after activation. Open Launch to
-            complete setup.
-          </p>
-          <Button asChild className="mt-3" size="sm">
-            <Link to={`/applications/${application.id}/launch`}>
-              Open Launch  →
-            </Link>
-          </Button>
-        </Card>
+        <DecisionBanner
+          tone="warning"
+          title="Application not launched"
+          body="Drift only accumulates after activation. Complete launch before monitoring runtime policy changes."
+          actionLabel="Open launch"
+          actionHref={`/applications/${application.id}/launch`}
+        />
       )}
 
       {launched && (
-        <Card className="overflow-hidden p-0">
+        <Surface className="overflow-hidden p-0">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <h3 className="text-sm font-semibold text-foreground">
@@ -135,7 +127,7 @@ export default function ApplicationActivityPage() {
               ))}
             </ul>
           )}
-        </Card>
+        </Surface>
       )}
     </div>
   );

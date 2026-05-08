@@ -17,7 +17,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -56,7 +56,6 @@ const UPSTREAM_PLACEHOLDER = "<your upstream service credential, e.g. GitHub PAT
 
 export default function ApplicationSetupPage() {
   const { application } = useApplicationContext();
-  const navigate = useNavigate();
   const location = useLocation();
   const createSecret =
     (location.state as { introspectionSecret?: string } | null)?.introspectionSecret ??
@@ -185,20 +184,16 @@ export default function ApplicationSetupPage() {
                 "Coding-agent prompt",
               )
             }
-            secondary="Open SDK steps"
-            onSecondary={() =>
-              navigate(`/resource-servers/${application.id}/sdk`)
-            }
+            secondary="Show Go config"
+            onSecondary={() => setVisibleCode("go")}
             highlight
           />
           <InstallCard
             tag="MANUAL"
             title="Install SDK manually"
             description="Use the Go resource-server guide. Wrap your existing MCP HTTP handler with authsecsdk.MountMCP."
-            primary="Open SDK steps"
-            onPrimary={() =>
-              navigate(`/resource-servers/${application.id}/sdk`)
-            }
+            primary="Show Go config"
+            onPrimary={() => setVisibleCode("go")}
           />
           <InstallCard
             tag="DEPLOY"

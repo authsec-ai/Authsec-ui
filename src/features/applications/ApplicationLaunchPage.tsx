@@ -14,7 +14,7 @@
 
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, AlertTriangle, Loader2, Sparkles, XCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
 
 import { useApplicationContext } from "./useApplicationContext";
 import { isLaunched } from "./lib/computeReadiness";
+import { DecisionBanner, Surface } from "./components/ApplicationConsole";
 
 export default function ApplicationLaunchPage() {
   const { application } = useApplicationContext();
@@ -71,7 +72,6 @@ export default function ApplicationLaunchPage() {
     if (launched) {
       return {
         tone: "ok" as const,
-        icon: Sparkles,
         title: "Launched",
         subtitle: `${passingCount} of ${totalSteps} setup steps complete · policy is live.`,
         ctaLabel: "View activity",
@@ -83,7 +83,6 @@ export default function ApplicationLaunchPage() {
     if (canActivate) {
       return {
         tone: "ok" as const,
-        icon: CheckCircle2,
         title: "Ready to launch",
         subtitle: `All ${totalSteps} setup steps complete.`,
         ctaLabel: activating ? "Launching…" : "Launch application",
@@ -95,7 +94,6 @@ export default function ApplicationLaunchPage() {
     if (failingCount > 0) {
       return {
         tone: "err" as const,
-        icon: XCircle,
         title: "Not ready to launch",
         subtitle: `${failingCount} step${failingCount === 1 ? "" : "s"} remaining · ${passingCount} of ${totalSteps} complete`,
         ctaLabel: firstFailing
@@ -110,7 +108,6 @@ export default function ApplicationLaunchPage() {
     }
     return {
       tone: "warn" as const,
-      icon: AlertTriangle,
       title: "Loading…",
       subtitle: "Fetching setup checklist.",
       ctaLabel: "—",
@@ -119,8 +116,6 @@ export default function ApplicationLaunchPage() {
       showActivate: false,
     };
   })();
-
-  const BannerIcon = banner.icon;
 
   return (
     <div className="space-y-4">
@@ -136,60 +131,14 @@ export default function ApplicationLaunchPage() {
         </p>
       </header>
 
-      {/* Status banner */}
-      <Card
-        className={cn(
-          "flex flex-col gap-4 border-l-4 p-4 md:flex-row md:items-center",
-          banner.tone === "ok" &&
-            "border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)]",
-          banner.tone === "warn" &&
-            "border-l-[var(--color-warning)] bg-[color:color-mix(in_oklch,var(--color-warning)_6%,transparent)]",
-          banner.tone === "err" &&
-            "border-l-[var(--color-danger)] bg-[color:color-mix(in_oklch,var(--color-danger)_6%,transparent)]",
-        )}
-      >
-        <BannerIcon
-          className={cn(
-            "size-5 shrink-0",
-            banner.tone === "ok" && "text-[var(--color-success)]",
-            banner.tone === "warn" && "text-[var(--color-warning)]",
-            banner.tone === "err" && "text-[var(--color-danger)]",
-          )}
-          aria-hidden
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Status
-          </p>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground">
-            {banner.title}
-          </h3>
-          <p className="text-sm text-muted-foreground">{banner.subtitle}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-stretch gap-1 md:items-end">
-          {banner.showActivate ? (
-            <Button
-              onClick={banner.primaryAction}
-              disabled={!canActivate || activating}
-              className="bg-[var(--color-success)] hover:opacity-90"
-            >
-              {activating && <Loader2 className="mr-2 size-4 animate-spin" />}
-              {banner.ctaLabel}
-            </Button>
-          ) : banner.primaryAction ? (
-            <Button onClick={banner.primaryAction}>{banner.ctaLabel}</Button>
-          ) : banner.ctaHref ? (
-            <Button onClick={() => navigate(banner.ctaHref!)}>
-              {banner.ctaLabel} →
-            </Button>
-          ) : null}
-          {banner.tone === "err" && firstFailing && (
-            <p className="text-[11px] italic text-muted-foreground">
-              first failing step
-            </p>
-          )}
-        </div>
-      </Card>
+      <DecisionBanner
+        tone={banner.tone === "ok" ? "success" : banner.tone === "err" ? "danger" : "warning"}
+        title={banner.title}
+        body={banner.subtitle}
+        actionLabel={banner.ctaLabel}
+        actionHref={!banner.showActivate ? banner.ctaHref : undefined}
+        onAction={banner.showActivate ? banner.primaryAction : undefined}
+      />
 
       {/* Real setup checklist */}
       <section>
@@ -267,7 +216,7 @@ export default function ApplicationLaunchPage() {
           />
         </div>
         {preview && (
-          <Card className="mt-3 p-4 text-sm">
+          <Surface className="mt-3 p-4 text-sm">
             <dl className="grid gap-3 sm:grid-cols-2">
               <PreviewKv
                 label="Default role"
@@ -301,17 +250,17 @@ export default function ApplicationLaunchPage() {
                 <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-primary)]">
                   Public tools ({preview.public_tool_names.length})
                 </p>
-                <p className="mt-1 break-all font-mono text-xs text-foreground">
+                <p className="mt-1 break-all font-mono text-xs text-slate-700">
                   {preview.public_tool_names.join(", ")}
                 </p>
               </div>
             )}
-          </Card>
+          </Surface>
         )}
       </section>
 
       {/* Footer copy — what activation actually does */}
-      <Card
+      <Surface
         className={cn(
           "space-y-2 border-l-4 p-5",
           "border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)]",
@@ -326,7 +275,7 @@ export default function ApplicationLaunchPage() {
           <code className="font-mono">setup_completed_at</code>, and starts
           enforcing the activation-preview policy at runtime.
         </p>
-      </Card>
+      </Surface>
     </div>
   );
 }
@@ -347,7 +296,7 @@ function ChecklistRow({
   onFix: () => void;
 }) {
   return (
-    <Card className="flex items-stretch overflow-hidden p-0">
+    <Surface className="flex items-stretch overflow-hidden p-0">
       <span
         className={cn(
           "w-1 shrink-0",
@@ -389,7 +338,7 @@ function ChecklistRow({
           </Button>
         )}
       </div>
-    </Card>
+    </Surface>
   );
 }
 
@@ -409,7 +358,7 @@ function PreviewStat({
     muted: "text-foreground",
   };
   return (
-    <Card className="p-4">
+    <Surface className="p-4">
       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
@@ -421,7 +370,7 @@ function PreviewStat({
       >
         {value}
       </p>
-    </Card>
+    </Surface>
   );
 }
 

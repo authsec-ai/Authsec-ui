@@ -29,15 +29,8 @@ import { UsersPage } from "./features/users/UsersPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
-// Resource-server detail/clients/onboarding/SDK/prompt remain as
-// implementation surfaces the Launch Control Setup tab links into. The
-// list and details list-views are gone — `/resource-servers` now redirects
-// to `/applications`.
-import ResourceServerDetailsPage from "./features/resource-servers/ResourceServerDetailsPage";
-import ResourceServerClientsPage from "./features/resource-servers/ResourceServerClientsPage";
-import ResourceServerOnboardingPage from "./features/resource-servers/ResourceServerOnboardingPage";
-import ResourceServerSDKPage from "./features/resource-servers/ResourceServerSDKPage";
-import ResourceServerPromptPage from "./features/resource-servers/ResourceServerPromptPage";
+// Resource server is now a backend/API term. User-facing legacy
+// `/resource-servers/*` URLs redirect into the Applications console.
 import ApplicationsPage from "./features/applications/ApplicationsPage";
 import CreateApplicationPage from "./features/applications/CreateApplicationPage";
 import ApplicationLayout from "./features/applications/ApplicationLayout";
@@ -92,7 +85,6 @@ import {
 // RBAC pages
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
-import { ScopeMatrixPage } from "./features/scope-matrix/ScopeMatrixPage";
 import { ConsentGrantsPage } from "./features/consent-grants/ConsentGrantsPage";
 import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
 import SDKHubPage from "./features/sdk/SDKHubPage";
@@ -187,10 +179,20 @@ function ContextRouteSync() {
 function LegacyClientOnboardRedirect() {
   const { clientId } = useParams<{ clientId?: string }>();
   const target = clientId
-    ? `/resource-servers/${encodeURIComponent(clientId)}`
-    : "/resource-servers?create=1";
+    ? `/applications/${encodeURIComponent(clientId)}/overview`
+    : "/applications/new";
 
   return <Navigate to={target} replace />;
+}
+
+function LegacyResourceServerRedirect({
+  section = "overview",
+}: {
+  section?: string;
+}) {
+  const { id = "" } = useParams<{ id?: string }>();
+  const encoded = encodeURIComponent(id);
+  return <Navigate to={`/applications/${encoded}/${section}`} replace />;
 }
 
 function LegacyExternalServiceSdkRedirect() {
@@ -419,70 +421,30 @@ function AppContent() {
                   />
                   <Route
                     path="/resource-servers/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServerDetailsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="overview" />}
                   />
                   <Route
                     path="/resource-servers/:id/clients"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServerClientsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="clients" />}
                   />
 
-                  {/* Sub-pages still owned by the resource-servers feature.
-                       The Launch Control Setup tab links into these. They
-                       can be migrated into the applications feature in a
-                       follow-up; for now they're the production surface for
-                       SDK guidance, prompt generation, and the legacy
-                       onboarding wizard. */}
+                  {/* Legacy resource-server sub-pages now resolve into the
+                       Applications lifecycle. */}
                   <Route
                     path="/resource-servers/:id/onboarding"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServerOnboardingPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="overview" />}
                   />
                   <Route
                     path="/resource-servers/:id/sdk"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServerSDKPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="setup" />}
                   />
                   <Route
                     path="/resource-servers/:id/prompt"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ResourceServerPromptPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="setup" />}
                   />
                   <Route
                     path="/resource-servers/:id/scope-matrix"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ScopeMatrixPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyResourceServerRedirect section="tools" />}
                   />
 
                   {/* ───── Launch Control ──────────────────────────────────

@@ -96,7 +96,7 @@ export default function ApplicationClientsPage() {
               : `${clients!.length} client${clients!.length === 1 ? "" : "s"}`}
         </p>
         <Button asChild>
-          <Link to={`/resource-servers/${application.id}/clients`}>
+          <Link to={`/applications/${application.id}/clients`}>
             <Plus className="mr-1.5 size-4" />
             Manage clients
           </Link>

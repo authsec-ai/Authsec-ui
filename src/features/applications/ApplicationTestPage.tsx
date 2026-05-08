@@ -13,7 +13,6 @@
 import { Loader2, Play, ShieldCheck, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   useTestLoginMutation,
@@ -21,6 +20,7 @@ import {
 } from "@/app/api/setupWizardApi";
 
 import { useApplicationContext } from "./useApplicationContext";
+import { DecisionBanner, Surface } from "./components/ApplicationConsole";
 
 export default function ApplicationTestPage() {
   const { application } = useApplicationContext();
@@ -47,7 +47,15 @@ export default function ApplicationTestPage() {
         </p>
       </header>
 
-      <Card className="space-y-4 p-5">
+      <DecisionBanner
+        tone={data ? "success" : apiError ? "danger" : "info"}
+        title={data ? "Latest protection signal received" : "Run a setup signal"}
+        body="This checks AuthSec's backend readiness for OAuth, SDK policy state, tool inventory, and unmapped tools. It is intentionally not a fabricated user-client-tool simulator."
+        actionLabel={isLoading ? "Running..." : "Run test"}
+        onAction={() => runTest(application.id)}
+      />
+
+      <Surface className="space-y-4 p-5">
         <div className="flex items-center gap-2">
           <ShieldCheck
             className="size-4 text-[var(--color-primary)]"
@@ -81,10 +89,10 @@ export default function ApplicationTestPage() {
             </p>
           )}
         </div>
-      </Card>
+      </Surface>
 
       {apiError && (
-        <Card className="border-l-4 border-l-[var(--color-danger)] bg-[color:color-mix(in_oklch,var(--color-danger)_6%,transparent)] p-5">
+        <Surface className="border-l-4 border-l-[var(--color-danger)] bg-[color:color-mix(in_oklch,var(--color-danger)_6%,transparent)] p-5">
           <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-danger)]">
             Test failed
           </p>
@@ -92,7 +100,7 @@ export default function ApplicationTestPage() {
             {apiError.data?.error ??
               "test-login returned an error. Verify the SDK is deployed and check the backend logs."}
           </p>
-        </Card>
+        </Surface>
       )}
 
       {data && <TestResultCard result={data} />}
@@ -106,7 +114,7 @@ function TestResultCard({ result }: { result: TestLoginResponse }) {
   const allOk = oauthOk && sdkOk;
 
   return (
-    <Card
+    <Surface
       className={cn(
         "border-l-4 p-5",
         allOk
@@ -192,7 +200,7 @@ function TestResultCard({ result }: { result: TestLoginResponse }) {
           }
         />
       </dl>
-    </Card>
+    </Surface>
   );
 }
 

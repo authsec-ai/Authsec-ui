@@ -621,86 +621,129 @@ function ToolInspectorDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle className="font-mono">{tool.name}</SheetTitle>
-          <SheetDescription>
-            {tool.title || "Tool details from /scope-matrix"}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="space-y-5 py-4">
-          {tool.description && (
-            <Detail label="Description">
-              <p className="text-sm text-foreground">{tool.description}</p>
-            </Detail>
-          )}
-
-          <Detail label="Risk (highest mapped scope)">
+      <SheetContent className="flex h-full flex-col overflow-hidden p-0 sm:max-w-[560px]">
+        <SheetHeader className="border-b border-slate-200 bg-white px-6 py-5 text-left">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <SheetTitle className="break-all font-mono text-[28px] font-semibold leading-8 tracking-normal text-slate-950">
+                {tool.name}
+              </SheetTitle>
+              <SheetDescription className="mt-1 text-sm leading-5 text-slate-600">
+                {tool.title || "Tool details from /scope-matrix"}
+              </SheetDescription>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <StatusBadge
+              tone={
+                decision === "public"
+                  ? "info"
+                  : decision === "mapped"
+                    ? "success"
+                    : "warning"
+              }
+            >
+              {decision === "public"
+                ? "Public"
+                : decision === "mapped"
+                  ? "Mapped"
+                  : decision === "advisory"
+                    ? "Suggested only"
+                    : "Denied"}
+            </StatusBadge>
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-5",
                 RISK_TONE[risk].chip,
                 RISK_TONE[risk].text,
               )}
             >
-              <span className="size-1 rounded-full bg-current" aria-hidden />
-              {risk}
+              <span className="size-1.5 rounded-full bg-current" aria-hidden />
+              {risk} risk
             </span>
-          </Detail>
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] font-semibold leading-5 text-slate-600">
+              {tool.inventory_source ?? "source unknown"}
+            </span>
+          </div>
+        </SheetHeader>
 
-          <Detail label="Inventory source">
-            <code className="font-mono text-sm text-foreground">
-              {tool.inventory_source ?? "—"}
-            </code>
-          </Detail>
+        <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/60 px-6 py-5">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              What this tool does
+            </p>
+            {tool.description ? (
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                {tool.description}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">
+                No description returned for this tool.
+              </p>
+            )}
+            <p className="mt-3 text-[11px] text-slate-500">
+              Source: <code className="font-mono">/scope-matrix</code>{" "}
+              <code className="font-mono">tool.description</code>.
+            </p>
+          </section>
 
-          <Detail label="Current decision">
-            <span className="text-sm text-foreground">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+              Runtime decision
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-700">
               {decision === "public"
                 ? "Public — callable by every authenticated AuthSec token."
                 : decision === "mapped"
                   ? "Mapped — gated by the scopes below."
                   : decision === "advisory"
                     ? "Suggested only — not runtime-effective until applied by an admin override."
-                  : "Unmapped — denied at runtime."}
-            </span>
-          </Detail>
+                    : "Unmapped — denied at runtime."}
+            </p>
+          </section>
 
-          <Detail label="Mapped scopes">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                Mapped scopes
+              </p>
+              <span className="text-xs text-slate-500">
+                {tool.scopes.length} runtime mapping{tool.scopes.length === 1 ? "" : "s"}
+              </span>
+            </div>
             {tool.scopes.length === 0 ? (
-              <p className="text-xs italic text-muted-foreground">
+              <p className="mt-3 text-sm text-slate-500">
                 No mapped scopes.
               </p>
             ) : (
-              <ul className="space-y-1">
+              <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
                 {tool.scopes.map((s) => (
                   <li
                     key={s.scope_id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5"
+                    className="grid gap-3 bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto]"
                   >
-                    <span className="font-mono text-xs text-foreground">
-                      {s.scope_string}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase",
-                          RISK_TONE[s.risk_level].chip,
-                          RISK_TONE[s.risk_level].text,
-                        )}
-                      >
-                        {s.risk_level}
-                      </span>
-                      <span
-                        className={cn(
-                          "rounded-full border border-border px-1.5 py-0.5 text-[9px] font-bold uppercase text-muted-foreground",
-                        )}
-                      >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-sm font-semibold text-slate-950">
+                        {s.scope_string}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                            RISK_TONE[s.risk_level].chip,
+                            RISK_TONE[s.risk_level].text,
+                          )}
+                        >
+                          {s.risk_level}
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500">
                           {s.source ?? "source unknown"}
-                      </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         disabled={mapping}
                         onClick={() => handleRemoveMap(s.scope_id)}
@@ -712,22 +755,35 @@ function ToolInspectorDrawer({
                 ))}
               </ul>
             )}
-          </Detail>
+          </section>
 
           {tool.suggested_scopes && tool.suggested_scopes.length > 0 && (
-            <Detail label="SDK-suggested (advisory until applied)">
-              <p className="font-mono text-xs text-foreground">
-                {tool.suggested_scopes.join(", ")}
+            <section className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                SDK-suggested scopes
               </p>
-            </Detail>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {tool.suggested_scopes.map((scope) => (
+                  <span
+                    key={scope}
+                    className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-xs text-slate-700"
+                  >
+                    {scope}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Advisory until applied by an admin override.
+              </p>
+            </section>
           )}
 
           {unmappedScopes.length > 0 && (
-            <div className="border-t border-border pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <section className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
                 Add a scope mapping
               </p>
-              <div className="mt-2 grid gap-2">
+              <div className="mt-3 grid gap-2">
                 {unmappedScopes.slice(0, 8).map((s) => (
                   <Button
                     key={s.id}
@@ -735,34 +791,35 @@ function ToolInspectorDrawer({
                     size="sm"
                     disabled={mapping}
                     onClick={() => handleMap(s.id)}
-                    className="justify-between"
+                    className="h-auto justify-between gap-3 py-2"
                   >
-                    <span className="font-mono">{s.scope_string}</span>
-                    <span className="text-xs text-muted-foreground">+ map</span>
+                    <span className="min-w-0 truncate font-mono">
+                      {s.scope_string}
+                    </span>
+                    <span className="shrink-0 text-xs text-slate-500">Map</span>
                   </Button>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Mark public */}
-          <div className="border-t border-border pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-danger)]">
-              Mark public — risky
+          <section className="rounded-lg border border-red-200 bg-white p-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-red-600">
+              Public exposure
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-2 text-sm leading-5 text-slate-600">
               Public tools are callable by every authenticated AuthSec token.
               To mark public, type the exact tool name. Removing public access
               does not require confirmation.
             </p>
             {isWriteOrAdmin && !tool.is_public && (
-              <div className="mt-2 rounded-md border border-[color:color-mix(in_oklch,var(--color-danger)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-danger)_8%,transparent)] p-2 text-xs text-[var(--color-danger)]">
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
                 {risk}-risk tool. Public exposure may grant write or
                 administrative capability.
               </div>
             )}
             {tool.is_public && (
-              <div className="mt-2 rounded-md border border-[color:color-mix(in_oklch,var(--color-primary)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_5%,transparent)] p-2 text-xs text-[var(--color-primary)]">
+              <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-700">
                 Currently public. Confirming will <strong>remove</strong>{" "}
                 public exposure.
               </div>
@@ -772,7 +829,7 @@ function ToolInspectorDrawer({
                 <div>
                   <Label
                     htmlFor="confirm-name"
-                    className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground"
+                    className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500"
                   >
                     Type the tool name
                   </Label>
@@ -792,32 +849,15 @@ function ToolInspectorDrawer({
                 onClick={handleMarkPublic}
               >
                 {publishing
-                  ? "Saving…"
+                  ? "Saving..."
                   : tool.is_public
                     ? "Unmark public"
                     : "Mark public"}
               </Button>
             </div>
-          </div>
+          </section>
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function Detail({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-1">{children}</div>
-    </div>
   );
 }
