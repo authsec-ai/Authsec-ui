@@ -27,6 +27,23 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
 
 const RECENT_ROLE_STORAGE_KEY = "authsec_recent_role_id";
+
+function getResourceServerRoleDisplayName(roleName: string) {
+  const match = roleName.match(/^rs-[^:]+:(.+)$/);
+  if (!match) return null;
+
+  const accessLevel = match[1]
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+  return {
+    displayName: `Resource server - ${accessLevel || "Access"}`,
+    scopeLabel: "Managed from Application > Access",
+  };
+}
+
 export function RolesPage() {
   const standardNavigate = useNavigate();
   const location = useLocation();
@@ -75,16 +92,22 @@ export function RolesPage() {
     () =>
       isAdmin
         ? {
-            title: "Roles and mapped permissions",
+            title: "Platform roles",
             subtitle:
-              "Define reusable permission sets for privileged operators",
-            ctaLabel: "Create Roles and map permissions",
+              "Control who can administer AuthSec. Application access roles are managed from each application.",
+            ctaLabel: "Create platform role",
+            bannerTitle: "Understanding platform roles",
+            bannerDescription:
+              "Platform roles grant access to administer AuthSec. They do not grant customer identities access to protected MCP servers, APIs, or applications.",
           }
         : {
-            title: "Roles and mapped permissions",
+            title: "Customer roles",
             subtitle:
-              "Shape customer capabilities with tailored permission bundles",
-            ctaLabel: "Create Roles and map permissions",
+              "Define reusable access bundles for customer and end-user identities.",
+            ctaLabel: "Create customer role",
+            bannerTitle: "Understanding customer roles",
+            bannerDescription:
+              "Customer roles describe what end users can access. Resource-server roles generated for a specific application are configured from Application > Access.",
           },
     [isAdmin]
   );
@@ -174,9 +197,21 @@ export function RolesPage() {
             ? "custom"
             : undefined;
 
+        const roleName = String(
+          role?.name ?? role?.role_name ?? `Role ${index + 1}`
+        );
+        const resourceServerRole = getResourceServerRoleDisplayName(roleName);
+
         return {
           id: String(rawId),
-          name: String(role?.name ?? role?.role_name ?? `Role ${index + 1}`),
+          name: resourceServerRole?.displayName ?? roleName,
+          rawName: resourceServerRole ? roleName : undefined,
+          roleKind: resourceServerRole
+            ? "resource_server"
+            : audience === "admin"
+            ? "platform"
+            : "customer",
+          roleScopeLabel: resourceServerRole?.scopeLabel,
           description: role?.description ?? "",
           type: typeNormalized,
           permissions: Array.isArray(role?.permissions) ? role.permissions : [],
@@ -201,11 +236,22 @@ export function RolesPage() {
         };
       })
       .filter((role): role is EnhancedRole => Boolean(role));
-  }, [roles]);
+  }, [roles, audience]);
+
+  const generatedResourceRoleCount = useMemo(
+    () =>
+      normalizedRoles.filter((role) => role.roleKind === "resource_server")
+        .length,
+    [normalizedRoles]
+  );
 
   // Filtering logic with simplified filters
   const filteredRoles = useMemo(() => {
     let filtered = [...normalizedRoles];
+
+    if (isAdmin) {
+      filtered = filtered.filter((role) => role.roleKind !== "resource_server");
+    }
 
     // Apply search filter
     if (filters.searchQuery) {
@@ -218,7 +264,7 @@ export function RolesPage() {
     }
 
     return filtered;
-  }, [normalizedRoles, filters]);
+  }, [normalizedRoles, filters, isAdmin]);
 
   useEffect(() => {
     if (!recentRoleId) return;
@@ -277,6 +323,7 @@ export function RolesPage() {
     try {
       await deleteRoles({
         tenant_id: tenantId,
+        audience,
         role_ids: [roleId],
       }).unwrap();
       toast.success("Role deleted successfully");
@@ -398,8 +445,8 @@ export function RolesPage() {
 
           {/* Info Banner */}
           <PageInfoBanner
-            title="Understanding Roles"
-            description="Roles are reusable permission sets that define what users can do in your system. Instead of assigning permissions individually, assign users to roles for easier management."
+            title={audienceCopy.bannerTitle}
+            description={audienceCopy.bannerDescription}
             features={[
               {
                 text: "Group related permissions into logical sets",
@@ -434,6 +481,15 @@ export function RolesPage() {
             storageKey="roles-page-banner"
             dismissible={true}
           />
+
+          {isAdmin && generatedResourceRoleCount > 0 && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-100">
+              {generatedResourceRoleCount} resource-server role
+              {generatedResourceRoleCount === 1 ? "" : "s"} hidden here.
+              Manage application access roles from each application&apos;s
+              Access page.
+            </div>
+          )}
 
           <div data-tour-id="roles-filters">
             <RolesFilterCard

@@ -92,9 +92,6 @@ export function RoleNameCell({
   onToggleExpand?: () => void;
   isExpanded?: boolean;
 }) {
-  const level = RoleTableUtils.getRoleLevel(role.name);
-  const permissionCount = RoleTableUtils.getPermissionCount(role);
-
   const handleToggle = onToggleExpand
     ? (event: React.MouseEvent) => {
         event.stopPropagation();
@@ -102,19 +99,45 @@ export function RoleNameCell({
       }
     : undefined;
 
+  const kindLabel =
+    role.roleKind === "resource_server"
+      ? "Resource server role"
+      : role.roleKind === "platform"
+        ? "Platform role"
+        : role.roleKind === "customer"
+          ? "Customer role"
+          : null;
+
   return (
-    <div className="min-w-0">
-      <p
-        className={`truncate text-sm font-medium ${
-          onToggleExpand
-            ? "cursor-pointer text-foreground hover:underline"
-            : "text-foreground"
-        }`}
-        title={role.name}
-        onClick={handleToggle}
-      >
-        {role.name}
-      </p>
+    <div className="min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <p
+          className={`truncate text-sm font-medium ${
+            onToggleExpand
+              ? "cursor-pointer text-foreground hover:underline"
+              : "text-foreground"
+          }`}
+          title={role.rawName || role.name}
+          onClick={handleToggle}
+        >
+          {role.name}
+        </p>
+        {kindLabel && (
+          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
+            {kindLabel}
+          </Badge>
+        )}
+      </div>
+      {role.rawName && (
+        <p className="truncate font-mono text-[11px] text-foreground/60">
+          Role ID: {role.rawName}
+        </p>
+      )}
+      {role.roleScopeLabel && (
+        <p className="truncate text-[11px] text-foreground/60">
+          {role.roleScopeLabel}
+        </p>
+      )}
     </div>
   );
 }

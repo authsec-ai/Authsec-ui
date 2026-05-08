@@ -460,6 +460,9 @@ export interface RolePermission {
 export interface EnhancedRole {
   id: string;
   name: string;
+  rawName?: string;
+  roleKind?: "platform" | "customer" | "resource_server";
+  roleScopeLabel?: string;
   description?: string;
   type?: "system" | "custom";
   permissions?: RolePermission[];
