@@ -45,6 +45,11 @@ export interface TenantMembership {
   suspended_at?: string | null;
   created_at: string;
   updated_at: string;
+  // Decorated by ListMembers/GetMembership JOIN
+  user_email?: string;
+  user_name?: string;
+  user_username?: string;
+  user_last_login?: string | null;
 }
 
 export type EndUserStatus = "active" | "suspended";
@@ -62,9 +67,11 @@ export interface TenantEndUserState {
   suspended_reason?: string | null;
   created_at: string;
   updated_at: string;
-  // Decorated by ListEndUsers JOIN
+  // Decorated by ListEndUsers/GetEndUser JOIN
   user_email?: string;
+  user_name?: string;
   user_username?: string;
+  user_last_login?: string | null;
 }
 
 export interface EffectiveBinding {

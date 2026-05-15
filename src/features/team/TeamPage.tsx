@@ -96,6 +96,9 @@ function MembersTab({ tenantId }: { tenantId: string }) {
     const s = search.toLowerCase();
     return items.filter(
       (m) =>
+        m.user_email?.toLowerCase().includes(s) ||
+        m.user_name?.toLowerCase().includes(s) ||
+        m.user_username?.toLowerCase().includes(s) ||
         m.user_id.toLowerCase().includes(s) ||
         m.external_id?.toLowerCase().includes(s),
     );
@@ -131,7 +134,7 @@ function MembersTab({ tenantId }: { tenantId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Input
-          placeholder="Search by user ID or external ID…"
+          placeholder="Search by email, name, or external ID…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-80"
@@ -176,7 +179,14 @@ function MembersTab({ tenantId }: { tenantId: string }) {
                 <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No members match these filters.</TableCell></TableRow>
               ) : rows.map((m) => (
                 <TableRow key={m.id} className="hover:bg-muted/40">
-                  <TableCell className="font-mono text-xs">{m.user_id}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">
+                      {m.user_email ?? m.user_username ?? m.user_id}
+                    </div>
+                    {m.user_name && m.user_name !== "Not Provided" ? (
+                      <div className="text-xs text-muted-foreground">{m.user_name}</div>
+                    ) : null}
+                  </TableCell>
                   <TableCell><TypeBadge type={m.membership_type} /></TableCell>
                   <TableCell><StatusBadge status={m.status} /></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{m.source}</TableCell>

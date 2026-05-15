@@ -226,7 +226,11 @@ export default function EndUsersPage() {
                         <div className="font-medium">
                           {r.user_email ?? r.user_username ?? r.user_id}
                         </div>
-                        {r.user_email && r.user_username ? (
+                        {r.user_name && r.user_name !== "Not Provided" ? (
+                          <div className="text-xs text-muted-foreground">
+                            {r.user_name}
+                          </div>
+                        ) : r.user_email && r.user_username ? (
                           <div className="text-xs text-muted-foreground">
                             {r.user_username}
                           </div>
