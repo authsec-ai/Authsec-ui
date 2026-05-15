@@ -26,6 +26,9 @@ import React, { useEffect, useRef } from "react";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 import { UsersPage } from "./features/users/UsersPage";
+import EndUsersPage from "./features/end-users/EndUsersPage";
+import TeamPage from "./features/team/TeamPage";
+import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
@@ -644,7 +647,39 @@ function AppContent() {
                     element={<Navigate to="/admin/users" replace />}
                   />
 
-                  {/* Context-aware RBAC and OAuth routes */}
+                  {/* ── Phase A: object-first routes (no /admin or /enduser prefix) ── */}
+                  <Route
+                    path="/end-users"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EndUsersPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings/team"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TeamPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/authz/effective-access"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EffectiveAccessPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Context-aware RBAC and OAuth routes (legacy — kept while Phase A→F migrates each surface) */}
                   <Route path="/:context">
                     <Route
                       path="users"

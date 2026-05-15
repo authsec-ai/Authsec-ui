@@ -152,6 +152,10 @@ export const baseApi = createApi({
     "DelegationLog",
     "ResourceServer",
     "ResourceServerClient",
+    // Phase A: v2 membership + end-user state
+    "TenantMembership",
+    "TenantEndUserState",
+    "RoleBinding",
   ],
   endpoints: () => ({}),
 });

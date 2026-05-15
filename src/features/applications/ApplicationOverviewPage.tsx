@@ -44,6 +44,16 @@ export default function ApplicationOverviewPage() {
 
   return (
     <div className="space-y-5">
+      <div className="flex justify-end text-xs">
+        <a
+          href="https://docs.authsec.dev/getting-started/from-zero-to-launched"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-500 hover:text-slate-900 hover:underline"
+        >
+          Need help? Read the first-run guide →
+        </a>
+      </div>
       <DecisionBanner
         tone={checklist?.can_activate ? "success" : firstFailing ? "warning" : "info"}
         title={

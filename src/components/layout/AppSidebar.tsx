@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   Layers,
   PlugZap,
+  Search,
   ShieldPlus,
   UserCog,
   UserPlus,
@@ -53,6 +54,13 @@ interface NavItem {
   icon: LucideIcon;
   isActive?: boolean;
   onClick?: () => void;
+  /**
+   * Phase A: items still tied to the legacy `/admin` or `/enduser` audience
+   * prefix opt in by setting `contextPrefixed: true`. Phase A's own object-
+   * first routes (e.g. /end-users, /settings/team, /authz/effective-access)
+   * leave this false and render as-is.
+   */
+  contextPrefixed?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,18 +72,26 @@ const NAV_DASHBOARD: NavItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
 ];
 
-const NAV_PROTECT: NavItem[] = [
+// PRIMARY OBJECT NAV — end users are the default workspace because they are
+// the operational long-tail. Members management lives in Settings, not here.
+const NAV_OBJECTS: NavItem[] = [
+  { title: "End Users", url: "/end-users", icon: Users },
   { title: "Applications", url: "/applications", icon: Layers },
   { title: "Clients", url: "/clients", icon: PlugZap },
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
-const NAV_ACCESS: NavItem[] = [
-  { title: "Users", url: "/users", icon: Users },
-  { title: "Roles", url: "/authz/roles", icon: UserCog },
-  { title: "Permissions", url: "/authz/permissions", icon: ShieldPlus },
-  { title: "Assignments", url: "/authz/role-bindings", icon: UserPlus },
-  { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock },
+// Authz lumps all the "rules" surfaces (roles, permissions, scopes, bindings,
+// effective-access). These still rely on the legacy `:context` route prefix in
+// Phase A; the IA refactor in this group is partial. URLs are prefixed at
+// render time with `/admin` or `/enduser` as before, EXCEPT `effective-access`
+// which is a fresh object-first route.
+const NAV_AUTHZ: NavItem[] = [
+  { title: "Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
+  { title: "Permissions", url: "/authz/permissions", icon: ShieldPlus, contextPrefixed: true } as NavItem,
+  { title: "Assignments", url: "/authz/role-bindings", icon: UserPlus, contextPrefixed: true } as NavItem,
+  { title: "Effective Access", url: "/authz/effective-access", icon: Search } as NavItem,
+  { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock } as NavItem,
 ];
 
 const NAV_MONITOR: NavItem[] = [
@@ -87,6 +103,10 @@ const NAV_CONFIGURE: NavItem[] = [
   { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock },
   { title: "Secrets", url: "/external-services", icon: KeyRound },
   { title: "SDK Guides", url: "/developer/sdk-guides", icon: BookOpen },
+];
+
+const NAV_SETTINGS: NavItem[] = [
+  { title: "Team", url: "/settings/team", icon: Users },
 ];
 
 export function AppSidebar({
@@ -120,9 +140,15 @@ export function AppSidebar({
     [navigate, dispatch],
   );
 
+  /**
+   * Apply the legacy `/admin` or `/enduser` prefix only to items that opted in
+   * via contextPrefixed=true. Phase A's object-first routes are left untouched.
+   */
   const prefixUrls = useCallback(
     (items: NavItem[], prefix: string): NavItem[] =>
-      items.map((item) => ({ ...item, url: `${prefix}${item.url}` })),
+      items.map((item) =>
+        item.contextPrefixed ? { ...item, url: `${prefix}${item.url}` } : item,
+      ),
     [],
   );
 
@@ -154,10 +180,11 @@ export function AppSidebar({
   const nav = useMemo(
     () => ({
       dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
-      protect: attachHandlers(markActive(NAV_PROTECT)),
-      access: attachHandlers(markActive(prefixUrls(NAV_ACCESS, contextPrefix))),
+      objects: attachHandlers(markActive(NAV_OBJECTS)),
+      authz: attachHandlers(markActive(prefixUrls(NAV_AUTHZ, contextPrefix))),
       monitor: attachHandlers(markActive(NAV_MONITOR)),
       configure: attachHandlers(markActive(NAV_CONFIGURE)),
+      settings: attachHandlers(markActive(NAV_SETTINGS)),
     }),
     [contextPrefix, prefixUrls, markActive, attachHandlers],
   );
@@ -231,10 +258,11 @@ export function AppSidebar({
 
       <SidebarContent>
         <NavMain items={nav.dashboard} />
-        <NavMain title="Protect" items={nav.protect} />
-        <NavMain title="Access" items={nav.access} />
+        <NavMain title="Workspace" items={nav.objects} />
+        <NavMain title="Authz" items={nav.authz} />
         <NavMain title="Configure" items={nav.configure} />
         <NavMain title="Monitor" items={nav.monitor} />
+        <NavMain title="Settings" items={nav.settings} />
       </SidebarContent>
 
       <SidebarFooter className="mt-auto gap-0 border-t border-[var(--app-shell-border)]">
