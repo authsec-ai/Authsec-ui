@@ -99,7 +99,7 @@ export const membershipApi = baseApi.injectEndpoints({
         if (status) params.set("status", status);
         if (type) params.set("type", type);
         const qs = params.toString() ? `?${params.toString()}` : "";
-        return { url: `/uflow/v2/tenants/${tenantId}/memberships${qs}` };
+        return { url: `authsec/uflow/v2/tenants/${tenantId}/memberships${qs}` };
       },
       providesTags: (_, __, arg) => [
         { type: "TenantMembership", id: arg.tenantId },
@@ -118,7 +118,7 @@ export const membershipApi = baseApi.injectEndpoints({
       }
     >({
       query: ({ tenantId, ...body }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/memberships`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/memberships`,
         method: "POST",
         body,
       }),
@@ -138,7 +138,7 @@ export const membershipApi = baseApi.injectEndpoints({
       }
     >({
       query: ({ tenantId, userId, ...body }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
         method: "PATCH",
         body,
       }),
@@ -152,7 +152,7 @@ export const membershipApi = baseApi.injectEndpoints({
       { tenantId: string; userId: string }
     >({
       query: ({ tenantId, userId }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
         method: "DELETE",
       }),
       invalidatesTags: (_, __, arg) => [
@@ -176,7 +176,7 @@ export const membershipApi = baseApi.injectEndpoints({
         if (plan_tier) params.set("plan_tier", plan_tier);
         if (q) params.set("q", q);
         const qs = params.toString() ? `?${params.toString()}` : "";
-        return { url: `/uflow/v2/tenants/${tenantId}/end-users${qs}` };
+        return { url: `authsec/uflow/v2/tenants/${tenantId}/end-users${qs}` };
       },
       providesTags: (_, __, arg) => [
         { type: "TenantEndUserState", id: arg.tenantId },
@@ -188,7 +188,7 @@ export const membershipApi = baseApi.injectEndpoints({
       { tenantId: string; userId: string }
     >({
       query: ({ tenantId, userId }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
       }),
       providesTags: (_, __, arg) => [
         { type: "TenantEndUserState", id: `${arg.tenantId}:${arg.userId}` },
@@ -206,7 +206,7 @@ export const membershipApi = baseApi.injectEndpoints({
       }
     >({
       query: ({ tenantId, userId, ...body }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
         method: "PATCH",
         body,
       }),
@@ -221,7 +221,7 @@ export const membershipApi = baseApi.injectEndpoints({
       { tenantId: string; userId: string; reason?: string }
     >({
       query: ({ tenantId, userId, reason }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/end-users/${userId}/suspend`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}/suspend`,
         method: "POST",
         body: { reason: reason ?? "" },
       }),
@@ -235,7 +235,7 @@ export const membershipApi = baseApi.injectEndpoints({
       { tenantId: string; userId: string }
     >({
       query: ({ tenantId, userId }) => ({
-        url: `/uflow/v2/tenants/${tenantId}/end-users/${userId}/reactivate`,
+        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}/reactivate`,
         method: "POST",
       }),
       invalidatesTags: (_, __, arg) => [
@@ -257,7 +257,7 @@ export const membershipApi = baseApi.injectEndpoints({
       }
     >({
       query: ({ groupId, ...body }) => ({
-        url: `/uflow/v2/groups/${groupId}/role-bindings`,
+        url: `authsec/uflow/v2/groups/${groupId}/role-bindings`,
         method: "POST",
         body,
       }),
@@ -270,7 +270,7 @@ export const membershipApi = baseApi.injectEndpoints({
       { userId: string }
     >({
       query: ({ userId }) => ({
-        url: `/uflow/v2/users/${userId}/effective-access`,
+        url: `authsec/uflow/v2/users/${userId}/effective-access`,
       }),
     }),
   }),
