@@ -29,6 +29,19 @@ export const INTEGRATION_LANGUAGE_LABELS: Record<IntegrationLanguage, string> = 
   python: "Python",
 };
 
+export type EnvShell = "dotenv" | "bash" | "pwsh" | "cmd";
+
+export const ENV_SHELL_LABELS: Record<EnvShell, string> = {
+  dotenv: ".env file",
+  bash: "macOS / Linux (bash · zsh)",
+  pwsh: "Windows · PowerShell",
+  cmd: "Windows · CMD",
+};
+
+const ENV_SECRET_PLACEHOLDER = "<paste the one-time introspection secret>";
+const ENV_UPSTREAM_PLACEHOLDER =
+  "<your upstream service credential, e.g. GitHub PAT>";
+
 export const DEFAULT_FORM: ResourceServerFormState = {
   name: "",
   public_base_url: "",
@@ -338,6 +351,108 @@ export function buildSDKContent(
       },
     ],
   };
+}
+
+/**
+ * Canonical AuthSec env-var block as an array of [key, value, comment?] tuples.
+ * The shell only decides serialization — values come from here.
+ */
+export function getEnvPairs(
+  server: Pick<ResourceServer, "id" | "resource_uri" | "name">,
+  secret: string | null,
+): Array<{ key: string; value: string; comment?: string }> {
+  const isGitHub = server.name.toLowerCase().includes("github");
+  const secretValue = secret ?? ENV_SECRET_PLACEHOLDER;
+  const upstreamKey = isGitHub ? "AUTHSEC_UPSTREAM_GITHUB_TOKEN" : "UPSTREAM_API_TOKEN";
+  return [
+    { key: "AUTHSEC_RESOURCE_SERVER_ID", value: server.id },
+    { key: "AUTHSEC_RESOURCE_URI", value: server.resource_uri },
+    { key: "AUTHSEC_RESOURCE_NAME", value: server.name },
+    { key: "AUTHSEC_ISSUER", value: computeOAuthIssuerURL() },
+    { key: "AUTHSEC_AUTHORIZATION_SERVER", value: computeAuthSecAPIOrigin() },
+    { key: "AUTHSEC_JWKS_URL", value: computeJwksURL() },
+    { key: "AUTHSEC_INTROSPECTION_URL", value: computeIntrospectionURL() },
+    { key: "AUTHSEC_INTROSPECTION_CLIENT_ID", value: server.id },
+    { key: "AUTHSEC_INTROSPECTION_CLIENT_SECRET", value: secretValue },
+    { key: "AUTHSEC_INTROSPECTION_SECRET", value: secretValue },
+    { key: "AUTHSEC_POLICY_MODE", value: "remote_required" },
+    { key: "AUTHSEC_PUBLISH_MANIFEST", value: "true" },
+    {
+      key: upstreamKey,
+      value: ENV_UPSTREAM_PLACEHOLDER,
+      comment:
+        "Upstream service credential — DO NOT confuse with the AuthSec user token. AuthSec validates the user; the upstream credential stays server-side and authenticates this MCP to its provider.",
+    },
+  ];
+}
+
+const ENV_HEADER_BY_SHELL: Record<EnvShell, string> = {
+  dotenv: "# AuthSec — protected resource configuration",
+  bash: "# AuthSec — paste into your bash / zsh shell",
+  pwsh: "# AuthSec — paste into Windows PowerShell",
+  cmd: "REM AuthSec — paste into Windows Command Prompt",
+};
+
+function escapePwshValue(value: string): string {
+  return value.replace(/`/g, "``").replace(/"/g, '`"');
+}
+
+function serializeEnvPair(
+  shell: EnvShell,
+  key: string,
+  value: string,
+): string {
+  switch (shell) {
+    case "dotenv":
+      return `${key}=${value}`;
+    case "bash":
+      return /[\s"'$`\\]/.test(value)
+        ? `export ${key}='${value.replace(/'/g, "'\\''")}'`
+        : `export ${key}=${value}`;
+    case "pwsh":
+      return `$Env:${key} = "${escapePwshValue(value)}"`;
+    case "cmd":
+      return `set ${key}=${value}`;
+  }
+}
+
+function serializeComment(shell: EnvShell, comment: string): string {
+  const lines = comment.match(/.{1,72}(\s|$)/g)?.map((l) => l.trim()) ?? [comment];
+  const prefix = shell === "cmd" ? "REM " : "# ";
+  return lines.map((line) => `${prefix}${line}`).join("\n");
+}
+
+/**
+ * Serialize the canonical env pairs into the chosen shell flavor.
+ */
+export function buildEnvSnippet(
+  server: Pick<ResourceServer, "id" | "resource_uri" | "name">,
+  secret: string | null,
+  shell: EnvShell,
+): string {
+  const pairs = getEnvPairs(server, secret);
+  const lines: string[] = [ENV_HEADER_BY_SHELL[shell]];
+  let upstreamCommentEmitted = false;
+  for (const pair of pairs) {
+    if (pair.comment && !upstreamCommentEmitted) {
+      lines.push("");
+      lines.push(serializeComment(shell, pair.comment));
+      upstreamCommentEmitted = true;
+    }
+    lines.push(serializeEnvPair(shell, pair.key, pair.value));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Best-effort default shell guess from the user's platform — used only as the
+ * initial value of the URL-param-backed selector. The user can override.
+ */
+export function getOSDefaultShell(): EnvShell {
+  if (typeof navigator === "undefined") return "bash";
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes("win")) return "pwsh";
+  return "bash";
 }
 
 export function buildIntegrationPrompt(

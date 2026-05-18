@@ -23,7 +23,7 @@ import {
   type IntegrationLanguage,
 } from "./resource-server-utils";
 
-const LANGUAGES: IntegrationLanguage[] = ["go"];
+const LANGUAGES: IntegrationLanguage[] = ["go", "python", "typescript"];
 
 export function ResourceServerSDKPage() {
   const navigate = useNavigate();
@@ -166,9 +166,9 @@ curl -i -X POST ${derivedValues?.mcpEndpointURL} \\
                   ))}
                     </TabsList>
                     <p className="pt-3 text-xs italic text-muted-foreground">
-                      Go is the canonical resource-server protection path today.
-                      TypeScript and Python snippets stay out of this guide until
-                      their resource-server OAuth helpers match this contract.
+                      Pick the language your MCP server uses. All three SDKs
+                      converge on the same AuthSec config; snippets adapt
+                      automatically.
                     </p>
 
                 {LANGUAGES.map((item) => (

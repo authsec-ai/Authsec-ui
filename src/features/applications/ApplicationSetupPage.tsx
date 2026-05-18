@@ -1,23 +1,20 @@
 /**
- * `ApplicationSetupPage` — install protection (deployment task), fully wired.
+ * `ApplicationSetupPage` — Protect endpoint, a four-step wizard.
  *
- * Backend sources of truth:
- *   • `useGetSDKManifestStatusQuery` → has the SDK actually started
- *      publishing yet?
- *   • `useRotateResourceServerSecretMutation` → re-issue the introspection
- *      secret if the original was lost.
- *   • `useValidateResourceServerMutation` → run a real protection check.
+ * Steps:
+ *   1. Pick your stack (language + shell — drives every snippet below)
+ *   2. Wire the AuthSec SDK (coding-agent prompt OR manual snippet)
+ *   3. Configure environment (.env or OS-aware shell exports, with secret)
+ *   4. Verify protection (bearer challenge + manifest)
  *
- * The previous version handed admins a tiny env block missing every
- * field the Go SDK actually needs. The new env block is built from
- * `resource-server-utils` (the same helpers that power the existing
- * SDK page) so it matches the real `authsecsdk.Config` struct, plus a
- * dedicated slot for the upstream service credential (e.g. GitHub PAT)
- * that admins frequently forget is separate from the AuthSec token.
+ * The lang + shell selections persist in the URL (?lang=&os=) so the page is
+ * shareable and survives reload. All snippet generation goes through
+ * `resource-server-utils` so the SDK guide page and the docs share a single
+ * source of truth.
  */
 
-import { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,11 +23,13 @@ import {
   EyeOff,
   Loader2,
   RefreshCcw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   useRotateResourceServerSecretMutation,
@@ -39,20 +38,28 @@ import {
 import { useGetSDKManifestStatusQuery } from "@/app/api/setupWizardApi";
 
 import { useApplicationContext } from "./useApplicationContext";
+import { SetupStep, type SetupStepState } from "./components/SetupStep";
 import {
+  buildEnvSnippet,
   buildIntegrationPrompt,
-  computeAuthSecAPIOrigin,
-  computeIntrospectionURL,
-  computeJwksURL,
-  computeOAuthIssuerURL,
-  getDeclaredScopes,
+  buildSDKContent,
+  ENV_SHELL_LABELS,
+  getOSDefaultShell,
+  INTEGRATION_LANGUAGE_LABELS,
+  type EnvShell,
+  type IntegrationLanguage,
 } from "../resource-servers/resource-server-utils";
-import {
-  DecisionBanner,
-} from "./components/ApplicationConsole";
 
-const SECRET_PLACEHOLDER = "<paste the one-time introspection secret>";
-const UPSTREAM_PLACEHOLDER = "<your upstream service credential, e.g. GitHub PAT>";
+const LANG_VALUES: readonly IntegrationLanguage[] = ["go", "python", "typescript"];
+const SHELL_VALUES: readonly EnvShell[] = ["dotenv", "bash", "pwsh", "cmd"];
+
+function isLang(value: string | null): value is IntegrationLanguage {
+  return value !== null && (LANG_VALUES as readonly string[]).includes(value);
+}
+
+function isShell(value: string | null): value is EnvShell {
+  return value !== null && (SHELL_VALUES as readonly string[]).includes(value);
+}
 
 export default function ApplicationSetupPage() {
   const { application } = useApplicationContext();
@@ -60,6 +67,33 @@ export default function ApplicationSetupPage() {
   const createSecret =
     (location.state as { introspectionSecret?: string } | null)?.introspectionSecret ??
     null;
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const langParam = searchParams.get("lang");
+  const osParam = searchParams.get("os");
+  const language: IntegrationLanguage = isLang(langParam) ? langParam : "go";
+  const shell: EnvShell = isShell(osParam) ? osParam : getOSDefaultShell();
+
+  const setLanguage = (next: IntegrationLanguage) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("lang", next);
+    setSearchParams(params, { replace: true });
+  };
+  const setShell = (next: EnvShell) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("os", next);
+    setSearchParams(params, { replace: true });
+  };
+
+  // Pin defaults into the URL on first mount so the URL is always shareable.
+  useEffect(() => {
+    if (langParam && osParam) return;
+    const params = new URLSearchParams(searchParams);
+    if (!langParam) params.set("lang", language);
+    if (!osParam) params.set("os", shell);
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: manifest, isLoading: manifestLoading } =
     useGetSDKManifestStatusQuery(application.id);
@@ -70,14 +104,21 @@ export default function ApplicationSetupPage() {
 
   const [secretValue, setSecretValue] = useState<string | null>(createSecret);
   const [secretVisible, setSecretVisible] = useState(Boolean(createSecret));
-  const [secretAcknowledged, setSecretAcknowledged] = useState(false);
-  const [visibleCode, setVisibleCode] = useState<"env" | "go">("env");
+  const [installMode, setInstallMode] = useState<"agent" | "manual">("agent");
+  const [validationFresh, setValidationFresh] = useState(false);
 
-  const envBlock = useMemo(
-    () => buildEnvBlock(application, secretValue),
-    [application, secretValue],
+  const prompt = useMemo(
+    () => buildIntegrationPrompt(language, application),
+    [language, application],
   );
-  const goConfig = useMemo(() => buildGoConfig(application), [application]);
+  const sdkContent = useMemo(
+    () => buildSDKContent(language, application),
+    [language, application],
+  );
+  const envSnippet = useMemo(
+    () => buildEnvSnippet(application, secretValue, shell),
+    [application, secretValue, shell],
+  );
 
   const handleCopy = async (value: string, label: string) => {
     try {
@@ -89,14 +130,19 @@ export default function ApplicationSetupPage() {
   };
 
   const handleRotate = async () => {
-    if (!window.confirm(
-      "Rotate the introspection secret? Existing deployments will need to be updated with the new value.",
-    )) return;
+    if (
+      !window.confirm(
+        "Rotate the introspection secret? Existing deployments will need to be updated with the new value.",
+      )
+    )
+      return;
     try {
       const response = await rotateSecret(application.id).unwrap();
       setSecretValue(response.introspection_secret);
       setSecretVisible(true);
-      toast.success("Secret rotated. Copy the new value now — AuthSec won't show it again.");
+      toast.success(
+        "Secret rotated. Copy the new value now — AuthSec won't show it again.",
+      );
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't rotate secret.");
@@ -104,8 +150,10 @@ export default function ApplicationSetupPage() {
   };
 
   const handleValidate = async () => {
+    setValidationFresh(false);
     try {
       const result = await validate(application.id).unwrap();
+      setValidationFresh(true);
       if (result.status === "passed") {
         toast.success("Protection check passed.");
       } else {
@@ -117,6 +165,11 @@ export default function ApplicationSetupPage() {
     }
   };
 
+  const manifestPassed = Boolean(manifest?.last_success);
+  const protectionPassed = application.last_validation_status === "passed";
+  const step4State: SetupStepState =
+    manifestPassed && protectionPassed ? "done" : "active";
+
   return (
     <div className="space-y-5">
       <header className="space-y-1">
@@ -124,430 +177,237 @@ export default function ApplicationSetupPage() {
           Protect endpoint
         </h2>
         <p className="text-sm text-slate-600">
-          Install AuthSec enforcement, publish the MCP tool manifest, and
+          Wire the AuthSec SDK, configure the environment for your shell, and
           verify that unauthenticated calls fail closed.
         </p>
       </header>
 
-      <DecisionBanner
-        tone={manifest?.last_success ? "success" : "warning"}
-        title={manifest?.last_success ? "SDK manifest received" : "Protection not verified"}
-        body={
-          manifest?.last_success
-            ? `AuthSec last received ${manifest.last_success.tool_count ?? "the"} tools from the SDK manifest.`
-            : "Unauthenticated calls should return a Bearer challenge and the SDK must publish a tool manifest before launch."
-        }
-        actionLabel={validating ? "Checking..." : "Run protection check"}
-        onAction={handleValidate}
-      />
-
-      <SecretBanner
-        secret={secretValue}
-        visible={secretVisible}
-        acknowledged={secretAcknowledged}
-        onToggleVisible={() => setSecretVisible((current) => !current)}
-        onCopy={() =>
-          handleCopy(
-            secretValue ?? SECRET_PLACEHOLDER,
-            "Introspection secret",
-          )
-        }
-        onAcknowledge={() => setSecretAcknowledged(true)}
-        onRotate={handleRotate}
-        rotating={rotating}
-      />
-
-      <ManifestBanner
-        loading={manifestLoading}
-        lastSuccess={manifest?.last_success}
-        lastAttempt={manifest?.last_attempt}
-        neverSeen={manifest?.never_seen ?? false}
-      />
-
-      <section>
-        <h3 className="text-base font-semibold text-slate-950">
-          Choose install path
-        </h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Coding-agent is primary; manual SDK and environment values are
-          supporting paths for production deploys.
+      {/* ── Step 1: Pick your stack ─────────────────────────────────── */}
+      <SetupStep number={1} title="Pick your stack" state="active">
+        <p className="text-sm text-muted-foreground">
+          Choose the language and OS shell. Every snippet below adapts
+          automatically — and the URL keeps your selection, so this page is
+          shareable.
         </p>
-        <div className="mt-3 grid gap-3 lg:grid-cols-3">
-          <InstallCard
-            tag="FASTEST"
-            title="Use coding agent"
-            description="Generate a complete Go integration prompt with real values. Paste into Claude or Cursor and the agent wraps your existing handler."
-            primary="Copy coding-agent prompt"
-            onPrimary={() =>
-              handleCopy(
-                buildIntegrationPrompt("go", application),
-                "Coding-agent prompt",
-              )
-            }
-            secondary="Show Go config"
-            onSecondary={() => setVisibleCode("go")}
-            highlight
-          />
-          <InstallCard
-            tag="MANUAL"
-            title="Install SDK manually"
-            description="Use the Go resource-server guide. Wrap your existing MCP HTTP handler with authsecsdk.MountMCP."
-            primary="Show Go config"
-            onPrimary={() => setVisibleCode("go")}
-          />
-          <InstallCard
-            tag="DEPLOY"
-            title="Environment variables"
-            description="Copy the .env block (real fields, real values) for your secret manager."
-            primary="Copy env block"
-            onPrimary={() => handleCopy(envBlock, "Env block")}
-          />
-        </div>
-      </section>
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-950">
-            Deployment values
-          </h3>
-          <div className="inline-flex rounded-md border border-slate-200 bg-white p-1">
-            {[
-              ["env", ".env"],
-              ["go", "Go wrapper"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setVisibleCode(key as "env" | "go")}
-                className={cn(
-                  "h-7 rounded px-3 text-xs font-semibold",
-                  visibleCode === key
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-50",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Language
+          </span>
+          <Tabs
+            value={language}
+            onValueChange={(v) => setLanguage(v as IntegrationLanguage)}
+          >
+            <TabsList>
+              {LANG_VALUES.map((l) => (
+                <TabsTrigger key={l} value={l}>
+                  {INTEGRATION_LANGUAGE_LABELS[l]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Shell
+          </span>
+          <Tabs value={shell} onValueChange={(v) => setShell(v as EnvShell)}>
+            <TabsList>
+              {SHELL_VALUES.map((s) => (
+                <TabsTrigger key={s} value={s}>
+                  {ENV_SHELL_LABELS[s]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
-        <CodeBlock
-          title={visibleCode === "env" ? ".env" : "Go SDK wrapper"}
-          subtitle={
-            visibleCode === "env"
-              ? "Map these into your deployment's secret manager."
-              : "MountMCP wraps the existing handler, validates tokens, and publishes the manifest."
-          }
-          value={visibleCode === "env" ? envBlock : goConfig}
+      </SetupStep>
+
+      {/* ── Step 2: Wire the SDK ────────────────────────────────────── */}
+      <SetupStep number={2} title="Wire the AuthSec SDK" state="active">
+        <Tabs
+          value={installMode}
+          onValueChange={(v) => setInstallMode(v as "agent" | "manual")}
+        >
+          <TabsList>
+            <TabsTrigger value="agent">
+              <Sparkles className="mr-1.5 size-3.5" />
+              Coding agent · fastest
+            </TabsTrigger>
+            <TabsTrigger value="manual">Manual install</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {installMode === "agent" ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Paste this prompt into Claude Code or Cursor. The agent reads
+              your repo and wires the {INTEGRATION_LANGUAGE_LABELS[language]}{" "}
+              SDK with real values from this resource server.
+            </p>
+            <CodeBlock
+              title={`Coding-agent prompt · ${INTEGRATION_LANGUAGE_LABELS[language]}`}
+              subtitle="One prompt, every value pre-filled."
+              value={prompt}
+              onCopy={() => handleCopy(prompt, "Coding-agent prompt")}
+              compact
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Install the SDK and wrap your existing MCP handler. Same env
+              vars as Step 3 below.
+            </p>
+            {sdkContent.snippets.map((snippet) => (
+              <CodeBlock
+                key={snippet.title}
+                title={snippet.title}
+                subtitle=""
+                value={snippet.code}
+                onCopy={() => handleCopy(snippet.code, snippet.title)}
+                compact
+              />
+            ))}
+          </>
+        )}
+      </SetupStep>
+
+      {/* ── Step 3: Configure environment ───────────────────────────── */}
+      <SetupStep number={3} title="Configure environment" state="active">
+        <SecretStrip
+          secret={secretValue}
+          visible={secretVisible}
+          onToggleVisible={() => setSecretVisible((v) => !v)}
           onCopy={() =>
             handleCopy(
-              visibleCode === "env" ? envBlock : goConfig,
-              visibleCode === "env" ? ".env block" : "Go SDK config",
+              secretValue ?? "",
+              "Introspection secret",
             )
           }
+          onRotate={handleRotate}
+          rotating={rotating}
         />
-      </section>
+        <CodeBlock
+          title={ENV_SHELL_LABELS[shell]}
+          subtitle="Map these into your deployment's secret manager — or paste straight into your shell."
+          value={envSnippet}
+          onCopy={() =>
+            handleCopy(envSnippet, `${ENV_SHELL_LABELS[shell]} block`)
+          }
+        />
+      </SetupStep>
 
-      <ExpectedResult
-        validating={validating}
-        onValidate={handleValidate}
-      />
-
-      <p className="text-[11px] italic text-muted-foreground">
-        Already deployed?{" "}
-        <Link
-          to={`/applications/${application.id}/launch`}
-          className="font-semibold text-[var(--color-primary)] hover:underline"
-        >
-          Open Launch
-        </Link>{" "}
-        to see the real setup checklist.
-      </p>
+      {/* ── Step 4: Verify protection ───────────────────────────────── */}
+      <SetupStep
+        number={4}
+        title="Verify protection"
+        state={step4State}
+        summary={
+          step4State === "done"
+            ? `Protection check passed and AuthSec has the SDK manifest. Launch is unlocked.`
+            : undefined
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Unauthenticated calls should return a Bearer challenge. Once your
+          SDK publishes a manifest, both checks turn green and{" "}
+          <strong>Launch application</strong> unlocks.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CheckTile
+            ok={protectionPassed && validationFresh}
+            warn={!protectionPassed}
+            title="Bearer challenge"
+            body="GET /mcp without a token must return 401 with a WWW-Authenticate challenge pointing at AuthSec."
+          />
+          <CheckTile
+            ok={manifestPassed}
+            warn={!manifestPassed}
+            loading={manifestLoading}
+            title="SDK manifest published"
+            body={
+              manifest?.last_success
+                ? `Received ${manifest.last_success.tool_count ?? "?"} tools${
+                    manifest.last_success.manifest_version
+                      ? ` · v${manifest.last_success.manifest_version}`
+                      : ""
+                  }.`
+                : "AuthSec hasn't received any manifest yet. Deploy the SDK and trigger one tools/list call."
+            }
+          />
+        </div>
+        <Button onClick={handleValidate} disabled={validating}>
+          {validating ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <CheckCircle2 className="mr-2 size-4" />
+          )}
+          {validating ? "Running…" : "Run protection check"}
+        </Button>
+      </SetupStep>
     </div>
   );
 }
 
-// ── Builders ──────────────────────────────────────────────────────────────
-
-function buildEnvBlock(server: {
-  id: string;
-  resource_uri: string;
-  name: string;
-}, secretValue: string | null): string {
-  const issuer = computeOAuthIssuerURL();
-  const apiOrigin = computeAuthSecAPIOrigin();
-  const jwks = computeJwksURL();
-  const introspect = computeIntrospectionURL();
-  const isGitHub = server.name.toLowerCase().includes("github");
-  return [
-    `# AuthSec — protected resource configuration`,
-    `AUTHSEC_RESOURCE_SERVER_ID=${server.id}`,
-    `AUTHSEC_RESOURCE_URI=${server.resource_uri}`,
-    `AUTHSEC_RESOURCE_NAME=${server.name}`,
-    `AUTHSEC_ISSUER=${issuer}`,
-    `AUTHSEC_AUTHORIZATION_SERVER=${apiOrigin}`,
-    `AUTHSEC_JWKS_URL=${jwks}`,
-    `AUTHSEC_INTROSPECTION_URL=${introspect}`,
-    `AUTHSEC_INTROSPECTION_CLIENT_ID=${server.id}`,
-    `AUTHSEC_INTROSPECTION_CLIENT_SECRET=${secretValue ?? SECRET_PLACEHOLDER}`,
-    `AUTHSEC_INTROSPECTION_SECRET=${secretValue ?? SECRET_PLACEHOLDER}`,
-    `AUTHSEC_POLICY_MODE=remote_required`,
-    `AUTHSEC_PUBLISH_MANIFEST=true`,
-    ``,
-    `# Upstream service credential — DO NOT confuse with the AuthSec`,
-    `# user token. AuthSec validates the user; the upstream credential`,
-    `# stays server-side and authenticates this MCP to its provider.`,
-    isGitHub
-      ? `AUTHSEC_UPSTREAM_GITHUB_TOKEN=${UPSTREAM_PLACEHOLDER}`
-      : `UPSTREAM_API_TOKEN=${UPSTREAM_PLACEHOLDER}`,
-  ].join("\n");
-}
-
-function buildGoConfig(server: {
-  id: string;
-  resource_uri: string;
-  name: string;
-  scopes_supported: string[];
-}): string {
-  const scopes = getDeclaredScopes(server);
-  const issuer = computeOAuthIssuerURL();
-  const apiOrigin = computeAuthSecAPIOrigin();
-  const jwks = computeJwksURL();
-  const introspect = computeIntrospectionURL();
-  return [
-    `cfg := authsecsdk.Config{`,
-    `    Issuer:                    "${issuer}",`,
-    `    AuthorizationServer:       "${apiOrigin}",`,
-    `    JWKSURL:                   "${jwks}",`,
-    `    IntrospectionURL:          "${introspect}",`,
-    `    IntrospectionClientID:     "${server.id}",`,
-    `    IntrospectionClientSecret: os.Getenv("AUTHSEC_INTROSPECTION_CLIENT_SECRET"),`,
-    `    ResourceServerID:          "${server.id}",`,
-    `    ResourceURI:               "${server.resource_uri}",`,
-    `    ResourceName:              "${server.name}",`,
-    `    SupportedScopes:           []string{${scopes.map((s) => `"${s}"`).join(", ")}},`,
-    `    PolicyMode:                authsecsdk.PolicyModeRemoteRequired,`,
-    `    ValidationMode:            authsecsdk.ValidationModeJWTAndIntrospect,`,
-    `    PublishManifest:           true,`,
-    `}`,
-    ``,
-    `mux := http.NewServeMux()`,
-    `if err := authsecsdk.MountMCP(mux, "${server.resource_uri.replace(/^https?:\/\/[^/]+/, "")}", existingMCPHandler, cfg); err != nil {`,
-    `    log.Fatal(err)`,
-    `}`,
-  ].join("\n");
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────
 
-function SecretBanner({
+function SecretStrip({
   secret,
   visible,
-  acknowledged,
   onToggleVisible,
   onCopy,
-  onAcknowledge,
   onRotate,
   rotating,
 }: {
   secret: string | null;
   visible: boolean;
-  acknowledged: boolean;
   onToggleVisible: () => void;
   onCopy: () => void;
-  onAcknowledge: () => void;
   onRotate: () => void;
   rotating: boolean;
 }) {
-  if (!secret || acknowledged) {
-    return (
-      <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Introspection secret
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {secret
-              ? "Secret copied and collapsed. Rotate if this deployment needs a new value."
-              : "AuthSec only shows the secret at creation time or immediately after rotation."}
-          </p>
-        </div>
-        <Button size="sm" variant="outline" onClick={onRotate} disabled={rotating}>
-          {rotating ? (
-            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-          ) : (
-            <RefreshCcw className="mr-1.5 size-3.5" />
-          )}
-          Rotate secret
-        </Button>
-      </Card>
-    );
-  }
-
   return (
     <Card
       className={cn(
-        "flex flex-col gap-3 border-l-4 p-3",
-        "border-l-[var(--color-warning)] bg-[color:color-mix(in_oklch,var(--color-warning)_8%,transparent)]",
+        "flex flex-wrap items-center gap-2 border-l-4 p-3",
+        secret
+          ? "border-l-[var(--color-warning)] bg-[color:color-mix(in_oklch,var(--color-warning)_6%,transparent)]"
+          : "border-l-slate-300 bg-slate-50",
       )}
     >
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0 flex-1">
         <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-warning)]">
           One-time introspection secret
         </p>
-        <code className="flex-1 truncate rounded-sm bg-foreground/[0.06] px-3 py-1.5 font-mono text-xs text-foreground">
-          {secret && visible ? secret : "•".repeat(36)}
+        <code className="mt-1 block truncate rounded-sm bg-foreground/[0.06] px-2 py-1 font-mono text-xs text-foreground">
+          {secret ? (visible ? secret : "•".repeat(40)) : "Rotate to generate a new value."}
         </code>
-        <Button size="sm" variant="outline" onClick={onCopy} disabled={!secret}>
-          <Copy className="mr-1.5 size-3.5" />
-          Copy
-        </Button>
-        <Button size="sm" variant="outline" onClick={onToggleVisible} disabled={!secret}>
-          {visible ? (
-            <EyeOff className="mr-1.5 size-3.5" />
-          ) : (
-            <Eye className="mr-1.5 size-3.5" />
-          )}
-          {visible ? "Hide" : "Show"}
-        </Button>
-        <Button size="sm" variant="outline" onClick={onRotate} disabled={rotating}>
-          {rotating ? (
-            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-          ) : (
-            <RefreshCcw className="mr-1.5 size-3.5" />
-          )}
-          Rotate
-        </Button>
-        <Button size="sm" onClick={onAcknowledge}>
-          I copied this
-        </Button>
       </div>
-      <p className="text-[11px] italic text-muted-foreground">
-        AuthSec only displays this value at creation time and immediately
-        after rotation. If you've lost it, rotate to get a new one; every
-        existing deployment will need updating.
-      </p>
-    </Card>
-  );
-}
-
-function ManifestBanner({
-  loading,
-  lastSuccess,
-  lastAttempt,
-  neverSeen,
-}: {
-  loading: boolean;
-  lastSuccess?: { attempted_at: string; tool_count?: number; manifest_version?: string } | null;
-  lastAttempt?: { attempted_at: string; status: string; reason?: string } | null;
-  neverSeen: boolean;
-}) {
-  if (loading) {
-    return (
-      <Card className="p-3 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 inline size-4 animate-spin" />
-        Checking SDK manifest status…
-      </Card>
-    );
-  }
-  if (neverSeen) {
-    return (
-      <Card className="border-l-4 border-l-[var(--color-warning)] bg-[color:color-mix(in_oklch,var(--color-warning)_6%,transparent)] p-3 text-sm">
-        <AlertTriangle className="mr-2 inline size-4 text-[var(--color-warning)]" />
-        AuthSec hasn't received any manifest from this application yet.
-        Deploy the SDK and trigger one tool call.
-      </Card>
-    );
-  }
-  if (lastSuccess) {
-    return (
-      <Card className="border-l-4 border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)] p-3 text-sm">
-        <CheckCircle2 className="mr-2 inline size-4 text-[var(--color-success)]" />
-        SDK manifest received{" "}
-        <span className="text-muted-foreground">
-          ({lastSuccess.tool_count ?? "?"} tools
-          {lastSuccess.manifest_version
-            ? ` · v${lastSuccess.manifest_version}`
-            : ""}{" "}
-          · {new Date(lastSuccess.attempted_at).toLocaleString()})
-        </span>
-      </Card>
-    );
-  }
-  if (lastAttempt) {
-    return (
-      <Card className="border-l-4 border-l-[var(--color-danger)] bg-[color:color-mix(in_oklch,var(--color-danger)_6%,transparent)] p-3 text-sm">
-        <AlertTriangle className="mr-2 inline size-4 text-[var(--color-danger)]" />
-        Last manifest attempt failed
-        {lastAttempt.reason ? `: ${lastAttempt.reason}` : ""}
-        <span className="ml-1 text-muted-foreground">
-          ({new Date(lastAttempt.attempted_at).toLocaleString()})
-        </span>
-      </Card>
-    );
-  }
-  return null;
-}
-
-function InstallCard({
-  tag,
-  title,
-  description,
-  primary,
-  onPrimary,
-  secondary,
-  onSecondary,
-  highlight,
-}: {
-  tag: string;
-  title: string;
-  description: string;
-  primary: string;
-  onPrimary: () => void;
-  secondary?: string;
-  onSecondary?: () => void;
-  highlight?: boolean;
-}) {
-  return (
-    <Card
-      className={cn(
-        "flex flex-col gap-3 p-5",
-        highlight &&
-          "border-[var(--color-primary)] bg-[color:color-mix(in_oklch,var(--color-primary)_5%,transparent)]",
-      )}
-    >
-      <span
-        className={cn(
-          "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-          highlight
-            ? "bg-[var(--color-primary)] text-white"
-            : "bg-muted text-muted-foreground",
-        )}
+      <Button size="sm" variant="outline" onClick={onCopy} disabled={!secret}>
+        <Copy className="mr-1.5 size-3.5" />
+        Copy
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onToggleVisible}
+        disabled={!secret}
       >
-        {tag}
-      </span>
-      <h4 className="text-base font-semibold tracking-tight text-foreground">
-        {title}
-      </h4>
-      <p className="text-sm text-muted-foreground">{description}</p>
-      <div className="mt-auto space-y-2 pt-2">
-        <Button
-          className="w-full justify-center"
-          variant={highlight ? "default" : "outline"}
-          onClick={onPrimary}
-        >
-          {primary} <span aria-hidden>→</span>
-        </Button>
-        {secondary && onSecondary && (
-          <button
-            type="button"
-            onClick={onSecondary}
-            className="block w-full text-center text-xs font-semibold text-[var(--color-primary)] hover:underline"
-          >
-            {secondary}
-          </button>
+        {visible ? (
+          <EyeOff className="mr-1.5 size-3.5" />
+        ) : (
+          <Eye className="mr-1.5 size-3.5" />
         )}
-      </div>
+        {visible ? "Hide" : "Show"}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onRotate} disabled={rotating}>
+        {rotating ? (
+          <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+        ) : (
+          <RefreshCcw className="mr-1.5 size-3.5" />
+        )}
+        Rotate
+      </Button>
     </Card>
   );
 }
@@ -557,22 +417,24 @@ function CodeBlock({
   subtitle,
   value,
   onCopy,
+  compact,
 }: {
   title: string;
-  subtitle: React.ReactNode;
+  subtitle: string;
   value: string;
   onCopy: () => void;
+  compact?: boolean;
 }) {
   return (
     <Card className="overflow-hidden border-slate-800 bg-slate-950 p-0">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-        <div>
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-2.5">
+        <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-300">
             {title}
           </p>
-          <p className="mt-0.5 text-[11px] text-slate-400">
-            {subtitle}
-          </p>
+          {subtitle ? (
+            <p className="mt-0.5 truncate text-[11px] text-slate-400">{subtitle}</p>
+          ) : null}
         </div>
         <Button
           size="sm"
@@ -584,67 +446,61 @@ function CodeBlock({
           Copy
         </Button>
       </div>
-      <pre className="max-h-[28rem] overflow-auto p-4 font-mono text-[12px] leading-6 text-slate-100">
+      <pre
+        className={cn(
+          "overflow-auto p-4 font-mono text-[12px] leading-6 text-slate-100",
+          compact ? "max-h-[18rem]" : "max-h-[22rem]",
+        )}
+      >
         {value}
       </pre>
     </Card>
   );
 }
 
-const EXPECTED_CHECKS = [
-  "Unauthenticated request returns 401 with Bearer challenge.",
-  "Bearer challenge includes resource_metadata.",
-  "SDK manifest publishes tools (≥ 1).",
-  "Remote policy mode required — open mode never allowed.",
-];
-
-function ExpectedResult({
-  validating,
-  onValidate,
+function CheckTile({
+  ok,
+  warn,
+  loading,
+  title,
+  body,
 }: {
-  validating: boolean;
-  onValidate: () => void;
+  ok?: boolean;
+  warn?: boolean;
+  loading?: boolean;
+  title: string;
+  body: string;
 }) {
+  const tone = ok ? "ok" : warn ? "warn" : "neutral";
   return (
     <Card
       className={cn(
-        "grid gap-4 border-l-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center",
-        "border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)]",
+        "flex flex-col gap-2 p-4",
+        tone === "ok" && "border-emerald-300 bg-emerald-50",
+        tone === "warn" && "border-amber-300 bg-amber-50",
       )}
     >
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-success)]">
-          Expected result after you deploy
-        </p>
-        <ul className="space-y-1.5">
-          {EXPECTED_CHECKS.map((check) => (
-            <li
-              key={check}
-              className="flex items-start gap-2 text-sm text-foreground"
-            >
-              <CheckCircle2
-                aria-hidden
-                className="mt-0.5 size-4 shrink-0 text-[var(--color-success)]"
-              />
-              <span>{check}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="flex flex-col items-stretch gap-1 sm:items-end">
-        <Button onClick={onValidate} disabled={validating}>
-          {validating ? (
-            <Loader2 className="mr-2 size-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="mr-2 size-4" />
-          )}
-          {validating ? "Running…" : "Run protection check"}
-        </Button>
-        <p className="text-[11px] italic text-muted-foreground sm:text-right">
-          Calls{" "}
-          <code className="font-mono">POST /resource-servers/:id/validate</code>
-        </p>
-      </div>
+      <span
+        className={cn(
+          "inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+          tone === "ok"
+            ? "bg-emerald-600 text-white"
+            : tone === "warn"
+              ? "bg-amber-100 text-amber-800"
+              : "bg-slate-200 text-slate-700",
+        )}
+      >
+        {loading ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : tone === "ok" ? (
+          <CheckCircle2 className="size-3" />
+        ) : (
+          <AlertTriangle className="size-3" />
+        )}
+        {loading ? "Checking" : tone === "ok" ? "Passed" : "Pending"}
+      </span>
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <p className="text-xs text-muted-foreground">{body}</p>
     </Card>
   );
 }
