@@ -455,6 +455,51 @@ export function getOSDefaultShell(): EnvShell {
   return "bash";
 }
 
+/** Per-language SDK terminology so the prompt body matches the language tab. */
+type LanguagePromptProfile = {
+  installLine: string;
+  importGuidance: string;
+  /** Sentence used in step 1 ("Use the ... SDK's ... as the canonical integration path"). */
+  canonicalPathSentence: string;
+  /** Validation-checklist line describing the default setup primitive. */
+  validationDefaultPathLine: string;
+  /** Language-specific deep-link under docs.authsec.dev. */
+  sdkDocsURL: string;
+};
+
+const PROMPT_PROFILES: Record<IntegrationLanguage, LanguagePromptProfile> = {
+  go: {
+    installLine:
+      "Install the SDK with: go get github.com/authsec-ai/sdk-authsec/packages/go-sdk",
+    importGuidance: GO_IMPORT,
+    canonicalPathSentence:
+      "Use the Go SDK's `authsecsdk.MountMCP(mux, path, handler, cfg)` as the canonical integration path. Reach for `authsecsdk.WrapMCPHTTP` only when you must hand-wire an existing mux. Do not hand-wire protected-resource metadata when the SDK can mount it.",
+    validationDefaultPathLine:
+      "the server uses `MountMCP` as the default setup path; use `WrapMCPHTTP` only for advanced manual mux wiring",
+    sdkDocsURL: "https://docs.authsec.dev/sdk/go",
+  },
+  typescript: {
+    installLine: "Install the SDK with: npm install @authsec/sdk",
+    importGuidance:
+      'import { runMcpServerWithOAuth, protectedByAuthSec } from "@authsec/sdk";',
+    canonicalPathSentence:
+      "Use the TypeScript SDK's `runMcpServerWithOAuth({ tools, ... })` as the canonical bootstrap, and wrap each tool handler with `protectedByAuthSec({ toolName, scopes, ... }, handler)`. Do not hand-wire protected-resource metadata or bearer challenges — the SDK emits them.",
+    validationDefaultPathLine:
+      "the server uses `runMcpServerWithOAuth` to bootstrap and `protectedByAuthSec` to gate each tool; never short-circuit either with raw HTTP plumbing",
+    sdkDocsURL: "https://docs.authsec.dev/sdk/typescript",
+  },
+  python: {
+    installLine: "Install the SDK with: python3 -m pip install authsec-sdk",
+    importGuidance:
+      "from authsec_sdk import run_mcp_server_with_oauth, protected_by_authsec",
+    canonicalPathSentence:
+      "Use the Python SDK's `run_mcp_server_with_oauth(tools=..., ...)` as the canonical bootstrap, and wrap each tool handler with `protected_by_authsec({...}, handler)`. Do not hand-wire protected-resource metadata or bearer challenges — the SDK emits them.",
+    validationDefaultPathLine:
+      "the server uses `run_mcp_server_with_oauth` to bootstrap and `protected_by_authsec` to gate each tool; never short-circuit either with raw ASGI/WSGI plumbing",
+    sdkDocsURL: "https://docs.authsec.dev/sdk/python",
+  },
+};
+
 export function buildIntegrationPrompt(
   language: IntegrationLanguage,
   server: ResourceServer,
@@ -462,21 +507,13 @@ export function buildIntegrationPrompt(
   const metadataPath = computeMetadataPath(server.resource_uri);
   const metadataURL = computeMetadataURL(server.resource_uri);
   const mcpEndpointURL = computeMcpEndpointURL(server);
-  const installLine =
-    language === "go"
-      ? "Install the SDK with: go get github.com/authsec-ai/sdk-authsec/packages/go-sdk"
-      : language === "typescript"
-        ? "Install the SDK with: npm install @authsec/sdk"
-        : "Install the SDK with: python3 -m pip install authsec-sdk";
-
-  const importGuidance =
-    language === "go"
-      ? GO_IMPORT
-      : language === "typescript"
-        ? 'import { runMcpServerWithOAuth, protectedByAuthSec } from "@authsec/sdk";'
-        : "from authsec_sdk import run_mcp_server_with_oauth, protected_by_authsec";
+  const profile = PROMPT_PROFILES[language];
 
   return `You are integrating AuthSec into an MCP server in ${INTEGRATION_LANGUAGE_LABELS[language]}.
+
+Authoritative references (read these first, then implement):
+- Getting started: https://docs.authsec.dev/getting-started
+- ${INTEGRATION_LANGUAGE_LABELS[language]} SDK guide: ${profile.sdkDocsURL}
 
 Use these exact AuthSec and resource server values:
 - Resource server name: ${server.name}
@@ -509,13 +546,13 @@ MCP server responsibilities:
 - Map tools to scopes/policy rules
 - Never forward AuthSec user tokens to upstream systems such as GitHub
 
-${installLine}
+${profile.installLine}
 
 Use this import baseline:
-${importGuidance}
+${profile.importGuidance}
 
 Implement the integration in this order:
-1. Use the Go SDK's MountMCP path as the canonical integration path for Go servers. Do not hand-wire protected-resource metadata when the SDK can mount it.
+1. ${profile.canonicalPathSentence}
 2. Configure issuer, authorization server, JWKS URL, introspection URL, resource server ID, resource URI, resource name, and the one-time introspection secret from AuthSec.
 3. Preserve existing non-AuthSec server behavior unless AuthSec mode is explicitly enabled.
 4. Keep the upstream service credential separate from AuthSec tokens.
@@ -528,12 +565,14 @@ Validation checklist:
 - tools/list hides unauthorized tools
 - tools/call returns insufficient_scope for blocked tools
 - the server emits protected-resource metadata at ${metadataURL}
-- the server uses MountMCP as the default setup path; use WrapMCPHTTP only for advanced manual mux wiring
+- ${profile.validationDefaultPathLine}
 - tokens are validated against AuthSec
 - upstream provider calls still use server-side credentials only
 - the configured resource URI remains ${server.resource_uri}
 
 If the resource server is a GitHub MCP server, keep the GitHub PAT or installation token server-side. The AuthSec principal should only decide whether the tool is allowed; it should not replace the upstream GitHub credential.
+
+When in doubt, defer to ${profile.sdkDocsURL} and https://docs.authsec.dev/getting-started rather than improvising.
 
 Generate production-grade integration code, not pseudocode.`;
 }
