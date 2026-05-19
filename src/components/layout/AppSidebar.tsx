@@ -3,7 +3,7 @@
  *
  * Layout (Launch Control IA):
  *   Dashboard
- *   Protect : Applications, Clients, AI Agents
+ *   Protect : Applications, AI Agents
  *   Access  : Users, Roles, Permissions, Assignments, Consent Grants
  *   Configure : Identity Providers, Trust Delegation, Secrets, SDK Guides
  *   Monitor : Audit Logs
@@ -21,7 +21,6 @@ import {
   KeyRound,
   LayoutDashboard,
   Layers,
-  PlugZap,
   Search,
   ShieldPlus,
   UserCog,
@@ -77,7 +76,7 @@ const NAV_DASHBOARD: NavItem[] = [
 const NAV_OBJECTS: NavItem[] = [
   { title: "End Users", url: "/end-users", icon: Users },
   { title: "Applications", url: "/applications", icon: Layers },
-  { title: "Clients", url: "/clients", icon: PlugZap },
+  // { title: "Clients", url: "/clients", icon: PlugZap },
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 

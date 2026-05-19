@@ -43,7 +43,11 @@ export function computeReadiness(server: ResourceServer): Readiness {
         "Last validation succeeded.",
       );
     }
-    if (server.last_validation_status === "failed" || server.state === "scan_failed") {
+    if (
+      server.last_validation_status === "failed" ||
+      server.last_validation_status === "failing" ||
+      server.state === "scan_failed"
+    ) {
       return area(
         "err",
         "Failed",

@@ -49,7 +49,7 @@ export default function CreateApplicationPage() {
       const response = await createApplication(
         buildResourceServerPayload({
           ...form,
-          registration_modes: "cimd",
+          registration_modes: "dcr\ncimd",
         }),
       ).unwrap();
       toast.success("Application created. Now protect it.");

@@ -39,8 +39,10 @@ export const ENV_SHELL_LABELS: Record<EnvShell, string> = {
 };
 
 const ENV_SECRET_PLACEHOLDER = "<paste the one-time introspection secret>";
-const ENV_UPSTREAM_PLACEHOLDER =
-  "<your upstream service credential, e.g. GitHub PAT>";
+const ENV_UPSTREAM_PLACEHOLDER_GENERIC =
+  "<your upstream service credential, if this MCP calls an external API>";
+const ENV_UPSTREAM_PLACEHOLDER_GITHUB =
+  "<your GitHub PAT or installation token>";
 
 export const DEFAULT_FORM: ResourceServerFormState = {
   name: "",
@@ -363,7 +365,6 @@ export function getEnvPairs(
 ): Array<{ key: string; value: string; comment?: string }> {
   const isGitHub = server.name.toLowerCase().includes("github");
   const secretValue = secret ?? ENV_SECRET_PLACEHOLDER;
-  const upstreamKey = isGitHub ? "AUTHSEC_UPSTREAM_GITHUB_TOKEN" : "UPSTREAM_API_TOKEN";
   return [
     { key: "AUTHSEC_RESOURCE_SERVER_ID", value: server.id },
     { key: "AUTHSEC_RESOURCE_URI", value: server.resource_uri },
@@ -377,12 +378,19 @@ export function getEnvPairs(
     { key: "AUTHSEC_INTROSPECTION_SECRET", value: secretValue },
     { key: "AUTHSEC_POLICY_MODE", value: "remote_required" },
     { key: "AUTHSEC_PUBLISH_MANIFEST", value: "true" },
-    {
-      key: upstreamKey,
-      value: ENV_UPSTREAM_PLACEHOLDER,
-      comment:
-        "Upstream service credential — DO NOT confuse with the AuthSec user token. AuthSec validates the user; the upstream credential stays server-side and authenticates this MCP to its provider.",
-    },
+    isGitHub
+      ? {
+          key: "AUTHSEC_UPSTREAM_GITHUB_TOKEN",
+          value: ENV_UPSTREAM_PLACEHOLDER_GITHUB,
+          comment:
+            "GitHub credential used by this MCP server to call the GitHub API on the user's behalf. Distinct from the AuthSec user token: AuthSec authorizes the user; this stays server-side.",
+        }
+      : {
+          key: "UPSTREAM_API_TOKEN",
+          value: ENV_UPSTREAM_PLACEHOLDER_GENERIC,
+          comment:
+            "Optional — only set this if your MCP server calls an external API on the user's behalf. Leave unset for AuthSec-only servers. This is NOT the AuthSec user token.",
+        },
   ];
 }
 

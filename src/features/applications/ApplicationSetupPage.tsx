@@ -32,6 +32,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   useRotateResourceServerSecretMutation,
+  type ResourceServerValidationCheck,
+  type ResourceServerValidationResult,
   useValidateResourceServerMutation,
 } from "@/app/api/resourceServersApi";
 import { useGetSDKManifestStatusQuery } from "@/app/api/setupWizardApi";
@@ -113,6 +115,8 @@ export default function ApplicationSetupPage() {
   const [secretVisible, setSecretVisible] = useState(Boolean(createSecret));
   const [installMode, setInstallMode] = useState<"agent" | "manual">("agent");
   const [validationFresh, setValidationFresh] = useState(false);
+  const [lastValidation, setLastValidation] =
+    useState<ResourceServerValidationResult | null>(null);
 
   const prompt = useMemo(
     () => buildIntegrationPrompt(language, application),
@@ -160,11 +164,17 @@ export default function ApplicationSetupPage() {
     setValidationFresh(false);
     try {
       const result = await validate(application.id).unwrap();
+      setLastValidation(result);
       setValidationFresh(true);
       if (result.status === "passed") {
         toast.success("Protection check passed.");
       } else {
-        toast.error("Protection check returned issues. Review below.");
+        const failingChecks = result.checks.filter((check) => !isPassingStatus(check.status));
+        const summary = failingChecks
+          .slice(0, 2)
+          .map((check) => `${check.label}: ${check.message}`)
+          .join(" ");
+        toast.error(summary || "Protection check returned issues. Review below.");
       }
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
@@ -173,7 +183,11 @@ export default function ApplicationSetupPage() {
   };
 
   const manifestPassed = Boolean(manifest?.last_success);
-  const protectionPassed = application.last_validation_status === "passed";
+  const effectiveValidationStatus =
+    lastValidation?.status ?? application.last_validation_status;
+  const protectionPassed = effectiveValidationStatus === "passed";
+  const validationChecks = lastValidation?.checks ?? [];
+  const failingChecks = validationChecks.filter((check) => !isPassingStatus(check.status));
   const step4State: SetupStepState =
     manifestPassed && protectionPassed ? "done" : "active";
 
@@ -360,9 +374,44 @@ export default function ApplicationSetupPage() {
           )}
           {validating ? "Running…" : "Run protection check"}
         </Button>
+        {validationChecks.length > 0 ? (
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-[13px] font-semibold text-slate-900">
+                  Latest validation result
+                </h4>
+                <p className="text-sm text-slate-600">
+                  {protectionPassed
+                    ? "The endpoint returned the expected AuthSec protection signals."
+                    : `${failingChecks.length} check${failingChecks.length === 1 ? "" : "s"} still need attention.`}
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em]",
+                  protectionPassed
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700",
+                )}
+              >
+                {protectionPassed ? "Passed" : "Needs attention"}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {validationChecks.map((check) => (
+                <ValidationCheckRow key={check.key} check={check} />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </SetupStep>
     </div>
   );
+}
+
+function isPassingStatus(status: string | undefined): boolean {
+  return status === "passed" || status === "passing";
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
@@ -529,6 +578,63 @@ function CheckTile({
           </span>
         </div>
         <p className="text-xs leading-relaxed text-slate-600">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function ValidationCheckRow({
+  check,
+}: {
+  check: ResourceServerValidationCheck;
+}) {
+  const passing = isPassingStatus(check.status);
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border px-3 py-2.5",
+        passing
+          ? "border-emerald-200 bg-emerald-50/70"
+          : "border-amber-200 bg-amber-50/80",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full",
+            passing
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-amber-100 text-amber-700",
+          )}
+        >
+          {passing ? (
+            <CheckCircle2 className="size-3.5" />
+          ) : (
+            <AlertTriangle className="size-3.5" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[13px] font-medium text-slate-900">{check.label}</p>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em]",
+                passing
+                  ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                  : "border-amber-200 bg-amber-100 text-amber-700",
+              )}
+            >
+              {passing ? "Passing" : "Failing"}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-700">{check.message}</p>
+          {check.observed ? (
+            <code className="mt-2 block overflow-auto rounded bg-slate-950/95 px-2.5 py-2 font-mono text-[11px] leading-5 text-slate-100">
+              {check.observed}
+            </code>
+          ) : null}
+        </div>
       </div>
     </div>
   );
