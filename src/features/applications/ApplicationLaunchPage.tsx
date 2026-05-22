@@ -29,6 +29,7 @@ import {
 import { useApplicationContext } from "./useApplicationContext";
 import { isLaunched } from "./lib/computeReadiness";
 import { DecisionBanner, Surface } from "./components/ApplicationConsole";
+import { formatApplicationRoleName } from "./lib/formatRoleName";
 
 export default function ApplicationLaunchPage() {
   const { application } = useApplicationContext();
@@ -148,7 +149,7 @@ export default function ApplicationLaunchPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Sourced from{" "}
           <code className="font-mono">
-            GET /authsec/resource-servers/{application.id}/setup
+            GET /authsec/applications/{application.id}/setup
           </code>
           .
         </p>
@@ -188,7 +189,7 @@ export default function ApplicationLaunchPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Sourced from{" "}
           <code className="font-mono">
-            GET /authsec/resource-servers/{application.id}/activation-preview
+            GET /authsec/applications/{application.id}/activation-preview
           </code>
           . What policy will look like the moment you launch.
         </p>
@@ -220,7 +221,7 @@ export default function ApplicationLaunchPage() {
             <dl className="grid gap-3 sm:grid-cols-2">
               <PreviewKv
                 label="Default role"
-                value={preview.default_role || "(none)"}
+                value={formatApplicationRoleName(preview.default_role)}
               />
               <PreviewKv
                 label="Scopes registered"

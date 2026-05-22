@@ -84,6 +84,7 @@ export interface LoginPageData {
   client_id: string;
   client_type?: string;
   redirect_uris?: string[];
+  local_login_enabled?: boolean;
   providers: OIDCProvider[];
   base_url: string;
   error?: string;
@@ -353,6 +354,10 @@ export const oidcApi = createApi({
           redirect_uris: Array.isArray(res?.redirect_uris)
             ? res.redirect_uris
             : undefined,
+          local_login_enabled:
+            typeof res?.local_login_enabled === "boolean"
+              ? res.local_login_enabled
+              : undefined,
           providers,
           base_url: res?.base_url || "",
           error,

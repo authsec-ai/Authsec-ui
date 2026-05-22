@@ -3,7 +3,7 @@
  *
  * `Application` is the user-facing rename of the legacy `ResourceServer`.
  * For Phase 1 it's a structural alias — the underlying RTK Query slice
- * still talks to /resource-servers. Phase 4 renames the slice and moves
+ * still talks to /applications. Phase 4 renames the slice and moves
  * `ResourceServer` out of the public type surface.
  */
 

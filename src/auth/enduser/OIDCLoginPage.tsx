@@ -80,6 +80,7 @@ const OIDCLoginPageInner: React.FC = () => {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [authenticating, setAuthenticating] = useState<string | null>(null);
 
@@ -113,6 +114,17 @@ const OIDCLoginPageInner: React.FC = () => {
   );
   const tenantDomain =
     typeof window !== "undefined" ? window.location.hostname : undefined;
+
+  const extractErrorMessage = (err: unknown, fallback: string) => {
+    if (err instanceof Error && err.message) return err.message;
+    if (err && typeof err === "object") {
+      const data = (err as any).data;
+      if (typeof data?.error === "string") return data.error;
+      if (typeof data?.message === "string") return data.message;
+      if (typeof (err as any).error === "string") return (err as any).error;
+    }
+    return fallback;
+  };
 
   // WebAuthn state
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
@@ -424,11 +436,12 @@ const OIDCLoginPageInner: React.FC = () => {
   const fetchLoginData = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       setError(null);
 
       if (!loginChallenge) {
         console.error("❌ Missing login_challenge parameter");
-        setError(
+        setLoadError(
           "Missing login_challenge parameter. This page should be accessed via OAuth flow."
         );
         setLoading(false);
@@ -453,11 +466,11 @@ const OIDCLoginPageInner: React.FC = () => {
         }
       } else {
         console.error("❌ Login data fetch failed:", (data as any)?.error);
-        setError((data as any)?.error || "Failed to load login data");
+        setLoadError((data as any)?.error || "Failed to load login data");
       }
     } catch (err) {
       console.error("❌ Login data fetch exception:", err);
-      setError(
+      setLoadError(
         err instanceof Error
           ? err.message
           : "Failed to load authentication providers"
@@ -557,6 +570,11 @@ const OIDCLoginPageInner: React.FC = () => {
 
   // Custom login handlers
   const handleEmailSubmit = async () => {
+    if (loginPageData?.local_login_enabled === false) {
+      setError("Email/password sign-in is not enabled for this OAuth flow.");
+      return;
+    }
+
     if (!email || !email.includes("@")) {
       setError("Please enter a valid email address");
       return;
@@ -593,13 +611,18 @@ const OIDCLoginPageInner: React.FC = () => {
       }
     } catch (error) {
       console.error("User status check failed:", error);
-      setError("Failed to check user status");
+      setError(extractErrorMessage(error, "Failed to check user status"));
     } finally {
       setCustomAuthenticating(false);
     }
   };
 
   const handlePasswordSubmit = async () => {
+    if (loginPageData?.local_login_enabled === false) {
+      setError("Email/password sign-in is not enabled for this OAuth flow.");
+      return;
+    }
+
     if (!password) {
       setError("Please enter your password");
       return;
@@ -625,6 +648,11 @@ const OIDCLoginPageInner: React.FC = () => {
   };
 
   const handleSetupSubmit = async () => {
+    if (loginPageData?.local_login_enabled === false) {
+      setError("Email/password registration is not enabled for this OAuth flow.");
+      return;
+    }
+
     if (!password || !confirmPassword || !name.trim()) {
       // UPDATED
       setError("Please fill in all fields");
@@ -679,7 +707,7 @@ const OIDCLoginPageInner: React.FC = () => {
       }
     } catch (error) {
       console.error("Registration failed:", error);
-      setError("Registration failed");
+      setError(extractErrorMessage(error, "Registration failed"));
     } finally {
       setCustomAuthenticating(false);
     }
@@ -727,7 +755,7 @@ const OIDCLoginPageInner: React.FC = () => {
       }
     } catch (error) {
       console.error("OTP verification failed:", error);
-      setError("Failed to verify OTP");
+      setError(extractErrorMessage(error, "Failed to verify OTP"));
     } finally {
       setCustomAuthenticating(false);
     }
@@ -967,7 +995,7 @@ const OIDCLoginPageInner: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <AuthSplitFrame
         shellVariant="enduser-single-card"
@@ -992,7 +1020,7 @@ const OIDCLoginPageInner: React.FC = () => {
             <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
               <IconAlertTriangle className="h-5 w-5 text-red-600" />
             </div>
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-red-700">{loadError}</p>
             <div className="space-y-2">
               <Button onClick={fetchLoginData} className="w-full">
                 Retry
@@ -1014,7 +1042,7 @@ const OIDCLoginPageInner: React.FC = () => {
                 <div className="mt-2 space-y-1 text-xs text-slate-600">
                   <div>Challenge: {loginChallenge}</div>
                   <div>API URL: {config.VITE_API_URL}</div>
-                  <div>Error: {error}</div>
+                  <div>Error: {loadError}</div>
                 </div>
               </details>
             )}
@@ -1025,6 +1053,8 @@ const OIDCLoginPageInner: React.FC = () => {
   }
 
   if (!loginPageData) return null;
+
+  const localLoginEnabled = loginPageData.local_login_enabled !== false;
 
   const loginHeaderTitle = !showCustomLogin
     ? "Sign in"
@@ -1043,7 +1073,9 @@ const OIDCLoginPageInner: React.FC = () => {
   const loginHeaderSubtitle = !showCustomLogin
     ? sortedProviders.length > 0
       ? "Choose a sign-in method."
-      : "Enter your email to continue."
+      : localLoginEnabled
+        ? "Enter your email to continue."
+        : "No sign-in provider is configured for this test flow."
     : !emailSubmitted
       ? "Enter your email to continue."
       : userExists
@@ -1075,6 +1107,11 @@ const OIDCLoginPageInner: React.FC = () => {
     >
       <AuthActionPanel className="space-y-6">
         <AuthStepHeader title={loginHeaderTitle} subtitle={loginHeaderSubtitle} />
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {error}
+          </div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1118,46 +1155,58 @@ const OIDCLoginPageInner: React.FC = () => {
                       })}
                     </div>
 
-                    <Separator className="my-4" />
+                    {localLoginEnabled && <Separator className="my-4" />}
                   </>
                 )}
 
-                <form
-                  className="space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setShowCustomLogin(true);
-                    handleEmailSubmit();
-                  }}
-                >
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="inline-email"
-                      className="text-sm font-semibold text-slate-700 dark:text-slate-300"
-                    >
-                      Email
-                    </Label>
-                    <div className="space-y-3">
-                      <Input
-                        id="inline-email"
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-12 rounded-xl border-slate-300 bg-white text-base shadow-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/50 dark:focus:border-blue-500"
-                        placeholder="you@company.com"
-                      />
-                      <Button type="submit" className="h-11 w-full rounded-xl" disabled={customAuthenticating}>
-                        {customAuthenticating ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowRight className="mr-2 h-4 w-4" />
-                        )}
-                        Continue
-                      </Button>
+                {localLoginEnabled ? (
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setShowCustomLogin(true);
+                      handleEmailSubmit();
+                    }}
+                  >
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="inline-email"
+                        className="text-sm font-semibold text-slate-700 dark:text-slate-300"
+                      >
+                        Email
+                      </Label>
+                      <div className="space-y-3">
+                        <Input
+                          id="inline-email"
+                          type="email"
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="h-12 rounded-xl border-slate-300 bg-white text-base shadow-sm transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/50 dark:focus:border-blue-500"
+                          placeholder="you@company.com"
+                        />
+                        <Button
+                          type="submit"
+                          className="h-11 w-full rounded-xl"
+                          disabled={customAuthenticating}
+                        >
+                          {customAuthenticating ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <ArrowRight className="mr-2 h-4 w-4" />
+                          )}
+                          Continue
+                        </Button>
+                      </div>
                     </div>
+                  </form>
+                ) : sortedProviders.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                    No external sign-in provider is configured for this tenant.
+                    Add Google or another identity provider, then retry this
+                    login flow.
                   </div>
-                </form>
+                ) : null}
               </>
             ) : (
               <>

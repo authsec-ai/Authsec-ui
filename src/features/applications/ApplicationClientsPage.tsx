@@ -74,7 +74,7 @@ export default function ApplicationClientsPage() {
           Pre-register clients that need to call this application.
           Sourced from{" "}
           <code className="font-mono text-xs">
-            GET /authsec/resource-servers/{application.id}/clients
+            GET /authsec/applications/{application.id}/connections
           </code>
           .
         </p>

@@ -3,10 +3,10 @@
  *
  * Endpoints for OAuth scope registry, MCP tool discovery, and scope-tool mapping.
  * Base Paths:
- *   - /authsec/resource-servers/:id/scope-matrix
- *   - /authsec/resource-servers/:id/scopes
- *   - /authsec/resource-servers/:id/rescan
- *   - /authsec/resource-servers/:id/tool-scope-map
+ *   - /authsec/applications/:id/scope-matrix
+ *   - /authsec/applications/:id/scopes
+ *   - /authsec/applications/:id/rescan
+ *   - /authsec/applications/:id/tool-scope-map
  *   - /authsec/scopes/:scope_id
  */
 
@@ -21,19 +21,19 @@ import type {
 
 export const scopeMatrixApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // GET /authsec/resource-servers/:id/scope-matrix
+    // GET /authsec/applications/:id/scope-matrix
     getScopeMatrix: builder.query<ScopeMatrixResponse, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/scope-matrix`,
+      query: (rsId) => `/authsec/applications/${rsId}/scope-matrix`,
       providesTags: (_result, _error, rsId) => [
         { type: "ScopeMatrix" as const, id: rsId },
         { type: "OAuthScope" as const, id: "LIST" },
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/rescan
+    // POST /authsec/applications/:id/rescan
     rescanResourceServer: builder.mutation<unknown, string>({
       query: (rsId) => ({
-        url: `/authsec/resource-servers/${rsId}/rescan`,
+        url: `/authsec/applications/${rsId}/rescan`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, rsId) => [
@@ -43,19 +43,19 @@ export const scopeMatrixApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/scopes
+    // GET /authsec/applications/:id/scopes
     listResourceServerScopes: builder.query<OAuthScope[], string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/scopes`,
+      query: (rsId) => `/authsec/applications/${rsId}/scopes`,
       providesTags: [{ type: "OAuthScope" as const, id: "LIST" }],
     }),
 
-    // POST /authsec/resource-servers/:id/scopes
+    // POST /authsec/applications/:id/scopes
     createResourceServerScope: builder.mutation<
       OAuthScope,
       { rsId: string; body: CreateOAuthScopeRequest }
     >({
       query: ({ rsId, body }) => ({
-        url: `/authsec/resource-servers/${rsId}/scopes`,
+        url: `/authsec/applications/${rsId}/scopes`,
         method: "POST",
         body,
       }),
@@ -93,13 +93,13 @@ export const scopeMatrixApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // PUT /authsec/resource-servers/:id/tool-scope-map
+    // PUT /authsec/applications/:id/tool-scope-map
     updateToolScopeMap: builder.mutation<
       { status: string },
       { rsId: string; body: UpdateToolScopeMapRequest }
     >({
       query: ({ rsId, body }) => ({
-        url: `/authsec/resource-servers/${rsId}/tool-scope-map`,
+        url: `/authsec/applications/${rsId}/tool-scope-map`,
         method: "PUT",
         body,
       }),

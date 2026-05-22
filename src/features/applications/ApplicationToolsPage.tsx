@@ -25,9 +25,9 @@ import { KeyRound, Loader2, Plus, RefreshCcw, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HelpTooltip } from "@/components/ui/tooltip";
 import {
   Sheet,
   SheetContent,
@@ -99,6 +99,70 @@ function classifyTool(tool: MCPToolResponse): ToolDecision {
   if (tool.scopes.some((s) => s.source === "admin_override")) return "mapped";
   if (tool.scopes.length > 0) return "advisory";
   return "unmapped";
+}
+
+/**
+ * Mirror the backend's `inferRiskLevel` rule set so we can show the
+ * operator *why* a scope landed at a given risk level. Keep this in
+ * sync with services/scope_matrix_service.go.
+ */
+function riskReasonForScope(scopeString: string): string {
+  const s = scopeString.toLowerCase();
+  if (s.includes("admin") || s.includes("delete")) {
+    return `"${scopeString}" suggests an admin-risk action.`;
+  }
+  if (/(^|[:_/-])(write|create|update)([:_/-]|$)/.test(s)) {
+    return `"${scopeString}" contains a write verb — operator confirmation recommended.`;
+  }
+  if (s.includes(":*") || s.endsWith(":*")) {
+    return `"${scopeString}" uses a wildcard suffix — broad access surface.`;
+  }
+  return `"${scopeString}" maps to a read-only operation.`;
+}
+
+/**
+ * Highest-risk reason across a tool's mapped scopes — the one we
+ * surface as the table's `Risk reason` column. Falls back to a
+ * sensible message for unmapped tools.
+ */
+function riskReasonForTool(tool: MCPToolResponse): string {
+  if (tool.scopes.length === 0) {
+    return tool.is_public
+      ? "Public tool — no scope check required."
+      : "Unmapped tool — denied at runtime until mapped.";
+  }
+  const order: RiskLevel[] = ["critical", "high", "medium", "low"];
+  for (const r of order) {
+    const found = tool.scopes.find((s) => s.risk_level === r);
+    if (found) return riskReasonForScope(found.scope_string);
+  }
+  return riskReasonForScope(tool.scopes[0].scope_string);
+}
+
+const SOURCE_BADGE_STYLE: Record<string, string> = {
+  manifest: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  sdk_manifest: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  convention: "border-slate-200 bg-slate-50 text-slate-600",
+  scan: "border-blue-200 bg-blue-50 text-blue-700",
+  mcp_scan: "border-blue-200 bg-blue-50 text-blue-700",
+  manual: "border-amber-200 bg-amber-50 text-amber-700",
+};
+
+function normalizeToolSource(tool: MCPToolResponse): string {
+  // Prefer the mapped scope's source (admin_override / sdk_suggested)
+  // if present — those tell us where the *mapping* came from. Otherwise
+  // fall back to the tool inventory_source.
+  const mappingSource = tool.scopes.find(
+    (s) => s.source === "admin_override",
+  )?.source;
+  if (mappingSource === "admin_override") {
+    // Admin override is effectively a manual mapping decision.
+    return "manual";
+  }
+  if (tool.inventory_source === "sdk_manifest") return "manifest";
+  if (tool.inventory_source === "mcp_scan") return "scan";
+  if (tool.inventory_source === "manual") return "manual";
+  return tool.inventory_source ?? "scan";
 }
 
 function effectiveRisk(tool: MCPToolResponse): RiskLevel {
@@ -405,17 +469,31 @@ export default function ApplicationToolsPage() {
         <div>
           <table className="w-full table-fixed text-sm">
             <colgroup>
-              <col className="w-[26%]" />
+              <col className="w-[20%]" />
+              <col className="w-[8%]" />
+              <col className="w-[9%]" />
+              <col className="w-[24%]" />
+              <col className="w-[19%]" />
               <col className="w-[10%]" />
-              <col className="w-[39%]" />
-              <col className="w-[14%]" />
-              <col className="w-[11%]" />
+              <col className="w-[10%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
                 <th className="px-4 py-3">Tool</th>
                 <th className="px-4 py-3">Risk</th>
+                <th className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1">
+                    Source
+                    <HelpTooltip content="Where AuthSec learned about this tool. `manifest` = pushed by the SDK; `convention` = auto-matched by naming pattern; `scan` = found via tools/list; `manual` = added by an operator." />
+                  </span>
+                </th>
                 <th className="px-4 py-3">Mapped scopes</th>
+                <th className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1">
+                    Risk reason
+                    <HelpTooltip content="Why AuthSec flagged this risk level. Scopes containing `admin` or `delete` are critical; `write`/`create`/`update` are medium; `:*` wildcards are high; else low." />
+                  </span>
+                </th>
                 <th className="px-4 py-3">Decision</th>
                 <th className="px-4 py-3 text-right" aria-label="Action" />
               </tr>
@@ -423,7 +501,7 @@ export default function ApplicationToolsPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     <Loader2 className="mr-2 inline size-4 animate-spin" />
                     Loading tools…
                   </td>
@@ -431,7 +509,7 @@ export default function ApplicationToolsPage() {
               )}
               {!isLoading && visibleTools.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     {tools.length === 0
                       ? "No tools discovered yet. Rescan after deploying the SDK."
                     : "No tools match this filter."}
@@ -448,6 +526,16 @@ export default function ApplicationToolsPage() {
             </tbody>
           </table>
         </div>
+        {/* Footer — "How tools got here" */}
+        {!isLoading && tools.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/50 px-4 py-3 text-xs text-slate-600">
+            <span className="font-semibold text-slate-950">
+              How tools got here
+            </span>
+            <HelpTooltip content="Summary of where the tool inventory came from across this resource server." />
+            <span className="text-slate-500">{summarizeToolSources(tools)}</span>
+          </div>
+        )}
       </Surface>
 
       <ToolInspectorDrawer
@@ -462,6 +550,24 @@ export default function ApplicationToolsPage() {
 
 // ── Tool row ──────────────────────────────────────────────────────────────
 
+function summarizeToolSources(tools: MCPToolResponse[]): string {
+  const counts: Record<string, number> = {};
+  for (const tool of tools) {
+    const source = normalizeToolSource(tool);
+    counts[source] = (counts[source] ?? 0) + 1;
+  }
+  const total = tools.length;
+  if (counts.manifest === total) {
+    return `All ${total} tools came from your SDK manifest. No fallback scan was needed.`;
+  }
+  const parts: string[] = [];
+  if (counts.manifest) parts.push(`${counts.manifest} from manifest`);
+  if (counts.scan) parts.push(`${counts.scan} from scan`);
+  if (counts.convention) parts.push(`${counts.convention} from convention`);
+  if (counts.manual) parts.push(`${counts.manual} manual`);
+  return parts.length > 0 ? `${parts.join(", ")}.` : `${total} tools total.`;
+}
+
 function ToolRowRender({
   tool,
   onInspect,
@@ -472,6 +578,9 @@ function ToolRowRender({
   const decision = classifyTool(tool);
   const risk = effectiveRisk(tool);
   const riskTone = RISK_TONE[risk];
+  const source = normalizeToolSource(tool);
+  const sourceStyle =
+    SOURCE_BADGE_STYLE[source] ?? "border-slate-200 bg-slate-50 text-slate-600";
   return (
     <tr
       className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50/40"
@@ -500,6 +609,16 @@ function ToolRowRender({
         </span>
       </td>
       <td className="px-4 py-3">
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase",
+            sourceStyle,
+          )}
+        >
+          {source}
+        </span>
+      </td>
+      <td className="px-4 py-3">
         {tool.scopes.length === 0 ? (
           <span className="text-xs italic text-slate-500">
             {tool.is_public ? "(public — no scope check)" : "—"}
@@ -509,6 +628,11 @@ function ToolRowRender({
             {tool.scopes.map((s) => s.scope_string).join(", ")}
           </span>
         )}
+      </td>
+      <td className="px-4 py-3">
+        <span className="line-clamp-2 text-[11px] leading-4 text-slate-600">
+          {riskReasonForTool(tool)}
+        </span>
       </td>
       <td className="px-4 py-3">
         {decision === "public" ? (
@@ -700,6 +824,12 @@ function ToolInspectorDrawer({
                     ? "Suggested only — not runtime-effective until applied by an admin override."
                     : "Unmapped — denied at runtime."}
             </p>
+            {(risk === "high" || risk === "critical") && (
+              <p className="mt-3 text-xs leading-5 text-red-700">
+                <span className="font-semibold">Why {risk} risk?</span>{" "}
+                {riskReasonForTool(tool)}
+              </p>
+            )}
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-4">

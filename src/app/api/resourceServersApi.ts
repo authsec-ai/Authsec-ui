@@ -36,6 +36,17 @@ export interface CreateResourceServerRequest {
   protected_base_path?: string;
   scopes_supported?: string[];
   registration_modes?: string[];
+  /**
+   * Catalog id of a scope preset (e.g. "read_write", "code_repos",
+   * "blank"). The backend uses this to seed the scope vocabulary for
+   * this resource server. Optional — omit / send null for no preset.
+   */
+  scope_preset_id?: string | null;
+  /**
+   * Whether default access is enabled at creation time. Defaults to
+   * `false` (closed posture); operators opt in on the Access tab.
+   */
+  default_access_enabled?: boolean;
 }
 
 export interface ResourceServerCreateResponse {
@@ -92,6 +103,18 @@ export interface UpdateResourceServerAccessPolicyRequest {
   default_role_id?: string;
 }
 
+export interface UpdateApplicationRoleScopeGrantsRequest {
+  scope_ids: string[];
+}
+
+export interface UpdateApplicationRoleScopeGrantsResponse {
+  role_id: string;
+  role_name: string;
+  scope_ids: string[];
+  granted_scopes: string[];
+  permissions_count: number;
+}
+
 export interface ResourceServerValidationCheck {
   key: string;
   label: string;
@@ -110,7 +133,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listResourceServers: builder.query<ResourceServer[], void>({
       query: () => ({
-        url: "/authsec/resource-servers",
+        url: "/authsec/applications",
         method: "GET",
       }),
       providesTags: [{ type: "ResourceServer", id: "LIST" }],
@@ -118,7 +141,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
 
     getResourceServer: builder.query<ResourceServer, string>({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}`,
+        url: `/authsec/applications/${id}`,
         method: "GET",
       }),
       providesTags: (_result, _error, id) => [{ type: "ResourceServer", id }],
@@ -129,7 +152,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       CreateResourceServerRequest
     >({
       query: (body) => ({
-        url: "/authsec/resource-servers",
+        url: "/authsec/applications",
         method: "POST",
         body,
       }),
@@ -141,7 +164,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       { id: string; body: Partial<CreateResourceServerRequest> & { active?: boolean } }
     >({
       query: ({ id, body }) => ({
-        url: `/authsec/resource-servers/${id}`,
+        url: `/authsec/applications/${id}`,
         method: "PUT",
         body,
       }),
@@ -153,7 +176,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
 
     deleteResourceServer: builder.mutation<void, string>({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}`,
+        url: `/authsec/applications/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: [{ type: "ResourceServer", id: "LIST" }],
@@ -164,7 +187,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       string
     >({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}/rotate-introspection-secret`,
+        url: `/authsec/applications/${id}/rotate-introspection-secret`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, id) => [{ type: "ResourceServer", id }],
@@ -175,7 +198,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       string
     >({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}/clients`,
+        url: `/authsec/applications/${id}/connections`,
         method: "GET",
       }),
       providesTags: (_result, _error, id) => [
@@ -188,7 +211,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       { id: string; body: PreRegisterResourceServerClientRequest }
     >({
       query: ({ id, body }) => ({
-        url: `/authsec/resource-servers/${id}/clients`,
+        url: `/authsec/applications/${id}/connections`,
         method: "POST",
         body: {
           client_name: body.client_name,
@@ -211,7 +234,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       { id: string; clientId: string }
     >({
       query: ({ id, clientId }) => ({
-        url: `/authsec/resource-servers/${id}/clients/${encodeURIComponent(clientId)}`,
+        url: `/authsec/applications/${id}/connections/${encodeURIComponent(clientId)}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, { id }) => [
@@ -223,7 +246,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
 
     getResourceServerAccessPolicy: builder.query<ResourceServerAccessPolicy, string>({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}/access-policy`,
+        url: `/authsec/applications/${id}/access-policy`,
         method: "GET",
       }),
       providesTags: (_result, _error, id) => [{ type: "ResourceServer", id }],
@@ -234,7 +257,7 @@ export const resourceServersApi = baseApi.injectEndpoints({
       { id: string; body: UpdateResourceServerAccessPolicyRequest }
     >({
       query: ({ id, body }) => ({
-        url: `/authsec/resource-servers/${id}/access-policy`,
+        url: `/authsec/applications/${id}/access-policy`,
         method: "PUT",
         body,
       }),
@@ -244,9 +267,24 @@ export const resourceServersApi = baseApi.injectEndpoints({
       ],
     }),
 
+    updateApplicationRoleScopeGrants: builder.mutation<
+      UpdateApplicationRoleScopeGrantsResponse,
+      { applicationId: string; roleId: string; body: UpdateApplicationRoleScopeGrantsRequest }
+    >({
+      query: ({ applicationId, roleId, body }) => ({
+        url: `/authsec/applications/${applicationId}/roles/${roleId}/scope-grants`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { applicationId, roleId }) => [
+        { type: "ResourceServer", id: applicationId },
+        { type: "UnifiedRBACRole", id: roleId },
+      ],
+    }),
+
     validateResourceServer: builder.mutation<ResourceServerValidationResult, string>({
       query: (id) => ({
-        url: `/authsec/resource-servers/${id}/validate`,
+        url: `/authsec/applications/${id}/validate`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, id) => [
@@ -269,5 +307,6 @@ export const {
   useRevokeResourceServerClientMutation,
   useGetResourceServerAccessPolicyQuery,
   useUpdateResourceServerAccessPolicyMutation,
+  useUpdateApplicationRoleScopeGrantsMutation,
   useValidateResourceServerMutation,
 } = resourceServersApi;

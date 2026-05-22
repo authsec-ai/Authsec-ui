@@ -4,7 +4,6 @@ import {
   Route,
   Navigate,
   useParams,
-  useNavigate,
   useLocation,
 } from "react-router-dom";
 import { Provider } from "react-redux";
@@ -14,14 +13,10 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { AuthProvider } from "./auth/context/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { useSessionInit } from "./hooks/useSessionInit";
-import {
-  RbacAudienceProvider,
-  useRbacAudience,
-  type RbacAudience,
-} from "./contexts/RbacAudienceContext";
+import { RbacAudienceProvider } from "./contexts/RbacAudienceContext";
 import { GuidedTourProvider, GuidedTourOverlay } from "./features/guided-tour";
 import { WizardProvider } from "./contexts/WizardContext";
-import React, { useEffect, useRef } from "react";
+import React from "react";
 
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 
@@ -48,9 +43,6 @@ import ApplicationActivityPage from "./features/applications/ApplicationActivity
 import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
 import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
 import { AgentsPage } from "./features/workloads/components/AgentsPage";
-import { ClientsPage } from "./features/clients/ClientsPage";
-
-import VoiceAgentWizardPage from "./features/clients/VoiceAgentWizardPage";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -97,11 +89,6 @@ import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
 
-/**
- * Context Route Sync Component
- * Syncs URL context (admin/enduser) with RbacAudienceContext
- */
-
 function LegacyTrustDelegationPolicyDetailRedirect() {
   const { policyId = "" } = useParams();
   return <Navigate to={`/trust-delegation/${policyId}`} replace />;
@@ -110,73 +97,6 @@ function LegacyTrustDelegationPolicyDetailRedirect() {
 function LegacyTrustDelegationPolicyEditRedirect() {
   const { policyId = "" } = useParams();
   return <Navigate to={`/trust-delegation/${policyId}/edit`} replace />;
-}
-
-function ContextRouteSync() {
-  const { audience, setAudience } = useRbacAudience();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const previousAudienceRef = useRef<RbacAudience>(audience);
-  const previousPathContextRef = useRef<RbacAudience | null>(null);
-
-  useEffect(() => {
-    const pathParts = location.pathname.split("/").filter(Boolean);
-    const pathContextRaw = pathParts[0] ?? null;
-    const pathContext: RbacAudience | null =
-      pathContextRaw === "admin"
-        ? "admin"
-        : pathContextRaw === "enduser"
-          ? "endUser"
-          : null;
-
-    const prevAudience = previousAudienceRef.current;
-    const prevPathContext = previousPathContextRef.current;
-
-    // If the URL context changed (navigation), update the audience state
-    if (pathContext && pathContext !== audience) {
-      const pathContextChanged = pathContext !== prevPathContext;
-      if (pathContextChanged) {
-        console.log("🔄 Syncing URL context to state:", pathContext);
-        setAudience(pathContext);
-        previousAudienceRef.current = audience;
-        previousPathContextRef.current = pathContext;
-        return;
-      }
-    }
-
-    const currentContextSegment =
-      pathContext === "admin"
-        ? "admin"
-        : pathContext === "endUser"
-          ? "enduser"
-          : null;
-    const expectedContextSegment = audience === "admin" ? "admin" : "enduser";
-
-    // If the audience state changed (toggle) while on a context route, update the URL
-    if (
-      (pathContextRaw === "admin" || pathContextRaw === "enduser") &&
-      currentContextSegment !== expectedContextSegment &&
-      audience !== prevAudience
-    ) {
-      const remainder = pathParts.slice(1).join("/");
-      const newPath = remainder
-        ? `/${expectedContextSegment}/${remainder}`
-        : `/${expectedContextSegment}`;
-
-      console.log(
-        `🔄 Syncing state change to URL: ${currentContextSegment} → ${expectedContextSegment}`,
-      );
-      navigate(newPath, { replace: true });
-      previousPathContextRef.current = audience;
-      previousAudienceRef.current = audience;
-      return;
-    }
-
-    previousAudienceRef.current = audience;
-    previousPathContextRef.current = pathContext;
-  }, [audience, location.pathname, navigate, setAudience]);
-
-  return null;
 }
 
 function LegacyClientOnboardRedirect() {
@@ -236,7 +156,6 @@ function AppContent() {
         <Router>
           <WizardProvider>
             <GuidedTourProvider>
-              <ContextRouteSync />
               <div className="min-h-screen bg-background text-foreground">
                 <Routes>
                   {/* Auth routes - accessible without authentication */}
@@ -402,13 +321,7 @@ function AppContent() {
                        with their original components below. */}
                   <Route
                     path="/clients"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ClientsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
                   <Route
                     path="/clients/mcp"
@@ -497,7 +410,7 @@ function AppContent() {
 
                   <Route
                     path="/clients/onboard"
-                    element={<Navigate to="/resource-servers?create=1" replace />}
+                    element={<Navigate to="/applications/new" replace />}
                   />
 
                   <Route
@@ -507,13 +420,7 @@ function AppContent() {
 
                   <Route
                     path="/clients/voice-agent"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <VoiceAgentWizardPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/agents" replace />}
                   />
 
                   <Route
@@ -726,11 +633,11 @@ function AppContent() {
                     <Route path="roles" element={<Navigate to="authz/roles" replace />} />
                     <Route
                       path="scopes"
-                      element={<Navigate to="/resource-servers" replace />}
+                      element={<Navigate to="/applications" replace />}
                     />
                     <Route
                       path="api-oauth-scopes"
-                      element={<Navigate to="/resource-servers" replace />}
+                      element={<Navigate to="/applications" replace />}
                     />
                     <Route
                       path="permissions"
@@ -758,7 +665,7 @@ function AppContent() {
                       />
                       <Route
                         path="internal-scopes"
-                        element={<Navigate to="/resource-servers" replace />}
+                        element={<Navigate to="/applications" replace />}
                       />
                       <Route
                         path="permissions"
@@ -795,7 +702,7 @@ function AppContent() {
                     <Route path="oauth">
                       <Route
                         path="resource-scopes"
-                        element={<Navigate to="/resource-servers" replace />}
+                        element={<Navigate to="/applications" replace />}
                       />
                     </Route>
 
@@ -818,11 +725,11 @@ function AppContent() {
                   />
                   <Route
                     path="/scopes"
-                    element={<Navigate to="/resource-servers" replace />}
+                    element={<Navigate to="/applications" replace />}
                   />
                   <Route
                     path="/api-oauth-scopes"
-                    element={<Navigate to="/resource-servers" replace />}
+                    element={<Navigate to="/applications" replace />}
                   />
                   <Route
                     path="/permissions"
@@ -1001,7 +908,7 @@ function AppContent() {
                   {/* RBAC Routes */}
                   <Route
                     path="/scopes"
-                    element={<Navigate to="/resource-servers" replace />}
+                    element={<Navigate to="/applications" replace />}
                   />
 
                   <Route

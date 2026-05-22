@@ -1,4 +1,4 @@
-import { baseApi, withSessionData } from "./baseApi";
+import { baseApi } from "./baseApi";
 import type { Client } from "../../types/entities";
 import type { AuthMethod } from "../../features/authentication/types";
 
@@ -263,7 +263,21 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
   if (Array.isArray(response)) {
-    return { clients: response as ClientData[] };
+    return {
+      clients: response.map((item: any) => ({
+        ...item,
+        id: item.id,
+        client_id: item.client_id || item.id,
+        tenant_id: item.tenant_id || "",
+        project_id: item.project_id || item.tenant_id || "",
+        name: item.name || item.client_name || "Unnamed application",
+        active: item.active ?? true,
+        status: item.status || (item.active === false ? "inactive" : "active"),
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString(),
+        client_type: item.application_type || item.client_type || "application",
+      })) as ClientData[],
+    };
   }
 
   if (!isRecord(response)) {
@@ -495,13 +509,8 @@ export const clientApi = baseApi.injectEndpoints({
       DeleteClientRequest
     >({
       query: ({ tenant_id, client_id }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/delete-complete`,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: withSessionData({
-          tenant_id,
-          client_id,
-        }),
+        url: `/authsec/applications/${client_id}`,
+        method: "DELETE",
       }),
       invalidatesTags: [{ type: "Client", id: "LIST" }],
     }),
@@ -512,9 +521,9 @@ export const clientApi = baseApi.injectEndpoints({
       SetClientStatusRequest
     >({
       query: (data) => ({
-        url: `/authsec/clientms/tenants/${data.tenant_id}/clients/set-status`,
-        method: "POST",
-        body: data,
+        url: `/authsec/applications/${data.client_id}`,
+        method: "PUT",
+        body: { active: data.active },
       }),
       invalidatesTags: [{ type: "Client", id: "LIST" }],
     }),
@@ -543,26 +552,13 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: "/authsec/applications",
           method: "GET",
           params,
-          responseHandler: "text", // Get raw text to handle potential multiple JSON objects
         };
       },
-      transformResponse: (response: string) => {
-        // Parse first valid JSON if backend sends duplicates
+      transformResponse: (response: unknown) => {
         const parsed = parseFirstValidJSON<unknown>(response);
-
-        // CRITICAL: Backend API is returning incomplete data structure
-        // The /clients/getClients endpoint now returns:
-        // { client_name, user_count, authentication_methods: string, enabled }
-        // But we need: client_id, tenant_id, id, and full ClientData fields
-        //
-        // This is a TEMPORARY WORKAROUND - Backend needs to fix this endpoint!
-        console.warn(
-          "⚠️ WARNING: /clients/getClients endpoint returning incomplete data without client_id",
-        );
-        console.log("Raw API response simplified:", parsed);
 
         return normalizeClientsResponse(parsed);
       },
@@ -611,13 +607,12 @@ export const clientApi = baseApi.injectEndpoints({
         }
 
         return {
-          url: `/authsec/clientms/tenants/${data.tenant_id}/clients/getClients`,
+          url: "/authsec/applications",
           method: "GET",
           params,
-          responseHandler: "text", // Handle potential response format issues
         };
       },
-      transformResponse: (response: string) => {
+      transformResponse: (response: unknown) => {
         try {
           // Parse the regular clients response and transform it to enhanced format
           const parsed = parseFirstValidJSON<any>(response);
@@ -791,27 +786,19 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClientRequest
     >({
       query: (data) => {
-        const tenantId = data.tenant_id;
         return {
-          url: `/authsec/clientms/tenants/${tenantId}/clients/create`,
+          url: "/authsec/applications",
           method: "POST",
           body: {
             name: data.name,
-            email: data.email,
-            project_id: data.project_id ?? "",
-            react_app_url: data.react_app_url ?? "",
-            client_type: "application",
-            agent_type: data.agent_type ?? "mcp-agent",
-            platform: data.platform ?? "",
-            platform_config: {
-              namespace: data.platform_config?.namespace ?? "",
-              service_account: data.platform_config?.service_account ?? "",
-            },
+            public_base_url: data.react_app_url || "https://example.com",
+            protected_base_path: "/mcp",
+            registration_modes: ["dynamic"],
+            scopes_supported: [],
           },
-          responseHandler: "text", // Get raw text to handle multiple JSON objects
         };
       },
-      transformResponse: (response: string) => {
+      transformResponse: (response: unknown) => {
         return normalizeRegisterClientResponse(response);
       },
       invalidatesTags: [
@@ -824,17 +811,20 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClientResponse,
       RegisterAiAgentClientRequest
     >({
-      query: ({ tenant_id, selectors, ...body }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
+      query: ({ tenant_id: _tenant_id, selectors, ...body }) => ({
+        url: "/authsec/applications",
         method: "POST",
         body: {
-          ...body,
-          agent_type: body.agent_type ?? "mcp-agent",
+          name: body.name,
+          public_base_url: "https://example.com",
+          protected_base_path: "/mcp",
+          application_type: "ai_agent",
+          registration_modes: ["dynamic"],
+          scopes_supported: [],
           selectors,
         },
-        responseHandler: "text",
       }),
-      transformResponse: (response: string) => {
+      transformResponse: (response: unknown) => {
         return normalizeRegisterClientResponse(response);
       },
       invalidatesTags: [
@@ -847,26 +837,19 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClientResponse,
       RegisterClawAuthClientRequest
     >({
-      query: ({ tenant_id, ...body }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/create`,
+      query: ({ tenant_id: _tenant_id, ...body }) => ({
+        url: "/authsec/applications",
         method: "POST",
         body: {
           name: body.name,
-          email: body.email,
-          project_id: body.project_id || "00000000-0000-0000-0000-000000000000",
-          react_app_url: body.react_app_url || "",
-          client_type: "claw_auth",
-          agent_type: "claw_auth",
-          redirect_url: body.redirect_url,
-          platform: "",
-          platform_config: {
-            namespace: "",
-            service_account: "",
-          },
+          public_base_url: body.redirect_url || body.react_app_url || "https://example.com",
+          protected_base_path: "/mcp",
+          application_type: "claw_auth",
+          registration_modes: ["dynamic"],
+          scopes_supported: [],
         },
-        responseHandler: "text",
       }),
-      transformResponse: (response: string) => {
+      transformResponse: (response: unknown) => {
         return normalizeRegisterClientResponse(response);
       },
       invalidatesTags: [
@@ -969,10 +952,8 @@ export const clientApi = baseApi.injectEndpoints({
       PlatformSelectorsResponse,
       GetPlatformSelectorsRequest
     >({
-      query: ({ tenant_id, platform }) => ({
-        url: `/authsec/clientms/tenants/${tenant_id}/clients/platform-selectors`,
-        method: "GET",
-        params: { platform },
+      queryFn: async ({ platform }) => ({
+        data: { platform, selector_keys: [] },
       }),
     }),
   }),

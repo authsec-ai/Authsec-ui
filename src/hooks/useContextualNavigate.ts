@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
-import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 
 function normalizePath(path: string): string {
   if (!path) return "";
@@ -13,7 +12,6 @@ function normalizePath(path: string): string {
 export function useContextualNavigate() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { audience } = useRbacAudience();
 
   const activeContext = useMemo<"admin" | "enduser" | null>(() => {
     const match = location.pathname.match(/^\/(admin|enduser)(?:\/|$)/);
@@ -27,7 +25,7 @@ export function useContextualNavigate() {
       const remainder = restParts.join("");
       const hasExplicitContext =
         pathOnly.startsWith("admin/") || pathOnly.startsWith("enduser/");
-      const contextSegment = activeContext ?? (audience === "admin" ? "admin" : "enduser");
+      const contextSegment = activeContext ?? "admin";
       const prefix = `/${contextSegment}`;
       const buildPath = () => {
         if (!pathOnly) {
@@ -42,6 +40,6 @@ export function useContextualNavigate() {
 
       navigate(buildPath(), options);
     },
-    [activeContext, audience, navigate]
+    [activeContext, navigate]
   );
 }

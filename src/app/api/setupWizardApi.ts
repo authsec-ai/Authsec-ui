@@ -4,7 +4,7 @@
  * Endpoints for the 6-step RS setup wizard, drift events, manifest status polling,
  * and public-tool management.
  *
- * Base path: /authsec/resource-servers/:id/...
+ * Base path: /authsec/applications/:id/...
  */
 
 import { baseApi } from "./baseApi";
@@ -143,28 +143,28 @@ export interface TestLoginResponse {
 
 export const setupWizardApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // GET /authsec/resource-servers/:id/setup
+    // GET /authsec/applications/:id/setup
     getSetupChecklist: builder.query<SetupChecklistResponse, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/setup`,
+      query: (rsId) => `/authsec/applications/${rsId}/setup`,
       providesTags: (_result, _error, rsId) => [
         { type: "ResourceServer" as const, id: rsId },
         { type: "ScopeMatrix" as const, id: rsId },
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/activation-preview
+    // GET /authsec/applications/:id/activation-preview
     getActivationPreview: builder.query<ActivationPreviewResponse, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/activation-preview`,
+      query: (rsId) => `/authsec/applications/${rsId}/activation-preview`,
       providesTags: (_result, _error, rsId) => [
         { type: "ResourceServer" as const, id: rsId },
         { type: "ScopeMatrix" as const, id: rsId },
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/activate
+    // POST /authsec/applications/:id/activate
     activateResourceServer: builder.mutation<ActivateResponse, string>({
       query: (rsId) => ({
-        url: `/authsec/resource-servers/${rsId}/activate`,
+        url: `/authsec/applications/${rsId}/activate`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, rsId) => [
@@ -174,13 +174,13 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/tools/:tool_id/public
+    // POST /authsec/applications/:id/tools/:tool_id/public
     markToolPublic: builder.mutation<
       { tool_id: string; is_public: boolean },
       { rsId: string; toolId: string; body: MarkToolPublicRequest }
     >({
       query: ({ rsId, toolId, body }) => ({
-        url: `/authsec/resource-servers/${rsId}/tools/${toolId}/public`,
+        url: `/authsec/applications/${rsId}/tools/${toolId}/public`,
         method: "POST",
         body,
       }),
@@ -189,26 +189,26 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/sdk-manifest-status
+    // GET /authsec/applications/:id/sdk-manifest-status
     getSDKManifestStatus: builder.query<SDKManifestStatusResponse, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/sdk-manifest-status`,
+      query: (rsId) => `/authsec/applications/${rsId}/sdk-manifest-status`,
     }),
 
-    // GET /authsec/resource-servers/:id/drift-events
+    // GET /authsec/applications/:id/drift-events
     getDriftEvents: builder.query<DriftEventsResponse, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/drift-events`,
+      query: (rsId) => `/authsec/applications/${rsId}/drift-events`,
       providesTags: (_result, _error, rsId) => [
         { type: "ResourceServer" as const, id: `${rsId}-drift` },
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/drift-events/:event_id/dismiss
+    // POST /authsec/applications/:id/drift-events/:event_id/dismiss
     dismissDriftEvent: builder.mutation<
       { status: string },
       { rsId: string; eventId: string }
     >({
       query: ({ rsId, eventId }) => ({
-        url: `/authsec/resource-servers/${rsId}/drift-events/${eventId}/dismiss`,
+        url: `/authsec/applications/${rsId}/drift-events/${eventId}/dismiss`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, { rsId }) => [
@@ -216,15 +216,15 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/test-login
+    // POST /authsec/applications/:id/test-login
     testLogin: builder.mutation<TestLoginResponse, string>({
       query: (rsId) => ({
-        url: `/authsec/resource-servers/${rsId}/test-login`,
+        url: `/authsec/applications/${rsId}/test-login`,
         method: "POST",
       }),
     }),
 
-    // POST /authsec/resource-servers/:id/rescan
+    // POST /authsec/applications/:id/rescan
     // Authenticated-scan: pass a one-shot bearer token in the body so the
     // backend forwards it to the MCP server's tools/list. The token must be
     // in the body, not the Authorization header (which is reserved for the
@@ -234,7 +234,7 @@ export const setupWizardApi = baseApi.injectEndpoints({
       { rsId: string; mcpToken?: string }
     >({
       query: ({ rsId, mcpToken }) => ({
-        url: `/authsec/resource-servers/${rsId}/rescan`,
+        url: `/authsec/applications/${rsId}/rescan`,
         method: "POST",
         body: mcpToken ? { mcp_token: mcpToken } : {},
       }),
@@ -244,29 +244,29 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/roles
+    // GET /authsec/applications/:id/roles
     listRSRoles: builder.query<{ roles: RSRole[] }, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/roles`,
+      query: (rsId) => `/authsec/applications/${rsId}/roles`,
       providesTags: (_result, _error, rsId) => [
         { type: "ResourceServer" as const, id: `${rsId}-roles` },
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/bindings
+    // GET /authsec/applications/:id/bindings
     listRSBindings: builder.query<{ bindings: RSBinding[] }, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/bindings`,
+      query: (rsId) => `/authsec/applications/${rsId}/bindings`,
       providesTags: (_result, _error, rsId) => [
         { type: "ResourceServer" as const, id: `${rsId}-bindings` },
       ],
     }),
 
-    // POST /authsec/resource-servers/:id/bindings
+    // POST /authsec/applications/:id/bindings
     createRSBinding: builder.mutation<
       { id: string; user_id: string; role_id: string; role_name: string },
       { rsId: string; userId: string; roleId: string }
     >({
       query: ({ rsId, userId, roleId }) => ({
-        url: `/authsec/resource-servers/${rsId}/bindings`,
+        url: `/authsec/applications/${rsId}/bindings`,
         method: "POST",
         body: { user_id: userId, role_id: roleId },
       }),
@@ -276,10 +276,10 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // DELETE /authsec/resource-servers/:id/bindings/:binding_id
+    // DELETE /authsec/applications/:id/bindings/:binding_id
     deleteRSBinding: builder.mutation<{ status: string }, { rsId: string; bindingId: string }>({
       query: ({ rsId, bindingId }) => ({
-        url: `/authsec/resource-servers/${rsId}/bindings/${bindingId}`,
+        url: `/authsec/applications/${rsId}/bindings/${bindingId}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, { rsId }) => [
@@ -288,12 +288,12 @@ export const setupWizardApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // GET /authsec/resource-servers/:id/eligible-users
+    // GET /authsec/applications/:id/eligible-users
     listEligibleUsers: builder.query<{ users: EligibleUser[] }, string>({
-      query: (rsId) => `/authsec/resource-servers/${rsId}/eligible-users`,
+      query: (rsId) => `/authsec/applications/${rsId}/eligible-users`,
     }),
 
-    // POST /authsec/resource-servers/:id/tools
+    // POST /authsec/applications/:id/tools
     // Manual tool entry — wizard "Path C" escape hatch. inventory_source is
     // forced to 'manual' on the backend; admin override of mcp_scan or
     // sdk_manifest tools is not allowed through this route.
@@ -302,7 +302,7 @@ export const setupWizardApi = baseApi.injectEndpoints({
       { rsId: string; name: string; description?: string }
     >({
       query: ({ rsId, name, description }) => ({
-        url: `/authsec/resource-servers/${rsId}/tools`,
+        url: `/authsec/applications/${rsId}/tools`,
         method: "POST",
         body: {
           name,

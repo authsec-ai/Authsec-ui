@@ -72,7 +72,7 @@ export default function ApplicationActivityPage() {
         <p className="text-sm text-muted-foreground">
           Post-launch drift events from{" "}
           <code className="font-mono text-xs">
-            GET /authsec/resource-servers/{application.id}/drift-events
+            GET /authsec/applications/{application.id}/drift-events
           </code>
           . Detailed runtime metrics (policy health, denied calls,
           insufficient_scope errors) require backend endpoints we don't

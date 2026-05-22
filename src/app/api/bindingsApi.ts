@@ -51,14 +51,14 @@ export interface RoleBinding {
 /**
  * Bindings API
  * Handles role binding assignments (user + role + scope)
- * Supports both admin and end-user audiences with separate endpoints
+ * Uses the operator/admin RBAC surface.
  */
 export const bindingsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // List all role bindings with optional filters
     listBindings: builder.query<RoleBinding[], ListBindingsParams>({
       query: (params) => {
-        const { audience, ...restParams } = params;
+        const { audience: _audience, ...restParams } = params;
         const queryParams = new URLSearchParams();
 
         if (restParams.user_id) queryParams.append("user_id", restParams.user_id);
@@ -67,13 +67,8 @@ export const bindingsApi = baseApi.injectEndpoints({
 
         const queryString = queryParams.toString();
 
-        // Route based on audience
-        const baseUrl = audience === "admin"
-          ? "/authsec/uflow/admin/bindings"
-          : "/authsec/uflow/user/rbac/bindings";
-
         return {
-          url: `${baseUrl}${queryString ? `?${queryString}` : ""}`,
+          url: `/authsec/uflow/admin/bindings${queryString ? `?${queryString}` : ""}`,
           method: "GET",
         };
       },
@@ -81,18 +76,11 @@ export const bindingsApi = baseApi.injectEndpoints({
     }),
 
     createBinding: builder.mutation<BindingResponse, CreateBindingRequest>({
-      query: ({ audience = "admin", ...data }) => {
-        // Route based on audience
-        const url = audience === "admin"
-          ? "/authsec/uflow/admin/bindings"
-          : "/authsec/uflow/user/rbac/bindings";
-
-        return {
-          url,
-          method: "POST",
-          body: withSessionData(data),
-        };
-      },
+      query: ({ audience: _audience, ...data }) => ({
+        url: "/authsec/uflow/admin/bindings",
+        method: "POST",
+        body: withSessionData(data),
+      }),
       invalidatesTags: ["AdminUser", "AdminRBACRole", "AdminRBACScope"],
     }),
   }),

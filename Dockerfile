@@ -1,15 +1,15 @@
 # Stage 1: Build the React app
-FROM node:20-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 
-# Set environment variables for native module compatibility
-# ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild
-# ENV NPM_CONFIG_UNSAFE_PERM=true
-# ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
-# ARG VITE_API_URL
-# ARG VITE_APP_NAME
-# ENV VITE_API_URL=${VITE_API_URL}
-# ENV VITE_APP_NAME=${VITE_APP_NAME}
+# Vite bakes env vars into the bundle at build time. Anything the browser
+# needs to know (API URL, OAuth URL) must be set HERE, not at runtime.
+ARG VITE_API_URL
+ARG VITE_OAUTH_BASE_URL
+ARG VITE_APP_NAME
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_OAUTH_BASE_URL=${VITE_OAUTH_BASE_URL}
+ENV VITE_APP_NAME=${VITE_APP_NAME}
 
 # Copy package.json only (not package-lock.json to avoid platform mismatch)
 COPY . .

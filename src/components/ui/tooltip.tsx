@@ -55,3 +55,60 @@ function TooltipContent({
 }
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };
+
+/**
+ * `HelpTooltip` — small `?` icon that reveals contextual copy on hover.
+ *
+ * Used inline next to form labels, table headers, and section titles to
+ * explain AuthSec concepts (scopes, presets, roles, readiness checks).
+ * Implemented on top of the existing Radix tooltip primitive so it
+ * inherits keyboard accessibility and portal behavior.
+ */
+type HelpTooltipProps = {
+  content: string;
+  side?: "top" | "right" | "bottom" | "left";
+  className?: string;
+};
+
+export function HelpTooltip({
+  content,
+  side = "top",
+  className,
+}: HelpTooltipProps): React.JSX.Element {
+  return (
+    <TooltipPrimitive.Provider delayDuration={150}>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger asChild>
+          <button
+            type="button"
+            aria-label="Help"
+            className={cn(
+              "inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full",
+              "bg-slate-200 text-[10px] font-bold leading-none text-slate-600",
+              "hover:bg-slate-300 hover:text-slate-800",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1",
+              "align-middle",
+              className,
+            )}
+          >
+            ?
+          </button>
+        </TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            side={side}
+            sideOffset={6}
+            className={cn(
+              "z-[120] max-w-xs rounded-md bg-slate-900 px-3 py-2 text-xs leading-5 text-white shadow-lg",
+              "data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95",
+              "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            )}
+          >
+            {content}
+            <TooltipPrimitive.Arrow className="fill-slate-900" />
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
+  );
+}

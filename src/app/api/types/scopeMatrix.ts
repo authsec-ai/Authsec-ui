@@ -9,6 +9,13 @@
 // ── OAuth Scope ──
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type ScopeSource = "preset" | "discovered" | "manifest" | "manual";
+
+export interface ScopePermission {
+  id: string;
+  resource: string;
+  action: string;
+}
 
 export interface OAuthScope {
   id: string;
@@ -21,6 +28,8 @@ export interface OAuthScope {
   risk_level: RiskLevel;
   parent_scope_id?: string;
   is_auto_discovered: boolean;
+  source?: ScopeSource;
+  permissions?: ScopePermission[];
   created_at?: string;
   updated_at?: string;
 }

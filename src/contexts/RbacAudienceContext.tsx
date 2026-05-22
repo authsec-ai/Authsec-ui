@@ -1,9 +1,7 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 
@@ -21,24 +19,14 @@ const RbacAudienceContext = createContext<RbacAudienceContextValue | undefined>(
 );
 
 export function RbacAudienceProvider({ children }: { children: ReactNode }) {
-  const [audience, setAudience] = useState<RbacAudience>("admin");
-
-  const toggleAudience = useCallback(() => {
-    setAudience((prev) => (prev === "admin" ? "endUser" : "admin"));
-  }, []);
-
-  const setAudienceValue = useCallback((next: RbacAudience) => {
-    setAudience(next);
-  }, []);
-
   const value = useMemo<RbacAudienceContextValue>(
     () => ({
-      audience,
-      isAdmin: audience === "admin",
-      setAudience: setAudienceValue,
-      toggleAudience,
+      audience: "admin",
+      isAdmin: true,
+      setAudience: () => {},
+      toggleAudience: () => {},
     }),
-    [audience, setAudienceValue, toggleAudience]
+    []
   );
 
   return (

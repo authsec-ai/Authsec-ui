@@ -4,7 +4,7 @@
  * Layout (Launch Control IA):
  *   Dashboard
  *   Protect : Applications, AI Agents
- *   Access  : Users, Roles, Permissions, Assignments, Consent Grants
+ *   Authz   : Roles, Consent Grants
  *   Configure : Identity Providers, Trust Delegation, Secrets, SDK Guides
  *   Monitor : Audit Logs
  */
@@ -21,17 +21,13 @@ import {
   KeyRound,
   LayoutDashboard,
   Layers,
-  Search,
-  ShieldPlus,
   UserCog,
-  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
 
 import { useAppDispatch } from "../../app/hooks";
 import { setCurrentPage } from "../../app/slices/uiSlice";
-import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -54,8 +50,8 @@ interface NavItem {
   isActive?: boolean;
   onClick?: () => void;
   /**
-   * Phase A: items still tied to the legacy `/admin` or `/enduser` audience
-   * prefix opt in by setting `contextPrefixed: true`. Phase A's own object-
+   * Items still tied to the legacy `/admin` operator prefix
+   * opt in by setting `contextPrefixed: true`. Object-
    * first routes (e.g. /end-users, /settings/team, /authz/effective-access)
    * leave this false and render as-is.
    */
@@ -63,8 +59,8 @@ interface NavItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sidebar IA. URLs in NAV_ACCESS are prefixed at render time with the active
-// audience (`/admin` or `/enduser`) so the audience switcher continues to work.
+// Sidebar IA. URLs in NAV_ACCESS are prefixed at render time with the operator
+// `/admin` route prefix while the API consolidates on one RBAC surface.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const NAV_DASHBOARD: NavItem[] = [
@@ -80,16 +76,12 @@ const NAV_OBJECTS: NavItem[] = [
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
-// Authz lumps all the "rules" surfaces (roles, permissions, scopes, bindings,
-// effective-access). These still rely on the legacy `:context` route prefix in
-// Phase A; the IA refactor in this group is partial. URLs are prefixed at
-// render time with `/admin` or `/enduser` as before, EXCEPT `effective-access`
-// which is a fresh object-first route.
+// Platform authz is now workspace membership plus application-scoped access.
+// The legacy permission catalogue, assignment table, and generic effective
+// access pages are intentionally hidden from the primary nav; application
+// roles/grants live inside each Application's Access tab.
 const NAV_AUTHZ: NavItem[] = [
   { title: "Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
-  { title: "Permissions", url: "/authz/permissions", icon: ShieldPlus, contextPrefixed: true } as NavItem,
-  { title: "Assignments", url: "/authz/role-bindings", icon: UserPlus, contextPrefixed: true } as NavItem,
-  { title: "Effective Access", url: "/authz/effective-access", icon: Search } as NavItem,
   { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock } as NavItem,
 ];
 
@@ -116,7 +108,6 @@ export function AppSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { audience } = useRbacAudience();
   const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,7 +120,7 @@ export function AppSidebar({
     }
   }, []);
 
-  const contextPrefix = audience === "admin" ? "/admin" : "/enduser";
+  const contextPrefix = "/admin";
 
   const handleNavigation = useCallback(
     (path: string, pageId: string) => {
@@ -140,7 +131,7 @@ export function AppSidebar({
   );
 
   /**
-   * Apply the legacy `/admin` or `/enduser` prefix only to items that opted in
+   * Apply the legacy `/admin` prefix only to items that opted in
    * via contextPrefixed=true. Phase A's object-first routes are left untouched.
    */
   const prefixUrls = useCallback(

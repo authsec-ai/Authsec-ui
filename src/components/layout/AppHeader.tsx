@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { Button } from "../ui/button";
+import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
-import { Bell, Monitor, Sparkles } from "lucide-react";
+import { Monitor } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Breadcrumb } from "./Breadcrumb";
 import { useResponsiveLayout } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { RbacAudienceSwitcher } from "@/features/rbac/RbacAudienceSwitcher";
 
 interface AppHeaderProps {
   onRightSidebarToggle?: () => void;
@@ -16,7 +13,6 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: AppHeaderProps) {
-  const location = useLocation();
   const { shouldAutoCollapseSidebar } = useResponsiveLayout();
   const { open: sidebarOpen } = useSidebar();
   const [showAutoCollapseIndicator, setShowAutoCollapseIndicator] = useState(false);
@@ -35,15 +31,6 @@ export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: 
       setShowAutoCollapseIndicator(false);
     }
   }, [shouldShowIndicator]);
-
-  const handleNotifications = () => {};
-
-  const shouldShowRbacSwitcher = useMemo(() => {
-    const RBAC_SEGMENTS = ["users", "groups", "roles", "resources", "permissions", "role-bindings", "consent-grants"];
-    const segments = location.pathname.split("/").filter(Boolean);
-
-    return segments.some((segment) => RBAC_SEGMENTS.includes(segment));
-  }, [location.pathname]);
 
   return (
     <header className="bg-[var(--app-shell-surface)] text-foreground border-[var(--app-shell-border)] flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
@@ -69,13 +56,6 @@ export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: 
         <div className="flex-1">
           <Breadcrumb />
         </div>
-
-        {shouldShowRbacSwitcher && (
-          <>
-            <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
-            <RbacAudienceSwitcher />
-          </>
-        )}
 
         {/* <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" /> */}
 

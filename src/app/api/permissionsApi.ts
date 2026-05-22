@@ -72,12 +72,7 @@ export const permissionsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Get available permission resources
     getPermissionResources: builder.query<string[], { audience: 'admin' | 'endUser' }>({
-      query: ({ audience }) => {
-        if (audience === 'admin') {
-          return '/authsec/uflow/admin/permissions/resources';
-        }
-        return '/authsec/uflow/user/rbac/permissions/resources';
-      },
+      query: () => '/authsec/uflow/admin/permissions/resources',
       transformResponse: (response: ResourcesResponse) => {
         if (!response || !Array.isArray(response.resources)) {
           console.warn('Invalid resources API response:', response);
@@ -90,12 +85,7 @@ export const permissionsApi = baseApi.injectEndpoints({
 
     // List all permissions for a tenant
     getPermissions: builder.query<Permission[], { tenant_id: string; audience: 'admin' | 'endUser' }>({
-      query: ({ audience }) => {
-        if (audience === 'admin') {
-          return '/authsec/uflow/admin/permissions';
-        }
-        return '/authsec/uflow/user/rbac/permissions';
-      },
+      query: () => '/authsec/uflow/admin/permissions',
       transformResponse: (response: any) => {
         if (!response) {
           console.warn('Invalid permissions API response:', response);
@@ -116,8 +106,8 @@ export const permissionsApi = baseApi.injectEndpoints({
 
     // Create an atomic permission (resource + action)
     createPermission: builder.mutation<CreatePermissionResponse, CreatePermissionRequest & { audience: 'admin' | 'endUser' }>({
-      query: ({ audience, ...data }) => ({
-        url: audience === 'admin' ? "/authsec/uflow/admin/permissions" : "/authsec/uflow/user/rbac/permissions",
+      query: ({ audience: _audience, ...data }) => ({
+        url: "/authsec/uflow/admin/permissions",
         method: "POST",
         body: withSessionData(data),
       }),
@@ -147,8 +137,8 @@ export const permissionsApi = baseApi.injectEndpoints({
     // NEW: Delete Permission by Body (Main DB) - DELETE /uflow/admin/permissions
     // Deletes a permission using resource and action in body
     deletePermissionByBody: builder.mutation<GenericDeleteResponse, DeletePermissionByBodyRequest & { audience: 'admin' | 'endUser' }>({
-      query: ({ audience, ...data }) => ({
-        url: audience === 'admin' ? "/authsec/uflow/admin/permissions" : "/authsec/uflow/user/rbac/permissions",
+      query: ({ audience: _audience, ...data }) => ({
+        url: "/authsec/uflow/admin/permissions",
         method: "DELETE",
         body: data,
       }),
@@ -158,8 +148,8 @@ export const permissionsApi = baseApi.injectEndpoints({
     // NEW: Delete Permission by ID (Main DB) - DELETE /uflow/admin/permissions/{id}
     // Deletes a permission by its ID
     deletePermissionById: builder.mutation<GenericDeleteResponse, { id: string; audience: 'admin' | 'endUser' }>({
-      query: ({ id, audience }) => ({
-        url: audience === 'admin' ? `/authsec/uflow/admin/permissions/${id}` : `/authsec/uflow/user/rbac/permissions/${id}`,
+      query: ({ id }) => ({
+        url: `/authsec/uflow/admin/permissions/${id}`,
         method: "DELETE",
       }),
       invalidatesTags: ["UnifiedRBACPermission"],

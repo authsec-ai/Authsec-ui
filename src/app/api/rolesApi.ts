@@ -25,6 +25,16 @@ interface AuthSecRole {
   group_ids?: string[];
 }
 
+export interface AuthSecRoleDetail {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  granted_scopes?: string[];
+  user_ids?: string[];
+  usernames?: string[];
+}
+
 interface UserDefinedRoleRequest {
   tenant_id: string;
   name: string;
@@ -172,10 +182,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     getAuthSecRoles: builder.query<AuthSecRole[], { tenant_id: string; audience?: 'admin' | 'endUser' }>({
       async queryFn(args, _api, _extraOptions, baseQuery) {
         const tenantId = (args?.tenant_id ?? '').trim();
-        const audience = args?.audience ?? 'admin';
-
-        const basePath =
-          audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles';
+        const basePath = '/authsec/uflow/admin/roles';
 
         const candidateEndpoints = [
           tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
@@ -227,8 +234,8 @@ export const authSecRolesApi = baseApi.injectEndpoints({
 
     // Add user-defined roles
     addUserDefinedRoles: builder.mutation<CreateUserDefinedRoleResponse, UserDefinedRoleRequest>({
-      query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles',
+      query: ({ audience: _audience, ...data }) => ({
+        url: '/authsec/uflow/admin/roles',
         method: 'POST',
         body: withSessionData(data),
       }),
@@ -236,19 +243,36 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     }),
 
     // Update a role
-    updateUserDefinedRole: builder.mutation<{ message?: string; success?: boolean }, { id: string; data: { tenant_id: string; name: string; description?: string } }>({
+    getAuthSecRoleDetail: builder.query<AuthSecRoleDetail, string>({
+      query: (id) => `/authsec/uflow/admin/roles/${id}`,
+      providesTags: (_result, _error, id) => [{ type: 'UnifiedRBACRole', id }],
+    }),
+
+    updateUserDefinedRole: builder.mutation<
+      { message?: string; success?: boolean },
+      {
+        id: string;
+        data: {
+          tenant_id?: string;
+          name: string;
+          description?: string;
+          permission_ids?: string[];
+          permission_strings?: string[];
+        };
+      }
+    >({
       query: ({ id, data }) => ({
         url: `/authsec/uflow/admin/roles/${id}`,
         method: 'PUT',
         body: withSessionData(data),
       }),
-      invalidatesTags: ['UnifiedRBACRole'],
+      invalidatesTags: (_result, _error, { id }) => ['UnifiedRBACRole', { type: 'UnifiedRBACRole', id }],
     }),
 
     // Delete user-defined roles
     deleteUserDefinedRoles: builder.mutation<{ message?: string; success?: boolean }, DeleteRolesRequest>({
-      query: ({ audience = 'admin', ...data }) => ({
-        url: audience === 'admin' ? '/authsec/uflow/admin/roles' : '/authsec/uflow/user/rbac/roles',
+      query: ({ audience: _audience, ...data }) => ({
+        url: '/authsec/uflow/admin/roles',
         method: 'DELETE',
         body: withSessionData(data),
       }),
@@ -272,6 +296,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
 
 export const {
   useGetAuthSecRolesQuery,
+  useGetAuthSecRoleDetailQuery,
   useAddUserDefinedRolesMutation,
   useUpdateUserDefinedRoleMutation,
   useDeleteUserDefinedRolesMutation,

@@ -3,7 +3,6 @@
  *
  * Endpoints for fetching unique resources from permissions
  * - Admin: GET /uflow/admin/permissions/resources
- * - EndUser: GET /uflow/user/rbac/permissions/resources
  */
 
 import { baseApi } from './baseApi';
@@ -33,9 +32,9 @@ export const permissionsResourcesApi = baseApi.injectEndpoints({
             providesTags: ['AdminRBACResource'],
         }),
 
-        // GET /uflow/user/rbac/permissions/resources - List unique resources for enduser
+        // Compatibility hook: route through the consolidated admin surface.
         getEndUserPermissionResources: builder.query<string[], string>({
-            query: (tenant_id) => `/authsec/uflow/user/rbac/permissions/resources?tenant_id=${tenant_id}`,
+            query: () => '/authsec/uflow/admin/permissions/resources',
             transformResponse: (response: PermissionResourcesResponse) => response.resources || [],
             providesTags: ['EndUserRBACResource'],
         }),

@@ -13,6 +13,10 @@ export type ResourceServerFormState = {
   scopes_supported: string;
   registration_modes: string;
   active: boolean;
+  /** Catalog id of the scope preset selected on Create. `null` / `"blank"` for no preset. */
+  scope_preset_id: string | null;
+  /** When true, the access policy is activated immediately with a default role. */
+  default_access_enabled: boolean;
 };
 
 export type ResourceServerSecretState = {
@@ -51,6 +55,10 @@ export const DEFAULT_FORM: ResourceServerFormState = {
   scopes_supported: "tools:read\ntools:write",
   registration_modes: "dcr\nprereg\ncimd",
   active: true,
+  // Default to the recommended preset; operator can switch on Create.
+  scope_preset_id: "read_write",
+  // Closed by default — operator opts in on the Access tab.
+  default_access_enabled: false,
 };
 
 export function parseLines(value: string): string[] {
@@ -182,12 +190,20 @@ export function formFromServer(server: ResourceServer): ResourceServerFormState 
     scopes_supported: getDeclaredScopes(server).join("\n"),
     registration_modes: (server.registration_modes ?? []).join("\n"),
     active: server.active,
+    // Existing servers don't surface preset metadata yet; default to null
+    // so edit flows don't accidentally re-seed scopes.
+    scope_preset_id: null,
+    default_access_enabled: Boolean(server.access_policy_enabled),
   };
 }
 
 export function buildResourceServerPayload(
   form: ResourceServerFormState,
 ): CreateResourceServerRequest & { active?: boolean } {
+  const preset =
+    form.scope_preset_id && form.scope_preset_id !== "blank"
+      ? form.scope_preset_id
+      : null;
   return {
     name: form.name.trim(),
     public_base_url: form.public_base_url.trim(),
@@ -195,6 +211,8 @@ export function buildResourceServerPayload(
     scopes_supported: parseLines(form.scopes_supported),
     registration_modes: parseLines(form.registration_modes),
     active: form.active,
+    scope_preset_id: preset,
+    default_access_enabled: form.default_access_enabled,
   };
 }
 
