@@ -112,6 +112,13 @@ export interface ScopeMatrixResourceServer {
 export interface ScopeMatrixResponse {
   resource_server: ScopeMatrixResourceServer;
   tools: MCPToolResponse[];
+  /** All OAuth scopes registered against this RS. Used by the per-tool sidebar
+   *  to compute "scopes available to map to THIS tool" (i.e., scopes the tool
+   *  doesn't already have, even if they're mapped to other tools). */
+  scopes: OAuthScopeResponse[];
+  /** Scopes mapped to NO tool at all (strictly smaller than `scopes`). Kept
+   *  for back-compat — new code should derive per-tool unmapped from `scopes`
+   *  minus the tool's own mapped scopes. */
   unmapped_scopes: OAuthScopeResponse[];
   total_scopes: number;
   total_tools: number;

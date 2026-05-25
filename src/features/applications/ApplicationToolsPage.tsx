@@ -630,7 +630,16 @@ export default function ApplicationToolsPage() {
       <ToolInspectorDrawer
         tool={selected}
         applicationId={application.id}
-        unmappedScopes={matrix?.unmapped_scopes ?? []}
+        // PER-TOOL unmapped: every RS scope MINUS the scopes already mapped to
+        // the currently-selected tool. Falls back to the legacy global
+        // `unmapped_scopes` when the response doesn't yet include `scopes`
+        // (older backend pre-fix).
+        unmappedScopes={(() => {
+          const allScopes = matrix?.scopes ?? matrix?.unmapped_scopes ?? [];
+          if (!selected) return [];
+          const alreadyMapped = new Set(selected.scopes.map((s) => s.scope_id));
+          return allScopes.filter((s) => !alreadyMapped.has(s.id));
+        })()}
         onClose={() => setSelected(null)}
       />
     </div>
