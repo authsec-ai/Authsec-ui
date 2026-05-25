@@ -25,6 +25,12 @@ import { KeyRound, Loader2, Plus, RefreshCcw, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
+import {
+  AdaptiveTable,
+  type AdaptiveColumn,
+} from "@/components/ui/adaptive-table";
+import { Badge } from "@/components/ui/badge";
+import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HelpTooltip } from "@/components/ui/tooltip";
@@ -50,13 +56,13 @@ import type {
   RiskLevel,
 } from "@/app/api/types/scopeMatrix";
 import { cn } from "@/lib/utils";
+import { FilterCard, TableCard } from "@/theme/components/cards";
 
 import { useApplicationContext } from "./useApplicationContext";
 import {
   DecisionBanner,
   InlineStat,
   StatusBadge,
-  Surface,
 } from "./components/ApplicationConsole";
 
 type FilterKey = "all" | "needs-review" | "mapped" | "public";
@@ -230,6 +236,116 @@ export default function ApplicationToolsPage() {
     });
   }, [tools, filter, query]);
 
+  const toolColumns = useMemo<AdaptiveColumn<MCPToolResponse>[]>(
+    () => [
+      {
+        id: "tool",
+        header: "Tool",
+        alwaysVisible: true,
+        approxWidth: 260,
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <div className="truncate font-mono text-xs font-semibold text-slate-950">
+              {row.original.name}
+            </div>
+            {row.original.title ? (
+              <div className="mt-0.5 truncate text-xs text-slate-500">
+                {row.original.title}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: "risk",
+        header: "Risk",
+        priority: 1,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const risk = effectiveRisk(row.original);
+          const tone = RISK_TONE[risk];
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                tone.chip,
+                tone.text,
+              )}
+            >
+              <span className="size-1 rounded-full bg-current" aria-hidden />
+              {risk}
+            </span>
+          );
+        },
+      },
+      {
+        id: "source",
+        header: "Source",
+        priority: 2,
+        approxWidth: 130,
+        cell: ({ row }) => {
+          const source = normalizeToolSource(row.original);
+          const sourceStyle =
+            SOURCE_BADGE_STYLE[source] ?? "border-slate-200 bg-slate-50 text-slate-600";
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                sourceStyle,
+              )}
+            >
+              {source}
+            </span>
+          );
+        },
+      },
+      {
+        id: "scopes",
+        header: "Mapped scopes",
+        priority: 3,
+        approxWidth: 260,
+        cell: ({ row }) =>
+          row.original.scopes.length === 0 ? (
+            <span className="text-xs italic text-slate-500">
+              {row.original.is_public ? "public — no scope check" : "—"}
+            </span>
+          ) : (
+            <span
+              className="block truncate font-mono text-xs text-slate-700"
+              title={row.original.scopes.map((s) => s.scope_string).join(", ")}
+            >
+              {row.original.scopes.map((s) => s.scope_string).join(", ")}
+            </span>
+          ),
+      },
+      {
+        id: "decision",
+        header: "Decision",
+        priority: 4,
+        approxWidth: 140,
+        cell: ({ row }) => {
+          const decision = classifyTool(row.original);
+          if (decision === "public") return <StatusBadge tone="info">public</StatusBadge>;
+          if (decision === "mapped") return <StatusBadge tone="success">mapped</StatusBadge>;
+          if (decision === "advisory") return <StatusBadge tone="warning">suggested</StatusBadge>;
+          return <StatusBadge tone="warning">denied</StatusBadge>;
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 110,
+        cell: ({ row }) => (
+          <Button variant="outline" size="sm" onClick={() => setSelected(row.original)}>
+            Inspect
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
+
   const handleRescan = async () => {
     try {
       await rescan(application.id).unwrap();
@@ -320,7 +436,8 @@ export default function ApplicationToolsPage() {
         onAction={handleRescan}
       />
 
-      <Surface className="p-4">
+      <FilterCard>
+        <CardContent variant="compact" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <InlineStat label="tools" value={isLoading ? "..." : counts.all} tone="info" />
@@ -370,7 +487,8 @@ export default function ApplicationToolsPage() {
             );
           })}
         </div>
-      </Surface>
+        </CardContent>
+      </FilterCard>
 
       <details className="group rounded-lg border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.02)]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-950">
@@ -457,7 +575,7 @@ export default function ApplicationToolsPage() {
       </details>
 
       {/* Tools table */}
-      <Surface className="overflow-hidden">
+      <TableCard>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs">
           <span className="font-semibold text-slate-950">
             {FILTER_DEFS.find((f) => f.key === filter)?.label} ({visibleTools.length})
@@ -466,66 +584,37 @@ export default function ApplicationToolsPage() {
             Click any row to inspect mapping and decide.
           </span>
         </div>
-        <div>
-          <table className="w-full table-fixed text-sm">
-            <colgroup>
-              <col className="w-[20%]" />
-              <col className="w-[8%]" />
-              <col className="w-[9%]" />
-              <col className="w-[24%]" />
-              <col className="w-[19%]" />
-              <col className="w-[10%]" />
-              <col className="w-[10%]" />
-            </colgroup>
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/60 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-                <th className="px-4 py-3">Tool</th>
-                <th className="px-4 py-3">Risk</th>
-                <th className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1">
-                    Source
-                    <HelpTooltip content="Where AuthSec learned about this tool. `manifest` = pushed by the SDK; `convention` = auto-matched by naming pattern; `scan` = found via tools/list; `manual` = added by an operator." />
-                  </span>
-                </th>
-                <th className="px-4 py-3">Mapped scopes</th>
-                <th className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1">
-                    Risk reason
-                    <HelpTooltip content="Why AuthSec flagged this risk level. Scopes containing `admin` or `delete` are critical; `write`/`create`/`update` are medium; `:*` wildcards are high; else low." />
-                  </span>
-                </th>
-                <th className="px-4 py-3">Decision</th>
-                <th className="px-4 py-3 text-right" aria-label="Action" />
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                    <Loader2 className="mr-2 inline size-4 animate-spin" />
-                    Loading tools…
-                  </td>
-                </tr>
-              )}
-              {!isLoading && visibleTools.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                    {tools.length === 0
-                      ? "No tools discovered yet. Rescan after deploying the SDK."
-                    : "No tools match this filter."}
-                  </td>
-                </tr>
-              )}
-              {visibleTools.map((tool) => (
-                <ToolRowRender
-                  key={tool.id}
-                  tool={tool}
-                  onInspect={() => setSelected(tool)}
+        <CardContent variant="flush">
+          {isLoading ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 inline size-4 animate-spin" />
+              Loading tools...
+            </div>
+          ) : visibleTools.length === 0 ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              {tools.length === 0
+                ? "No tools discovered yet. Rescan after deploying the SDK."
+                : "No tools match this filter."}
+            </div>
+          ) : (
+            <AdaptiveTable
+              tableId="application-tools"
+              data={visibleTools}
+              columns={toolColumns}
+              enableSelection={false}
+              enableExpansion
+              renderExpandedRow={(row) => (
+                <ToolExpandedRow
+                  tool={row.original}
+                  onInspect={() => setSelected(row.original)}
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
+              )}
+              onRowClick={(tool) => setSelected(tool)}
+              getRowId={(tool) => tool.id}
+              pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
+            />
+          )}
+        </CardContent>
         {/* Footer — "How tools got here" */}
         {!isLoading && tools.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/50 px-4 py-3 text-xs text-slate-600">
@@ -536,7 +625,7 @@ export default function ApplicationToolsPage() {
             <span className="text-slate-500">{summarizeToolSources(tools)}</span>
           </div>
         )}
-      </Surface>
+      </TableCard>
 
       <ToolInspectorDrawer
         tool={selected}
@@ -548,7 +637,7 @@ export default function ApplicationToolsPage() {
   );
 }
 
-// ── Tool row ──────────────────────────────────────────────────────────────
+// ── Expanded tool row ─────────────────────────────────────────────────────
 
 function summarizeToolSources(tools: MCPToolResponse[]): string {
   const counts: Record<string, number> = {};
@@ -568,96 +657,60 @@ function summarizeToolSources(tools: MCPToolResponse[]): string {
   return parts.length > 0 ? `${parts.join(", ")}.` : `${total} tools total.`;
 }
 
-function ToolRowRender({
+function ToolExpandedRow({
   tool,
   onInspect,
 }: {
   tool: MCPToolResponse;
   onInspect: () => void;
 }) {
-  const decision = classifyTool(tool);
-  const risk = effectiveRisk(tool);
-  const riskTone = RISK_TONE[risk];
   const source = normalizeToolSource(tool);
   const sourceStyle =
     SOURCE_BADGE_STYLE[source] ?? "border-slate-200 bg-slate-50 text-slate-600";
+
   return (
-    <tr
-      className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50/40"
-      onClick={onInspect}
-    >
-      <td className="px-4 py-3">
-        <div className="truncate font-mono text-xs font-semibold text-slate-950">
-          {tool.name}
+    <div className="grid gap-4 p-4 text-sm md:grid-cols-[1fr_1fr_1fr]">
+      <section>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Risk reason
         </div>
-        {tool.title ? (
-          <div className="mt-0.5 truncate text-xs text-slate-500">
-            {tool.title}
-          </div>
-        ) : null}
-      </td>
-      <td className="px-4 py-3">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
-            riskTone.chip,
-            riskTone.text,
+        <p className="mt-2 text-muted-foreground">{riskReasonForTool(tool)}</p>
+      </section>
+      <section>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Mapped scopes
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {tool.scopes.length ? (
+            tool.scopes.map((scope) => (
+              <Badge key={scope.scope_id} variant="outline" className="font-mono text-xs">
+                {scope.scope_string}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">No mapped scopes.</span>
           )}
-        >
-          <span className="size-1 rounded-full bg-current" aria-hidden />
-          {risk}
-        </span>
-      </td>
-      <td className="px-4 py-3">
+        </div>
+      </section>
+      <section>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Source
+        </div>
         <span
           className={cn(
-            "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase",
+            "mt-2 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase",
             sourceStyle,
           )}
         >
           {source}
         </span>
-      </td>
-      <td className="px-4 py-3">
-        {tool.scopes.length === 0 ? (
-          <span className="text-xs italic text-slate-500">
-            {tool.is_public ? "(public — no scope check)" : "—"}
-          </span>
-        ) : (
-          <span className="block truncate font-mono text-xs text-slate-700" title={tool.scopes.map((s) => s.scope_string).join(", ")}>
-            {tool.scopes.map((s) => s.scope_string).join(", ")}
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <span className="line-clamp-2 text-[11px] leading-4 text-slate-600">
-          {riskReasonForTool(tool)}
-        </span>
-      </td>
-      <td className="px-4 py-3">
-        {decision === "public" ? (
-          <StatusBadge tone="info">public</StatusBadge>
-        ) : decision === "mapped" ? (
-          <StatusBadge tone="success">mapped</StatusBadge>
-        ) : decision === "advisory" ? (
-          <StatusBadge tone="warning">suggested</StatusBadge>
-        ) : (
-          <StatusBadge tone="warning">denied</StatusBadge>
-        )}
-      </td>
-      <td className="px-4 py-3 text-right">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onInspect();
-          }}
-        >
-          Inspect
-        </Button>
-      </td>
-    </tr>
+        <div className="mt-4">
+          <Button variant="outline" size="sm" onClick={onInspect}>
+            Inspect mapping
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }
 

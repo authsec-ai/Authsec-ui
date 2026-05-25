@@ -22,8 +22,10 @@ import { DashboardPage } from "./features/dashboard/DashboardPage";
 
 import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
+import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
 import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
+import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
 
@@ -35,7 +37,10 @@ import ApplicationLayout from "./features/applications/ApplicationLayout";
 import ApplicationOverviewPage from "./features/applications/ApplicationOverviewPage";
 import ApplicationSetupPage from "./features/applications/ApplicationSetupPage";
 import ApplicationToolsPage from "./features/applications/ApplicationToolsPage";
+import ApplicationScopesPage from "./features/applications/ApplicationScopesPage";
 import ApplicationAccessPage from "./features/applications/ApplicationAccessPage";
+import ApplicationRoleBindingsPage from "./features/applications/ApplicationRoleBindingsPage";
+import ApplicationConsentGrantsPage from "./features/applications/ApplicationConsentGrantsPage";
 import ApplicationClientsPage from "./features/applications/ApplicationClientsPage";
 import ApplicationTestPage from "./features/applications/ApplicationTestPage";
 import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage";
@@ -401,7 +406,10 @@ function AppContent() {
                     <Route path="overview" element={<ApplicationOverviewPage />} />
                     <Route path="setup" element={<ApplicationSetupPage />} />
                     <Route path="tools" element={<ApplicationToolsPage />} />
+                    <Route path="scopes" element={<ApplicationScopesPage />} />
                     <Route path="access" element={<ApplicationAccessPage />} />
+                    <Route path="role-bindings" element={<ApplicationRoleBindingsPage />} />
+                    <Route path="consent-grants" element={<ApplicationConsentGrantsPage />} />
                     <Route path="clients" element={<ApplicationClientsPage />} />
                     <Route path="test" element={<ApplicationTestPage />} />
                     <Route path="launch" element={<ApplicationLaunchPage />} />
@@ -566,6 +574,16 @@ function AppContent() {
                     }
                   />
                   <Route
+                    path="/end-users/:userId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EndUserDetailPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/settings/team"
                     element={
                       <ProtectedRoute requireProject>
@@ -581,6 +599,26 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <EffectiveAccessPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/authz/scope-catalog"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ScopeCatalogPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/consent-grants"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ConsentGrantsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -696,6 +734,10 @@ function AppContent() {
                             </AppLayout>
                           </ProtectedRoute>
                         }
+                      />
+                      <Route
+                        path="scope-catalog"
+                        element={<Navigate to="/authz/scope-catalog" replace />}
                       />
                     </Route>
 

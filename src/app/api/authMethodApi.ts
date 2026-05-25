@@ -1,132 +1,109 @@
+// authMethodApi — workspace-scoped Identity Provider API (v4)
+//
+// Single canonical endpoint at /authsec/identity-providers handles both OIDC
+// and SAML by dispatching on `provider_type`. Application-level whitelisting
+// happens via /authsec/applications/:id/identity-providers (default-allow).
+//
+// Legacy /oocmgr/* IDP endpoints have been removed from the backend; the only
+// surfaces below are v4.
+
 import { baseApi } from "./baseApi";
 import type {
   AuthMethod,
-  AuthMethodWithStats,
   AuthMethodFilters,
   AuthMethodAnalytics,
-  ListParams,
 } from "@/types/database";
 
-// OIDC Provider Types
-export interface OidcProviderConfig {
-  provider_name: string;
+// ---------------------------------------------------------------------------
+// Identity Provider (workspace-scoped) — shared core types
+// ---------------------------------------------------------------------------
+
+export type IdentityProviderType = "oidc" | "saml" | "ad" | "entra" | "scim";
+export type IdentityProviderStatus = "configured" | "disabled";
+
+/** Row stored in identity_providers; protocol-specific config is referenced
+ *  by config_ref (UUID of the underlying oidc_providers / saml_providers row). */
+export interface IdentityProvider {
+  id: string;
+  workspace_id: string;
+  provider_type: IdentityProviderType;
   display_name: string;
+  config_ref: string;
+  status: IdentityProviderStatus;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Payload posted when creating an OIDC IDP. The client_secret is sent to the
+ *  backend in plaintext; it is written to Vault and never persisted in the DB. */
+export interface CreateOIDCIdentityProviderConfig {
+  provider_name: string; // 'google' | 'github' | 'microsoft' | custom slug
+  authorization_url: string;
+  token_url: string;
+  userinfo_url: string;
   client_id: string;
   client_secret: string;
-  auth_url: string;
-  token_url: string;
-  user_info_url: string;
-  scopes: string[];
-  issuer_url?: string;
-  jwks_url?: string;
-  additional_params?: Record<string, any>;
-  is_active: boolean;
-  sort_order?: number;
+  scopes?: string; // space-delimited, e.g. "openid email profile"
+  icon_url?: string;
 }
 
-export interface TenantClientConfig {
-  client_name: string;
-  redirect_uris: string[];
-  scopes?: string[];
-  grant_types?: string[];
+/** Payload posted when creating a SAML IDP. */
+export interface CreateSAMLIdentityProviderConfig {
+  provider_name: string;
+  entity_id: string;
+  sso_url: string;
+  slo_url?: string;
+  certificate: string;
+  name_id_format?: string;
+  attribute_mapping?: Record<string, string>;
 }
 
-export interface OidcProviderRequest {
-  tenant_id: string;
-  org_id: string;
-  provider: OidcProviderConfig;
-  react_app_url: string;
-  created_by: string;
-}
-
-export interface GenerateLoginUrlRequest {
-  tenant_id: string;
-  org_id: string;
-  redirect_uri: string;
-  state: string;
-}
-
-export interface GenerateLoginUrlResponse {
-  success: boolean;
-  instructions: string;
-  login_endpoint: string;
-  oauth_url: string;
-  pkce: {
-    code_challenge: string;
-    code_verifier: string;
-    method: string;
-  };
-  tenant_client_id: string;
-}
-
-export interface OidcProviderResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-}
-
-export interface OidcConfigRequest {
-  tenant_id: string;
-  client_id?: string; // Optional - filter by client_id if provided
-}
-
-export interface OidcConfigResponse {
-  success: boolean;
-  message: string;
-  data: {
-    oidc_providers: Array<{
-      provider_name: string;
+export type CreateIdentityProviderRequest =
+  | {
+      provider_type: "oidc";
       display_name: string;
-      client_id: string;
-      callback_url: string;
-      provider_config: {
-        client_id: string;
-        client_secret: string;
-        auth_url: string;
-        token_url: string;
-        user_info_url: string;
-        scopes: string[];
-        issuer_url?: string;
-        jwks_url?: string;
-        additional_params?: any;
-      };
-      is_active: boolean;
-      created_at: string;
-      sort_order: number;
-    }> | null;
-    tenant_id: string;
-    org_id?: string;
-    provider_count: number;
-    tenant_client?: TenantClientConfig & {
-      client_id?: string;
-      created_at?: string;
+      config: CreateOIDCIdentityProviderConfig;
+    }
+  | {
+      provider_type: "saml";
+      display_name: string;
+      config: CreateSAMLIdentityProviderConfig;
     };
-  };
-  timestamp: string;
+
+export interface UpdateIdentityProviderStatusRequest {
+  id: string;
+  status: IdentityProviderStatus;
 }
 
-export interface UpdateCompleteTenantRequest {
-  tenant_id: string;
-  org_id: string;
-  client_id?: string; // Optional - if provided, updates only for this client
-  tenant_name?: string;
-  tenant_client?: TenantClientConfig;
-  oidc_providers?: OidcProviderConfig[];
-  updated_by?: string;
+// ---------------------------------------------------------------------------
+// Application IDP policies (Application↔IDP whitelist; default-allow)
+// ---------------------------------------------------------------------------
+
+export interface ApplicationIDPPolicy {
+  id: string;
+  workspace_id: string;
+  application_id: string;
+  identity_provider_id: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface OocmgrMessageResponse {
-  message?: string;
-  success?: boolean;
-  data?: any;
-  timestamp?: string;
-  request_id?: string;
+export interface AddApplicationIDPPolicyRequest {
+  applicationId: string;
+  identity_provider_id: string;
+  enabled?: boolean;
 }
 
-// Show Auth Providers Types (New API)
+export interface RemoveApplicationIDPPolicyRequest {
+  applicationId: string;
+  identityProviderId: string;
+}
+
 export interface ShowAuthProvidersRequest {
   tenant_id: string;
-  client_id?: string; // Optional - sent as header if provided
+  client_id?: string;
 }
 
 export interface ShowAuthProvidersResponse {
@@ -142,13 +119,7 @@ export interface ShowAuthProvidersResponse {
       client_id?: string;
       client_ids?: string;
       provider_type?: string;
-      hydra_client_id?: string;
       callback_url?: string;
-      endpoints?: {
-        auth_url: string;
-        token_url: string;
-        user_info_url?: string;
-      };
       is_active: boolean;
       sort_order: number;
       status?: string;
@@ -157,96 +128,58 @@ export interface ShowAuthProvidersResponse {
   timestamp: string;
 }
 
-// Edit Client Auth Provider Types (New API)
 export interface EditClientAuthProviderRequest {
   tenant_id: string;
   client_id: string;
   provider_name: string;
   display_name: string;
   is_active: boolean;
-  callback_url: string;
-  provider_config: {
-    auth_url: string;
-    token_url: string;
+  callback_url?: string;
+  provider_config?: {
+    auth_url?: string;
+    token_url?: string;
     user_info_url?: string;
   };
   updated_by?: string;
 }
 
-export interface EditClientAuthProviderResponse {
-  success: boolean;
-  message: string;
-  data: {
-    client_id: string;
-    provider_name: string;
-    updated_clients: string[];
-    updated_fields: {
-      provider_name: string;
-      display_name: string;
-      callback_url: string;
-      is_active: boolean;
-      provider_config: {
-        auth_url: string;
-        token_url: string;
-        user_info_url?: string;
-      };
-    };
-  };
-  timestamp: string;
-}
-
-// Update Provider Types (New API)
 export interface UpdateProviderRequest {
   tenant_id: string;
-  org_id: string;
+  org_id?: string;
   provider_name: string;
   display_name: string;
-  client_id: string;
-  client_secret: string;
-  auth_url: string;
-  token_url: string;
-  user_info_url: string;
-  scopes: string[];
-  is_active: boolean;
-  updated_by: string;
+  client_id?: string;
+  client_secret?: string;
+  auth_url?: string;
+  token_url?: string;
+  user_info_url?: string;
+  scopes?: string[];
+  is_active?: boolean;
+  updated_by?: string;
 }
 
-export interface UpdateProviderResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-  timestamp: string;
-}
-
-// Delete Provider Types (New API)
 export interface DeleteProviderRequest {
   tenant_id: string;
-  client_id: string;
+  client_id?: string;
   provider_name: string;
 }
 
-export interface DeleteProviderResponse {
-  success: boolean;
-  message: string;
-  timestamp: string;
-}
+// ---------------------------------------------------------------------------
+// Callback URL helper — the workspace OIDC callback is always at this path
+// ---------------------------------------------------------------------------
 
-export interface RawHydraDumpRequest {
-  tenant_id: string;
-  client_type: string;
-  provider_name: string;
-}
+/** Compute the OIDC redirect URI to paste into Google Cloud Console / GitHub
+ *  / Microsoft Entra. The backend serves the callback at this exact path. */
+export const oidcCallbackUrl = (): string =>
+  `${window.location.origin}/authsec/uflow/oidc/callback`;
 
-export interface RawHydraDumpResponse {
-  success: boolean;
-  message?: string;
-  data?: Record<string, any>;
-  timestamp?: string;
-}
+// ---------------------------------------------------------------------------
+// RTK Query slice
+// ---------------------------------------------------------------------------
 
 export const authMethodApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // Authentication Methods CRUD
+    // ----- Auth methods (legacy/unrelated, kept for other pages) ----------
     getAuthMethods: builder.query<AuthMethod[], AuthMethodFilters>({
       query: (params = {}) => {
         const searchParams = new URLSearchParams();
@@ -257,17 +190,14 @@ export const authMethodApi = baseApi.injectEndpoints({
         if (params.limit) searchParams.append("limit", params.limit.toString());
         if (params.offset)
           searchParams.append("offset", params.offset.toString());
-
         return `/authsec/auth-methods?${searchParams.toString()}`;
       },
       providesTags: ["AuthMethod"],
     }),
-
     getAuthMethod: builder.query<AuthMethod, string>({
       query: (id) => `/authsec/auth-methods/${id}`,
       providesTags: (result, error, id) => [{ type: "AuthMethod", id }],
     }),
-
     createAuthMethod: builder.mutation<AuthMethod, Partial<AuthMethod>>({
       query: (data) => ({
         url: "/authsec/auth-methods",
@@ -276,7 +206,6 @@ export const authMethodApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["AuthMethod"],
     }),
-
     updateAuthMethod: builder.mutation<
       AuthMethod,
       { id: string; data: Partial<AuthMethod> }
@@ -288,7 +217,6 @@ export const authMethodApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (result, error, { id }) => [{ type: "AuthMethod", id }],
     }),
-
     deleteAuthMethod: builder.mutation<void, string>({
       query: (id) => ({
         url: `/authsec/auth-methods/${id}`,
@@ -296,20 +224,16 @@ export const authMethodApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["AuthMethod"],
     }),
-
-    // Auth Method Stats
     getAuthMethodStats: builder.query<any, string>({
-      query: (projectId) => `/authsec/auth-methods/stats?project_id=${projectId}`,
+      query: (projectId) =>
+        `/authsec/auth-methods/stats?project_id=${projectId}`,
       providesTags: ["AuthMethod"],
     }),
-
-    // Auth Method Analytics
     getAuthMethodAnalytics: builder.query<AuthMethodAnalytics, string>({
-      query: (projectId) => `/authsec/auth-methods/analytics?project_id=${projectId}`,
+      query: (projectId) =>
+        `/authsec/auth-methods/analytics?project_id=${projectId}`,
       providesTags: ["AuthMethod"],
     }),
-
-    // Toggle auth method status
     toggleAuthMethodStatus: builder.mutation<AuthMethod, string>({
       query: (id) => ({
         url: `/authsec/auth-methods/${id}/toggle-status`,
@@ -320,182 +244,177 @@ export const authMethodApi = baseApi.injectEndpoints({
         "AuthMethod",
       ],
     }),
-
-    // Get auth methods by project
     getAuthMethodsByProject: builder.query<AuthMethod[], string>({
       query: (projectId) => `/authsec/projects/${projectId}/auth-methods`,
       providesTags: ["AuthMethod"],
     }),
 
-    // OIDC Provider Endpoints
-    addOidcProvider: builder.mutation<
-      OidcProviderResponse,
-      OidcProviderRequest
-    >({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/add-provider",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    showAuthProviders: builder.query<ShowAuthProvidersResponse, ShowAuthProvidersRequest>({
+      query: () => "/authsec/identity-providers?provider_type=oidc",
+      transformResponse: (providers: IdentityProvider[], _meta, arg) => ({
+        success: true,
+        message: "Identity providers loaded",
+        data: {
+          tenant_id: arg.tenant_id,
+          client_id: arg.client_id,
+          count: providers.length,
+          providers: providers.map((provider, index) => ({
+            provider_name: provider.display_name.toLowerCase().replace(/\s+/g, "-"),
+            display_name: provider.display_name,
+            client_id: provider.config_ref,
+            client_ids: provider.config_ref,
+            provider_type: provider.provider_type,
+            is_active: provider.status === "configured",
+            sort_order: index,
+            status: provider.status === "configured" ? "active" : "inactive",
+          })),
         },
-        body: data,
+        timestamp: new Date().toISOString(),
       }),
-      invalidatesTags: ["AuthMethodOIDCProvider"],
+      providesTags: [{ type: "IdentityProvider", id: "LIST" }],
     }),
 
-    getOidcConfig: builder.query<OidcConfigResponse, OidcConfigRequest>({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/get-config",
-        method: "POST",
-        body: data,
+    editClientAuthProvider: builder.mutation<{ success: boolean }, EditClientAuthProviderRequest>({
+      query: ({ provider_name, is_active }) => ({
+        url: `/authsec/identity-providers/${provider_name}/status`,
+        method: "PUT",
+        body: { status: is_active ? "configured" : "disabled" },
       }),
-      providesTags: (result, error, arg) =>
-        // Provide specific tags based on whether client_id is in the request
-        arg.client_id
+      invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
+    }),
+
+    updateProvider: builder.mutation<{ success: boolean }, UpdateProviderRequest>({
+      query: ({ provider_name, is_active }) => ({
+        url: `/authsec/identity-providers/${provider_name}/status`,
+        method: "PUT",
+        body: { status: is_active === false ? "disabled" : "configured" },
+      }),
+      invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
+    }),
+
+    deleteProvider: builder.mutation<{ success: boolean }, DeleteProviderRequest>({
+      query: ({ provider_name }) => ({
+        url: `/authsec/identity-providers/${provider_name}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
+    }),
+
+    // ----- Identity Providers (workspace IDP CRUD) ------------------------
+
+    /** GET /authsec/identity-providers — list all IDPs in the workspace. */
+    listIdentityProviders: builder.query<
+      IdentityProvider[],
+      { provider_type?: IdentityProviderType } | void
+    >({
+      query: (params) => {
+        const qs =
+          params && params.provider_type
+            ? `?provider_type=${encodeURIComponent(params.provider_type)}`
+            : "";
+        return `/authsec/identity-providers${qs}`;
+      },
+      providesTags: (result) =>
+        result
           ? [
-              { type: "AuthMethodOIDCProvider", id: arg.client_id },
-              { type: "AuthMethodOIDCProvider", id: "LIST" },
+              ...result.map((p) => ({
+                type: "IdentityProvider" as const,
+                id: p.id,
+              })),
+              { type: "IdentityProvider" as const, id: "LIST" },
             ]
-          : [{ type: "AuthMethodOIDCProvider", id: "LIST" }],
+          : [{ type: "IdentityProvider" as const, id: "LIST" }],
     }),
 
-    updateCompleteTenantConfig: builder.mutation<
-      OocmgrMessageResponse,
-      UpdateCompleteTenantRequest
+    /** GET /authsec/identity-providers/:id */
+    getIdentityProvider: builder.query<IdentityProvider, string>({
+      query: (id) => `/authsec/identity-providers/${id}`,
+      providesTags: (_r, _e, id) => [{ type: "IdentityProvider", id }],
+    }),
+
+    /** POST /authsec/identity-providers — dispatches on provider_type. */
+    createIdentityProvider: builder.mutation<
+      IdentityProvider,
+      CreateIdentityProviderRequest
     >({
-      query: (data) => ({
-        url: "/authsec/oocmgr/tenant/update-complete",
+      query: (body) => ({
+        url: "/authsec/identity-providers",
         method: "POST",
-        body: data,
+        body,
       }),
-      invalidatesTags: (result, error, arg) => {
-        // Only invalidate the specific client's cache if client_id is provided
-        // Otherwise invalidate all OIDC provider caches
-        if (arg.client_id) {
-          return [
-            { type: "AuthMethodOIDCProvider", id: arg.client_id },
-            { type: "Client", id: arg.client_id },
-            "Client", // Also invalidate client list to refresh the table
-          ];
-        }
-        return ["AuthMethodOIDCProvider", "Client"];
-      },
+      invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
     }),
 
-    // New OIDC Provider Management Endpoints
-    showAuthProviders: builder.query<
-      ShowAuthProvidersResponse,
-      ShowAuthProvidersRequest
+    /** PUT /authsec/identity-providers/:id/status — 'configured' | 'disabled'. */
+    updateIdentityProviderStatus: builder.mutation<
+      { status: IdentityProviderStatus },
+      UpdateIdentityProviderStatusRequest
     >({
-      query: (data) => {
-        console.log("[showAuthProviders] Request data:", data);
-
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-
-        // ALWAYS add Client-Id header (required by backend)
-        // Use provided client_id or empty string if not available
-        const clientIdValue = data.client_id || "";
-        headers["Client-Id"] = clientIdValue;
-
-        // Always include client_id in body as well (fallback for CORS issues)
-        const requestBody = {
-          tenant_id: data.tenant_id,
-          client_id: clientIdValue,
-        };
-
-        console.log("[showAuthProviders] Sending request:", {
-          url: "/authsec/oocmgr/oidc/show-auth-providers",
-          headers,
-          body: requestBody,
-        });
-
-        return {
-          url: "/authsec/oocmgr/oidc/show-auth-providers",
-          method: "POST",
-          headers,
-          body: requestBody,
-        };
-      },
-      providesTags: (result, error, arg) =>
-        // Provide specific tags based on whether client_id is in the request
-        arg.client_id
-          ? [
-              { type: "AuthMethodOIDCProvider", id: arg.client_id },
-              { type: "AuthMethodOIDCProvider", id: "LIST" },
-            ]
-          : [{ type: "AuthMethodOIDCProvider", id: "LIST" }],
+      query: ({ id, status }) => ({
+        url: `/authsec/identity-providers/${id}/status`,
+        method: "PUT",
+        body: { status },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "IdentityProvider", id },
+        { type: "IdentityProvider", id: "LIST" },
+      ],
     }),
 
-    editClientAuthProvider: builder.mutation<
-      EditClientAuthProviderResponse,
-      EditClientAuthProviderRequest
+    /** DELETE /authsec/identity-providers/:id — also removes the underlying
+     *  oidc_providers/saml_providers row and the Vault secret. */
+    deleteIdentityProvider: builder.mutation<{ status: string }, string>({
+      query: (id) => ({
+        url: `/authsec/identity-providers/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
+    }),
+
+    // ----- Application IDP policies (optional whitelist) ------------------
+
+    listApplicationIDPPolicies: builder.query<
+      ApplicationIDPPolicy[],
+      string /* applicationId */
     >({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/edit-client-auth-provider",
-        method: "POST",
-        body: data,
-      }),
-      invalidatesTags: (result, error, arg) => {
-        // Only invalidate the specific client's cache if client_id is provided
-        // Otherwise invalidate all OIDC provider caches
-        if (arg.client_id) {
-          return [
-            { type: "AuthMethodOIDCProvider", id: arg.client_id },
-            { type: "Client", id: arg.client_id },
-            "Client", // Also invalidate client list to refresh the table
-          ];
-        }
-        return ["AuthMethodOIDCProvider", "Client"];
-      },
+      query: (applicationId) =>
+        `/authsec/applications/${applicationId}/identity-providers`,
+      providesTags: (_r, _e, applicationId) => [
+        { type: "ApplicationIDPPolicy", id: applicationId },
+      ],
     }),
 
-    updateProvider: builder.mutation<
-      UpdateProviderResponse,
-      UpdateProviderRequest
+    addApplicationIDPPolicy: builder.mutation<
+      ApplicationIDPPolicy,
+      AddApplicationIDPPolicyRequest
     >({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/update-provider",
+      query: ({ applicationId, ...body }) => ({
+        url: `/authsec/applications/${applicationId}/identity-providers`,
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: data,
+        body,
       }),
-      invalidatesTags: ["OIDCProvider", "Client"],
+      invalidatesTags: (_r, _e, { applicationId }) => [
+        { type: "ApplicationIDPPolicy", id: applicationId },
+      ],
     }),
 
-    deleteProvider: builder.mutation<
-      DeleteProviderResponse,
-      DeleteProviderRequest
+    removeApplicationIDPPolicy: builder.mutation<
+      { status: string },
+      RemoveApplicationIDPPolicyRequest
     >({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/delete-provider",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: data,
+      query: ({ applicationId, identityProviderId }) => ({
+        url: `/authsec/applications/${applicationId}/identity-providers/${identityProviderId}`,
+        method: "DELETE",
       }),
-      invalidatesTags: ["OIDCProvider", "Client"],
-    }),
-
-    rawHydraDump: builder.query<RawHydraDumpResponse, RawHydraDumpRequest>({
-      query: (data) => ({
-        url: "/authsec/oocmgr/oidc/raw-hydra-dump",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: data,
-      }),
-      providesTags: ["AuthMethodOIDCProvider"],
+      invalidatesTags: (_r, _e, { applicationId }) => [
+        { type: "ApplicationIDPPolicy", id: applicationId },
+      ],
     }),
   }),
 });
 
 export const {
+  // Generic auth methods
   useGetAuthMethodsQuery,
   useGetAuthMethodQuery,
   useCreateAuthMethodMutation,
@@ -505,13 +424,18 @@ export const {
   useGetAuthMethodAnalyticsQuery,
   useToggleAuthMethodStatusMutation,
   useGetAuthMethodsByProjectQuery,
-  useAddOidcProviderMutation,
-  useGetOidcConfigQuery,
-  useUpdateCompleteTenantConfigMutation,
   useShowAuthProvidersQuery,
   useEditClientAuthProviderMutation,
   useUpdateProviderMutation,
   useDeleteProviderMutation,
-  useRawHydraDumpQuery,
-  useLazyRawHydraDumpQuery,
+  // Identity provider CRUD
+  useListIdentityProvidersQuery,
+  useGetIdentityProviderQuery,
+  useCreateIdentityProviderMutation,
+  useUpdateIdentityProviderStatusMutation,
+  useDeleteIdentityProviderMutation,
+  // Application IDP policies
+  useListApplicationIDPPoliciesQuery,
+  useAddApplicationIDPPolicyMutation,
+  useRemoveApplicationIDPPolicyMutation,
 } = authMethodApi;

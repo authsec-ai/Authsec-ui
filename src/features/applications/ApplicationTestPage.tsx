@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Loader2, Play, ShieldAlert, XCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import config from "@/config";
 import { Button } from "@/components/ui/button";
 import { HelpTooltip } from "@/components/ui/tooltip";
 import {
@@ -11,12 +10,12 @@ import {
   type ResourceServerValidationCheck,
   type ResourceServerValidationResult,
 } from "@/app/api/resourceServersApi";
-import { useListResourceServerScopesQuery } from "@/app/api/scopeMatrixApi";
 import { cn } from "@/lib/utils";
 import {
   generateCodeChallenge,
   generateCodeVerifier,
   generateRandomString,
+  getOAuthBaseUrl,
 } from "@/utils/oauthUtils";
 
 import { useApplicationContext } from "./useApplicationContext";
@@ -167,6 +166,7 @@ export default function ApplicationTestPage() {
   const { application } = useApplicationContext();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const oauthBaseUrl = getOAuthBaseUrl();
   const [registrationMode, setRegistrationMode] = useState<RegistrationMode>(
     application.registration_modes?.includes("dcr")
       ? "dcr"
@@ -183,8 +183,6 @@ export default function ApplicationTestPage() {
   const [callbackBusy, setCallbackBusy] = useState(false);
   const [validate, { data: validation, isLoading, error }] =
     useValidateResourceServerMutation();
-  const { data: scopes = [] } = useListResourceServerScopesQuery(application.id);
-
   useEffect(() => {
     void validate(application.id);
   }, [application.id, validate]);
@@ -271,7 +269,7 @@ export default function ApplicationTestPage() {
         });
 
         const response = await fetch(
-          `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/token`,
+          `${oauthBaseUrl}/oauth/token`,
           {
             method: "POST",
             headers: {
@@ -326,6 +324,7 @@ export default function ApplicationTestPage() {
     application.id,
     callbackBusy,
     navigate,
+    oauthBaseUrl,
     searchParams,
     validate,
   ]);
@@ -388,17 +387,10 @@ export default function ApplicationTestPage() {
       const codeChallenge = await generateCodeChallenge(codeVerifier);
       const state = generateRandomString(32);
 
-      const requestedScopes = Array.from(
-        new Set([
-          "openid",
-          "profile",
-          "email",
-          ...scopes.map((scope) => scope.scope_string).filter(Boolean),
-        ]),
-      );
+      const requestedScopes = ["openid", "profile", "email"];
 
       const registerResponse = await fetch(
-        `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/register`,
+        `${oauthBaseUrl}/oauth/register`,
         {
           method: "POST",
           headers: {
@@ -443,9 +435,7 @@ export default function ApplicationTestPage() {
         createdAt: new Date().toISOString(),
       } satisfies PendingBrowserTest);
 
-      const authUrl = new URL(
-        `${config.VITE_API_URL.replace(/\/+$/, "")}/oauth/authorize`,
-      );
+      const authUrl = new URL(`${oauthBaseUrl}/oauth/authorize`);
       authUrl.searchParams.set("response_type", "code");
       authUrl.searchParams.set("client_id", registerPayload.client_id);
       authUrl.searchParams.set("resource", application.resource_uri);

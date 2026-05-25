@@ -72,6 +72,19 @@ export interface TenantEndUserState {
   user_name?: string;
   user_username?: string;
   user_last_login?: string | null;
+  access_summary?: string;
+  applications_count?: number;
+  effective_scopes_count?: number;
+  applications?: Array<{
+    application_id: string;
+    name: string;
+    resource_uri: string;
+    role_id: string;
+    role_name: string;
+    role_label: string;
+    binding_id: string;
+    scopes_count: number;
+  }>;
 }
 
 export interface EffectiveBinding {

@@ -1,3 +1,9 @@
+// CreateSamlMethodPage — workspace-scoped SAML IDP creation (v4)
+//
+// No client selector: SAML IDPs are owned by the workspace and apply to all
+// applications by default. Application-level whitelisting is opt-in via the
+// Application policy UI (separate page).
+
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -9,17 +15,19 @@ import {
   ChevronRight,
   Settings,
   X,
+  Info,
 } from "lucide-react";
 import { toast } from "../../lib/toast";
 import { cn } from "../../lib/utils";
 import { FormField, FormInput, FormCopyField } from "../../theme";
 import {
-  useAddSamlProviderMutation,
-  useLazyGetSamlMetadataQuery,
+  useLazyGetSamlSPMetadataQuery,
+  samlEntityId,
+  samlAcsUrl,
+  samlMetadataUrl,
 } from "../../app/api/samlApi";
-import { useGetClientsQuery } from "../../app/api/clientApi";
+import { useCreateIdentityProviderMutation } from "../../app/api/authMethodApi";
 import { SessionManager } from "../../utils/sessionManager";
-import { current } from "@reduxjs/toolkit";
 
 const NAME_ID_FORMATS = [
   {
@@ -43,174 +51,146 @@ const NAME_ID_FORMATS = [
 // Wizard steps
 const WIZARD_STEPS = [
   { id: "configuration", label: "Configuration", icon: Settings },
-  { id: "Identity-Provider", label: "Identity Provider", icon: Settings },
+  { id: "identity-provider", label: "Identity Provider", icon: Settings },
   { id: "review", label: "Review", icon: CheckCircle },
 ];
 
 export function CreateSamlMethodPage() {
   const navigate = useNavigate();
   const session = SessionManager.getSession();
-  const tenantId = session?.tenant_id || "";
+  const workspaceId = session?.tenant_id || "";
 
-  const [selectedClientId, setSelectedClientId] = useState("");
-  const [metadata, setMetadata] = useState<{
-    entity_id: string;
-    acs_url: string;
-  } | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     provider_name: "",
     display_name: "",
     entity_id: "",
     sso_url: "",
+    slo_url: "",
     certificate: "",
-    metadata_url: "",
     name_id_format: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-    attribute_email: "",
-    attribute_first_name: "",
-    attribute_last_name: "",
-    is_active: true,
-    sort_order: 1,
+    attribute_email: "email",
+    attribute_first_name: "firstName",
+    attribute_last_name: "lastName",
   });
 
-  const { data: clientsResponse } = useGetClientsQuery(
-    { tenant_id: tenantId, active_only: false },
-    { skip: !tenantId }
+  // SP metadata URLs are deterministic from the workspace ID — display them
+  // immediately so the operator can paste them into their IdP admin console.
+  const spMetadata = useMemo(
+    () =>
+      workspaceId
+        ? {
+            entity_id: samlEntityId(workspaceId),
+            acs_url: samlAcsUrl(workspaceId),
+            metadata_url: samlMetadataUrl(workspaceId),
+          }
+        : null,
+    [workspaceId],
   );
-  const [fetchMetadata, { isLoading: loadingMetadata }] =
-    useLazyGetSamlMetadataQuery();
-  const [addSamlProvider, { isLoading: isCreating }] =
-    useAddSamlProviderMutation();
 
-  const clients = clientsResponse?.clients || [];
-  const currentStep = WIZARD_STEPS[currentStepIndex];
+  // Lazy-fetch the actual XML to verify the backend serves matching metadata.
+  // (Optional — purely a sanity preview.)
+  const [fetchMetadata, { isLoading: loadingMetadata }] =
+    useLazyGetSamlSPMetadataQuery();
 
   useEffect(() => {
-    if (selectedClientId && tenantId) {
-      fetchMetadata({ tenant_id: tenantId, client_id: selectedClientId })
-        .unwrap()
-        .then((data) => {
-          setMetadata({ entity_id: data.entity_id, acs_url: data.acs_url });
-        })
-        .catch(() => {
-          toast.error("Failed to fetch SAML metadata");
-        });
+    if (workspaceId) {
+      fetchMetadata({ workspaceId }).unwrap().catch(() => {
+        // Non-fatal: fall back to deterministic URLs displayed above.
+      });
     }
-  }, [selectedClientId, tenantId, fetchMetadata]);
+  }, [workspaceId, fetchMetadata]);
+
+  const [createIdp, { isLoading: isCreating }] =
+    useCreateIdentityProviderMutation();
+
+  const currentStep = WIZARD_STEPS[currentStepIndex];
 
   const handleBack = useCallback(() => {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(currentStepIndex - 1);
-    } else {
-      navigate("/authentication");
-    }
+    if (currentStepIndex > 0) setCurrentStepIndex(currentStepIndex - 1);
+    else navigate("/authentication");
   }, [currentStepIndex, navigate]);
 
   const handleNext = useCallback(() => {
     if (currentStepIndex === 0) {
-      // Validate all required fields at once
-      if (!selectedClientId) {
-        toast.error("Please select a client");
-        return;
-      }
       if (!formData.provider_name || !formData.display_name) {
-        toast.error("Please fill in provider information");
+        toast.error("Provider name and display name are required");
         return;
       }
     }
     if (currentStepIndex === 1) {
       if (!formData.entity_id || !formData.sso_url || !formData.certificate) {
-        toast.error("Please fill in all required IDP fields");
+        toast.error("Entity ID, SSO URL, and certificate are required");
         return;
       }
     }
-
     if (currentStepIndex < WIZARD_STEPS.length - 1) {
-      setErrors({});
       setCurrentStepIndex(currentStepIndex + 1);
     }
-  }, [currentStepIndex, selectedClientId, formData]);
+  }, [currentStepIndex, formData]);
 
   const canProceed = () => {
-    if (currentStepIndex === 0) {
-      // All required fields must be filled
+    if (currentStepIndex === 0)
+      return Boolean(formData.provider_name && formData.display_name);
+    if (currentStepIndex === 1)
       return Boolean(
-        selectedClientId && formData.provider_name && formData.display_name
+        formData.entity_id && formData.sso_url && formData.certificate,
       );
-    }
-    if (currentStepIndex === 1) {
-      // Identity Provider step
-      return Boolean(
-        formData.entity_id && formData.sso_url && formData.certificate
-      );
-    }
-    if (currentStepIndex === 2) {
-      // Review step
-      return Boolean(
-        selectedClientId && formData.provider_name && formData.entity_id
-      );
-    }
-    return false;
+    return Boolean(workspaceId && formData.provider_name && formData.entity_id);
   };
 
   const handleFinish = async () => {
-    if (!canProceed()) {
-      toast.error("Please fill in all required fields");
+    if (!workspaceId) {
+      toast.error("Missing workspace session — please sign in again.");
       return;
     }
-
     try {
-      const payload = {
-        tenant_id: tenantId,
-        client_id: selectedClientId,
-        provider_name: formData.provider_name,
+      await createIdp({
+        provider_type: "saml",
         display_name: formData.display_name,
-        entity_id: formData.entity_id,
-        sso_url: formData.sso_url,
-        certificate: formData.certificate,
-        metadata_url: formData.metadata_url || undefined,
-        name_id_format: formData.name_id_format,
-        attribute_mapping: {
-          email: formData.attribute_email,
-          first_name: formData.attribute_first_name,
-          last_name: formData.attribute_last_name,
+        config: {
+          provider_name: formData.provider_name,
+          entity_id: formData.entity_id,
+          sso_url: formData.sso_url,
+          slo_url: formData.slo_url || undefined,
+          certificate: formData.certificate,
+          name_id_format: formData.name_id_format,
+          attribute_mapping: {
+            email: formData.attribute_email,
+            first_name: formData.attribute_first_name,
+            last_name: formData.attribute_last_name,
+          },
         },
-        is_active: formData.is_active,
-        sort_order: formData.sort_order,
-      };
-
-      await addSamlProvider(payload).unwrap();
-      toast.success("SAML provider created successfully!");
-      navigate("/", {
-        state: {
-          authProviderCreated: true,
-          clientId: selectedClientId
-        }
+      }).unwrap();
+      toast.success("SAML identity provider created!");
+      navigate("/authentication", {
+        state: { authProviderCreated: true },
       });
     } catch (error: any) {
       console.error("Failed to create SAML provider:", error);
-      toast.error(error?.data?.message || "Failed to create SAML provider");
+      toast.error(
+        error?.data?.error || "Failed to create SAML identity provider",
+      );
     }
   };
 
   const getStepSubtitle = () => {
     switch (currentStep.id) {
       case "configuration":
-        return "Configure your SAML authentication settings";
-      case "Identity-Provider":
-        return "Identity Provider settings for your SAML method";
+        return "Configure your SAML provider settings";
+      case "identity-provider":
+        return "IdP metadata — pasted from your SAML Identity Provider";
       case "review":
         return "Review and finalize your SAML configuration";
       default:
         return "";
     }
   };
-  const getSteptitle = () => {
+  const getStepTitle = () => {
     switch (currentStep.id) {
       case "configuration":
         return "Configure";
-      case "Identity-Provider":
+      case "identity-provider":
         return "Identity Provider";
       case "review":
         return "Review";
@@ -221,11 +201,11 @@ export function CreateSamlMethodPage() {
 
   return (
     <div className="flex flex-col h-[90vh] w-full">
-      {/* Fixed Header */}
+      {/* Header */}
       <div className="flex-shrink-0 border-b py-4 px-8">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold">{getSteptitle()}</h2>
+            <h2 className="text-lg font-semibold">{getStepTitle()}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {getStepSubtitle()}
             </p>
@@ -241,92 +221,27 @@ export function CreateSamlMethodPage() {
         </div>
       </div>
 
-      {/* Scrollable Content Area */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto px-8 py-4 min-h-0">
         <div className="w-full">
-          {/* Step 0: Configuration */}
+          {/* Step 0 */}
           {currentStepIndex === 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column */}
+              {/* Left: provider naming + SP metadata for the operator */}
               <div className="space-y-6">
-                {/* Client Selection Section */}
-                <div>
-                  <h3 className="text-base font-semibold mb-3">
-                    Client Application
-                  </h3>
-
-                  <FormField label="Client" htmlFor="client" required>
-                    <select
-                      id="client"
-                      value={selectedClientId}
-                      onChange={(e) => setSelectedClientId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Select a client...</option>
-                      {clients.map((client) => (
-                        <option key={client.client_id} value={client.client_id}>
-                          {client.name} ({client.client_id})
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
-
-                  {loadingMetadata && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Loading SP metadata...</span>
-                    </div>
-                  )}
-
-                  {metadata && (
-                    <div className="mt-4 space-y-3">
-                      <div className="mb-2">
-                        <h4 className="text-sm font-semibold">
-                          Service Provider Metadata
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          Configure these in your Identity Provider
-                        </p>
-                      </div>
-
-                      <FormField label="Entity ID (Audience URI)">
-                        <FormCopyField
-                          value={metadata.entity_id}
-                          onCopy={() =>
-                            toast.success("Entity ID copied to clipboard!")
-                          }
-                          className="font-mono text-sm"
-                        />
-                      </FormField>
-
-                      <FormField label="ACS URL (Assertion Consumer Service)">
-                        <FormCopyField
-                          value={metadata.acs_url}
-                          onCopy={() =>
-                            toast.success("ACS URL copied to clipboard!")
-                          }
-                          className="font-mono text-sm"
-                        />
-                      </FormField>
-                    </div>
-                  )}
-                </div>
-
-                {/* Provider Information Section */}
                 <div>
                   <h3 className="text-base font-semibold mb-3">
                     Provider Information
                   </h3>
-
                   <div className="space-y-3">
                     <FormField
-                      label="Provider Name"
+                      label="Provider Slug"
                       htmlFor="provider_name"
                       required
                     >
                       <FormInput
                         id="provider_name"
-                        placeholder="e.g., okta-saml"
+                        placeholder="e.g. okta or azure-ad"
                         value={formData.provider_name}
                         onChange={(e) =>
                           setFormData({
@@ -334,10 +249,15 @@ export function CreateSamlMethodPage() {
                             provider_name: e.target.value,
                           })
                         }
-                        className="h-9"
+                        className="h-9 font-mono"
                       />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Used in the login URL:{" "}
+                        <span className="font-mono">
+                          /saml/initiate/{formData.provider_name || "{slug}"}
+                        </span>
+                      </p>
                     </FormField>
-
                     <FormField
                       label="Display Name"
                       htmlFor="display_name"
@@ -345,7 +265,7 @@ export function CreateSamlMethodPage() {
                     >
                       <FormInput
                         id="display_name"
-                        placeholder="e.g., Okta SAML"
+                        placeholder="Sign in with Okta"
                         value={formData.display_name}
                         onChange={(e) =>
                           setFormData({
@@ -358,16 +278,69 @@ export function CreateSamlMethodPage() {
                     </FormField>
                   </div>
                 </div>
+
+                {/* SP metadata — what to paste into the IdP admin console */}
+                {spMetadata && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/30 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 mt-0.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <div>
+                        <h4 className="text-sm font-semibold">
+                          Service Provider Metadata
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Paste these values into your SAML Identity Provider
+                          (Okta, Azure AD, OneLogin, etc.).
+                        </p>
+                      </div>
+                    </div>
+
+                    <FormField label="SP Entity ID (Audience URI)">
+                      <FormCopyField
+                        value={spMetadata.entity_id}
+                        onCopy={() => toast.success("Entity ID copied!")}
+                        className="font-mono text-sm"
+                      />
+                    </FormField>
+
+                    <FormField label="ACS URL (Assertion Consumer Service)">
+                      <FormCopyField
+                        value={spMetadata.acs_url}
+                        onCopy={() => toast.success("ACS URL copied!")}
+                        className="font-mono text-sm"
+                      />
+                    </FormField>
+
+                    <FormField label="SP Metadata XML URL (optional import)">
+                      <FormCopyField
+                        value={spMetadata.metadata_url}
+                        onCopy={() =>
+                          toast.success("Metadata URL copied!")
+                        }
+                        className="font-mono text-sm"
+                      />
+                    </FormField>
+
+                    {loadingMetadata && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Verifying SP metadata endpoint…
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Right Column */}
+              {/* Right: attribute mapping */}
               <div className="space-y-6">
-                {/* Attribute Mapping Section */}
                 <div>
                   <h3 className="text-base font-semibold mb-3">
                     Attribute Mapping
                   </h3>
-
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Names of the SAML attributes your IdP will send in the
+                    assertion.
+                  </p>
                   <div className="space-y-3">
                     <FormField
                       label="Email Attribute"
@@ -383,10 +356,9 @@ export function CreateSamlMethodPage() {
                             attribute_email: e.target.value,
                           })
                         }
-                        className="h-9"
+                        className="h-9 font-mono"
                       />
                     </FormField>
-
                     <FormField
                       label="First Name Attribute"
                       htmlFor="attribute_first_name"
@@ -401,10 +373,9 @@ export function CreateSamlMethodPage() {
                             attribute_first_name: e.target.value,
                           })
                         }
-                        className="h-9"
+                        className="h-9 font-mono"
                       />
                     </FormField>
-
                     <FormField
                       label="Last Name Attribute"
                       htmlFor="attribute_last_name"
@@ -419,7 +390,7 @@ export function CreateSamlMethodPage() {
                             attribute_last_name: e.target.value,
                           })
                         }
-                        className="h-9"
+                        className="h-9 font-mono"
                       />
                     </FormField>
                   </div>
@@ -428,15 +399,20 @@ export function CreateSamlMethodPage() {
             </div>
           )}
 
+          {/* Step 1 — IdP metadata */}
           {currentStepIndex === 1 && (
             <div>
               <h3 className="text-base font-semibold mb-3">
                 Identity Provider Configuration
               </h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Copy these values from your SAML IdP admin console (Okta SSO
+                URL + cert, Azure AD federation metadata, etc.).
+              </p>
 
               <div className="space-y-3">
                 <FormField
-                  label="Entity ID (Issuer ID)"
+                  label="IdP Entity ID (Issuer)"
                   htmlFor="entity_id"
                   required
                 >
@@ -445,16 +421,17 @@ export function CreateSamlMethodPage() {
                     placeholder="https://your-idp.com/entity-id"
                     value={formData.entity_id}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        entity_id: e.target.value,
-                      })
+                      setFormData({ ...formData, entity_id: e.target.value })
                     }
-                    className="h-9"
+                    className="h-9 font-mono"
                   />
                 </FormField>
 
-                <FormField label="SSO URL" htmlFor="sso_url" required>
+                <FormField
+                  label="IdP SSO URL (SingleSignOnService)"
+                  htmlFor="sso_url"
+                  required
+                >
                   <FormInput
                     id="sso_url"
                     placeholder="https://your-idp.com/sso/saml"
@@ -462,18 +439,33 @@ export function CreateSamlMethodPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, sso_url: e.target.value })
                     }
-                    className="h-9"
+                    className="h-9 font-mono"
                   />
                 </FormField>
 
                 <FormField
-                  label="X.509 Certificate"
+                  label="IdP SLO URL (SingleLogoutService, optional)"
+                  htmlFor="slo_url"
+                >
+                  <FormInput
+                    id="slo_url"
+                    placeholder="https://your-idp.com/slo/saml"
+                    value={formData.slo_url}
+                    onChange={(e) =>
+                      setFormData({ ...formData, slo_url: e.target.value })
+                    }
+                    className="h-9 font-mono"
+                  />
+                </FormField>
+
+                <FormField
+                  label="X.509 Signing Certificate"
                   htmlFor="certificate"
                   required
                 >
                   <textarea
                     id="certificate"
-                    placeholder="MIIDtDCCApygAwIBAgIGAZp327n/MA0GCSqGSIb3DQEBC..."
+                    placeholder="-----BEGIN CERTIFICATE-----&#10;MIIDtDCCApygAwIBAgIG...&#10;-----END CERTIFICATE-----"
                     value={formData.certificate}
                     onChange={(e) =>
                       setFormData({
@@ -484,21 +476,10 @@ export function CreateSamlMethodPage() {
                     rows={6}
                     className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono resize-vertical"
                   />
-                </FormField>
-
-                <FormField label="Metadata URL" htmlFor="metadata_url">
-                  <FormInput
-                    id="metadata_url"
-                    placeholder="https://your-idp.com/metadata (optional)"
-                    value={formData.metadata_url}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        metadata_url: e.target.value,
-                      })
-                    }
-                    className="h-9"
-                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Paste the PEM-encoded certificate including the BEGIN/END
+                    markers.
+                  </p>
                 </FormField>
 
                 <FormField label="Name ID Format" htmlFor="name_id_format">
@@ -511,7 +492,7 @@ export function CreateSamlMethodPage() {
                         name_id_format: e.target.value,
                       })
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {NAME_ID_FORMATS.map((format) => (
                       <option key={format.value} value={format.value}>
@@ -524,18 +505,15 @@ export function CreateSamlMethodPage() {
             </div>
           )}
 
-          {/* Step 1: Review & Create */}
+          {/* Step 2 — review */}
           {currentStepIndex === 2 && (
             <div className="space-y-3">
               <h3 className="text-base font-semibold mb-3">Review & Create</h3>
-
               <div className="rounded-lg border bg-muted/50 p-3 space-y-2.5">
                 <div>
-                  <h4 className="font-medium text-xs mb-0.5">
-                    Client Application
-                  </h4>
+                  <h4 className="font-medium text-xs mb-0.5">Workspace</h4>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {selectedClientId || "—"}
+                    {workspaceId || "—"}
                   </p>
                 </div>
 
@@ -545,7 +523,7 @@ export function CreateSamlMethodPage() {
                   </h4>
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
                     <div className="flex justify-between gap-4">
-                      <span>Provider Name:</span>
+                      <span>Slug:</span>
                       <span className="font-mono">
                         {formData.provider_name || "—"}
                       </span>
@@ -557,22 +535,22 @@ export function CreateSamlMethodPage() {
                   </div>
                 </div>
 
-                {metadata && (
+                {spMetadata && (
                   <div className="border-t pt-2.5">
                     <h4 className="font-medium text-xs mb-1">
-                      Service Provider
+                      Service Provider (paste into your IdP)
                     </h4>
                     <div className="space-y-0.5 text-[11px] text-muted-foreground">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium">Entity ID:</span>
                         <span className="font-mono break-all">
-                          {metadata.entity_id}
+                          {spMetadata.entity_id}
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5">
                         <span className="font-medium">ACS URL:</span>
                         <span className="font-mono break-all">
-                          {metadata.acs_url}
+                          {spMetadata.acs_url}
                         </span>
                       </div>
                     </div>
@@ -580,9 +558,7 @@ export function CreateSamlMethodPage() {
                 )}
 
                 <div className="border-t pt-2.5">
-                  <h4 className="font-medium text-xs mb-1">
-                    Identity Provider
-                  </h4>
+                  <h4 className="font-medium text-xs mb-1">Identity Provider</h4>
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-medium">Entity ID (Issuer):</span>
@@ -596,46 +572,44 @@ export function CreateSamlMethodPage() {
                         {formData.sso_url || "—"}
                       </span>
                     </div>
+                    {formData.slo_url && (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium">SLO URL:</span>
+                        <span className="font-mono break-all">
+                          {formData.slo_url}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex flex-col gap-0.5">
                       <span className="font-medium">Name ID Format:</span>
                       <span className="text-xs">
                         {NAME_ID_FORMATS.find(
-                          (f) => f.value === formData.name_id_format
+                          (f) => f.value === formData.name_id_format,
                         )?.label || formData.name_id_format}
                       </span>
                     </div>
-                    {formData.metadata_url && (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium">Metadata URL:</span>
-                        <span className="font-mono break-all">
-                          {formData.metadata_url}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
                 <div className="border-t pt-2.5">
-                  <h4 className="font-medium text-xs mb-1">
-                    Attribute Mapping
-                  </h4>
+                  <h4 className="font-medium text-xs mb-1">Attribute Mapping</h4>
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
                     <div className="flex justify-between gap-4">
                       <span>Email:</span>
                       <span className="font-mono">
-                        {formData.attribute_email}
+                        {formData.attribute_email || "—"}
                       </span>
                     </div>
                     <div className="flex justify-between gap-4">
                       <span>First Name:</span>
                       <span className="font-mono">
-                        {formData.attribute_first_name}
+                        {formData.attribute_first_name || "—"}
                       </span>
                     </div>
                     <div className="flex justify-between gap-4">
                       <span>Last Name:</span>
                       <span className="font-mono">
-                        {formData.attribute_last_name}
+                        {formData.attribute_last_name || "—"}
                       </span>
                     </div>
                   </div>
@@ -646,10 +620,9 @@ export function CreateSamlMethodPage() {
         </div>
       </div>
 
-      {/* Fixed Footer with Navigation */}
+      {/* Footer */}
       <div className="flex-shrink-0 border-t bg-background pt-4 pb-4 mt-auto px-8">
         <div className="flex items-center justify-between gap-4">
-          {/* Back/Cancel Button */}
           <div className="flex items-center gap-2 min-w-[120px]">
             <Button variant="outline" onClick={handleBack} size="default">
               {currentStepIndex > 0 ? (
@@ -663,20 +636,18 @@ export function CreateSamlMethodPage() {
             </Button>
           </div>
 
-          {/* Progress Stepper */}
           <div className="flex items-center gap-2 flex-1 justify-center">
             {WIZARD_STEPS.map((step, index) => {
               const StepIcon = step.icon;
               const isActive = index === currentStepIndex;
               const isCompleted = index < currentStepIndex;
-
               return (
                 <React.Fragment key={step.id}>
                   <div
                     className={cn(
                       "flex items-center gap-2 rounded-lg px-3 py-2",
                       isActive && "bg-primary/10",
-                      isCompleted && "opacity-60"
+                      isCompleted && "opacity-60",
                     )}
                   >
                     <div
@@ -686,7 +657,7 @@ export function CreateSamlMethodPage() {
                         isActive && "bg-primary/20 text-primary",
                         !isActive &&
                           !isCompleted &&
-                          "bg-muted text-muted-foreground"
+                          "bg-muted text-muted-foreground",
                       )}
                     >
                       {isCompleted ? (
@@ -699,7 +670,7 @@ export function CreateSamlMethodPage() {
                       className={cn(
                         "text-sm font-medium",
                         isActive && "text-foreground",
-                        !isActive && "text-muted-foreground"
+                        !isActive && "text-muted-foreground",
                       )}
                     >
                       {step.label}
@@ -713,7 +684,6 @@ export function CreateSamlMethodPage() {
             })}
           </div>
 
-          {/* Next/Finish Button */}
           <div className="flex items-center gap-2 min-w-[120px] justify-end">
             {currentStepIndex < WIZARD_STEPS.length - 1 ? (
               <Button
@@ -738,7 +708,7 @@ export function CreateSamlMethodPage() {
                 ) : (
                   <>
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Create Method
+                    Create Provider
                   </>
                 )}
               </Button>

@@ -46,6 +46,10 @@ export interface RoleBinding {
   conditions?: Record<string, any>;
   created_at: string;
   expires_at?: string;
+  source?: string;
+  user?: { id: string; email?: string; name?: string };
+  role?: { id: string; name: string; label?: string };
+  application?: { id: string; name: string; resource_uri?: string };
 }
 
 /**

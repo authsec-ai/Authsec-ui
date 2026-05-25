@@ -21,6 +21,8 @@ import {
   KeyRound,
   LayoutDashboard,
   Layers,
+  Link2,
+  SearchCheck,
   UserCog,
   Users,
   type LucideIcon,
@@ -81,7 +83,10 @@ const NAV_OBJECTS: NavItem[] = [
 // access pages are intentionally hidden from the primary nav; application
 // roles/grants live inside each Application's Access tab.
 const NAV_AUTHZ: NavItem[] = [
-  { title: "Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
+  { title: "Effective Access", url: "/authz/effective-access", icon: SearchCheck } as NavItem,
+  { title: "Application Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
+  { title: "Role Bindings", url: "/authz/role-bindings", icon: Link2, contextPrefixed: true } as NavItem,
+  { title: "Scope Catalog", url: "/authz/scope-catalog", icon: KeyRound } as NavItem,
   { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock } as NavItem,
 ];
 

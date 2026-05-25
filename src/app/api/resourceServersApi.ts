@@ -24,6 +24,13 @@ export interface ResourceServer {
   last_validated_at?: string;
   last_validation_status?: string;
   last_validation_error?: string;
+  tools_count?: number;
+  scopes_count?: number;
+  roles_count?: number;
+  bindings_count?: number;
+  end_users_count?: number;
+  default_role_name?: string;
+  latest_access_issue?: string;
   state?: "pending_scan" | "needs_setup" | "ready" | "scan_failed";
   setup_completed_at?: string;
   created_at?: string;

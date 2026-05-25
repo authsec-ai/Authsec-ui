@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  MoreHorizontal,
-  ShieldCheck,
-  Wrench,
+  Activity,
+  ExternalLink,
   KeyRound,
-  Users,
+  MoreHorizontal,
   PlayCircle,
   Rocket,
-  Activity,
+  ShieldCheck,
   Trash2,
-  ExternalLink,
+  Users,
+  Wrench,
 } from "lucide-react";
 
 import {
@@ -20,11 +20,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import {
+  AdaptiveTable,
+  type AdaptiveColumn,
+} from "@/components/ui/adaptive-table";
+import { TableCard } from "@/theme/components/cards";
 import type { Application } from "../types";
 import type { computeReadiness } from "../lib/computeReadiness";
 import {
   StatusBadge,
-  Surface,
   toneFromReadiness,
 } from "./ApplicationConsole";
 
@@ -57,6 +63,16 @@ function riskTone(row: ApplicationTableRow): "danger" | "warning" | "success" | 
   return "neutral";
 }
 
+function lastSignal(application: Application) {
+  if (application.last_scan_completed_at) {
+    return `Manifest ${new Date(application.last_scan_completed_at).toLocaleDateString()}`;
+  }
+  if (application.last_validated_at) {
+    return `Checked ${new Date(application.last_validated_at).toLocaleDateString()}`;
+  }
+  return "No runtime signal";
+}
+
 const ROW_ACTIONS: Array<{
   key: string;
   label: string;
@@ -84,141 +100,213 @@ export function ApplicationsTable({
   onNavigateToTab: (applicationId: string, tab: string) => void;
   onDeleteApplication: (application: Application) => void;
 }) {
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
+
+  const columns = useMemo<AdaptiveColumn<ApplicationTableRow>[]>(
+    () => [
+      {
+        id: "application",
+        header: "Application",
+        alwaysVisible: true,
+        approxWidth: 300,
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-950">
+              {row.original.application.name}
+            </div>
+            <div className="mt-1 truncate font-mono text-[12px] text-slate-500">
+              {row.original.application.resource_uri}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "readiness",
+        header: "Readiness",
+        priority: 1,
+        approxWidth: 180,
+        cell: ({ row }) => (
+          <StatusBadge tone={toneFromReadiness(row.original.readiness.launch.state)}>
+            {readinessCopy(row.original)}
+          </StatusBadge>
+        ),
+      },
+      {
+        id: "risk",
+        header: "Risk",
+        priority: 2,
+        approxWidth: 140,
+        cell: ({ row }) => {
+          const tone = riskTone(row.original);
+          return (
+            <StatusBadge tone={tone}>
+              {tone === "danger" ? "High" : tone === "warning" ? "Needs review" : "Low"}
+            </StatusBadge>
+          );
+        },
+      },
+      {
+        id: "users",
+        header: "Users",
+        priority: 3,
+        approxWidth: 100,
+        cell: ({ row }) => (
+          <span className="text-sm text-slate-700">
+            {row.original.application.end_users_count ?? 0}
+          </span>
+        ),
+      },
+      {
+        id: "lastSignal",
+        header: "Last signal",
+        priority: 4,
+        approxWidth: 190,
+        cell: ({ row }) => (
+          <span className="text-sm text-slate-600">{lastSignal(row.original.application)}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 72,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <ApplicationActions
+            row={row.original}
+            onNavigateToTab={onNavigateToTab}
+            onDeleteApplication={onDeleteApplication}
+          />
+        ),
+      },
+    ],
+    [onDeleteApplication, onNavigateToTab],
+  );
+
   return (
-    <Surface className="overflow-hidden p-0">
-      <table className="w-full table-fixed">
-        <colgroup>
-          <col className="w-[42%]" />
-          <col className="w-[18%]" />
-          <col className="w-[14%]" />
-          <col className="w-[20%]" />
-          <col className="w-[6%]" />
-        </colgroup>
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50/80 text-left">
-            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              Application
-            </th>
-            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              Readiness
-            </th>
-            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              Risk
-            </th>
-            <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              Last signal
-            </th>
-            <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <ApplicationRow
-              key={row.application.id}
-              row={row}
-              onOpenApplication={onOpenApplication}
+    <TableCard>
+      <CardContent variant="flush">
+        <AdaptiveTable
+          tableId="applications"
+          data={rows}
+          columns={columns}
+          enableSelection={false}
+          enableExpansion
+          expandedRowIds={expandedRowIds}
+          onExpandedRowsChange={setExpandedRowIds}
+          renderExpandedRow={(row) => (
+            <ApplicationExpandedRow
+              row={row.original}
               onNavigateToTab={onNavigateToTab}
-              onDeleteApplication={onDeleteApplication}
             />
-          ))}
-        </tbody>
-      </table>
-    </Surface>
+          )}
+          onRowClick={(row) => onOpenApplication(row.application)}
+          getRowId={(row) => row.application.id}
+          pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: rows.length > 10 }}
+        />
+      </CardContent>
+    </TableCard>
   );
 }
 
-function ApplicationRow({
+function ApplicationActions({
   row,
-  onOpenApplication,
   onNavigateToTab,
   onDeleteApplication,
 }: {
   row: ApplicationTableRow;
-  onOpenApplication: (application: Application) => void;
   onNavigateToTab: (applicationId: string, tab: string) => void;
   onDeleteApplication: (application: Application) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   return (
-    <tr
-      onClick={() => onOpenApplication(row.application)}
-      className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50/80 last:border-b-0"
-    >
-      <td className="px-4 py-4">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950">
-            {row.application.name}
-          </div>
-          <div className="mt-1 truncate font-mono text-[12px] text-slate-500">
-            {row.application.resource_uri}
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-4">
-        <StatusBadge tone={toneFromReadiness(row.readiness.launch.state)}>
-          {readinessCopy(row)}
-        </StatusBadge>
-      </td>
-      <td className="px-4 py-4">
-        <StatusBadge tone={riskTone(row)}>
-          {riskTone(row) === "danger"
-            ? "High"
-            : riskTone(row) === "warning"
-              ? "Needs review"
-              : "Low"}
-        </StatusBadge>
-      </td>
-      <td className="px-4 py-4 text-sm text-slate-600">
-        {row.application.last_scan_completed_at
-          ? `Manifest ${new Date(row.application.last_scan_completed_at).toLocaleDateString()}`
-          : row.application.last_validated_at
-            ? `Checked ${new Date(row.application.last_validated_at).toLocaleDateString()}`
-            : "No runtime signal"}
-      </td>
-      <td className="px-4 py-4 text-right">
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`Actions for ${row.application.name}`}
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex size-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            // Stop row click propagation when interacting with menu items.
-            onClick={(event) => event.stopPropagation()}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Actions for ${row.application.name}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuLabel className="max-w-48 truncate text-slate-500">
+          {row.application.name}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {ROW_ACTIONS.map(({ key, label, tab, icon: Icon }) => (
+          <DropdownMenuItem
+            key={key}
+            onSelect={() => onNavigateToTab(row.application.id, tab)}
           >
-            <DropdownMenuLabel className="truncate text-slate-500">
-              {row.application.name}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {ROW_ACTIONS.map(({ key, label, tab, icon: Icon }) => (
-              <DropdownMenuItem
-                key={key}
-                onSelect={() => onNavigateToTab(row.application.id, tab)}
-              >
-                <Icon className="size-4 text-slate-500" />
-                {label}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => onDeleteApplication(row.application)}
-            >
-              <Trash2 className="size-4" />
-              Delete application
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </td>
-    </tr>
+            <Icon className="size-4 text-slate-500" />
+            {label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => onDeleteApplication(row.application)}
+        >
+          <Trash2 className="size-4" />
+          Delete application
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ApplicationExpandedRow({
+  row,
+  onNavigateToTab,
+}: {
+  row: ApplicationTableRow;
+  onNavigateToTab: (applicationId: string, tab: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_1.4fr]">
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <Metric label="Tools" value={row.application.tools_count ?? 0} />
+        <Metric label="Scopes" value={row.application.scopes_count ?? 0} />
+        <Metric label="Roles" value={row.application.roles_count ?? 0} />
+        <Metric label="Bindings" value={row.application.bindings_count ?? 0} />
+      </div>
+      <div className="space-y-2 text-sm">
+        <div>
+          <span className="text-slate-500">Default access role: </span>
+          <span className="font-medium">{row.application.default_role_name || "Not configured"}</span>
+        </div>
+        <div>
+          <span className="text-slate-500">Latest issue: </span>
+          <span className="font-medium">{row.application.latest_access_issue || "No blocking issue"}</span>
+        </div>
+        <div>
+          <span className="text-slate-500">Resource URI: </span>
+          <code className="break-all font-mono text-xs">{row.application.resource_uri}</code>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-start gap-2">
+        <Button onClick={() => onNavigateToTab(row.application.id, "access")}>
+          Configure access
+        </Button>
+        <Button variant="outline" onClick={() => onNavigateToTab(row.application.id, "tools")}>
+          Review tools
+        </Button>
+        <Button variant="outline" onClick={() => onNavigateToTab(row.application.id, "test")}>
+          Test login
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-slate-950">{value}</div>
+    </div>
   );
 }

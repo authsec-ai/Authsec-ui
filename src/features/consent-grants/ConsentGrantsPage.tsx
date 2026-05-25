@@ -1,13 +1,14 @@
 import { useState, useMemo } from "react";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { TableCard } from "@/theme/components/cards";
+import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
+import { FilterCard, TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { RefreshCcw, Search, ShieldX } from "lucide-react";
+import { KeyRound, RefreshCcw, Search, ShieldCheck, ShieldX } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
   useListAdminConsentGrantsQuery,
@@ -138,36 +139,61 @@ export function ConsentGrantsPage() {
           }
         />
 
-        {/* Search/Filter Bar */}
-        {grants.length > 0 && (
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={
-                  isAdmin
-                    ? "Search by user or client..."
-                    : "Search by client or resource..."
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+        <PageInfoBanner
+          title="Consent grants are remembered OAuth approvals"
+          description="Review which clients received user consent for protected Applications and revoke grants when access should be re-approved."
+          features={[
+            { text: "Inspect client and Application pairs", icon: KeyRound },
+            { text: "Expand rows for raw grant details and scopes", icon: ShieldCheck },
+            { text: "Revoke remembered consent without deleting roles", icon: ShieldX },
+          ]}
+          featuresTitle="Grant review"
+          storageKey="consent-grants-info"
+          dismissible
+        />
+
+        <FilterCard>
+          <CardContent variant="compact">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Filters</span>
+                {searchQuery.trim() ? (
+                  <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-foreground dark:bg-white/10">
+                    1
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex w-full flex-1 flex-wrap items-center gap-2">
+                <div className="relative min-w-[220px] flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder={
+                      isAdmin
+                        ? "Search by user or client..."
+                        : "Search by client or resource..."
+                    }
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-9 pl-9"
+                  />
+                </div>
+                {searchQuery.trim() && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
-            {searchQuery.trim() && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSearchQuery("")}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-        )}
+          </CardContent>
+        </FilterCard>
 
         {/* Table Card */}
-        <TableCard className="space-y-4 p-4 sm:p-6">
+        <TableCard>
+          <CardContent variant="flush">
           {isLoading ? (
             <DataTableSkeleton rows={5} columns={isAdmin ? 7 : 6} />
           ) : filteredGrants.length === 0 && searchQuery.trim() ? (
@@ -186,10 +212,11 @@ export function ConsentGrantsPage() {
               onRevoke={handleRevokeClick}
             />
           )}
+          </CardContent>
 
           {/* Stats Badge */}
           {!isLoading && filteredGrants.length > 0 && (
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex items-center justify-between border-t px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <ShieldX className="h-4 w-4" />
                 <span>
