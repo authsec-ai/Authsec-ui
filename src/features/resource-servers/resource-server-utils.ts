@@ -52,7 +52,7 @@ export const DEFAULT_FORM: ResourceServerFormState = {
   name: "",
   public_base_url: "",
   protected_base_path: "/mcp",
-  scopes_supported: "tools:read\ntools:write",
+  scopes_supported: "",
   registration_modes: "dcr\nprereg\ncimd",
   active: true,
   // Default to the recommended preset; operator can switch on Create.
@@ -214,6 +214,24 @@ export function buildResourceServerPayload(
     scope_preset_id: preset,
     default_access_enabled: form.default_access_enabled,
   };
+}
+
+export function buildScopeCleanupInstruction(server: ResourceServer): string {
+  const scopes = getDeclaredScopes(server);
+  const canonicalScopeList =
+    scopes.length > 0
+      ? scopes.map((scope) => `- ${scope}`).join("\n")
+      : "- Use only the AuthSec scopes shown in the Application Scopes tab.";
+
+  return `Remove or replace all hardcoded MCP/OAuth authorization scopes in this server.
+
+AuthSec is the source of truth for authorization. Do not enforce local legacy scopes such as read, write, admin, tools.read, tools.write, tools:read, tools:write, openid, profile, email, offline_access, default, all, or *.
+
+Use only these AuthSec canonical scopes for this application:
+${canonicalScopeList}
+
+The MCP server should define tools and execute tools. AuthSec defines access.
+Validate AuthSec-issued access tokens and check the canonical scopes above. Ignore or delete any predefined scope list that came from the MCP framework, examples, or old server code.`;
 }
 
 type IntegrationSnippet = {
@@ -549,7 +567,7 @@ Use these exact AuthSec and resource server values:
 - MCP endpoint URL: ${mcpEndpointURL}
 - Metadata path: ${metadataPath}
 - Metadata URL: ${metadataURL}
-- Supported scopes: ${getDeclaredScopes(server).join(", ") || "none declared"}
+- AuthSec canonical scopes: ${getDeclaredScopes(server).join(", ") || "none configured yet"}
 - Registration modes: ${(server.registration_modes ?? []).join(", ") || "none declared"}
 - OAuth issuer: ${computeOAuthIssuerURL()}
 - AuthSec API / SDK policy server: ${computeAuthSecAPIOrigin()}
@@ -569,8 +587,11 @@ AuthSec responsibilities:
 MCP server responsibilities:
 - Keep upstream service credentials server-side only
 - Execute the actual tools
-- Map tools to scopes/policy rules
+- Use only AuthSec canonical scopes for tool checks
 - Never forward AuthSec user tokens to upstream systems such as GitHub
+
+Scope cleanup requirement:
+${buildScopeCleanupInstruction(server)}
 
 ${profile.installLine}
 

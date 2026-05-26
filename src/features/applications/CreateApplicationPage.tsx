@@ -240,8 +240,9 @@ export default function CreateApplicationPage() {
                     </h2>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Scopes are labels your Application checks at runtime. Start from a preset,
-                    then tune the exact scope list after tools are discovered.
+                    AuthSec generates the canonical scope vocabulary. Server-defined
+                    scopes are treated as legacy noise unless they already match this
+                    application namespace.
                   </p>
                 </div>
                 <Button variant="outline" size="sm" asChild>
@@ -319,7 +320,8 @@ export default function CreateApplicationPage() {
               <ol className="mt-5 space-y-4">
                 {[
                   "Generate a one-time introspection secret.",
-                  "Create the preset's scope names as vocabulary only.",
+                  "Create canonical AuthSec scopes from the selected preset.",
+                  "Ignore legacy scopes declared by the MCP server.",
                   "Probe protected-resource metadata.",
                   "Import tools from manifest or discovery.",
                   "Create a 'viewer' role — empty until you bind scopes to it.",
@@ -405,7 +407,7 @@ function PresetCard({
           )}
         </span>
         <span className="mt-1 block font-mono text-xs text-emerald-700">
-          {scopesPreview || "no scopes - start blank"}
+          {scopesPreview || "no canonical scopes - start blank"}
         </span>
         <span className="mt-1 block text-xs leading-5 text-slate-500">
           {preset.description}

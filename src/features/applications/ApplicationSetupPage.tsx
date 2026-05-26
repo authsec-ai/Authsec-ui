@@ -266,7 +266,9 @@ export default function ApplicationSetupPage() {
             <p className="text-sm text-slate-600">
               Paste this prompt into Claude Code or Cursor. The agent reads
               your repo and wires the {INTEGRATION_LANGUAGE_LABELS[language]}{" "}
-              SDK with real values from this resource server.
+              SDK with real values from this resource server, including the
+              instruction to remove legacy predefined scopes and use only
+              AuthSec canonical scopes.
             </p>
             <CodeBlock
               title={`Coding-agent prompt · ${INTEGRATION_LANGUAGE_LABELS[language]}`}

@@ -65,7 +65,8 @@ export function ResourceServerFormDialog({
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Create Resource Server" : "Edit Resource Server"}</DialogTitle>
           <DialogDescription>
-            Configure the protected MCP resource, supported scopes, and client registration modes.
+            Configure the protected MCP resource and client registration modes. AuthSec owns
+            the canonical scopes; server-defined scopes are ignored.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,13 +112,13 @@ export function ResourceServerFormDialog({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="resource-server-scopes">Supported scopes</Label>
+              <Label htmlFor="resource-server-scopes">Canonical AuthSec scopes</Label>
               <Textarea
                 id="resource-server-scopes"
                 rows={7}
                 value={form.scopes_supported}
                 onChange={(event) => handleChange("scopes_supported", event.target.value)}
-                placeholder={"issues:read\nissues:write\nrepos:read"}
+                placeholder={"demo:read\ndemo:write\ndemo:tools:read\ndemo:tools:write"}
               />
             </div>
             <div className="space-y-2">
