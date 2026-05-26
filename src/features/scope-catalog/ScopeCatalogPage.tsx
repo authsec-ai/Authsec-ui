@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Layers3, MoreHorizontal, Search, ShieldCheck, Workflow } from "lucide-react";
+import { Layers3, MoreHorizontal, Plus, Search, ShieldCheck, SlidersHorizontal, Workflow } from "lucide-react";
 
 import {
   useAttachScopeCatalogEntryMutation,
@@ -18,6 +18,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -104,38 +112,28 @@ function CatalogExpandedRow({ scope }: { scope: ScopeCatalogEntry }) {
 export default function ScopeCatalogPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState("all");
+  const [riskFilter, setRiskFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newRisk, setNewRisk] = useState("low");
   const [attachCatalogId, setAttachCatalogId] = useState("");
   const [attachApplicationId, setAttachApplicationId] = useState("");
-  const { data, isLoading, isFetching, refetch } = useListScopeCatalogQuery();
+  const { data, isLoading, isFetching, refetch } = useListScopeCatalogQuery({
+    q: query.trim() || undefined,
+    kind: kindFilter as "application" | "catalog" | "global" | "all",
+    risk_level: riskFilter === "all" ? undefined : riskFilter,
+  });
   const { data: applications = [] } = useListApplicationsQuery();
   const [createCatalogEntry, { isLoading: creating }] = useCreateScopeCatalogEntryMutation();
   const [attachCatalogEntry, { isLoading: attaching }] = useAttachScopeCatalogEntryMutation();
 
   const scopes = useMemo(() => {
     const items = data?.items ?? [];
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((scope) =>
-      [
-        scope.key,
-        scope.scope_string,
-        scope.display_name,
-        scope.description,
-        scope.application?.name,
-        scope.application?.resource_uri,
-        scope.source,
-        scope.kind,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [data?.items, query]);
+    return items;
+  }, [data?.items]);
 
   const columns = useMemo<AdaptiveColumn<ScopeCatalogEntry>[]>(
     () => [
@@ -264,12 +262,15 @@ export default function ScopeCatalogPage() {
       setNewName("");
       setNewDescription("");
       setNewRisk("low");
+      setCreateOpen(false);
       toast.success("Catalog scope created.");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't create catalog scope.");
     }
   };
+
+  const activeFilterCount = [query.trim(), kindFilter !== "all", riskFilter !== "all"].filter(Boolean).length;
 
   const handleAttach = async () => {
     if (!attachCatalogId || !attachApplicationId) {
@@ -291,25 +292,31 @@ export default function ScopeCatalogPage() {
   return (
     <div className="space-y-4 p-6">
       <PageHeader
-        title="Scope Catalog"
-        description="Govern scope vocabulary and reusable presets. Runtime grants still resolve against each Application."
+        title="Application Scopes"
+        description="Govern runtime scopes, reusable presets, usage, and risk posture across Applications."
         actions={
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? "Refreshing..." : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add scope
+            </Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
         }
       />
 
       <PageInfoBanner
-        title="Catalog scopes are reusable templates"
-        description="Application scopes remain the runtime authority. Catalog entries help operators reuse names, descriptions, and risk posture without creating global grants."
+        title="Application scopes are the runtime contract"
+        description="Scopes describe exactly what an Application can authorize. Presets speed up naming, but grants still resolve against application-owned scopes."
         features={[
           { text: "Create reusable scope presets", icon: Layers3 },
           { text: "Attach presets into specific Applications", icon: Workflow },
           { text: "Review usage without implying global access", icon: ShieldCheck },
         ]}
         featuresTitle="Scope model"
-        storageKey="scope-catalog-info"
+        storageKey="application-scopes-info"
         dismissible
       />
 
@@ -317,10 +324,11 @@ export default function ScopeCatalogPage() {
         <CardContent variant="compact" className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="flex shrink-0 items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">Filters</span>
-              {query.trim() ? (
+              {activeFilterCount ? (
                 <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-foreground dark:bg-white/10">
-                  1
+                  {activeFilterCount}
                 </span>
               ) : null}
             </div>
@@ -332,52 +340,46 @@ export default function ScopeCatalogPage() {
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search scopes, applications, or sources"
                   className="h-9 pl-9"
+                  autoComplete="off"
                 />
               </div>
-              {query.trim() ? (
-                <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
+              <Select value={kindFilter} onValueChange={setKindFilter}>
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All scopes</SelectItem>
+                  <SelectItem value="application">Application scopes</SelectItem>
+                  <SelectItem value="catalog">Presets</SelectItem>
+                  <SelectItem value="global">Global</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={riskFilter} onValueChange={setRiskFilter}>
+                <SelectTrigger className="h-9 w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All risks</SelectItem>
+                  <SelectItem value="low">Low risk</SelectItem>
+                  <SelectItem value="medium">Medium risk</SelectItem>
+                  <SelectItem value="high">High risk</SelectItem>
+                  <SelectItem value="critical">Critical risk</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeFilterCount ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setQuery("");
+                    setKindFilter("all");
+                    setRiskFilter("all");
+                  }}
+                >
                   Clear
                 </Button>
               ) : null}
             </div>
-          </div>
-          <div className="border-t pt-4">
-            <h2 className="text-sm font-semibold">Create catalog scope</h2>
-            <p className="text-sm text-muted-foreground">
-              Catalog scopes are reusable templates. They do not grant access until attached to an Application.
-            </p>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.5fr_160px_auto]">
-            <Input
-              value={newKey}
-              onChange={(event) => setNewKey(event.target.value)}
-              placeholder="scope key, e.g. demo:tools:read"
-              className="font-mono"
-            />
-            <Input
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="Display name"
-            />
-            <Input
-              value={newDescription}
-              onChange={(event) => setNewDescription(event.target.value)}
-              placeholder="Description"
-            />
-            <Select value={newRisk} onValueChange={setNewRisk}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low risk</SelectItem>
-                <SelectItem value="medium">Medium risk</SelectItem>
-                <SelectItem value="high">High risk</SelectItem>
-                <SelectItem value="critical">Critical risk</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={handleCreateCatalogEntry} disabled={creating || !newKey.trim()}>
-              {creating ? "Creating..." : "Create"}
-            </Button>
           </div>
           <div className="grid gap-3 border-t pt-4 lg:grid-cols-[1fr_1fr_auto]">
             <Select value={attachCatalogId} onValueChange={setAttachCatalogId}>
@@ -435,6 +437,56 @@ export default function ScopeCatalogPage() {
           )}
         </CardContent>
       </TableCard>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add scope preset</DialogTitle>
+            <DialogDescription>
+              Create a reusable scope definition. Attach it to an Application before it can grant access.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={newKey}
+              onChange={(event) => setNewKey(event.target.value)}
+              placeholder="scope key, e.g. demo:tools:read"
+              className="font-mono"
+              autoComplete="off"
+            />
+            <Input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Display name"
+              autoComplete="off"
+            />
+            <Input
+              value={newDescription}
+              onChange={(event) => setNewDescription(event.target.value)}
+              placeholder="Description"
+              autoComplete="off"
+            />
+            <Select value={newRisk} onValueChange={setNewRisk}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low risk</SelectItem>
+                <SelectItem value="medium">Medium risk</SelectItem>
+                <SelectItem value="high">High risk</SelectItem>
+                <SelectItem value="critical">Critical risk</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateCatalogEntry} disabled={creating || !newKey.trim()}>
+              {creating ? "Creating..." : "Create scope"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

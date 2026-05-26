@@ -108,11 +108,7 @@ export default function ApplicationRoleBindingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                navigate(
-                  `/authz/effective-access?user_id=${row.original.user_id}&application_id=${application.id}`,
-                )
-              }
+              onClick={() => navigate(`/end-users/${row.original.user_id}`)}
             >
               Effective access
             </Button>

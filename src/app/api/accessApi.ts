@@ -48,6 +48,21 @@ export interface ApplicationRoleListResponse {
   count: number;
 }
 
+export interface ListApplicationRolesParams {
+  q?: string;
+  application_id?: string;
+  source?: string;
+  default?: boolean;
+}
+
+export interface CreateApplicationRoleRequest {
+  name: string;
+  description?: string;
+  scope_ids: string[];
+  default_role?: boolean;
+  assign_user_ids?: string[];
+}
+
 export interface ApplicationAccessUser {
   user: AccessUserRef;
   roles: AccessRoleRef[];
@@ -117,6 +132,13 @@ export interface ScopeCatalogResponse {
   count: number;
 }
 
+export interface ListScopeCatalogParams {
+  q?: string;
+  kind?: "application" | "catalog" | "global" | "all";
+  risk_level?: string;
+  application_id?: string;
+}
+
 export interface CreateScopeCatalogEntryRequest {
   key: string;
   display_name?: string;
@@ -124,11 +146,42 @@ export interface CreateScopeCatalogEntryRequest {
   risk_level?: string;
 }
 
+function toQueryString(params?: Record<string, string | number | boolean | undefined>) {
+  if (!params) return "";
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === "" || value === "all") return;
+    query.set(key, String(value));
+  });
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
 export const accessApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    listApplicationRoles: builder.query<ApplicationRoleListResponse, void>({
-      query: () => ({ url: "/authsec/application-roles", method: "GET" }),
+    listApplicationRoles: builder.query<ApplicationRoleListResponse, ListApplicationRolesParams | void>({
+      query: (params) => ({
+        url: `/authsec/application-roles${toQueryString(params)}`,
+        method: "GET",
+      }),
       providesTags: [{ type: "ApplicationRole", id: "LIST" }],
+    }),
+
+    createApplicationRole: builder.mutation<
+      ApplicationRole,
+      { applicationId: string; body: CreateApplicationRoleRequest }
+    >({
+      query: ({ applicationId, body }) => ({
+        url: `/authsec/applications/${applicationId}/roles`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { applicationId }) => [
+        { type: "ApplicationRole", id: "LIST" },
+        { type: "ApplicationAccess", id: applicationId },
+        { type: "ResourceServer", id: `${applicationId}-roles` },
+        { type: "ResourceServer", id: `${applicationId}-bindings` },
+      ],
     }),
 
     listApplicationAccessUsers: builder.query<ApplicationAccessUsersResponse, string>({
@@ -154,8 +207,8 @@ export const accessApi = baseApi.injectEndpoints({
       ],
     }),
 
-    listScopeCatalog: builder.query<ScopeCatalogResponse, void>({
-      query: () => ({ url: "/authsec/scope-catalog", method: "GET" }),
+    listScopeCatalog: builder.query<ScopeCatalogResponse, ListScopeCatalogParams | void>({
+      query: (params) => ({ url: `/authsec/scope-catalog${toQueryString(params)}`, method: "GET" }),
       providesTags: [{ type: "ScopeCatalog", id: "LIST" }],
     }),
 
@@ -183,6 +236,7 @@ export const accessApi = baseApi.injectEndpoints({
 
 export const {
   useListApplicationRolesQuery,
+  useCreateApplicationRoleMutation,
   useListApplicationAccessUsersQuery,
   useGetApplicationEffectiveAccessQuery,
   useListScopeCatalogQuery,

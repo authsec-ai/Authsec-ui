@@ -126,11 +126,7 @@ export default function EndUserDetailPage() {
             </Button>
             <Button
               size="sm"
-              onClick={() =>
-                navigate(
-                  `/authz/effective-access?user_id=${userId}&application_id=${row.original.application_id}`,
-                )
-              }
+              onClick={() => navigate(`/end-users/${userId}`)}
             >
               Effective access
             </Button>
@@ -149,7 +145,7 @@ export default function EndUserDetailPage() {
         actions={
           <Button
             variant="outline"
-            onClick={() => navigate(`/authz/effective-access?user_id=${userId}`)}
+            onClick={() => navigate(`/end-users/${userId}`)}
           >
             Effective access
           </Button>
@@ -202,11 +198,7 @@ export default function EndUserDetailPage() {
                 <ApplicationExpandedRow
                   application={row.original}
                   userId={userId}
-                  onEffectiveAccess={() =>
-                    navigate(
-                      `/authz/effective-access?user_id=${userId}&application_id=${row.original.application_id}`,
-                    )
-                  }
+                  onEffectiveAccess={() => navigate(`/end-users/${userId}`)}
                 />
               )}
               getRowId={(application) => application.binding_id}

@@ -24,7 +24,6 @@ import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
 import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
-import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
 import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
@@ -34,7 +33,6 @@ import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
 import ApplicationsPage from "./features/applications/ApplicationsPage";
 import CreateApplicationPage from "./features/applications/CreateApplicationPage";
 import ApplicationLayout from "./features/applications/ApplicationLayout";
-import ApplicationOverviewPage from "./features/applications/ApplicationOverviewPage";
 import ApplicationSetupPage from "./features/applications/ApplicationSetupPage";
 import ApplicationToolsPage from "./features/applications/ApplicationToolsPage";
 import ApplicationScopesPage from "./features/applications/ApplicationScopesPage";
@@ -402,8 +400,8 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   >
-                    <Route index element={<Navigate to="overview" replace />} />
-                    <Route path="overview" element={<ApplicationOverviewPage />} />
+                    <Route index element={<Navigate to="launch" replace />} />
+                    <Route path="overview" element={<Navigate to="../launch" replace />} />
                     <Route path="setup" element={<ApplicationSetupPage />} />
                     <Route path="tools" element={<ApplicationToolsPage />} />
                     <Route path="scopes" element={<ApplicationScopesPage />} />
@@ -411,8 +409,8 @@ function AppContent() {
                     <Route path="role-bindings" element={<ApplicationRoleBindingsPage />} />
                     <Route path="consent-grants" element={<ApplicationConsentGrantsPage />} />
                     <Route path="clients" element={<ApplicationClientsPage />} />
-                    <Route path="test" element={<ApplicationTestPage />} />
                     <Route path="launch" element={<ApplicationLaunchPage />} />
+                    <Route path="test" element={<ApplicationTestPage />} />
                     <Route path="activity" element={<ApplicationActivityPage />} />
                   </Route>
 
@@ -595,16 +593,10 @@ function AppContent() {
                   />
                   <Route
                     path="/authz/effective-access"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <EffectiveAccessPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/end-users" replace />}
                   />
                   <Route
-                    path="/authz/scope-catalog"
+                    path="/authz/application-scopes"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -612,6 +604,10 @@ function AppContent() {
                         </AppLayout>
                       </ProtectedRoute>
                     }
+                  />
+                  <Route
+                    path="/authz/scope-catalog"
+                    element={<Navigate to="/authz/application-scopes" replace />}
                   />
                   <Route
                     path="/consent-grants"
@@ -737,7 +733,11 @@ function AppContent() {
                       />
                       <Route
                         path="scope-catalog"
-                        element={<Navigate to="/authz/scope-catalog" replace />}
+                        element={<Navigate to="/authz/application-scopes" replace />}
+                      />
+                      <Route
+                        path="application-scopes"
+                        element={<Navigate to="/authz/application-scopes" replace />}
                       />
                     </Route>
 

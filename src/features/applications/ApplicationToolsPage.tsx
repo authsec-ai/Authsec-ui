@@ -21,7 +21,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { KeyRound, Loader2, Plus, RefreshCcw, Search } from "lucide-react";
+import { Loader2, RefreshCcw, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -47,9 +47,7 @@ import {
   useUpdateToolScopeMapMutation,
 } from "@/app/api/scopeMatrixApi";
 import {
-  useCreateManualToolMutation,
   useMarkToolPublicMutation,
-  useScanWithMCPTokenMutation,
 } from "@/app/api/setupWizardApi";
 import type {
   MCPToolResponse,
@@ -187,15 +185,8 @@ export default function ApplicationToolsPage() {
   const { data: matrix, isLoading } = useGetScopeMatrixQuery(application.id);
   const [rescan, { isLoading: rescanning }] =
     useRescanResourceServerMutation();
-  const [scanWithMCPToken, { isLoading: scanningWithToken }] =
-    useScanWithMCPTokenMutation();
-  const [createManualTool, { isLoading: creatingManualTool }] =
-    useCreateManualToolMutation();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<MCPToolResponse | null>(null);
-  const [scanToken, setScanToken] = useState("");
-  const [manualName, setManualName] = useState("");
-  const [manualDescription, setManualDescription] = useState("");
   const [query, setQuery] = useState("");
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix]);
@@ -356,44 +347,6 @@ export default function ApplicationToolsPage() {
     }
   };
 
-  const handleAuthenticatedScan = async () => {
-    if (!scanToken.trim()) {
-      toast.error("Paste a one-time bearer token for the MCP server.");
-      return;
-    }
-    try {
-      await scanWithMCPToken({
-        rsId: application.id,
-        mcpToken: scanToken.trim(),
-      }).unwrap();
-      setScanToken("");
-      toast.success("Authenticated scan completed.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Authenticated scan failed.");
-    }
-  };
-
-  const handleCreateManualTool = async () => {
-    if (!manualName.trim()) {
-      toast.error("Enter the exact tool name.");
-      return;
-    }
-    try {
-      await createManualTool({
-        rsId: application.id,
-        name: manualName.trim(),
-        description: manualDescription.trim() || undefined,
-      }).unwrap();
-      setManualName("");
-      setManualDescription("");
-      toast.success("Manual tool added.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't add manual tool.");
-    }
-  };
-
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -448,10 +401,14 @@ export default function ApplicationToolsPage() {
           <div className="relative w-full sm:w-[22rem]">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
+              type="search"
+              name="application-tools-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search tools or scopes"
               className="h-9 pl-9"
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
         </div>
@@ -489,90 +446,6 @@ export default function ApplicationToolsPage() {
         </div>
         </CardContent>
       </FilterCard>
-
-      <details className="group rounded-lg border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.02)]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-950">
-          Discovery fallbacks
-          <span className="text-xs font-medium text-slate-500 group-open:hidden">
-            Authenticated scan and manual entry
-          </span>
-        </summary>
-        <div className="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-2">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <KeyRound className="size-4 text-blue-600" aria-hidden />
-            <h3 className="text-sm font-semibold text-slate-950">
-              Authenticated scan
-            </h3>
-          </div>
-          <p className="text-xs leading-5 text-slate-600">
-            Use this when <code className="font-mono">tools/list</code> is
-            protected and unauthenticated rescan cannot see inventory. The
-            token is sent once and is not stored.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              type="password"
-              value={scanToken}
-              onChange={(e) => setScanToken(e.target.value)}
-              placeholder="Bearer token for MCP tools/list"
-              aria-label="MCP scan token"
-            />
-            <Button
-              variant="outline"
-              onClick={handleAuthenticatedScan}
-              disabled={scanningWithToken}
-            >
-              {scanningWithToken ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <KeyRound className="mr-2 size-4" />
-              )}
-              Scan
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Plus className="size-4 text-blue-600" aria-hidden />
-            <h3 className="text-sm font-semibold text-slate-950">
-              Manual tool entry
-            </h3>
-          </div>
-          <p className="text-xs leading-5 text-slate-600">
-            Use only as a fallback for closed servers. Manual tools still
-            need an admin mapping before runtime allows them.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
-            <Input
-              value={manualName}
-              onChange={(e) => setManualName(e.target.value)}
-              placeholder="tool_name"
-              aria-label="Manual tool name"
-            />
-            <Input
-              value={manualDescription}
-              onChange={(e) => setManualDescription(e.target.value)}
-              placeholder="Optional description"
-              aria-label="Manual tool description"
-            />
-            <Button
-              variant="outline"
-              onClick={handleCreateManualTool}
-              disabled={creatingManualTool}
-            >
-              {creatingManualTool ? (
-                <Loader2 className="mr-2 size-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 size-4" />
-              )}
-              Add
-            </Button>
-          </div>
-        </div>
-        </div>
-      </details>
 
       {/* Tools table */}
       <TableCard>

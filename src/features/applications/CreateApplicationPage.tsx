@@ -12,7 +12,7 @@
 
 import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { useCreateApplicationMutation } from "@/app/api/applicationsApi";
@@ -238,17 +238,18 @@ export default function CreateApplicationPage() {
                     <h2 className="text-base font-semibold text-slate-950">
                       Access vocabulary
                     </h2>
-                    <HelpTooltip content="A starter set of scope names. AuthSec also auto-detects scopes from your server — presets just give you sensible names from day one. None of them grant access by themselves." />
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
-                    Pick a starter set of scope names. AuthSec also
-                    auto-detects scopes from your server — presets just
-                    give you sensible names from day one.
+                    Scopes are labels your Application checks at runtime. Start from a preset,
+                    then tune the exact scope list after tools are discovered.
                   </p>
                 </div>
-                <p className="text-xs text-slate-500">
-                  {presets.length} presets · share across apps
-                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/developer/sdk-guides" target="_blank" rel="noreferrer">
+                    <ExternalLink className="mr-2 size-4" />
+                    Docs
+                  </a>
+                </Button>
               </div>
 
               {/* Filter chip row */}
@@ -273,7 +274,7 @@ export default function CreateApplicationPage() {
                 })}
               </div>
 
-              {/* Preset grid */}
+              {/* Preset list */}
               <div className="mt-4">
                 {presetsLoading ? (
                   <div className="rounded-lg border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-500">
@@ -284,7 +285,7 @@ export default function CreateApplicationPage() {
                     No presets match this filter.
                   </div>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="divide-y rounded-md border border-slate-200">
                     {visiblePresets.map((preset) => (
                       <PresetCard
                         key={preset.id}
@@ -381,58 +382,36 @@ function PresetCard({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "relative flex h-full min-h-[140px] flex-col gap-2 rounded-lg border p-3 text-left transition-colors",
-        selected
-          ? "border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+        "flex w-full items-start gap-3 p-3 text-left transition-colors",
+        selected ? "bg-emerald-50/70" : "bg-white hover:bg-slate-50",
       )}
     >
-      {/* Top row: radio + (optional) BEST chip */}
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className={cn(
-            "mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full border",
-            selected
-              ? "border-emerald-500 bg-emerald-500"
-              : "border-slate-300 bg-white",
-          )}
-          aria-hidden
-        >
-          {selected && <span className="size-1.5 rounded-full bg-white" />}
-        </span>
-        {preset.recommended && (
-          <span className="inline-flex items-center rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-            Best
-          </span>
+      <span
+        className={cn(
+          "mt-1 inline-flex size-4 shrink-0 items-center justify-center rounded-full border",
+          selected ? "border-emerald-500 bg-emerald-500" : "border-slate-300 bg-white",
         )}
-      </div>
-
-      {/* Title */}
-      <h3
-        className="font-sans text-[12px] font-semibold leading-4 text-slate-950"
-        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+        aria-hidden
       >
-        {preset.name}
-      </h3>
-
-      {/* Scopes preview */}
-      <p
-        className="font-sans text-[10px] font-medium leading-4 text-emerald-700"
-        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-      >
-        {scopesPreview || "no scopes — start blank"}
-      </p>
-
-      {/* Description */}
-      <p
-        className="font-sans text-[10px] leading-4 text-slate-500"
-        style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-      >
-        {preset.description}
-      </p>
-
-      {/* Bottom-right category pill */}
-      <div className="mt-auto flex justify-end pt-1">
+        {selected && <span className="size-1.5 rounded-full bg-white" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-950">{preset.name}</span>
+          {preset.recommended && (
+            <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+              Best
+            </span>
+          )}
+        </span>
+        <span className="mt-1 block font-mono text-xs text-emerald-700">
+          {scopesPreview || "no scopes - start blank"}
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">
+          {preset.description}
+        </span>
+      </span>
+      <span className="shrink-0 pt-0.5">
         <span
           className={cn(
             "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
@@ -443,7 +422,7 @@ function PresetCard({
         >
           {pillLabel}
         </span>
-      </div>
+      </span>
     </button>
   );
 }

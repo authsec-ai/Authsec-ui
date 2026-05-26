@@ -233,9 +233,7 @@ export function RoleBindingsTable({
               {row.original.application?.id && (row.original.user_id || row.original.user?.id) ? (
                 <DropdownMenuItem
                   onSelect={() =>
-                    navigate(
-                      `/authz/effective-access?user_id=${row.original.user_id || row.original.user?.id}&application_id=${row.original.application?.id}`,
-                    )
+                    navigate(`/end-users/${row.original.user_id || row.original.user?.id}`)
                   }
                 >
                   View effective access

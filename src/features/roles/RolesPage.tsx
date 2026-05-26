@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AppWindow, KeyRound, MoreHorizontal, Search, Users } from "lucide-react";
+import { AppWindow, KeyRound, MoreHorizontal, Plus, Search, SlidersHorizontal, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useListApplicationRolesQuery, type ApplicationRole } from "@/app/api/accessApi";
@@ -20,19 +20,31 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FilterCard, TableCard } from "@/theme/components/cards";
+import { ApplicationRoleWizard } from "./components/ApplicationRoleWizard";
 
 function RoleExpandedRow({ role }: { role: ApplicationRole }) {
+  const highRiskScopes = role.scopes.filter((scope) =>
+    ["high", "critical"].includes(scope.risk_level),
+  );
+
   return (
-    <div className="grid gap-4 p-4 md:grid-cols-[1.2fr_1fr_1fr]">
-      <section>
+    <div className="grid gap-4 p-4 md:grid-cols-[1.4fr_0.9fr_1fr]">
+      <section className="space-y-3">
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Scope grants
+          Scope grants ({role.scopes.length})
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {role.scopes.length ? (
             role.scopes.map((scope) => (
-              <Badge key={scope.id} variant="outline" className="font-mono">
+              <Badge key={scope.id} variant="outline" className="font-mono text-xs">
                 {scope.scope_string}
               </Badge>
             ))
@@ -40,6 +52,12 @@ function RoleExpandedRow({ role }: { role: ApplicationRole }) {
             <span className="text-sm text-muted-foreground">No scopes granted.</span>
           )}
         </div>
+        {highRiskScopes.length ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            {highRiskScopes.length} high-risk scope{highRiskScopes.length === 1 ? "" : "s"} in this role.
+            Review user bindings before widening this grant.
+          </div>
+        ) : null}
       </section>
       <section>
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -52,17 +70,21 @@ function RoleExpandedRow({ role }: { role: ApplicationRole }) {
       </section>
       <section>
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Role metadata
+          Control panel
         </div>
-        <div className="mt-2 space-y-1 text-sm">
-          <div>
-            <span className="text-muted-foreground">Raw name:</span>{" "}
-            <code className="font-mono text-xs">{role.name}</code>
+        <div className="mt-2 grid gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-2 rounded-md border p-3">
+            <div>
+              <div className="text-xs text-muted-foreground">Users</div>
+              <div className="font-semibold">{role.users_count}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Source</div>
+              <div className="font-semibold capitalize">{role.source}</div>
+            </div>
           </div>
-          <div>
-            <span className="text-muted-foreground">Source:</span> {role.source}
-          </div>
-          {role.description ? <div>{role.description}</div> : null}
+          {role.description ? <div className="text-muted-foreground">{role.description}</div> : null}
+          <code className="break-all rounded bg-muted px-2 py-1 font-mono text-xs">{role.name}</code>
         </div>
       </section>
     </div>
@@ -72,25 +94,22 @@ function RoleExpandedRow({ role }: { role: ApplicationRole }) {
 export function RolesPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const { data, isLoading, isFetching, refetch } = useListApplicationRolesQuery();
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [defaultFilter, setDefaultFilter] = useState("all");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const { data, isLoading, isFetching, refetch } = useListApplicationRolesQuery({
+    q: query.trim() || undefined,
+    source: sourceFilter === "all" ? undefined : sourceFilter,
+    default:
+      defaultFilter === "all" ? undefined : defaultFilter === "default",
+  });
 
   const roles = useMemo(() => {
     const items = data?.roles ?? [];
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((role) =>
-      [
-        role.label,
-        role.name,
-        role.application.name,
-        role.application.resource_uri,
-        ...role.scopes.map((scope) => scope.scope_string),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [data?.roles, query]);
+    return items;
+  }, [data?.roles]);
+
+  const activeFilterCount = [query.trim(), sourceFilter !== "all", defaultFilter !== "all"].filter(Boolean).length;
 
   const columns = useMemo<AdaptiveColumn<ApplicationRole>[]>(
     () => [
@@ -183,7 +202,12 @@ export function RolesPage() {
               <DropdownMenuItem
                 onSelect={() => navigate(`/applications/${row.original.application.id}/access`)}
               >
-                Manage scopes
+                Open access control
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => navigate(`/applications/${row.original.application.id}/scopes`)}
+              >
+                Review application scopes
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => navigate(`/admin/authz/role-bindings?role_id=${row.original.id}`)}
@@ -205,9 +229,15 @@ export function RolesPage() {
         title="Application Roles"
         description="Manage roles that grant end users scoped access to Applications. Platform roles live in Platform Management."
         actions={
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? "Refreshing..." : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setWizardOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create role
+            </Button>
+            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
         }
       />
 
@@ -228,10 +258,11 @@ export function RolesPage() {
         <CardContent variant="compact">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="flex shrink-0 items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">Filters</span>
-              {query.trim() ? (
+              {activeFilterCount ? (
                 <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-foreground dark:bg-white/10">
-                  1
+                  {activeFilterCount}
                 </span>
               ) : null}
             </div>
@@ -243,10 +274,39 @@ export function RolesPage() {
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search roles, applications, or scopes"
                   className="h-9 pl-9"
+                  autoComplete="off"
                 />
               </div>
-              {query.trim() ? (
-                <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="h-9 w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                  <SelectItem value="generated">Generated</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={defaultFilter} onValueChange={setDefaultFilter}>
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All roles</SelectItem>
+                  <SelectItem value="default">Default only</SelectItem>
+                  <SelectItem value="non-default">Non-default</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeFilterCount ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setQuery("");
+                    setSourceFilter("all");
+                    setDefaultFilter("all");
+                  }}
+                >
                   Clear
                 </Button>
               ) : null}
@@ -275,6 +335,11 @@ export function RolesPage() {
           )}
         </CardContent>
       </TableCard>
+      <ApplicationRoleWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCreated={() => refetch()}
+      />
     </div>
   );
 }

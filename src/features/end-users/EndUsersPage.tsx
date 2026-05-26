@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   KeyRound,
   MoreHorizontal,
+  RefreshCcw,
   Search,
   ShieldCheck,
   ShieldOff,
+  Trash2,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -17,6 +19,8 @@ import {
   type EndUserStatus,
   type TenantEndUserState,
 } from "@/app/api/membershipApi";
+import { useGetApplicationEffectiveAccessQuery } from "@/app/api/accessApi";
+import { useDeleteRSBindingMutation } from "@/app/api/setupWizardApi";
 import {
   AdaptiveTable,
   type AdaptiveColumn,
@@ -32,12 +36,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { toast } from "@/lib/toast";
@@ -146,12 +158,188 @@ function EndUserExpandedRow({
   );
 }
 
+function EffectiveAccessDrawer({
+  user,
+  initialApplicationId,
+  open,
+  onOpenChange,
+}: {
+  user: TenantEndUserState | null;
+  initialApplicationId?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [applicationId, setApplicationId] = useState(initialApplicationId ?? "");
+  const [deleteBinding, deleteState] = useDeleteRSBindingMutation();
+  const applications = user?.applications ?? [];
+  const selectedApplicationId = applicationId || applications[0]?.application_id || "";
+  const { data, isFetching, refetch } = useGetApplicationEffectiveAccessQuery(
+    { applicationId: selectedApplicationId, userId: user?.user_id ?? "" },
+    { skip: !user || !selectedApplicationId },
+  );
+
+  React.useEffect(() => {
+    if (open) setApplicationId(initialApplicationId ?? applications[0]?.application_id ?? "");
+  }, [applications, initialApplicationId, open]);
+
+  const handleRemoveBinding = async (bindingId: string) => {
+    if (!selectedApplicationId) return;
+    const confirmed = window.confirm("Remove this user's application role binding?");
+    if (!confirmed) return;
+    try {
+      await deleteBinding({ rsId: selectedApplicationId, bindingId }).unwrap();
+      toast.success("Access removed");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.data?.error ?? "Failed to remove access");
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+        <SheetHeader>
+          <SheetTitle>Effective access</SheetTitle>
+          <SheetDescription>
+            {user ? userLabel(user) : "Select a user"} across application roles, scopes, and tools.
+          </SheetDescription>
+        </SheetHeader>
+
+        {user ? (
+          <div className="mt-6 space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={selectedApplicationId} onValueChange={setApplicationId}>
+                <SelectTrigger className="h-9 min-w-[260px] flex-1">
+                  <SelectValue placeholder="Application" />
+                </SelectTrigger>
+                <SelectContent>
+                  {applications.map((app) => (
+                    <SelectItem key={app.application_id} value={app.application_id}>
+                      {app.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selectedApplicationId && refetch()}
+                disabled={isFetching || !selectedApplicationId}
+              >
+                <RefreshCcw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
+
+            <Tabs defaultValue="roles">
+              <TabsList>
+                <TabsTrigger value="roles">Roles & scopes</TabsTrigger>
+                <TabsTrigger value="tools">Applications & tools</TabsTrigger>
+              </TabsList>
+              <TabsContent value="roles" className="mt-4 space-y-4">
+                <section className="rounded-md border">
+                  <div className="border-b px-3 py-2 text-sm font-semibold">Role bindings</div>
+                  <div className="divide-y">
+                    {data?.roles?.length ? (
+                      data.roles.map((role) => (
+                        <div key={`${role.id}:${role.binding_id}`} className="flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <div className="font-medium">{role.label}</div>
+                            <div className="truncate font-mono text-xs text-muted-foreground">{role.name}</div>
+                          </div>
+                          {role.binding_id ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRemoveBinding(role.binding_id!)}
+                              disabled={deleteState.isLoading}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-sm text-muted-foreground">No role binding for this application.</div>
+                    )}
+                  </div>
+                </section>
+
+                <section className="rounded-md border">
+                  <div className="border-b px-3 py-2 text-sm font-semibold">Scopes</div>
+                  <div className="grid gap-2 p-3">
+                    {data?.scopes?.length ? (
+                      data.scopes.map((scope) => (
+                        <div key={scope.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+                          <div>
+                            <div className="font-mono text-sm">{scope.scope_string}</div>
+                            <div className="text-xs text-muted-foreground">{scope.display_name}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={scope.status === "granted" ? "default" : "outline"}>
+                              {scope.status === "granted" ? "Granted" : "Not granted"}
+                            </Badge>
+                            <Badge variant="outline">{scope.risk_level}</Badge>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-sm text-muted-foreground">No scopes found.</div>
+                    )}
+                  </div>
+                </section>
+              </TabsContent>
+              <TabsContent value="tools" className="mt-4 space-y-3">
+                {applications.length ? (
+                  applications.map((app) => (
+                    <div key={app.binding_id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{app.name}</div>
+                          <div className="truncate font-mono text-xs text-muted-foreground">
+                            {app.resource_uri}
+                          </div>
+                        </div>
+                        <Badge variant="secondary">{app.scopes_count} scopes</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                        <Badge variant="outline">{app.role_label || app.role_name}</Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setApplicationId(app.application_id)}
+                        >
+                          Inspect
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-md border p-6 text-sm text-muted-foreground">
+                    This user has no application access yet.
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function EndUsersPage() {
   const navigate = useNavigate();
   const tenantId = resolveTenantId();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<string>("all");
+  const [accessDrawer, setAccessDrawer] = useState<{
+    open: boolean;
+    user: TenantEndUserState | null;
+    applicationId?: string;
+  }>({ open: false, user: null });
 
   const { data, isLoading, isFetching, refetch } = useListEndUsersQuery(
     {
@@ -269,7 +457,7 @@ export default function EndUsersPage() {
                 View profile
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => navigate(`/authz/effective-access?user_id=${row.original.user_id}`)}
+                onClick={() => setAccessDrawer({ open: true, user: row.original })}
               >
                 <KeyRound className="mr-2 h-4 w-4" />
                 Effective access
@@ -397,11 +585,7 @@ export default function EndUsersPage() {
                     user={row.original}
                     onOpenProfile={() => navigate(`/end-users/${row.original.user_id}`)}
                     onOpenEffectiveAccess={(applicationId) =>
-                      navigate(
-                        applicationId
-                          ? `/authz/effective-access?user_id=${row.original.user_id}&application_id=${applicationId}`
-                          : `/authz/effective-access?user_id=${row.original.user_id}`,
-                      )
+                      setAccessDrawer({ open: true, user: row.original, applicationId })
                     }
                   />
                 )}
@@ -413,9 +597,15 @@ export default function EndUsersPage() {
         </TableCard>
 
         <div className="text-xs text-muted-foreground">
-          {rows.length} end user{rows.length === 1 ? "" : "s"} in this tenant.
+          {rows.length} end user{rows.length === 1 ? "" : "s"} in this workspace.
         </div>
       </div>
+      <EffectiveAccessDrawer
+        open={accessDrawer.open}
+        user={accessDrawer.user}
+        initialApplicationId={accessDrawer.applicationId}
+        onOpenChange={(open) => setAccessDrawer((current) => ({ ...current, open }))}
+      />
     </>
   );
 }

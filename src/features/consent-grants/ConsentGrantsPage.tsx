@@ -35,25 +35,13 @@ export function ConsentGrantsPage() {
     grant: OAuthConsentGrant | null;
   }>({ open: false, grant: null });
 
-  // Build filter object for admin queries
-  const adminFilters = useMemo(() => {
-    const query = searchQuery.trim();
-    if (!query || !isAdmin) return undefined;
-
-    // Simple search - searches across user_id and client_id
-    return {
-      user_id: query,
-      client_id: query,
-    };
-  }, [searchQuery, isAdmin]);
-
   // API queries - conditional based on audience
   const {
     data: adminData,
     isLoading: isAdminLoading,
     isFetching: isAdminFetching,
     refetch: refetchAdmin,
-  } = useListAdminConsentGrantsQuery(adminFilters, {
+  } = useListAdminConsentGrantsQuery(undefined, {
     skip: !isAdmin,
   });
 
@@ -71,13 +59,13 @@ export function ConsentGrantsPage() {
   const isFetching = isAdmin ? isAdminFetching : isUserFetching;
   const grants = (isAdmin ? adminData?.consent_grants : userData?.consent_grants) || [];
 
-  // Client-side filtering for end-users (since API doesn't support filters)
   const filteredGrants = useMemo(() => {
-    if (isAdmin || !searchQuery.trim()) return grants;
+    if (!searchQuery.trim()) return grants;
 
     const query = searchQuery.toLowerCase();
     return grants.filter(
       (grant) =>
+        (isAdmin && grant.user_id.toLowerCase().includes(query)) ||
         grant.client_id.toLowerCase().includes(query) ||
         grant.client_name?.toLowerCase().includes(query) ||
         grant.resource_server_id.toLowerCase().includes(query) ||
@@ -110,8 +98,8 @@ export function ConsentGrantsPage() {
     () => ({
       title: "Consent Grants",
       description: isAdmin
-        ? `Manage OAuth consent grants across all users. ${filteredGrants.length} total grants.`
-        : `View and revoke your application access permissions. ${filteredGrants.length} active grants.`,
+        ? `Review remembered OAuth approvals across users. ${filteredGrants.length} grant${filteredGrants.length === 1 ? "" : "s"} shown.`
+        : `Review remembered approvals that let clients skip the consent prompt. ${filteredGrants.length} active grant${filteredGrants.length === 1 ? "" : "s"}.`,
     }),
     [isAdmin, filteredGrants.length]
   );
@@ -140,11 +128,11 @@ export function ConsentGrantsPage() {
         />
 
         <PageInfoBanner
-          title="Consent grants are remembered OAuth approvals"
-          description="Review which clients received user consent for protected Applications and revoke grants when access should be re-approved."
+          title="Consent grants explain why a prompt is skipped"
+          description="A grant is created after a user approves a client for an Application. Revoke it when a user must approve again, without deleting their roles."
           features={[
             { text: "Inspect client and Application pairs", icon: KeyRound },
-            { text: "Expand rows for raw grant details and scopes", icon: ShieldCheck },
+            { text: "Expand rows for raw grant details and approved scopes", icon: ShieldCheck },
             { text: "Revoke remembered consent without deleting roles", icon: ShieldX },
           ]}
           featuresTitle="Grant review"
@@ -169,7 +157,7 @@ export function ConsentGrantsPage() {
                   <Input
                     placeholder={
                       isAdmin
-                        ? "Search by user or client..."
+                        ? "Search user, client, Application, or scope"
                         : "Search by client or resource..."
                     }
                     value={searchQuery}

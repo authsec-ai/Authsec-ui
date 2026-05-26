@@ -22,7 +22,6 @@ import {
   LayoutDashboard,
   Layers,
   Link2,
-  SearchCheck,
   UserCog,
   Users,
   type LucideIcon,
@@ -54,7 +53,7 @@ interface NavItem {
   /**
    * Items still tied to the legacy `/admin` operator prefix
    * opt in by setting `contextPrefixed: true`. Object-
-   * first routes (e.g. /end-users, /settings/team, /authz/effective-access)
+   * first routes (e.g. /end-users, /settings/team, /consent-grants)
    * leave this false and render as-is.
    */
   contextPrefixed?: boolean;
@@ -83,10 +82,9 @@ const NAV_OBJECTS: NavItem[] = [
 // access pages are intentionally hidden from the primary nav; application
 // roles/grants live inside each Application's Access tab.
 const NAV_AUTHZ: NavItem[] = [
-  { title: "Effective Access", url: "/authz/effective-access", icon: SearchCheck } as NavItem,
   { title: "Application Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
   { title: "Role Bindings", url: "/authz/role-bindings", icon: Link2, contextPrefixed: true } as NavItem,
-  { title: "Scope Catalog", url: "/authz/scope-catalog", icon: KeyRound } as NavItem,
+  { title: "Application Scopes", url: "/authz/application-scopes", icon: KeyRound } as NavItem,
   { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock } as NavItem,
 ];
 
