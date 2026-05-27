@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Activity,
   ExternalLink,
   KeyRound,
   MoreHorizontal,
   PlayCircle,
-  Rocket,
   ShieldCheck,
   Trash2,
   Users,
@@ -85,7 +84,6 @@ const ROW_ACTIONS: Array<{
   { key: "access", label: "Manage access", tab: "access", icon: KeyRound },
   { key: "clients", label: "Clients", tab: "clients", icon: Users },
   { key: "test", label: "Run test login", tab: "test", icon: PlayCircle },
-  { key: "launch", label: "Overview", tab: "launch", icon: Rocket },
   { key: "activity", label: "Monitor", tab: "activity", icon: Activity },
 ];
 
@@ -100,8 +98,6 @@ export function ApplicationsTable({
   onNavigateToTab: (applicationId: string, tab: string) => void;
   onDeleteApplication: (application: Application) => void;
 }) {
-  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
-
   const columns = useMemo<AdaptiveColumn<ApplicationTableRow>[]>(
     () => [
       {
@@ -191,15 +187,7 @@ export function ApplicationsTable({
           data={rows}
           columns={columns}
           enableSelection={false}
-          enableExpansion
-          expandedRowIds={expandedRowIds}
-          onExpandedRowsChange={setExpandedRowIds}
-          renderExpandedRow={(row) => (
-            <ApplicationExpandedRow
-              row={row.original}
-              onNavigateToTab={onNavigateToTab}
-            />
-          )}
+          enableExpansion={false}
           onRowClick={(row) => onOpenApplication(row.application)}
           getRowId={(row) => row.application.id}
           pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: rows.length > 10 }}
@@ -255,58 +243,5 @@ function ApplicationActions({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function ApplicationExpandedRow({
-  row,
-  onNavigateToTab,
-}: {
-  row: ApplicationTableRow;
-  onNavigateToTab: (applicationId: string, tab: string) => void;
-}) {
-  return (
-    <div className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_1.4fr]">
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <Metric label="Tools" value={row.application.tools_count ?? 0} />
-        <Metric label="Scopes" value={row.application.scopes_count ?? 0} />
-        <Metric label="Roles" value={row.application.roles_count ?? 0} />
-        <Metric label="Bindings" value={row.application.bindings_count ?? 0} />
-      </div>
-      <div className="space-y-2 text-sm">
-        <div>
-          <span className="text-slate-500">Default access role: </span>
-          <span className="font-medium">{row.application.default_role_name || "Not configured"}</span>
-        </div>
-        <div>
-          <span className="text-slate-500">Latest issue: </span>
-          <span className="font-medium">{row.application.latest_access_issue || "No blocking issue"}</span>
-        </div>
-        <div>
-          <span className="text-slate-500">Resource URI: </span>
-          <code className="break-all font-mono text-xs">{row.application.resource_uri}</code>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-start gap-2">
-        <Button onClick={() => onNavigateToTab(row.application.id, "access")}>
-          Configure access
-        </Button>
-        <Button variant="outline" onClick={() => onNavigateToTab(row.application.id, "tools")}>
-          Review tools
-        </Button>
-        <Button variant="outline" onClick={() => onNavigateToTab(row.application.id, "test")}>
-          Test login
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-slate-950">{value}</div>
-    </div>
   );
 }

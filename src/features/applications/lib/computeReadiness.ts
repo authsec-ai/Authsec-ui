@@ -109,7 +109,7 @@ export function computeReadiness(server: ResourceServer): Readiness {
     : area(
         "warn",
         "Not launched",
-        "Open Launch to see remaining gates from the setup checklist.",
+        "Open Overview to see remaining gates from the setup checklist.",
       );
 
   return { protection, tools, access, clients, test, launch };

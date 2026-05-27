@@ -52,7 +52,7 @@ export function ReadinessRibbon({
     { key: "access", label: "Access", tab: "access", area: readiness.access },
     { key: "clients", label: "Clients", tab: "clients", area: readiness.clients },
     { key: "test", label: "Test", tab: "test", area: readiness.test },
-    { key: "launch", label: "Launch", tab: "launch", area: readiness.launch },
+    { key: "launch", label: "Overview", tab: "overview", area: readiness.launch },
   ];
 
   return (

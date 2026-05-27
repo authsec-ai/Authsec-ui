@@ -8,7 +8,6 @@ import {
   ShieldOff,
   Trash2,
   UserRound,
-  UsersRound,
 } from "lucide-react";
 
 import {
@@ -27,6 +26,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import {
+  AccessPath,
+  ConsoleFilterBar,
+  EntityCell,
+  VerdictCard,
+} from "@/components/console/iam-console";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,11 +53,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { toast } from "@/lib/toast";
-import { FilterCard, TableCard } from "@/theme/components/cards";
+import { TableCard } from "@/theme/components/cards";
 import { resolveTenantId } from "@/utils/workspace";
 
 const StatusBadge: React.FC<{ status: EndUserStatus }> = ({ status }) =>
@@ -139,15 +142,53 @@ function EffectiveAccessDrawer({
               </Select>
             </div>
 
-            <Tabs defaultValue="roles">
-              <TabsList>
-                <TabsTrigger value="roles">Roles & scopes</TabsTrigger>
-                <TabsTrigger value="tools">Applications & tools</TabsTrigger>
-              </TabsList>
-              <TabsContent value="roles" className="mt-4 space-y-4">
-                <section className="rounded-md border">
-                  <div className="border-b px-3 py-2 text-sm font-semibold">Role bindings</div>
-                  <div className="divide-y">
+            <VerdictCard
+              verdict={data?.roles?.length ? "allow" : "review"}
+              title={data?.roles?.length ? "Application access is active" : "No app role grants this user access"}
+              body={
+                data?.roles?.length
+                  ? "Access resolves through application roles, mapped scopes, and remembered consent where required."
+                  : "Assign an application role or inspect recent denials before escalating."
+              }
+            />
+
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Access path
+              </h3>
+              <AccessPath
+                steps={[
+                  {
+                    label: user.status === "active" ? "User active" : "User suspended",
+                    detail:
+                      user.status === "active"
+                        ? "The identity can authenticate."
+                        : user.suspended_reason || "Suspended users should not receive runtime access.",
+                    state: user.status === "active" ? "ok" : "blocked",
+                  },
+                  {
+                    label: selectedApplicationId ? "Application selected" : "No application access",
+                    detail:
+                      applications.find((app) => app.application_id === selectedApplicationId)?.name ||
+                      "Pick an application to inspect role and scope grants.",
+                    state: selectedApplicationId ? "ok" : "warn",
+                  },
+                  {
+                    label: data?.roles?.length ? "Role grants scopes" : "No role grant",
+                    detail: data?.roles?.length
+                      ? `${data.roles.length} role${data.roles.length === 1 ? "" : "s"} found for this application.`
+                      : "No application role binding was found.",
+                    state: data?.roles?.length ? "ok" : "blocked",
+                  },
+                ]}
+              />
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Role bindings
+              </h3>
+              <div className="divide-y overflow-hidden rounded-lg border">
                     {data?.roles?.length ? (
                       data.roles.map((role) => (
                         <div key={`${role.id}:${role.binding_id}`} className="flex items-center justify-between gap-3 p-3">
@@ -171,12 +212,14 @@ function EffectiveAccessDrawer({
                     ) : (
                       <div className="p-4 text-sm text-muted-foreground">No role binding for this application.</div>
                     )}
-                  </div>
-                </section>
+              </div>
+            </section>
 
-                <section className="rounded-md border">
-                  <div className="border-b px-3 py-2 text-sm font-semibold">Scopes</div>
-                  <div className="grid gap-2 p-3">
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Effective scopes
+              </h3>
+              <div className="grid gap-2">
                     {data?.scopes?.length ? (
                       data.scopes.map((scope) => (
                         <div key={scope.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
@@ -195,10 +238,13 @@ function EffectiveAccessDrawer({
                     ) : (
                       <div className="p-4 text-sm text-muted-foreground">No scopes found.</div>
                     )}
-                  </div>
-                </section>
-              </TabsContent>
-              <TabsContent value="tools" className="mt-4 space-y-3">
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Applications
+              </h3>
                 {applications.length ? (
                   applications.map((app) => (
                     <div key={app.binding_id} className="rounded-md border p-3">
@@ -228,8 +274,7 @@ function EffectiveAccessDrawer({
                     This user has no application access yet.
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
+            </section>
           </div>
         ) : null}
       </SheetContent>
@@ -242,7 +287,6 @@ export default function EndUsersPage() {
   const tenantId = resolveTenantId();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
-  const [planFilter, setPlanFilter] = useState<string>("all");
   const [accessDrawer, setAccessDrawer] = useState<{
     open: boolean;
     user: TenantEndUserState | null;
@@ -253,7 +297,6 @@ export default function EndUsersPage() {
     {
       tenantId: tenantId || "",
       status: statusFilter === "all" ? undefined : statusFilter,
-      plan_tier: planFilter === "all" ? undefined : planFilter,
       q: search.trim() || undefined,
     },
     { skip: !tenantId },
@@ -291,14 +334,14 @@ export default function EndUsersPage() {
         alwaysVisible: true,
         approxWidth: 260,
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{userLabel(row.original)}</div>
-            {row.original.user_name && row.original.user_name !== "Not Provided" ? (
-              <div className="text-xs text-muted-foreground">{row.original.user_name}</div>
-            ) : row.original.user_email && row.original.user_username ? (
-              <div className="text-xs text-muted-foreground">{row.original.user_username}</div>
-            ) : null}
-          </div>
+          <EntityCell
+            label={userLabel(row.original)}
+            detail={
+              row.original.user_name && row.original.user_name !== "Not Provided"
+                ? row.original.user_name
+                : row.original.user_username
+            }
+          />
         ),
       },
       {
@@ -309,10 +352,22 @@ export default function EndUsersPage() {
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
-        id: "access",
-        header: "Access summary",
+        id: "applications",
+        header: "Applications",
         priority: 2,
-        approxWidth: 240,
+        approxWidth: 150,
+        cell: ({ row }) => (
+          <span className="text-sm">
+            {row.original.applications_count ?? row.original.applications?.length ?? 0} app
+            {(row.original.applications_count ?? row.original.applications?.length ?? 0) === 1 ? "" : "s"}
+          </span>
+        ),
+      },
+      {
+        id: "access",
+        header: "Risk / access summary",
+        priority: 3,
+        approxWidth: 260,
         cell: ({ row }) => (
           <div className="text-sm">
             <div>{row.original.access_summary || "No application access"}</div>
@@ -326,19 +381,8 @@ export default function EndUsersPage() {
         ),
       },
       {
-        id: "firstConsent",
-        header: "First consent",
-        priority: 3,
-        approxWidth: 180,
-        cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">
-            {formatDate(row.original.first_consent_at)}
-          </span>
-        ),
-      },
-      {
         id: "lastActivity",
-        header: "Last activity",
+        header: "Last relevant activity",
         priority: 4,
         approxWidth: 180,
         cell: ({ row }) => (
@@ -414,35 +458,12 @@ export default function EndUsersPage() {
       />
 
       <div className="space-y-4 p-6">
-        <PageInfoBanner
-          title="End users are consumer identities"
-          description="These users are separate from your platform team. They appear here after consenting to an Application through OAuth."
-          features={[
-            { text: "Review application access without opening each app", icon: UsersRound },
-            { text: "Jump to effective access for scoped troubleshooting", icon: KeyRound },
-            { text: "Suspend or reactivate consumer access", icon: ShieldCheck },
-          ]}
-          featuresTitle="Access workflow"
-          storageKey="end-users-info"
-          dismissible
-        />
-
-        <FilterCard>
-          <CardContent variant="compact">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-sm font-medium text-foreground">Filters</span>
-              </div>
-              <div className="flex w-full flex-1 flex-wrap items-center gap-2">
-                <div className="relative min-w-[220px] flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by email or username..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-9 pl-9"
-                  />
-                </div>
+        <ConsoleFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search by email, name, or username"
+          trailing={
+            <>
                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as EndUserStatus | "all")}>
                   <SelectTrigger className="h-9 w-40">
                     <SelectValue placeholder="Status" />
@@ -453,20 +474,21 @@ export default function EndUsersPage() {
                     <SelectItem value="suspended">Suspended</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={planFilter} onValueChange={setPlanFilter}>
-                  <SelectTrigger className="h-9 w-40">
-                    <SelectValue placeholder="Plan tier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All plans</SelectItem>
-                    <SelectItem value="free">Free</SelectItem>
-                    <SelectItem value="pro">Pro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </FilterCard>
+                {search.trim() || statusFilter !== "all" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+            </>
+          }
+        />
 
         <TableCard>
           <CardContent variant="flush">

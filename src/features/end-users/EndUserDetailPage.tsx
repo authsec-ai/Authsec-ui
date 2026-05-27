@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
 
 import { useGetEndUserQuery, type TenantEndUserState } from "@/app/api/membershipApi";
 import {
@@ -8,65 +7,16 @@ import {
   type AdaptiveColumn,
 } from "@/components/ui/adaptive-table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import {
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
 import { resolveTenantId } from "@/utils/workspace";
 
 type EndUserApplication = NonNullable<TenantEndUserState["applications"]>[number];
-
-const formatDate = (iso?: string | null) => {
-  if (!iso) return "-";
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : formatDistanceToNow(date, { addSuffix: true });
-};
-
-function ApplicationExpandedRow({
-  application,
-  userId,
-  onEffectiveAccess,
-}: {
-  application: EndUserApplication;
-  userId: string;
-  onEffectiveAccess: () => void;
-}) {
-  return (
-    <div className="grid gap-4 p-4 text-sm md:grid-cols-[1.2fr_1fr]">
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Application
-        </div>
-        <div className="mt-2 font-medium">{application.name}</div>
-        <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
-          {application.resource_uri}
-        </div>
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Binding metadata
-        </div>
-        <dl className="mt-2 space-y-1">
-          <div>
-            <dt className="inline text-muted-foreground">User ID: </dt>
-            <dd className="inline font-mono text-xs">{userId}</dd>
-          </div>
-          <div>
-            <dt className="inline text-muted-foreground">Role ID: </dt>
-            <dd className="inline font-mono text-xs">{application.role_id}</dd>
-          </div>
-          <div>
-            <dt className="inline text-muted-foreground">Binding ID: </dt>
-            <dd className="inline font-mono text-xs">{application.binding_id}</dd>
-          </div>
-        </dl>
-        <Button className="mt-4" size="sm" onClick={onEffectiveAccess}>
-          Effective access
-        </Button>
-      </section>
-    </div>
-  );
-}
 
 export default function EndUserDetailPage() {
   const navigate = useNavigate();
@@ -88,12 +38,7 @@ export default function EndUserDetailPage() {
         alwaysVisible: true,
         approxWidth: 280,
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{row.original.name}</div>
-            <div className="truncate font-mono text-xs text-muted-foreground">
-              {row.original.resource_uri}
-            </div>
-          </div>
+          <EntityCell label={row.original.name} detail={row.original.resource_uri} monoDetail />
         ),
       },
       {
@@ -105,51 +50,46 @@ export default function EndUserDetailPage() {
       },
       {
         id: "scopes",
-        header: "Effective scopes",
+        header: "Capabilities",
         priority: 2,
         approxWidth: 150,
-        cell: ({ row }) => <span>{row.original.scopes_count}</span>,
+        cell: ({ row }) => (
+          <span>{row.original.scopes_count} scope{row.original.scopes_count === 1 ? "" : "s"}</span>
+        ),
       },
       {
         id: "actions",
-        header: "Actions",
+        header: "",
         alwaysVisible: true,
-        approxWidth: 260,
+        approxWidth: 76,
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/applications/${row.original.application_id}/access`)}
-            >
-              Open application
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate(`/end-users/${userId}`)}
-            >
-              Effective access
-            </Button>
-          </div>
+          <ConsoleRowActions
+            items={[
+              {
+                label: "Open application access",
+                onSelect: () => navigate(`/applications/${row.original.application_id}/access`),
+              },
+              {
+                label: "Review assignments",
+                onSelect: () => navigate(`/applications/${row.original.application_id}/role-bindings`),
+              },
+              {
+                label: "View consent grants",
+                onSelect: () => navigate(`/applications/${row.original.application_id}/consent-grants`),
+              },
+            ]}
+          />
         ),
       },
     ],
-    [navigate, userId],
+    [navigate],
   );
 
   return (
     <div className="space-y-4 p-6">
       <PageHeader
         title={displayName}
-        description="Consumer identity, application access, effective scopes, and consent history for this workspace."
-        actions={
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/end-users/${userId}`)}
-          >
-            Effective access
-          </Button>
-        }
+        description="Consumer identity, application access, effective scopes, and remediation paths for this workspace."
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -165,8 +105,8 @@ export default function EndUserDetailPage() {
         </TableCard>
         <TableCard>
           <CardContent className="p-4">
-            <div className="text-sm text-muted-foreground">First consent</div>
-            <div className="mt-2 font-medium">{formatDate(user?.first_consent_at)}</div>
+            <div className="text-sm text-muted-foreground">Applications</div>
+            <div className="mt-2 font-medium">{applications.length}</div>
           </CardContent>
         </TableCard>
         <TableCard>
@@ -193,14 +133,7 @@ export default function EndUserDetailPage() {
               data={applications}
               columns={columns}
               enableSelection={false}
-              enableExpansion
-              renderExpandedRow={(row) => (
-                <ApplicationExpandedRow
-                  application={row.original}
-                  userId={userId}
-                  onEffectiveAccess={() => navigate(`/end-users/${userId}`)}
-                />
-              )}
+              enableExpansion={false}
               getRowId={(application) => application.binding_id}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />

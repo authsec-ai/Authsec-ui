@@ -6,10 +6,10 @@
  *   Protected URL: <url>
  *
  * The launch state pill reads `state === "ready"` (the real backend
- * signal), not `application.active`. The pill links to the Launch tab.
+ * signal), not `application.active`. The pill links to the Overview tab.
  *
  * The pill text is intentionally backend-truth, not a fabricated
- * blocker count. The Launch page itself shows the per-gate detail
+ * blocker count. The Overview page itself shows the per-gate detail
  * sourced from `useGetSetupChecklistQuery` and `useGetActivationPreviewQuery`.
  */
 
@@ -40,7 +40,7 @@ interface LaunchSummary {
 function summariseLaunch(
   application: ApplicationHeaderProps["application"],
 ): LaunchSummary {
-  const launchHref = `/applications/${application.id}/launch`;
+  const launchHref = `/applications/${application.id}/overview`;
   if (isLaunched(application)) {
     return { label: "Launched", tone: "ok", href: launchHref };
   }

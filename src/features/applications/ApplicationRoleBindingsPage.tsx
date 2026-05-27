@@ -14,11 +14,14 @@ import {
   AdaptiveTable,
   type AdaptiveColumn,
 } from "@/components/ui/adaptive-table";
-import { FilterCard, TableCard } from "@/theme/components/cards";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { TableCard } from "@/theme/components/cards";
 import { useNavigate } from "react-router-dom";
 import { useApplicationContext } from "./useApplicationContext";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
 import { useState } from "react";
 import { isLaunched } from "./lib/computeReadiness";
 
@@ -61,18 +64,14 @@ export default function ApplicationRoleBindingsPage() {
     () => [
       {
         id: "user",
-        header: "User",
+        header: "Principal",
         alwaysVisible: true,
         approxWidth: 240,
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium">
-              {row.original.user_email || row.original.username || row.original.user_id}
-            </div>
-            {row.original.username && row.original.user_email ? (
-              <div className="text-xs text-muted-foreground">{row.original.username}</div>
-            ) : null}
-          </div>
+          <EntityCell
+            label={row.original.user_email || row.original.username || "End user"}
+            detail={row.original.username && row.original.user_email ? row.original.username : undefined}
+          />
         ),
       },
       {
@@ -92,54 +91,67 @@ export default function ApplicationRoleBindingsPage() {
         ),
       },
       {
-        id: "created",
-        header: "Created",
+        id: "summary",
+        header: "Access summary",
         priority: 3,
-        approxWidth: 160,
+        approxWidth: 220,
         cell: ({ row }) => (
-          <span className="text-sm">
-            {formatDistanceToNow(new Date(row.original.created_at), { addSuffix: true })}
-          </span>
+          <div className="text-sm">
+            <div>{labelRole(row.original.role_name)} on {application.name}</div>
+            <div className="text-xs text-muted-foreground">
+              Assigned {formatDistanceToNow(new Date(row.original.created_at), { addSuffix: true })}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 4,
+        approxWidth: 120,
+        cell: () => (
+          <Badge variant="default">Active</Badge>
         ),
       },
       {
         id: "actions",
-        header: "Actions",
+        header: "",
         alwaysVisible: true,
-        approxWidth: 280,
+        approxWidth: 76,
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/end-users/${row.original.user_id}`)}
-            >
-              Effective access
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={deleting}
-              onClick={async () => {
-                try {
-                  await deleteBinding({
-                    rsId: application.id,
-                    bindingId: row.original.id,
-                  }).unwrap();
-                  toast.success("Role binding removed.");
-                } catch (err) {
-                  const apiErr = err as { data?: { error?: string } };
-                  toast.error(apiErr?.data?.error ?? "Couldn't remove binding.");
-                }
-              }}
-            >
-              Remove
-            </Button>
-          </div>
+          <ConsoleRowActions
+            items={[
+              {
+                label: "View effective access",
+                onSelect: () => navigate(`/end-users/${row.original.user_id}`),
+              },
+              {
+                label: "Change role",
+                onSelect: () => navigate(`/applications/${application.id}/access`),
+              },
+              {
+                label: "Remove access",
+                disabled: deleting,
+                destructive: true,
+                onSelect: async () => {
+                  try {
+                    await deleteBinding({
+                      rsId: application.id,
+                      bindingId: row.original.id,
+                    }).unwrap();
+                    toast.success("Access removed.");
+                  } catch (err) {
+                    const apiErr = err as { data?: { error?: string } };
+                    toast.error(apiErr?.data?.error ?? "Couldn't remove access.");
+                  }
+                },
+              },
+            ]}
+          />
         ),
       },
     ],
-    [application.id, deleteBinding, deleting, navigate],
+    [application.id, application.name, deleteBinding, deleting, navigate],
   );
 
   return (
@@ -154,36 +166,25 @@ export default function ApplicationRoleBindingsPage() {
                 Finish setup on the Overview page, then return here to manage user access.
               </p>
             </div>
-            <Button onClick={() => navigate(`/applications/${application.id}/launch`)}>
+            <Button onClick={() => navigate(`/applications/${application.id}/overview`)}>
               Open overview
             </Button>
           </CardContent>
         </TableCard>
       ) : (
         <>
-      <FilterCard>
-        <CardContent variant="compact">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Filters</span>
-            </div>
-            <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search users, roles, or sources"
-                className="h-9 pl-9"
-              />
-            </div>
-            {query.trim() ? (
-              <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
-                Clear
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </FilterCard>
+      <ConsoleFilterBar
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search users, roles, or assignment reasons"
+        trailing={
+          query.trim() ? (
+            <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
+              Clear
+            </Button>
+          ) : null
+        }
+      />
 
       <TableCard>
         <CardContent variant="flush">

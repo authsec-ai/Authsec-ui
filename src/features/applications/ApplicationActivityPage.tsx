@@ -85,8 +85,8 @@ export default function ApplicationActivityPage() {
           tone="warning"
           title="Application not launched"
           body="Drift only accumulates after activation. Complete launch before monitoring runtime policy changes."
-          actionLabel="Open launch"
-          actionHref={`/applications/${application.id}/launch`}
+          actionLabel="Open overview"
+          actionHref={`/applications/${application.id}/overview`}
         />
       )}
 

@@ -30,6 +30,10 @@ export interface OAuthScope {
   is_auto_discovered: boolean;
   source?: ScopeSource;
   permissions?: ScopePermission[];
+  tools_count?: number;
+  roles_count?: number;
+  users_count?: number;
+  consent_grants_count?: number;
   created_at?: string;
   updated_at?: string;
 }

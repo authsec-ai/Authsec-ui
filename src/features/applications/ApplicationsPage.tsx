@@ -21,7 +21,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Plus,
-  RefreshCcw,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -86,7 +85,6 @@ export default function ApplicationsPage() {
   const {
     data: applications,
     isLoading,
-    refetch,
   } = useListApplicationsQuery();
   const [deleteApplication, { isLoading: deleting }] =
     useDeleteApplicationMutation();
@@ -190,23 +188,13 @@ export default function ApplicationsPage() {
           title="Applications"
           description="Triage protected MCP servers, APIs, and services by launch readiness and runtime risk."
           actions={
-            <>
-              <Button
-                variant="outline"
-                onClick={() => refetch()}
-                className="h-9"
-              >
-                <RefreshCcw className="mr-2 size-4" />
-                Refresh
-              </Button>
-              <Button
-                onClick={() => navigate("/applications/new")}
-                className="h-9"
-              >
-                <Plus className="mr-2 size-4" />
-                Create application
-              </Button>
-            </>
+            <Button
+              onClick={() => navigate("/applications/new")}
+              className="h-9"
+            >
+              <Plus className="mr-2 size-4" />
+              Create application
+            </Button>
           }
         />
 

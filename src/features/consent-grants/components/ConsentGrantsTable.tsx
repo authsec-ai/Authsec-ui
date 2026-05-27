@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Clock, KeyRound, ShieldX } from "lucide-react";
+import { ShieldX } from "lucide-react";
 
 import type { OAuthConsentGrant } from "@/app/api/types/scopeMatrix";
 import {
@@ -7,7 +7,10 @@ import {
   type AdaptiveColumn,
 } from "@/components/ui/adaptive-table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
 
 interface ConsentGrantsTableProps {
   grants: OAuthConsentGrant[];
@@ -16,71 +19,8 @@ interface ConsentGrantsTableProps {
   onRevoke: (grant: OAuthConsentGrant) => void;
 }
 
-function formatDate(date: string) {
-  const parsed = new Date(date);
-  return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString();
-}
-
-function ConsentGrantExpandedRow({
-  grant,
-  isAdmin,
-}: {
-  grant: OAuthConsentGrant;
-  isAdmin: boolean;
-}) {
-  return (
-    <div className="grid gap-4 p-4 text-sm md:grid-cols-3">
-      {isAdmin ? (
-        <section>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            User
-          </div>
-          <div className="mt-2 break-all font-mono text-xs text-muted-foreground">
-            {grant.user_id}
-          </div>
-        </section>
-      ) : null}
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Client
-        </div>
-        <div className="mt-2 font-medium">{grant.client_name || grant.client_id}</div>
-        {grant.client_name ? (
-          <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
-            {grant.client_id}
-          </div>
-        ) : null}
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Resource
-        </div>
-        <div className="mt-2 font-medium">{grant.resource_name || grant.resource_server_id}</div>
-        {grant.resource_name ? (
-          <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
-            {grant.resource_server_id}
-          </div>
-        ) : null}
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Scopes
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {grant.granted_scopes.length ? (
-            grant.granted_scopes.map((scope) => (
-              <Badge key={scope} variant="outline" className="font-mono text-xs">
-                <KeyRound className="mr-1 h-3 w-3" />
-                {scope}
-              </Badge>
-            ))
-          ) : (
-            <span className="text-muted-foreground">No scopes</span>
-          )}
-        </div>
-      </section>
-    </div>
-  );
+function shortId(value: string) {
+  return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
 }
 
 export function ConsentGrantsTable({
@@ -95,13 +35,11 @@ export function ConsentGrantsTable({
         ? [
             {
               id: "user",
-              header: "User",
+              header: "Principal",
               priority: 1,
               approxWidth: 190,
               cell: ({ row }) => (
-                <span className="font-mono text-xs text-muted-foreground">
-                  {row.original.user_id}
-                </span>
+                <EntityCell label="End user" detail={shortId(row.original.user_id)} monoDetail />
               ),
             } satisfies AdaptiveColumn<OAuthConsentGrant>,
           ]
@@ -112,14 +50,11 @@ export function ConsentGrantsTable({
         alwaysVisible: true,
         approxWidth: 260,
         cell: ({ row }) => (
-          <div>
-            <div className="font-medium">{row.original.client_name || row.original.client_id}</div>
-            {row.original.client_name ? (
-              <div className="truncate font-mono text-xs text-muted-foreground">
-                {row.original.client_id}
-              </div>
-            ) : null}
-          </div>
+          <EntityCell
+            label={row.original.client_name || "OAuth client"}
+            detail={row.original.client_name ? shortId(row.original.client_id) : row.original.client_id}
+            monoDetail
+          />
         ),
       },
       ...(!applicationContext
@@ -146,56 +81,55 @@ export function ConsentGrantsTable({
         : []),
       {
         id: "scopes",
-        header: "Scopes",
+        header: "Capabilities",
         priority: 3,
-        approxWidth: 180,
+        approxWidth: 260,
         cell: ({ row }) => (
-          <span className="text-sm">
-            {row.original.granted_scopes.length} scope
-            {row.original.granted_scopes.length === 1 ? "" : "s"}
-          </span>
+          <div className="flex flex-wrap gap-1">
+            {row.original.granted_scopes.slice(0, 3).map((scope) => (
+              <Badge key={scope} variant="outline" className="font-mono text-xs">
+                {scope}
+              </Badge>
+            ))}
+            {row.original.granted_scopes.length > 3 ? (
+              <Badge variant="secondary">
+                +{row.original.granted_scopes.length - 3}
+              </Badge>
+            ) : null}
+            {row.original.granted_scopes.length === 0 ? (
+              <span className="text-sm text-muted-foreground">No scopes</span>
+            ) : null}
+          </div>
         ),
       },
       {
-        id: "granted",
-        header: "Granted",
+        id: "status",
+        header: "Status",
         priority: 4,
-        approxWidth: 130,
+        approxWidth: 150,
         cell: ({ row }) => (
-          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {formatDate(row.original.created_at)}
-          </span>
-        ),
-      },
-      {
-        id: "expires",
-        header: "Expires",
-        priority: 5,
-        approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {formatDate(row.original.expires_at)}
-          </span>
+          <Badge variant={row.original.revoked_at ? "destructive" : "default"}>
+            {row.original.revoked_at ? "Revoked" : "Active"}
+          </Badge>
         ),
       },
       {
         id: "actions",
-        header: "Actions",
+        header: "",
         alwaysVisible: true,
-        approxWidth: 130,
+        approxWidth: 76,
         cell: ({ row }) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onRevoke(row.original)}
-            disabled={!!row.original.revoked_at}
-          >
-            <ShieldX className="mr-1 h-3 w-3" />
-            {row.original.revoked_at ? "Revoked" : "Revoke"}
-          </Button>
+          <ConsoleRowActions
+            items={[
+              {
+                label: row.original.revoked_at ? "Already revoked" : "Revoke consent",
+                icon: <ShieldX className="size-4" />,
+                destructive: true,
+                disabled: !!row.original.revoked_at,
+                onSelect: () => onRevoke(row.original),
+              },
+            ]}
+          />
         ),
       },
     ],
@@ -222,12 +156,7 @@ export function ConsentGrantsTable({
       data={grants}
       columns={columns}
       enableSelection={false}
-      enableExpansion={!applicationContext}
-      renderExpandedRow={
-        applicationContext
-          ? undefined
-          : (row) => <ConsentGrantExpandedRow grant={row.original} isAdmin={isAdmin} />
-      }
+      enableExpansion={false}
       getRowId={(grant) => grant.id}
       pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: true }}
     />

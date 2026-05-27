@@ -187,10 +187,10 @@ export function AppSidebar({
       if (tenantId) {
         try {
           await navigator.clipboard.writeText(tenantId);
-          toast.success("Tenant ID copied to clipboard");
+          toast.success("Workspace ID copied to clipboard");
         } catch (err) {
           console.error("Failed to copy:", err);
-          toast.error("Failed to copy Tenant ID");
+          toast.error("Failed to copy workspace ID");
         }
       }
     },

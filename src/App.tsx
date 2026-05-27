@@ -85,6 +85,7 @@ import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
 import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
 import SDKHubPage from "./features/sdk/SDKHubPage";
+import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
 
@@ -399,8 +400,9 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   >
-                    <Route index element={<Navigate to="launch" replace />} />
-                    <Route path="overview" element={<Navigate to="../launch" replace />} />
+                    <Route index element={<Navigate to="overview" replace />} />
+                    <Route path="launch" element={<Navigate to="../overview" replace />} />
+                    <Route path="overview" element={<ApplicationLaunchPage />} />
                     <Route path="setup" element={<ApplicationSetupPage />} />
                     <Route path="tools" element={<ApplicationToolsPage />} />
                     <Route path="scopes" element={<ApplicationScopesPage />} />
@@ -408,7 +410,6 @@ function AppContent() {
                     <Route path="role-bindings" element={<ApplicationRoleBindingsPage />} />
                     <Route path="consent-grants" element={<ApplicationConsentGrantsPage />} />
                     <Route path="clients" element={<ApplicationClientsPage />} />
-                    <Route path="launch" element={<ApplicationLaunchPage />} />
                     <Route path="test" element={<ApplicationTestPage />} />
                     <Route path="activity" element={<ApplicationActivityPage />} />
                   </Route>
@@ -592,7 +593,17 @@ function AppContent() {
                   />
                   <Route
                     path="/authz/effective-access"
-                    element={<Navigate to="/end-users" replace />}
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EffectiveAccessPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/effective-access"
+                    element={<Navigate to="/authz/effective-access" replace />}
                   />
                   <Route
                     path="/authz/application-scopes"

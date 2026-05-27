@@ -11,13 +11,13 @@ import { cn } from "@/lib/utils";
 import type { Readiness, ReadinessState } from "../types";
 
 const TABS = [
+  { key: "overview", label: "Overview", readinessKey: "launch" },
   { key: "setup", label: "Setup", readinessKey: "protection" },
   { key: "tools", label: "Tools", readinessKey: "tools" },
-  { key: "scopes", label: "Application Scopes", readinessKey: "access" },
+  { key: "scopes", label: "Scopes", readinessKey: "access" },
   { key: "access", label: "Access", readinessKey: "access" },
+  { key: "role-bindings", label: "Access Assignments", readinessKey: "access" },
   { key: "clients", label: "Clients", readinessKey: "clients" },
-  { key: "launch", label: "Overview", readinessKey: "launch" },
-  { key: "role-bindings", label: "Role Bindings", readinessKey: "access" },
   { key: "consent-grants", label: "Consent Grants", readinessKey: null },
   { key: "test", label: "Test", readinessKey: "test" },
   { key: "activity", label: "Monitor", readinessKey: null },

@@ -116,8 +116,8 @@ export function computeNextBestAction(
     return {
       key: "open-launch",
       headline: "Resolve launch blockers",
-      body: readiness.launch.detail ?? "Open the Launch page to see remaining blockers.",
-      primary: "Open Launch",
+      body: readiness.launch.detail ?? "Open Overview to see remaining blockers.",
+      primary: "Open Overview",
     };
   }
 
@@ -156,7 +156,7 @@ export function nextActionHref(
       return `/applications/${applicationId}/test`;
     case "launch-application":
     case "open-launch":
-      return `/applications/${applicationId}/launch`;
+      return `/applications/${applicationId}/overview`;
     case "open":
     default:
       return `/applications/${applicationId}/overview`;

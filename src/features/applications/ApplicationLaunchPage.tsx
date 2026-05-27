@@ -1,414 +1,434 @@
-/**
- * `ApplicationLaunchPage` — production safety gate, fully wired.
- *
- * Backend sources of truth:
- *   • `useGetSetupChecklistQuery`     → step list + can_activate flag
- *   • `useGetActivationPreviewQuery`  → tool/scope counts, viewer scopes,
- *                                       first-time-user grant, public_tool_names
- *   • `useActivateResourceServerMutation` → POST /activate (the button)
- *
- * Doctrine: every gate row is a real backend step. We don't invent
- * "Endpoint protection / Client readiness / Scenario test" gates that
- * the backend doesn't enforce.
- */
-
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Activity,
+  ArrowRight,
+  CheckCircle2,
+  KeyRound,
+  Loader2,
+  PlayCircle,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { TableCard } from "@/theme/components/cards";
 import {
   useActivateResourceServerMutation,
   useGetActivationPreviewQuery,
+  useGetDriftEventsQuery,
   useGetSetupChecklistQuery,
 } from "@/app/api/setupWizardApi";
+import { useGetScopeMatrixQuery } from "@/app/api/scopeMatrixApi";
 
 import { useApplicationContext } from "./useApplicationContext";
 import { isLaunched } from "./lib/computeReadiness";
-import { DecisionBanner, Surface } from "./components/ApplicationConsole";
-import { formatApplicationRoleName } from "./lib/formatRoleName";
+
+type QueueTone = "ok" | "warn" | "danger" | "info";
+
+interface ActionQueueItem {
+  key: string;
+  title: string;
+  body: string;
+  href: string;
+  action: string;
+  tone: QueueTone;
+}
+
+const toneClass: Record<QueueTone, string> = {
+  ok: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warn: "border-amber-200 bg-amber-50 text-amber-800",
+  danger: "border-red-200 bg-red-50 text-red-800",
+  info: "border-blue-200 bg-blue-50 text-blue-800",
+};
 
 export default function ApplicationLaunchPage() {
   const { application } = useApplicationContext();
   const navigate = useNavigate();
+  const launched = isLaunched(application);
 
   const { data: checklist, isLoading: checklistLoading } =
     useGetSetupChecklistQuery(application.id);
   const { data: preview, isLoading: previewLoading } =
     useGetActivationPreviewQuery(application.id);
-
+  const { data: matrix } = useGetScopeMatrixQuery(application.id);
+  const { data: drift } = useGetDriftEventsQuery(application.id, {
+    skip: !launched,
+  });
   const [activate, { isLoading: activating }] =
     useActivateResourceServerMutation();
 
-  const launched = isLaunched(application);
+  const firstFailing = checklist?.steps.find((step) => !step.complete);
   const canActivate = checklist?.can_activate ?? false;
+  const publicTools = preview?.tools.public ?? 0;
+  const unmappedTools = preview?.tools.unmapped ?? 0;
+  const mappedTools = preview?.tools.mapped ?? 0;
+  const totalTools = preview?.tools.total ?? matrix?.tools.length ?? 0;
+  const driftCount = drift?.events.length ?? 0;
 
-  const failingSteps = useMemo(
-    () => (checklist?.steps ?? []).filter((s) => !s.complete),
-    [checklist],
+  const highRiskTools = useMemo(
+    () =>
+      (matrix?.tools ?? []).filter((tool) =>
+        tool.scopes.some((scope) =>
+          scope.risk_level === "high" || scope.risk_level === "critical",
+        ),
+      ).length,
+    [matrix?.tools],
   );
-  const failingCount = failingSteps.length;
-  const totalSteps = checklist?.steps.length ?? 0;
-  const passingCount = totalSteps - failingCount;
-  const firstFailing = failingSteps[0];
 
-  const handleLaunch = async () => {
+  const queue = useMemo<ActionQueueItem[]>(() => {
+    const items: ActionQueueItem[] = [];
+
+    if (firstFailing) {
+      items.push({
+        key: `blocker:${firstFailing.step}`,
+        title: firstFailing.name,
+        body:
+          firstFailing.detail ||
+          "This is the next launch blocker to resolve before runtime policy can go live.",
+        href: failingStepRoute(application.id, firstFailing.step),
+        action: firstFailing.step <= 1 ? "Open setup" : "Fix blocker",
+        tone: "danger",
+      });
+    } else if (!launched && canActivate) {
+      items.push({
+        key: "launch",
+        title: "Ready to launch",
+        body: "All launch gates are complete. Publish the current tool, scope, role, and client policy.",
+        href: `/applications/${application.id}/overview`,
+        action: "Launch application",
+        tone: "ok",
+      });
+    }
+
+    if (unmappedTools > 0) {
+      items.push({
+        key: "unmapped-tools",
+        title: `${unmappedTools} tool${unmappedTools === 1 ? "" : "s"} denied by default`,
+        body: "Unmapped MCP tools cannot be called until an operator assigns an access label.",
+        href: `/applications/${application.id}/tools`,
+        action: "Review tools",
+        tone: "warn",
+      });
+    }
+
+    if (publicTools > 0) {
+      items.push({
+        key: "public-tools",
+        title: `${publicTools} public tool${publicTools === 1 ? "" : "s"}`,
+        body: "Public tools bypass scope checks for any authenticated token with this application audience.",
+        href: `/applications/${application.id}/tools`,
+        action: "Review public tools",
+        tone: "warn",
+      });
+    }
+
+    if (highRiskTools > 0) {
+      items.push({
+        key: "high-risk-tools",
+        title: `${highRiskTools} high-risk mapped tool${highRiskTools === 1 ? "" : "s"}`,
+        body: "Review who receives the roles and scopes that unlock write, admin, delete, or broad capabilities.",
+        href: `/applications/${application.id}/access`,
+        action: "Review access",
+        tone: "info",
+      });
+    }
+
+    if (driftCount > 0) {
+      items.push({
+        key: "drift",
+        title: `${driftCount} drift event${driftCount === 1 ? "" : "s"} since launch`,
+        body: "New, changed, or removed tools should be reviewed before operators trust the current policy.",
+        href: `/applications/${application.id}/activity`,
+        action: "Review drift",
+        tone: "warn",
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({
+        key: "steady",
+        title: launched ? "Runtime policy is steady" : "Setup is waiting for the first signal",
+        body: launched
+          ? "No current blockers, public tool warnings, or drift events need attention."
+          : "Start with setup, then map tools and validate access before launch.",
+        href: launched
+          ? `/applications/${application.id}/activity`
+          : `/applications/${application.id}/setup`,
+        action: launched ? "View monitor" : "Open setup",
+        tone: launched ? "ok" : "info",
+      });
+    }
+
+    return items;
+  }, [
+    application.id,
+    canActivate,
+    driftCount,
+    firstFailing,
+    highRiskTools,
+    launched,
+    publicTools,
+    unmappedTools,
+  ]);
+
+  const handlePrimary = async () => {
+    if (!canActivate || launched) return;
     try {
       await activate(application.id).unwrap();
-      toast.success("Application activated. Policy is now live.");
+      toast.success("Application launched. Runtime policy is active.");
     } catch (err) {
-      const apiErr = err as { data?: { error?: string; failed?: string[] } };
-      const message =
-        apiErr?.data?.error ||
-        "Activation failed. Resolve the failing gates and retry.";
-      toast.error(message);
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Launch failed. Resolve blockers and retry.");
     }
   };
-
-  // ── Banner identity ───────────────────────────────────────────────────
-  const banner = (() => {
-    if (launched) {
-      return {
-        tone: "ok" as const,
-        title: "Launched",
-        subtitle: `${passingCount} of ${totalSteps} setup steps complete · policy is live.`,
-        ctaLabel: "View activity",
-        ctaHref: `/applications/${application.id}/activity`,
-        primaryAction: () => navigate(`/applications/${application.id}/activity`),
-        showActivate: false,
-      };
-    }
-    if (canActivate) {
-      return {
-        tone: "ok" as const,
-        title: "Ready to launch",
-        subtitle: `All ${totalSteps} setup steps complete.`,
-        ctaLabel: activating ? "Launching…" : "Launch application",
-        ctaHref: undefined,
-        primaryAction: handleLaunch,
-        showActivate: true,
-      };
-    }
-    if (failingCount > 0) {
-      return {
-        tone: "err" as const,
-        title: "Not ready to launch",
-        subtitle: `${failingCount} step${failingCount === 1 ? "" : "s"} remaining · ${passingCount} of ${totalSteps} complete`,
-        ctaLabel: firstFailing
-          ? `Fix step ${firstFailing.step}: ${firstFailing.name}`
-          : "Resolve blockers",
-        ctaHref: firstFailing
-          ? failingStepRoute(application.id, firstFailing.step)
-          : `/applications/${application.id}/setup`,
-        primaryAction: undefined,
-        showActivate: false,
-      };
-    }
-    return {
-      tone: "warn" as const,
-      title: "Loading…",
-      subtitle: "Fetching setup checklist.",
-      ctaLabel: "—",
-      ctaHref: `/applications/${application.id}/overview`,
-      primaryAction: undefined,
-      showActivate: false,
-    };
-  })();
 
   return (
     <div className="space-y-4">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">
-          Overview
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Each step below is enforced by the backend on activation. The
-          launch button calls{" "}
-          <code className="font-mono text-xs">/activate</code> and only
-          succeeds when every step passes.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            Overview
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
+            Operational posture for this MCP application: what is exposed, who
+            can use it, and what needs attention before or after launch.
+          </p>
+        </div>
+        {!launched && canActivate ? (
+          <Button onClick={handlePrimary} disabled={activating}>
+            {activating ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <PlayCircle className="mr-2 size-4" />
+            )}
+            Launch application
+          </Button>
+        ) : null}
       </header>
 
-      <DecisionBanner
-        tone={banner.tone === "ok" ? "success" : banner.tone === "err" ? "danger" : "warning"}
-        title={banner.title}
-        body={banner.subtitle}
-        actionLabel={banner.ctaLabel}
-        actionHref={!banner.showActivate ? banner.ctaHref : undefined}
-        onAction={banner.showActivate ? banner.primaryAction : undefined}
-      />
-
-      {/* Real setup checklist */}
-      <section>
-        <h3 className="text-sm font-semibold text-foreground">
-          Setup checklist
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Sourced from{" "}
-          <code className="font-mono">
-            GET /authsec/applications/{application.id}/setup
-          </code>
-          .
-        </p>
-        <div className="mt-3 space-y-2">
-          {checklistLoading && !checklist && (
-            <Card className="p-4 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 inline size-4 animate-spin" />
-              Loading checklist…
-            </Card>
-          )}
-          {!checklistLoading &&
-            checklist?.steps.length === 0 && (
-              <Card className="p-4 text-sm text-muted-foreground">
-                Backend returned no checklist steps for this application.
-              </Card>
-            )}
-          {checklist?.steps.map((step) => (
-            <ChecklistRow
-              key={step.step}
-              step={step.step}
-              name={step.name}
-              detail={step.detail}
-              complete={step.complete}
-              onFix={() =>
-                navigate(failingStepRoute(application.id, step.step))
-              }
-            />
-          ))}
-        </div>
-      </section>
-
-      {/* Real activation preview (numbers only — no fabricated narrative) */}
-      <section>
-        <h3 className="text-sm font-semibold text-foreground">
-          Activation preview
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Sourced from{" "}
-          <code className="font-mono">
-            GET /authsec/applications/{application.id}/activation-preview
-          </code>
-          . What policy will look like the moment you launch.
-        </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <PreviewStat
-            label="Tools (total)"
-            value={previewLoading ? "…" : preview?.tools.total ?? "—"}
-          />
-          <PreviewStat
-            label="Mapped"
-            value={previewLoading ? "…" : preview?.tools.mapped ?? "—"}
-            tone="ok"
-          />
-          <PreviewStat
-            label="Public"
-            value={previewLoading ? "…" : preview?.tools.public ?? "—"}
-            tone="info"
-          />
-          <PreviewStat
-            label="Unmapped"
-            value={previewLoading ? "…" : preview?.tools.unmapped ?? "—"}
-            tone={
-              (preview?.tools.unmapped ?? 0) > 0 ? "warn" : "muted"
-            }
-          />
-        </div>
-        {preview && (
-          <Surface className="mt-3 p-4 text-sm">
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <PreviewKv
-                label="Default role"
-                value={formatApplicationRoleName(preview.default_role)}
-              />
-              <PreviewKv
-                label="Scopes registered"
-                value={String(preview.scope_count)}
-              />
-              <PreviewKv
-                label="Viewer scopes"
-                value={
-                  preview.viewer_scopes.length
-                    ? preview.viewer_scopes.join(", ")
-                    : "(none)"
-                }
-                mono
-              />
-              <PreviewKv
-                label="First-time user grant"
-                value={
-                  preview.first_time_user_grant.length
-                    ? preview.first_time_user_grant.join(", ")
-                    : "(none)"
-                }
-                mono
-              />
-            </dl>
-            {preview.public_tool_names.length > 0 && (
-              <div className="mt-3 border-t border-border pt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-primary)]">
-                  Public tools ({preview.public_tool_names.length})
-                </p>
-                <p className="mt-1 break-all font-mono text-xs text-slate-700">
-                  {preview.public_tool_names.join(", ")}
-                </p>
+      <TableCard>
+        <CardContent className="space-y-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Action queue
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ordered by launch impact and runtime risk.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/applications/${application.id}/test`}>
+                <PlayCircle className="mr-2 size-4" />
+                Run test
+              </Link>
+            </Button>
+          </div>
+          <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {checklistLoading && !checklist ? (
+              <div className="p-4 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 inline size-4 animate-spin" />
+                Reading application posture...
               </div>
+            ) : (
+              queue.map((item) => (
+                <ActionQueueRow
+                  key={item.key}
+                  item={item}
+                  onLaunch={
+                    item.key === "launch" ? handlePrimary : undefined
+                  }
+                  launching={activating}
+                />
+              ))
             )}
-          </Surface>
-        )}
-      </section>
+          </div>
+        </CardContent>
+      </TableCard>
 
-      {/* Footer copy — what activation actually does */}
-      <Surface
-        className={cn(
-          "space-y-2 border-l-4 p-5",
-          "border-l-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_6%,transparent)]",
-        )}
-      >
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-success)]">
-          When you launch
-        </p>
-        <p className="text-sm text-foreground">
-          AuthSec marks this application{" "}
-          <code className="font-mono">state = ready</code>, sets{" "}
-          <code className="font-mono">setup_completed_at</code>, and starts
-          enforcing the activation-preview policy at runtime.
-        </p>
-      </Surface>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <PostureStat
+          icon={<ShieldCheck className="size-4" />}
+          label="Runtime state"
+          value={launched ? "Launched" : canActivate ? "Ready" : "Blocked"}
+          detail={
+            launched
+              ? "Policy is active"
+              : canActivate
+                ? "Ready to publish"
+                : firstFailing?.name ?? "Setup pending"
+          }
+          tone={launched || canActivate ? "ok" : "warn"}
+        />
+        <PostureStat
+          icon={<Sparkles className="size-4" />}
+          label="Tool exposure"
+          value={previewLoading ? "..." : String(totalTools)}
+          detail={`${mappedTools} mapped · ${unmappedTools} denied · ${publicTools} public`}
+          tone={unmappedTools || publicTools ? "warn" : "ok"}
+        />
+        <PostureStat
+          icon={<ShieldAlert className="size-4" />}
+          label="High-risk tools"
+          value={String(highRiskTools)}
+          detail="Mapped through high or critical scopes"
+          tone={highRiskTools ? "warn" : "ok"}
+        />
+        <PostureStat
+          icon={<Activity className="size-4" />}
+          label="Drift"
+          value={launched ? String(driftCount) : "—"}
+          detail={launched ? "Open events since launch" : "Starts after launch"}
+          tone={driftCount ? "warn" : "ok"}
+        />
+      </div>
+
+      <TableCard>
+        <CardContent className="space-y-3 p-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="size-4 text-blue-600" />
+            <h3 className="text-sm font-semibold text-foreground">
+              Access proof points
+            </h3>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <ProofPoint
+              title="Who can call tools?"
+              body="Inspect effective access from End Users or Access Assignments."
+              href={`/applications/${application.id}/access`}
+              action="Open access"
+            />
+            <ProofPoint
+              title="Which tools are public?"
+              body="Review public and denied tools from the tool matrix."
+              href={`/applications/${application.id}/tools`}
+              action="Open tools"
+            />
+            <ProofPoint
+              title="Can the browser flow work?"
+              body="Run the live OAuth test before trusting the launch state."
+              href={`/applications/${application.id}/test`}
+              action="Run test"
+            />
+          </div>
+        </CardContent>
+      </TableCard>
     </div>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────
-
-function ChecklistRow({
-  step,
-  name,
-  detail,
-  complete,
-  onFix,
+function ActionQueueRow({
+  item,
+  onLaunch,
+  launching,
 }: {
-  step: number;
-  name: string;
-  detail?: string;
-  complete: boolean;
-  onFix: () => void;
+  item: ActionQueueItem;
+  onLaunch?: () => void;
+  launching?: boolean;
 }) {
+  const action = onLaunch ? (
+    <Button size="sm" onClick={onLaunch} disabled={launching}>
+      {launching ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+      {item.action}
+    </Button>
+  ) : (
+    <Button asChild variant="outline" size="sm">
+      <Link to={item.href}>
+        {item.action}
+        <ArrowRight className="ml-2 size-4" />
+      </Link>
+    </Button>
+  );
+
   return (
-    <Surface className="flex items-stretch overflow-hidden p-0">
-      <span
-        className={cn(
-          "w-1 shrink-0",
-          complete ? "bg-[var(--color-success)]" : "bg-[var(--color-warning)]",
-        )}
-        aria-hidden
-      />
-      <div className="flex flex-1 flex-wrap items-center gap-3 px-4 py-3">
+    <div className="flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 gap-3">
         <span
-          className={cn(
-            "inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold",
-            complete
-              ? "border-[var(--color-success)] bg-[color:color-mix(in_oklch,var(--color-success)_15%,transparent)] text-[var(--color-success)]"
-              : "border-border bg-muted text-muted-foreground",
-          )}
+          className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full border ${toneClass[item.tone]}`}
         >
-          {complete ? "✓" : step}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-semibold text-foreground">{name}</h4>
-          {detail && (
-            <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+          {item.tone === "ok" ? (
+            <CheckCircle2 className="size-4" />
+          ) : item.tone === "danger" ? (
+            <ShieldAlert className="size-4" />
+          ) : (
+            <Activity className="size-4" />
           )}
+        </span>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-slate-950">{item.title}</h4>
+          <p className="mt-1 text-sm leading-5 text-slate-600">{item.body}</p>
         </div>
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
-            complete
-              ? "border-[color:color-mix(in_oklch,var(--color-success)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_10%,transparent)] text-[var(--color-success)]"
-              : "border-[color:color-mix(in_oklch,var(--color-warning)_30%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_10%,transparent)] text-[var(--color-warning)]",
-          )}
-        >
-          <span className="size-1.5 rounded-full bg-current" aria-hidden />
-          {complete ? "Complete" : "Pending"}
-        </span>
-        {!complete && (
-          <Button variant="default" size="sm" onClick={onFix}>
-            Open →
-          </Button>
-        )}
       </div>
-    </Surface>
+      <div className="shrink-0">{action}</div>
+    </div>
   );
 }
 
-function PreviewStat({
+function PostureStat({
+  icon,
   label,
   value,
-  tone = "muted",
+  detail,
+  tone,
 }: {
-  label: string;
-  value: string | number;
-  tone?: "ok" | "warn" | "info" | "muted";
-}) {
-  const TONE: Record<NonNullable<typeof tone>, string> = {
-    ok: "text-[var(--color-success)]",
-    warn: "text-[var(--color-warning)]",
-    info: "text-[var(--color-primary)]",
-    muted: "text-foreground",
-  };
-  return (
-    <Surface className="p-4">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-semibold tabular-nums",
-          TONE[tone],
-        )}
-      >
-        {value}
-      </p>
-    </Surface>
-  );
-}
-
-function PreviewKv({
-  label,
-  value,
-  mono,
-}: {
+  icon: React.ReactNode;
   label: string;
   value: string;
-  mono?: boolean;
+  detail: string;
+  tone: "ok" | "warn";
 }) {
   return (
-    <div>
-      <dt className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </dt>
-      <dd
-        className={cn(
-          "mt-0.5 text-sm text-foreground",
-          mono && "font-mono text-xs",
-        )}
-      >
-        {value}
-      </dd>
+    <TableCard>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {icon}
+          {label}
+        </div>
+        <div
+          className={`mt-3 text-2xl font-semibold ${
+            tone === "ok" ? "text-emerald-700" : "text-amber-700"
+          }`}
+        >
+          {value}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+      </CardContent>
+    </TableCard>
+  );
+}
+
+function ProofPoint({
+  title,
+  body,
+  href,
+  action,
+}: {
+  title: string;
+  body: string;
+  href: string;
+  action: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <h4 className="text-sm font-semibold text-slate-950">{title}</h4>
+      <p className="mt-1 min-h-10 text-xs leading-5 text-slate-600">{body}</p>
+      <Separator className="my-3" />
+      <Button asChild variant="ghost" size="sm" className="px-0">
+        <Link to={href}>
+          {action}
+          <ArrowRight className="ml-2 size-4" />
+        </Link>
+      </Button>
     </div>
   );
 }
 
-/**
- * Map a setup-checklist step number to the most relevant tab.
- * Backend defines the canonical step list (see
- * `setup_checklist.go`); this is just the navigation hint.
- */
 function failingStepRoute(applicationId: string, step: number): string {
-  // Backend steps: 1 Register, 2 Tool inventory, 3 Define scopes,
-  // 4 Map tools to scopes, 5 Default role, 6 Activate.
   const route =
     step <= 1
       ? "setup"
@@ -416,6 +436,6 @@ function failingStepRoute(applicationId: string, step: number): string {
         ? "tools"
         : step === 5
           ? "access"
-          : "launch";
+          : "overview";
   return `/applications/${applicationId}/${route}`;
 }

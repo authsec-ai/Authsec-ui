@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { KeyRound, Search, ShieldCheck, Users } from "lucide-react";
+import { KeyRound, Search, ShieldOff } from "lucide-react";
 
 import { useListApplicationsQuery } from "@/app/api/applicationsApi";
 import {
@@ -10,7 +10,6 @@ import {
 import { useListEndUsersQuery } from "@/app/api/membershipApi";
 import { useDeleteRSBindingMutation } from "@/app/api/setupWizardApi";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import {
   AdaptiveTable,
   type AdaptiveColumn,
@@ -26,7 +25,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FilterCard, TableCard } from "@/theme/components/cards";
+import {
+  AccessPath,
+  ConsoleRowActions,
+  EntityCell,
+  VerdictCard,
+} from "@/components/console/iam-console";
+import { TableCard } from "@/theme/components/cards";
 import { resolveTenantId } from "@/utils/workspace";
 import { toast } from "react-hot-toast";
 
@@ -50,7 +55,7 @@ export default function EffectiveAccessPage() {
     { skip: !tenantId },
   );
   const { data: applications = [] } = useListApplicationsQuery();
-  const { data, isLoading, isFetching, refetch } = useGetApplicationEffectiveAccessQuery(
+  const { data, isLoading, refetch } = useGetApplicationEffectiveAccessQuery(
     { applicationId, userId },
     { skip: !applicationId || !userId },
   );
@@ -73,21 +78,20 @@ export default function EffectiveAccessPage() {
     () => [
       {
         id: "scope",
-        header: "Scope",
+        header: "Access label",
         alwaysVisible: true,
         approxWidth: 260,
         cell: ({ row }) => (
-          <div>
-            <div className="font-mono text-sm font-medium">{row.original.scope_string}</div>
-            <div className="text-xs text-muted-foreground">
-              {row.original.display_name || row.original.scope_string}
-            </div>
-          </div>
+          <EntityCell
+            label={row.original.display_name || row.original.scope_string}
+            detail={row.original.scope_string}
+            monoDetail
+          />
         ),
       },
       {
-        id: "status",
-        header: "Status",
+        id: "verdict",
+        header: "Verdict",
         priority: 1,
         approxWidth: 130,
         cell: ({ row }) => (
@@ -98,7 +102,7 @@ export default function EffectiveAccessPage() {
       },
       {
         id: "through",
-        header: "Granted through",
+        header: "Why",
         priority: 2,
         approxWidth: 240,
         cell: ({ row }) =>
@@ -115,23 +119,9 @@ export default function EffectiveAccessPage() {
           ),
       },
       {
-        id: "source",
-        header: "Source",
-        priority: 3,
-        approxWidth: 150,
-        cell: ({ row }) =>
-          (row.original.granted_through ?? []).length ? (
-            <span className="text-sm">
-              {Array.from(new Set((row.original.granted_through ?? []).map((s) => s.source))).join(", ")}
-            </span>
-          ) : (
-            <span className="text-sm text-muted-foreground">-</span>
-          ),
-      },
-      {
         id: "risk",
         header: "Risk",
-        priority: 4,
+        priority: 3,
         approxWidth: 130,
         cell: ({ row }) => (
           <Badge variant={riskVariant(row.original.risk_level)}>
@@ -143,51 +133,44 @@ export default function EffectiveAccessPage() {
         id: "action",
         header: "Action",
         alwaysVisible: true,
-        approxWidth: 170,
+        approxWidth: 76,
         cell: ({ row }) => {
           const sources = row.original.granted_through ?? [];
-          if (row.original.status !== "granted") {
-            return (
-              <Button
-                size="sm"
-                onClick={() => navigate(`/applications/${applicationId}/access`)}
-              >
-                Add via role
-              </Button>
-            );
-          }
-          if (!row.original.removable || sources.length !== 1) {
-            return (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/admin/authz/role-bindings?user_id=${userId}`)}
-              >
-                Review sources
-              </Button>
-            );
-          }
           return (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={deletingBinding}
-              onClick={async () => {
-                try {
-                  await deleteBinding({
-                    rsId: applicationId,
-                    bindingId: sources[0].binding_id,
-                  }).unwrap();
-                  toast.success("Role binding removed.");
-                  refetch();
-                } catch (err) {
-                  const apiErr = err as { data?: { error?: string } };
-                  toast.error(apiErr?.data?.error ?? "Couldn't remove binding.");
-                }
-              }}
-            >
-              Remove source
-            </Button>
+            <ConsoleRowActions
+              items={[
+                row.original.status !== "granted"
+                  ? {
+                      label: "Add via role",
+                      icon: <KeyRound className="size-4" />,
+                      onSelect: () => navigate(`/applications/${applicationId}/access`),
+                    }
+                  : {
+                      label: "Review sources",
+                      icon: <KeyRound className="size-4" />,
+                      onSelect: () => navigate(`/admin/authz/role-bindings?user_id=${userId}`),
+                    },
+                {
+                  label: "Remove only source",
+                  icon: <ShieldOff className="size-4" />,
+                  disabled: row.original.status !== "granted" || !row.original.removable || sources.length !== 1 || deletingBinding,
+                  destructive: true,
+                  onSelect: async () => {
+                    try {
+                      await deleteBinding({
+                        rsId: applicationId,
+                        bindingId: sources[0].binding_id,
+                      }).unwrap();
+                      toast.success("Role binding removed.");
+                      refetch();
+                    } catch (err) {
+                      const apiErr = err as { data?: { error?: string } };
+                      toast.error(apiErr?.data?.error ?? "Couldn't remove binding.");
+                    }
+                  },
+                },
+              ]}
+            />
           );
         },
       },
@@ -199,30 +182,10 @@ export default function EffectiveAccessPage() {
     <div className="space-y-4 p-6">
       <PageHeader
         title="Effective Access"
-        description="Pick an end user and an Application to see which scopes are granted, why they are granted, and the safe remediation path."
-        actions={
-          data ? (
-            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-              {isFetching ? "Refreshing..." : "Refresh"}
-            </Button>
-          ) : null
-        }
+        description="Resolve whether a user can reach an application capability, why, and the safest next fix."
       />
 
-      <PageInfoBanner
-        title="Effective access shows why a user has each scope"
-        description="Access is changed by assigning or removing application role bindings. Shared role scope changes affect every user with that role."
-        features={[
-          { text: "Pick one end user and one Application", icon: Users },
-          { text: "Review all granting roles and binding sources", icon: ShieldCheck },
-          { text: "Remove only the selected safe source", icon: KeyRound },
-        ]}
-        featuresTitle="Safe remediation"
-        storageKey="effective-access-info"
-        dismissible
-      />
-
-      <FilterCard>
+      <TableCard>
         <CardContent variant="compact">
           <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
             <div className="space-y-2">
@@ -280,7 +243,42 @@ export default function EffectiveAccessPage() {
             </div>
           </div>
         </CardContent>
-      </FilterCard>
+      </TableCard>
+
+      {data ? (
+        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <VerdictCard
+            verdict={data.roles.length ? "allow" : "deny"}
+            title={data.roles.length ? "Application access is active" : "No application role grants access"}
+            body={
+              data.roles.length
+                ? `${data.user.email || data.user.name} resolves through ${data.roles.length} application role${data.roles.length === 1 ? "" : "s"}.`
+                : "Assign an application role, then confirm the client requested the matching scope."
+            }
+          />
+          <AccessPath
+            steps={[
+              {
+                label: "User selected",
+                detail: data.user.email || data.user.name || userId,
+                state: "ok",
+              },
+              {
+                label: "Application selected",
+                detail: data.application.name,
+                state: "ok",
+              },
+              {
+                label: data.roles.length ? "Role binding active" : "Missing role binding",
+                detail: data.roles.length
+                  ? data.roles.map((role) => role.label).join(", ")
+                  : "No role path currently grants application scopes.",
+                state: data.roles.length ? "ok" : "blocked",
+              },
+            ]}
+          />
+        </div>
+      ) : null}
 
       {!applicationId || !userId ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
@@ -299,10 +297,7 @@ export default function EffectiveAccessPage() {
                 data={scopes}
                 columns={columns}
                 enableSelection={false}
-                enableExpansion
-                renderExpandedRow={(row) => (
-                  <EffectiveScopeExpandedRow scope={row.original} />
-                )}
+                enableExpansion={false}
                 getRowId={(scope) => scope.id}
                 pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
               />
@@ -317,49 +312,6 @@ export default function EffectiveAccessPage() {
           {data.roles.length === 1 ? "" : "s"} on {data.application.name}.
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function EffectiveScopeExpandedRow({ scope }: { scope: EffectiveAccessScope }) {
-  const sources = scope.granted_through ?? [];
-
-  return (
-    <div className="grid gap-4 p-4 text-sm md:grid-cols-[1.2fr_1fr]">
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Granting sources
-        </div>
-        {sources.length ? (
-          <div className="mt-2 space-y-2">
-            {sources.map((source) => (
-              <div key={`${source.binding_id}:${source.role_id}`} className="rounded-md border p-3">
-                <div className="font-medium">{source.role_name}</div>
-                <div className="mt-1 font-mono text-xs text-muted-foreground">
-                  binding {source.binding_id}
-                </div>
-                <Badge variant="outline" className="mt-2">
-                  {source.source}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-muted-foreground">No role currently grants this scope.</p>
-        )}
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Remediation
-        </div>
-        <p className="mt-2 text-muted-foreground">
-          {scope.status !== "granted"
-            ? "Add access by assigning an existing Application role."
-            : scope.removable && sources.length === 1
-              ? "This scope has a single removable binding source."
-              : "This scope is shared across multiple sources or a protected source. Review bindings before removing access."}
-        </p>
-      </section>
     </div>
   );
 }

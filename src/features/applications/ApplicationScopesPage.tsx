@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, Plus, Search, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 
 import {
   useCreateResourceServerScopeMutation,
@@ -16,6 +16,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+  ImpactPreviewDialog,
+} from "@/components/console/iam-console";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -29,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { FilterCard, TableCard } from "@/theme/components/cards";
+import { TableCard } from "@/theme/components/cards";
 import { useApplicationContext } from "./useApplicationContext";
 
 const RISK_OPTIONS: Array<{ value: RiskLevel; label: string }> = [
@@ -54,6 +60,7 @@ export default function ApplicationScopesPage() {
   const [description, setDescription] = useState("");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>("low");
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OAuthScope | null>(null);
 
   const { data: scopesData, isLoading } = useListResourceServerScopesQuery(application.id);
   const { data: matrix } = useGetScopeMatrixQuery(application.id);
@@ -119,15 +126,9 @@ export default function ApplicationScopesPage() {
   };
 
   const handleDelete = async (scope: OAuthScope) => {
-    if (
-      !window.confirm(
-        `Delete scope "${scope.scope_string}"? Any tool mapping that uses this scope will also be removed.`,
-      )
-    ) {
-      return;
-    }
     try {
       await deleteScope(scope.id).unwrap();
+      setDeleteTarget(null);
       toast.success(`Scope "${scope.scope_string}" deleted.`);
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
@@ -139,16 +140,15 @@ export default function ApplicationScopesPage() {
     () => [
       {
         id: "scope",
-        header: "Scope",
+        header: "Access label",
         alwaysVisible: true,
         approxWidth: 280,
         cell: ({ row }) => (
-          <div>
-            <div className="font-mono text-sm font-medium">{row.original.scope_string}</div>
-            <div className="text-xs text-muted-foreground">
-              {row.original.display_name || row.original.scope_string}
-            </div>
-          </div>
+          <EntityCell
+            label={row.original.display_name || row.original.scope_string}
+            detail={row.original.scope_string}
+            monoDetail
+          />
         ),
       },
       {
@@ -163,34 +163,30 @@ export default function ApplicationScopesPage() {
         ),
       },
       {
-        id: "source",
-        header: "Source",
+        id: "tools",
+        header: "Tools unlocked",
         priority: 2,
-        approxWidth: 140,
+        approxWidth: 150,
         cell: ({ row }) => (
-          <Badge variant="outline">
-            {row.original.source || (row.original.is_auto_discovered ? "discovered" : "manual")}
-          </Badge>
+          <span>{row.original.tools_count ?? toolCountByScopeID.get(row.original.id) ?? 0}</span>
         ),
       },
       {
-        id: "tools",
-        header: "Used by tools",
+        id: "roles",
+        header: "Roles using it",
         priority: 3,
         approxWidth: 150,
         cell: ({ row }) => (
-          <span>{toolCountByScopeID.get(row.original.id) ?? 0}</span>
+          <span>{row.original.roles_count ?? "—"}</span>
         ),
       },
       {
-        id: "updated",
-        header: "Updated",
+        id: "users",
+        header: "Users affected",
         priority: 4,
         approxWidth: 150,
         cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">
-            {row.original.updated_at ? new Date(row.original.updated_at).toLocaleDateString() : "-"}
-          </span>
+          <span>{row.original.users_count ?? "—"}</span>
         ),
       },
       {
@@ -199,15 +195,23 @@ export default function ApplicationScopesPage() {
         alwaysVisible: true,
         approxWidth: 90,
         cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={deleting}
-            onClick={() => handleDelete(row.original)}
-            aria-label={`Delete ${row.original.scope_string}`}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          <ConsoleRowActions
+            items={[
+              {
+                label: "View tools",
+                onSelect: () => {
+                  setQuery(row.original.scope_string);
+                },
+              },
+              {
+                label: "Delete unused label",
+                icon: <Trash2 className="size-4" />,
+                onSelect: () => setDeleteTarget(row.original),
+                disabled: deleting,
+                destructive: true,
+              },
+            ]}
+          />
         ),
       },
     ],
@@ -216,24 +220,22 @@ export default function ApplicationScopesPage() {
 
   return (
     <div className="space-y-4">
-      <FilterCard>
-        <CardContent variant="compact">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Filters</span>
-              <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-muted-foreground dark:bg-white/10">
-                {isLoading ? "..." : scopes.length}
-              </span>
-            </div>
-            <div className="relative min-w-[220px] flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search scopes"
-                className="h-9 pl-9"
-              />
-            </div>
+      <header className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+          Scopes
+        </h2>
+        <p className="max-w-3xl text-sm leading-5 text-slate-600">
+          Access labels define which MCP tools roles can unlock. Raw scope
+          strings remain copyable metadata, not the primary operator view.
+        </p>
+      </header>
+
+      <ConsoleFilterBar
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search access labels or scope strings"
+        trailing={
+          <>
             {query.trim() ? (
               <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
                 Clear
@@ -298,9 +300,9 @@ export default function ApplicationScopesPage() {
                 </div>
               </PopoverContent>
             </Popover>
-          </div>
-        </CardContent>
-      </FilterCard>
+          </>
+        }
+      />
 
       <TableCard>
         <CardContent variant="flush">
@@ -321,6 +323,31 @@ export default function ApplicationScopesPage() {
           )}
         </CardContent>
       </TableCard>
+
+      <ImpactPreviewDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete access label?"
+        description="AuthSec will remove this scope and any tool mappings that depend on it."
+        confirmLabel={deleting ? "Deleting..." : "Delete label"}
+        confirmDisabled={!deleteTarget || deleting}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+      >
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-medium">
+            {deleteTarget?.display_name || deleteTarget?.scope_string}
+          </div>
+          <div className="mt-1 font-mono text-xs">{deleteTarget?.scope_string}</div>
+          <div className="mt-3 text-xs">
+            Tools unlocked:{" "}
+            {deleteTarget
+              ? deleteTarget.tools_count ?? toolCountByScopeID.get(deleteTarget.id) ?? 0
+              : 0}
+            {" · "}Roles using it: {deleteTarget?.roles_count ?? "unknown"}
+            {" · "}Users affected: {deleteTarget?.users_count ?? "unknown"}
+          </div>
+        </div>
+      </ImpactPreviewDialog>
     </div>
   );
 }

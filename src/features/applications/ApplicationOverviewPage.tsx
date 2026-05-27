@@ -67,8 +67,8 @@ export default function ApplicationOverviewPage() {
           firstFailing?.detail ??
           "AuthSec turns setup state into launch gates so protected resources stay fail-closed until policy is complete."
         }
-        actionLabel={checklist?.can_activate ? "Open launch" : firstFailing ? "Fix blocker" : "Open setup"}
-        actionHref={checklist?.can_activate ? `/applications/${application.id}/launch` : firstFailingHref}
+        actionLabel={checklist?.can_activate ? "Open overview" : firstFailing ? "Fix blocker" : "Open setup"}
+        actionHref={checklist?.can_activate ? `/applications/${application.id}/overview` : firstFailingHref}
       />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -207,8 +207,8 @@ function NextActionCard({
           to the SDK.
         </p>
         <Button asChild className="mt-5 w-full justify-center">
-          <Link to={`/applications/${applicationId}/launch`}>
-            Open Launch  →
+          <Link to={`/applications/${applicationId}/overview`}>
+            Open Overview  →
           </Link>
         </Button>
       </Surface>
