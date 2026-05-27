@@ -20,6 +20,7 @@ import { useApplicationContext } from "./useApplicationContext";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { useState } from "react";
+import { isLaunched } from "./lib/computeReadiness";
 
 const labelRole = (roleName: string) => {
   const raw = roleName.includes(":") ? roleName.split(":").pop() || roleName : roleName;
@@ -31,8 +32,11 @@ const labelRole = (roleName: string) => {
 export default function ApplicationRoleBindingsPage() {
   const navigate = useNavigate();
   const { application } = useApplicationContext();
+  const launched = isLaunched(application);
   const [query, setQuery] = useState("");
-  const { data, isLoading } = useListRSBindingsQuery(application.id);
+  const { data, isLoading } = useListRSBindingsQuery(application.id, {
+    skip: !launched,
+  });
   const [deleteBinding, { isLoading: deleting }] = useDeleteRSBindingMutation();
   const bindings = useMemo(() => {
     const items = data?.bindings ?? [];
@@ -140,6 +144,23 @@ export default function ApplicationRoleBindingsPage() {
 
   return (
     <div className="space-y-4">
+      {!launched ? (
+        <TableCard>
+          <CardContent className="space-y-3 p-6">
+            <div>
+              <h2 className="text-lg font-semibold">Role bindings unlock after launch</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Application role bindings are useful only after runtime policy is active.
+                Finish setup on the Overview page, then return here to manage user access.
+              </p>
+            </div>
+            <Button onClick={() => navigate(`/applications/${application.id}/launch`)}>
+              Open overview
+            </Button>
+          </CardContent>
+        </TableCard>
+      ) : (
+        <>
       <FilterCard>
         <CardContent variant="compact">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -176,37 +197,15 @@ export default function ApplicationRoleBindingsPage() {
               data={bindings}
               columns={columns}
               enableSelection={false}
-              enableExpansion
-              renderExpandedRow={(row) => (
-                <div className="grid gap-4 p-4 text-sm md:grid-cols-3">
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Binding
-                    </div>
-                    <div className="mt-2 font-mono text-xs">{row.original.id}</div>
-                  </section>
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      User
-                    </div>
-                    <div className="mt-2 font-mono text-xs">{row.original.user_id}</div>
-                  </section>
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Scope
-                    </div>
-                    <div className="mt-2 font-mono text-xs">
-                      {row.original.scope_type || "-"} {row.original.scope_id || ""}
-                    </div>
-                  </section>
-                </div>
-              )}
+              enableExpansion={false}
               getRowId={(binding) => binding.id}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
           )}
         </CardContent>
       </TableCard>
+        </>
+      )}
     </div>
   );
 }

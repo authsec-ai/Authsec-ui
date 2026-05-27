@@ -195,7 +195,7 @@ export default function ApplicationSetupPage() {
     <div className="space-y-0">
       <header className="mb-5 space-y-1">
         <h2 className="text-[22px] font-semibold leading-7 text-slate-950">
-          Protect endpoint
+          Set up protection
         </h2>
         <p className="text-sm text-slate-600">
           Wire the AuthSec SDK, configure the environment for your shell, and

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   KeyRound,
   MoreHorizontal,
-  RefreshCcw,
   Search,
   ShieldCheck,
   ShieldOff,
@@ -76,88 +75,6 @@ function userLabel(user: TenantEndUserState) {
   return user.user_email ?? user.user_username ?? user.user_id;
 }
 
-function EndUserExpandedRow({
-  user,
-  onOpenProfile,
-  onOpenEffectiveAccess,
-}: {
-  user: TenantEndUserState;
-  onOpenProfile: () => void;
-  onOpenEffectiveAccess: (applicationId?: string) => void;
-}) {
-  const applications = user.applications ?? [];
-
-  return (
-    <div className="grid gap-4 p-4 text-sm md:grid-cols-[1.3fr_1fr]">
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Application access
-        </div>
-        {applications.length ? (
-          <div className="mt-2 space-y-2">
-            {applications.slice(0, 3).map((app) => (
-              <div key={app.binding_id} className="rounded-md border p-3">
-                <div className="font-medium">{app.name}</div>
-                <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                  {app.resource_uri}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{app.role_label || app.role_name}</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {app.scopes_count} scope{app.scopes_count === 1 ? "" : "s"}
-                  </span>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0"
-                    onClick={() => onOpenEffectiveAccess(app.application_id)}
-                  >
-                    Effective access
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {applications.length > 3 ? (
-              <div className="text-xs text-muted-foreground">
-                +{applications.length - 3} more application{applications.length - 3 === 1 ? "" : "s"}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-2 text-muted-foreground">No application role bindings yet.</p>
-        )}
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          User details
-        </div>
-        <dl className="mt-2 space-y-1">
-          <div>
-            <dt className="inline text-muted-foreground">User ID: </dt>
-            <dd className="inline font-mono text-xs">{user.user_id}</dd>
-          </div>
-          <div>
-            <dt className="inline text-muted-foreground">Plan: </dt>
-            <dd className="inline">{user.plan_tier || "—"}</dd>
-          </div>
-          <div>
-            <dt className="inline text-muted-foreground">Effective scopes: </dt>
-            <dd className="inline">{user.effective_scopes_count ?? 0}</dd>
-          </div>
-        </dl>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={onOpenProfile}>
-            View profile
-          </Button>
-          <Button size="sm" onClick={() => onOpenEffectiveAccess()}>
-            Effective access
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function EffectiveAccessDrawer({
   user,
   initialApplicationId,
@@ -173,7 +90,7 @@ function EffectiveAccessDrawer({
   const [deleteBinding, deleteState] = useDeleteRSBindingMutation();
   const applications = user?.applications ?? [];
   const selectedApplicationId = applicationId || applications[0]?.application_id || "";
-  const { data, isFetching, refetch } = useGetApplicationEffectiveAccessQuery(
+  const { data, refetch } = useGetApplicationEffectiveAccessQuery(
     { applicationId: selectedApplicationId, userId: user?.user_id ?? "" },
     { skip: !user || !selectedApplicationId },
   );
@@ -220,15 +137,6 @@ function EffectiveAccessDrawer({
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => selectedApplicationId && refetch()}
-                disabled={isFetching || !selectedApplicationId}
-              >
-                <RefreshCcw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
             </div>
 
             <Tabs defaultValue="roles">
@@ -341,7 +249,7 @@ export default function EndUsersPage() {
     applicationId?: string;
   }>({ open: false, user: null });
 
-  const { data, isLoading, isFetching, refetch } = useListEndUsersQuery(
+  const { data, isLoading } = useListEndUsersQuery(
     {
       tenantId: tenantId || "",
       status: statusFilter === "all" ? undefined : statusFilter,
@@ -502,7 +410,7 @@ export default function EndUsersPage() {
     <>
       <PageHeader
         title="End Users"
-        description="Consumers of this tenant's published Applications. These are not members — they connect to your AI agents, MCP servers, or web apps via OAuth."
+        description="Consumers of this workspace's published Applications. These are not members; they connect to your AI agents, MCP servers, or web apps via OAuth."
       />
 
       <div className="space-y-4 p-6">
@@ -555,9 +463,6 @@ export default function EndUsersPage() {
                     <SelectItem value="pro">Pro</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-                  {isFetching ? "Refreshing..." : "Refresh"}
-                </Button>
               </div>
             </div>
           </CardContent>
@@ -579,16 +484,7 @@ export default function EndUsersPage() {
                 data={rows}
                 columns={columns}
                 enableSelection={false}
-                enableExpansion
-                renderExpandedRow={(row) => (
-                  <EndUserExpandedRow
-                    user={row.original}
-                    onOpenProfile={() => navigate(`/end-users/${row.original.user_id}`)}
-                    onOpenEffectiveAccess={(applicationId) =>
-                      setAccessDrawer({ open: true, user: row.original, applicationId })
-                    }
-                  />
-                )}
+                enableExpansion={false}
                 getRowId={(row) => row.user_id}
                 pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: true }}
               />

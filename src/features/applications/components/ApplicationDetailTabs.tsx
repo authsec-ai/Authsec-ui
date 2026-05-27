@@ -11,14 +11,14 @@ import { cn } from "@/lib/utils";
 import type { Readiness, ReadinessState } from "../types";
 
 const TABS = [
-  { key: "setup", label: "Protect", readinessKey: "protection" },
+  { key: "setup", label: "Setup", readinessKey: "protection" },
   { key: "tools", label: "Tools", readinessKey: "tools" },
   { key: "scopes", label: "Application Scopes", readinessKey: "access" },
   { key: "access", label: "Access", readinessKey: "access" },
+  { key: "clients", label: "Clients", readinessKey: "clients" },
+  { key: "launch", label: "Overview", readinessKey: "launch" },
   { key: "role-bindings", label: "Role Bindings", readinessKey: "access" },
   { key: "consent-grants", label: "Consent Grants", readinessKey: null },
-  { key: "clients", label: "Clients", readinessKey: "clients" },
-  { key: "launch", label: "Launch", readinessKey: "launch" },
   { key: "test", label: "Test", readinessKey: "test" },
   { key: "activity", label: "Monitor", readinessKey: null },
 ] as const;
@@ -41,6 +41,9 @@ export function ApplicationDetailTabs({
   readiness,
   className,
 }: ApplicationDetailTabsProps) {
+  const launched = readiness?.launch.state === "ok";
+  const visibleTabs = TABS.filter((tab) => tab.key !== "role-bindings" || launched);
+
   return (
     <nav
       aria-label="Application sections"
@@ -50,7 +53,7 @@ export function ApplicationDetailTabs({
         className,
       )}
     >
-      {TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const area = tab.readinessKey ? readiness?.[tab.readinessKey] : undefined;
         return (
           <NavLink

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 interface ConsentGrantsTableProps {
   grants: OAuthConsentGrant[];
   isAdmin: boolean;
+  applicationContext?: boolean;
   onRevoke: (grant: OAuthConsentGrant) => void;
 }
 
@@ -85,6 +86,7 @@ function ConsentGrantExpandedRow({
 export function ConsentGrantsTable({
   grants,
   isAdmin,
+  applicationContext = false,
   onRevoke,
 }: ConsentGrantsTableProps) {
   const columns = useMemo<AdaptiveColumn<OAuthConsentGrant>[]>(
@@ -108,7 +110,7 @@ export function ConsentGrantsTable({
         id: "client",
         header: "Client",
         alwaysVisible: true,
-        approxWidth: 240,
+        approxWidth: 260,
         cell: ({ row }) => (
           <div>
             <div className="font-medium">{row.original.client_name || row.original.client_id}</div>
@@ -120,24 +122,28 @@ export function ConsentGrantsTable({
           </div>
         ),
       },
-      {
-        id: "resource",
-        header: "Application",
-        priority: 2,
-        approxWidth: 240,
-        cell: ({ row }) => (
-          <div>
-            <div className="font-medium">
-              {row.original.resource_name || row.original.resource_server_id}
-            </div>
-            {row.original.resource_name ? (
-              <div className="truncate font-mono text-xs text-muted-foreground">
-                {row.original.resource_server_id}
-              </div>
-            ) : null}
-          </div>
-        ),
-      },
+      ...(!applicationContext
+        ? [
+            {
+              id: "resource",
+              header: "Application",
+              priority: 2,
+              approxWidth: 240,
+              cell: ({ row }) => (
+                <div>
+                  <div className="font-medium">
+                    {row.original.resource_name || row.original.resource_server_id}
+                  </div>
+                  {row.original.resource_name ? (
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {row.original.resource_server_id}
+                    </div>
+                  ) : null}
+                </div>
+              ),
+            } satisfies AdaptiveColumn<OAuthConsentGrant>,
+          ]
+        : []),
       {
         id: "scopes",
         header: "Scopes",
@@ -181,8 +187,9 @@ export function ConsentGrantsTable({
         approxWidth: 130,
         cell: ({ row }) => (
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => onRevoke(row.original)}
             disabled={!!row.original.revoked_at}
           >
@@ -192,7 +199,7 @@ export function ConsentGrantsTable({
         ),
       },
     ],
-    [isAdmin, onRevoke],
+    [applicationContext, isAdmin, onRevoke],
   );
 
   if (grants.length === 0) {
@@ -215,10 +222,12 @@ export function ConsentGrantsTable({
       data={grants}
       columns={columns}
       enableSelection={false}
-      enableExpansion
-      renderExpandedRow={(row) => (
-        <ConsentGrantExpandedRow grant={row.original} isAdmin={isAdmin} />
-      )}
+      enableExpansion={!applicationContext}
+      renderExpandedRow={
+        applicationContext
+          ? undefined
+          : (row) => <ConsentGrantExpandedRow grant={row.original} isAdmin={isAdmin} />
+      }
       getRowId={(grant) => grant.id}
       pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: true }}
     />

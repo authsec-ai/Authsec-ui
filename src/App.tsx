@@ -83,7 +83,6 @@ import {
 // RBAC pages
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
-import { ConsentGrantsPage } from "./features/consent-grants/ConsentGrantsPage";
 import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
 import SDKHubPage from "./features/sdk/SDKHubPage";
 
@@ -611,13 +610,7 @@ function AppContent() {
                   />
                   <Route
                     path="/consent-grants"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ConsentGrantsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
 
                   {/* Context-aware RBAC and OAuth routes (legacy — kept while Phase A→F migrates each surface) */}
@@ -750,13 +743,7 @@ function AppContent() {
 
                     <Route
                       path="consent-grants"
-                      element={
-                        <ProtectedRoute requireProject>
-                          <AppLayout>
-                            <ConsentGrantsPage />
-                          </AppLayout>
-                        </ProtectedRoute>
-                      }
+                      element={<Navigate to="/applications" replace />}
                     />
                   </Route>
 

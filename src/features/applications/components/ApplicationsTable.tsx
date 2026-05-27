@@ -80,12 +80,12 @@ const ROW_ACTIONS: Array<{
   icon: typeof ShieldCheck;
 }> = [
   { key: "overview", label: "Open overview", tab: "overview", icon: ExternalLink },
-  { key: "setup", label: "Protect", tab: "setup", icon: ShieldCheck },
+  { key: "setup", label: "Setup", tab: "setup", icon: ShieldCheck },
   { key: "tools", label: "Review tools", tab: "tools", icon: Wrench },
   { key: "access", label: "Manage access", tab: "access", icon: KeyRound },
   { key: "clients", label: "Clients", tab: "clients", icon: Users },
   { key: "test", label: "Run test login", tab: "test", icon: PlayCircle },
-  { key: "launch", label: "Launch", tab: "launch", icon: Rocket },
+  { key: "launch", label: "Overview", tab: "launch", icon: Rocket },
   { key: "activity", label: "Monitor", tab: "activity", icon: Activity },
 ];
 

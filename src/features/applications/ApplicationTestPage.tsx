@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { CheckCircle2, Loader2, Play, ShieldAlert, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Play, ShieldAlert } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -654,43 +654,6 @@ export default function ApplicationTestPage() {
       </div>
 
       {browserResult && <BrowserResultCard result={browserResult} />}
-
-      <section>
-        <h3 className="text-sm font-semibold text-slate-950">
-          Operator decisions remaining
-        </h3>
-        <p className="mt-1 text-xs text-slate-500">
-          What's left before this application is production-ready.
-        </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <DecisionCard
-            title="Run browser login"
-            body="Start the live OAuth redirect and exchange the callback code for tokens."
-            status={
-              browserSucceeded
-                ? "Completed"
-                : browserBlocked
-                  ? "Authorization blocked"
-                : allReady
-                  ? "Pending operator action"
-                  : "Blocked by live validation"
-            }
-            done={browserSucceeded}
-          />
-          <DecisionCard
-            title="Approve high-risk tool mappings"
-            body="Confirm admin/delete tools before launch."
-            status="On the Tools tab"
-            done={false}
-          />
-          <DecisionCard
-            title="Launch application"
-            body="Flip access on once all checks have passed."
-            status="On the Launch tab"
-            done={false}
-          />
-        </div>
-      </section>
     </div>
   );
 }
@@ -757,42 +720,6 @@ function buildReadinessChecks(
       status: browserStatus,
     },
   ];
-}
-
-function DecisionCard({
-  title,
-  body,
-  status,
-  done,
-}: {
-  title: string;
-  body: string;
-  status: string;
-  done: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md border p-3",
-        done
-          ? "border-emerald-200 bg-emerald-50/60"
-          : "border-slate-200 bg-white",
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        {done ? (
-          <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />
-        ) : (
-          <XCircle className="size-4 text-slate-400" aria-hidden />
-        )}
-        <p className="text-sm font-semibold text-slate-950">{title}</p>
-      </div>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{body}</p>
-      <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-        {status}
-      </p>
-    </div>
-  );
 }
 
 function BrowserResultCard({ result }: { result: BrowserTestResult }) {

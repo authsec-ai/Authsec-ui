@@ -3,8 +3,8 @@
  *
  * Layout (Launch Control IA):
  *   Dashboard
- *   Protect : Applications, AI Agents
- *   Authz   : Roles, Consent Grants
+ *   Workspace : End Users, Applications, AI Agents
+ *   Authz     : Application Roles, Role Bindings, Application Scopes
  *   Configure : Identity Providers, Trust Delegation, Secrets, SDK Guides
  *   Monitor : Audit Logs
  */
@@ -85,7 +85,6 @@ const NAV_AUTHZ: NavItem[] = [
   { title: "Application Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
   { title: "Role Bindings", url: "/authz/role-bindings", icon: Link2, contextPrefixed: true } as NavItem,
   { title: "Application Scopes", url: "/authz/application-scopes", icon: KeyRound } as NavItem,
-  { title: "Consent Grants", url: "/consent-grants", icon: GlobeLock } as NavItem,
 ];
 
 const NAV_MONITOR: NavItem[] = [

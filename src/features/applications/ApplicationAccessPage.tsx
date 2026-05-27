@@ -479,7 +479,7 @@ export default function ApplicationAccessPage() {
             </p>
           ) : roleOptions.length === 0 ? (
             <div className="mt-3 rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-500">
-              No roles yet. Define them on the Protect tab, then come back to
+              No roles yet. Define them on the Setup tab, then come back to
               grant scopes.
             </div>
           ) : (

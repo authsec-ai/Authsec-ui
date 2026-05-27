@@ -21,7 +21,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Loader2, RefreshCcw, Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,6 @@ import {
 } from "@/components/ui/sheet";
 import {
   useGetScopeMatrixQuery,
-  useRescanResourceServerMutation,
   useUpdateToolScopeMapMutation,
 } from "@/app/api/scopeMatrixApi";
 import {
@@ -58,7 +57,6 @@ import { FilterCard, TableCard } from "@/theme/components/cards";
 
 import { useApplicationContext } from "./useApplicationContext";
 import {
-  DecisionBanner,
   InlineStat,
   StatusBadge,
 } from "./components/ApplicationConsole";
@@ -183,8 +181,6 @@ function effectiveRisk(tool: MCPToolResponse): RiskLevel {
 export default function ApplicationToolsPage() {
   const { application } = useApplicationContext();
   const { data: matrix, isLoading } = useGetScopeMatrixQuery(application.id);
-  const [rescan, { isLoading: rescanning }] =
-    useRescanResourceServerMutation();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<MCPToolResponse | null>(null);
   const [query, setQuery] = useState("");
@@ -337,19 +333,9 @@ export default function ApplicationToolsPage() {
     [],
   );
 
-  const handleRescan = async () => {
-    try {
-      await rescan(application.id).unwrap();
-      toast.success("Rescan started.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Rescan failed.");
-    }
-  };
-
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-4">
+      <header className="space-y-1">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold tracking-tight text-slate-950">
             Review tool access
@@ -360,34 +346,7 @@ export default function ApplicationToolsPage() {
             Unmapped tools are denied at runtime.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRescan}
-          disabled={rescanning}
-        >
-          <RefreshCcw
-            className={cn("mr-2 size-4", rescanning && "animate-spin")}
-          />
-          Rescan
-        </Button>
       </header>
-
-      <DecisionBanner
-        tone={counts.unmapped > 0 ? "warning" : "success"}
-        title={
-          counts.unmapped > 0
-            ? `${counts.unmapped} tools need a runtime decision`
-            : "Tool inventory is mapped"
-        }
-        body={
-          counts.unmapped > 0
-            ? "Keep new or unmapped tools denied until an admin maps them to access labels or marks them explicitly public."
-            : "All discovered tools have an explicit policy decision. Rescan after SDK or upstream changes."
-        }
-        actionLabel="Rescan"
-        onAction={handleRescan}
-      />
 
       <FilterCard>
         <CardContent variant="compact" className="space-y-3">
@@ -447,15 +406,12 @@ export default function ApplicationToolsPage() {
         </CardContent>
       </FilterCard>
 
-      {/* Tools table */}
       <TableCard>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs">
           <span className="font-semibold text-slate-950">
             {FILTER_DEFS.find((f) => f.key === filter)?.label} ({visibleTools.length})
           </span>
-          <span className="text-slate-500">
-            Click any row to inspect mapping and decide.
-          </span>
+          <span className="text-slate-500">Use Inspect for mapping details.</span>
         </div>
         <CardContent variant="flush">
           {isLoading ? (
@@ -475,20 +431,13 @@ export default function ApplicationToolsPage() {
               data={visibleTools}
               columns={toolColumns}
               enableSelection={false}
-              enableExpansion
-              renderExpandedRow={(row) => (
-                <ToolExpandedRow
-                  tool={row.original}
-                  onInspect={() => setSelected(row.original)}
-                />
-              )}
+              enableExpansion={false}
               onRowClick={(tool) => setSelected(tool)}
               getRowId={(tool) => tool.id}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
           )}
         </CardContent>
-        {/* Footer — "How tools got here" */}
         {!isLoading && tools.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/50 px-4 py-3 text-xs text-slate-600">
             <span className="font-semibold text-slate-950">
@@ -519,8 +468,6 @@ export default function ApplicationToolsPage() {
   );
 }
 
-// ── Expanded tool row ─────────────────────────────────────────────────────
-
 function summarizeToolSources(tools: MCPToolResponse[]): string {
   const counts: Record<string, number> = {};
   for (const tool of tools) {
@@ -537,63 +484,6 @@ function summarizeToolSources(tools: MCPToolResponse[]): string {
   if (counts.convention) parts.push(`${counts.convention} from convention`);
   if (counts.manual) parts.push(`${counts.manual} manual`);
   return parts.length > 0 ? `${parts.join(", ")}.` : `${total} tools total.`;
-}
-
-function ToolExpandedRow({
-  tool,
-  onInspect,
-}: {
-  tool: MCPToolResponse;
-  onInspect: () => void;
-}) {
-  const source = normalizeToolSource(tool);
-  const sourceStyle =
-    SOURCE_BADGE_STYLE[source] ?? "border-slate-200 bg-slate-50 text-slate-600";
-
-  return (
-    <div className="grid gap-4 p-4 text-sm md:grid-cols-[1fr_1fr_1fr]">
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Risk reason
-        </div>
-        <p className="mt-2 text-muted-foreground">{riskReasonForTool(tool)}</p>
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Mapped scopes
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {tool.scopes.length ? (
-            tool.scopes.map((scope) => (
-              <Badge key={scope.scope_id} variant="outline" className="font-mono text-xs">
-                {scope.scope_string}
-              </Badge>
-            ))
-          ) : (
-            <span className="text-muted-foreground">No mapped scopes.</span>
-          )}
-        </div>
-      </section>
-      <section>
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Source
-        </div>
-        <span
-          className={cn(
-            "mt-2 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase",
-            sourceStyle,
-          )}
-        >
-          {source}
-        </span>
-        <div className="mt-4">
-          <Button variant="outline" size="sm" onClick={onInspect}>
-            Inspect mapping
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
 }
 
 // ── Inspector drawer ──────────────────────────────────────────────────────

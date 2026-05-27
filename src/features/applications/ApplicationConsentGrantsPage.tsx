@@ -34,6 +34,7 @@ export default function ApplicationConsentGrantsPage() {
           <ConsentGrantsTable
             grants={grants}
             isAdmin
+            applicationContext
             onRevoke={(grant) => setRevokeDialog({ open: true, grant })}
           />
         )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, Search, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Search, Trash2 } from "lucide-react";
 
 import {
   useCreateResourceServerScopeMutation,
@@ -24,6 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { FilterCard, TableCard } from "@/theme/components/cards";
 import { useApplicationContext } from "./useApplicationContext";
 
@@ -48,6 +53,7 @@ export default function ApplicationScopesPage() {
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
   const [riskLevel, setRiskLevel] = useState<RiskLevel>("low");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data: scopesData, isLoading } = useListResourceServerScopesQuery(application.id);
   const { data: matrix } = useGetScopeMatrixQuery(application.id);
@@ -104,6 +110,7 @@ export default function ApplicationScopesPage() {
       setDisplayName("");
       setDescription("");
       setRiskLevel("low");
+      setCreateOpen(false);
       toast.success(`Scope "${trimmed}" created.`);
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
@@ -210,10 +217,13 @@ export default function ApplicationScopesPage() {
   return (
     <div className="space-y-4">
       <FilterCard>
-        <CardContent variant="compact" className="space-y-4">
+        <CardContent variant="compact">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="flex shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-foreground">Filters</span>
+              <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-muted-foreground dark:bg-white/10">
+                {isLoading ? "..." : scopes.length}
+              </span>
             </div>
             <div className="relative min-w-[220px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -229,48 +239,65 @@ export default function ApplicationScopesPage() {
                 Clear
               </Button>
             ) : null}
-          </div>
-          <div className="border-t pt-4">
-            <h2 className="text-sm font-semibold">Create application scope</h2>
-            <p className="text-sm text-muted-foreground">
-              Scopes are enforced only for {application.name} and can be granted through Application roles.
-            </p>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.4fr_160px_auto]">
-            <Input
-              value={scopeString}
-              onChange={(event) => setScopeString(event.target.value)}
-              placeholder="e.g. demo:tools:read"
-              className="h-9 font-mono"
-            />
-            <Input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Display name"
-              className="h-9"
-            />
-            <Input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Description shown during consent"
-              className="h-9"
-            />
-            <Select value={riskLevel} onValueChange={(value) => setRiskLevel(value as RiskLevel)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RISK_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleCreate} disabled={creating || !scopeString.trim()}>
-              <KeyRound className="mr-2 h-4 w-4" />
-              {creating ? "Creating..." : "Create"}
-            </Button>
+            <Popover open={createOpen} onOpenChange={setCreateOpen}>
+              <PopoverTrigger asChild>
+                <Button size="sm" className="h-9">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create scope
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(92vw,34rem)] p-4">
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-sm font-semibold">Create application scope</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Scopes are enforced only for {application.name}.
+                    </p>
+                  </div>
+                  <div className="grid gap-3">
+                    <Input
+                      value={scopeString}
+                      onChange={(event) => setScopeString(event.target.value)}
+                      placeholder="e.g. demo:tools:read"
+                      className="h-9 font-mono"
+                    />
+                    <Input
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      placeholder="Display name"
+                      className="h-9"
+                    />
+                    <Input
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Description shown during consent"
+                      className="h-9"
+                    />
+                    <Select value={riskLevel} onValueChange={(value) => setRiskLevel(value as RiskLevel)}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RISK_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleCreate} disabled={creating || !scopeString.trim()}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      {creating ? "Creating..." : "Create"}
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </CardContent>
       </FilterCard>
@@ -287,36 +314,7 @@ export default function ApplicationScopesPage() {
               data={scopes}
               columns={columns}
               enableSelection={false}
-              enableExpansion
-              renderExpandedRow={(row) => (
-                <div className="grid gap-4 p-4 text-sm md:grid-cols-[1.2fr_1fr_1fr]">
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Description
-                    </div>
-                    <p className="mt-2 text-muted-foreground">
-                      {row.original.description || "No description yet."}
-                    </p>
-                  </section>
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Tool mappings
-                    </div>
-                    <div className="mt-2 font-medium">
-                      {toolCountByScopeID.get(row.original.id) ?? 0} tool
-                      {(toolCountByScopeID.get(row.original.id) ?? 0) === 1 ? "" : "s"}
-                    </div>
-                  </section>
-                  <section>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Raw ID
-                    </div>
-                    <div className="mt-2 break-all font-mono text-xs text-muted-foreground">
-                      {row.original.id}
-                    </div>
-                  </section>
-                </div>
-              )}
+              enableExpansion={false}
               getRowId={(scope) => scope.id}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
