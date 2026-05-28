@@ -237,12 +237,12 @@ export default function VoiceAgentWizardPage() {
 
   // Get tenant ID
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
 
   // Fetch clients
   const { data: clientsResponse, isLoading: clientsLoading } = useGetAllClientsQuery(
-    { tenant_id: tenantId },
-    { skip: !tenantId },
+    { workspace_id: workspaceId },
+    { skip: !workspaceId },
   );
 
   const clients = useMemo(() => clientsResponse?.clients || [], [clientsResponse]);

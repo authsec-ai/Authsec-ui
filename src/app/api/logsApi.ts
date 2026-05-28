@@ -3,7 +3,7 @@ import type { AuthLog, AuditLog } from "@/types/entities";
 
 // Types for logs API (paginated endpoint)
 export interface FetchLogsParams {
-  tenant_id: string;
+  workspace_id: string;
   page?: number;
   page_size?: number;
   sort_by?: "ts" | "log_level" | "event_type" | "status";
@@ -30,7 +30,7 @@ export interface FetchLogsParams {
 export interface RawLogEntry {
   timestamp: string;
   log_level?: string;
-  tenant_id: string;
+  workspace_id: string;
   event_type?: string;
   source_ip?: string;
   message?: string;
@@ -69,7 +69,7 @@ export interface LogAnalytics {
 // Unified configuration request for all log services
 export interface ConfigureLogServiceRequest {
   host: string; // Domain or IP:port
-  tenant_id: string; // From JWT token
+  workspace_id: string; // From JWT token
   name: "splunk" | "fluentbit" | "elasticsearch" | "syslog";
 }
 
@@ -81,7 +81,7 @@ export interface ConfigureLogServiceResponse {
 // Log configuration status types
 export interface LogConfigurationItem {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string; // e.g. "splunk", "es", "fluentbit", "syslog"
   host: string;
   alias: string;
@@ -91,11 +91,11 @@ export interface LogConfigurationItem {
 
 export interface GetLogConfigurationStatusResponse {
   configurations: LogConfigurationItem[];
-  tenant_id: string;
+  workspace_id: string;
 }
 
 export interface GetLogConfigurationStatusParams {
-  tenant_id: string;
+  workspace_id: string;
 }
 
 export interface LogConfigurationStatus {
@@ -118,7 +118,7 @@ export interface ConfigureFluentbitResponse {
 
 // Parameters for paginated audit logs API
 export interface FetchAuditLogsParams {
-  tenant_id: string;
+  workspace_id: string;
   page?: number;
   page_size?: number;
   sort_by?: "ts" | "service" | "event_type" | "operation";
@@ -439,14 +439,14 @@ function transformRawLogToAuthLog(rawLog: RawLogEntry, index: number): AuthLog {
   }
 
   return {
-    id: `log-${rawLog.tenant_id}-${index}-${Date.now()}`,
+    id: `log-${rawLog.workspace_id}-${index}-${Date.now()}`,
     timestamp: parsedTimestamp,
     logType,
     userId: rawLog.actor?.id || rawLog.metadata?.user_id || messageData.user_id,
     username,
     email: rawLog.actor?.email || rawLog.metadata?.email || messageData.email,
     clientType,
-    clientId: rawLog.tenant_id,
+    clientId: rawLog.workspace_id,
     clientName,
     authMethod,
     status,
@@ -477,13 +477,13 @@ function transformRawLogToAuthLog(rawLog: RawLogEntry, index: number): AuthLog {
 // API for logging feature
 export const logsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // Fetch logs by tenant_id and optional filters (paginated)
+    // Fetch logs by workspace_id and optional filters (paginated)
     getLogs: builder.query<
       { logs: AuthLog[]; pagination?: PaginationMetadata },
       FetchLogsParams
     >({
       query: ({
-        tenant_id,
+        workspace_id,
         page,
         page_size,
         sort_by,
@@ -498,7 +498,7 @@ export const logsApi = baseApi.injectEndpoints({
         end_time,
       }) => {
         const params = new URLSearchParams();
-        params.append("tenant_id", tenant_id);
+        params.append("workspace_id", workspace_id);
 
         if (page !== undefined) {
           params.append("page", page.toString());
@@ -613,7 +613,7 @@ export const logsApi = baseApi.injectEndpoints({
       FetchAuditLogsParams
     >({
       query: ({
-        tenant_id,
+        workspace_id,
         page,
         page_size,
         sort_by,
@@ -627,7 +627,7 @@ export const logsApi = baseApi.injectEndpoints({
         end_time,
       }) => {
         const params = new URLSearchParams();
-        params.append("tenant_id", tenant_id);
+        params.append("workspace_id", workspace_id);
 
         if (page !== undefined) {
           params.append("page", page.toString());
@@ -718,7 +718,7 @@ export const logsApi = baseApi.injectEndpoints({
       FetchAuditLogsParams
     >({
       query: ({
-        tenant_id,
+        workspace_id,
         page,
         page_size,
         sort_by,
@@ -732,7 +732,7 @@ export const logsApi = baseApi.injectEndpoints({
         end_time,
       }) => {
         const params = new URLSearchParams();
-        params.append("tenant_id", tenant_id);
+        params.append("workspace_id", workspace_id);
         params.append("service", service); // Always filter by service for M2M
 
         if (page !== undefined) {
@@ -820,8 +820,8 @@ export const logsApi = baseApi.injectEndpoints({
       LogConfigurationStatus,
       GetLogConfigurationStatusParams
     >({
-      query: ({ tenant_id }) => ({
-        url: `/logs/status?tenant_id=${tenant_id}`,
+      query: ({ workspace_id }) => ({
+        url: `/logs/status?workspace_id=${workspace_id}`,
         method: "GET",
       }),
       transformResponse: (

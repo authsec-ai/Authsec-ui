@@ -75,7 +75,7 @@ image:
 
 # Agent settings
 agent:
-  tenantId: "your-tenant-id-here"
+  workspaceId: "your-tenant-id-here"
   clusterName: "my-k8s-cluster"
   icpServiceUrl: "https://your-icp-server.example.com/spiresvc"
   logLevel: info
@@ -184,7 +184,7 @@ metadata:
 data:
   config.yaml: |
     agent:
-      tenant_id: "your-tenant-id-here"
+      workspace_id: "your-tenant-id-here"
       node_id: "\${NODE_NAME}"
       data_dir: "/var/lib/icp-agent"
       socket_path: "/run/spire/sockets/agent.sock"
@@ -919,7 +919,7 @@ sudo mkdir -p /etc/icp-agent
 # Create config file
 sudo tee /etc/icp-agent/config.yaml > /dev/null <<EOF
 agent:
-  tenant_id: "your-tenant-id-here"
+  workspace_id: "your-tenant-id-here"
   node_id: "vm-prod-web-01"
   data_dir: "/var/lib/icp-agent"
   socket_path: "/run/spire/sockets/agent.sock"

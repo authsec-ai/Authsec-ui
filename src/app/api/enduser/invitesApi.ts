@@ -27,7 +27,7 @@ export interface InviteEndUser {
   roles: string[];
   groups?: string[];
   tenant_domain?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   project_id?: string;
 }
@@ -46,7 +46,7 @@ export interface DirectorySync {
     username?: string;
     password?: string;
     base_dn?: string;
-    tenant_id?: string;
+    workspace_id?: string;
     client_id?: string;
     client_secret?: string;
     use_ssl?: boolean;
@@ -55,7 +55,7 @@ export interface DirectorySync {
   dry_run?: boolean;
   audience?: "admin" | "endUser";
   sync_type?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   project_id?: string;
 }
@@ -88,7 +88,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
           roles: data.roles,
           groups: data.groups || [],
           tenant_domain: data.tenant_domain,
-          tenant_id: data.tenant_id,
+          workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,
         }),
@@ -107,7 +107,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
           config: data.config,
           dry_run: data.dry_run || false,
           sync_type: data.sync_type || "ad",
-          tenant_id: data.tenant_id,
+          workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,
         }),
@@ -126,7 +126,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
           config: data.config,
           dry_run: data.dry_run || false,
           sync_type: data.sync_type || "entra_id",
-          tenant_id: data.tenant_id,
+          workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,
         }),
@@ -145,7 +145,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
           config: data.config,
           dry_run: data.dry_run || false,
           sync_type: data.sync_type || "ad",
-          tenant_id: data.tenant_id,
+          workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,
         }),
@@ -164,7 +164,7 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
           config: data.config,
           dry_run: data.dry_run || false,
           sync_type: data.sync_type || "entra_id",
-          tenant_id: data.tenant_id,
+          workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,
         }),

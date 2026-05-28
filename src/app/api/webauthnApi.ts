@@ -7,7 +7,7 @@ import { baseApi } from "./baseApi";
 
 export interface WebAuthnRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
 }
 
@@ -21,7 +21,7 @@ export interface AdminMFAStatusRequest {
 
 export interface MFAStatusForLoginRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
 }
 
@@ -82,7 +82,7 @@ export interface WebAuthnRegistrationCredential {
 
 export interface FinishAuthRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   credential: WebAuthnCredential;
 }
@@ -94,7 +94,7 @@ export interface AdminFinishAuthRequest {
 
 export interface FinishRegistrationRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   credential: WebAuthnRegistrationCredential;
 }
@@ -106,7 +106,7 @@ export interface AdminFinishRegistrationRequest {
 
 export interface TOTPSetupRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
 }
 
@@ -119,7 +119,7 @@ export interface TOTPSetupResponse {
 
 export interface TOTPConfirmRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   secret: string;
   code: string;
@@ -127,7 +127,7 @@ export interface TOTPConfirmRequest {
 
 export interface TOTPVerifyRequest {
   email: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   code: string;
 }
@@ -143,7 +143,7 @@ export interface MFAMethod {
 export interface WebAuthnCallbackRequest {
   email: string;
   mfa_verified: boolean;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   flow_context?: 'admin' | 'oidc' | 'enduser';
 }

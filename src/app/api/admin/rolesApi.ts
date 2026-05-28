@@ -9,7 +9,7 @@
  *
  * Available Endpoints:
  * - POST   /uflow/admin/roles          - Create roles
- * - GET    /uflow/admin/roles/:tenant_id - Get all roles for tenant
+ * - GET    /uflow/admin/roles/:workspace_id - Get all roles for tenant
  * - PUT    /uflow/admin/roles/:id      - Update a role
  * - DELETE /uflow/admin/roles          - Delete roles
  * - POST   /uflow/admin/roles/map      - Map roles to client/project
@@ -23,7 +23,7 @@ import { baseApi, withSessionData } from '../baseApi';
 
 export interface AdminRole {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   description: string;
   created_at: string;
@@ -36,7 +36,7 @@ export interface CreateRoleInput {
 }
 
 export interface CreateRolesRequest {
-  tenant_id: string;
+  workspace_id: string;
   roles: CreateRoleInput[];
 }
 
@@ -46,18 +46,18 @@ export interface CreateRolesResponse {
 }
 
 export interface UpdateRoleRequest {
-  tenant_id: string;
+  workspace_id: string;
   name?: string;
   description?: string;
 }
 
 export interface DeleteRolesRequest {
-  tenant_id: string;
+  workspace_id: string;
   role_ids: string[];
 }
 
 export interface MapRolesToClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   project_id: string;
   role_ids: string[];
 }
@@ -83,9 +83,9 @@ export const adminRolesApi = baseApi.injectEndpoints({
       invalidatesTags: ['AdminRBACRole'],
     }),
 
-    // GET /uflow/admin/roles/:tenant_id
+    // GET /uflow/admin/roles/:workspace_id
     getRolesByTenant: builder.query<AdminRole[], string>({
-      query: (tenant_id) => `/authsec/uflow/admin/roles/${tenant_id}`,
+      query: (workspace_id) => `/authsec/uflow/admin/roles/${workspace_id}`,
       transformResponse: (response: { roles: AdminRole[] }) => response.roles,
       providesTags: ['AdminRBACRole'],
     }),

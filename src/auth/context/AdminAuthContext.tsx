@@ -40,7 +40,7 @@ interface AdminAuthContextType {
   // State
   currentStep: string;
   isFirstLogin: boolean;
-  tenantId: string | null;
+  workspaceId: string | null;
   email: string | null;
   availableMFAMethods: AdminMFAMethod[];
   selectedMFAMethod: "webauthn" | "totp" | null;
@@ -58,7 +58,7 @@ interface AdminAuthContextType {
   authenticateWithWebAuthn: () => Promise<boolean>;
   authenticateWithTOTP: (code: string) => Promise<boolean>;
   resetFlow: () => void;
-  executeCallback: (email: string, tenantId?: string) => Promise<{ success: boolean; token?: string; error?: string }>;
+  executeCallback: (email: string, workspaceId?: string) => Promise<{ success: boolean; token?: string; error?: string }>;
   backToSelection: () => void;
 }
 
@@ -128,8 +128,8 @@ class AdminCallbackHandler {
   
   constructor(private webauthnCallbackMutation: any) {}
   
-  async executeCallback(email: string, tenantId?: string) {
-    const sessionKey = `admin-${email}-${tenantId ?? 'none'}`;
+  async executeCallback(email: string, workspaceId?: string) {
+    const sessionKey = `admin-${email}-${workspaceId ?? 'none'}`;
     
     if (this.pendingCallbacks.has(sessionKey)) {
       return this.pendingCallbacks.get(sessionKey);
@@ -139,7 +139,7 @@ class AdminCallbackHandler {
       return completed.result;
     }
     
-    const callbackPromise = this.performCallback(email, tenantId);
+    const callbackPromise = this.performCallback(email, workspaceId);
     this.pendingCallbacks.set(sessionKey, callbackPromise);
     
     try {
@@ -153,12 +153,12 @@ class AdminCallbackHandler {
     }
   }
   
-  private async performCallback(email: string, tenantId?: string) {
+  private async performCallback(email: string, workspaceId?: string) {
     try {
       const requestBody = {
         email,
         mfa_verified: true,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         flow_context: 'admin' as const
       };
       
@@ -500,7 +500,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Admin uses "Login" TOTP endpoints
       const result = await totpBeginLoginSetup({
         email: adminWebauthn.email,
-        tenant_id: adminWebauthn.tenantId
+        workspace_id: adminWebauthn.workspaceId
       });
 
       if ('data' in result && result.data) {
@@ -518,10 +518,10 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, totpBeginLoginSetup, dispatch]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, totpBeginLoginSetup, dispatch]);
 
   const confirmTOTPSetup = useCallback(async (code: string): Promise<boolean> => {
-    if (!adminWebauthn.tenantId || !adminWebauthn.email || !adminWebauthn.totpSecret) {
+    if (!adminWebauthn.workspaceId || !adminWebauthn.email || !adminWebauthn.totpSecret) {
       toast.error("Missing TOTP setup data");
       return false;
     }
@@ -529,7 +529,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const result = await totpConfirmLoginSetup({
         email: adminWebauthn.email,
-        tenant_id: adminWebauthn.tenantId,
+        workspace_id: adminWebauthn.workspaceId,
         secret: adminWebauthn.totpSecret,
         code
       });
@@ -553,7 +553,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch, callbackHandler]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch, callbackHandler]);
 
   const authenticateWithWebAuthn = useCallback(async (): Promise<boolean> => {
     if (!adminWebauthn.email) {
@@ -629,12 +629,12 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.success("Authentication successful!");
 
       // Admin flow: Execute callback and store token
-      const callbackResult = await callbackHandler.executeCallback(adminWebauthn.email!, adminWebauthn.tenantId!);
+      const callbackResult = await callbackHandler.executeCallback(adminWebauthn.email!, adminWebauthn.workspaceId!);
       
       if (callbackResult.success && callbackResult.token) {
         dispatch(setAuthToken(callbackResult.token));
         dispatch(completeWebAuthnAuthentication({
-          tenantId: adminWebauthn.tenantId!,
+          workspaceId: adminWebauthn.workspaceId!,
           email: adminWebauthn.email!,
           token: callbackResult.token,
         }));
@@ -655,10 +655,10 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, beginAdminAuthentication, finishAdminAuthentication, dispatch, callbackHandler, notifyNewUserIfNeeded]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, beginAdminAuthentication, finishAdminAuthentication, dispatch, callbackHandler, notifyNewUserIfNeeded]);
 
   const authenticateWithTOTP = useCallback(async (code: string): Promise<boolean> => {
-    if (!adminWebauthn.tenantId || !adminWebauthn.email) {
+    if (!adminWebauthn.workspaceId || !adminWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -666,7 +666,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const result = await totpVerifyLogin({
         email: adminWebauthn.email,
-        tenant_id: adminWebauthn.tenantId,
+        workspace_id: adminWebauthn.workspaceId,
         code
       });
 
@@ -686,7 +686,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           
           dispatch(setAuthToken(token));
           dispatch(completeWebAuthnAuthentication({
-            tenantId: adminWebauthn.tenantId!,
+            workspaceId: adminWebauthn.workspaceId!,
             email: adminWebauthn.email!,
             token: token,
           }));
@@ -696,12 +696,12 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           return true;
         } else {
           // Fallback: Execute callback if no direct token
-          const callbackResult = await callbackHandler.executeCallback(adminWebauthn.email, adminWebauthn.tenantId);
+          const callbackResult = await callbackHandler.executeCallback(adminWebauthn.email, adminWebauthn.workspaceId);
 
           if (callbackResult.success && callbackResult.token) {
             dispatch(setAuthToken(callbackResult.token));
             dispatch(completeWebAuthnAuthentication({
-              tenantId: adminWebauthn.tenantId!,
+              workspaceId: adminWebauthn.workspaceId!,
               email: adminWebauthn.email!,
               token: callbackResult.token,
             }));
@@ -727,14 +727,14 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.tenantId, adminWebauthn.email, totpVerifyLogin, dispatch, callbackHandler, notifyNewUserIfNeeded]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, totpVerifyLogin, dispatch, callbackHandler, notifyNewUserIfNeeded]);
 
   const resetFlow = useCallback(() => {
     dispatch(resetAdminWebAuthnState());
   }, [dispatch]);
 
-  const executeCallback = useCallback(async (email: string, tenantId?: string) => {
-    return callbackHandler.executeCallback(email, tenantId);
+  const executeCallback = useCallback(async (email: string, workspaceId?: string) => {
+    return callbackHandler.executeCallback(email, workspaceId);
   }, [callbackHandler]);
 
   // Navigate back to MFA selection list
@@ -746,7 +746,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // State
     currentStep: adminWebauthn.currentStep,
     isFirstLogin: adminWebauthn.isFirstLogin,
-    tenantId: adminWebauthn.tenantId,
+    workspaceId: adminWebauthn.workspaceId,
     email: adminWebauthn.email,
     availableMFAMethods: adminWebauthn.availableMFAMethods,
     selectedMFAMethod: adminWebauthn.selectedMFAMethod,

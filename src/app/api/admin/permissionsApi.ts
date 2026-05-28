@@ -29,7 +29,7 @@ export interface AdminPermission {
 }
 
 export interface CreatePermissionRequest {
-  tenant_id: string;
+  workspace_id: string;
   role_id: string;
   scope_id: string;
   resource_id: string;
@@ -47,7 +47,7 @@ export interface CreatePermissionResponse {
 }
 
 export interface DeletePermissionsRequest {
-  tenant_id: string;
+  workspace_id: string;
   permission_ids: string[];
 }
 

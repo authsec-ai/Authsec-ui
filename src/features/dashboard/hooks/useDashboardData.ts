@@ -5,7 +5,7 @@ import {
 } from "../../../app/api/dashboardApi";
 
 export interface UseDashboardDataProps {
-  tenantId: string;
+  workspaceId: string;
 }
 
 export interface DashboardData {
@@ -35,21 +35,21 @@ export interface DashboardData {
 /**
  * Custom hook to fetch and process all dashboard data
  */
-export function useDashboardData({ tenantId }: UseDashboardDataProps): DashboardData {
+export function useDashboardData({ workspaceId }: UseDashboardDataProps): DashboardData {
   // COMMENTED OUT: Dashboard stats API
   // const {
   //   data: statsData,
   //   isLoading: statsLoading,
   //   error: statsError,
   //   refetch: refetchStats,
-  // } = useGetDashboardStatsQuery({ tenant_id: tenantId }, { skip: !tenantId });
+  // } = useGetDashboardStatsQuery({ workspace_id: workspaceId }, { skip: !workspaceId });
 
   const {
     data: quickActionsData,
     isLoading: quickActionsLoading,
     error: quickActionsError,
     refetch: refetchQuickActions,
-  } = useGetQuickActionsStatusQuery({ tenant_id: tenantId }, { skip: !tenantId });
+  } = useGetQuickActionsStatusQuery({ workspace_id: workspaceId }, { skip: !workspaceId });
 
   const refetchAll = () => {
     // refetchStats(); // COMMENTED OUT

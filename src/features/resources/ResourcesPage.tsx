@@ -19,7 +19,7 @@ import { BulkActionsBar } from "./components";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import type { Resource } from "./types";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ export default function ResourcesPage() {
   const { isAdmin } = useRbacAudience();
 
   // Get tenant ID from context/session
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
   // Conditionally use Admin or End-User APIs based on audience toggle
   const [adminDeleteResource] = useDeleteAdminResourceMutation();
@@ -56,8 +56,8 @@ export default function ResourcesPage() {
     isLoading: endUserResourcesLoading,
     error: endUserResourcesError,
     refetch: refetchEndUserResources,
-  } = useGetEndUserResourcesQuery(tenantId || '', {
-    skip: isAdmin || !tenantId,
+  } = useGetEndUserResourcesQuery(workspaceId || '', {
+    skip: isAdmin || !workspaceId,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -68,26 +68,26 @@ export default function ResourcesPage() {
   const resourcesLoading = isAdmin ? adminResourcesLoading : endUserResourcesLoading;
   const resourcesError = isAdmin ? adminResourcesError : endUserResourcesError;
 
-  const previousContextRef = useRef<{ isAdmin: boolean; tenantId?: string | null }>({
+  const previousContextRef = useRef<{ isAdmin: boolean; workspaceId?: string | null }>({
     isAdmin,
-    tenantId,
+    workspaceId,
   });
 
   useEffect(() => {
     const previous = previousContextRef.current;
     const audienceChanged = previous.isAdmin !== isAdmin;
-    const tenantChanged = previous.tenantId !== tenantId;
+    const tenantChanged = previous.workspaceId !== workspaceId;
 
     if (audienceChanged || tenantChanged) {
       if (isAdmin) {
         refetchAdminResources();
-      } else if (tenantId) {
+      } else if (workspaceId) {
         refetchEndUserResources();
       }
     }
 
-    previousContextRef.current = { isAdmin, tenantId };
-  }, [isAdmin, tenantId, refetchAdminResources, refetchEndUserResources]);
+    previousContextRef.current = { isAdmin, workspaceId };
+  }, [isAdmin, workspaceId, refetchAdminResources, refetchEndUserResources]);
 
   // State
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
@@ -144,8 +144,8 @@ export default function ResourcesPage() {
   const handleClearSelection = () => setSelectedResources([]);
 
   const handleDeleteResource = async (resourceId: string) => {
-    if (!isAdmin && !tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!isAdmin && !workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       return;
     }
 
@@ -153,7 +153,7 @@ export default function ResourcesPage() {
       if (isAdmin) {
         await adminDeleteResource(resourceId).unwrap();
       } else {
-        await endUserDeleteResource({ tenant_id: tenantId!, resource_id: resourceId }).unwrap();
+        await endUserDeleteResource({ workspace_id: workspaceId!, resource_id: resourceId }).unwrap();
       }
       toast.success("Resource deleted successfully");
       setSelectedResources((prev) => prev.filter((id) => id !== resourceId));
@@ -175,15 +175,15 @@ export default function ResourcesPage() {
           toast.info("Select at least one resource to delete.");
           return;
         }
-        if (!isAdmin && !tenantId) {
-          toast.error("Tenant context missing; please sign in again.");
+        if (!isAdmin && !workspaceId) {
+          toast.error("Workspace context missing; please sign in again.");
           return;
         }
         try {
           const deleteResult = await performDiscreteDeletes(selectedResources, (resourceId) =>
             isAdmin
               ? adminDeleteResource(resourceId).unwrap()
-              : endUserDeleteResource({ tenant_id: tenantId!, resource_id: resourceId }).unwrap()
+              : endUserDeleteResource({ workspace_id: workspaceId!, resource_id: resourceId }).unwrap()
           );
 
           if (deleteResult.successCount) {

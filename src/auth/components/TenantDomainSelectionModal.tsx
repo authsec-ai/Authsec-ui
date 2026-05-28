@@ -26,7 +26,7 @@ interface TenantDomainSelectionModalProps {
     provider_user_id: string;
   };
   onSuccess: (data: {
-    tenant_id: string;
+    workspace_id: string;
     client_id: string;
     tenant_domain: string;
   }) => void;
@@ -111,7 +111,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
 
       if (result.success) {
         onSuccess({
-          tenant_id: result.tenant_id,
+          workspace_id: result.workspace_id,
           client_id: result.client_id,
           tenant_domain: result.tenant_domain,
         });

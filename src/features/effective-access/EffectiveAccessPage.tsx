@@ -32,7 +32,7 @@ import {
   VerdictCard,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { toast } from "react-hot-toast";
 
 function riskVariant(risk?: string): "default" | "secondary" | "destructive" | "outline" {
@@ -43,7 +43,7 @@ function riskVariant(risk?: string): "default" | "secondary" | "destructive" | "
 }
 
 export default function EffectiveAccessPage() {
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [userSearch, setUserSearch] = useState("");
@@ -51,8 +51,8 @@ export default function EffectiveAccessPage() {
   const [applicationId, setApplicationId] = useState(searchParams.get("application_id") || "");
 
   const { data: endUsers } = useListEndUsersQuery(
-    { tenantId: tenantId || "", q: userSearch.trim() || undefined },
-    { skip: !tenantId },
+    { workspaceId: workspaceId || "", q: userSearch.trim() || undefined },
+    { skip: !workspaceId },
   );
   const { data: applications = [] } = useListApplicationsQuery();
   const { data, isLoading, refetch } = useGetApplicationEffectiveAccessQuery(

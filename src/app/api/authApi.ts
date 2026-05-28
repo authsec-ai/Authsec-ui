@@ -80,7 +80,7 @@ export interface AdminBootstrapAccountRequest {
 export interface AdminBootstrapAccountResponse {
   message: string;
   status: "pending_verification" | "registered";
-  tenant_id?: string;
+  workspace_id?: string;
   tenant_domain?: string;
 }
 
@@ -108,7 +108,7 @@ export interface AuthUser {
 }
 
 export interface LoginResponse {
-  tenant_id: string;
+  workspace_id: string;
   email: string;
   first_login: boolean;
 }
@@ -120,7 +120,7 @@ export interface RegisterInitiateResponse {
 }
 
 export interface RegisterVerifyResponse {
-  tenant_id: string;
+  workspace_id: string;
   project_id: string;
   client_id: string;
   email_id: string;

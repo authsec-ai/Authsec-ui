@@ -15,17 +15,17 @@ export function SDKIntegrationSections() {
   const [showServiceSelection, setShowServiceSelection] = useState(false);
 
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
 
   // Fetch external services to get a service ID for SDK page
   const { data: servicesData } = useGetExternalServicesQuery(undefined, {
-    skip: !tenantId,
+    skip: !workspaceId,
   });
 
   // Fetch clients for SDK integration
   const { data: clientsData } = useGetAllClientsQuery(
-    { tenant_id: tenantId },
-    { skip: !tenantId }
+    { workspace_id: workspaceId },
+    { skip: !workspaceId }
   );
 
   const handleAuthSDKClick = () => {

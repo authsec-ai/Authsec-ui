@@ -23,7 +23,7 @@ import { baseApi, withSessionData } from "../baseApi";
 
 export interface AdminResource {
   id: string;
-  tenant_id: null;  // Global resources have NULL tenant_id
+  workspace_id: null;  // Global resources have NULL workspace_id
   name: string;
   description?: string;
   created_at: string;

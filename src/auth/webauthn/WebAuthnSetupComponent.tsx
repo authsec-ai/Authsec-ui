@@ -18,11 +18,11 @@ import { AuthStepHeader } from "../components/AuthStepHeader";
 interface WebAuthnSetupComponentProps {
   contextType: "admin" | "oidc";
   email: string;
-  tenantId: string;
+  workspaceId: string;
   onSuccess?: (token?: string) => void;
   onError?: (error: string) => void;
   onBack?: () => void;
-  onSetup?: (email: string, tenantId: string) => Promise<unknown>;
+  onSetup?: (email: string, workspaceId: string) => Promise<unknown>;
 }
 
 /**
@@ -31,7 +31,7 @@ interface WebAuthnSetupComponentProps {
  * Handles biometric/security key registration for new users.
  * Pure component - flow logic handled by parent page
  */
-export function WebAuthnSetupComponent({ contextType: _contextType, email, tenantId, onSuccess, onError, onBack, onSetup }: WebAuthnSetupComponentProps) {
+export function WebAuthnSetupComponent({ contextType: _contextType, email, workspaceId, onSuccess, onError, onBack, onSetup }: WebAuthnSetupComponentProps) {
   const { 
     registerUser, 
     handleCallback,
@@ -55,14 +55,14 @@ export function WebAuthnSetupComponent({ contextType: _contextType, email, tenan
     try {
       if (onSetup) {
         // Use the context-specific setup function
-        await onSetup(email, tenantId);
+        await onSetup(email, workspaceId);
         setSetupState("success");
         onSuccess?.();
       } else {
         // Fallback to local setup logic
-        await registerUser(email, tenantId);
+        await registerUser(email, workspaceId);
         
-        const callbackResult = await handleCallback(email, tenantId);
+        const callbackResult = await handleCallback(email, workspaceId);
         
         if (callbackResult.success && callbackResult.token) {
           setSetupState("success");

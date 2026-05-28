@@ -11,7 +11,7 @@ import {
   useGetEndUserPermissionResourcesQuery,
 } from "@/app/api/permissionsResourcesApi";
 import { baseApi } from "@/app/api/baseApi";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useResponsiveCards } from "@/hooks/use-mobile";
 import { EnhancedPermissionsTable } from "./components/EnhancedPermissionsTable";
 import { PermissionsFilterCard } from "./components/PermissionsFilterCard";
@@ -84,7 +84,7 @@ export function PermissionsPage() {
   });
 
   // API data fetching
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
   // audience in query params triggers refetch on context change
   const {
@@ -92,18 +92,18 @@ export function PermissionsPage() {
     isLoading: permissionsLoading,
     error: permissionsError,
   } = useGetPermissionsQuery(
-    { tenant_id: tenantId || "", audience },
+    { workspace_id: workspaceId || "", audience },
     {
-      skip: !tenantId,
+      skip: !workspaceId,
     },
   );
 
   // Invalidate cache when audience changes to force fresh API call
   useEffect(() => {
-    if (tenantId) {
+    if (workspaceId) {
       dispatch(baseApi.util.invalidateTags(["UnifiedRBACPermission"]));
     }
-  }, [audience, dispatch, tenantId]);
+  }, [audience, dispatch, workspaceId]);
 
   // Auto-open modal if query param present (from wizard)
   useEffect(() => {
@@ -152,8 +152,8 @@ export function PermissionsPage() {
     data: endUserResources = [],
     isLoading: endUserResourcesLoading,
     error: endUserResourcesError,
-  } = useGetEndUserPermissionResourcesQuery(tenantId || "", {
-    skip: isAdmin || !tenantId,
+  } = useGetEndUserPermissionResourcesQuery(workspaceId || "", {
+    skip: isAdmin || !workspaceId,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -320,7 +320,7 @@ export function PermissionsPage() {
 
     try {
       await deletePermissions({
-        tenant_id: tenantId || "",
+        workspace_id: workspaceId || "",
         permission_ids: selectedPermissions,
       }).unwrap();
 

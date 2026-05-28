@@ -80,7 +80,7 @@ interface ClientSelectionStepProps {
 
 export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
   const session = SessionManager.getSession();
-  const tenantId = session?.tenant_id;
+  const workspaceId = session?.workspace_id;
 
   const {
     data: clientsResponse,
@@ -88,10 +88,10 @@ export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
     refetch,
   } = useGetAllClientsQuery(
     {
-      tenant_id: tenantId || "",
+      workspace_id: workspaceId || "",
       active_only: false,
     },
-    { skip: !tenantId },
+    { skip: !workspaceId },
   );
 
   const [selectionMode, setSelectionMode] = useState<
@@ -399,7 +399,7 @@ export function ConfigureAuthStep({
   onComplete,
 }: ConfigureAuthStepProps) {
   const session = SessionManager.getSession();
-  const tenantId = session?.tenant_id;
+  const workspaceId = session?.workspace_id;
 
   // State for provider selection and existing config display
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -408,7 +408,7 @@ export function ConfigureAuthStep({
 
   // Check for existing auth methods
   const { providers, isLoading } = useUnifiedProviders({
-    tenant_id: tenantId || "",
+    workspace_id: workspaceId || "",
     client_id: undefined, // Tenant-wide check
   });
 

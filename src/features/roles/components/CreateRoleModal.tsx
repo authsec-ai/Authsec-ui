@@ -19,7 +19,7 @@ import {
 import {
   useGetPermissionsQuery,
 } from "@/app/api/permissionsApi";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { CreatePermissionModal } from "../../permissions/components/CreatePermissionModal";
@@ -32,7 +32,7 @@ interface CreateRoleModalProps {
 }
 
 export function CreateRoleModal({ open, onOpenChange, onRoleCreated, onSuccess }: CreateRoleModalProps) {
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const { audience, isAdmin } = useRbacAudience();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -42,7 +42,7 @@ export function CreateRoleModal({ open, onOpenChange, onRoleCreated, onSuccess }
 
   // API hooks
   const { data: allPermissions = [], isLoading: permissionsLoading, refetch: refetchPermissions } = useGetPermissionsQuery({
-    tenant_id: tenantId || "",
+    workspace_id: workspaceId || "",
     audience,
   });
   const [addRole] = useAddUserDefinedRolesMutation();
@@ -101,7 +101,7 @@ export function CreateRoleModal({ open, onOpenChange, onRoleCreated, onSuccess }
 
     try {
       const response = await addRole({
-        tenant_id: tenantId || "",
+        workspace_id: workspaceId || "",
         audience,
         name: name.trim(),
         description: description.trim() || undefined,

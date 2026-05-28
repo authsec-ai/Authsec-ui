@@ -35,7 +35,7 @@ export interface UsersQueryParams {
   lastLoginAfter?: string;
   lastLoginBefore?: string;
   client_id?: string;
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 export interface ConfigStatus {
@@ -102,7 +102,7 @@ export const endUserUsersApi = baseApi.injectEndpoints({
 
         // Client filter
         if (params.client_id !== undefined) body.client_id = params.client_id;
-        if (params.tenant_id) body.tenant_id = params.tenant_id;
+        if (params.workspace_id) body.workspace_id = params.workspace_id;
 
         const payload = withSessionData(body);
 
@@ -151,11 +151,11 @@ export const endUserUsersApi = baseApi.injectEndpoints({
 
     // Admin Actions
 
-    // DELETE /uflow/user/enduser/:tenant_id/:user_id
+    // DELETE /uflow/user/enduser/:workspace_id/:user_id
     // Soft delete end user
-    deleteUser: builder.mutation<any, { tenant_id: string; user_id: string }>({
-      query: ({ tenant_id, user_id }) => ({
-        url: `/authsec/uflow/user/enduser/${tenant_id}/${user_id}`,
+    deleteUser: builder.mutation<any, { workspace_id: string; user_id: string }>({
+      query: ({ workspace_id, user_id }) => ({
+        url: `/authsec/uflow/user/enduser/${workspace_id}/${user_id}`,
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

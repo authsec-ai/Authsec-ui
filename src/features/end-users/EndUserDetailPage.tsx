@@ -14,17 +14,17 @@ import {
 } from "@/components/console/iam-console";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 
 type EndUserApplication = NonNullable<TenantEndUserState["applications"]>[number];
 
 export default function EndUserDetailPage() {
   const navigate = useNavigate();
   const { userId = "" } = useParams();
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const { data: user, isLoading } = useGetEndUserQuery(
-    { tenantId: tenantId || "", userId },
-    { skip: !tenantId || !userId },
+    { workspaceId: workspaceId || "", userId },
+    { skip: !workspaceId || !userId },
   );
 
   const applications = useMemo(() => user?.applications ?? [], [user?.applications]);

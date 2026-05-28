@@ -7,12 +7,12 @@ import { getTenantFromUrl } from "./subdomainUtils";
  */
 export function getWorkspaceId(): string | null {
   const session = SessionManager.getSession();
-  if (session?.tenant_id) {
-    return session.tenant_id;
+  if (session?.workspace_id) {
+    return session.workspace_id;
   }
 
-  if (session?.jwtPayload?.tenant_id) {
-    return session.jwtPayload.tenant_id;
+  if (session?.jwtPayload?.workspace_id) {
+    return session.jwtPayload.workspace_id;
   }
 
   const slug = getTenantFromUrl();
@@ -29,20 +29,20 @@ export function getWorkspaceId(): string | null {
  */
 export function getCurrentWorkspace() {
   const session = SessionManager.getSession();
-  const tenantId = getWorkspaceId();
-  if (!tenantId) return null;
+  const workspaceId = getWorkspaceId();
+  if (!workspaceId) return null;
   
   return {
-    id: tenantId,
-    name: `Tenant ${tenantId}`,
-    slug: tenantId
+    id: workspaceId,
+    name: `Workspace ${workspaceId}`,
+    slug: workspaceId
   };
 }
 
 /**
- * Resolve the current tenant ID using session data or URL context
+ * Resolve the current workspace ID using session data or URL context
  */
-export function resolveTenantId(): string | null {
+export function resolveWorkspaceId(): string | null {
   return getWorkspaceId();
 }
 

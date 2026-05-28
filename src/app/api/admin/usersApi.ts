@@ -34,7 +34,7 @@ export interface AdminUser {
   mfa_default_method?: string;
   mfa_verified?: boolean;
   client_id?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   project_id?: string;
   tenant_domain?: string;
   provider?: string;
@@ -63,7 +63,7 @@ export interface AdminUsersQueryParams {
   roles?: string[];
   created_after?: string;
   created_before?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   status?: string;
   provider?: string;
   is_synced?: boolean;
@@ -132,7 +132,7 @@ export const adminUsersApi = baseApi.injectEndpoints({
         // Date filters
         if (params.created_after) body.created_after = params.created_after;
         if (params.created_before) body.created_before = params.created_before;
-        if (params.tenant_id) body.tenant_id = params.tenant_id;
+        if (params.workspace_id) body.workspace_id = params.workspace_id;
         if (params.status) body.status = params.status;
         if (params.provider) body.provider = params.provider;
         if (params.sync_source) body.sync_source = params.sync_source;

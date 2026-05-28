@@ -32,14 +32,14 @@ export function DeleteDomainDialog({
     if (!domain) return;
 
     const session = SessionManager.getSession();
-    if (!session?.tenant_id) {
+    if (!session?.workspace_id) {
       toast.error("Session expired. Please log in again.");
       return;
     }
 
     try {
       await deleteDomain({
-        tenant_id: session.tenant_id,
+        workspace_id: session.workspace_id,
         domain_id: domain.id,
       }).unwrap();
 

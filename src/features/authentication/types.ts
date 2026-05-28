@@ -211,7 +211,7 @@ export interface ApiOidcProvider {
 // API SAML Provider (from ListSamlProviders endpoint)
 export interface ApiSamlProvider {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   provider_name: string;
   display_name: string;

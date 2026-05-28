@@ -362,7 +362,7 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
             <InfoLine label="Email" value={mergedUser.email} copyable />
             <InfoLine label="Username" value={mergedUser.username} />
             <InfoLine label="Client ID" value={mergedUser.client_id} copyable />
-            <InfoLine label="Tenant ID" value={mergedUser.tenant_id} copyable />
+            <InfoLine label="Workspace ID" value={mergedUser.workspace_id} copyable />
             <InfoLine label="Project ID" value={mergedUser.project_id} copyable />
             <InfoLine label="Tenant Domain" value={mergedUser.tenant_domain} />
             <div className="flex items-center justify-between gap-3">
@@ -546,13 +546,13 @@ export function createAdminUserTableColumns(
       ),
     },
     {
-      id: "tenantId",
-      accessorKey: "tenant_id",
-      header: "Tenant ID",
+      id: "workspaceId",
+      accessorKey: "workspace_id",
+      header: "Workspace ID",
       resizable: true,
       responsive: true,
       cell: ({ row }: { row: any }) => (
-        <AdminIdentifierCell value={row.original.tenant_id} label="Tenant ID" />
+        <AdminIdentifierCell value={row.original.workspace_id} label="Workspace ID" />
       ),
     },
     {

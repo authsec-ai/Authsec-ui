@@ -6,7 +6,7 @@ export interface SessionData {
   projects: any[];
   currentProject: any;
   jwtPayload?: JWTPayload;
-  tenant_id: string;
+  workspace_id: string;
   tenant_domain?: string;
   project_id: string;
   client_id: string;

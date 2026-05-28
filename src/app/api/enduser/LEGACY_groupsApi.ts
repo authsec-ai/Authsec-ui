@@ -11,7 +11,7 @@
  * - POST /uflow/user/groups/users/add         - Add user to groups
  * - POST /uflow/user/groups/users/remove      - Remove user from groups
  * - GET  /uflow/user/groups/users             - Get authenticated user's groups (JWT-based)
- * - GET  /uflow/user/groups/:tenant_id/:group_id/users - Get all users in a group
+ * - GET  /uflow/user/groups/:workspace_id/:group_id/users - Get all users in a group
  */
 
 import { baseApi, withSessionData } from '../baseApi';
@@ -22,7 +22,7 @@ import { baseApi, withSessionData } from '../baseApi';
 
 export interface UserGroup {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   description: string;
   created_at: string;
@@ -39,13 +39,13 @@ export interface GroupUser {
 }
 
 export interface AddUserToGroupsRequest {
-  tenant_id: string;
+  workspace_id: string;
   user_id: string;
   groups: string[];
 }
 
 export interface RemoveUserFromGroupsRequest {
-  tenant_id: string;
+  workspace_id: string;
   user_id: string;
   groups: string[];
 }
@@ -99,10 +99,10 @@ export const endUserGroupsApi = baseApi.injectEndpoints({
       providesTags: ['EndUserRBACGroup', 'EndUser'],
     }),
 
-    // GET /uflow/user/groups/:tenant_id/:group_id/users
+    // GET /uflow/user/groups/:workspace_id/:group_id/users
     // Get all users in a specific group
-    getGroupUsers: builder.query<GroupUser[], { tenant_id: string; group_id: string }>({
-      query: ({ tenant_id, group_id }) => `/authsec/uflow/user/groups/${tenant_id}/${group_id}/users`,
+    getGroupUsers: builder.query<GroupUser[], { workspace_id: string; group_id: string }>({
+      query: ({ workspace_id, group_id }) => `/authsec/uflow/user/groups/${workspace_id}/${group_id}/users`,
       transformResponse: (response: GetGroupUsersResponse) => response.users,
       providesTags: ['EndUserRBACGroup', 'EndUser'],
     }),

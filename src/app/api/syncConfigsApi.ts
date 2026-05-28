@@ -31,7 +31,7 @@ export interface ADConfig {
 }
 
 export interface EntraConfig {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   client_secret: string;
   skip_verify?: boolean;
@@ -39,7 +39,7 @@ export interface EntraConfig {
 
 export interface SyncConfig {
   id?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   project_id?: string;
   sync_type: SyncType;
@@ -56,7 +56,7 @@ export interface SyncConfig {
 }
 
 export interface CreateSyncConfigRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   project_id?: string;
   sync_type: SyncType;
@@ -73,7 +73,7 @@ export interface CreateSyncConfigResponse {
 }
 
 export interface ListSyncConfigsRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   sync_type?: SyncType;
 }
@@ -86,7 +86,7 @@ export interface ListSyncConfigsResponse {
 
 export interface UpdateSyncConfigRequest {
   id: string;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   config_name?: string;
   description?: string;
@@ -103,7 +103,7 @@ export interface UpdateSyncConfigResponse {
 
 export interface DeleteSyncConfigRequest {
   id: string;
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
 }
 

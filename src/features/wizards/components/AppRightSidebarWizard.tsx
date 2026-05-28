@@ -142,8 +142,8 @@ function UserAuthCompletionView({
 
   // Fetch clients for Edit Auth Methods action
   const { data: clientsData } = useGetAllClientsQuery(
-    { tenant_id: session?.tenant_id || "", active_only: false },
-    { skip: !session?.tenant_id },
+    { workspace_id: session?.workspace_id || "", active_only: false },
+    { skip: !session?.workspace_id },
   );
 
   const handleViewClient = () => {
@@ -213,7 +213,7 @@ function UserAuthCompletionView({
       const clientWithAuthMethods: ClientWithAuthMethods = {
         id: client.client_id,
         name: client.name,
-        workspace_id: client.tenant_id,
+        workspace_id: client.workspace_id,
         secret_id: null,
         description: null,
         type: "mcp_server",

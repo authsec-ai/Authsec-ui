@@ -69,9 +69,9 @@ export function M2MLogsPage() {
     null
   );
 
-  // Get tenant_id from session
+  // Get workspace_id from session
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   // Get time range timestamps
   const { start_time, end_time } = getTimeRangeTimestamps(filters.timeRange);
@@ -80,7 +80,7 @@ export function M2MLogsPage() {
   const { data, isLoading, isFetching, isError, error, refetch } =
     useGetM2MLogsQuery(
       {
-        tenant_id: tenantId || "",
+        workspace_id: workspaceId || "",
         page,
         page_size: pageSize,
         sort_by: filters.sort_by,
@@ -92,7 +92,7 @@ export function M2MLogsPage() {
         start_time,
         end_time,
       },
-      { skip: !tenantId }
+      { skip: !workspaceId }
     );
 
   const m2mLogs = data?.logs || [];

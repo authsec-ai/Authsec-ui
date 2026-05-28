@@ -21,7 +21,7 @@ client = AuthSecClient(base_url="https://your-authsec-server.com")
 
 # Generate token for a user
 token = client.generate_token(
-    tenant_id="your-tenant-id",
+    workspace_id="your-tenant-id",
     project_id="your-project-id",
     client_id="your-client-id",
     email_id="user@example.com",
@@ -89,7 +89,7 @@ try:
     print("Token is valid!")
     print(f"User: {claims.get('email')}")
     print(f"User ID: {claims.get('sub')}")
-    print(f"Tenant: {claims.get('tenant_id')}")
+    print(f"Workspace: {claims.get('workspace_id')}")
     print(f"Roles: {claims.get('roles', [])}")
     print(f"Permissions: {claims.get('perms', [])}")
     print(f"Expires: {claims.get('exp')}")
@@ -226,7 +226,7 @@ client = AuthSecClient(base_url="https://your-authsec-server.com")
 
 # Generate or set token first
 token = client.generate_token(
-    tenant_id="tenant-id",
+    workspace_id="tenant-id",
     project_id="project-id",
     client_id="client-id",
     email_id="user@example.com"
@@ -299,7 +299,7 @@ client = AuthSecClient(base_url="https://your-authsec-server.com")
 
 # Generate token for user authenticated via ${methodName}
 token = client.generate_token(
-    tenant_id="your-tenant-id",
+    workspace_id="your-tenant-id",
     project_id="your-project-id",
     client_id="your-client-id",
     email_id="user@example.com"

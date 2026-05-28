@@ -28,7 +28,7 @@ import type { CustomDomain } from "@/app/api/domainApi";
 
 export function CustomDomainsPage() {
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   // State
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,7 +45,7 @@ export function CustomDomainsPage() {
     isFetching,
     error,
     refetch,
-  } = useListDomainsQuery({ tenant_id: tenantId || "" }, { skip: !tenantId });
+  } = useListDomainsQuery({ workspace_id: workspaceId || "" }, { skip: !workspaceId });
 
   // Error handling
   const errorMessage = error

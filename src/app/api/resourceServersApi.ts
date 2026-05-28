@@ -2,7 +2,7 @@ import { baseApi } from "./baseApi";
 
 export interface ResourceServer {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   public_base_url: string;
   protected_base_path: string;

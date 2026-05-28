@@ -9,7 +9,7 @@
  *
  * Available Endpoints:
  * - POST   /uflow/admin/groups             - Create groups
- * - GET    /uflow/admin/groups/:tenant_id  - Get all groups for tenant
+ * - GET    /uflow/admin/groups/:workspace_id  - Get all groups for tenant
  * - PUT    /uflow/admin/groups/:id         - Update a group
  * - DELETE /uflow/admin/groups             - Delete groups
  * - POST   /uflow/admin/groups/map         - Map groups to client/project
@@ -24,7 +24,7 @@ import { baseApi, withSessionData } from '../baseApi';
 
 export interface AdminGroup {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   description: string;
   created_at: string;
@@ -36,7 +36,7 @@ export interface CreateGroupInput {
 }
 
 export interface CreateGroupsRequest {
-  tenant_id: string;
+  workspace_id: string;
   groups: string[] | CreateGroupInput[];
 }
 
@@ -46,24 +46,24 @@ export interface CreateGroupsResponse {
 }
 
 export interface UpdateGroupRequest {
-  tenant_id: string;
+  workspace_id: string;
   name?: string;
   description?: string;
 }
 
 export interface DeleteGroupsRequest {
-  tenant_id: string;
+  workspace_id: string;
   groups: string[];
 }
 
 export interface MapGroupsToClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   groups: string[];
 }
 
 export interface UnmapGroupsFromClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   groups: string[];
 }
@@ -89,9 +89,9 @@ export const adminGroupsApi = baseApi.injectEndpoints({
       invalidatesTags: ['AdminRBACGroup'],
     }),
 
-    // GET /uflow/admin/groups/:tenant_id
+    // GET /uflow/admin/groups/:workspace_id
     getGroupsByTenant: builder.query<AdminGroup[], string>({
-      query: (tenant_id) => `/authsec/uflow/admin/groups/${tenant_id}`,
+      query: (workspace_id) => `/authsec/uflow/admin/groups/${workspace_id}`,
       transformResponse: (response: { groups: AdminGroup[] }) => response.groups,
       providesTags: ['AdminRBACGroup'],
     }),

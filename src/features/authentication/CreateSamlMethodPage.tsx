@@ -58,7 +58,7 @@ const WIZARD_STEPS = [
 export function CreateSamlMethodPage() {
   const navigate = useNavigate();
   const session = SessionManager.getSession();
-  const workspaceId = session?.tenant_id || "";
+  const workspaceId = session?.workspace_id || "";
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [formData, setFormData] = useState({

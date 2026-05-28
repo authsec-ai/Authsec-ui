@@ -8,7 +8,7 @@ type UnknownRecord = Record<string, unknown>;
 
 export interface DelegationPolicyRecord {
   id: string;
-  tenant_id?: string;
+  workspace_id?: string;
   role_name: string;
   agent_type: string;
   allowed_permissions: string[];
@@ -171,7 +171,7 @@ export function normalizeDelegationPolicy(record: DelegationPolicyRecord): Deleg
     enabled: Boolean(record.enabled),
     clientId: record.client_id,
     clientLabel,
-    tenantId: record.tenant_id,
+    workspaceId: record.workspace_id,
     createdBy: record.created_by,
   };
 }

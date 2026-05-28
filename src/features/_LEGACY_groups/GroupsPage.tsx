@@ -26,7 +26,7 @@ import { SessionManager } from "../../utils/sessionManager";
 import { useResponsiveCards } from "../../hooks/use-mobile";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 
 /**
  * Groups page component - Manage user groups and role assignments with modern UI
@@ -47,7 +47,7 @@ export function GroupsPage() {
 
   // Get session data
   const sessionData = SessionManager.getSession();
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const userId = sessionData?.user_id;
 
   // Conditionally use Admin or End-User APIs based on isAdmin toggle
@@ -59,8 +59,8 @@ export function GroupsPage() {
     isLoading: adminGroupsLoading,
     error: adminGroupsError,
     refetch: refetchAdminGroups,
-  } = useAdminGetAllGroupsQuery(tenantId || "", {
-    skip: !tenantId || !isAdmin,
+  } = useAdminGetAllGroupsQuery(workspaceId || "", {
+    skip: !workspaceId || !isAdmin,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -104,7 +104,7 @@ export function GroupsPage() {
   React.useEffect(() => {
     if (previousAudienceRef.current !== audience) {
       if (isAdmin) {
-        if (tenantId) {
+        if (workspaceId) {
           refetchAdminGroups();
         }
       } else {
@@ -112,7 +112,7 @@ export function GroupsPage() {
       }
     }
     previousAudienceRef.current = audience;
-  }, [audience, isAdmin, refetchAdminGroups, refetchEndUserGroups, tenantId]);
+  }, [audience, isAdmin, refetchAdminGroups, refetchEndUserGroups, workspaceId]);
 
   const groupsData = useMemo(() => {
     return isAdmin ? adminGroups : endUserGroups;
@@ -189,8 +189,8 @@ export function GroupsPage() {
     navigate(`/groups/edit/${groupId}`);
 
   const handleDeleteGroup = async (groupId: string) => {
-    if (!tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       return;
     }
 
@@ -198,7 +198,7 @@ export function GroupsPage() {
       if (isAdmin) {
         // Admin: Delete group
         await adminDeleteGroups({
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           group_ids: [groupId],
         }).unwrap();
         toast.success("Group deleted successfully");
@@ -209,7 +209,7 @@ export function GroupsPage() {
           return;
         }
         await endUserRemoveFromGroups({
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           user_id: userId,
           groups: [groupId],
         }).unwrap();
@@ -228,15 +228,15 @@ export function GroupsPage() {
           toast.info("Select at least one group to delete.");
           return;
         }
-        if (!tenantId) {
-          toast.error("Tenant context missing; please sign in again.");
+        if (!workspaceId) {
+          toast.error("Workspace context missing; please sign in again.");
           return;
         }
         try {
           if (isAdmin) {
             // Admin: Delete groups
             await adminDeleteGroups({
-              tenant_id: tenantId,
+              workspace_id: workspaceId,
               group_ids: selectedGroups,
             }).unwrap();
             toast.success(`Deleted ${selectedGroups.length} groups`);
@@ -247,7 +247,7 @@ export function GroupsPage() {
               return;
             }
             await endUserRemoveFromGroups({
-              tenant_id: tenantId,
+              workspace_id: workspaceId,
               user_id: userId,
               group_ids: selectedGroups,
             }).unwrap();

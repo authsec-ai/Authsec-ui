@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import type { UsersQueryParams } from "@/app/api/enduser/usersApi";
 import { useGetAllClientsQuery, type GetClientsRequest } from "@/app/api/clientApi";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 
 // Provider options - static for better reliability
 const DEFAULT_PROVIDER_OPTIONS = [
@@ -65,19 +65,19 @@ const UsersFilterCard = React.memo(({
   );
 
   // Client filter state
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const [selectedClientId, setSelectedClientId] = useState<string>(
     initialFilters.client_id || ""
   );
 
   const clientsQueryArgs = useMemo(() => {
-    if (!tenantId) return undefined;
+    if (!workspaceId) return undefined;
     return {
-      tenant_id: tenantId,
+      workspace_id: workspaceId,
       active_only: false,
       filters: {},
     } as GetClientsRequest;
-  }, [tenantId]);
+  }, [workspaceId]);
 
   // Fetch clients using query hook (same endpoint as Clients page)
   const { data: clientsData, isLoading: clientsLoading } = useGetAllClientsQuery(

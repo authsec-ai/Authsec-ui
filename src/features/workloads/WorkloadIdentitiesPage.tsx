@@ -143,7 +143,7 @@ function getSpiffeDomainPrefix(): string {
 
 export function WorkloadIdentitiesPage() {
   const sessionData = SessionManager.getSession();
-  const tenantId = (sessionData?.tenant_id || "").replace(/['"]/g, "");
+  const workspaceId = (sessionData?.workspace_id || "").replace(/['"]/g, "");
   const navigate = useNavigate();
   const location = useLocation();
   const { id: entryId } = useParams<{ id: string }>();
@@ -162,12 +162,12 @@ export function WorkloadIdentitiesPage() {
     isLoading: isLoadingEntries,
     refetch: refetchEntries,
   } = useListEntriesQuery({
-    tenant_id: tenantId,
+    workspace_id: workspaceId,
     limit: 10,
     offset: 0,
   });
   const { data: editEntry, error: editEntryError } = useGetEntryQuery(
-    { entry_id: entryId || "", tenant_id: tenantId },
+    { entry_id: entryId || "", workspace_id: workspaceId },
     { skip: !isEditMode || !entryId },
   );
 
@@ -309,7 +309,7 @@ export function WorkloadIdentitiesPage() {
         // UPDATE mode
         await updateEntry({
           entry_id: entryId,
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           spiffe_id: fullSpiffeId,
           parent_id: parentId,
           selectors: selectorsObj,
@@ -323,7 +323,7 @@ export function WorkloadIdentitiesPage() {
       } else {
         // CREATE mode
         await registerEntry({
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           spiffe_id: fullSpiffeId,
           parent_id: parentId,
           selectors: selectorsObj,
@@ -358,7 +358,7 @@ export function WorkloadIdentitiesPage() {
     try {
       await deleteEntry({
         entry_id: entry.id,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
       }).unwrap();
 
       toast.success("Workload entry deleted successfully!");
@@ -387,7 +387,7 @@ export function WorkloadIdentitiesPage() {
     workloadName.trim() &&
     (isEditMode || parentId) &&
     hasValidSelectors &&
-    tenantId &&
+    workspaceId &&
     !isLoading,
   );
 

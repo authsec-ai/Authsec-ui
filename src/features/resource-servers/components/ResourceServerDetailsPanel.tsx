@@ -120,7 +120,7 @@ export function ResourceServerDetailsPanel({
         </h4>
         <div className="space-y-3 text-sm">
             <DetailLine label="Resource server ID" value={server.id} copyable />
-            <DetailLine label="Tenant ID" value={server.tenant_id} copyable />
+            <DetailLine label="Workspace ID" value={server.workspace_id} copyable />
             <DetailLine label="Created" value={formatTimestamp(server.created_at)} />
             <DetailLine label="Updated" value={formatTimestamp(server.updated_at)} />
         </div>

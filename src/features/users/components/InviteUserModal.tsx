@@ -18,7 +18,7 @@ import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import { useInviteAdminUserMutation } from "@/app/api/admin/invitesApi";
 import { useInviteEndUserMutation } from "@/app/api/enduser/invitesApi";
 import { SessionManager } from "@/utils/sessionManager";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useNavigate } from "react-router-dom";
 
 const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
@@ -63,14 +63,14 @@ export function InviteUserModal({ isOpen, onClose, audience, onSuccess }: Invite
   const canSend = emailValid && selectedRoleIds.length > 0;
 
   const sessionData = SessionManager.getSession();
-  const tenantId =
-    resolveTenantId() ??
-    sessionData?.tenant_id ??
-    (sessionData as any)?.tenantId ??
+  const workspaceId =
+    resolveWorkspaceId() ??
+    sessionData?.workspace_id ??
+    (sessionData as any)?.workspaceId ??
     '';
 
   const { data: rolesResponse = [] } = useGetAuthSecRolesQuery({
-    tenant_id: tenantId || "",
+    workspace_id: workspaceId || "",
     audience,
   });
   const [inviteAdminUser, { isLoading: busySendAdmin }] = useInviteAdminUserMutation();
@@ -203,7 +203,7 @@ export function InviteUserModal({ isOpen, onClose, audience, onSuccess }: Invite
         roles: selectedRoleIds,
         tenant_domain:
           tenantDomain ?? sessionData?.tenant_domain ?? (sessionData as any)?.tenantDomain ?? "",
-        tenant_id: tenantId || "",
+        workspace_id: workspaceId || "",
         client_id: clientId,
         project_id: projectId,
       };

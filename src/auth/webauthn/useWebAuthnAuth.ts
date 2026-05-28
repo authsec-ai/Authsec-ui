@@ -17,13 +17,13 @@ import type { WebAuthnCredential, WebAuthnRegistrationCredential } from '../../a
 
 export interface UseWebAuthnAuthResult {
   // Authentication flow
-  authenticateUser: (email: string, tenantId: string) => Promise<boolean>;
+  authenticateUser: (email: string, workspaceId: string) => Promise<boolean>;
   
   // Registration flow
-  registerUser: (email: string, tenantId: string) => Promise<boolean>;
+  registerUser: (email: string, workspaceId: string) => Promise<boolean>;
   
   // Callback handling
-  handleCallback: (email: string, tenantId?: string, flowContext?: 'admin' | 'oidc') => Promise<{ success: boolean; token?: string; error?: string }>;
+  handleCallback: (email: string, workspaceId?: string, flowContext?: 'admin' | 'oidc') => Promise<{ success: boolean; token?: string; error?: string }>;
   
   // Loading states
   isAuthenticating: boolean;
@@ -49,10 +49,10 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
   const [webauthnCallback, { isLoading: isHandlingCallback }] = useWebauthnCallbackMutation();
   
   // Authentication flow
-  const authenticateUser = useCallback(async (email: string, tenantId: string): Promise<boolean> => {
+  const authenticateUser = useCallback(async (email: string, workspaceId: string): Promise<boolean> => {
     try {
       // Begin authentication
-      const beginResult = await beginAuth({ email, tenant_id: tenantId }).unwrap();
+      const beginResult = await beginAuth({ email, workspace_id: workspaceId }).unwrap();
       // Response shape: { publicKey: <assertionOptions> }
       const publicKeyOpts = (beginResult && (beginResult.publicKey || beginResult));
       const pk = publicKeyOpts?.publicKey ? publicKeyOpts.publicKey : publicKeyOpts;
@@ -96,7 +96,7 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
       // Finish authentication
       await finishAuth({
         email,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         credential: webauthnCredential
       }).unwrap();
       
@@ -109,10 +109,10 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
   }, [beginAuth, finishAuth]);
   
   // Registration flow
-  const registerUser = useCallback(async (email: string, tenantId: string): Promise<boolean> => {
+  const registerUser = useCallback(async (email: string, workspaceId: string): Promise<boolean> => {
     try {
       // Begin registration
-      const beginResult = await beginRegistration({ email, tenant_id: tenantId }).unwrap();
+      const beginResult = await beginRegistration({ email, workspace_id: workspaceId }).unwrap();
       // Response shape: { publicKey: <creationOptions> }
       const publicKeyOpts = (beginResult && (beginResult.publicKey || beginResult));
       const pk = publicKeyOpts?.publicKey ? publicKeyOpts.publicKey : publicKeyOpts;
@@ -158,7 +158,7 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
       // Finish registration
       await finishRegistration({
         email,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         credential: webauthnCredential
       }).unwrap();
       
@@ -173,14 +173,14 @@ export function useWebAuthnAuth(): UseWebAuthnAuthResult {
   // Callback handling
   const handleCallback = useCallback(async (
     email: string, 
-    tenantId?: string,
+    workspaceId?: string,
     flowContext?: 'admin' | 'oidc'
   ): Promise<{ success: boolean; token?: string; error?: string }> => {
     try {
       const result = await webauthnCallback({
         email,
         mfa_verified: true,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         flow_context: flowContext
       }).unwrap();
       

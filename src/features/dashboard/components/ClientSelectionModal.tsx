@@ -24,11 +24,11 @@ export function ClientSelectionModal({
 }: ClientSelectionModalProps) {
   const navigate = useNavigate();
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
 
   const { data: clientsResponse, isLoading } = useGetAllClientsQuery(
-    { tenant_id: tenantId },
-    { skip: !tenantId }
+    { workspace_id: workspaceId },
+    { skip: !workspaceId }
   );
 
   const clients = clientsResponse?.clients || [];

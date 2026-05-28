@@ -17,7 +17,7 @@ export interface DirectorySync {
     username?: string;
     password?: string;
     base_dn?: string;
-    tenant_id?: string;
+    workspace_id?: string;
     client_id?: string;
     client_secret?: string;
     use_ssl?: boolean;

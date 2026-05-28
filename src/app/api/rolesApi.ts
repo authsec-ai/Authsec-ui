@@ -15,7 +15,7 @@ interface AuthSecRole {
   id: string;
   name: string;
   description?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   created_at?: string;
   updated_at?: string;
   permissions_count?: number;
@@ -36,7 +36,7 @@ export interface AuthSecRoleDetail {
 }
 
 interface UserDefinedRoleRequest {
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   description?: string;
   permission_ids?: string[];
@@ -51,13 +51,13 @@ interface CreateUserDefinedRoleResponse extends Partial<AuthSecRole> {
 }
 
 interface DeleteRolesRequest {
-  tenant_id: string;
+  workspace_id: string;
   role_ids: string[];
   audience?: 'admin' | 'endUser';
 }
 
 interface MapRolesRequest {
-  tenant_id: string;
+  workspace_id: string;
   project_id?: string;
   client_id?: string;
   role_ids: string[];
@@ -179,13 +179,13 @@ export const {
 export const authSecRolesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Get user-defined roles for a tenant
-    getAuthSecRoles: builder.query<AuthSecRole[], { tenant_id: string; audience?: 'admin' | 'endUser' }>({
+    getAuthSecRoles: builder.query<AuthSecRole[], { workspace_id: string; audience?: 'admin' | 'endUser' }>({
       async queryFn(args, _api, _extraOptions, baseQuery) {
-        const tenantId = (args?.tenant_id ?? '').trim();
+        const workspaceId = (args?.workspace_id ?? '').trim();
         const basePath = '/authsec/uflow/admin/roles';
 
         const candidateEndpoints = [
-          tenantId ? `${basePath}/${encodeURIComponent(tenantId)}` : null,
+          workspaceId ? `${basePath}/${encodeURIComponent(workspaceId)}` : null,
           basePath,
         ].filter((endpoint): endpoint is string => Boolean(endpoint));
 
@@ -253,7 +253,7 @@ export const authSecRolesApi = baseApi.injectEndpoints({
       {
         id: string;
         data: {
-          tenant_id?: string;
+          workspace_id?: string;
           name: string;
           description?: string;
           permission_ids?: string[];

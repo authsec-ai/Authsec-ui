@@ -6,7 +6,7 @@ const HANDOFF_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 export interface AdminHandoffPayload {
   email: string;
   tenant_domain?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   first_login?: boolean;
   target?: "login" | "webauthn";
   flow_stage?: string;

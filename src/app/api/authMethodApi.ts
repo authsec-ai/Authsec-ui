@@ -102,7 +102,7 @@ export interface RemoveApplicationIDPPolicyRequest {
 }
 
 export interface ShowAuthProvidersRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
 }
 
@@ -110,7 +110,7 @@ export interface ShowAuthProvidersResponse {
   success: boolean;
   message: string;
   data: {
-    tenant_id: string;
+    workspace_id: string;
     client_id?: string;
     count: number;
     providers: Array<{
@@ -129,7 +129,7 @@ export interface ShowAuthProvidersResponse {
 }
 
 export interface EditClientAuthProviderRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   provider_name: string;
   display_name: string;
@@ -144,7 +144,7 @@ export interface EditClientAuthProviderRequest {
 }
 
 export interface UpdateProviderRequest {
-  tenant_id: string;
+  workspace_id: string;
   org_id?: string;
   provider_name: string;
   display_name: string;
@@ -159,7 +159,7 @@ export interface UpdateProviderRequest {
 }
 
 export interface DeleteProviderRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   provider_name: string;
 }
@@ -255,7 +255,7 @@ export const authMethodApi = baseApi.injectEndpoints({
         success: true,
         message: "Identity providers loaded",
         data: {
-          tenant_id: arg.tenant_id,
+          workspace_id: arg.workspace_id,
           client_id: arg.client_id,
           count: providers.length,
           providers: providers.map((provider, index) => ({

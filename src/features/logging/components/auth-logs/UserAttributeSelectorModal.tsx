@@ -37,7 +37,7 @@ export function UserAttributeSelectorModal({
 }: UserAttributeSelectorModalProps) {
   // Get tenant ID from session
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   // Fetch users from API
   const {
@@ -49,11 +49,11 @@ export function UserAttributeSelectorModal({
     {
       page: 1,
       limit: 50,
-      tenant_id: tenantId || "",
+      workspace_id: workspaceId || "",
       active: true,
     },
     {
-      skip: !tenantId || !isOpen,
+      skip: !workspaceId || !isOpen,
       refetchOnMountOrArgChange: true,
     }
   );

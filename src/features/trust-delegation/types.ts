@@ -8,7 +8,7 @@ export interface DelegationPolicyUI {
   enabled: boolean;
   clientId: string;
   clientLabel: string;
-  tenantId?: string;
+  workspaceId?: string;
   createdBy?: string;
 }
 

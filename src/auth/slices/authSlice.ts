@@ -91,26 +91,26 @@ const authSlice = createSlice({
     // Handle successful WebAuthn authentication
     completeWebAuthnAuthentication: (
       state,
-      action: PayloadAction<{ tenantId: string; email: string; token?: string | null }>
+      action: PayloadAction<{ workspaceId: string; email: string; token?: string | null }>
     ) => {
-      const { tenantId, email, token } = action.payload;
+      const { workspaceId, email, token } = action.payload;
 
       console.log("🔐 completeWebAuthnAuthentication called:", {
-        tenantId,
+        workspaceId,
         email,
         hasToken: !!token,
       });
 
       // Decode JWT token to get correct project_id if available
       let jwtPayload = null;
-      let actualProjectId = tenantId; // fallback to tenantId
-      let actualClientId = tenantId; // fallback to tenantId
+      let actualProjectId = workspaceId; // fallback to workspaceId
+      let actualClientId = workspaceId; // fallback to workspaceId
       
       if (token) {
         jwtPayload = decodeJWT(token);
         if (jwtPayload) {
-          actualProjectId = jwtPayload.project_id || tenantId;
-          actualClientId = jwtPayload.client_id || tenantId;
+          actualProjectId = jwtPayload.project_id || workspaceId;
+          actualClientId = jwtPayload.client_id || workspaceId;
         }
       }
 
@@ -147,7 +147,7 @@ const authSlice = createSlice({
         user,
         projects: [project],
         currentProject: project,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         tenant_domain: jwtPayload?.tenant_domain,
         project_id: actualProjectId, // Use project_id from JWT
         client_id: actualClientId, // Use client_id from JWT
@@ -197,12 +197,12 @@ const authSlice = createSlice({
   extraReducers: (builder) => {
     // Handle login success - new format with WebAuthn flow
     builder.addMatcher(authApi.endpoints.login.matchFulfilled, (state, action) => {
-      // New login response only contains tenant_id, email, first_login
+      // New login response only contains workspace_id, email, first_login
       // Don't authenticate user here - authentication happens after WebAuthn flow
-      const { tenant_id, email, first_login } = action.payload;
+      const { workspace_id, email, first_login } = action.payload;
 
       // Just log the login attempt, but don't authenticate yet
-      console.log("Login successful, WebAuthn flow required:", { tenant_id, email, first_login });
+      console.log("Login successful, WebAuthn flow required:", { workspace_id, email, first_login });
 
       // Clear any existing auth state since this is just step 1
       state.isAuthenticated = false;
@@ -219,7 +219,7 @@ const authSlice = createSlice({
       // Just store the verification data temporarily, don't authenticate
       // User will be authenticated after login with JWT token
       const verificationData = {
-        tenant_id: action.payload.tenant_id,
+        workspace_id: action.payload.workspace_id,
         project_id: action.payload.project_id,
         client_id: action.payload.client_id,
         email_id: action.payload.email_id,

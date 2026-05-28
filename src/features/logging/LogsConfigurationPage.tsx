@@ -33,12 +33,12 @@ export function LogsConfigurationPage() {
     description?: string;
   }>(null);
 
-  const tenantId = (() => {
+  const workspaceId = (() => {
     try {
       const session = JSON.parse(
         localStorage.getItem("authsec_session_v2") || "{}"
       );
-      return session?.tenant_id || "";
+      return session?.workspace_id || "";
     } catch {
       return "";
     }
@@ -46,15 +46,15 @@ export function LogsConfigurationPage() {
 
   const { data: configStatus, isLoading: isStatusLoading } =
     useGetLogConfigurationStatusQuery(
-      { tenant_id: tenantId },
-      { skip: !tenantId }
+      { workspace_id: workspaceId },
+      { skip: !workspaceId }
     );
 
   const [configureLogService, { isLoading: isConfiguring }] =
     useConfigureLogServiceMutation();
 
   const [splunkConfig, setSplunkConfig] = useState({
-    tenant_id: "",
+    workspace_id: "",
     host: "",
     port: "",
   });
@@ -62,26 +62,26 @@ export function LogsConfigurationPage() {
   /*
   // HTTP Configuration - Commented for future use
   const [httpConfig, setHttpConfig] = useState({
-    tenant_id: "",
+    workspace_id: "",
     host: "",
     port: "",
   });
   */
 
   const [fluentbitConfig, setFluentbitConfig] = useState({
-    tenant_id: "",
+    workspace_id: "",
     host: "",
     port: "",
   });
 
   const [syslogConfig, setSyslogConfig] = useState({
-    tenant_id: "",
+    workspace_id: "",
     host: "",
     port: "",
   });
 
   const [elasticsearchConfig, setElasticsearchConfig] = useState({
-    tenant_id: "",
+    workspace_id: "",
     host: "",
     port: "",
   });
@@ -89,7 +89,7 @@ export function LogsConfigurationPage() {
   // Unified save handler factory
   const createSaveHandler = (
     name: "splunk" | "fluentbit" | "elasticsearch" | "syslog",
-    config: { tenant_id: string; host: string; port: string }
+    config: { workspace_id: string; host: string; port: string }
   ) => {
     return async () => {
       try {
@@ -98,7 +98,7 @@ export function LogsConfigurationPage() {
 
         await configureLogService({
           host: hostString,
-          tenant_id: config.tenant_id,
+          workspace_id: config.workspace_id,
           name: name,
         }).unwrap();
 

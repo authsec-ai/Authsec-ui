@@ -4,7 +4,7 @@ import { useListSamlProvidersQuery } from '@/app/api/samlApi';
 import type { UnifiedAuthProvider, ApiOidcProvider, ApiSamlProvider } from '../types';
 
 interface UseUnifiedProvidersParams {
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
 }
 
@@ -20,7 +20,7 @@ interface UseUnifiedProvidersReturn {
  * Hook to fetch and merge both OIDC and SAML providers into a unified list
  */
 export const useUnifiedProviders = ({
-  tenant_id,
+  workspace_id,
   client_id,
 }: UseUnifiedProvidersParams): UseUnifiedProvidersReturn => {
   // Fetch OIDC providers
@@ -30,7 +30,7 @@ export const useUnifiedProviders = ({
     isError: isOidcError,
     error: oidcError,
     refetch: refetchOidc,
-  } = useShowAuthProvidersQuery({ tenant_id, client_id });
+  } = useShowAuthProvidersQuery({ workspace_id, client_id });
 
   // Fetch SAML providers
   const {
@@ -39,7 +39,7 @@ export const useUnifiedProviders = ({
     isError: isSamlError,
     error: samlError,
     refetch: refetchSaml,
-  } = useListSamlProvidersQuery({ tenant_id, client_id });
+  } = useListSamlProvidersQuery({ workspace_id, client_id });
 
   // Convert OIDC provider to unified format
   const normalizeOidcProvider = (oidc: ApiOidcProvider): UnifiedAuthProvider => {

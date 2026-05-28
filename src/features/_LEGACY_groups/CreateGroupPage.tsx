@@ -34,7 +34,7 @@ import { useGetEndUsersQuery } from "@/app/api/enduser/usersApi";
 import { useAddUserToGroupsMutation } from "@/app/api/enduser/groupsApi";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { cn } from "@/lib/utils";
 
@@ -70,10 +70,10 @@ export default function CreateGroupPage() {
   const [updateGroup] = useUpdateGroupMutation();
   const [addUserToGroups] = useAddUserToGroupsMutation(); // Resolve tenant ID from workspace context
 
-  const tenantId = resolveTenantId(); // Fetch existing groups for edit mode
+  const workspaceId = resolveWorkspaceId(); // Fetch existing groups for edit mode
 
-  const { data: groupsData } = useGetGroupsByTenantQuery(tenantId || "", {
-    skip: !tenantId || !isEditMode,
+  const { data: groupsData } = useGetGroupsByTenantQuery(workspaceId || "", {
+    skip: !workspaceId || !isEditMode,
   }); // Fetch users based on audience context // Admin context: fetch admin users (staff) // End-user context: fetch end-users (customers)
 
   const {
@@ -85,9 +85,9 @@ export default function CreateGroupPage() {
     {
       page: 1,
       limit: 1000, // Fetch all users for selection
-      tenant_id: tenantId || "",
+      workspace_id: workspaceId || "",
     },
-    { skip: !isAdmin || !tenantId }
+    { skip: !isAdmin || !workspaceId }
   );
 
   const {
@@ -99,9 +99,9 @@ export default function CreateGroupPage() {
     {
       page: 1,
       limit: 1000, // Fetch all users for selection
-      tenant_id: tenantId || "",
+      workspace_id: workspaceId || "",
     },
-    { skip: isAdmin || !tenantId }
+    { skip: isAdmin || !workspaceId }
   ); // Select appropriate data based on context
 
   const usersResponse = isAdmin ? adminUsersResponse : endUsersResponse;
@@ -112,17 +112,17 @@ export default function CreateGroupPage() {
   useEffect(() => {
     debug("API Query States:", {
       audience: isAdmin ? "admin" : "enduser",
-      tenantId,
+      workspaceId,
       isAdmin,
       adminUsers: {
-        skip: !isAdmin || !tenantId,
+        skip: !isAdmin || !workspaceId,
         isLoading: isLoadingAdminUsers,
         isFetching: isFetchingAdminUsers,
         hasData: !!adminUsersResponse,
         error: adminUsersError,
       },
       endUsers: {
-        skip: isAdmin || !tenantId,
+        skip: isAdmin || !workspaceId,
         isLoading: isLoadingEndUsers,
         isFetching: isFetchingEndUsers,
         hasData: !!endUsersResponse,
@@ -137,7 +137,7 @@ export default function CreateGroupPage() {
     });
   }, [
     isAdmin,
-    tenantId,
+    workspaceId,
     isLoadingAdminUsers,
     isFetchingAdminUsers,
     adminUsersResponse,
@@ -388,8 +388,8 @@ export default function CreateGroupPage() {
       setIsSubmitting(false);
       return;
     }
-    if (!tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       setIsSubmitting(false);
       return;
     }
@@ -400,7 +400,7 @@ export default function CreateGroupPage() {
       groupId,
       groupName: groupName.trim(),
       selectedUsers,
-      tenantId,
+      workspaceId,
     });
 
     try {
@@ -409,7 +409,7 @@ export default function CreateGroupPage() {
         await updateGroup({
           id: groupId,
           data: {
-            tenant_id: tenantId,
+            workspace_id: workspaceId,
             name: groupName.trim(),
             description: groupDescription.trim() || undefined,
           },
@@ -423,7 +423,7 @@ export default function CreateGroupPage() {
       } // Create new group using AuthSec API
 
       const createGroupsPayload = {
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         groups: [
           {
             name: groupName.trim(),
@@ -451,7 +451,7 @@ export default function CreateGroupPage() {
         for (const userId of selectedUsers) {
           try {
             await addUserToGroups({
-              tenant_id: tenantId,
+              workspace_id: workspaceId,
               user_id: userId,
               groups: [createdGroupName],
             }).unwrap();

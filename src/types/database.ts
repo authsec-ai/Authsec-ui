@@ -35,7 +35,7 @@ export interface AuthMethod {
 export interface User {
   id: string;
   client_id: string;
-  tenant_id: string;
+  workspace_id: string;
   project_id: string;
   name: string;
   email: string;
@@ -347,7 +347,7 @@ export interface AuthSecUsersResponse {
 }
 
 export interface AuthSecUsersRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   email?: string;
   active?: boolean;

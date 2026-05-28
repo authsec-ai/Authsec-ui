@@ -15,7 +15,7 @@ import { isIPv4Address } from "../../../../utils/validation";
 
 interface ElasticsearchConfigurationProps {
   config: {
-    tenant_id: string;
+    workspace_id: string;
     host: string;
     port: string;
   };
@@ -33,11 +33,11 @@ export function ElasticsearchConfiguration({ config, onChange, onSave, onCancel,
     setShowPort(isIPv4Address(config.host));
   }, [config.host]);
 
-  // Auto-fill tenant_id on mount
+  // Auto-fill workspace_id on mount
   useEffect(() => {
-    const tenantId = SessionManager.getSession()?.tenant_id || "";
-    if (tenantId && !config.tenant_id) {
-      onChange({ ...config, tenant_id: tenantId });
+    const workspaceId = SessionManager.getSession()?.workspace_id || "";
+    if (workspaceId && !config.workspace_id) {
+      onChange({ ...config, workspace_id: workspaceId });
     }
   }, []);
 
@@ -66,7 +66,7 @@ export function ElasticsearchConfiguration({ config, onChange, onSave, onCancel,
               </Label>
               <Input
                 id="es-tenant-id"
-                value={config.tenant_id}
+                value={config.workspace_id}
                 readOnly
                 disabled
                 className="bg-slate-50 dark:bg-neutral-900/50"

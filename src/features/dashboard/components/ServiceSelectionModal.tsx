@@ -16,10 +16,10 @@ export function ServiceSelectionModal({
 }: ServiceSelectionModalProps) {
   const navigate = useNavigate();
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
   const { data: servicesData, isLoading } = useGetExternalServicesQuery(
     undefined,
-    { skip: !tenantId }
+    { skip: !workspaceId }
   );
 
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");

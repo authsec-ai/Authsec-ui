@@ -44,7 +44,7 @@ interface EndUserAuthContextType {
   // State
   currentStep: string;
   isFirstLogin: boolean;
-  tenantId: string | null;
+  workspaceId: string | null;
   email: string | null;
   clientId: string | null;
   availableMFAMethods: OIDCMFAMethod[];
@@ -64,7 +64,7 @@ interface EndUserAuthContextType {
   authenticateWithWebAuthn: () => Promise<boolean>;
   authenticateWithTOTP: (code: string) => Promise<boolean>;
   resetFlow: () => void;
-  executeCallback: (email: string, tenantId?: string) => Promise<{ success: boolean; token?: string; error?: string }>;
+  executeCallback: (email: string, workspaceId?: string) => Promise<{ success: boolean; token?: string; error?: string }>;
   backToSelection: () => void;
   // Helper to capture client_id from initial responses
   captureClientId: (clientId: string) => void;
@@ -130,8 +130,8 @@ class OIDCCallbackHandler {
   
   constructor(private webauthnCallbackMutation: any) {}
   
-  async executeCallback(email: string, tenantId?: string, clientId?: string) {
-    const sessionKey = `oidc-${email}-${tenantId ?? 'none'}-${clientId ?? 'none'}`;
+  async executeCallback(email: string, workspaceId?: string, clientId?: string) {
+    const sessionKey = `oidc-${email}-${workspaceId ?? 'none'}-${clientId ?? 'none'}`;
 
     // Dedup: return pending promise if one is already in-flight
     if (this.pendingCallbacks.has(sessionKey)) {
@@ -144,7 +144,7 @@ class OIDCCallbackHandler {
       return completed.result;
     }
 
-    const callbackPromise = this.performCallback(email, tenantId, clientId);
+    const callbackPromise = this.performCallback(email, workspaceId, clientId);
     this.pendingCallbacks.set(sessionKey, callbackPromise);
 
     try {
@@ -158,12 +158,12 @@ class OIDCCallbackHandler {
     }
   }
   
-  private async performCallback(email: string, tenantId?: string, clientId?: string) {
+  private async performCallback(email: string, workspaceId?: string, clientId?: string) {
     try {
       const requestBody = {
         email,
         mfa_verified: true,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         flow_context: 'enduser' as const,
         ...(clientId && { client_id: clientId })
       };
@@ -216,7 +216,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const getMFAMethods = useCallback(async (): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -230,7 +230,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Include client_id in MFA status check if available
       const requestPayload = {
         email: oidcWebauthn.email!,
-        tenant_id: oidcWebauthn.tenantId!,
+        workspace_id: oidcWebauthn.workspaceId!,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
 
@@ -309,7 +309,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error("Failed to get MFA methods");
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, mfaStatusCheck, dispatch]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, mfaStatusCheck, dispatch]);
 
   const selectMFAMethod = useCallback((method: "webauthn" | "totp") => {
     console.log("🔄 OIDC method selected:", method);
@@ -331,7 +331,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [dispatch, oidcWebauthn.availableMFAMethods, oidcWebauthn.isFirstLogin]);
 
   const setupWebAuthn = useCallback(async (): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -354,7 +354,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // End-User Setup: begin registration
       const requestPayload = {
         email: oidcWebauthn.email!,
-        tenant_id: oidcWebauthn.tenantId!,
+        workspace_id: oidcWebauthn.workspaceId!,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
 
@@ -394,7 +394,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Finish registration
       const finishPayload = {
         email: oidcWebauthn.email!,
-        tenant_id: oidcWebauthn.tenantId!,
+        workspace_id: oidcWebauthn.workspaceId!,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId }),
         credential: {
           id: credential.id,
@@ -423,10 +423,10 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error(errorMsg);
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, beginWebAuthnRegistration, finishWebAuthnRegistration, dispatch, getMFAMethods]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, beginWebAuthnRegistration, finishWebAuthnRegistration, dispatch, getMFAMethods]);
 
   const setupTOTP = useCallback(async (): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -439,7 +439,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       const requestPayload = {
         email: oidcWebauthn.email,
-        tenant_id: oidcWebauthn.tenantId,
+        workspace_id: oidcWebauthn.workspaceId,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
 
@@ -460,10 +460,10 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error(errorMsg);
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, totpBeginSetup, dispatch]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, totpBeginSetup, dispatch]);
 
   const confirmTOTPSetup = useCallback(async (code: string): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email || !oidcWebauthn.totpSecret) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email || !oidcWebauthn.totpSecret) {
       toast.error("Missing TOTP setup data");
       return false;
     }
@@ -476,7 +476,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       const requestPayload = {
         email: oidcWebauthn.email,
-        tenant_id: oidcWebauthn.tenantId,
+        workspace_id: oidcWebauthn.workspaceId,
         secret: oidcWebauthn.totpSecret,
         code,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
@@ -502,10 +502,10 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error(errorMsg);
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.totpSecret, totpConfirmSetup, dispatch, getMFAMethods]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.totpSecret, totpConfirmSetup, dispatch, getMFAMethods]);
 
   const authenticateWithWebAuthn = useCallback(async (): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -528,7 +528,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Begin authentication
       const requestPayload = {
         email: oidcWebauthn.email!,
-        tenant_id: oidcWebauthn.tenantId!,
+        workspace_id: oidcWebauthn.workspaceId!,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
 
@@ -560,7 +560,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       // Finish authentication
       const finishPayload = {
         email: oidcWebauthn.email!,
-        tenant_id: oidcWebauthn.tenantId!,
+        workspace_id: oidcWebauthn.workspaceId!,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId }),
         credential: {
           id: credential.id,
@@ -578,7 +578,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       await finishWebAuthnAuth(finishPayload).unwrap();
       toast.success("Authentication successful!");
 
-      const callbackResult = await callbackHandler.executeCallback(oidcWebauthn.email!, oidcWebauthn.tenantId!, oidcWebauthn.clientId || undefined);
+      const callbackResult = await callbackHandler.executeCallback(oidcWebauthn.email!, oidcWebauthn.workspaceId!, oidcWebauthn.clientId || undefined);
 
       if (callbackResult.success && callbackResult.token) {
         if (oidcWebauthn.mfaRequired === false) {
@@ -602,10 +602,10 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error(errorMsg);
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.mfaRequired, beginWebAuthnAuth, finishWebAuthnAuth, dispatch, callbackHandler, notifyNewUser]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.mfaRequired, beginWebAuthnAuth, finishWebAuthnAuth, dispatch, callbackHandler, notifyNewUser]);
 
   const authenticateWithTOTP = useCallback(async (code: string): Promise<boolean> => {
-    if (!oidcWebauthn.tenantId || !oidcWebauthn.email) {
+    if (!oidcWebauthn.workspaceId || !oidcWebauthn.email) {
       toast.error("Missing authentication data");
       return false;
     }
@@ -618,7 +618,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       const requestPayload = {
         email: oidcWebauthn.email,
-        tenant_id: oidcWebauthn.tenantId,
+        workspace_id: oidcWebauthn.workspaceId,
         code,
         ...(oidcWebauthn.clientId && { client_id: oidcWebauthn.clientId })
       };
@@ -628,7 +628,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if ('data' in result) {
         toast.success("Authentication successful!");
         
-        const callbackResult = await callbackHandler.executeCallback(oidcWebauthn.email, oidcWebauthn.tenantId, oidcWebauthn.clientId || undefined);
+        const callbackResult = await callbackHandler.executeCallback(oidcWebauthn.email, oidcWebauthn.workspaceId, oidcWebauthn.clientId || undefined);
 
         if (callbackResult.success && callbackResult.token) {
           // Notify new user before displaying token (await to ensure it completes)
@@ -659,14 +659,14 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       toast.error(errorMsg);
       return false;
     }
-  }, [oidcWebauthn.tenantId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.mfaRequired, totpVerify, dispatch, callbackHandler, notifyNewUser]);
+  }, [oidcWebauthn.workspaceId, oidcWebauthn.email, oidcWebauthn.clientId, oidcWebauthn.mfaRequired, totpVerify, dispatch, callbackHandler, notifyNewUser]);
 
   const resetFlow = useCallback(() => {
     dispatch(resetOIDCWebAuthnState());
   }, [dispatch]);
 
-  const executeCallback = useCallback(async (email: string, tenantId?: string) => {
-    return callbackHandler.executeCallback(email, tenantId, oidcWebauthn.clientId || undefined);
+  const executeCallback = useCallback(async (email: string, workspaceId?: string) => {
+    return callbackHandler.executeCallback(email, workspaceId, oidcWebauthn.clientId || undefined);
   }, [callbackHandler, oidcWebauthn.clientId]);
 
   const backToSelection = useCallback(() => {
@@ -681,7 +681,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // State
     currentStep: oidcWebauthn.currentStep,
     isFirstLogin: oidcWebauthn.isFirstLogin,
-    tenantId: oidcWebauthn.tenantId,
+    workspaceId: oidcWebauthn.workspaceId,
     email: oidcWebauthn.email,
     clientId: oidcWebauthn.clientId,
     availableMFAMethods: oidcWebauthn.availableMFAMethods,

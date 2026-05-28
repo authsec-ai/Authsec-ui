@@ -425,12 +425,12 @@ export function ClientIdCell({ client }: { client: ClientWithAuthMethods }) {
 export function TenantIdCell({ client }: { client: ClientWithAuthMethods }) {
   const rawClient =
     (client.metadata?.raw_client as ClientData | undefined) ?? (client as unknown as ClientData);
-  const tenantId =
-    rawClient?.tenant_id ||
-    client.metadata?.tenant_id ||
+  const workspaceId =
+    rawClient?.workspace_id ||
+    client.metadata?.workspace_id ||
     client.workspace_id ||
     client.workspace_id;
-  return <IdentifierLink value={tenantId} label="Tenant ID" />;
+  return <IdentifierLink value={workspaceId} label="Workspace ID" />;
 }
 
 // Shared footer for step popovers

@@ -266,7 +266,7 @@ export default function ApplicationAccessPage() {
     }
     try {
       await addRole({
-        tenant_id: application.tenant_id,
+        workspace_id: application.workspace_id,
         name,
         description: "",
         permission_strings: [],

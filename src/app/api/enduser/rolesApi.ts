@@ -24,7 +24,7 @@ export interface UserRole {
   id: string;
   name: string;
   description: string;
-  tenant_id: string;
+  workspace_id: string;
   assigned_at: string;
 }
 
@@ -32,7 +32,7 @@ export interface AvailableRole {
   id: string;
   name: string;
   description: string;
-  tenant_id: string;
+  workspace_id: string;
   is_assigned: boolean;
 }
 

@@ -25,7 +25,7 @@ export interface LegacyCreatePermissionRequest {
 }
 
 export interface DeletePermissionsRequest {
-  tenant_id: string;
+  workspace_id: string;
   permission_ids: string[];
 }
 
@@ -84,7 +84,7 @@ export const permissionsApi = baseApi.injectEndpoints({
     }),
 
     // List all permissions for a tenant
-    getPermissions: builder.query<Permission[], { tenant_id: string; audience: 'admin' | 'endUser' }>({
+    getPermissions: builder.query<Permission[], { workspace_id: string; audience: 'admin' | 'endUser' }>({
       query: () => '/authsec/uflow/admin/permissions',
       transformResponse: (response: any) => {
         if (!response) {
@@ -156,8 +156,8 @@ export const permissionsApi = baseApi.injectEndpoints({
     }),
 
     // Get effective permissions for a user (including inherited from groups)
-    getUserEffectivePermissions: builder.query<EffectivePermission[], { tenantId: string; userId: string }>({
-      query: ({ tenantId, userId }) => `/authsec/uflow/user/permissions/${tenantId}/${userId}`,
+    getUserEffectivePermissions: builder.query<EffectivePermission[], { workspaceId: string; userId: string }>({
+      query: ({ workspaceId, userId }) => `/authsec/uflow/user/permissions/${workspaceId}/${userId}`,
       transformResponse: (response: any) => {
         if (!response || !Array.isArray(response.effective_permissions)) {
           console.warn('Invalid effective permissions response:', response);
@@ -169,8 +169,8 @@ export const permissionsApi = baseApi.injectEndpoints({
     }),
 
     // Get permissions by role
-    getRolePermissions: builder.query<Permission[], { tenantId: string; roleId: string }>({
-      query: ({ tenantId, roleId }) => `/authsec/uflow/admin/permissions/${tenantId}/role/${roleId}`,
+    getRolePermissions: builder.query<Permission[], { workspaceId: string; roleId: string }>({
+      query: ({ workspaceId, roleId }) => `/authsec/uflow/admin/permissions/${workspaceId}/role/${roleId}`,
       transformResponse: (response: any) => {
         if (!response || !Array.isArray(response)) {
           console.warn('Invalid role permissions response:', response);

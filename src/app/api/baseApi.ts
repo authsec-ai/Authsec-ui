@@ -63,7 +63,7 @@ export const withSessionData = (body: any) => {
   const session = getSessionData();
   return {
     ...body,
-    tenant_id: body.tenant_id || session?.tenant_id || "",
+    workspace_id: body.workspace_id || session?.workspace_id || "",
     client_id: body.client_id || session?.client_id || "",
     project_id: body.project_id || session?.project_id || "",
   };

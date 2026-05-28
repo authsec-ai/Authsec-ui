@@ -34,7 +34,7 @@ import "./dashboard-theme.css";
 
 export function DashboardPage() {
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
   const navigate = useNavigate();
   const { audience } = useRbacAudience();
   const { isActive, activeWizard, completedSteps } = useWizard();
@@ -48,23 +48,23 @@ export function DashboardPage() {
     error,
     quickActionsStatus,
   } = useDashboardData({
-    tenantId: tenantId || "",
+    workspaceId: workspaceId || "",
   });
 
   const { data: clientsData, isLoading: isClientsLoading } = useGetAllClientsQuery(
-    { tenant_id: tenantId || "" },
-    { skip: !tenantId },
+    { workspace_id: workspaceId || "" },
+    { skip: !workspaceId },
   );
 
   const { data: domainsData, isLoading: isDomainsLoading } = useListDomainsQuery(
-    { tenant_id: tenantId || "" },
-    { skip: !tenantId },
+    { workspace_id: workspaceId || "" },
+    { skip: !workspaceId },
   );
 
   const { data: servicesData, isLoading: isServicesLoading } = useGetExternalServicesQuery(
     undefined,
     {
-      skip: !tenantId,
+      skip: !workspaceId,
     },
   );
 
@@ -110,7 +110,7 @@ export function DashboardPage() {
     ];
   }, [hasClient, activationStep1Done, completedWizards, customDomainAdded]);
 
-  const clientsCount = tenantId
+  const clientsCount = workspaceId
     ? typeof clientsData?.clients?.length === "number"
       ? clientsData.clients.length
       : isClientsLoading
@@ -118,7 +118,7 @@ export function DashboardPage() {
         : 0
     : null;
 
-  const customDomainCount = tenantId
+  const customDomainCount = workspaceId
     ? Array.isArray(domainsData)
       ? domainsData.filter((domain) => domain.kind === "custom").length
       : isDomainsLoading
@@ -126,7 +126,7 @@ export function DashboardPage() {
         : 0
     : null;
 
-  const externalServiceCount = tenantId
+  const externalServiceCount = workspaceId
     ? Array.isArray(servicesData)
       ? servicesData.length
       : isServicesLoading

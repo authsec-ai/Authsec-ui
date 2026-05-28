@@ -80,14 +80,14 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
 
   const handleVerify = async () => {
     const session = SessionManager.getSession();
-    if (!session?.tenant_id) {
+    if (!session?.workspace_id) {
       toast.error("Session expired. Please log in again.");
       return;
     }
 
     try {
       await verifyDomain({
-        tenant_id: session.tenant_id,
+        workspace_id: session.workspace_id,
         domain_id: domain.id,
       }).unwrap();
 
@@ -109,14 +109,14 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
     }
 
     const session = SessionManager.getSession();
-    if (!session?.tenant_id) {
+    if (!session?.workspace_id) {
       toast.error("Session expired. Please log in again.");
       return;
     }
 
     try {
       await setPrimaryDomain({
-        tenant_id: session.tenant_id,
+        workspace_id: session.workspace_id,
         domain_id: domain.id,
       }).unwrap();
 

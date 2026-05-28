@@ -13,7 +13,7 @@ import { baseApi, withSessionData } from './baseApi';
 export type { AdminGroup as Group } from './admin/groupsApi';
 
 export interface UnifiedGetGroupsParams {
-  tenant_id: string;
+  workspace_id: string;
   audience: 'admin' | 'endUser';
   user_id?: string;
 }
@@ -30,19 +30,19 @@ export const groupsApi = baseApi.injectEndpoints({
      * Get Groups - Unified Query
      *
      * Routes to:
-     * - Admin: GET /uflow/admin/groups/:tenant_id
+     * - Admin: GET /uflow/admin/groups/:workspace_id
      * - Enduser (impersonation via admin): POST /uflow/admin/groups/list with user_id filter
      * - Enduser (self-service): GET /uflow/user/groups/users
      */
     getGroups: builder.query<any[], UnifiedGetGroupsParams>({
-      query: ({ tenant_id, audience, user_id }) => {
+      query: ({ workspace_id, audience, user_id }) => {
         if (audience === 'admin') {
-          return `/authsec/uflow/admin/groups/${tenant_id}`;
+          return `/authsec/uflow/admin/groups/${workspace_id}`;
         }
 
         if (user_id) {
           const requestBody = {
-            tenant_id,
+            workspace_id,
             user_id,
           };
 

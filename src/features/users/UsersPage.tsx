@@ -35,7 +35,7 @@ import { InviteUserModal } from "./components/InviteUserModal";
 import { ADSyncInlineForm } from "./components/ADSyncInlineForm";
 import { EntraSyncInlineForm } from "./components/EntraSyncInlineForm";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import type { EnhancedUser } from "@/types/entities";
 import {
   UserX,
@@ -225,15 +225,15 @@ export function UsersPage() {
 
   const contextKey = isAdmin ? "admin" : "enduser";
   const contextSignature = `${contextKey}-${contextSwitchCounter}`;
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
   const adminQueryArgs = useMemo(() => {
     const args: AdminUsersQueryParams = {
       page: currentPage,
       limit: pageSize,
     };
-    if (tenantId) {
-      args.tenant_id = tenantId;
+    if (workspaceId) {
+      args.workspace_id = workspaceId;
     }
     if (adminFilters.searchQuery && adminFilters.searchQuery.trim()) {
       args.searchQuery = adminFilters.searchQuery.trim();
@@ -255,7 +255,7 @@ export function UsersPage() {
     }
     (args as unknown as Record<string, unknown>).__contextSignature = contextSignature;
     return args;
-  }, [currentPage, pageSize, contextSignature, tenantId, adminFilters]);
+  }, [currentPage, pageSize, contextSignature, workspaceId, adminFilters]);
 
   const endUserQueryArgs = useMemo(() => {
     const args: UsersQueryParams = {
@@ -263,12 +263,12 @@ export function UsersPage() {
       page: currentPage,
       limit: pageSize,
     };
-    if (tenantId) {
-      args.tenant_id = tenantId;
+    if (workspaceId) {
+      args.workspace_id = workspaceId;
     }
     (args as unknown as Record<string, unknown>).__contextSignature = contextSignature;
     return args;
-  }, [filters, currentPage, pageSize, contextSignature, tenantId]);
+  }, [filters, currentPage, pageSize, contextSignature, workspaceId]);
 
   // Configuration status - check if sync configs exist
   const { data: syncConfigsData } = useListSyncConfigsQuery();
@@ -283,7 +283,7 @@ export function UsersPage() {
     error: adminUsersError,
     refetch: refetchAdminUsers,
   } = useGetAdminUsersQuery(adminQueryArgs, {
-    skip: !isAdmin || !tenantId,
+    skip: !isAdmin || !workspaceId,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -295,7 +295,7 @@ export function UsersPage() {
     error: endUsersError,
     refetch: refetchEndUsers,
   } = useGetEndUsersQuery(endUserQueryArgs, {
-    skip: isAdmin || !tenantId,
+    skip: isAdmin || !workspaceId,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -318,9 +318,9 @@ export function UsersPage() {
     console.log(
       `[UsersPage] Context switch #${contextSwitchCounter}: requesting ${endpoint} (page=${currentPage}, limit=${pageSize})`
     );
-    if (isAdmin && tenantId) {
+    if (isAdmin && workspaceId) {
       refetchAdminUsers();
-    } else if (!isAdmin && tenantId) {
+    } else if (!isAdmin && workspaceId) {
       refetchEndUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,7 +445,7 @@ export function UsersPage() {
         updated_at: user.updated_at || user.updatedAt,
         provider: providerValue,
         client_id: user.client_id,
-        tenant_id: user.tenant_id,
+        workspace_id: user.workspace_id,
         project_id: user.project_id,
         tenant_domain: user.tenant_domain,
         provider_id: user.provider_id,
@@ -576,11 +576,11 @@ export function UsersPage() {
       if (isAdmin) {
         await deleteAdminUser({ user_id: userId }).unwrap();
       } else {
-        if (!tenantId) {
-          toast.error("Tenant context missing; cannot delete end user.");
+        if (!workspaceId) {
+          toast.error("Workspace context missing; cannot delete end user.");
           return;
         }
-        await deleteEndUser({ tenant_id: tenantId, user_id: userId }).unwrap();
+        await deleteEndUser({ workspace_id: workspaceId, user_id: userId }).unwrap();
       }
       toast.success("User deletion requested; changes may take a moment to reflect.");
       refetchUsers();

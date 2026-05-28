@@ -96,7 +96,7 @@ export function CreateWorkloadPage() {
     useUpdateWorkloadMutation();
 
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
 
   const { data: existingWorkload } = useGetWorkloadQuery(
     { workload_id: workloadId || "" },
@@ -225,8 +225,8 @@ export function CreateWorkloadPage() {
           status: "active",
           attestation_type: platform || "kubernetes",
         };
-        if (tenantId) {
-          updatePayload.tenant_id = tenantId;
+        if (workspaceId) {
+          updatePayload.workspace_id = workspaceId;
         }
 
         await updateWorkload(updatePayload).unwrap();
@@ -239,8 +239,8 @@ export function CreateWorkloadPage() {
           status: "active",
           attestation_type: platform || "kubernetes",
         };
-        if (tenantId) {
-          payload.tenant_id = tenantId;
+        if (workspaceId) {
+          payload.workspace_id = workspaceId;
         }
         if (spiffeId.trim()) {
           payload.spiffe_id = spiffeId.trim();
@@ -268,7 +268,7 @@ export function CreateWorkloadPage() {
   const canSubmit = Boolean(
     (isEditMode || (spiffeId.trim() && parentAgent && parentAgentId.trim())) &&
       hasValidSelectors &&
-      tenantId &&
+      workspaceId &&
       !isLoading
   );
 

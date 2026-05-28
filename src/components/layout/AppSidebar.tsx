@@ -41,7 +41,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { AuthSecLogo } from "@/components/ui/authsec-logo";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -110,15 +110,15 @@ export function AppSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      setTenantId(resolveTenantId());
+      setWorkspaceId(resolveWorkspaceId());
     } catch (error) {
-      console.error("Failed to resolve tenant ID:", error);
-      setTenantId(null);
+      console.error("Failed to resolve workspace ID:", error);
+      setWorkspaceId(null);
     }
   }, []);
 
@@ -181,12 +181,12 @@ export function AppSidebar({
     [contextPrefix, prefixUrls, markActive, attachHandlers],
   );
 
-  const handleTenantIdClick = useCallback(
+  const handleWorkspaceIdClick = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (tenantId) {
+      if (workspaceId) {
         try {
-          await navigator.clipboard.writeText(tenantId);
+          await navigator.clipboard.writeText(workspaceId);
           toast.success("Workspace ID copied to clipboard");
         } catch (err) {
           console.error("Failed to copy:", err);
@@ -194,14 +194,14 @@ export function AppSidebar({
         }
       }
     },
-    [tenantId],
+    [workspaceId],
   );
 
-  const tenantIdLabel = useMemo(() => {
-    if (!tenantId) return "Not available";
-    if (tenantId.length <= 24) return tenantId;
-    return `${tenantId.slice(0, 12)}…${tenantId.slice(-8)}`;
-  }, [tenantId]);
+  const workspaceIdLabel = useMemo(() => {
+    if (!workspaceId) return "Not available";
+    if (workspaceId.length <= 24) return workspaceId;
+    return `${workspaceId.slice(0, 12)}…${workspaceId.slice(-8)}`;
+  }, [workspaceId]);
 
   return (
     <Sidebar
@@ -236,10 +236,10 @@ export function AppSidebar({
                   </span>
                   <span
                     className="block truncate text-[9px] font-mono leading-tight text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground"
-                    title={tenantId ?? undefined}
-                    onClick={handleTenantIdClick}
+                    title={workspaceId ?? undefined}
+                    onClick={handleWorkspaceIdClick}
                   >
-                    {tenantIdLabel}
+                    {workspaceIdLabel}
                   </span>
                 </div>
               </div>

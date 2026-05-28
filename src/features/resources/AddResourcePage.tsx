@@ -6,7 +6,7 @@ import { ArrowLeft, Database, Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import {
   useCreateAdminResourceMutation,
   useGetAdminResourceQuery,
@@ -31,7 +31,7 @@ export function AddResourcePage() {
   const navigate = useContextualNavigate();
   const { isAdmin } = useRbacAudience();
   const { id: resourceId } = useParams<{ id: string }>();
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
   const isEditMode = Boolean(resourceId);
 
@@ -55,8 +55,8 @@ export function AddResourcePage() {
 
   const { data: endUserResource, isLoading: endUserResourceLoading } =
     useGetEndUserResourceQuery(
-      { tenant_id: tenantId!, resource_id: resourceId! },
-      { skip: !isEditMode || isAdmin || !tenantId || !resourceId }
+      { workspace_id: workspaceId!, resource_id: resourceId! },
+      { skip: !isEditMode || isAdmin || !workspaceId || !resourceId }
     );
 
   // Populate form when resource data loads in edit mode
@@ -79,8 +79,8 @@ export function AddResourcePage() {
       return;
     }
 
-    if (!isAdmin && !tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!isAdmin && !workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       return;
     }
 
@@ -98,7 +98,7 @@ export function AddResourcePage() {
           }).unwrap();
         } else {
           await updateEndUserResource({
-            tenant_id: tenantId!,
+            workspace_id: workspaceId!,
             id: resourceId!,
             data: {
               name: name.trim(),
@@ -116,7 +116,7 @@ export function AddResourcePage() {
           }).unwrap();
         } else {
           await createEndUserResource({
-            tenant_id: tenantId!,
+            workspace_id: workspaceId!,
             data: {
               name: name.trim(),
               description: description.trim() || undefined,

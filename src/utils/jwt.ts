@@ -14,7 +14,7 @@ export interface JWTPayload {
   scope?: string;
   scopes: string[];
   tenant_domain?: string;
-  tenant_id: string;
+  workspace_id: string;
   token_type: string;
   [key: string]: unknown;
 }
@@ -53,7 +53,7 @@ export const decodeJWT = (token: string): JWTPayload | null => {
       client_id: decoded.client_id || decoded.sub || "",
       email_id: decoded.email_id || decoded.email || "",
       project_id: decoded.project_id || "",
-      tenant_id: decoded.tenant_id || "",
+      workspace_id: decoded.workspace_id || decoded.tenant_id || "",
       token_type: decoded.token_type || "",
       scopes,
       roles: Array.isArray(decoded.roles) ? decoded.roles : [],

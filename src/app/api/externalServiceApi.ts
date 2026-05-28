@@ -117,17 +117,17 @@ export const externalServiceApi = baseApi.injectEndpoints({
     // POST /exsvc/services
     createExternalService: builder.mutation<
       ExternalService,
-      ExternalServiceRequest & { tenant_id?: string; auto_create_resource?: boolean }
+      ExternalServiceRequest & { workspace_id?: string; auto_create_resource?: boolean }
     >({
       queryFn: async (arg, api, _extraOptions, baseQuery) => {
-        const { tenant_id, auto_create_resource = true, ...body } = arg;
+        const { workspace_id, auto_create_resource = true, ...body } = arg;
 
-        // If auto_create_resource is true and tenant_id is provided, create the resource first
-        if (auto_create_resource && tenant_id) {
+        // If auto_create_resource is true and workspace_id is provided, create the resource first
+        if (auto_create_resource && workspace_id) {
           try {
             const resourceResult = await api.dispatch(
               endUserResourcesApi.endpoints.createEndUserResource.initiate({
-                tenant_id,
+                workspace_id,
                 data: {
                   name: `${body.name} Resource`,
                   description: `Auto-generated resource for external service: ${body.name}`,
@@ -184,12 +184,12 @@ export const externalServiceApi = baseApi.injectEndpoints({
     // DELETE /exsvc/services/{id}
     deleteExternalService: builder.mutation<
       { success: boolean; id: string },
-      string | { id: string; tenant_id?: string; resource_id?: number; auto_delete_resource?: boolean }
+      string | { id: string; workspace_id?: string; resource_id?: number; auto_delete_resource?: boolean }
     >({
       queryFn: async (arg, api, _extraOptions, baseQuery) => {
         // Handle both string ID and object with options
         const id = typeof arg === "string" ? arg : arg.id;
-        const tenant_id = typeof arg === "object" ? arg.tenant_id : undefined;
+        const workspace_id = typeof arg === "object" ? arg.workspace_id : undefined;
         const resource_id = typeof arg === "object" ? arg.resource_id : undefined;
         const auto_delete_resource = typeof arg === "object" ? arg.auto_delete_resource !== false : true;
 
@@ -203,12 +203,12 @@ export const externalServiceApi = baseApi.injectEndpoints({
           return { error: result.error as any };
         }
 
-        // If auto_delete_resource is true and we have tenant_id and resource_id, delete the resource
-        if (auto_delete_resource && tenant_id && resource_id) {
+        // If auto_delete_resource is true and we have workspace_id and resource_id, delete the resource
+        if (auto_delete_resource && workspace_id && resource_id) {
           try {
             await api.dispatch(
               endUserResourcesApi.endpoints.deleteEndUserResource.initiate({
-                tenant_id,
+                workspace_id,
                 resource_id: String(resource_id),
               })
             );

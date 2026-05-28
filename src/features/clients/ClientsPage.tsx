@@ -80,8 +80,8 @@ function mapClientDataToTableFormat(
       ? email.split("@")[0]
       : email
     : "unknown";
-  const tenantSuffix = client.tenant_id
-    ? client.tenant_id.slice(-8)
+  const tenantSuffix = client.workspace_id
+    ? client.workspace_id.slice(-8)
     : "unknown";
   const projectSuffix = client.project_id
     ? client.project_id.slice(-8)
@@ -128,7 +128,7 @@ function mapClientDataToTableFormat(
 
   return {
     id: client.client_id,
-    workspace_id: client.tenant_id,
+    workspace_id: client.workspace_id,
     secret_id: typeof client.secret_id === "string" ? client.secret_id : null,
     name: client.name || client.client_name || "Unnamed Client",
     description:
@@ -143,7 +143,7 @@ function mapClientDataToTableFormat(
     authentication_type: "custom" as const,
     metadata: {
       project_id: client.project_id,
-      tenant_id: client.tenant_id,
+      workspace_id: client.workspace_id,
       original_id: client.id,
       email,
       org_id: client.org_id,
@@ -249,10 +249,10 @@ export function ClientsPage() {
 
   // Get session data for tenant ID
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   const queryArgs = useMemo(() => {
-    if (!tenantId) return undefined;
+    if (!workspaceId) return undefined;
     const cleanedFilters: Record<string, any> = {};
     Object.entries(filtersState || {}).forEach(([key, value]) => {
       if (
@@ -267,13 +267,13 @@ export function ClientsPage() {
     });
 
     return {
-      tenant_id: tenantId,
+      workspace_id: workspaceId,
       active_only: false,
       filters: cleanedFilters,
       page: queryPage,
       limit: 10,
     } as GetClientsRequest;
-  }, [tenantId, filtersState, queryPage]);
+  }, [workspaceId, filtersState, queryPage]);
 
   // Use getAllClients to get enhanced data with authentication methods
   const {
@@ -291,7 +291,7 @@ export function ClientsPage() {
 
   // Load clients when component mounts or when data changes
   React.useEffect(() => {
-    if (!tenantId) {
+    if (!workspaceId) {
       // Allow the UI to render with empty data when no tenant/session is present
       setClients([]);
       setLoading(false);
@@ -342,7 +342,7 @@ export function ClientsPage() {
         );
       }
     }
-  }, [tenantId, clientsResponse, clientsError, clientsLoading]); // Removed sessionData from dependencies
+  }, [workspaceId, clientsResponse, clientsError, clientsLoading]); // Removed sessionData from dependencies
 
   // Responsive card system
   const { mainAreaRef } = useResponsiveCards();
@@ -454,8 +454,8 @@ export function ClientsPage() {
   // Confirm delete client
   const handleConfirmDelete = async () => {
     const sessionData = SessionManager.getSession();
-    const tenantId = sessionData?.tenant_id;
-    if (!tenantId) {
+    const workspaceId = sessionData?.workspace_id;
+    if (!workspaceId) {
       toast.error("Missing tenant context");
       return;
     }
@@ -463,7 +463,7 @@ export function ClientsPage() {
     setIsDeleting(true);
     try {
       await deleteClientComplete({
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         client_id: deleteDialog.clientId,
       }).unwrap();
       toast.success("Client deleted successfully");
@@ -484,9 +484,9 @@ export function ClientsPage() {
 
   const handleToggleStatus = async (clientId: string) => {
     const sessionData = SessionManager.getSession();
-    const tenantId = sessionData?.tenant_id;
+    const workspaceId = sessionData?.workspace_id;
 
-    if (!tenantId) {
+    if (!workspaceId) {
       toast.error("Missing tenant context");
       return;
     }
@@ -509,7 +509,7 @@ export function ClientsPage() {
     try {
       const newStatus = !currentClient.active;
       await setClientStatus({
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         client_id: clientId,
         active: newStatus,
       }).unwrap();

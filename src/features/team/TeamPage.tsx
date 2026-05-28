@@ -5,10 +5,10 @@
  * Distinct from End Users (consumers); see User Taxonomy in
  * docs/USER_MANAGEMENT_AND_MCP_AUTHZ.md.
  *
- * Backend: GET    /uflow/v2/tenants/:tenant_id/memberships
- *          POST   /uflow/v2/tenants/:tenant_id/memberships
- *          PATCH  /uflow/v2/tenants/:tenant_id/memberships/:user_id
- *          DELETE /uflow/v2/tenants/:tenant_id/memberships/:user_id
+ * Backend: GET    /uflow/v2/tenants/:workspace_id/memberships
+ *          POST   /uflow/v2/tenants/:workspace_id/memberships
+ *          PATCH  /uflow/v2/tenants/:workspace_id/memberships/:user_id
+ *          DELETE /uflow/v2/tenants/:workspace_id/memberships/:user_id
  */
 
 import React, { useState, useMemo } from "react";
@@ -40,7 +40,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { toast } from "@/lib/toast";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import {
   useListMembersQuery,
   useUpdateMembershipMutation,
@@ -80,11 +80,11 @@ const TypeBadge: React.FC<{ type: MembershipType }> = ({ type }) => (
 const formatDate = (iso?: string | null) =>
   !iso ? "—" : new Date(iso).toLocaleDateString();
 
-function MembersTab({ tenantId }: { tenantId: string }) {
+function MembersTab({ workspaceId }: { workspaceId: string }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MembershipStatus | "all">("all");
   const { data, isLoading, isFetching, refetch } = useListMembersQuery({
-    tenantId,
+    workspaceId,
     status: statusFilter === "all" ? undefined : statusFilter,
   });
   const [update] = useUpdateMembershipMutation();
@@ -106,7 +106,7 @@ function MembersTab({ tenantId }: { tenantId: string }) {
 
   const handleSuspend = async (userId: string) => {
     try {
-      await update({ tenantId, userId, status: "suspended" }).unwrap();
+      await update({ workspaceId, userId, status: "suspended" }).unwrap();
       toast.success("Member suspended");
     } catch (e: any) {
       toast.error(e?.data?.error ?? "Failed");
@@ -114,7 +114,7 @@ function MembersTab({ tenantId }: { tenantId: string }) {
   };
   const handleReactivate = async (userId: string) => {
     try {
-      await update({ tenantId, userId, status: "active" }).unwrap();
+      await update({ workspaceId, userId, status: "active" }).unwrap();
       toast.success("Member reactivated");
     } catch (e: any) {
       toast.error(e?.data?.error ?? "Failed");
@@ -123,7 +123,7 @@ function MembersTab({ tenantId }: { tenantId: string }) {
   const handleRemove = async (userId: string) => {
     if (!confirm("Remove this member? Their identity is preserved; only the tenant membership is dropped.")) return;
     try {
-      await del({ tenantId, userId }).unwrap();
+      await del({ workspaceId, userId }).unwrap();
       toast.success("Member removed");
     } catch (e: any) {
       toast.error(e?.data?.error ?? "Failed");
@@ -234,9 +234,9 @@ function MembersTab({ tenantId }: { tenantId: string }) {
 }
 
 export default function TeamPage() {
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
-  if (!tenantId) {
+  if (!workspaceId) {
     return (
       <div className="p-8">
         <p className="text-muted-foreground">No tenant selected.</p>
@@ -259,7 +259,7 @@ export default function TeamPage() {
             <TabsTrigger value="audit" disabled>Audit <span className="ml-1 text-xs opacity-70">(Phase F)</span></TabsTrigger>
           </TabsList>
           <TabsContent value="members" className="mt-4">
-            <MembersTab tenantId={tenantId} />
+            <MembersTab workspaceId={workspaceId} />
           </TabsContent>
         </Tabs>
       </div>

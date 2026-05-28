@@ -122,7 +122,7 @@ export default function OnboardingPage() {
   const [showExample, setShowExample] = useState(false);
   // First step form state
   const [email, setEmail] = useState("");
-  const [tenantId, setTenantId] = useState("");
+  const [workspaceId, setTenantId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
   const [registerClient, { isLoading: isCreating }] = useRegisterClientMutation();
@@ -143,7 +143,7 @@ export default function OnboardingPage() {
         SessionManager.getSession() ||
         JSON.parse(localStorage.getItem("authsec_session_v2") || "null");
       if (session) {
-        setTenantId(session.tenant_id || "");
+        setTenantId(session.workspace_id || "");
         setProjectId(session.project_id || "");
         const sessionEmail = session.user?.email || session.user?.email_id || "";
         if (sessionEmail) setEmail(sessionEmail);
@@ -289,7 +289,7 @@ async def my_protected_function(arguments: dict, session) -> list:
     # Step 1: Access authenticated user/session info
     user_info = session.user_info or {}
     org_id = session.org_id or "unknown"
-    tenant_id = session.tenant_id or "unknown"
+    workspace_id = session.workspace_id or "unknown"
     provider = session.provider or "unknown"
  
     # Step 2: Extract and validate arguments
@@ -318,7 +318,7 @@ async def my_protected_function(arguments: dict, session) -> list:
                 "result": result_value,
                 "performed_by": user_info.get("email", "unknown"),
                 "org_id": org_id,
-                "tenant_id": tenant_id,
+                "workspace_id": workspace_id,
                 "provider": provider,
                 "timestamp": datetime.now().isoformat(),
                 "session_id": (session.session_id[:8] + "...") if getattr(session, "session_id", None) else "unknown",
@@ -462,7 +462,7 @@ async def auth_callback(request):
                       toast.error("Please provide a client name");
                       return;
                     }
-                    if (!tenantId || !email) {
+                    if (!workspaceId || !email) {
                       toast.error("Missing tenant or email. Please sign in.");
                       return;
                     }
@@ -470,7 +470,7 @@ async def auth_callback(request):
                       const res = await registerClient({
                         name: clientName.trim(),
                         email,
-                        tenant_id: tenantId,
+                        workspace_id: workspaceId,
                         project_id: projectId,
                         react_app_url: window.location.hostname,
                       }).unwrap();
@@ -495,7 +495,7 @@ async def auth_callback(request):
                   <div className="space-y-2 md:col-span-2">
                     <Label>Prefilled Context</Label>
                     <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                      Using tenant <span className="font-mono text-foreground">{tenantId || "—"}</span> and
+                      Using tenant <span className="font-mono text-foreground">{workspaceId || "—"}</span> and
                       contact email <span className="font-mono text-foreground"> {email || "—"}</span>.
                     </div>
                   </div>

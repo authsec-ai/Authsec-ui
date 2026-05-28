@@ -35,7 +35,7 @@ export interface OIDCLoginRequest {
 export interface OIDCLoginResponse {
   success: boolean;
   data?: {
-    tenant_id: string;
+    workspace_id: string;
     email: string;
     first_login: boolean;
   };
@@ -155,7 +155,7 @@ export interface SamlLoginRequest {
 }
 
 export interface SamlLoginResponse {
-  tenant_id: string;
+  workspace_id: string;
   email: string;
   first_login: boolean;
   otp_required: boolean;
@@ -195,7 +195,7 @@ export interface UFlowOIDCCallbackData {
   // For existing users
   client_id?: string;
   tenant_domain?: string;
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 export interface TenantDomainCheckResponse {
@@ -218,7 +218,7 @@ export interface CompleteUFlowOIDCRegistrationResponse {
   message: string;
   success: boolean;
   tenant_domain: string;
-  tenant_id: string;
+  workspace_id: string;
 }
 
 export interface AdminOIDCExchangeRequest {
@@ -227,7 +227,7 @@ export interface AdminOIDCExchangeRequest {
 }
 
 export interface AdminOIDCExchangeSuccessResponse {
-  tenant_id: string;
+  workspace_id: string;
   email: string;
   first_login: boolean;
   otp_required: boolean;

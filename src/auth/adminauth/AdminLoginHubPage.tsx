@@ -1043,7 +1043,7 @@ export function AdminLoginHubPage() {
 
   // Handle domain modal success
   const handleDomainModalSuccess = async (data: {
-    tenant_id: string;
+    workspace_id: string;
     client_id: string;
     tenant_domain: string;
   }) => {

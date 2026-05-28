@@ -20,7 +20,7 @@ import { AuthStepHeader } from "../components/AuthStepHeader";
 interface TOTPSetupComponentProps {
   contextType: "admin" | "oidc";
   email: string;
-  tenantId: string;
+  workspaceId: string;
   totpData?: TOTPSetupData | null;
   onSuccess?: () => void;
   onError?: (error: string) => void;
@@ -40,7 +40,7 @@ interface TOTPSetupComponentProps {
 export function TOTPSetupComponent({ 
   contextType,
   email,
-  tenantId,
+  workspaceId,
   totpData,
   onSuccess,
   onError,

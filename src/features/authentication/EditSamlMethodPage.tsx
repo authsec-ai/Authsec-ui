@@ -44,7 +44,7 @@ export function EditSamlMethodPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const session = SessionManager.getSession();
-  const tenantId = session?.tenant_id || "";
+  const workspaceId = session?.workspace_id || "";
 
   const [metadata, setMetadata] = useState<{ entity_id: string; acs_url: string } | null>(null);
   const [formData, setFormData] = useState({
@@ -65,8 +65,8 @@ export function EditSamlMethodPage() {
 
   // Fetch existing SAML provider data
   const { data: providerData, isLoading: isLoadingProvider } = useGetSamlProviderQuery(
-    { tenant_id: tenantId, provider_id: id || "" },
-    { skip: !tenantId || !id }
+    { workspace_id: workspaceId, provider_id: id || "" },
+    { skip: !workspaceId || !id }
   );
 
   const [fetchMetadata, { isLoading: loadingMetadata }] = useLazyGetSamlMetadataQuery();
@@ -102,8 +102,8 @@ export function EditSamlMethodPage() {
   // Fetch metadata when client_id is available
   useEffect(() => {
     const clientId = providerData?.provider?.client_id;
-    if (clientId && tenantId) {
-      fetchMetadata({ tenant_id: tenantId, client_id: clientId })
+    if (clientId && workspaceId) {
+      fetchMetadata({ workspace_id: workspaceId, client_id: clientId })
         .unwrap()
         .then((data) => {
           setMetadata({ entity_id: data.entity_id, acs_url: data.acs_url });
@@ -113,7 +113,7 @@ export function EditSamlMethodPage() {
           console.log("Could not fetch fresh metadata, using existing values");
         });
     }
-  }, [providerData?.provider?.client_id, tenantId, fetchMetadata]);
+  }, [providerData?.provider?.client_id, workspaceId, fetchMetadata]);
 
   const canComplete = useMemo(
     () =>
@@ -140,7 +140,7 @@ export function EditSamlMethodPage() {
 
     try {
       const payload = {
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         provider_id: id,
         provider_name: formData.provider_name,
         display_name: formData.display_name,

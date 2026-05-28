@@ -135,11 +135,11 @@ export function GroupActionsCell({
 // Enhanced expanded row content component
 export function GroupExpandedRow({ group }: { group: Group }) {
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   const { data: groupUsers, isLoading, error } = useGetGroupUsersQuery(
-    { tenant_id: tenantId || '', group_id: group.id },
-    { skip: !tenantId }
+    { workspace_id: workspaceId || '', group_id: group.id },
+    { skip: !workspaceId }
   );
 
   return (

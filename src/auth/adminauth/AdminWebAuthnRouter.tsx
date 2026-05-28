@@ -35,14 +35,14 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const email = params.get("email");
-    const tenantId = params.get("tenant_id");
+    const workspaceId = params.get("workspace_id");
     const firstLogin = params.get("first_login");
 
-    if (email && tenantId) {
+    if (email && workspaceId) {
       dispatch(setCurrentStep("login"));
       dispatch(
         setLoginData({
-          tenantId,
+          workspaceId,
           email,
           isFirstLogin: firstLogin === "true",
         })
@@ -55,18 +55,18 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
 
     const payload = decodeHandoff<{
       email?: string;
-      tenant_id?: string;
+      workspace_id?: string;
       first_login?: boolean;
       target?: "login" | "webauthn";
     }>(handoff);
 
-    if (payload?.email && payload?.tenant_id) {
+    if (payload?.email && payload?.workspace_id) {
       dispatch(
         setCurrentStep("login") // reset to login so auto-routing can advance
       );
       dispatch(
         setLoginData({
-          tenantId: payload.tenant_id,
+          workspaceId: payload.workspace_id,
           email: payload.email,
           isFirstLogin: !!payload.first_login,
         })
@@ -101,17 +101,17 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
     if (
       adminWebauthn.currentStep === 'login' &&
       adminWebauthn.email &&
-      adminWebauthn.tenantId
+      adminWebauthn.workspaceId
     ) {
       const next = adminWebauthn.isFirstLogin ? 'mfa_selection' : 'authentication';
       console.log("🔄 Admin auto-routing:", adminWebauthn.isFirstLogin ? "first login -> mfa_selection" : "returning user -> authentication");
       dispatch(setCurrentStep(next));
     }
-  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.tenantId, adminWebauthn.isFirstLogin, dispatch]);
+  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.isFirstLogin, dispatch]);
 
   // Prefetch MFA methods when entering authentication or selection
   useEffect(() => {
-    if (!adminWebauthn.email || !adminWebauthn.tenantId) return;
+    if (!adminWebauthn.email || !adminWebauthn.workspaceId) return;
     if (
       (adminWebauthn.currentStep === 'authentication' || adminWebauthn.currentStep === 'mfa_selection') &&
       (!adminWebauthn.availableMFAMethods || adminWebauthn.availableMFAMethods.length === 0)
@@ -119,7 +119,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
       // Fire and forget; context handles errors/toasts
       void adminWebauthn.getMFAMethods();
     }
-  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.tenantId, adminWebauthn.getMFAMethods, adminWebauthn.availableMFAMethods]);
+  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.getMFAMethods, adminWebauthn.availableMFAMethods]);
 
   // Render lightweight loader if step is still 'login' to avoid blank screen during transition
   if (adminWebauthn.currentStep === "login") {
@@ -150,7 +150,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
             <WebAuthnSetupComponent 
               contextType="admin"
               email={adminWebauthn.email || ""}
-              tenantId={adminWebauthn.tenantId || ""}
+              workspaceId={adminWebauthn.workspaceId || ""}
               onSuccess={() => {}} // Handled by context
               onError={(error) => onAuthError?.(error)}
               onBack={adminWebauthn.backToSelection}
@@ -162,7 +162,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
             <TOTPSetupComponent 
               contextType="admin"
               email={adminWebauthn.email || ""}
-              tenantId={adminWebauthn.tenantId || ""}
+              workspaceId={adminWebauthn.workspaceId || ""}
               totpData={adminWebauthn.totpSetupData}
               onSuccess={() => {}} // Handled by context
               onError={(error) => onAuthError?.(error)}
@@ -179,7 +179,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
                 <WebAuthnAuthComponent 
                   contextType="admin"
                   email={adminWebauthn.email || ""}
-                  tenantId={adminWebauthn.tenantId || ""}
+                  workspaceId={adminWebauthn.workspaceId || ""}
                   onSuccess={() => {}} // Handled by context
                   onError={(error) => onAuthError?.(error)}
                   onAuthenticate={adminWebauthn.authenticateWithWebAuthn}
@@ -188,7 +188,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
                 <TOTPAuthComponent 
                   contextType="admin"
                   email={adminWebauthn.email || ""}
-                  tenantId={adminWebauthn.tenantId || ""}
+                  workspaceId={adminWebauthn.workspaceId || ""}
                   onSuccess={() => {}} // Handled by context
                   onError={(error) => onAuthError?.(error)}
                   onAuthenticate={adminWebauthn.authenticateWithTOTP}
@@ -201,7 +201,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
                       <WebAuthnAuthComponent 
                         contextType="admin"
                         email={adminWebauthn.email || ""}
-                        tenantId={adminWebauthn.tenantId || ""}
+                        workspaceId={adminWebauthn.workspaceId || ""}
                         onSuccess={() => {}} // Handled by context
                         onError={(error) => onAuthError?.(error)}
                         onAuthenticate={adminWebauthn.authenticateWithWebAuthn}
@@ -210,7 +210,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
                       <TOTPAuthComponent 
                         contextType="admin"
                         email={adminWebauthn.email || ""}
-                        tenantId={adminWebauthn.tenantId || ""}
+                        workspaceId={adminWebauthn.workspaceId || ""}
                         onSuccess={() => {}} // Handled by context
                         onError={(error) => onAuthError?.(error)}
                         onAuthenticate={adminWebauthn.authenticateWithTOTP}

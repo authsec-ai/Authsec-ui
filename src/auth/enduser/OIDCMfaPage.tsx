@@ -43,16 +43,16 @@ export function OIDCMfaPage() {
   );
 
   useEffect(() => {
-    const tenantId = searchParams.get("tenant_id");
+    const workspaceId = searchParams.get("workspace_id");
     const email = searchParams.get("email");
     const clientId = searchParams.get("client_id");
     const clientType = searchParams.get("client_type");
     const firstLogin = parseBoolean(searchParams.get("first_login"));
 
-    if (tenantId && email) {
+    if (workspaceId && email) {
       dispatch(
         setLoginData({
-          tenantId,
+          workspaceId,
           email,
           isFirstLogin: firstLogin,
           clientId: clientId || undefined,

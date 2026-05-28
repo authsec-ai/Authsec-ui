@@ -62,7 +62,7 @@ export function AuthenticationPage() {
 
   // Get session data for OIDC config
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   // Client filtering state - no default selection
   const [selectedClientId, setSelectedClientId] = useState<string>("");
@@ -86,10 +86,10 @@ export function AuthenticationPage() {
     isLoading: loadingClients,
     error: clientsError,
   } = useGetClientsQuery(
-    tenantId
-      ? { tenant_id: tenantId, active_only: false }
-      : { tenant_id: "", active_only: false },
-    { skip: !tenantId },
+    workspaceId
+      ? { workspace_id: workspaceId, active_only: false }
+      : { workspace_id: "", active_only: false },
+    { skip: !workspaceId },
   );
 
   // Mutations
@@ -131,7 +131,7 @@ export function AuthenticationPage() {
     error: providerError,
     refetch: refetchProviders,
   } = useUnifiedProviders({
-    tenant_id: tenantId || "",
+    workspace_id: workspaceId || "",
     client_id: selectedClientId || undefined,
   });
 
@@ -227,8 +227,8 @@ export function AuthenticationPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       setDeleteDialog({
         open: false,
         providerId: "",
@@ -257,13 +257,13 @@ export function AuthenticationPage() {
         // Delete SAML provider
         const samlId = deleteDialog.providerId.replace("saml-", ""); // Remove prefix to get actual ID
         await deleteSamlProvider({
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           provider_id: samlId,
         }).unwrap();
       } else {
         // Delete OIDC provider
         const payload: DeleteProviderRequest = {
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           client_id: provider.client_id,
           provider_name: provider.provider_name,
         };
@@ -288,8 +288,8 @@ export function AuthenticationPage() {
   };
 
   const handleToggleActive = async (providerId: string, isActive: boolean) => {
-    if (!tenantId) {
-      toast.error("Tenant context missing; please sign in again.");
+    if (!workspaceId) {
+      toast.error("Workspace context missing; please sign in again.");
       return;
     }
 
@@ -304,7 +304,7 @@ export function AuthenticationPage() {
         // Update SAML provider
         const samlId = providerId.replace("saml-", ""); // Remove prefix to get actual ID
         await updateSamlProvider({
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           provider_id: samlId,
           is_active: isActive,
         }).unwrap();
@@ -312,10 +312,10 @@ export function AuthenticationPage() {
         // Update OIDC provider
         const orgId = sessionData?.org_id || "";
         const clientId =
-          provider.client_id || provider.hydra_client_id || tenantId;
+          provider.client_id || provider.hydra_client_id || workspaceId;
 
         const payload: UpdateProviderRequest = {
-          tenant_id: tenantId,
+          workspace_id: workspaceId,
           org_id: orgId,
           provider_name: provider.provider_name,
           display_name: provider.display_name,

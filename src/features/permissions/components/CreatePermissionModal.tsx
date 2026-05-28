@@ -20,7 +20,7 @@ import {
   useGetPermissionsQuery,
   useGetPermissionResourcesQuery,
 } from "@/app/api/permissionsApi";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 
 interface CreatePermissionModalProps {
@@ -45,7 +45,7 @@ const STANDARD_ACTIONS = [
 ];
 
 export function CreatePermissionModal({ open, onOpenChange, onSuccess }: CreatePermissionModalProps) {
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const { audience } = useRbacAudience();
   const [selectedResource, setSelectedResource] = useState<string>("");
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
@@ -63,7 +63,7 @@ export function CreatePermissionModal({ open, onOpenChange, onSuccess }: CreateP
     skip: !open,
   });
   const { data: existingPermissions = [] } = useGetPermissionsQuery({
-    tenant_id: tenantId || "",
+    workspace_id: workspaceId || "",
     audience,
   }, {
     skip: !open,

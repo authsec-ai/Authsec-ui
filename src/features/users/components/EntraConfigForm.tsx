@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 export interface EntraConfigFormData {
   config_name: string;
   description?: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   client_secret: string;
   skip_verify?: boolean;
@@ -81,10 +81,10 @@ export function EntraConfigForm({
           </Label>
           <Input
             id="entra-tenant-id"
-            value={config.tenant_id}
-            onChange={(e) => updateField("tenant_id", e.target.value)}
-            onBlur={() => onBlur?.("tenant_id")}
-            aria-invalid={!!isErr("tenant_id")}
+            value={config.workspace_id}
+            onChange={(e) => updateField("workspace_id", e.target.value)}
+            onBlur={() => onBlur?.("workspace_id")}
+            aria-invalid={!!isErr("workspace_id")}
             placeholder="12345678-1234-5678-9012-123456789012"
             autoComplete="off"
             className="h-9"
@@ -92,8 +92,8 @@ export function EntraConfigForm({
           <p className="text-[11px] text-muted-foreground">
             Azure tenant ID (Directory ID)
           </p>
-          {isErr("tenant_id") && (
-            <p className="text-xs text-destructive">{errors.tenant_id}</p>
+          {isErr("workspace_id") && (
+            <p className="text-xs text-destructive">{errors.workspace_id}</p>
           )}
         </div>
 

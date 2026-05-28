@@ -31,7 +31,7 @@ interface AuthContextType {
     email: string,
     password: string,
     tenantDomainOverride?: string
-  ) => Promise<{ success: boolean; requiresWebAuthn?: boolean; tenantId?: string; email?: string; firstLogin?: boolean }>;
+  ) => Promise<{ success: boolean; requiresWebAuthn?: boolean; workspaceId?: string; email?: string; firstLogin?: boolean }>;
   signUp: (
     email: string,
     password: string,
@@ -126,17 +126,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     tenantDomainOverride?: string
-  ): Promise<{ success: boolean; requiresWebAuthn?: boolean; tenantId?: string; email?: string; firstLogin?: boolean }> => {
+  ): Promise<{ success: boolean; requiresWebAuthn?: boolean; workspaceId?: string; email?: string; firstLogin?: boolean }> => {
     setIsLoading(true);
     try {
       const result = await loginMutation({ email, password, tenant_domain: tenantDomainOverride });
       
       if ('data' in result && result.data) {
-        const { tenant_id, email: userEmail, first_login } = result.data;
+        const { workspace_id, email: userEmail, first_login } = result.data;
         
         // Store WebAuthn flow data in Redux
         dispatch(setLoginData({
-          tenantId: tenant_id,
+          workspaceId: workspace_id,
           email: userEmail,
           isFirstLogin: first_login
         }));
@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           success: true,
           requiresWebAuthn: true,
-          tenantId: tenant_id,
+          workspaceId: workspace_id,
           email: userEmail,
           firstLogin: first_login
         };

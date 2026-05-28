@@ -22,7 +22,7 @@ export interface AdminCibaDevicesResponse {
 export interface AdminTotpDevice {
   id: string;
   user_id: string;
-  tenant_id: string;
+  workspace_id: string;
   device_name: string;
   device_type: string;
   last_used: number | null;

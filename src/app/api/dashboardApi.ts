@@ -19,19 +19,19 @@ export interface SessionData {
   is_active: boolean;
   client_id: string;
   org_id: string | null;
-  tenant_id: string;
+  workspace_id: string;
   provider: string | null;
   accessible_tools: string | null; // JSON string array
 }
 
 export interface GetSessionsRequest {
-  tenant_id: string;
+  workspace_id: string;
   is_active: boolean;
 }
 
 export interface GetSessionsResponse {
   success: boolean;
-  tenant_id: string;
+  workspace_id: string;
   sessions: SessionData[];
   total_count: number;
   timestamp: string;
@@ -43,7 +43,7 @@ export interface GetSessionsResponse {
 
 export interface EndUserData {
   client_id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   email: string;
   provider: string; // 'custom', 'google', 'github', 'microsoft', 'entra_id', 'ad_sync'
@@ -55,14 +55,14 @@ export interface EndUserData {
 }
 
 export interface GetUsersRequest {
-  tenant_id: string;
+  workspace_id: string;
   provider?: string; // Optional filter by provider
   client_id?: string; // Optional filter by client_id
 }
 
 export interface GetUsersResponse {
   success: boolean;
-  tenant_id: string;
+  workspace_id: string;
   filters: {
     provider: string | null;
     client_id: string | null;
@@ -134,7 +134,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     // getActiveSessions: builder.query<GetSessionsResponse, GetSessionsRequest>({
     //   query: (data) => {
     //     console.log("[DASHBOARD API] 🔵 getActiveSessions called", {
-    //       tenant_id: data.tenant_id,
+    //       workspace_id: data.workspace_id,
     //       timestamp: new Date().toISOString(),
     //       stack: new Error().stack
     //     });
@@ -142,7 +142,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     //       url: "/sdkmgr/dashboard/sessions",
     //       method: "POST",
     //       body: {
-    //         tenant_id: data.tenant_id,
+    //         workspace_id: data.workspace_id,
     //         is_active: true,
     //       },
     //     };
@@ -154,7 +154,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     // getInactiveSessions: builder.query<GetSessionsResponse, GetSessionsRequest>({
     //   query: (data) => {
     //     console.log("[DASHBOARD API] 🔵 getInactiveSessions called", {
-    //       tenant_id: data.tenant_id,
+    //       workspace_id: data.workspace_id,
     //       timestamp: new Date().toISOString(),
     //       stack: new Error().stack
     //     });
@@ -162,7 +162,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     //       url: "/sdkmgr/dashboard/sessions",
     //       method: "POST",
     //       body: {
-    //         tenant_id: data.tenant_id,
+    //         workspace_id: data.workspace_id,
     //         is_active: false,
     //       },
     //     };
@@ -174,7 +174,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     // getDashboardEndUsers: builder.query<GetUsersResponse, GetUsersRequest>({
     //   query: (data) => {
     //     console.log("[DASHBOARD API] 🔴 getDashboardEndUsers called - THIS SHOULD ONLY BE CALLED FROM DASHBOARD PAGE!", {
-    //       tenant_id: data.tenant_id,
+    //       workspace_id: data.workspace_id,
     //       provider: data.provider,
     //       client_id: data.client_id,
     //       timestamp: new Date().toISOString(),
@@ -183,7 +183,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     //     });
 
     //     const body: any = {
-    //       tenant_id: data.tenant_id,
+    //       workspace_id: data.workspace_id,
     //     };
 
     //     // Add optional filters
@@ -204,10 +204,10 @@ export const dashboardApi = baseApi.injectEndpoints({
     // }),
 
     // Combined dashboard data query (fetches all stats at once)
-    // getDashboardStats: builder.query<DashboardStats, { tenant_id: string }>({
+    // getDashboardStats: builder.query<DashboardStats, { workspace_id: string }>({
     //   async queryFn(arg, _queryApi, _extraOptions, fetchWithBQ) {
     //     console.log("[DASHBOARD API] 🔵 getDashboardStats called", {
-    //       tenant_id: arg.tenant_id,
+    //       workspace_id: arg.workspace_id,
     //       timestamp: new Date().toISOString(),
     //       currentPath: window.location.pathname,
     //       stack: new Error().stack
@@ -219,23 +219,23 @@ export const dashboardApi = baseApi.injectEndpoints({
     //         fetchWithBQ({
     //           url: "/sdkmgr/dashboard/sessions",
     //           method: "POST",
-    //           body: { tenant_id: arg.tenant_id, is_active: true },
+    //           body: { workspace_id: arg.workspace_id, is_active: true },
     //         }),
     //         fetchWithBQ({
     //           url: "/sdkmgr/dashboard/sessions",
     //           method: "POST",
-    //           body: { tenant_id: arg.tenant_id, is_active: false },
+    //           body: { workspace_id: arg.workspace_id, is_active: false },
     //         }),
     //         fetchWithBQ({
     //           url: "/sdkmgr/dashboard/users",
     //           method: "POST",
-    //           body: { tenant_id: arg.tenant_id },
+    //           body: { workspace_id: arg.workspace_id },
     //         }),
     //         fetchWithBQ({
     //           url: "uflow/admin/users/list",
     //           method: "POST",
     //           body: withSessionData({
-    //             tenant_id: arg.tenant_id,
+    //             workspace_id: arg.workspace_id,
     //             page: 1,
     //             limit: 1,
     //           }),
@@ -285,7 +285,7 @@ export const dashboardApi = baseApi.injectEndpoints({
     // }),
 
     // Get Quick Actions Status (aggregated from various sources)
-    getQuickActionsStatus: builder.query<QuickActionsStatus, { tenant_id: string }>({
+    getQuickActionsStatus: builder.query<QuickActionsStatus, { workspace_id: string }>({
       async queryFn(arg, _queryApi, _extraOptions, fetchWithBQ) {
         try {
           // For now, return placeholder data

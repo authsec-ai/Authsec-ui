@@ -42,7 +42,7 @@ export function OnboardClientModal({
   const navigate = useNavigate();
   const session = SessionManager.getSession();
   const sessionEmail = session?.user?.email || session?.user?.email_id || "";
-  const sessionTenantId = session?.tenant_id || "";
+  const sessionTenantId = session?.workspace_id || "";
   const [clientType, setClientType] = useState<"application" | "ai_agent" | "claw_auth">("application");
   const [clientName, setClientName] = useState("");
   const [platform, setPlatform] = useState("kubernetes");
@@ -74,9 +74,9 @@ export function OnboardClientModal({
 
   // Fetch selector keys when platform changes (only when ai_agent type is selected)
   useEffect(() => {
-    if (clientType !== "ai_agent" || !session?.tenant_id || !platform) return;
+    if (clientType !== "ai_agent" || !session?.workspace_id || !platform) return;
     setIsFetchingSelectors(true);
-    fetchPlatformSelectors({ tenant_id: session.tenant_id, platform })
+    fetchPlatformSelectors({ workspace_id: session.workspace_id, platform })
       .unwrap()
       .then((res) => {
         setPlatformSelectorKeys(res.selector_keys);
@@ -114,7 +114,7 @@ export function OnboardClientModal({
     }
 
     try {
-      if (!session?.tenant_id) {
+      if (!session?.workspace_id) {
         toast.error("Missing tenant context. Please sign in.");
         return;
       }
@@ -155,7 +155,7 @@ export function OnboardClientModal({
           }
         });
         response = await registerAiAgentClient({
-          tenant_id: session.tenant_id,
+          workspace_id: session.workspace_id,
           name: trimmedName,
           email,
           client_type: "ai_agent",
@@ -165,7 +165,7 @@ export function OnboardClientModal({
         }).unwrap();
       } else if (clientType === "claw_auth") {
         response = await registerClawAuthClient({
-          tenant_id: session.tenant_id,
+          workspace_id: session.workspace_id,
           name: trimmedName,
           email,
           project_id: session.project_id || "00000000-0000-0000-0000-000000000000",
@@ -178,7 +178,7 @@ export function OnboardClientModal({
         response = await registerClient({
           name: trimmedName,
           email,
-          tenant_id: session.tenant_id,
+          workspace_id: session.workspace_id,
           project_id: session.project_id,
           react_app_url: window.location.hostname,
         }).unwrap();

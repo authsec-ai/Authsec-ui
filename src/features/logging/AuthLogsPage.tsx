@@ -73,9 +73,9 @@ export function AuthLogsPage() {
     tourConfig: TOUR_REGISTRY["auth-logs-intro"],
   });
 
-  // Get tenant_id from session
+  // Get workspace_id from session
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id;
+  const workspaceId = sessionData?.workspace_id;
 
   // Get time range timestamps
   const { start_time, end_time } = getTimeRangeTimestamps(filters.timeRange);
@@ -84,7 +84,7 @@ export function AuthLogsPage() {
   const { data, isLoading, isFetching, isError, error, refetch } =
     useGetLogsQuery(
       {
-        tenant_id: tenantId || "",
+        workspace_id: workspaceId || "",
         page,
         page_size: pageSize,
         username:
@@ -108,7 +108,7 @@ export function AuthLogsPage() {
         end_time,
       },
       {
-        skip: !tenantId,
+        skip: !workspaceId,
         refetchOnMountOrArgChange: true, // Force refetch when args change
       }
     );

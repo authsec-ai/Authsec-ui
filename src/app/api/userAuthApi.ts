@@ -14,7 +14,7 @@ export interface CustomLoginRequest {
 }
 
 export interface CustomLoginResponse {
-  tenant_id: string;
+  workspace_id: string;
   email: string;
   first_login: boolean;
   otp_required: boolean;

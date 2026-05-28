@@ -34,7 +34,7 @@ export type MembershipType =
 
 export interface TenantMembership {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   user_id: string;
   status: MembershipStatus;
   membership_type: MembershipType;
@@ -55,7 +55,7 @@ export interface TenantMembership {
 export type EndUserStatus = "active" | "suspended";
 
 export interface TenantEndUserState {
-  tenant_id: string;
+  workspace_id: string;
   user_id: string;
   status: EndUserStatus;
   plan_tier?: string | null;
@@ -112,24 +112,24 @@ export const membershipApi = baseApi.injectEndpoints({
     // ─── Tenant memberships (operators) ───────────────────────────
     listMembers: build.query<
       ListResponse<TenantMembership>,
-      { tenantId: string; status?: MembershipStatus; type?: MembershipType }
+      { workspaceId: string; status?: MembershipStatus; type?: MembershipType }
     >({
-      query: ({ tenantId, status, type }) => {
+      query: ({ workspaceId, status, type }) => {
         const params = new URLSearchParams();
         if (status) params.set("status", status);
         if (type) params.set("type", type);
         const qs = params.toString() ? `?${params.toString()}` : "";
-        return { url: `authsec/uflow/v2/tenants/${tenantId}/memberships${qs}` };
+        return { url: `authsec/uflow/v2/tenants/${workspaceId}/memberships${qs}` };
       },
       providesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.tenantId },
+        { type: "TenantMembership", id: arg.workspaceId },
       ],
     }),
 
     createMembership: build.mutation<
       TenantMembership,
       {
-        tenantId: string;
+        workspaceId: string;
         user_id: string;
         membership_type?: MembershipType;
         status?: MembershipStatus;
@@ -137,46 +137,46 @@ export const membershipApi = baseApi.injectEndpoints({
         external_id?: string | null;
       }
     >({
-      query: ({ tenantId, ...body }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/memberships`,
+      query: ({ workspaceId, ...body }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/memberships`,
         method: "POST",
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.tenantId },
+        { type: "TenantMembership", id: arg.workspaceId },
       ],
     }),
 
     updateMembership: build.mutation<
       TenantMembership,
       {
-        tenantId: string;
+        workspaceId: string;
         userId: string;
         status?: MembershipStatus;
         membership_type?: MembershipType;
         external_id?: string | null;
       }
     >({
-      query: ({ tenantId, userId, ...body }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
+      query: ({ workspaceId, userId, ...body }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/memberships/${userId}`,
         method: "PATCH",
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.tenantId },
+        { type: "TenantMembership", id: arg.workspaceId },
       ],
     }),
 
     deleteMembership: build.mutation<
       void,
-      { tenantId: string; userId: string }
+      { workspaceId: string; userId: string }
     >({
-      query: ({ tenantId, userId }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/memberships/${userId}`,
+      query: ({ workspaceId, userId }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/memberships/${userId}`,
         method: "DELETE",
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.tenantId },
+        { type: "TenantMembership", id: arg.workspaceId },
       ],
     }),
 
@@ -184,82 +184,82 @@ export const membershipApi = baseApi.injectEndpoints({
     listEndUsers: build.query<
       ListResponse<TenantEndUserState>,
       {
-        tenantId: string;
+        workspaceId: string;
         status?: EndUserStatus;
         plan_tier?: string;
         q?: string;
       }
     >({
-      query: ({ tenantId, status, plan_tier, q }) => {
+      query: ({ workspaceId, status, plan_tier, q }) => {
         const params = new URLSearchParams();
         if (status) params.set("status", status);
         if (plan_tier) params.set("plan_tier", plan_tier);
         if (q) params.set("q", q);
         const qs = params.toString() ? `?${params.toString()}` : "";
-        return { url: `authsec/uflow/v2/tenants/${tenantId}/end-users${qs}` };
+        return { url: `authsec/uflow/v2/tenants/${workspaceId}/end-users${qs}` };
       },
       providesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.tenantId },
+        { type: "TenantEndUserState", id: arg.workspaceId },
       ],
     }),
 
     getEndUser: build.query<
       TenantEndUserState,
-      { tenantId: string; userId: string }
+      { workspaceId: string; userId: string }
     >({
-      query: ({ tenantId, userId }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
+      query: ({ workspaceId, userId }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/end-users/${userId}`,
       }),
       providesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: `${arg.tenantId}:${arg.userId}` },
+        { type: "TenantEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
       ],
     }),
 
     updateEndUser: build.mutation<
       TenantEndUserState,
       {
-        tenantId: string;
+        workspaceId: string;
         userId: string;
         status?: EndUserStatus;
         plan_tier?: string | null;
         rate_limit_override?: string | null;
       }
     >({
-      query: ({ tenantId, userId, ...body }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}`,
+      query: ({ workspaceId, userId, ...body }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/end-users/${userId}`,
         method: "PATCH",
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.tenantId },
-        { type: "TenantEndUserState", id: `${arg.tenantId}:${arg.userId}` },
+        { type: "TenantEndUserState", id: arg.workspaceId },
+        { type: "TenantEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
       ],
     }),
 
     suspendEndUser: build.mutation<
       TenantEndUserState,
-      { tenantId: string; userId: string; reason?: string }
+      { workspaceId: string; userId: string; reason?: string }
     >({
-      query: ({ tenantId, userId, reason }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}/suspend`,
+      query: ({ workspaceId, userId, reason }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/end-users/${userId}/suspend`,
         method: "POST",
         body: { reason: reason ?? "" },
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.tenantId },
+        { type: "TenantEndUserState", id: arg.workspaceId },
       ],
     }),
 
     reactivateEndUser: build.mutation<
       TenantEndUserState,
-      { tenantId: string; userId: string }
+      { workspaceId: string; userId: string }
     >({
-      query: ({ tenantId, userId }) => ({
-        url: `authsec/uflow/v2/tenants/${tenantId}/end-users/${userId}/reactivate`,
+      query: ({ workspaceId, userId }) => ({
+        url: `authsec/uflow/v2/tenants/${workspaceId}/end-users/${userId}/reactivate`,
         method: "POST",
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.tenantId },
+        { type: "TenantEndUserState", id: arg.workspaceId },
       ],
     }),
 
@@ -268,7 +268,7 @@ export const membershipApi = baseApi.injectEndpoints({
       unknown,
       {
         groupId: string;
-        tenant_id: string;
+        workspace_id: string;
         role_id: string;
         scope_type?: string;
         scope_id?: string;

@@ -74,14 +74,14 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
     }
 
     const session = SessionManager.getSession();
-    if (!session?.tenant_id) {
+    if (!session?.workspace_id) {
       toast.error("Session expired. Please log in again.");
       return;
     }
 
     try {
       const result = await createDomain({
-        tenant_id: session.tenant_id,
+        workspace_id: session.workspace_id,
         domain: domain.trim().toLowerCase(),
         is_primary: isPrimary,
       }).unwrap();

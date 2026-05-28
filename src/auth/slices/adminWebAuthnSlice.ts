@@ -20,7 +20,7 @@ interface AdminWebAuthnState {
   isFirstLogin: boolean;
   
   // User context
-  tenantId: string | null;
+  workspaceId: string | null;
   email: string | null;
   
   // MFA configuration
@@ -50,7 +50,7 @@ interface AdminWebAuthnState {
 const initialState: AdminWebAuthnState = {
   currentStep: "login",
   isFirstLogin: false,
-  tenantId: null,
+  workspaceId: null,
   email: null,
   availableMFAMethods: [],
   selectedMFAMethod: null,
@@ -72,8 +72,8 @@ const adminWebAuthnSlice = createSlice({
     },
     
     // User context
-    setLoginData: (state, action: PayloadAction<{ tenantId: string; email: string; isFirstLogin: boolean }>) => {
-      state.tenantId = action.payload.tenantId;
+    setLoginData: (state, action: PayloadAction<{ workspaceId: string; email: string; isFirstLogin: boolean }>) => {
+      state.workspaceId = action.payload.workspaceId;
       state.email = action.payload.email;
       state.isFirstLogin = action.payload.isFirstLogin;
       // Reset flow-specific state on new login context

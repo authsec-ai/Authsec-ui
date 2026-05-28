@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/error-utils";
 import { toast } from "@/lib/toast";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useGetAdminUsersQuery } from "@/app/api/admin/usersApi";
 import { useGetAllClientsQuery } from "@/app/api/clientApi";
 import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
@@ -178,23 +178,23 @@ function mapAdminUsers(usersResponse: unknown) {
 
 export function TrustDelegationPolicyFormPage() {
   const navigate = useNavigate();
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const { policyId } = useParams();
   const isEditMode = Boolean(policyId);
   const [searchParams] = useSearchParams();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   const { data: roles = [] } = useGetAuthSecRolesQuery(
-    { tenant_id: tenantId || "", audience: "admin" },
-    { skip: !tenantId },
+    { workspace_id: workspaceId || "", audience: "admin" },
+    { skip: !workspaceId },
   );
   const { data: adminUsersResponse } = useGetAdminUsersQuery(
-    { page: 1, limit: 100, tenant_id: tenantId || "" },
-    { skip: !tenantId },
+    { page: 1, limit: 100, workspace_id: workspaceId || "" },
+    { skip: !workspaceId },
   );
   const { data: clientsData } = useGetAllClientsQuery(
-    { tenant_id: tenantId || "", active_only: false },
-    { skip: !tenantId },
+    { workspace_id: workspaceId || "", active_only: false },
+    { skip: !workspaceId },
   );
   const [
     loadPermissionCatalog,

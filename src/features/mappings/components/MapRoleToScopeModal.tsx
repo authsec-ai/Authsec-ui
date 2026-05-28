@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Shield, UserRound, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/lib/toast";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { SessionManager } from "@/utils/sessionManager";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
@@ -45,11 +45,11 @@ interface MapRoleToScopeModalProps {
 
 export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselectedUsers, preselectedRoles, audience = 'admin' }: MapRoleToScopeModalProps) {
   const sessionData = SessionManager.getSession();
-  const tenantId =
-    resolveTenantId() ??
-    sessionData?.tenant_id ??
-    (sessionData as any)?.tenantId ??
-    sessionData?.jwtPayload?.tenant_id ??
+  const workspaceId =
+    resolveWorkspaceId() ??
+    sessionData?.workspace_id ??
+    (sessionData as any)?.workspaceId ??
+    sessionData?.jwtPayload?.workspace_id ??
     "";
 
   const isEndUser = audience === 'endUser';
@@ -95,7 +95,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
     isLoading: isLoadingRoles,
     isFetching: isFetchingRoles,
   } = useGetAuthSecRolesQuery({
-    tenant_id: tenantId,
+    workspace_id: workspaceId,
     audience: audience,
   });
 

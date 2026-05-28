@@ -79,21 +79,21 @@ export function OIDCWebAuthnRouter({
 
   // ── Step Auto-Routing (login → mfa_selection / authentication) ──
   useEffect(() => {
-    if (oidcWebauthn.currentStep === "login" && oidcWebauthn.email && oidcWebauthn.tenantId) {
+    if (oidcWebauthn.currentStep === "login" && oidcWebauthn.email && oidcWebauthn.workspaceId) {
       dispatch(setCurrentStep(oidcWebauthn.isFirstLogin ? "mfa_selection" : "authentication"));
     }
-  }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.tenantId, oidcWebauthn.isFirstLogin, dispatch]);
+  }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.workspaceId, oidcWebauthn.isFirstLogin, dispatch]);
 
   // ── MFA Method Prefetch ──
   const mfaPrefetchedRef = useRef(false);
   useEffect(() => {
-    if (!oidcWebauthn.email || !oidcWebauthn.tenantId) return;
+    if (!oidcWebauthn.email || !oidcWebauthn.workspaceId) return;
     if (oidcWebauthn.currentStep !== "authentication" && oidcWebauthn.currentStep !== "mfa_selection") return;
     if (oidcWebauthn.availableMFAMethods.length > 0) return;
     if (mfaPrefetchedRef.current) return;
     mfaPrefetchedRef.current = true;
     void oidcWebauthn.getMFAMethods();
-  }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.tenantId]);
+  }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.workspaceId]);
 
   // ── Loader while step is still "login" ──
   if (oidcWebauthn.currentStep === "login") {
@@ -156,7 +156,7 @@ export function OIDCWebAuthnRouter({
           <WebAuthnSetupComponent
             contextType="oidc"
             email={oidcWebauthn.email || ""}
-            tenantId={oidcWebauthn.tenantId || ""}
+            workspaceId={oidcWebauthn.workspaceId || ""}
             onSuccess={() => {}}
             onError={onAuthError}
             onBack={oidcWebauthn.backToSelection}
@@ -168,7 +168,7 @@ export function OIDCWebAuthnRouter({
           <TOTPSetupComponent
             contextType="oidc"
             email={oidcWebauthn.email || ""}
-            tenantId={oidcWebauthn.tenantId || ""}
+            workspaceId={oidcWebauthn.workspaceId || ""}
             totpData={oidcWebauthn.totpSetupData}
             onSuccess={() => {}}
             onError={onAuthError}
@@ -184,7 +184,7 @@ export function OIDCWebAuthnRouter({
               <WebAuthnAuthComponent
                 contextType="oidc"
                 email={oidcWebauthn.email || ""}
-                tenantId={oidcWebauthn.tenantId || ""}
+                workspaceId={oidcWebauthn.workspaceId || ""}
                 onSuccess={() => {}}
                 onError={(error) => onAuthError?.(error)}
                 onAuthenticate={oidcWebauthn.authenticateWithWebAuthn}
@@ -193,7 +193,7 @@ export function OIDCWebAuthnRouter({
               <TOTPAuthComponent
                 contextType="oidc"
                 email={oidcWebauthn.email || ""}
-                tenantId={oidcWebauthn.tenantId || ""}
+                workspaceId={oidcWebauthn.workspaceId || ""}
                 onSuccess={() => {}}
                 onError={(error) => onAuthError?.(error)}
                 onAuthenticate={oidcWebauthn.authenticateWithTOTP}
@@ -207,7 +207,7 @@ export function OIDCWebAuthnRouter({
                     <WebAuthnAuthComponent
                       contextType="oidc"
                       email={oidcWebauthn.email || ""}
-                      tenantId={oidcWebauthn.tenantId || ""}
+                      workspaceId={oidcWebauthn.workspaceId || ""}
                       onSuccess={() => {}}
                       onError={(error) => onAuthError?.(error)}
                       onAuthenticate={oidcWebauthn.authenticateWithWebAuthn}
@@ -216,7 +216,7 @@ export function OIDCWebAuthnRouter({
                     <TOTPAuthComponent
                       contextType="oidc"
                       email={oidcWebauthn.email || ""}
-                      tenantId={oidcWebauthn.tenantId || ""}
+                      workspaceId={oidcWebauthn.workspaceId || ""}
                       onSuccess={() => {}}
                       onError={(error) => onAuthError?.(error)}
                       onAuthenticate={oidcWebauthn.authenticateWithTOTP}
@@ -226,7 +226,7 @@ export function OIDCWebAuthnRouter({
                   <TOTPAuthComponent
                     contextType="oidc"
                     email={oidcWebauthn.email || ""}
-                    tenantId={oidcWebauthn.tenantId || ""}
+                    workspaceId={oidcWebauthn.workspaceId || ""}
                     onSuccess={() => {}}
                     onError={(error) => onAuthError?.(error)}
                     onAuthenticate={oidcWebauthn.authenticateWithTOTP}

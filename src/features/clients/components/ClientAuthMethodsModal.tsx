@@ -39,10 +39,10 @@ export function ClientAuthMethodsModal({
   const session = SessionManager.getSession();
   const rawClient = (client?.metadata?.raw_client as any);
 
-  // Extract tenant_id and client_id dynamically
-  const tenantId = client?.workspace_id ||
-    rawClient?.tenant_id ||
-    session?.tenant_id ||
+  // Extract workspace_id and client_id dynamically
+  const workspaceId = client?.workspace_id ||
+    rawClient?.workspace_id ||
+    session?.workspace_id ||
     "";
 
   const clientId = client?.id ||
@@ -56,8 +56,8 @@ export function ClientAuthMethodsModal({
     error: activeError,
     refetch: refetchActive,
   } = useShowAuthProvidersQuery(
-    { tenant_id: tenantId, client_id: clientId },
-    { skip: !open || !tenantId || !clientId }
+    { workspace_id: workspaceId, client_id: clientId },
+    { skip: !open || !workspaceId || !clientId }
   );
 
   // Call 2: Get all available providers (WITHOUT client_id to get tenant-wide list)
@@ -67,8 +67,8 @@ export function ClientAuthMethodsModal({
     error: allError,
     refetch: refetchAll,
   } = useShowAuthProvidersQuery(
-    { tenant_id: tenantId, client_id: "" }, // Empty client_id to get all
-    { skip: !open || !tenantId }
+    { workspace_id: workspaceId, client_id: "" }, // Empty client_id to get all
+    { skip: !open || !workspaceId }
   );
 
   const [editClientAuthProvider] = useEditClientAuthProviderMutation();
@@ -81,7 +81,7 @@ export function ClientAuthMethodsModal({
     if (!open) return;
 
     console.log('[ClientAuthMethodsModal] Query state:', {
-      tenantId,
+      workspaceId,
       clientId,
       isLoadingActive,
       isLoadingAll,
@@ -146,7 +146,7 @@ export function ClientAuthMethodsModal({
   }, [activeProvidersData, allProvidersData]);
 
   const handleToggleStatus = async (provider: Provider, nextStatus: boolean) => {
-    if (!tenantId || !clientId) {
+    if (!workspaceId || !clientId) {
       toast.error("Missing tenant or client information.");
       return;
     }
@@ -156,7 +156,7 @@ export function ClientAuthMethodsModal({
     }
 
     const payload: EditClientAuthProviderRequest = {
-      tenant_id: tenantId,
+      workspace_id: workspaceId,
       client_id: clientId,
       provider_name: provider.provider_name,
       display_name: provider.display_name,

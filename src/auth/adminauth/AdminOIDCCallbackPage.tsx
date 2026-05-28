@@ -62,7 +62,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
       const legacyPicture = urlParams.get("picture") || "";
       const legacyProvider = urlParams.get("provider") || "";
       const legacyProviderUserId = urlParams.get("provider_user_id") || "";
-      const legacyTenantId = urlParams.get("tenant_id") || "";
+      const legacyTenantId = urlParams.get("workspace_id") || "";
       const legacyTenantDomain = urlParams.get("tenant_domain") || "";
       const legacyFirstLogin = urlParams.get("first_login") === "true";
       const legacyNeedsDomain = urlParams.get("needs_domain") === "true";
@@ -97,7 +97,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
         }
 
         handleExistingUser({
-          tenant_id: legacyTenantId,
+          workspace_id: legacyTenantId,
           email: legacyEmail,
           first_login: legacyFirstLogin,
           otp_required: false,
@@ -138,7 +138,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
       const handoffToken = encodeHandoff({
         email: data.email,
         tenant_domain: tenantDomain,
-        tenant_id: data.tenant_id,
+        workspace_id: data.workspace_id,
         first_login: data.first_login,
         target: "webauthn",
       });
@@ -152,12 +152,12 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     dispatch(setAuthenticationError(null));
     dispatch(
       setLoginData({
-        tenantId: data.tenant_id,
+        workspaceId: data.workspace_id,
         email: data.email,
         isFirstLogin: data.first_login,
       })
     );
-    // Router will advance once email + tenantId are present
+    // Router will advance once email + workspaceId are present
     dispatch(setCurrentStep("login"));
 
     toast.success("Signed in with provider. Complete security verification.");
@@ -166,7 +166,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
 
     const params = new URLSearchParams({
       email: data.email,
-      tenant_id: data.tenant_id,
+      workspace_id: data.workspace_id,
       first_login: String(data.first_login),
     });
     navigate(`/admin/webauthn?${params.toString()}`, { replace: true });
@@ -192,7 +192,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     setStatusMessage(message || "Failed to complete sign-in. Please try again.");
   };
 
-  const handleDomainSuccess = (result: { tenant_id: string; client_id: string; tenant_domain: string }) => {
+  const handleDomainSuccess = (result: { workspace_id: string; client_id: string; tenant_domain: string }) => {
     if (!providerData) return;
 
     const tenantDomain = result.tenant_domain;
@@ -207,7 +207,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
       const handoffToken = encodeHandoff({
         email: providerData.email,
         tenant_domain: tenantDomain,
-        tenant_id: result.tenant_id,
+        workspace_id: result.workspace_id,
         first_login: true,
         target: "webauthn",
       });
@@ -226,7 +226,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     dispatch(setAuthenticationError(null));
     dispatch(
       setLoginData({
-        tenantId: result.tenant_id,
+        workspaceId: result.workspace_id,
         email: providerData.email,
         isFirstLogin: true,
       })
@@ -235,7 +235,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
 
     const params = new URLSearchParams({
       email: providerData.email,
-      tenant_id: result.tenant_id,
+      workspace_id: result.workspace_id,
       first_login: "true",
     });
     navigate(`/admin/webauthn?${params.toString()}`, { replace: true });

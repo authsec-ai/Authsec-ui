@@ -28,13 +28,13 @@ export interface SamlSPMetadata {
 }
 
 export interface ListSamlProvidersRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
 }
 
 export interface SamlProviderResponseRow {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   client_id?: string;
   provider_name: string;
   display_name: string;
@@ -62,7 +62,7 @@ export interface ListSamlProvidersResponse {
 }
 
 export interface GetSamlProviderRequest {
-  tenant_id: string;
+  workspace_id: string;
   provider_id: string;
 }
 
@@ -72,7 +72,7 @@ export interface GetSamlProviderResponse {
 }
 
 export interface UpdateSamlProviderRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   provider_id?: string;
   id?: string;
   provider_name?: string;
@@ -89,7 +89,7 @@ export interface UpdateSamlProviderRequest {
 }
 
 export interface DeleteSamlProviderRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   provider_id?: string;
   id?: string;
 }
@@ -168,7 +168,7 @@ export const samlApi = baseApi.injectEndpoints({
         success: true,
         providers: providers.map((provider, index) => ({
           id: provider.id,
-          tenant_id: arg.tenant_id,
+          workspace_id: arg.workspace_id,
           client_id: arg.client_id,
           provider_name: provider.display_name.toLowerCase().replace(/\s+/g, "-"),
           display_name: provider.display_name,
@@ -204,7 +204,7 @@ export const samlApi = baseApi.injectEndpoints({
         success: true,
         provider: {
           id: provider.id,
-          tenant_id: arg.tenant_id,
+          workspace_id: arg.workspace_id,
           provider_name: provider.display_name.toLowerCase().replace(/\s+/g, "-"),
           display_name: provider.display_name,
           entity_id: provider.config_ref || provider.id,

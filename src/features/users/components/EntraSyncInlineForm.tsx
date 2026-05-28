@@ -43,7 +43,7 @@ interface EntraSyncInlineFormProps {
 }
 
 type EntraSyncFallback = SyncConfig & {
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   client_secret?: string;
   entra_tenant_id?: string;
@@ -58,7 +58,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     (): EntraConfigFormData => ({
     config_name: "",
     description: "",
-    tenant_id: "",
+    workspace_id: "",
     client_id: "",
     client_secret: "",
     skip_verify: true,
@@ -75,7 +75,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       ...defaults,
       config_name: source.config_name || defaults.config_name,
       description: source.description || '',
-      tenant_id: entra.tenant_id || fallback.tenant_id || fallback.entra_tenant_id || defaults.tenant_id,
+      workspace_id: entra.workspace_id || fallback.workspace_id || fallback.entra_tenant_id || defaults.workspace_id,
       client_id: entra.client_id || fallback.entra_client_id || fallback.client_id || defaults.client_id,
       client_secret: entra.client_secret || fallback.client_secret || defaults.client_secret,
       skip_verify: entra.skip_verify ?? fallback.skip_verify ?? defaults.skip_verify,
@@ -112,7 +112,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!entraConfig.config_name.trim()) newErrors.config_name = "Configuration name is required";
-    if (!entraConfig.tenant_id.trim()) newErrors.tenant_id = "Tenant ID is required";
+    if (!entraConfig.workspace_id.trim()) newErrors.workspace_id = "Tenant ID is required";
     if (!entraConfig.client_id.trim()) newErrors.client_id = "Client ID is required";
     if (!entraConfig.client_secret.trim()) newErrors.client_secret = "Client Secret is required";
     setErrors(newErrors);
@@ -153,7 +153,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       await syncEntra({
         provider: "entra",
         config: {
-          tenant_id: entraConfig.tenant_id,
+          workspace_id: entraConfig.workspace_id,
           client_id: entraConfig.client_id,
           client_secret: entraConfig.client_secret,
           skip_verify: entraConfig.skip_verify,
@@ -182,7 +182,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
         config_name: entraConfig.config_name,
         description: entraConfig.description,
         entra_config: {
-          tenant_id: entraConfig.tenant_id,
+          workspace_id: entraConfig.workspace_id,
           client_id: entraConfig.client_id,
           client_secret: entraConfig.client_secret,
           skip_verify: entraConfig.skip_verify,
@@ -211,7 +211,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     if (currentStepIndex === 0) {
       return (
         entraConfig.config_name.trim() &&
-        entraConfig.tenant_id.trim() &&
+        entraConfig.workspace_id.trim() &&
         entraConfig.client_id.trim() &&
         entraConfig.client_secret.trim()
       );
@@ -277,7 +277,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
                     <div className="space-y-0.5 text-[11px] text-muted-foreground">
                       <div className="flex justify-between gap-4">
                         <span>Tenant ID:</span>
-                        <span className="font-mono truncate">{entraConfig.tenant_id}</span>
+                        <span className="font-mono truncate">{entraConfig.workspace_id}</span>
                       </div>
                       <div className="flex justify-between gap-4">
                         <span>Client ID:</span>
@@ -348,7 +348,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
                     <div className="flex justify-between gap-4">
                       <span>Tenant ID:</span>
-                      <span className="font-mono truncate">{entraConfig.tenant_id}</span>
+                      <span className="font-mono truncate">{entraConfig.workspace_id}</span>
                     </div>
                     <div className="flex justify-between gap-4">
                       <span>Client ID:</span>

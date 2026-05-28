@@ -20,7 +20,7 @@ interface OIDCWebAuthnState {
   isFirstLogin: boolean;
 
   // User context
-  tenantId: string | null;
+  workspaceId: string | null;
   email: string | null;
   clientId: string | null; // Add client_id to capture from initial response
   clientType: string | null; // e.g. "claw_auth", "application", "ai_agent"
@@ -54,7 +54,7 @@ interface OIDCWebAuthnState {
 const initialState: OIDCWebAuthnState = {
   currentStep: "login",
   isFirstLogin: false,
-  tenantId: null,
+  workspaceId: null,
   email: null,
   clientId: null,
   clientType: null,
@@ -80,8 +80,8 @@ const oidcWebAuthnSlice = createSlice({
     },
     
     // User context
-    setLoginData: (state, action: PayloadAction<{ tenantId: string; email: string; isFirstLogin: boolean; clientId?: string }>) => {
-      state.tenantId = action.payload.tenantId;
+    setLoginData: (state, action: PayloadAction<{ workspaceId: string; email: string; isFirstLogin: boolean; clientId?: string }>) => {
+      state.workspaceId = action.payload.workspaceId;
       state.email = action.payload.email;
       state.isFirstLogin = action.payload.isFirstLogin;
       if (action.payload.clientId) {

@@ -146,7 +146,7 @@ client = AuthSecClient("https://auth.example.com")
 
 # Option 1: Generate through AuthSec (requires Vault + tenant DB wiring)
 token = client.generate_token(
-    tenant_id="demo-tenant",
+    workspace_id="demo-tenant",
     project_id="demo-project",
     client_id="demo-client",
     email_id="user@example.com",
@@ -165,7 +165,7 @@ response = client.request("GET", "/api/v1/invoices")
 print("Status:", response.status_code)`;
 
 const generatePayload = `{
-  "tenant_id": "demo-tenant",
+  "workspace_id": "demo-tenant",
   "project_id": "demo-project",
   "client_id": "demo-client",
   "email_id": "user@example.com",
@@ -181,7 +181,7 @@ const oidcPayload = `{
 }`;
 
 const claimsExample = `{
-  "tenant_id": "demo-tenant",
+  "workspace_id": "demo-tenant",
   "project_id": "demo-project",
   "client_id": "demo-client",
   "email_id": "user@example.com",
@@ -401,7 +401,7 @@ export function SDKManagerPage() {
                 <li>
                   Store client credentials at{" "}
                   <code className="font-mono text-xs">
-                    kv/secret/&lt;tenant_id&gt;/&lt;project_id&gt;/&lt;client_id&gt;
+                    kv/secret/&lt;workspace_id&gt;/&lt;project_id&gt;/&lt;client_id&gt;
                   </code>
                   .
                 </li>

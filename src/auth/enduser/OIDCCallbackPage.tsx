@@ -69,12 +69,12 @@ const OIDCCallbackPageInner: React.FC = () => {
 
   const transitionToMfa = useCallback(
     (
-      data: { tenantId: string; email: string; firstLogin: boolean },
+      data: { workspaceId: string; email: string; firstLogin: boolean },
       nextClientId?: string | null,
       redirectTo?: string | null,
     ) => {
       const params = new URLSearchParams({
-        tenant_id: data.tenantId,
+        workspace_id: data.workspaceId,
         email: data.email,
         first_login: String(data.firstLogin),
       });
@@ -193,7 +193,7 @@ const OIDCCallbackPageInner: React.FC = () => {
           console.log("✅ Existing UFlow OAuth user - proceeding to login");
 
           // Extract tenant and client info
-          const tenantId = urlParams.get("tenant_id");
+          const workspaceId = urlParams.get("workspace_id");
           const tenantDomain = urlParams.get("tenant_domain");
 
           if (isAdminFlow) {
@@ -224,7 +224,7 @@ const OIDCCallbackPageInner: React.FC = () => {
             // End-user flow - WebAuthn authentication
             const clientId = urlParams.get("client_id");
 
-            if (!tenantId || !clientId) {
+            if (!workspaceId || !clientId) {
               setStatus("error");
               setMessage(
                 "Missing tenant or client information from OAuth callback",
@@ -242,7 +242,7 @@ const OIDCCallbackPageInner: React.FC = () => {
 
             // Initialize WebAuthn flow
             const webauthnFlowData = {
-              tenantId,
+              workspaceId,
               email,
               firstLogin: false, // Existing user
             };
@@ -254,7 +254,7 @@ const OIDCCallbackPageInner: React.FC = () => {
             // Initialize WebAuthn flow in Redux
             dispatch(
               setLoginData({
-                tenantId: webauthnFlowData.tenantId,
+                workspaceId: webauthnFlowData.workspaceId,
                 email: webauthnFlowData.email,
                 isFirstLogin: webauthnFlowData.firstLogin,
                 clientId: clientId,
@@ -268,7 +268,7 @@ const OIDCCallbackPageInner: React.FC = () => {
             setDebugInfo({
               flow_type: "UFlow OAuth - Existing User",
               email,
-              tenant_id: tenantId,
+              workspace_id: workspaceId,
               client_id: clientId,
             });
 
@@ -528,7 +528,7 @@ const OIDCCallbackPageInner: React.FC = () => {
               const oidcData: any = oidcResponse
                 ? ((oidcResponse as any).data ?? oidcResponse)
                 : undefined;
-              let tenantId: string | undefined = oidcData?.tenant_id;
+              let workspaceId: string | undefined = oidcData?.workspace_id;
               let email: string | undefined = oidcData?.email;
               const firstLogin = Boolean(oidcData?.first_login);
 
@@ -538,8 +538,8 @@ const OIDCCallbackPageInner: React.FC = () => {
                 ? decodeJWT(response.tokens.access_token)
                 : null;
               if (decoded) {
-                tenantId =
-                  decoded?.ext?.tenant_id || decoded?.tenant_id || tenantId;
+                workspaceId =
+                  decoded?.ext?.workspace_id || decoded?.workspace_id || workspaceId;
                 email = decoded?.ext?.email || decoded?.email_id || email;
 
                 // Only extract client_id from JWT as fallback if not in Redux
@@ -552,8 +552,8 @@ const OIDCCallbackPageInner: React.FC = () => {
                 }
               }
 
-              if (tenantId && email) {
-                const webauthnFlowData = { tenantId, email, firstLogin };
+              if (workspaceId && email) {
+                const webauthnFlowData = { workspaceId, email, firstLogin };
                 setMessage(
                   "OIDC login processed. Initiating MFA (WebAuthn/TOTP)...",
                 );
@@ -566,7 +566,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                 // Initialize WebAuthn flow in Redux
                 dispatch(
                   setLoginData({
-                    tenantId: webauthnFlowData.tenantId,
+                    workspaceId: webauthnFlowData.workspaceId,
                     email: webauthnFlowData.email,
                     isFirstLogin: webauthnFlowData.firstLogin,
                     clientId: clientId || undefined,
@@ -831,7 +831,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                 if (samlLoginResponse.first_login !== undefined) {
                   // Set up WebAuthn flow data
                   const webauthnFlowData = {
-                    tenantId: samlLoginResponse.tenant_id,
+                    workspaceId: samlLoginResponse.workspace_id,
                     email: samlLoginResponse.email,
                     firstLogin: samlLoginResponse.first_login,
                   };
@@ -846,7 +846,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                   // Initialize WebAuthn flow in Redux
                   dispatch(
                     setLoginData({
-                      tenantId: webauthnFlowData.tenantId,
+                      workspaceId: webauthnFlowData.workspaceId,
                       email: webauthnFlowData.email,
                       isFirstLogin: webauthnFlowData.firstLogin,
                       clientId: clientIdForSaml,

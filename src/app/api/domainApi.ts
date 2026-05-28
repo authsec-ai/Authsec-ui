@@ -6,7 +6,7 @@ import { baseApi, withSessionData } from "./baseApi";
 
 export interface CustomDomain {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   domain: string;
   kind: "custom" | "platform";
   is_primary: boolean;
@@ -21,7 +21,7 @@ export interface CustomDomain {
 }
 
 export interface CreateDomainRequest {
-  tenant_id: string;
+  workspace_id: string;
   domain: string;
   is_primary?: boolean;
 }
@@ -69,8 +69,8 @@ export const domainApi = baseApi.injectEndpoints({
     /**
      * List all domains for a tenant
      */
-    listDomains: builder.query<CustomDomain[], { tenant_id: string }>({
-      query: ({ tenant_id }) => `/authsec/uflow/admin/tenants/${tenant_id}/domains`,
+    listDomains: builder.query<CustomDomain[], { workspace_id: string }>({
+      query: ({ workspace_id }) => `/authsec/uflow/admin/tenants/${workspace_id}/domains`,
       transformResponse: (response: ListDomainsResponse) => {
         return response.domains || [];
       },
@@ -91,10 +91,10 @@ export const domainApi = baseApi.injectEndpoints({
      */
     getDomain: builder.query<
       CustomDomain,
-      { tenant_id: string; domain_id: string }
+      { workspace_id: string; domain_id: string }
     >({
-      query: ({ tenant_id, domain_id }) =>
-        `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
+      query: ({ workspace_id, domain_id }) =>
+        `/authsec/uflow/admin/tenants/${workspace_id}/domains/${domain_id}`,
       transformResponse: (response: {
         success: boolean;
         domain: CustomDomain;
@@ -111,7 +111,7 @@ export const domainApi = baseApi.injectEndpoints({
      */
     createDomain: builder.mutation<CreateDomainResponse, CreateDomainRequest>({
       query: (data) => ({
-        url: `/authsec/uflow/admin/tenants/${data.tenant_id}/domains`,
+        url: `/authsec/uflow/admin/tenants/${data.workspace_id}/domains`,
         method: "POST",
         body: {
           domain: data.domain,
@@ -126,10 +126,10 @@ export const domainApi = baseApi.injectEndpoints({
      */
     verifyDomain: builder.mutation<
       VerifyDomainResponse,
-      { tenant_id: string; domain_id: string }
+      { workspace_id: string; domain_id: string }
     >({
-      query: ({ tenant_id, domain_id }) => ({
-        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/verify`,
+      query: ({ workspace_id, domain_id }) => ({
+        url: `/authsec/uflow/admin/tenants/${workspace_id}/domains/${domain_id}/verify`,
         method: "POST",
       }),
       invalidatesTags: (_result, _error, { domain_id }) => [
@@ -143,10 +143,10 @@ export const domainApi = baseApi.injectEndpoints({
      */
     setPrimaryDomain: builder.mutation<
       SetPrimaryDomainResponse,
-      { tenant_id: string; domain_id: string }
+      { workspace_id: string; domain_id: string }
     >({
-      query: ({ tenant_id, domain_id }) => ({
-        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}/set-primary`,
+      query: ({ workspace_id, domain_id }) => ({
+        url: `/authsec/uflow/admin/tenants/${workspace_id}/domains/${domain_id}/set-primary`,
         method: "POST",
       }),
       // Invalidate entire list since we need to update the old primary too
@@ -158,10 +158,10 @@ export const domainApi = baseApi.injectEndpoints({
      */
     deleteDomain: builder.mutation<
       DeleteDomainResponse,
-      { tenant_id: string; domain_id: string }
+      { workspace_id: string; domain_id: string }
     >({
-      query: ({ tenant_id, domain_id }) => ({
-        url: `/authsec/uflow/admin/tenants/${tenant_id}/domains/${domain_id}`,
+      query: ({ workspace_id, domain_id }) => ({
+        url: `/authsec/uflow/admin/tenants/${workspace_id}/domains/${domain_id}`,
         method: "DELETE",
       }),
       invalidatesTags: (_result, _error, { domain_id }) => [

@@ -378,7 +378,7 @@ const mapEntryRecord = (entry: EntryRecord, index: number): DisplayWorkload => {
 
 export function WorkloadCertificatePage() {
   const sessionData = SessionManager.getSession();
-  const tenantId = sessionData?.tenant_id || "";
+  const workspaceId = sessionData?.workspace_id || "";
   const navigate = useNavigate();
 
   // Initialize guided tour
@@ -400,7 +400,7 @@ export function WorkloadCertificatePage() {
     error: entriesError,
     refetch,
   } = useListEntriesQuery(
-    { tenant_id: tenantId },
+    { workspace_id: workspaceId },
     {
       skip: !sessionData?.token,
       refetchOnMountOrArgChange: true,
@@ -483,7 +483,7 @@ export function WorkloadCertificatePage() {
     try {
       await deleteEntry({
         entry_id: workloadToDelete.id,
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
       }).unwrap();
       toast.success("Entry deleted successfully");
       setDeleteDialogOpen(false);

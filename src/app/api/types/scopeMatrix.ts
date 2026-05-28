@@ -19,7 +19,7 @@ export interface ScopePermission {
 
 export interface OAuthScope {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   resource_server_id?: string;
   scope_string: string;
   display_name: string;
@@ -144,7 +144,7 @@ export interface UpdateToolScopeMapRequest {
 
 export interface OAuthConsentGrant {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   user_id: string;
   client_id: string;
   client_name?: string;

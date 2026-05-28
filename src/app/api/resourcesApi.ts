@@ -15,7 +15,7 @@ interface AuthSecResource {
   id: string;
   name: string;
   description?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   created_at: string;
   updated_at?: string;
 }
@@ -26,17 +26,17 @@ interface UserDefinedResourceInput {
 }
 
 interface UserDefinedResourcesRequest {
-  tenant_id: string;
+  workspace_id: string;
   resources: UserDefinedResourceInput[];
 }
 
 interface DeleteResourcesRequest {
-  tenant_id: string;
+  workspace_id: string;
   resource_ids: string[];
 }
 
 interface MapResourcesRequest {
-  tenant_id: string;
+  workspace_id: string;
   project_id?: string;
   client_id?: string;
   resource_ids: string[];

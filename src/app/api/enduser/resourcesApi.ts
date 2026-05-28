@@ -3,16 +3,16 @@
  *
  * Endpoints for end-user resource management operations (TENANT-SPECIFIC resources)
  * Authentication: Requires AuthMiddleware (user ID and tenant ID extracted from JWT)
- * Base Path: /admin/endusers/:tenant_id/resources
+ * Base Path: /admin/endusers/:workspace_id/resources
  *
  * Documentation Reference: New RBAC System - End-User Resource Management
  *
  * Available Endpoints:
- * - GET    /admin/endusers/:tenant_id/resources                    - List tenant resources
- * - GET    /admin/endusers/:tenant_id/resources/:resource_id       - Get specific resource
- * - POST   /admin/endusers/:tenant_id/resources                    - Create tenant resource
- * - PUT    /admin/endusers/:tenant_id/resources/:resource_id       - Update resource
- * - DELETE /admin/endusers/:tenant_id/resources/:resource_id       - Delete resource
+ * - GET    /admin/endusers/:workspace_id/resources                    - List tenant resources
+ * - GET    /admin/endusers/:workspace_id/resources/:resource_id       - Get specific resource
+ * - POST   /admin/endusers/:workspace_id/resources                    - Create tenant resource
+ * - PUT    /admin/endusers/:workspace_id/resources/:resource_id       - Update resource
+ * - DELETE /admin/endusers/:workspace_id/resources/:resource_id       - Delete resource
  */
 
 import { baseApi, withSessionData } from '../baseApi';
@@ -23,7 +23,7 @@ import { baseApi, withSessionData } from '../baseApi';
 
 export interface EndUserResource {
   id: string;
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   description?: string;
   created_at: string;
@@ -54,48 +54,48 @@ export interface ApiResponse {
 
 export const endUserResourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => {
-    const buildPath = (tenant_id: string, suffix = "") =>
-      `uflow/admin/endusers/${tenant_id}/resources${suffix}`;
+    const buildPath = (workspace_id: string, suffix = "") =>
+      `uflow/admin/endusers/${workspace_id}/resources${suffix}`;
 
     return {
-      // GET /admin/endusers/:tenant_id/resources - List all tenant resources
+      // GET /admin/endusers/:workspace_id/resources - List all tenant resources
       getEndUserResources: builder.query<EndUserResource[], string>({
-        query: (tenant_id) => buildPath(tenant_id),
+        query: (workspace_id) => buildPath(workspace_id),
         transformResponse: (response: { resources: EndUserResource[] }) => response.resources,
         providesTags: ["EndUserRBACResource"],
       }),
 
-      // GET /admin/endusers/:tenant_id/resources/:resource_id - Get specific resource
+      // GET /admin/endusers/:workspace_id/resources/:resource_id - Get specific resource
       getEndUserResource: builder.query<
         EndUserResource,
-        { tenant_id: string; resource_id: string }
+        { workspace_id: string; resource_id: string }
       >({
-        query: ({ tenant_id, resource_id }) => buildPath(tenant_id, `/${resource_id}`),
+        query: ({ workspace_id, resource_id }) => buildPath(workspace_id, `/${resource_id}`),
         providesTags: (result, error, { resource_id }) => [
           { type: "EndUserRBACResource", id: resource_id },
         ],
       }),
 
-      // POST /admin/endusers/:tenant_id/resources - Create tenant resource
+      // POST /admin/endusers/:workspace_id/resources - Create tenant resource
       createEndUserResource: builder.mutation<
         CreateResourcesResponse,
-        { tenant_id: string; data: CreateResourceInput }
+        { workspace_id: string; data: CreateResourceInput }
       >({
-        query: ({ tenant_id, data }) => ({
-          url: buildPath(tenant_id),
+        query: ({ workspace_id, data }) => ({
+          url: buildPath(workspace_id),
           method: "POST",
           body: withSessionData(data),
         }),
         invalidatesTags: ["EndUserRBACResource"],
       }),
 
-      // PUT /admin/endusers/:tenant_id/resources/:resource_id - Update resource
+      // PUT /admin/endusers/:workspace_id/resources/:resource_id - Update resource
       updateEndUserResource: builder.mutation<
         ApiResponse,
-        { tenant_id: string; id: string; data: UpdateResourceRequest }
+        { workspace_id: string; id: string; data: UpdateResourceRequest }
       >({
-        query: ({ tenant_id, id, data }) => ({
-          url: buildPath(tenant_id, `/${id}`),
+        query: ({ workspace_id, id, data }) => ({
+          url: buildPath(workspace_id, `/${id}`),
           method: "PUT",
           body: withSessionData(data),
         }),
@@ -105,13 +105,13 @@ export const endUserResourcesApi = baseApi.injectEndpoints({
         ],
       }),
 
-      // DELETE /admin/endusers/:tenant_id/resources/:resource_id - Delete resource
+      // DELETE /admin/endusers/:workspace_id/resources/:resource_id - Delete resource
       deleteEndUserResource: builder.mutation<
         ApiResponse,
-        { tenant_id: string; resource_id: string }
+        { workspace_id: string; resource_id: string }
       >({
-        query: ({ tenant_id, resource_id }) => ({
-          url: buildPath(tenant_id, `/${resource_id}`),
+        query: ({ workspace_id, resource_id }) => ({
+          url: buildPath(workspace_id, `/${resource_id}`),
           method: "DELETE",
         }),
         invalidatesTags: ["EndUserRBACResource"],

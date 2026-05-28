@@ -119,7 +119,7 @@ export function EnhancedPermissionsTable({
   onSelectPermission,
 }: EnhancedPermissionsTableProps) {
   const [deletePermissions, { isLoading: isDeleting }] = useDeletePermissionsMutation();
-  const tenantId = SessionManager.getSession()?.tenant_id || "";
+  const workspaceId = SessionManager.getSession()?.workspace_id || "";
   const [sdkModalOpen, setSdkModalOpen] = useState(false);
   const [selectedPermissionForSDK, setSelectedPermissionForSDK] = useState<Permission | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -140,7 +140,7 @@ export function EnhancedPermissionsTable({
 
     try {
       await deletePermissions({
-        tenant_id: tenantId,
+        workspace_id: workspaceId,
         permission_ids: [permissionToDelete.id],
       }).unwrap();
       toast.success(`Permission deleted successfully`);
@@ -150,7 +150,7 @@ export function EnhancedPermissionsTable({
       toast.error(error?.data?.message || "Failed to delete permission");
       // Keep modal open on error for retry
     }
-  }, [permissionToDelete, deletePermissions, tenantId]);
+  }, [permissionToDelete, deletePermissions, workspaceId]);
 
   const columns: ResponsiveColumnDef<Permission, unknown>[] = useMemo(
     () => [

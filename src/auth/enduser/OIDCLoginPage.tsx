@@ -275,9 +275,9 @@ const OIDCLoginPageInner: React.FC = () => {
   const loginChallenge = urlParams.get("login_challenge");
 
   const transitionToMfa = useCallback(
-    (data: { tenantId: string; email: string; firstLogin: boolean }, nextClientId?: string) => {
+    (data: { workspaceId: string; email: string; firstLogin: boolean }, nextClientId?: string) => {
       const params = new URLSearchParams({
-        tenant_id: data.tenantId,
+        workspace_id: data.workspaceId,
         email: data.email,
         first_login: String(data.firstLogin),
       });
@@ -298,7 +298,7 @@ const OIDCLoginPageInner: React.FC = () => {
   // Extract SAML-related parameters from URL (if present after SAML callback)
   const samlClientId = urlParams.get("client_id");
   const samlUserEmail = urlParams.get("user_email");
-  const samlTenantId = urlParams.get("tenant_id");
+  const samlTenantId = urlParams.get("workspace_id");
   const samlUserId = urlParams.get("user_id");
   const samlProvider = urlParams.get("provider");
   const samlProviderId = urlParams.get("provider_id");
@@ -316,7 +316,7 @@ const OIDCLoginPageInner: React.FC = () => {
           {
             client_id: samlClientId,
             user_email: samlUserEmail,
-            tenant_id: samlTenantId,
+            workspace_id: samlTenantId,
             provider: samlProvider,
           }
         );
@@ -334,7 +334,7 @@ const OIDCLoginPageInner: React.FC = () => {
           if (samlLoginResponse.first_login !== undefined) {
             // Set up WebAuthn flow data
             const webauthnFlowData = {
-              tenantId: samlLoginResponse.tenant_id,
+              workspaceId: samlLoginResponse.workspace_id,
               email: samlLoginResponse.email,
               firstLogin: samlLoginResponse.first_login,
             };
@@ -346,7 +346,7 @@ const OIDCLoginPageInner: React.FC = () => {
             // Initialize OIDC WebAuthn flow in Redux
             dispatch(
               setLoginData({
-                tenantId: webauthnFlowData.tenantId,
+                workspaceId: webauthnFlowData.workspaceId,
                 email: webauthnFlowData.email,
                 isFirstLogin: webauthnFlowData.firstLogin,
                 clientId: samlClientId,
@@ -776,13 +776,13 @@ const OIDCLoginPageInner: React.FC = () => {
         ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
       }).unwrap();
 
-      // Your API returns data directly: {tenant_id, email, first_login, otp_required, mfa_required}
+      // Your API returns data directly: {workspace_id, email, first_login, otp_required, mfa_required}
       const userData = result;
 
       // Check if we have the expected fields
       if (
         userData &&
-        userData.tenant_id &&
+        userData.workspace_id &&
         userData.email !== undefined &&
         userData.first_login !== undefined
       ) {
@@ -813,7 +813,7 @@ const OIDCLoginPageInner: React.FC = () => {
         if (!userData.first_login) {
           // Set WebAuthn data
           const webauthnFlowData = {
-            tenantId: userData.tenant_id,
+            workspaceId: userData.workspace_id,
             email: userData.email,
             firstLogin: userData.first_login,
           };
@@ -821,7 +821,7 @@ const OIDCLoginPageInner: React.FC = () => {
           // Initialize OIDC WebAuthn flow in Redux first to provide context data
           dispatch(
             setLoginData({
-              tenantId: webauthnFlowData.tenantId,
+              workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
               clientId, // Include client_id in Redux state
@@ -835,7 +835,7 @@ const OIDCLoginPageInner: React.FC = () => {
         } else {
           // First-time login - initiate MFA setup flow
           const webauthnFlowData = {
-            tenantId: userData.tenant_id,
+            workspaceId: userData.workspace_id,
             email: userData.email,
             firstLogin: true,
           };
@@ -843,7 +843,7 @@ const OIDCLoginPageInner: React.FC = () => {
           // Initialize OIDC WebAuthn flow for first-time user first
           dispatch(
             setLoginData({
-              tenantId: webauthnFlowData.tenantId,
+              workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
               clientId, // Include client_id in Redux state
@@ -859,7 +859,7 @@ const OIDCLoginPageInner: React.FC = () => {
         // If we don't have the expected structure, log it and show error
         console.error("Invalid custom login response structure:", result);
         console.error(
-          "Expected: {tenant_id, email, first_login, otp_required, mfa_required}"
+          "Expected: {workspace_id, email, first_login, otp_required, mfa_required}"
         );
         setError("Invalid response from login API. Please try again.");
       }

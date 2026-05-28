@@ -249,10 +249,10 @@ export function CreateAuthMethodPage() {
   // Workspace context comes from the session (JWT); the backend resolves the
   // workspace_id from the token, so we don't pass it explicitly.
   const [workspaceId, setWorkspaceId] = useState<string | null>(
-    SessionManager.getSession()?.tenant_id || null,
+    SessionManager.getSession()?.workspace_id || null,
   );
   useEffect(() => {
-    setWorkspaceId(SessionManager.getSession()?.tenant_id || null);
+    setWorkspaceId(SessionManager.getSession()?.workspace_id || null);
   }, []);
 
   const callbackUrl = useMemo(() => oidcCallbackUrl(), []);

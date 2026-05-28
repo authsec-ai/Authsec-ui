@@ -4,7 +4,7 @@ import type { AuthMethod } from "../../features/authentication/types";
 
 // AuthSec API specific interfaces
 export interface GetClientsRequest {
-  tenant_id: string;
+  workspace_id: string;
   active_only?: boolean;
   filters?: Record<string, any>;
   page?: number;
@@ -14,7 +14,7 @@ export interface GetClientsRequest {
 export interface ClientData {
   id: string;
   client_id: string;
-  tenant_id: string;
+  workspace_id: string;
   project_id: string;
   owner_id?: string | null;
   org_id?: string | null;
@@ -92,7 +92,7 @@ export interface GetAllClientsResponse {
 }
 
 export interface RegisterClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   email: string;
   project_id?: string;
@@ -109,7 +109,7 @@ export interface ClientPlatformConfig {
 }
 
 export interface GetPlatformSelectorsRequest {
-  tenant_id: string;
+  workspace_id: string;
   platform: string;
 }
 
@@ -119,7 +119,7 @@ export interface PlatformSelectorsResponse {
 }
 
 export interface RegisterAiAgentClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   email: string;
   client_type: "ai_agent";
@@ -129,7 +129,7 @@ export interface RegisterAiAgentClientRequest {
 }
 
 export interface RegisterClawAuthClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   name: string;
   email: string;
   project_id?: string;
@@ -142,7 +142,7 @@ export interface RegisterClawAuthClientRequest {
 export interface RegisterClientResponse {
   id: string;
   client_id: string;
-  tenant_id: string;
+  workspace_id: string;
   project_id: string;
   name: string;
   secret_id?: string;
@@ -154,18 +154,18 @@ export interface RegisterClientResponse {
 }
 
 export interface DeleteClientRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
 }
 
 export interface DeleteClientResponse {
   client_id: string;
   message: string;
-  tenant_id: string;
+  workspace_id: string;
 }
 
 export interface SetClientStatusRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   active: boolean;
 }
@@ -177,7 +177,7 @@ export interface SetClientStatusResponse {
     active: boolean;
     client: ClientData;
     client_id: string;
-    tenant_id: string;
+    workspace_id: string;
   };
   timestamp: string;
 }
@@ -195,7 +195,7 @@ export interface OIDCProvider {
 }
 
 export interface AddProviderRequest {
-  tenant_id: string;
+  workspace_id: string;
   client_id: string;
   provider: OIDCProvider;
   created_by: string;
@@ -211,13 +211,13 @@ export interface AddProviderResponse {
     display_name: string;
     is_active: boolean;
     provider_name: string;
-    tenant_id: string;
+    workspace_id: string;
   };
   timestamp: string;
 }
 
 export interface GetConfigRequest {
-  tenant_id: string;
+  workspace_id: string;
 }
 
 export interface GetConfigResponse {
@@ -253,7 +253,7 @@ export interface GetConfigResponse {
       redirect_uris: string[];
       scopes: string[];
     };
-    tenant_id: string;
+    workspace_id: string;
   };
   timestamp: string;
 }
@@ -268,8 +268,8 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
         ...item,
         id: item.id,
         client_id: item.client_id || item.id,
-        tenant_id: item.tenant_id || "",
-        project_id: item.project_id || item.tenant_id || "",
+        workspace_id: item.workspace_id || "",
+        project_id: item.project_id || item.workspace_id || "",
         name: item.name || item.client_name || "Unnamed application",
         active: item.active ?? true,
         status: item.status || (item.active === false ? "inactive" : "active"),
@@ -286,7 +286,7 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
 
   // TEMP WORKAROUND: Handle broken API response format
   // The API is returning: { client_name, user_count, authentication_methods: "password", enabled }
-  // But we need full ClientData with client_id, tenant_id, etc.
+  // But we need full ClientData with client_id, workspace_id, etc.
   if (Array.isArray(response.clients)) {
     const hasClientId =
       response.clients.length > 0 && "client_id" in response.clients[0];
@@ -311,7 +311,7 @@ const normalizeClientsResponse = (response: unknown): GetClientsResponse => {
           return {
             id: deterministicId,
             client_id: deterministicId, // This is WRONG but API doesn't provide real UUID
-            tenant_id: "", // API doesn't provide this
+            workspace_id: "", // API doesn't provide this
             project_id: "", // API doesn't provide this
             owner_id: null,
             org_id: null,
@@ -479,13 +479,13 @@ const normalizeRegisterClientResponse = (
   }
 
   const id = getStringOrFallback(parsed.id);
-  const tenantId = getStringOrFallback(parsed.tenant_id);
+  const workspaceId = getStringOrFallback(parsed.workspace_id);
 
   return {
     id,
     client_id: getStringOrFallback(parsed.client_id, id),
-    tenant_id: tenantId,
-    project_id: getStringOrFallback(parsed.project_id, tenantId),
+    workspace_id: workspaceId,
+    project_id: getStringOrFallback(parsed.project_id, workspaceId),
     name: getStringOrFallback(parsed.name),
     secret_id:
       typeof parsed.secret_id === "string" ? parsed.secret_id : undefined,
@@ -508,7 +508,7 @@ export const clientApi = baseApi.injectEndpoints({
       DeleteClientResponse,
       DeleteClientRequest
     >({
-      query: ({ tenant_id, client_id }) => ({
+      query: ({ workspace_id, client_id }) => ({
         url: `/authsec/applications/${client_id}`,
         method: "DELETE",
       }),
@@ -685,7 +685,7 @@ export const clientApi = baseApi.injectEndpoints({
                   // Map from actual API response fields
                   id: client.id || client.client_id || `client-${index}`,
                   client_id: client.client_id || `client-${index}`,
-                  tenant_id: client.tenant_id || "",
+                  workspace_id: client.workspace_id || "",
                   project_id: client.project_id || "",
                   owner_id: client.owner_id || null,
                   org_id: client.org_id || null,
@@ -811,7 +811,7 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClientResponse,
       RegisterAiAgentClientRequest
     >({
-      query: ({ tenant_id: _tenant_id, selectors, ...body }) => ({
+      query: ({ workspace_id: _workspace_id, selectors, ...body }) => ({
         url: "/authsec/applications",
         method: "POST",
         body: {
@@ -837,7 +837,7 @@ export const clientApi = baseApi.injectEndpoints({
       RegisterClientResponse,
       RegisterClawAuthClientRequest
     >({
-      query: ({ tenant_id: _tenant_id, ...body }) => ({
+      query: ({ workspace_id: _workspace_id, ...body }) => ({
         url: "/authsec/applications",
         method: "POST",
         body: {

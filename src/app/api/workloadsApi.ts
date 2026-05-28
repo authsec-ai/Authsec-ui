@@ -22,7 +22,7 @@ export interface WorkloadSelector {
 export interface WorkloadRecord {
   id?: string;
   workload_id?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   spiffe_id?: string;
   spiffeId?: string;
   type?: string;
@@ -37,7 +37,7 @@ export interface WorkloadRecord {
 
 // Request for creating a new workload
 export interface RegisterWorkloadRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   selectors: K8sSelectors;
   vault_role?: string;
   status?: string;
@@ -53,7 +53,7 @@ export interface RegisterWorkloadRequest {
 // Request for updating an existing workload
 export interface UpdateWorkloadRequest {
   workload_id: string;
-  tenant_id?: string;
+  workspace_id?: string;
   selectors?: K8sSelectors;
   vault_role?: string;
   status?: string;
@@ -63,12 +63,12 @@ export interface UpdateWorkloadRequest {
 // Request for deleting a workload
 export interface DeleteWorkloadRequest {
   workload_id: string;
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 // Request for listing workloads
 export interface ListWorkloadsRequest {
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 export interface WorkloadEnvelope {
@@ -119,7 +119,7 @@ export interface EntryRecord {
 }
 
 export interface RegisterEntryRequest {
-  tenant_id?: string;
+  workspace_id?: string;
   spiffe_id: string;
   parent_id: string;
   selectors: Record<string, string>;
@@ -130,7 +130,7 @@ export interface RegisterEntryRequest {
 
 export interface UpdateEntryRequest {
   entry_id: string;
-  tenant_id?: string;
+  workspace_id?: string;
   spiffe_id: string;
   parent_id: string;
   selectors: Record<string, string>;
@@ -141,7 +141,7 @@ export interface UpdateEntryRequest {
 
 export interface DeleteEntryRequest {
   entry_id: string;
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 export interface DeleteEntryResponse {
@@ -304,9 +304,9 @@ export const workloadsApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: "Entry", id: "LIST" }],
     }),
     updateEntry: builder.mutation<EntryRecord, UpdateEntryRequest>({
-      query: ({ entry_id, tenant_id, ...body }) => {
+      query: ({ entry_id, workspace_id, ...body }) => {
         const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
+        if (workspace_id) searchParams.append("workspace_id", workspace_id);
         const queryString = searchParams.toString();
         return {
           url: `/authsec/spiresvc/v1/entries/${entry_id}${
@@ -322,9 +322,9 @@ export const workloadsApi = baseApi.injectEndpoints({
       ],
     }),
     deleteEntry: builder.mutation<DeleteEntryResponse, DeleteEntryRequest>({
-      query: ({ entry_id, tenant_id }) => {
+      query: ({ entry_id, workspace_id }) => {
         const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
+        if (workspace_id) searchParams.append("workspace_id", workspace_id);
         const queryString = searchParams.toString();
         return {
           url: `/authsec/spiresvc/v1/entries/${entry_id}${
@@ -341,7 +341,7 @@ export const workloadsApi = baseApi.injectEndpoints({
     listEntries: builder.query<
       EntryRecord[],
       {
-        tenant_id?: string;
+        workspace_id?: string;
         limit?: number;
         offset?: number;
         spiffe_id?: string;
@@ -349,8 +349,8 @@ export const workloadsApi = baseApi.injectEndpoints({
     >({
       query: (params) => {
         const searchParams = new URLSearchParams();
-        if (params.tenant_id)
-          searchParams.append("tenant_id", params.tenant_id);
+        if (params.workspace_id)
+          searchParams.append("workspace_id", params.workspace_id);
         if (params.limit !== undefined)
           searchParams.append("limit", params.limit.toString());
         if (params.offset !== undefined)
@@ -378,11 +378,11 @@ export const workloadsApi = baseApi.injectEndpoints({
     }),
     getEntry: builder.query<
       EntryRecord | null,
-      { entry_id: string; tenant_id?: string }
+      { entry_id: string; workspace_id?: string }
     >({
-      query: ({ entry_id, tenant_id }) => {
+      query: ({ entry_id, workspace_id }) => {
         const searchParams = new URLSearchParams();
-        if (tenant_id) searchParams.append("tenant_id", tenant_id);
+        if (workspace_id) searchParams.append("workspace_id", workspace_id);
         const queryString = searchParams.toString();
         return {
           url: `/authsec/spiresvc/v1/entries/${entry_id}${

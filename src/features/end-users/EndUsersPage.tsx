@@ -56,7 +56,7 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { toast } from "@/lib/toast";
 import { TableCard } from "@/theme/components/cards";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 
 const StatusBadge: React.FC<{ status: EndUserStatus }> = ({ status }) =>
   status === "active" ? (
@@ -284,7 +284,7 @@ function EffectiveAccessDrawer({
 
 export default function EndUsersPage() {
   const navigate = useNavigate();
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
   const [accessDrawer, setAccessDrawer] = useState<{
@@ -295,11 +295,11 @@ export default function EndUsersPage() {
 
   const { data, isLoading } = useListEndUsersQuery(
     {
-      tenantId: tenantId || "",
+      workspaceId: workspaceId || "",
       status: statusFilter === "all" ? undefined : statusFilter,
       q: search.trim() || undefined,
     },
-    { skip: !tenantId },
+    { skip: !workspaceId },
   );
 
   const [suspend, suspendState] = useSuspendEndUserMutation();
@@ -307,9 +307,9 @@ export default function EndUsersPage() {
   const rows: TenantEndUserState[] = useMemo(() => data?.items ?? [], [data]);
 
   const handleSuspend = async (userId: string) => {
-    if (!tenantId) return;
+    if (!workspaceId) return;
     try {
-      await suspend({ tenantId, userId, reason: "Manual suspension via End Users page" }).unwrap();
+      await suspend({ workspaceId, userId, reason: "Manual suspension via End Users page" }).unwrap();
       toast.success("End user suspended");
     } catch (e: any) {
       toast.error(e?.data?.error ?? "Failed to suspend");
@@ -317,9 +317,9 @@ export default function EndUsersPage() {
   };
 
   const handleReactivate = async (userId: string) => {
-    if (!tenantId) return;
+    if (!workspaceId) return;
     try {
-      await reactivate({ tenantId, userId }).unwrap();
+      await reactivate({ workspaceId, userId }).unwrap();
       toast.success("End user reactivated");
     } catch (e: any) {
       toast.error(e?.data?.error ?? "Failed to reactivate");
@@ -440,7 +440,7 @@ export default function EndUsersPage() {
     [handleReactivate, handleSuspend, navigate, reactivateState.isLoading, suspendState.isLoading],
   );
 
-  if (!tenantId) {
+  if (!workspaceId) {
     return (
       <div className="p-8">
         <p className="text-muted-foreground">

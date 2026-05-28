@@ -17,10 +17,10 @@ import { AuthStepHeader } from "../components/AuthStepHeader";
 interface WebAuthnAuthComponentProps {
   contextType: "admin" | "oidc";
   email: string;
-  tenantId: string;
+  workspaceId: string;
   onSuccess?: (token?: string) => void;
   onError?: (error: string) => void;
-  onAuthenticate?: (email: string, tenantId: string) => Promise<unknown>;
+  onAuthenticate?: (email: string, workspaceId: string) => Promise<unknown>;
 }
 
 /**
@@ -29,7 +29,7 @@ interface WebAuthnAuthComponentProps {
  * Handles biometric authentication for returning users.
  * Pure component - flow logic handled by parent page
  */
-export function WebAuthnAuthComponent({ contextType: _contextType, email, tenantId, onSuccess, onError, onAuthenticate }: WebAuthnAuthComponentProps) {
+export function WebAuthnAuthComponent({ contextType: _contextType, email, workspaceId, onSuccess, onError, onAuthenticate }: WebAuthnAuthComponentProps) {
   const { 
     authenticateUser, 
     handleCallback,
@@ -48,15 +48,15 @@ export function WebAuthnAuthComponent({ contextType: _contextType, email, tenant
     try {
       if (onAuthenticate) {
         // Prefer parent-provided auth flow (e.g., OIDC context handles callback + token display)
-        const ok = await onAuthenticate(email, tenantId);
+        const ok = await onAuthenticate(email, workspaceId);
         if (!ok) {
           throw new Error('Authentication failed');
         }
         onSuccess?.();
       } else {
         // Local fallback: perform WebAuthn + callback via hook
-        await authenticateUser(email, tenantId);
-        const callbackResult = await handleCallback(email, tenantId);
+        await authenticateUser(email, workspaceId);
+        const callbackResult = await handleCallback(email, workspaceId);
         if (callbackResult.success && callbackResult.token) {
           onSuccess?.(callbackResult.token);
         } else {
@@ -72,7 +72,7 @@ export function WebAuthnAuthComponent({ contextType: _contextType, email, tenant
       setErrorMessage(errorMsg);
       onError?.(errorMsg);
     }
-  }, [authenticateUser, email, handleCallback, onAuthenticate, onError, onSuccess, tenantId]);
+  }, [authenticateUser, email, handleCallback, onAuthenticate, onError, onSuccess, workspaceId]);
 
   const getAuthErrorMessage = (error: unknown): string => {
     const errorName = getErrorName(error);

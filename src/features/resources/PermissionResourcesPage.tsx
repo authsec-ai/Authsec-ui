@@ -6,7 +6,7 @@ import {
   useGetAdminPermissionResourcesQuery,
   useGetEndUserPermissionResourcesQuery,
 } from "@/app/api/permissionsResourcesApi";
-import { resolveTenantId } from "@/utils/workspace";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { useResponsiveCards } from "@/hooks/use-mobile";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 import { TableCard } from "@/theme/components/cards";
@@ -60,7 +60,7 @@ export function PermissionResourcesPage() {
   const { mainAreaRef } = useResponsiveCards();
 
   // API data fetching
-  const tenantId = resolveTenantId();
+  const workspaceId = resolveWorkspaceId();
 
   // Conditionally use admin or end-user APIs based on audience
   const {
@@ -78,8 +78,8 @@ export function PermissionResourcesPage() {
     data: endUserResources = [],
     isLoading: endUserResourcesLoading,
     error: endUserResourcesError,
-  } = useGetEndUserPermissionResourcesQuery(tenantId || "", {
-    skip: isAdmin || !tenantId,
+  } = useGetEndUserPermissionResourcesQuery(workspaceId || "", {
+    skip: isAdmin || !workspaceId,
     refetchOnMountOrArgChange: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,

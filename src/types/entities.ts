@@ -270,7 +270,7 @@ export interface RawAuthLogPayload {
     severity?: string;
     version?: number;
   };
-  tenant_id?: string;
+  workspace_id?: string;
   actor?: {
     type?: string;
     id?: string;
@@ -393,7 +393,7 @@ export interface RbacPermission {
   role_names?: string[]; // Tenant context only
   created_at?: string;
   updated_at?: string;
-  tenant_id?: string;
+  workspace_id?: string;
 }
 
 // Scope with resources (new spec)
@@ -470,7 +470,7 @@ export interface EnhancedRole {
   permissions_count?: number;
   users_assigned?: number;
   usernames?: string[];
-  tenant_id?: string;
+  workspace_id?: string;
   client_id?: string;
   project_id?: string;
   userIds?: string[];
@@ -558,7 +558,7 @@ export interface EnhancedUser {
   last_sync_at?: string;
   username?: string;
   client_id?: string;
-  tenant_id?: string;
+  workspace_id?: string;
   project_id?: string;
   tenant_domain?: string;
   provider_id?: string;
