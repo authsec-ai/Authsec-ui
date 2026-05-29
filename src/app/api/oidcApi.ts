@@ -82,6 +82,10 @@ export interface LoginPageData {
   tenant_name: string;
   client_name: string;
   client_id: string;
+  // The real workspace identifier, resolved server-side from the Hydra
+  // login_challenge. This is the workspace the user authenticates against;
+  // client_id is the OAuth client (display/diagnostics only).
+  workspace_id: string;
   client_type?: string;
   redirect_uris?: string[];
   local_login_enabled?: boolean;
@@ -110,7 +114,10 @@ export interface AuthInitiateResponse {
 }
 
 export interface CustomLoginStatusRequest {
-  client_id: string;
+  // workspace_id is the workspace the user lookup is scoped to. client_id is
+  // kept optional for backward compat but is ignored by the backend here.
+  workspace_id: string;
+  client_id?: string;
   email: string;
   tenant_domain?: string;
 }
@@ -122,7 +129,8 @@ export interface CustomLoginStatusResponse {
 }
 
 export interface CustomLoginRegisterRequest {
-  client_id: string;
+  workspace_id: string;
+  client_id?: string;
   email: string;
   password: string;
   name: string;
@@ -137,7 +145,8 @@ export interface CustomLoginRegisterResponse {
 }
 
 export interface CustomLoginRegisterCompleteRequest {
-  client_id: string;
+  workspace_id: string;
+  client_id?: string;
   email: string;
   otp: string;
 }
@@ -350,6 +359,7 @@ export const oidcApi = createApi({
           tenant_name: res?.tenant_name || res?.tenant || "Tenant",
           client_name: res?.client_name || res?.client || "Client",
           client_id: clientId,
+          workspace_id: res?.workspace_id || "",
           client_type: res?.client_type || undefined,
           redirect_uris: Array.isArray(res?.redirect_uris)
             ? res.redirect_uris

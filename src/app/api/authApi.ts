@@ -25,7 +25,8 @@ export interface ResendOtpRequest {
 
 export interface ForgotPasswordRequest {
   email: string;
-  client_id: string;
+  workspace_id: string;
+  client_id?: string;
 }
 
 export interface ForgotPasswordVerifyOtpRequest {
@@ -36,7 +37,8 @@ export interface ForgotPasswordVerifyOtpRequest {
 export interface ForgotPasswordResetRequest {
   email: string;
   new_password: string;
-  client_id: string;
+  workspace_id: string;
+  client_id?: string;
 }
 
 // Admin forgot password interfaces

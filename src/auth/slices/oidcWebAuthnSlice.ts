@@ -89,6 +89,12 @@ const oidcWebAuthnSlice = createSlice({
       }
     },
 
+    // The real workspace identifier (resolved server-side from the Hydra
+    // login_challenge). Distinct from clientId, which is the OAuth client.
+    setWorkspaceId: (state, action: PayloadAction<string>) => {
+      state.workspaceId = action.payload;
+    },
+
     setClientId: (state, action: PayloadAction<string>) => {
       state.clientId = action.payload;
     },
@@ -155,6 +161,7 @@ const oidcWebAuthnSlice = createSlice({
 export const {
   setCurrentStep,
   setLoginData,
+  setWorkspaceId,
   setClientId,
   setClientType,
   setRedirectUris,

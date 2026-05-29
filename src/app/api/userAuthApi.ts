@@ -7,7 +7,10 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import config from '../../config';
 
 export interface CustomLoginRequest {
-  client_id: string;
+  // workspace_id scopes the user lookup. client_id is kept optional for
+  // backward compat but is no longer used as the workspace identifier.
+  workspace_id: string;
+  client_id?: string;
   email: string;
   password: string;
   tenant_domain?: string;

@@ -32,6 +32,7 @@ import {
 import {
   setCurrentStep,
   setLoginData,
+  setWorkspaceId,
   setClientId,
   setClientType,
   setRedirectUris,
@@ -66,9 +67,14 @@ const OIDCLoginPageInner: React.FC = () => {
     setTheme("light");
   }, [setTheme]);
 
-  // Get client_id, client_type, redirect_uris from Redux state
+  // Get client_id, workspace_id, client_type, redirect_uris from Redux state
   const clientId = useSelector(
     (state: RootState) => state.oidcWebAuthn.clientId
+  );
+  // The real workspace identifier (from page-data's workspace_id), used to
+  // scope all user-identity calls. client_id is no longer the workspace.
+  const workspaceId = useSelector(
+    (state: RootState) => state.oidcWebAuthn.workspaceId
   );
   const reduxClientType = useSelector(
     (state: RootState) => state.oidcWebAuthn.clientType
@@ -189,8 +195,8 @@ const OIDCLoginPageInner: React.FC = () => {
       setForgotError("Please enter a valid email address");
       return;
     }
-    if (!clientId) {
-      setForgotError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setForgotError("Workspace not available. Please refresh the page.");
       return;
     }
     setForgotLoading(true);
@@ -199,7 +205,7 @@ const OIDCLoginPageInner: React.FC = () => {
     try {
       await forgotPassword({
         email: forgotPasswordEmail,
-        client_id: clientId,
+        workspace_id: workspaceId,
       }).unwrap();
       setForgotPasswordStep("otp");
       setForgotSuccess("If your email is registered, an OTP has been sent.");
@@ -247,8 +253,8 @@ const OIDCLoginPageInner: React.FC = () => {
       setForgotError("Password must be at least 8 characters long");
       return;
     }
-    if (!clientId) {
-      setForgotError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setForgotError("Workspace not available. Please refresh the page.");
       return;
     }
     setForgotLoading(true);
@@ -258,7 +264,7 @@ const OIDCLoginPageInner: React.FC = () => {
       await forgotPasswordReset({
         email: forgotPasswordEmail,
         new_password: newPassword,
-        client_id: clientId,
+        workspace_id: workspaceId,
       }).unwrap();
       setForgotPasswordStep("success");
       setForgotSuccess("Password reset successfully.");
@@ -457,6 +463,9 @@ const OIDCLoginPageInner: React.FC = () => {
       if (ok) {
         setLoginPageData(data);
         if (data.client_id) dispatch(setClientId(data.client_id));
+        // workspace_id is the real workspace resolved server-side from the
+        // login_challenge; store it for scoping user-identity calls.
+        if (data.workspace_id) dispatch(setWorkspaceId(data.workspace_id));
         // Store client_type and redirect_uris in Redux for the Router to use
         if (data.client_type != null) {
           dispatch(setClientType(data.client_type));
@@ -580,8 +589,8 @@ const OIDCLoginPageInner: React.FC = () => {
       return;
     }
 
-    if (!clientId) {
-      setError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setError("Workspace not available. Please refresh the page.");
       return;
     }
 
@@ -589,7 +598,7 @@ const OIDCLoginPageInner: React.FC = () => {
 
     try {
       const statusResponse = await checkCustomLoginStatus({
-        client_id: clientId,
+        workspace_id: workspaceId,
         email,
         ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
       }).unwrap();
@@ -628,8 +637,8 @@ const OIDCLoginPageInner: React.FC = () => {
       return;
     }
 
-    if (!clientId) {
-      setError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setError("Workspace not available. Please refresh the page.");
       return;
     }
 
@@ -637,7 +646,7 @@ const OIDCLoginPageInner: React.FC = () => {
 
     try {
       // Call the existing handleCustomLoginSuccess which uses customLogin
-      await handleCustomLoginSuccess(clientId, email, password);
+      await handleCustomLoginSuccess(email, password);
       setError(null);
     } catch (error) {
       console.error("Custom login failed:", error);
@@ -675,15 +684,15 @@ const OIDCLoginPageInner: React.FC = () => {
       return;
     }
 
-    if (!clientId) {
-      setError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setError("Workspace not available. Please refresh the page.");
       return;
     }
 
     setCustomAuthenticating(true);
     try {
       const registerResponse = await registerCustomUser({
-        client_id: clientId,
+        workspace_id: workspaceId,
         name: name.trim(),
         email,
         password,
@@ -719,8 +728,8 @@ const OIDCLoginPageInner: React.FC = () => {
       return;
     }
 
-    if (!clientId) {
-      setError("Client ID not available. Please refresh the page.");
+    if (!workspaceId) {
+      setError("Workspace not available. Please refresh the page.");
       return;
     }
 
@@ -733,7 +742,7 @@ const OIDCLoginPageInner: React.FC = () => {
     setCustomAuthenticating(true);
     try {
       const verifyResponse = await completeCustomUserRegistration({
-        client_id: clientId,
+        workspace_id: workspaceId,
         email,
         otp: registrationOtp.trim(),
       }).unwrap();
@@ -743,7 +752,7 @@ const OIDCLoginPageInner: React.FC = () => {
         setRegistrationMessage(
           verifyResponse?.message || "Registration verified. Completing sign-in..."
         );
-        await handleCustomLoginSuccess(clientId, email, password);
+        await handleCustomLoginSuccess(email, password);
         setRegistrationStep("details");
         setRegistrationOtp("");
       } else {
@@ -761,16 +770,13 @@ const OIDCLoginPageInner: React.FC = () => {
     }
   };
 
-  // Handle successful custom login/registration and initiate WebAuthn flow if needed
-  const handleCustomLoginSuccess = async (
-    clientId: string,
-    email: string,
-    password: string
-  ) => {
+  // Handle successful custom login/registration and initiate WebAuthn flow if needed.
+  // workspaceId comes from Redux (set when page-data resolved the Hydra challenge).
+  const handleCustomLoginSuccess = async (email: string, password: string) => {
     try {
       // Call the custom login API endpoint using RTK Query
       const result = await customLogin({
-        client_id: clientId,
+        workspace_id: workspaceId || "",
         email,
         password,
         ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
