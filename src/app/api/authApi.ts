@@ -167,9 +167,13 @@ export const authApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["AdminAuth"],
     }),
+    // Resend the admin signup OTP. The legacy /uflow/register/resendOtp route
+    // was deleted (it was a v3 client_id-first endpoint that always 404'd).
+    // The v4 endpoint takes only { email } and regenerates+emails an OTP for
+    // an in-flight pending_registration. Returns 404 if no pending signup.
     resendOtp: builder.mutation<ResendOtpResponse, ResendOtpRequest>({
       query: (resendData) => ({
-        url: "/authsec/uflow/register/resendOtp",
+        url: "/authsec/uflow/auth/admin/login/resend-otp",
         method: "POST",
         body: resendData,
       }),
