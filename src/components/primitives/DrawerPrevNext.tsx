@@ -32,6 +32,14 @@ export function DrawerPrevNext({
   currentIndex,
   total,
 }: DrawerPrevNextProps) {
+  // Belt-and-suspenders against callers passing undefined/NaN. The actual fix
+  // is at the call site (e.g. handleSelectRow in EndUsersPage falling back to
+  // a linear lookup), but in-progress UI loads can briefly hand us NaN — and
+  // "NaN of 1" in the pager is a worse first impression than rendering "1 of 1"
+  // for the half-second before state settles.
+  const safeIndex = Number.isFinite(currentIndex) ? currentIndex : 0;
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
+
   return (
     <div className="flex items-center gap-1">
       <button
@@ -49,7 +57,7 @@ export function DrawerPrevNext({
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
       <span className="text-xs text-slate-500 select-none tabular-nums">
-        {currentIndex + 1} of {total}
+        {safeIndex + 1} of {safeTotal}
       </span>
       <button
         type="button"

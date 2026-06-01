@@ -5,8 +5,14 @@ import {
   ShieldOff,
   Trash2,
   Users,
-  X,
 } from "lucide-react";
+
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 import {
   useListEndUsersQuery,
@@ -303,11 +309,12 @@ function UserDetailPanel({
   const scopeCount = user.effective_scopes_count ?? 0;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-white border-b px-4 py-3 shrink-0">
-        {/* Row 1: nav + email + close */}
-        <div className="flex items-center justify-between gap-3">
+    <>
+      {/* Sticky header — SheetHeader handles a11y title; close button is
+          provided by SheetContent's own SheetClose so we don't render one. */}
+      <SheetHeader className="sticky top-0 z-20 bg-white border-b px-4 py-3 shrink-0 gap-2">
+        {/* Row 1: prev/next + email (Sheet's close X sits to the right) */}
+        <div className="flex items-center gap-3 pr-8">
           <DrawerPrevNext
             onPrev={onPrev}
             onNext={onNext}
@@ -316,28 +323,20 @@ function UserDetailPanel({
             currentIndex={currentIndex}
             total={total}
           />
-          <p className="text-sm font-semibold text-slate-900 truncate flex-1 text-center">
+          <SheetTitle className="text-sm font-semibold text-slate-900 truncate flex-1 text-center">
             {userLabel(user)}
-          </p>
-          <button
-            type="button"
-            aria-label="Close detail panel"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          </SheetTitle>
         </div>
 
         {/* Row 2: status line */}
-        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-slate-500">
           <StatusBadge status={user.status} />
           <span>·</span>
           <span>Last seen {formatRelativeTime(user.last_seen_at)}</span>
         </div>
 
         {/* Row 3: actions */}
-        <div className="mt-3 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -378,7 +377,7 @@ function UserDetailPanel({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </SheetHeader>
 
       {/* Section nav */}
       <SectionNav sections={SECTION_NAV_ITEMS} activeId={activeSection} />
@@ -387,24 +386,40 @@ function UserDetailPanel({
       <div className="flex-1 overflow-y-auto">
         {/* Overview */}
         <CollapsibleSection id="overview" title="Overview" defaultOpen={true}>
-          {/* Stat cards */}
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="rounded-md border p-3 text-center">
-              <p className="text-lg font-semibold text-slate-900">{appCount}</p>
-              <p className="text-xs text-slate-500">Applications</p>
+          {appCount === 0 ? (
+            // Intentional empty state. Three "0" tiles next to a blank Status
+            // tile read as "this view failed to render" rather than "this user
+            // hasn't consented yet" — which is the real story for a brand-new
+            // end user.
+            <div className="rounded-md border border-dashed px-4 py-5 text-center">
+              <ShieldCheck className="mx-auto h-5 w-5 text-slate-400" />
+              <p className="mt-2 text-sm font-medium text-slate-700">
+                No application access yet
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                This user hasn't consented to any of your apps. Assign a role to
+                grant access.
+              </p>
             </div>
-            <div className="rounded-md border p-3 text-center">
-              <p className="text-lg font-semibold text-slate-900">{scopeCount}</p>
-              <p className="text-xs text-slate-500">Eff. Scopes</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-md border p-3 text-center">
+                <p className="text-lg font-semibold text-slate-900">{appCount}</p>
+                <p className="text-xs text-slate-500">Applications</p>
+              </div>
+              <div className="rounded-md border p-3 text-center">
+                <p className="text-lg font-semibold text-slate-900">{scopeCount}</p>
+                <p className="text-xs text-slate-500">Eff. Scopes</p>
+              </div>
+              <div className="rounded-md border p-3 flex flex-col items-center justify-center gap-1">
+                <StatusBadge status={user.status} />
+                <p className="text-xs text-slate-500">Status</p>
+              </div>
             </div>
-            <div className="rounded-md border p-3 text-center">
-              <p className="text-sm font-semibold text-slate-900 capitalize">{user.status}</p>
-              <p className="text-xs text-slate-500">Status</p>
-            </div>
-          </div>
+          )}
 
           {/* MFA status placeholder */}
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          <div className="mt-3 flex items-center justify-between rounded-md border px-3 py-2">
             <span className="text-xs text-slate-600">MFA</span>
             <Badge variant="outline" className="text-xs">Unknown</Badge>
           </div>
@@ -450,7 +465,7 @@ function UserDetailPanel({
         onClose={() => setAssignOpen(false)}
         preselectedUserId={user.user_id}
       />
-    </div>
+    </>
   );
 }
 
@@ -499,10 +514,20 @@ export default function EndUsersPage() {
     }
   }, [workspaceId, reactivate]);
 
-  const handleSelectRow = useCallback((user: TenantEndUserState, index: number) => {
-    setSelectedUser(user);
-    setSelectedIndex(index);
-  }, []);
+  const handleSelectRow = useCallback(
+    (user: TenantEndUserState, index: number) => {
+      setSelectedUser(user);
+      // Guard against undefined / NaN index from the table layer. The table
+      // sometimes hands us a non-finite number (e.g. when triggered from a
+      // dropdown action rather than a row click) and that propagates into
+      // DrawerPrevNext as "NaN of 1". Fall back to a linear lookup.
+      const safeIndex = Number.isFinite(index)
+        ? index
+        : rows.findIndex((r) => r.user_id === user.user_id);
+      setSelectedIndex(safeIndex >= 0 ? safeIndex : 0);
+    },
+    [rows],
+  );
 
   const handlePrev = useCallback(() => {
     if (selectedIndex > 0) {
@@ -662,15 +687,9 @@ export default function EndUsersPage() {
         description="Consumers of this workspace's published Applications. These are not members; they connect to your AI agents, MCP servers, or web apps via OAuth."
       />
 
-      {/* Master-detail layout */}
-      <div className="flex h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-        {/* Left — table */}
-        <div
-          className={cn(
-            "flex flex-col overflow-auto transition-all duration-200",
-            selectedUser ? "w-[55%] min-w-0 flex-none" : "flex-1"
-          )}
-        >
+      {/* Table — full width. Detail panel slides in over it as a Sheet. */}
+      <div className="h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
+        <div className="flex h-full flex-col overflow-auto">
           <div className="space-y-4 p-6">
             <ConsoleFilterBar
               search={search}
@@ -744,9 +763,20 @@ export default function EndUsersPage() {
           </div>
         </div>
 
-        {/* Right — detail panel */}
-        {selectedUser && (
-          <div className="w-[45%] flex-none border-l bg-white overflow-y-auto">
+      </div>
+
+      {/* Detail panel — slides in over the table on row click. */}
+      <Sheet
+        open={!!selectedUser}
+        onOpenChange={(open) => {
+          if (!open) setSelectedUser(null);
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-xl lg:max-w-2xl p-0 gap-0 overflow-hidden flex flex-col"
+        >
+          {selectedUser && (
             <UserDetailPanel
               user={selectedUser}
               onClose={() => setSelectedUser(null)}
@@ -762,9 +792,9 @@ export default function EndUsersPage() {
               suspendLoading={suspendState.isLoading}
               reactivateLoading={reactivateState.isLoading}
             />
-          </div>
-        )}
-      </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
