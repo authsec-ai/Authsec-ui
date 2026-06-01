@@ -577,6 +577,12 @@ Use these exact AuthSec and resource server values:
 - Introspection endpoint: ${computeIntrospectionURL()}
 - Resource server registry endpoint: ${computeResourceServerRegistryURL()}
 
+SDK version (pin to this minor or newer — older versions have known
+401-handling crashes when admins revoke access mid-session):
+- TypeScript: @authsec/sdk ^4.4.3
+- Python:     authsec-sdk ^4.4.3
+- Go:         github.com/authsec-ai/sdk-authsec/packages/go-sdk v0.3.1 or newer
+
 AuthSec responsibilities:
 - Serve the authorization server for MCP OAuth and PAR-backed login flows
 - Issue and validate user tokens
@@ -616,6 +622,63 @@ Validation checklist:
 - tokens are validated against AuthSec
 - upstream provider calls still use server-side credentials only
 - the configured resource URI remains ${server.resource_uri}
+
+Known gotchas — these are bugs we have actually shipped and rolled back; do
+not reintroduce them:
+
+1. Never hand-build the WWW-Authenticate header. Always go through the SDK's
+   buildWwwAuthenticate / build_www_authenticate helper. Older versions of
+   the SDK (pre-4.4.3) had a sanitizer that stripped CR/LF/NUL but let
+   non-ASCII bytes through. Hydra leaks smart quotes, U+00A0 non-breaking
+   spaces, U+200B zero-width spaces, and emoji into error_description from
+   localized error strings. Both Node's http.setHeader and ASGI/uvicorn
+   reject those bytes — the throw escaped the handler and the MCP client
+   got an HTML 500 error page instead of a clean 401 on revoke. The fix
+   is in 4.4.3: printable-ASCII-only sanitizer plus a try/catch fallback
+   to a minimal Bearer challenge.
+
+2. Never let an upstream error body reach the client raw. If you catch a
+   Hydra / introspection / JWKS error, log it server-side and respond with
+   a structured JSON 401/403 — the SDK's denial helpers already do this.
+   Surfacing raw HTML or stack traces over the MCP wire breaks every
+   client at once.
+
+3. Token revocation is server-side. When an admin clicks Revoke in the
+   AuthSec UI, AuthSec marks oauth_consent_grants.revoked_at and calls
+   Hydra to invalidate the consent session. The user's next request fails
+   introspection (active=false) and your SDK responds 401. You do not need
+   a local revocation list, a websocket, or a polling cache invalidation —
+   the introspection round-trip is the source of truth. The scope-matrix
+   TTL was lowered to 30 s in 4.4.2 specifically so revocation propagates
+   without operator intervention.
+
+4. Treat suspend as identical to revoke. When an end user is suspended,
+   the scope resolver returns zero scopes for them, introspection returns
+   active=false, and any in-flight tokens fail on their next call. Your
+   server does not need a separate "is the user suspended" check — the
+   401 path covers both.
+
+5. AuthSec canonical scopes only. Tool authorization checks must compare
+   against the scope strings listed above ("AuthSec canonical scopes"),
+   not against role names, group names, or upstream provider scopes.
+   Mixing these means a workspace admin's role change doesn't propagate
+   to your tool checks.
+
+6. The protected-resource metadata path is path-scoped. For a server at
+   ${server.resource_uri}, the discovery URL is ${metadataURL}, NOT the
+   bare /.well-known/oauth-protected-resource. Clients that look at the
+   bare path will think there is no AuthSec protection.
+
+7. Manifest publishing matters. The SDK publishes your tool manifest to
+   AuthSec on startup so admins can see which tools exist and bind scopes
+   to them. If you skip the manifest, scopes resolve correctly but admins
+   cannot grant per-tool access in the UI — they only see the underlying
+   scope strings.
+
+8. The OAuth audience is your resource_uri (${server.resource_uri}), not
+   your public_base_url and not the MCP endpoint URL. The SDK enforces
+   this at introspection time; if you hand-rewrite aud, introspection
+   returns active=false.
 
 If the resource server is a GitHub MCP server, keep the GitHub PAT or installation token server-side. The AuthSec principal should only decide whether the tool is allowed; it should not replace the upstream GitHub credential.
 
