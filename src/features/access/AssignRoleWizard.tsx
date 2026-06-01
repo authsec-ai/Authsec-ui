@@ -683,9 +683,15 @@ export default function AssignRoleWizard({
     if (!selectedRoleId || selectedUserIds.size === 0) return;
 
     const expiresAt = computeExpiresAt(expiry, customDate);
+    // Backend canonical name for an application-scoped binding is
+    // ``resource_server``. Every reader (scope_resolver, scope_matrix,
+    // applications_controller) matches on that string; writing ``application``
+    // — as a previous version of this wizard did — creates rows that the
+    // scope resolver silently skips, so the binding "exists" on the
+    // Assignments page but never grants the scope on the consent screen.
     const scope =
       scopeType === "application" && selectedApplicationId
-        ? { id: selectedApplicationId, type: "application" }
+        ? { id: selectedApplicationId, type: "resource_server" }
         : undefined;
 
     const createdIds: string[] = [];
