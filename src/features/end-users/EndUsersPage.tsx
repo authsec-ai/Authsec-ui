@@ -25,7 +25,7 @@ import {
 } from "@/app/api/membershipApi";
 import { useGetApplicationEffectiveAccessQuery } from "@/app/api/accessApi";
 import { useDeleteBindingMutation } from "@/app/api/bindingsApi";
-import { AssignRoleWizard } from "@/features/access/AssignRoleWizard";
+import AssignRoleWizard from "@/features/access/AssignRoleWizard";
 import {
   AdaptiveTable,
   type AdaptiveColumn,
