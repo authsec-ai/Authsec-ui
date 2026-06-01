@@ -1,18 +1,20 @@
 import React, { useMemo, useState, useCallback } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   MoreHorizontal,
   ShieldCheck,
   ShieldOff,
   Trash2,
+  UserCheck,
   Users,
+  X,
+  AlertTriangle,
+  Layers,
+  KeyRound,
+  Clock,
+  Calendar,
 } from "lucide-react";
-
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 import {
   useListEndUsersQuery,
@@ -55,11 +57,6 @@ import { TableCard } from "@/theme/components/cards";
 import { toast } from "@/lib/toast";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
-import {
-  SectionNav,
-  CollapsibleSection,
-  DrawerPrevNext,
-} from "@/components/primitives";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,20 +84,24 @@ function formatRelativeTime(iso?: string | null): string {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
-    return `${days} day${days === 1 ? "" : "s"} ago`;
+    return `${days}d ago`;
   } catch {
     return "—";
   }
 }
 
-const SECTION_NAV_ITEMS = [
-  { id: "overview", label: "Overview" },
-  { id: "access", label: "Access" },
-  { id: "sessions", label: "Sessions" },
-  { id: "activity", label: "Activity" },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
+function formatDate(iso?: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
 
 const StatusBadge: React.FC<{ status: EndUserStatus | "invited" }> = ({ status }) => {
   if (status === "active") {
@@ -111,23 +112,23 @@ const StatusBadge: React.FC<{ status: EndUserStatus | "invited" }> = ({ status }
       </span>
     );
   }
-  if (status === "invited") {
+  if (status === "suspended") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-        Invited
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+        Suspended
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-orange-400 shrink-0" />
-      Suspended
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400 shrink-0" />
+      {status}
     </span>
   );
 };
 
-// ─── Right-panel access section ───────────────────────────────────────────────
+// ─── Access section ───────────────────────────────────────────────────────────
 
 function UserAccessSection({
   user,
@@ -146,7 +147,7 @@ function UserAccessSection({
   );
 
   const [deleteBinding, { isLoading: removing }] = useDeleteBindingMutation();
-  const [pendingRemoveBindingId, setPendingRemoveBindingId] = useState<string | null>(null);
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
   const handleRemoveRole = useCallback(
     async (bindingId: string | undefined, roleLabel: string) => {
@@ -154,21 +155,15 @@ function UserAccessSection({
         toast.error("This role can't be removed from here — open the role to manage it.");
         return;
       }
-      if (
-        !window.confirm(
-          `Remove "${roleLabel}" from ${userLabel(user)}? Active sessions for this app will be terminated.`,
-        )
-      ) {
-        return;
-      }
-      setPendingRemoveBindingId(bindingId);
+      if (!window.confirm(`Remove "${roleLabel}" from ${userLabel(user)}?`)) return;
+      setPendingRemoveId(bindingId);
       try {
         await deleteBinding(bindingId).unwrap();
-        toast.success(`${roleLabel} removed. The user has been signed out of connected apps.`);
+        toast.success(`${roleLabel} removed.`);
       } catch (err: any) {
         toast.error(err?.data?.error ?? "Failed to remove role.");
       } finally {
-        setPendingRemoveBindingId(null);
+        setPendingRemoveId(null);
       }
     },
     [deleteBinding, user],
@@ -176,58 +171,71 @@ function UserAccessSection({
 
   if (applications.length === 0) {
     return (
-      <div className="rounded-md border border-dashed p-6 text-center text-sm text-slate-500">
-        No application access. Assign a role to grant access.
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <Layers className="h-6 w-6 text-muted-foreground/40 mb-2" />
+        <p className="text-sm text-muted-foreground">No application access.</p>
+        <p className="text-xs text-muted-foreground/60 mt-0.5">
+          Assign a role above to grant access.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {/* App selector */}
-      <Select value={effectiveAppId} onValueChange={setSelectedAppId}>
-        <SelectTrigger className="h-8 text-xs">
-          <SelectValue placeholder="Select application" />
-        </SelectTrigger>
-        <SelectContent>
-          {applications.map((app) => (
-            <SelectItem key={app.application_id} value={app.application_id}>
-              {app.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="space-y-4">
+      {/* Application picker */}
+      {applications.length > 1 && (
+        <Select value={effectiveAppId} onValueChange={setSelectedAppId}>
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="Select application" />
+          </SelectTrigger>
+          <SelectContent>
+            {applications.map((app) => (
+              <SelectItem key={app.application_id} value={app.application_id}>
+                {app.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {applications.length === 1 && (
+        <div className="flex items-center gap-2 px-1">
+          <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs font-medium text-foreground">{applications[0].name}</span>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full rounded-md" />
-          ))}
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-9 w-full" />)}
         </div>
       ) : data ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* Roles */}
           {data.roles.length > 0 && (
             <div>
-              <p className="text-xs text-slate-500 uppercase font-semibold tracking-wide mb-1">Roles</p>
-              <div className="divide-y rounded-md border">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+                Roles
+              </p>
+              <div className="divide-y divide-border rounded-md border bg-card">
                 {data.roles.map((role) => {
-                  const isPending = pendingRemoveBindingId === role.binding_id;
+                  const isPending = pendingRemoveId === role.binding_id;
                   return (
                     <div key={role.id} className="flex items-center justify-between px-3 py-2 gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{role.label}</p>
-                        <p className="text-xs text-slate-500 font-mono truncate">{role.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate">{role.name}</p>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Remove ${role.label}`}
-                        className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
                         onClick={() => handleRemoveRole(role.binding_id, role.label)}
                         disabled={removing && isPending}
+                        aria-label={`Remove ${role.label}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   );
@@ -235,46 +243,62 @@ function UserAccessSection({
               </div>
             </div>
           )}
+
           {/* Scopes */}
           {data.scopes.length > 0 && (
             <div>
-              <p className="text-xs text-slate-500 uppercase font-semibold tracking-wide mb-1">
-                Scopes ({data.scopes.length})
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 px-1">
+                Effective Scopes
               </p>
-              <div className="divide-y rounded-md border">
+              <div className="divide-y divide-border rounded-md border bg-card">
                 {data.scopes.map((scope) => (
-                  <div key={scope.id} className="flex items-center justify-between px-3 py-2 gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-mono truncate">{scope.scope_string}</p>
-                      <p className="text-xs text-slate-500">{scope.display_name}</p>
+                  <div key={scope.id} className="flex items-center justify-between px-3 py-2 gap-3">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <KeyRound className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-mono truncate text-foreground">{scope.scope_string}</p>
+                        {scope.display_name && scope.display_name !== scope.scope_string && (
+                          <p className="text-[10px] text-muted-foreground truncate">{scope.display_name}</p>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge
-                        variant={scope.status === "granted" ? "default" : "outline"}
-                        className="text-xs"
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                          scope.status === "granted"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-slate-100 text-slate-500"
+                        )}
                       >
                         {scope.status === "granted" ? "Granted" : "Not granted"}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
+                      </span>
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium border border-border text-muted-foreground">
                         {scope.risk_level}
-                      </Badge>
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {data.roles.length === 0 && data.scopes.length === 0 && (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              No roles or scopes assigned for this application.
+            </div>
+          )}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">No data available.</p>
+        <p className="text-sm text-muted-foreground text-center py-4">No data available.</p>
       )}
     </div>
   );
 }
 
-// ─── Right panel ──────────────────────────────────────────────────────────────
+// ─── Detail drawer ────────────────────────────────────────────────────────────
 
-function UserDetailPanel({
+function UserDetailDrawer({
   user,
   onClose,
   onPrev,
@@ -303,161 +327,189 @@ function UserDetailPanel({
   suspendLoading: boolean;
   reactivateLoading: boolean;
 }) {
-  const [activeSection] = useState("overview");
   const [assignOpen, setAssignOpen] = useState(false);
-  const appCount = user.applications_count ?? user.applications?.length ?? 0;
-  const scopeCount = user.effective_scopes_count ?? 0;
+
+  const safeIndex = Number.isFinite(currentIndex) ? currentIndex : 0;
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
 
   return (
-    <>
-      {/* Sticky header — SheetHeader handles a11y title; close button is
-          provided by SheetContent's own SheetClose so we don't render one. */}
-      <SheetHeader className="sticky top-0 z-20 bg-white border-b px-4 py-3 shrink-0 gap-2">
-        {/* Row 1: prev/next + email (Sheet's close X sits to the right) */}
-        <div className="flex items-center gap-3 pr-8">
-          <DrawerPrevNext
-            onPrev={onPrev}
-            onNext={onNext}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-            currentIndex={currentIndex}
-            total={total}
-          />
-          <SheetTitle className="text-sm font-semibold text-slate-900 truncate flex-1 text-center">
-            {userLabel(user)}
-          </SheetTitle>
-        </div>
+    // Same pattern as AppRightSidebar: h-full flex sibling with border-l + shadow
+    <div className="h-full w-[520px] shrink-0 bg-background border-l border-border flex flex-col shadow-2xl">
+      {/* Header */}
+      <div className="flex-none border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        {/* Top bar: prev/next + close */}
+        <div className="flex items-center justify-between px-4 py-3">
+          {/* Prev / Next */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={!hasPrev}
+              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous user"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs text-muted-foreground tabular-nums select-none">
+              {safeIndex + 1} / {safeTotal}
+            </span>
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={!hasNext}
+              className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next user"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
-        {/* Row 2: status line */}
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <StatusBadge status={user.status} />
-          <span>·</span>
-          <span>Last seen {formatRelativeTime(user.last_seen_at)}</span>
-        </div>
-
-        {/* Row 3: actions */}
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1"
-            onClick={() => setAssignOpen(true)}
+          {/* Close */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            aria-label="Close"
           >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* User identity */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground shrink-0">
+              {userInitials(user)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate text-foreground">{userLabel(user)}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <StatusBadge status={user.status} />
+                {user.last_seen_at && (
+                  <>
+                    <span className="text-muted-foreground/40 text-xs">·</span>
+                    <span className="text-xs text-muted-foreground">
+                      seen {formatRelativeTime(user.last_seen_at)}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 px-4 pb-3">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setAssignOpen(true)}>
             + Assign role
           </Button>
           {user.status === "active" ? (
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
+              className="h-8 text-xs text-orange-600 border-orange-200 hover:bg-orange-50"
               onClick={() => onSuspend(user.user_id)}
               disabled={suspendLoading}
             >
+              <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
               Suspend
             </Button>
           ) : (
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs text-green-700 border-green-200 hover:bg-green-50"
+              className="h-8 text-xs text-green-600 border-green-200 hover:bg-green-50"
               onClick={() => onReactivate(user.user_id)}
               disabled={reactivateLoading}
             >
+              <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
               Reactivate
             </Button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-xs">Force logout</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
-      </SheetHeader>
+      </div>
 
-      {/* Section nav */}
-      <SectionNav sections={SECTION_NAV_ITEMS} activeId={activeSection} />
-
-      {/* Scrollable body */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        {/* Overview */}
-        <CollapsibleSection id="overview" title="Overview" defaultOpen={true}>
-          {appCount === 0 ? (
-            // Intentional empty state. Three "0" tiles next to a blank Status
-            // tile read as "this view failed to render" rather than "this user
-            // hasn't consented yet" — which is the real story for a brand-new
-            // end user.
-            <div className="rounded-md border border-dashed px-4 py-5 text-center">
-              <ShieldCheck className="mx-auto h-5 w-5 text-slate-400" />
-              <p className="mt-2 text-sm font-medium text-slate-700">
-                No application access yet
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                This user hasn't consented to any of your apps. Assign a role to
-                grant access.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="rounded-md border p-3 text-center">
-                <p className="text-lg font-semibold text-slate-900">{appCount}</p>
-                <p className="text-xs text-slate-500">Applications</p>
-              </div>
-              <div className="rounded-md border p-3 text-center">
-                <p className="text-lg font-semibold text-slate-900">{scopeCount}</p>
-                <p className="text-xs text-slate-500">Eff. Scopes</p>
-              </div>
-              <div className="rounded-md border p-3 flex flex-col items-center justify-center gap-1">
-                <StatusBadge status={user.status} />
-                <p className="text-xs text-slate-500">Status</p>
+        {/* Suspension warning */}
+        {user.status === "suspended" && (
+          <div className="mx-4 mt-4 rounded-md bg-red-50 border border-red-200 px-3 py-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-red-800">Account suspended</p>
+                {user.suspended_at && (
+                  <p className="text-xs text-red-600 mt-0.5">
+                    Suspended {formatRelativeTime(user.suspended_at)} · {formatDate(user.suspended_at)}
+                  </p>
+                )}
+                {user.suspended_reason && (
+                  <p className="text-xs text-red-700 mt-1 italic">"{user.suspended_reason}"</p>
+                )}
               </div>
             </div>
-          )}
-
-          {/* MFA status placeholder */}
-          <div className="mt-3 flex items-center justify-between rounded-md border px-3 py-2">
-            <span className="text-xs text-slate-600">MFA</span>
-            <Badge variant="outline" className="text-xs">Unknown</Badge>
           </div>
+        )}
 
-          {/* Risk warning */}
-          {scopeCount > 5 && (
-            <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-              This user has {scopeCount} effective scopes. Review critical grants.
-            </div>
-          )}
-        </CollapsibleSection>
+        {/* Metadata */}
+        <div className="px-4 py-4 space-y-1 border-b border-border">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Details
+          </p>
+          <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-xs">
+            <span className="text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="h-3 w-3 shrink-0" />
+              First consent
+            </span>
+            <span className="text-foreground text-right font-mono tabular-nums">
+              {formatDate(user.first_consent_at)}
+            </span>
+
+            <span className="text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3 w-3 shrink-0" />
+              Last seen
+            </span>
+            <span className="text-foreground text-right font-mono tabular-nums">
+              {user.last_seen_at ? formatDate(user.last_seen_at) : "—"}
+            </span>
+
+            {user.plan_tier && (
+              <>
+                <span className="text-muted-foreground">Plan tier</span>
+                <span className="text-foreground text-right capitalize">{user.plan_tier}</span>
+              </>
+            )}
+
+            <span className="text-muted-foreground">User ID</span>
+            <button
+              type="button"
+              className="text-right font-mono text-[10px] text-muted-foreground hover:text-foreground truncate max-w-[160px] transition-colors"
+              title={user.user_id}
+              onClick={() => {
+                navigator.clipboard.writeText(user.user_id).then(() => toast.success("ID copied"));
+              }}
+            >
+              {user.user_id.slice(0, 8)}…{user.user_id.slice(-4)}
+            </button>
+          </div>
+        </div>
 
         {/* Access */}
-        <CollapsibleSection
-          id="access"
-          title="Access"
-          defaultOpen={true}
-          badge={appCount}
-        >
-          <UserAccessSection user={user} workspaceId={workspaceId} />
-        </CollapsibleSection>
-
-        {/* Sessions */}
-        <CollapsibleSection id="sessions" title="Sessions" defaultOpen={false}>
-          <div className="text-center py-6 text-sm text-slate-500">
-            <p>Session history coming soon.</p>
-            <p className="mt-1 text-xs text-slate-400">
-              After deploying with Force Logout support, active sessions will appear here.
+        <div className="px-4 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Access
             </p>
+            {(user.applications_count ?? 0) > 0 && (
+              <span className="text-[10px] text-muted-foreground">
+                {user.applications_count} app{user.applications_count !== 1 ? "s" : ""}
+                {(user.effective_scopes_count ?? 0) > 0 &&
+                  ` · ${user.effective_scopes_count} scope${user.effective_scopes_count !== 1 ? "s" : ""}`}
+              </span>
+            )}
           </div>
-        </CollapsibleSection>
-
-        {/* Activity */}
-        <CollapsibleSection id="activity" title="Activity" defaultOpen={false}>
-          <div className="text-center py-6 text-sm text-slate-500">
-            Activity log coming soon.
-          </div>
-        </CollapsibleSection>
+          <UserAccessSection user={user} workspaceId={workspaceId} />
+        </div>
       </div>
 
       <AssignRoleWizard
@@ -465,7 +517,7 @@ function UserDetailPanel({
         onClose={() => setAssignOpen(false)}
         preselectedUserId={user.user_id}
       />
-    </>
+    </div>
   );
 }
 
@@ -495,8 +547,8 @@ export default function EndUsersPage() {
   const handleSuspend = useCallback(async (userId: string) => {
     if (!workspaceId) return;
     try {
-      await suspend({ workspaceId, userId, reason: "Manual suspension via End Users page" }).unwrap();
-      toast.success("End user suspended");
+      await suspend({ workspaceId, userId, reason: "Manual suspension" }).unwrap();
+      toast.success("User suspended — active sessions terminated.");
     } catch (e: unknown) {
       const err = e as { data?: { error?: string } };
       toast.error(err?.data?.error ?? "Failed to suspend");
@@ -507,7 +559,7 @@ export default function EndUsersPage() {
     if (!workspaceId) return;
     try {
       await reactivate({ workspaceId, userId }).unwrap();
-      toast.success("End user reactivated");
+      toast.success("User reactivated.");
     } catch (e: unknown) {
       const err = e as { data?: { error?: string } };
       toast.error(err?.data?.error ?? "Failed to reactivate");
@@ -516,32 +568,30 @@ export default function EndUsersPage() {
 
   const handleSelectRow = useCallback(
     (user: TenantEndUserState, index: number) => {
-      setSelectedUser(user);
-      // Guard against undefined / NaN index from the table layer. The table
-      // sometimes hands us a non-finite number (e.g. when triggered from a
-      // dropdown action rather than a row click) and that propagates into
-      // DrawerPrevNext as "NaN of 1". Fall back to a linear lookup.
       const safeIndex = Number.isFinite(index)
         ? index
         : rows.findIndex((r) => r.user_id === user.user_id);
+      setSelectedUser(user);
       setSelectedIndex(safeIndex >= 0 ? safeIndex : 0);
     },
     [rows],
   );
 
+  const handleClose = useCallback(() => setSelectedUser(null), []);
+
   const handlePrev = useCallback(() => {
     if (selectedIndex > 0) {
-      const newIdx = selectedIndex - 1;
-      setSelectedIndex(newIdx);
-      setSelectedUser(rows[newIdx]);
+      const i = selectedIndex - 1;
+      setSelectedIndex(i);
+      setSelectedUser(rows[i]);
     }
   }, [selectedIndex, rows]);
 
   const handleNext = useCallback(() => {
     if (selectedIndex < rows.length - 1) {
-      const newIdx = selectedIndex + 1;
-      setSelectedIndex(newIdx);
-      setSelectedUser(rows[newIdx]);
+      const i = selectedIndex + 1;
+      setSelectedIndex(i);
+      setSelectedUser(rows[i]);
     }
   }, [selectedIndex, rows]);
 
@@ -556,7 +606,7 @@ export default function EndUsersPage() {
           const u = row.original;
           return (
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold shrink-0">
+              <div className="h-8 w-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-xs font-semibold shrink-0">
                 {userInitials(u)}
               </div>
               <EntityCell
@@ -585,7 +635,7 @@ export default function EndUsersPage() {
         approxWidth: 80,
         cell: ({ row }) => {
           const count = row.original.applications_count ?? row.original.applications?.length ?? 0;
-          return <span className="text-sm text-slate-700">{count > 0 ? count : "—"}</span>;
+          return <span className="text-sm text-muted-foreground">{count > 0 ? count : "—"}</span>;
         },
       },
       {
@@ -594,7 +644,7 @@ export default function EndUsersPage() {
         priority: 3,
         approxWidth: 130,
         cell: ({ row }) => (
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-muted-foreground">
             {formatRelativeTime(row.original.last_seen_at)}
           </span>
         ),
@@ -615,7 +665,10 @@ export default function EndUsersPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 className="text-xs"
-                onClick={() => handleSelectRow(row.original, row.index)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectRow(row.original, row.index);
+                }}
               >
                 View details
               </DropdownMenuItem>
@@ -623,7 +676,10 @@ export default function EndUsersPage() {
               {row.original.status === "active" ? (
                 <DropdownMenuItem
                   className="text-xs"
-                  onClick={() => handleSuspend(row.original.user_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSuspend(row.original.user_id);
+                  }}
                   disabled={suspendState.isLoading}
                 >
                   <ShieldOff className="mr-2 h-3.5 w-3.5" />
@@ -632,15 +688,16 @@ export default function EndUsersPage() {
               ) : (
                 <DropdownMenuItem
                   className="text-xs"
-                  onClick={() => handleReactivate(row.original.user_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReactivate(row.original.user_id);
+                  }}
                   disabled={reactivateState.isLoading}
                 >
                   <ShieldCheck className="mr-2 h-3.5 w-3.5" />
                   Reactivate
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-xs text-slate-500">Force logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ),
@@ -651,15 +708,12 @@ export default function EndUsersPage() {
 
   if (!workspaceId) {
     return (
-      <div className="p-8">
-        <p className="text-slate-500 text-sm">
-          No tenant selected. Switch to a tenant to manage end users.
-        </p>
+      <div className="p-8 text-sm text-muted-foreground">
+        No workspace selected.
       </div>
     );
   }
 
-  // Empty state
   if (!isLoading && rows.length === 0) {
     return (
       <>
@@ -668,12 +722,12 @@ export default function EndUsersPage() {
           description="Consumers of this workspace's published Applications."
         />
         <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-          <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-            <Users className="h-6 w-6 text-slate-400" />
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Users className="h-6 w-6 text-muted-foreground" />
           </div>
-          <h3 className="text-base font-semibold text-slate-900">No end users yet</h3>
-          <p className="mt-1 text-sm text-slate-500 max-w-sm">
-            Once a public user connects to one of your Applications via OAuth, they'll appear here.
+          <h3 className="text-base font-semibold">No end users yet</h3>
+          <p className="mt-1 text-sm text-muted-foreground max-w-sm">
+            Once a user connects to one of your Applications via OAuth, they'll appear here.
           </p>
         </div>
       </>
@@ -684,117 +738,105 @@ export default function EndUsersPage() {
     <>
       <PageHeader
         title="End Users"
-        description="Consumers of this workspace's published Applications. These are not members; they connect to your AI agents, MCP servers, or web apps via OAuth."
+        description="Consumers of this workspace's published Applications. They connect via OAuth — not workspace members."
       />
 
-      {/* Table — full width. Detail panel slides in over it as a Sheet. */}
-      <div className="h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-        <div className="flex h-full flex-col overflow-auto">
-          <div className="space-y-4 p-6">
-            <ConsoleFilterBar
-              search={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Search by email, name, or username"
-              trailing={
-                <>
-                  <Select
-                    value={statusFilter}
-                    onValueChange={(v) => setStatusFilter(v as EndUserStatus | "all")}
-                  >
-                    <SelectTrigger className="h-9 w-40">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {(search.trim() || statusFilter !== "all") && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSearch("");
-                        setStatusFilter("all");
-                      }}
+      {/* Full-height flex row: table | detail drawer (same pattern as AppLayout) */}
+      <div className="flex h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
+
+        {/* Table column — flex-1, scrollable */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <ConsoleFilterBar
+                search={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search by email, name, or username"
+                trailing={
+                  <>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(v) => setStatusFilter(v as EndUserStatus | "all")}
                     >
-                      Clear
-                    </Button>
+                      <SelectTrigger className="h-9 w-40">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(search.trim() || statusFilter !== "all") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setSearch(""); setStatusFilter("all"); }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </>
+                }
+              />
+
+              <TableCard>
+                <CardContent variant="flush">
+                  {isLoading ? (
+                    <div className="py-16 text-center text-sm text-muted-foreground">
+                      Loading…
+                    </div>
+                  ) : (
+                    <AdaptiveTable
+                      tableId="end-users"
+                      data={rows}
+                      columns={columns}
+                      enableSelection={false}
+                      enableExpansion={false}
+                      getRowId={(row) => row.user_id}
+                      onRowClick={(row, index) => handleSelectRow(row, index)}
+                      rowClassName={(row) =>
+                        cn(
+                          "cursor-pointer",
+                          selectedUser?.user_id === row.user_id && "bg-muted/50"
+                        )
+                      }
+                      pagination={{
+                        pageSize: 10,
+                        pageSizeOptions: [5, 10, 25, 50],
+                        alwaysVisible: true,
+                      }}
+                    />
                   )}
-                </>
-              }
-            />
+                </CardContent>
+              </TableCard>
 
-            <TableCard>
-              <CardContent variant="flush">
-                {isLoading ? (
-                  <div className="py-16 text-center text-sm text-slate-500">
-                    Loading end users...
-                  </div>
-                ) : (
-                  <AdaptiveTable
-                    tableId="end-users"
-                    data={rows}
-                    columns={columns}
-                    enableSelection={false}
-                    enableExpansion={false}
-                    getRowId={(row) => row.user_id}
-                    onRowClick={(row, index) => handleSelectRow(row, index)}
-                    rowClassName={(row) =>
-                      cn(
-                        "cursor-pointer",
-                        selectedUser?.user_id === row.user_id && "bg-slate-50"
-                      )
-                    }
-                    pagination={{
-                      pageSize: 10,
-                      pageSizeOptions: [5, 10, 25, 50],
-                      alwaysVisible: true,
-                    }}
-                  />
-                )}
-              </CardContent>
-            </TableCard>
-
-            <div className="text-xs text-slate-500">
-              {rows.length} end user{rows.length === 1 ? "" : "s"} in this workspace.
+              <p className="text-xs text-muted-foreground">
+                {rows.length} end user{rows.length === 1 ? "" : "s"} in this workspace.
+              </p>
             </div>
           </div>
         </div>
 
+        {/* Detail drawer — flex sibling, slides into view, matches AppRightSidebar pattern */}
+        {selectedUser && (
+          <UserDetailDrawer
+            user={selectedUser}
+            onClose={handleClose}
+            onPrev={handlePrev}
+            onNext={handleNext}
+            hasPrev={selectedIndex > 0}
+            hasNext={selectedIndex < rows.length - 1}
+            currentIndex={selectedIndex}
+            total={rows.length}
+            workspaceId={workspaceId}
+            onSuspend={handleSuspend}
+            onReactivate={handleReactivate}
+            suspendLoading={suspendState.isLoading}
+            reactivateLoading={reactivateState.isLoading}
+          />
+        )}
       </div>
-
-      {/* Detail panel — slides in over the table on row click. */}
-      <Sheet
-        open={!!selectedUser}
-        onOpenChange={(open) => {
-          if (!open) setSelectedUser(null);
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-xl lg:max-w-2xl p-0 gap-0 overflow-hidden flex flex-col"
-        >
-          {selectedUser && (
-            <UserDetailPanel
-              user={selectedUser}
-              onClose={() => setSelectedUser(null)}
-              onPrev={handlePrev}
-              onNext={handleNext}
-              hasPrev={selectedIndex > 0}
-              hasNext={selectedIndex < rows.length - 1}
-              currentIndex={selectedIndex}
-              total={rows.length}
-              workspaceId={workspaceId}
-              onSuspend={handleSuspend}
-              onReactivate={handleReactivate}
-              suspendLoading={suspendState.isLoading}
-              reactivateLoading={reactivateState.isLoading}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
     </>
   );
 }
