@@ -85,7 +85,17 @@ export const bindingsApi = baseApi.injectEndpoints({
         method: "POST",
         body: withSessionData(data),
       }),
-      invalidatesTags: ["AdminUser", "AdminRBACRole", "AdminRBACScope"],
+      // Invalidate every surface that derives from role bindings. Without this,
+      // the End Users detail panel shows stale roles/scopes after a grant —
+      // which read as "the assign didn't work" even though the backend wrote it.
+      invalidatesTags: [
+        "AdminUser",
+        "AdminRBACRole",
+        "AdminRBACScope",
+        "RoleBinding",
+        "EffectiveAccess",
+        "TenantEndUserState",
+      ],
     }),
 
     deleteBinding: builder.mutation<void, string>({
@@ -93,7 +103,18 @@ export const bindingsApi = baseApi.injectEndpoints({
         url: `/authsec/uflow/admin/bindings/${bindingId}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["RoleBinding"],
+      // Same fan-out as create: any view that reads a user's roles/scopes
+      // (Assignments table, End Users panel, Effective Access page) must
+      // refetch so the row disappears immediately. Previously this only
+      // invalidated "RoleBinding" → other panels stayed stale.
+      invalidatesTags: [
+        "AdminUser",
+        "AdminRBACRole",
+        "AdminRBACScope",
+        "RoleBinding",
+        "EffectiveAccess",
+        "TenantEndUserState",
+      ],
     }),
   }),
 });

@@ -3,6 +3,7 @@ import {
   MoreHorizontal,
   ShieldCheck,
   ShieldOff,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -15,6 +16,8 @@ import {
   type TenantEndUserState,
 } from "@/app/api/membershipApi";
 import { useGetApplicationEffectiveAccessQuery } from "@/app/api/accessApi";
+import { useDeleteBindingMutation } from "@/app/api/bindingsApi";
+import { AssignRoleWizard } from "@/features/access/AssignRoleWizard";
 import {
   AdaptiveTable,
   type AdaptiveColumn,
@@ -136,6 +139,35 @@ function UserAccessSection({
     { skip: !effectiveAppId }
   );
 
+  const [deleteBinding, { isLoading: removing }] = useDeleteBindingMutation();
+  const [pendingRemoveBindingId, setPendingRemoveBindingId] = useState<string | null>(null);
+
+  const handleRemoveRole = useCallback(
+    async (bindingId: string | undefined, roleLabel: string) => {
+      if (!bindingId) {
+        toast.error("This role can't be removed from here — open the role to manage it.");
+        return;
+      }
+      if (
+        !window.confirm(
+          `Remove "${roleLabel}" from ${userLabel(user)}? Active sessions for this app will be terminated.`,
+        )
+      ) {
+        return;
+      }
+      setPendingRemoveBindingId(bindingId);
+      try {
+        await deleteBinding(bindingId).unwrap();
+        toast.success(`${roleLabel} removed. The user has been signed out of connected apps.`);
+      } catch (err: any) {
+        toast.error(err?.data?.error ?? "Failed to remove role.");
+      } finally {
+        setPendingRemoveBindingId(null);
+      }
+    },
+    [deleteBinding, user],
+  );
+
   if (applications.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-6 text-center text-sm text-slate-500">
@@ -173,14 +205,27 @@ function UserAccessSection({
             <div>
               <p className="text-xs text-slate-500 uppercase font-semibold tracking-wide mb-1">Roles</p>
               <div className="divide-y rounded-md border">
-                {data.roles.map((role) => (
-                  <div key={role.id} className="flex items-center justify-between px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium">{role.label}</p>
-                      <p className="text-xs text-slate-500 font-mono">{role.name}</p>
+                {data.roles.map((role) => {
+                  const isPending = pendingRemoveBindingId === role.binding_id;
+                  return (
+                    <div key={role.id} className="flex items-center justify-between px-3 py-2 gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{role.label}</p>
+                        <p className="text-xs text-slate-500 font-mono truncate">{role.name}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Remove ${role.label}`}
+                        className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                        onClick={() => handleRemoveRole(role.binding_id, role.label)}
+                        disabled={removing && isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -253,6 +298,7 @@ function UserDetailPanel({
   reactivateLoading: boolean;
 }) {
   const [activeSection] = useState("overview");
+  const [assignOpen, setAssignOpen] = useState(false);
   const appCount = user.applications_count ?? user.applications?.length ?? 0;
   const scopeCount = user.effective_scopes_count ?? 0;
 
@@ -292,7 +338,12 @@ function UserDetailPanel({
 
         {/* Row 3: actions */}
         <div className="mt-3 flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={() => setAssignOpen(true)}
+          >
             + Assign role
           </Button>
           {user.status === "active" ? (
@@ -393,6 +444,12 @@ function UserDetailPanel({
           </div>
         </CollapsibleSection>
       </div>
+
+      <AssignRoleWizard
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        preselectedUserId={user.user_id}
+      />
     </div>
   );
 }

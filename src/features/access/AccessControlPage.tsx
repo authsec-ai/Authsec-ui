@@ -993,26 +993,29 @@ function AssignmentsTab({
 
   const rows = useMemo<RoleBinding[]>(() => bindings ?? [], [bindings]);
 
+  const confirmRevokeBinding = useMemo(
+    () => rows.find((r) => r.id === confirmRevokeId) ?? null,
+    [rows, confirmRevokeId]
+  );
+
   const handleRevoke = useCallback(
     async (bindingId: string) => {
+      const binding = rows.find((r) => r.id === bindingId);
+      const subject =
+        binding?.email ?? binding?.username ?? binding?.user_id ?? "the user";
+      const roleLabel = binding?.role_name ?? "role";
       try {
         await deleteBinding(bindingId).unwrap();
-        toastWithUndo({
-          message: "Role binding revoked",
-          onUndo: () => {
-            // Undo is non-trivial (would need re-create); show a message instead
-            toast.error(
-              "Undo not available for revocations — re-assign the role manually."
-            );
-          },
-        });
+        toast.success(
+          `Revoked ${roleLabel} from ${subject}. Active sessions for connected apps have been terminated.`,
+        );
         setConfirmRevokeId(null);
       } catch (e: unknown) {
         const err = e as { data?: { error?: string } };
         toast.error(err?.data?.error ?? "Failed to revoke binding");
       }
     },
-    [deleteBinding]
+    [deleteBinding, rows]
   );
 
   return (
@@ -1124,10 +1127,35 @@ function AssignmentsTab({
               Revoke role assignment?
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-600">
-            The user will immediately lose access granted by this role. This
-            cannot be undone automatically.
-          </p>
+          <div className="space-y-2 text-sm text-slate-600">
+            {confirmRevokeBinding && (
+              <p>
+                Revoke{" "}
+                <span className="font-medium text-slate-900">
+                  {confirmRevokeBinding.role_name}
+                </span>{" "}
+                from{" "}
+                <span className="font-medium text-slate-900">
+                  {confirmRevokeBinding.email ??
+                    confirmRevokeBinding.username ??
+                    confirmRevokeBinding.user_id}
+                </span>
+                {confirmRevokeBinding.application?.name && (
+                  <>
+                    {" "}on{" "}
+                    <span className="font-medium text-slate-900">
+                      {confirmRevokeBinding.application.name}
+                    </span>
+                  </>
+                )}
+                ?
+              </p>
+            )}
+            <p>
+              Active sessions for connected apps will be terminated immediately.
+              Re-granting the role requires a new assignment.
+            </p>
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
