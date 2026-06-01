@@ -87,10 +87,19 @@ export const bindingsApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["AdminUser", "AdminRBACRole", "AdminRBACScope"],
     }),
+
+    deleteBinding: builder.mutation<void, string>({
+      query: (bindingId) => ({
+        url: `/authsec/uflow/admin/bindings/${bindingId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["RoleBinding"],
+    }),
   }),
 });
 
 export const {
   useListBindingsQuery,
-  useCreateBindingMutation
+  useCreateBindingMutation,
+  useDeleteBindingMutation,
 } = bindingsApi;

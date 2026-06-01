@@ -19,6 +19,7 @@ import { WizardProvider } from "./contexts/WizardContext";
 import React from "react";
 
 import { DashboardPage } from "./features/dashboard/DashboardPage";
+import AccessControlPage from "./features/access/AccessControlPage";
 
 import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
@@ -573,14 +574,59 @@ function AppContent() {
                   />
                   <Route
                     path="/end-users/:userId"
+                    element={<Navigate to="/end-users" replace />}
+                  />
+
+                  {/* ── Phase I-G: Access Control routes ─────────────── */}
+                  <Route
+                    path="/access"
+                    element={<Navigate to="/access/roles" replace />}
+                  />
+                  <Route
+                    path="/access/roles"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <EndUserDetailPage />
+                          <AccessControlPage initialTab="roles" />
                         </AppLayout>
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/access/scopes"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <AccessControlPage initialTab="scopes" />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/access/assignments"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <AccessControlPage initialTab="assignments" />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Legacy authz redirects */}
+                  <Route
+                    path="/authz/role-bindings"
+                    element={<Navigate to="/access/assignments" replace />}
+                  />
+                  <Route
+                    path="/authz/roles"
+                    element={<Navigate to="/access/roles" replace />}
+                  />
+                  <Route
+                    path="/authz/application-scopes"
+                    element={<Navigate to="/access/scopes" replace />}
+                  />
+
                   <Route
                     path="/settings/team"
                     element={

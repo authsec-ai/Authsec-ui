@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   useCreateResourceServerScopeMutation,
@@ -8,6 +8,7 @@ import {
   useGetScopeMatrixQuery,
   useListResourceServerScopesQuery,
 } from "@/app/api/scopeMatrixApi";
+import { ScopeDetailModal } from "@/features/scope-matrix/components/ScopeDetailModal";
 import type { OAuthScope, RiskLevel } from "@/app/api/types/scopeMatrix";
 import {
   AdaptiveTable,
@@ -61,6 +62,10 @@ export default function ApplicationScopesPage() {
   const [riskLevel, setRiskLevel] = useState<RiskLevel>("low");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<OAuthScope | null>(null);
+  // H-7: scope-edit modal target. ScopeDetailModal wires through useUpdateScopeMutation
+  // (orphan since v4.1) — clicking "Edit" on a row sets editScopeId, the modal opens,
+  // submit hits PUT /authsec/scopes/:id, RTK invalidates and the table re-renders.
+  const [editScopeId, setEditScopeId] = useState<string | null>(null);
 
   const { data: scopesData, isLoading } = useListResourceServerScopesQuery(application.id);
   const { data: matrix } = useGetScopeMatrixQuery(application.id);
@@ -197,6 +202,11 @@ export default function ApplicationScopesPage() {
         cell: ({ row }) => (
           <ConsoleRowActions
             items={[
+              {
+                label: "Edit",
+                icon: <Pencil className="size-4" />,
+                onSelect: () => setEditScopeId(row.original.id),
+              },
               {
                 label: "View tools",
                 onSelect: () => {
@@ -348,6 +358,15 @@ export default function ApplicationScopesPage() {
           </div>
         </div>
       </ImpactPreviewDialog>
+
+      <ScopeDetailModal
+        scopeId={editScopeId}
+        open={Boolean(editScopeId)}
+        onOpenChange={(next) => {
+          if (!next) setEditScopeId(null);
+        }}
+        rsId={application.id}
+      />
     </div>
   );
 }

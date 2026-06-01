@@ -71,20 +71,18 @@ const NAV_DASHBOARD: NavItem[] = [
 // PRIMARY OBJECT NAV — end users are the default workspace because they are
 // the operational long-tail. Members management lives in Settings, not here.
 const NAV_OBJECTS: NavItem[] = [
-  { title: "End Users", url: "/end-users", icon: Users },
+  { title: "Users", url: "/end-users", icon: Users },
   { title: "Applications", url: "/applications", icon: Layers },
   // { title: "Clients", url: "/clients", icon: PlugZap },
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
-// Platform authz is now workspace membership plus application-scoped access.
-// The legacy permission catalogue, assignment table, and generic effective
-// access pages are intentionally hidden from the primary nav; application
-// roles/grants live inside each Application's Access tab.
+// Workspace-level access control: roles, scopes, and assignments.
+// Application-specific roles and grants still live inside each Application's Access tab.
 const NAV_AUTHZ: NavItem[] = [
-  { title: "Application Roles", url: "/authz/roles", icon: UserCog, contextPrefixed: true } as NavItem,
-  { title: "Role Bindings", url: "/authz/role-bindings", icon: Link2, contextPrefixed: true } as NavItem,
-  { title: "Application Scopes", url: "/authz/application-scopes", icon: KeyRound } as NavItem,
+  { title: "Roles", url: "/access/roles", icon: UserCog },
+  { title: "Scopes", url: "/access/scopes", icon: KeyRound },
+  { title: "Assignments", url: "/access/assignments", icon: Link2 },
 ];
 
 const NAV_MONITOR: NavItem[] = [
