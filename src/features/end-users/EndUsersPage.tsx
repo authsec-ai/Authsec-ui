@@ -6,9 +6,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Trash2,
-  UserCheck,
   Users,
-  X,
   AlertTriangle,
   Layers,
   KeyRound,
@@ -16,6 +14,10 @@ import {
   Calendar,
 } from "lucide-react";
 
+import {
+  Sheet,
+  SheetContent,
+} from "@/components/ui/sheet";
 import {
   useListEndUsersQuery,
   useReactivateEndUserMutation,
@@ -333,8 +335,10 @@ function UserDetailDrawer({
   const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
 
   return (
-    // Same pattern as AppRightSidebar: h-full flex sibling with border-l + shadow
-    <div className="h-full w-[520px] shrink-0 bg-background border-l border-border flex flex-col shadow-2xl">
+    // SheetContent renders in a Radix portal — sits on top of the full screen
+    // including the header, exactly like the Tools inspector on ApplicationToolsPage.
+    // The inner div takes over all visual styling; SheetContent is just the portal host.
+    <div className="h-full flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <div className="flex-none border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         {/* Top bar: prev/next + close */}
@@ -364,15 +368,8 @@ function UserDetailDrawer({
             </button>
           </div>
 
-          {/* Close */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* SheetContent renders its own X — no duplicate close button here */}
+          <div className="w-7" />
         </div>
 
         {/* User identity */}
@@ -741,11 +738,9 @@ export default function EndUsersPage() {
         description="Consumers of this workspace's published Applications. They connect via OAuth — not workspace members."
       />
 
-      {/* Full-height flex row: table | detail drawer (same pattern as AppLayout) */}
-      <div className="flex h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-
-        {/* Table column — flex-1, scrollable */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      {/* Table — full width; detail panel overlays via Sheet portal (same as Tools page) */}
+      <div className="h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
+        <div className="h-full flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <div className="p-6 space-y-4">
               <ConsoleFilterBar
@@ -817,26 +812,33 @@ export default function EndUsersPage() {
             </div>
           </div>
         </div>
-
-        {/* Detail drawer — flex sibling, slides into view, matches AppRightSidebar pattern */}
-        {selectedUser && (
-          <UserDetailDrawer
-            user={selectedUser}
-            onClose={handleClose}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            hasPrev={selectedIndex > 0}
-            hasNext={selectedIndex < rows.length - 1}
-            currentIndex={selectedIndex}
-            total={rows.length}
-            workspaceId={workspaceId}
-            onSuspend={handleSuspend}
-            onReactivate={handleReactivate}
-            suspendLoading={suspendState.isLoading}
-            reactivateLoading={reactivateState.isLoading}
-          />
-        )}
       </div>
+
+      {/* Detail panel — Sheet portal, overlays full screen including header */}
+      <Sheet open={!!selectedUser} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <SheetContent
+          side="right"
+          className="flex h-full flex-col overflow-hidden p-0 sm:max-w-[560px]"
+        >
+          {selectedUser && (
+            <UserDetailDrawer
+              user={selectedUser}
+              onClose={handleClose}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              hasPrev={selectedIndex > 0}
+              hasNext={selectedIndex < rows.length - 1}
+              currentIndex={selectedIndex}
+              total={rows.length}
+              workspaceId={workspaceId}
+              onSuspend={handleSuspend}
+              onReactivate={handleReactivate}
+              suspendLoading={suspendState.isLoading}
+              reactivateLoading={reactivateState.isLoading}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
