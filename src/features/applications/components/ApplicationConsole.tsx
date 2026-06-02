@@ -9,7 +9,7 @@ export const consolePage =
   "mx-auto w-full max-w-[1280px] space-y-5 px-8 py-7";
 
 export const surface =
-  "rounded-lg border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.02)]";
+  "rounded-lg border border-slate-200 dark:border-border bg-white dark:bg-card shadow-[0_1px_1px_rgba(15,23,42,0.02)]";
 
 export type ConsoleTone = "neutral" | "info" | "success" | "warning" | "danger";
 
