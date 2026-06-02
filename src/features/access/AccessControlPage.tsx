@@ -1,10 +1,11 @@
 /**
  * AccessControlPage — workspace-level access management.
  *
- * Three page-level tabs:
- *   Roles       — workspace/app-scoped roles with inline right panel
- *   Scopes      — cross-workspace scope catalog with inline right panel
- *   Assignments — role binding table (replaces old Role Bindings page)
+ * Which view renders is driven by the route (and the left sidebar links that
+ * point at it) via the `initialTab` prop — there is no on-screen tab bar:
+ *   roles       — workspace/app-scoped roles with inline right panel
+ *   scopes      — cross-workspace scope catalog with inline right panel
+ *   assignments — role binding table (replaces old Role Bindings page)
  *
  * Usage:
  *   <AccessControlPage initialTab="roles" />
@@ -20,7 +21,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -278,7 +278,7 @@ function RoleDetailPanel({
           <DialogHeader>
             <DialogTitle>Delete role &quot;{role.name}&quot;?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             This action cannot be undone. Existing role bindings for this role
             will be removed.
           </p>
@@ -448,7 +448,7 @@ function RolesTab({
             <Button
               size="sm"
               onClick={() => setShowCreateDialog(true)}
-              className="ml-auto"
+              className="ml-auto text-white! [&_svg]:text-white!"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Create Role
@@ -498,7 +498,7 @@ function RolesTab({
                         onClick={() => handleSelectRow(role, index)}
                       >
                         <TableCell>
-                          <div className="font-medium text-slate-900">
+                          <div className="font-medium text-slate-900 dark:text-white">
                             {role.name}
                           </div>
                           {role.description && (
@@ -512,10 +512,10 @@ function RolesTab({
                             Workspace
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-slate-700">
+                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                           {role.users_assigned ?? "—"}
                         </TableCell>
-                        <TableCell className="text-sm text-slate-700">
+                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                           {role.permissions_count ?? "—"}
                         </TableCell>
                         <TableCell>
@@ -904,7 +904,7 @@ function ScopesTab() {
                         <TableCell>
                           <ResourceTag kind="scope" label={scope.scope_string} />
                         </TableCell>
-                        <TableCell className="text-sm text-slate-700">
+                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                           {scope.application?.name ?? "—"}
                         </TableCell>
                         <TableCell>
@@ -915,7 +915,7 @@ function ScopesTab() {
                             {scope.risk_level || "—"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-slate-700">
+                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                           {scope.tools_count ?? "—"}
                         </TableCell>
                         <TableCell>
@@ -1067,17 +1067,17 @@ function AssignmentsTab({
                 rows.map((binding) => (
                   <TableRow key={binding.id} className="hover:bg-slate-50">
                     <TableCell>
-                      <div className="font-medium text-slate-900 text-sm">
+                      <div className="font-medium text-slate-900 text-sm dark:text-white">
                         {binding.email ??
                           binding.username ??
                           binding.user_id ??
                           "—"}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-700">
+                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                       {binding.role_name}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-700">
+                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                       {binding.application?.name ?? (
                         <span className="text-slate-400">Workspace-wide</span>
                       )}
@@ -1127,15 +1127,15 @@ function AssignmentsTab({
               Revoke role assignment?
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 text-sm text-slate-600">
+          <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
             {confirmRevokeBinding && (
               <p>
                 Revoke{" "}
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-slate-900 dark:text-white">
                   {confirmRevokeBinding.role_name}
                 </span>{" "}
                 from{" "}
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-slate-900 dark:text-white">
                   {confirmRevokeBinding.email ??
                     confirmRevokeBinding.username ??
                     confirmRevokeBinding.user_id}
@@ -1143,7 +1143,7 @@ function AssignmentsTab({
                 {confirmRevokeBinding.application?.name && (
                   <>
                     {" "}on{" "}
-                    <span className="font-medium text-slate-900">
+                    <span className="font-medium text-slate-900 dark:text-white">
                       {confirmRevokeBinding.application.name}
                     </span>
                   </>
@@ -1219,48 +1219,24 @@ export default function AccessControlPage({
       />
 
       <div className="flex flex-col h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-        <Tabs
-          defaultValue={initialTab}
-          className="flex flex-col flex-1 overflow-hidden"
-        >
-          <div className="px-6 pt-4 border-b bg-white shrink-0">
-            <TabsList className="h-9">
-              <TabsTrigger value="roles" className="text-sm">
-                Roles
-              </TabsTrigger>
-              <TabsTrigger value="scopes" className="text-sm">
-                Scopes
-              </TabsTrigger>
-              <TabsTrigger value="assignments" className="text-sm">
-                Assignments
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="roles"
-            className="flex-1 overflow-hidden mt-0 data-[state=active]:flex data-[state=active]:flex-col"
-          >
+        {initialTab === "roles" && (
+          <div className="flex flex-1 flex-col overflow-hidden">
             <RolesTab
               workspaceId={workspaceId}
               onAssignUsers={handleAssignUsers}
             />
-          </TabsContent>
-
-          <TabsContent
-            value="scopes"
-            className="flex-1 overflow-hidden mt-0 data-[state=active]:flex data-[state=active]:flex-col"
-          >
+          </div>
+        )}
+        {initialTab === "scopes" && (
+          <div className="flex flex-1 flex-col overflow-hidden">
             <ScopesTab />
-          </TabsContent>
-
-          <TabsContent
-            value="assignments"
-            className="flex-1 overflow-auto mt-0"
-          >
+          </div>
+        )}
+        {initialTab === "assignments" && (
+          <div className="flex-1 overflow-auto">
             <AssignmentsTab onNewAssignment={() => setWizardOpen(true)} />
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
 
       <AssignRoleWizard

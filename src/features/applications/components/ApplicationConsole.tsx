@@ -172,7 +172,7 @@ export function SectionHeader({
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-[24px] font-semibold leading-8 tracking-normal text-slate-950">
+        <h1 className="text-[24px] font-semibold leading-8 tracking-normal text-slate-950 dark:text-white">
           {title}
         </h1>
         {description ? (
@@ -208,8 +208,8 @@ export function InlineStat({
   return (
     <div className="flex items-center gap-2">
       <span className={cn("size-1.5 rounded-full", toneClasses[tone].dot)} />
-      <span className="text-sm font-semibold text-slate-950">{value}</span>
-      <span className="text-sm text-slate-500">{label}</span>
+      <span className="text-sm font-semibold text-foreground">{value}</span>
+      <span className="text-sm text-muted-foreground">{label}</span>
     </div>
   );
 }

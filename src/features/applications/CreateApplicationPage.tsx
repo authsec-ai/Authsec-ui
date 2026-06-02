@@ -143,7 +143,7 @@ export default function CreateApplicationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/70">
+    <div className="min-h-screen bg-background">
       <div className={consolePage}>
         <SectionHeader
           eyebrow="New protected application"
