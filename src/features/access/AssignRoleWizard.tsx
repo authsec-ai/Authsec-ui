@@ -7,17 +7,10 @@
  *   3. Scope (workspace-wide or application-specific)
  *   4. Expiry (never / 24h / 7d / 30d / custom)
  *   5. Review & confirm
- *
- * Usage:
- *   <AssignRoleWizard
- *     open={open}
- *     onClose={() => setOpen(false)}
- *     preselectedRoleId={roleId}
- *   />
  */
 
 import React, { useState, useMemo, useCallback } from "react";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, User, Shield, Globe, Clock, ClipboardCheck } from "lucide-react";
 
 import {
   Dialog,
@@ -28,15 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { toast } from "@/lib/toast";
@@ -70,38 +55,87 @@ interface AuthSecRole {
 
 type ExpiryOption = "never" | "24h" | "7d" | "30d" | "custom";
 
-// ─── Step indicators ──────────────────────────────────────────────────────────
+// ─── Role name formatter ──────────────────────────────────────────────────────
+
+/**
+ * Parses `rs-{uuid}:{type}` role names and returns a clean display shape.
+ * If the UUID maps to a known application, shows the app name as the primary
+ * label. Falls back gracefully for roles that don't follow this convention.
+ */
+function parseRoleName(
+  name: string,
+  appMap: Map<string, string>
+): { primary: string; badge?: string } {
+  // Pattern: rs-{uuid}:{type}
+  const m = name.match(/^rs-([0-9a-f-]{36}):(.+)$/i);
+  if (m) {
+    const [, uuid, role] = m;
+    const appName = appMap.get(uuid);
+    if (appName) {
+      return { primary: appName, badge: role };
+    }
+    // UUID not in our map yet — show the role type without the UUID
+    return { primary: role, badge: "Application" };
+  }
+  return { primary: name };
+}
+
+// ─── Step configuration ───────────────────────────────────────────────────────
 
 const STEPS = [
-  "Select users",
-  "Select role",
-  "Scope",
-  "Expiry",
-  "Review",
+  { label: "Users",  icon: User },
+  { label: "Role",   icon: Shield },
+  { label: "Scope",  icon: Globe },
+  { label: "Expiry", icon: Clock },
+  { label: "Review", icon: ClipboardCheck },
 ];
 
-function StepDots({
-  current,
-  total,
-}: {
-  current: number;
-  total: number;
-}) {
+function StepIndicator({ current }: { current: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-4">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "h-2 rounded-full transition-all",
-            i < current
-              ? "w-2 bg-blue-500"
-              : i === current
-              ? "w-4 bg-blue-500"
-              : "w-2 bg-slate-200"
-          )}
-        />
-      ))}
+    <div className="flex items-center justify-center gap-1.5 mb-1">
+      {STEPS.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <React.Fragment key={i}>
+            <div
+              className={cn(
+                "flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all",
+                done   && "bg-blue-600 text-white",
+                active && "bg-blue-600 text-white ring-4 ring-blue-100",
+                !done && !active && "bg-slate-100 text-slate-400"
+              )}
+            >
+              {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+            </div>
+            {i < STEPS.length - 1 && (
+              <div
+                className={cn(
+                  "h-px w-6 transition-colors",
+                  i < current ? "bg-blue-600" : "bg-slate-200"
+                )}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function StepHeader({ step }: { step: number }) {
+  return (
+    <div className="text-center mb-5">
+      <p className="text-[11px] text-slate-400 uppercase tracking-widest font-medium">
+        Step {step + 1} of {STEPS.length}
+      </p>
+      <h3 className="text-base font-semibold text-slate-900 mt-0.5">
+        {STEPS[step].label === "Users"   && "Select users"}
+        {STEPS[step].label === "Role"    && "Select role"}
+        {STEPS[step].label === "Scope"   && "Choose scope"}
+        {STEPS[step].label === "Expiry"  && "Set expiry"}
+        {STEPS[step].label === "Review"  && "Review & confirm"}
+      </h3>
     </div>
   );
 }
@@ -112,10 +146,12 @@ function StepSelectUsers({
   workspaceId,
   selected,
   onToggle,
+  appMap,
 }: {
   workspaceId: string;
   selected: Set<string>;
   onToggle: (userId: string) => void;
+  appMap: Map<string, string>;
 }) {
   const [search, setSearch] = useState("");
   const { data, isLoading } = useListEndUsersQuery({
@@ -123,78 +159,88 @@ function StepSelectUsers({
     q: search.trim() || undefined,
   });
 
-  const rows = useMemo<TenantEndUserState[]>(
-    () => data?.items ?? [],
-    [data]
-  );
+  const rows = useMemo<TenantEndUserState[]>(() => data?.items ?? [], [data]);
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-slate-700">
-        Step 1 of {STEPS.length} — {STEPS[0]}
-      </p>
       <Input
-        placeholder="Search by email or username..."
+        placeholder="Search by email or username…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="h-9"
         autoFocus
       />
       {selected.size > 0 && (
-        <p className="text-xs text-blue-600">
+        <p className="text-xs font-medium text-blue-600">
           {selected.size} user{selected.size === 1 ? "" : "s"} selected
         </p>
       )}
-      <div className="max-h-64 overflow-y-auto border rounded-md divide-y">
+      <div className="max-h-60 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
         {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="px-3 py-2">
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="px-3 py-2.5">
               <Skeleton className="h-8 w-full" />
             </div>
           ))
         ) : rows.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500">
-            {search ? "No users match your search." : "No users found."}
+          <div className="text-center py-10 text-sm text-slate-400">
+            {search ? "No users match your search." : "No end users found."}
           </div>
         ) : (
           rows.map((user) => {
-            const label =
-              user.user_email ?? user.user_username ?? user.user_id;
+            const label = user.user_email ?? user.user_username ?? user.user_id;
+            const initials = label.slice(0, 2).toUpperCase();
             const isSelected = selected.has(user.user_id);
+            // Show application roles cleaned up
+            const roleTags = user.applications
+              ?.flatMap((a) => {
+                if (!a.role_name) return [];
+                const { primary, badge } = parseRoleName(a.role_name, appMap);
+                return [badge ? `${primary} · ${badge}` : primary];
+              })
+              .slice(0, 2) ?? [];
+
             return (
-              <label
+              <button
                 key={user.user_id}
-                className="flex items-start gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center h-4 mt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggle(user.user_id)}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-semibold shrink-0">
-                      {label.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium text-slate-900 truncate">
-                      {label}
-                    </span>
-                  </div>
-                  {user.applications && user.applications.length > 0 && (
-                    <p className="text-xs text-slate-500 mt-0.5 ml-8">
-                      {user.applications
-                        .map((a) => a.role_name)
-                        .join(", ")}
-                    </p>
-                  )}
-                </div>
-                {isSelected && (
-                  <Check className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                type="button"
+                onClick={() => onToggle(user.user_id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                  isSelected ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-slate-50"
                 )}
-              </label>
+              >
+                {/* Checkbox */}
+                <span
+                  className={cn(
+                    "flex-none w-4 h-4 rounded border-2 flex items-center justify-center transition-all",
+                    isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300 bg-white"
+                  )}
+                >
+                  {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
+                </span>
+
+                {/* Avatar */}
+                <span className="flex-none h-8 w-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold">
+                  {initials}
+                </span>
+
+                {/* Info */}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-slate-900 truncate">
+                    {label}
+                  </span>
+                  {roleTags.length > 0 && (
+                    <span className="block text-xs text-slate-400 truncate mt-0.5">
+                      {roleTags.join(", ")}
+                    </span>
+                  )}
+                </span>
+
+                {isSelected && (
+                  <Check className="flex-none h-4 w-4 text-blue-600" />
+                )}
+              </button>
             );
           })
         )}
@@ -209,86 +255,94 @@ function StepSelectRole({
   workspaceId,
   selectedRoleId,
   onSelect,
+  appMap,
 }: {
   workspaceId: string;
   selectedRoleId: string | null;
   onSelect: (roleId: string) => void;
+  appMap: Map<string, string>;
 }) {
   const [search, setSearch] = useState("");
-  const { data: roles, isLoading } = useGetAuthSecRolesQuery({
-    workspace_id: workspaceId,
-  });
+  const { data: roles, isLoading } = useGetAuthSecRolesQuery({ workspace_id: workspaceId });
 
   const rows = useMemo<AuthSecRole[]>(() => {
     const list = (roles ?? []) as AuthSecRole[];
     if (!search) return list;
     const s = search.toLowerCase();
     return list.filter(
-      (r) =>
-        r.name.toLowerCase().includes(s) ||
-        r.description?.toLowerCase().includes(s)
+      (r) => r.name.toLowerCase().includes(s) || r.description?.toLowerCase().includes(s)
     );
   }, [roles, search]);
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-slate-700">
-        Step 2 of {STEPS.length} — {STEPS[1]}
-      </p>
       <Input
-        placeholder="Search roles..."
+        placeholder="Search roles…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="h-9"
         autoFocus
       />
-      <div className="max-h-64 overflow-y-auto border rounded-md divide-y">
+      <div className="max-h-60 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="px-3 py-2">
+            <div key={i} className="px-3 py-2.5">
               <Skeleton className="h-8 w-full" />
             </div>
           ))
         ) : rows.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-10 text-sm text-slate-400">
             {search ? "No roles match your search." : "No roles found."}
           </div>
         ) : (
           rows.map((role) => {
             const isSelected = selectedRoleId === role.id;
+            const { primary, badge } = parseRoleName(role.name, appMap);
+            const desc = role.description;
+
             return (
-              <label
+              <button
                 key={role.id}
-                className="flex items-start gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center h-4 mt-0.5">
-                  <input
-                    type="radio"
-                    name="role-select"
-                    checked={isSelected}
-                    onChange={() => onSelect(role.id)}
-                    className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">
-                      {role.name}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      Workspace
-                    </Badge>
-                  </div>
-                  {role.description && (
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {role.description}
-                    </p>
-                  )}
-                </div>
-                {isSelected && (
-                  <Check className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                type="button"
+                onClick={() => onSelect(role.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-3 text-left transition-colors",
+                  isSelected ? "bg-blue-50 hover:bg-blue-50" : "hover:bg-slate-50"
                 )}
-              </label>
+              >
+                {/* Radio dot */}
+                <span
+                  className={cn(
+                    "flex-none w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                    isSelected ? "border-blue-600" : "border-slate-300 bg-white"
+                  )}
+                >
+                  {isSelected && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+                </span>
+
+                {/* Text */}
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-900">
+                      {primary}
+                    </span>
+                    {badge && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wide">
+                        {badge}
+                      </span>
+                    )}
+                  </span>
+                  {desc && (
+                    <span className="block text-xs text-slate-400 mt-0.5 truncate">
+                      {desc}
+                    </span>
+                  )}
+                </span>
+
+                {isSelected && (
+                  <Check className="flex-none h-4 w-4 text-blue-600" />
+                )}
+              </button>
             );
           })
         )}
@@ -310,12 +364,10 @@ function StepScope({
   selectedApplicationId: string | null;
   onApplicationSelect: (id: string | null) => void;
 }) {
-  const { data: appRolesData, isLoading: appsLoading } =
-    useListApplicationRolesQuery(undefined, {
-      skip: scopeType !== "application",
-    });
+  const { data: appRolesData, isLoading: appsLoading } = useListApplicationRolesQuery(undefined, {
+    skip: scopeType !== "application",
+  });
 
-  // Extract unique applications from application roles
   const applications = useMemo<ApplicationRole["application"][]>(() => {
     const list = appRolesData?.roles ?? [];
     const seen = new Map<string, ApplicationRole["application"]>();
@@ -325,79 +377,100 @@ function StepScope({
     return Array.from(seen.values());
   }, [appRolesData]);
 
+  const options: { value: "workspace" | "application"; label: string; desc: string }[] = [
+    {
+      value: "workspace",
+      label: "Workspace-wide",
+      desc: "Role applies across all applications in this workspace.",
+    },
+    {
+      value: "application",
+      label: "Application-specific",
+      desc: "Role applies only to the selected application.",
+    },
+  ];
+
   return (
-    <div className="space-y-4">
-      <p className="text-sm font-medium text-slate-700">
-        Step 3 of {STEPS.length} — {STEPS[2]}
-      </p>
-      <div className="space-y-3">
-        <label className="flex items-start gap-3 p-3 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors">
-          <input
-            type="radio"
-            name="scope-type"
-            checked={scopeType === "workspace"}
-            onChange={() => {
-              onScopeTypeChange("workspace");
-              onApplicationSelect(null);
+    <div className="space-y-3">
+      {options.map((opt) => {
+        const active = scopeType === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => {
+              onScopeTypeChange(opt.value);
+              if (opt.value === "workspace") onApplicationSelect(null);
             }}
-            className="h-4 w-4 mt-0.5 border-slate-300 text-blue-600 focus:ring-blue-500"
-          />
-          <div>
-            <p className="text-sm font-medium text-slate-900">
-              Workspace-wide (default)
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Role applies across all applications in this workspace.
-            </p>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 p-3 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors">
-          <input
-            type="radio"
-            name="scope-type"
-            checked={scopeType === "application"}
-            onChange={() => onScopeTypeChange("application")}
-            className="h-4 w-4 mt-0.5 border-slate-300 text-blue-600 focus:ring-blue-500"
-          />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-slate-900">
-              Application-specific
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Role applies only to the selected application.
-            </p>
-          </div>
-        </label>
-        {scopeType === "application" && (
-          <div className="ml-7">
-            {appsLoading ? (
-              <Skeleton className="h-9 w-full" />
-            ) : (
-              <Select
-                value={selectedApplicationId ?? ""}
-                onValueChange={(v) => onApplicationSelect(v || null)}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select application..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {applications.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      No applications found
-                    </SelectItem>
-                  ) : (
-                    applications.map((app) => (
-                      <SelectItem key={app.id} value={app.id}>
-                        {app.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+            className={cn(
+              "w-full flex items-start gap-3 p-4 rounded-lg border-2 text-left transition-all",
+              active
+                ? "border-blue-600 bg-blue-50"
+                : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
             )}
-          </div>
-        )}
-      </div>
+          >
+            <span
+              className={cn(
+                "mt-0.5 flex-none w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                active ? "border-blue-600" : "border-slate-300"
+              )}
+            >
+              {active && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+            </span>
+            <span>
+              <span
+                className={cn(
+                  "block text-sm font-semibold",
+                  active ? "text-blue-900" : "text-slate-900"
+                )}
+              >
+                {opt.label}
+              </span>
+              <span className="block text-xs text-slate-500 mt-0.5">{opt.desc}</span>
+            </span>
+          </button>
+        );
+      })}
+
+      {scopeType === "application" && (
+        <div className="mt-1">
+          {appsLoading ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-40 overflow-y-auto">
+              {applications.length === 0 ? (
+                <p className="text-center py-6 text-sm text-slate-400">No applications found.</p>
+              ) : (
+                applications.map((app) => {
+                  const isSelected = selectedApplicationId === app.id;
+                  return (
+                    <button
+                      key={app.id}
+                      type="button"
+                      onClick={() => onApplicationSelect(app.id)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                        isSelected ? "bg-blue-50" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex-none w-3.5 h-3.5 rounded-full border-2",
+                          isSelected ? "border-blue-600 bg-blue-600" : "border-slate-300"
+                        )}
+                      />
+                      <span className="text-sm font-medium text-slate-900 flex-1 truncate">
+                        {app.name}
+                      </span>
+                      {isSelected && <Check className="flex-none h-4 w-4 text-blue-600" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -415,42 +488,42 @@ function StepExpiry({
   customDate: string;
   onCustomDateChange: (d: string) => void;
 }) {
-  const options: { value: ExpiryOption; label: string }[] = [
-    { value: "never", label: "Never (default)" },
-    { value: "24h", label: "24 hours" },
-    { value: "7d", label: "7 days" },
-    { value: "30d", label: "30 days" },
-    { value: "custom", label: "Custom" },
+  const options: { value: ExpiryOption; label: string; desc: string }[] = [
+    { value: "never", label: "Never", desc: "Default — no expiry" },
+    { value: "24h",   label: "24 hours", desc: "Expires tomorrow" },
+    { value: "7d",    label: "7 days",   desc: "Short-lived access" },
+    { value: "30d",   label: "30 days",  desc: "Monthly access" },
+    { value: "custom", label: "Custom",  desc: "Pick a date" },
   ];
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm font-medium text-slate-700">
-        Step 4 of {STEPS.length} — {STEPS[3]}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onExpiryChange(opt.value)}
-            className={cn(
-              "inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition-colors",
-              expiry === opt.value
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {options.map((opt) => {
+          const active = expiry === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onExpiryChange(opt.value)}
+              className={cn(
+                "flex flex-col items-start p-3 rounded-lg border-2 text-left transition-all",
+                active
+                  ? "border-blue-600 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+              )}
+            >
+              <span className={cn("text-sm font-semibold", active ? "text-blue-900" : "text-slate-900")}>
+                {opt.label}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-0.5">{opt.desc}</span>
+            </button>
+          );
+        })}
       </div>
       {expiry === "custom" && (
-        <div className="space-y-1.5">
-          <label
-            htmlFor="custom-date"
-            className="text-sm text-slate-600"
-          >
+        <div className="pt-1 space-y-1">
+          <label htmlFor="custom-date" className="text-xs font-medium text-slate-600">
             Expiry date
           </label>
           <Input
@@ -479,6 +552,7 @@ function StepReview({
   applications,
   expiry,
   customDate,
+  appMap,
 }: {
   selectedUserIds: Set<string>;
   users: TenantEndUserState[];
@@ -489,81 +563,75 @@ function StepReview({
   applications: { id: string; name: string }[];
   expiry: ExpiryOption;
   customDate: string;
+  appMap: Map<string, string>;
 }) {
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
   const selectedApp = applications.find((a) => a.id === selectedApplicationId);
-  const selectedUsers = users.filter((u) =>
-    selectedUserIds.has(u.user_id)
-  );
+  const selectedUsers = users.filter((u) => selectedUserIds.has(u.user_id));
+
+  const roleName = selectedRole
+    ? (() => {
+        const { primary, badge } = parseRoleName(selectedRole.name, appMap);
+        return badge ? `${primary} · ${badge}` : primary;
+      })()
+    : "—";
 
   const expiryLabel =
-    expiry === "never"
-      ? "No expiry"
-      : expiry === "24h"
-      ? "Expires in 24 hours"
-      : expiry === "7d"
-      ? "Expires in 7 days"
-      : expiry === "30d"
-      ? "Expires in 30 days"
-      : `Expires on ${customDate}`;
+    expiry === "never" ? "No expiry" :
+    expiry === "24h"   ? "24 hours" :
+    expiry === "7d"    ? "7 days"   :
+    expiry === "30d"   ? "30 days"  :
+    customDate         ? customDate : "Custom";
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-slate-700">
-        Step 5 of {STEPS.length} — {STEPS[4]}
+      {/* Summary sentence */}
+      <p className="text-sm text-slate-700 leading-relaxed">
+        Granting{" "}
+        <span className="font-semibold text-blue-700">
+          {selectedUserIds.size} user{selectedUserIds.size === 1 ? "" : "s"}
+        </span>{" "}
+        the{" "}
+        <span className="font-semibold text-slate-900">{roleName}</span>{" "}
+        role{" "}
+        {scopeType === "application" && selectedApp
+          ? <>on <span className="font-semibold text-slate-900">{selectedApp.name}</span></>
+          : "workspace-wide"
+        }
+        {expiry !== "never" && (
+          <> · expires in <span className="font-semibold text-slate-900">{expiryLabel}</span></>
+        )}
+        .
       </p>
-      <div className="rounded-md border bg-slate-50 p-4 space-y-3 text-sm">
-        <p className="text-slate-700 font-medium">
-          Granting{" "}
-          <span className="text-blue-700 font-semibold">
-            {selectedUserIds.size} user
-            {selectedUserIds.size === 1 ? "" : "s"}
-          </span>{" "}
-          the{" "}
-          <span className="font-semibold text-slate-900">
-            {selectedRole?.name ?? "—"}
-          </span>{" "}
-          role{" "}
-          {scopeType === "application" && selectedApp
-            ? `for ${selectedApp.name}`
-            : "workspace-wide"}
-          {expiry !== "never" ? ` · ${expiryLabel}` : ""}
-        </p>
-        <div className="space-y-1">
-          {selectedUsers.map((u) => (
-            <div
-              key={u.user_id}
-              className="flex items-center gap-2 text-sm text-slate-700"
-            >
-              <div className="h-5 w-5 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-semibold shrink-0">
-                {(u.user_email ?? u.user_id).slice(0, 2).toUpperCase()}
+
+      {/* User list */}
+      <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
+        {selectedUsers.map((u) => {
+          const label = u.user_email ?? u.user_username ?? u.user_id;
+          const initials = label.slice(0, 2).toUpperCase();
+          return (
+            <div key={u.user_id} className="flex items-center gap-2.5 px-3 py-2.5">
+              <div className="h-7 w-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
+                {initials}
               </div>
-              <span className="truncate">
-                {u.user_email ?? u.user_username ?? u.user_id}
-              </span>
+              <span className="text-sm text-slate-800 truncate">{label}</span>
             </div>
-          ))}
-        </div>
-        <div className="border-t pt-3 text-xs text-slate-500 space-y-1">
-          <div className="flex justify-between">
-            <span>Role</span>
-            <span className="font-medium text-slate-700">
-              {selectedRole?.name ?? "—"}
-            </span>
+          );
+        })}
+      </div>
+
+      {/* Details grid */}
+      <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs space-y-2">
+        {[
+          { key: "Role",   val: roleName },
+          { key: "Scope",  val: scopeType === "application" && selectedApp ? selectedApp.name : "Workspace-wide" },
+          { key: "Expiry", val: expiry === "never" ? "No expiry" : expiryLabel },
+        ].map(({ key, val }) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <span className="text-slate-500">{key}</span>
+            <span className="font-semibold text-slate-800 text-right">{val}</span>
           </div>
-          <div className="flex justify-between">
-            <span>Scope</span>
-            <span className="font-medium text-slate-700">
-              {scopeType === "application" && selectedApp
-                ? selectedApp.name
-                : "Workspace-wide"}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Expiry</span>
-            <span className="font-medium text-slate-700">{expiryLabel}</span>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -573,10 +641,10 @@ function StepReview({
 
 function computeExpiresAt(expiry: ExpiryOption, customDate: string): string | undefined {
   const now = Date.now();
-  if (expiry === "never") return undefined;
-  if (expiry === "24h") return new Date(now + 24 * 60 * 60 * 1000).toISOString();
-  if (expiry === "7d") return new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
-  if (expiry === "30d") return new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
+  if (expiry === "never")  return undefined;
+  if (expiry === "24h")    return new Date(now + 24 * 60 * 60 * 1000).toISOString();
+  if (expiry === "7d")     return new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
+  if (expiry === "30d")    return new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
   if (expiry === "custom" && customDate) return new Date(customDate).toISOString();
   return undefined;
 }
@@ -588,60 +656,40 @@ export default function AssignRoleWizard({
   preselectedRoleId,
 }: AssignRoleWizardProps) {
   const workspaceId = resolveWorkspaceId() ?? "";
-
   const [step, setStep] = useState(0);
 
-  // Step 1
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() => {
-    if (preselectedUserId) return new Set([preselectedUserId]);
-    return new Set();
-  });
-
-  // Step 2
-  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(
-    preselectedRoleId ?? null
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(() =>
+    preselectedUserId ? new Set([preselectedUserId]) : new Set()
   );
-
-  // Step 3
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(preselectedRoleId ?? null);
   const [scopeType, setScopeType] = useState<"workspace" | "application">("workspace");
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
-
-  // Step 4
   const [expiry, setExpiry] = useState<ExpiryOption>("never");
   const [customDate, setCustomDate] = useState("");
 
   // Data
-  const { data: userData } = useListEndUsersQuery(
-    { workspaceId },
-    { skip: !workspaceId }
-  );
-  const users = useMemo<TenantEndUserState[]>(
-    () => userData?.items ?? [],
-    [userData]
-  );
+  const { data: userData } = useListEndUsersQuery({ workspaceId }, { skip: !workspaceId });
+  const users = useMemo<TenantEndUserState[]>(() => userData?.items ?? [], [userData]);
 
-  const { data: rolesData } = useGetAuthSecRolesQuery(
-    { workspace_id: workspaceId },
-    { skip: !workspaceId }
-  );
-  const roles = useMemo<AuthSecRole[]>(
-    () => (rolesData ?? []) as AuthSecRole[],
-    [rolesData]
-  );
+  const { data: rolesData } = useGetAuthSecRolesQuery({ workspace_id: workspaceId }, { skip: !workspaceId });
+  const roles = useMemo<AuthSecRole[]>(() => (rolesData ?? []) as AuthSecRole[], [rolesData]);
 
   const { data: appRolesData } = useListApplicationRolesQuery();
   const applications = useMemo(() => {
     const list = appRolesData?.roles ?? [];
     const seen = new Map<string, { id: string; name: string }>();
     list.forEach((r) => {
-      if (!seen.has(r.application.id))
-        seen.set(r.application.id, {
-          id: r.application.id,
-          name: r.application.name,
-        });
+      if (!seen.has(r.application.id)) seen.set(r.application.id, { id: r.application.id, name: r.application.name });
     });
     return Array.from(seen.values());
   }, [appRolesData]);
+
+  // uuid → application name map used by parseRoleName everywhere
+  const appMap = useMemo(() => {
+    const m = new Map<string, string>();
+    applications.forEach((a) => m.set(a.id, a.name));
+    return m;
+  }, [applications]);
 
   const [createBinding, createState] = useCreateBindingMutation();
   const [deleteBinding] = useDeleteBindingMutation();
@@ -649,11 +697,8 @@ export default function AssignRoleWizard({
   const toggleUser = useCallback((userId: string) => {
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
-      if (next.has(userId)) {
-        next.delete(userId);
-      } else {
-        next.add(userId);
-      }
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
       return next;
     });
   }, []);
@@ -661,55 +706,33 @@ export default function AssignRoleWizard({
   const canAdvance = useMemo(() => {
     if (step === 0) return selectedUserIds.size > 0;
     if (step === 1) return !!selectedRoleId;
-    if (step === 2)
-      return (
-        scopeType === "workspace" ||
-        (scopeType === "application" && !!selectedApplicationId)
-      );
-    if (step === 3)
-      return expiry !== "custom" || (expiry === "custom" && !!customDate);
+    if (step === 2) return scopeType === "workspace" || (scopeType === "application" && !!selectedApplicationId);
+    if (step === 3) return expiry !== "custom" || !!customDate;
     return true;
-  }, [
-    step,
-    selectedUserIds,
-    selectedRoleId,
-    scopeType,
-    selectedApplicationId,
-    expiry,
-    customDate,
-  ]);
+  }, [step, selectedUserIds, selectedRoleId, scopeType, selectedApplicationId, expiry, customDate]);
 
   const handleConfirm = useCallback(async () => {
     if (!selectedRoleId || selectedUserIds.size === 0) return;
-
     const expiresAt = computeExpiresAt(expiry, customDate);
-    // Backend canonical name for an application-scoped binding is
-    // ``resource_server``. Every reader (scope_resolver, scope_matrix,
-    // applications_controller) matches on that string; writing ``application``
-    // — as a previous version of this wizard did — creates rows that the
-    // scope resolver silently skips, so the binding "exists" on the
-    // Assignments page but never grants the scope on the consent screen.
     const scope =
       scopeType === "application" && selectedApplicationId
         ? { id: selectedApplicationId, type: "resource_server" }
         : undefined;
 
     const createdIds: string[] = [];
-
     try {
-      const promises = Array.from(selectedUserIds).map(async (userId) => {
-        const result = await createBinding({
-          user_id: userId,
-          role_id: selectedRoleId,
-          scope,
-          conditions: expiresAt ? { expires_at: expiresAt } : undefined,
-          audience: "admin",
-        }).unwrap();
-        if (result.id) createdIds.push(result.id);
-      });
-
-      await Promise.all(promises);
-
+      await Promise.all(
+        Array.from(selectedUserIds).map(async (userId) => {
+          const result = await createBinding({
+            user_id: userId,
+            role_id: selectedRoleId,
+            scope,
+            conditions: expiresAt ? { expires_at: expiresAt } : undefined,
+            audience: "admin",
+          }).unwrap();
+          if (result.id) createdIds.push(result.id);
+        })
+      );
       toastWithUndo({
         message: `Role assigned to ${selectedUserIds.size} user${selectedUserIds.size === 1 ? "" : "s"}`,
         onUndo: async () => {
@@ -721,9 +744,7 @@ export default function AssignRoleWizard({
           }
         },
       });
-
       onClose();
-      // Reset
       setStep(0);
       setSelectedUserIds(new Set());
       setSelectedRoleId(null);
@@ -735,40 +756,25 @@ export default function AssignRoleWizard({
       const err = e as { data?: { error?: string } };
       toast.error(err?.data?.error ?? "Failed to assign role");
     }
-  }, [
-    selectedRoleId,
-    selectedUserIds,
-    scopeType,
-    selectedApplicationId,
-    expiry,
-    customDate,
-    createBinding,
-    deleteBinding,
-    onClose,
-  ]);
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) onClose();
-    },
-    [onClose]
-  );
+  }, [selectedRoleId, selectedUserIds, scopeType, selectedApplicationId, expiry, customDate, createBinding, deleteBinding, onClose]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Assign Role</DialogTitle>
+          <DialogTitle className="text-center text-lg font-semibold">Assign Role</DialogTitle>
         </DialogHeader>
 
-        <StepDots current={step} total={STEPS.length} />
+        <StepIndicator current={step} />
+        <StepHeader step={step} />
 
-        <div className="min-h-[280px]">
+        <div className="min-h-[260px]">
           {step === 0 && (
             <StepSelectUsers
               workspaceId={workspaceId}
               selected={selectedUserIds}
               onToggle={toggleUser}
+              appMap={appMap}
             />
           )}
           {step === 1 && (
@@ -776,6 +782,7 @@ export default function AssignRoleWizard({
               workspaceId={workspaceId}
               selectedRoleId={selectedRoleId}
               onSelect={setSelectedRoleId}
+              appMap={appMap}
             />
           )}
           {step === 2 && (
@@ -805,39 +812,38 @@ export default function AssignRoleWizard({
               applications={applications}
               expiry={expiry}
               customDate={customDate}
+              appMap={appMap}
             />
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="flex-row items-center justify-between gap-2 pt-2 border-t border-slate-100">
           <Button
             variant="outline"
             onClick={() => (step === 0 ? onClose() : setStep((s) => s - 1))}
             disabled={createState.isLoading}
+            className="gap-1.5"
           >
-            {step === 0 ? (
-              "Cancel"
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back
-              </>
-            )}
+            {step > 0 && <ChevronLeft className="h-4 w-4" />}
+            {step === 0 ? "Cancel" : "Back"}
           </Button>
+
           {step < STEPS.length - 1 ? (
             <Button
               onClick={() => setStep((s) => s + 1)}
               disabled={!canAdvance}
+              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
             >
               Next
-              <ChevronRight className="h-4 w-4 ml-1" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirm}
               disabled={!canAdvance || createState.isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {createState.isLoading ? "Assigning..." : "Confirm & assign"}
+              {createState.isLoading ? "Assigning…" : "Confirm & assign"}
             </Button>
           )}
         </DialogFooter>
