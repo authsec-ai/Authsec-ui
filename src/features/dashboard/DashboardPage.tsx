@@ -22,6 +22,7 @@ import { useWizardStatus } from "./hooks/useWizardStatus";
 import { useDashboardOverview } from "./hooks/useDashboardOverview";
 
 import { ActivationSection } from "./components/ActivationSection";
+import { DashboardGreeting } from "./components/DashboardGreeting";
 import { SetupTourList } from "./components/SetupTourList";
 import { DashboardSection } from "./components/DashboardSection";
 import { DashboardActionTile } from "./components/DashboardActionTile";
@@ -284,6 +285,8 @@ export function DashboardPage() {
   return (
     <div data-dashboard="overview" className="dash-page min-h-full">
       <div className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6 sm:py-5">
+        <DashboardGreeting workspaceId={workspaceId} />
+
         <ActivationSection
           step1Done={activationStep1Done}
           step2Done={activationStep2Done}

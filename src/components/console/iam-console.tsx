@@ -74,8 +74,8 @@ export function ConsoleFilterBar({
                     className={cn(
                       "inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold transition-colors",
                       active
-                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                        ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"
+                        : "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)",
                     )}
                   >
                     {filter.label}
@@ -178,11 +178,11 @@ export function InspectorPanel({
   className?: string;
 }) {
   return (
-    <aside className={cn("rounded-lg border border-slate-200 bg-white", className)}>
-      <header className="border-b border-slate-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+    <aside className={cn("rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)", className)}>
+      <header className="border-b border-(--color-border-subtle) px-4 py-3">
+        <h3 className="text-sm font-semibold text-(--color-text)">{title}</h3>
         {description ? (
-          <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>
+          <p className="mt-1 text-xs leading-5 text-(--color-text-muted)">{description}</p>
         ) : null}
       </header>
       <div className="space-y-4 p-4">{children}</div>
@@ -198,10 +198,10 @@ export interface AccessPathStep {
 
 export function AccessPath({ steps }: { steps: AccessPathStep[] }) {
   const tone: Record<NonNullable<AccessPathStep["state"]>, string> = {
-    ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warn: "border-amber-200 bg-amber-50 text-amber-700",
-    blocked: "border-red-200 bg-red-50 text-red-700",
-    muted: "border-slate-200 bg-slate-50 text-slate-600",
+    ok: "border-transparent bg-(--color-success-soft) text-(--color-success-text)",
+    warn: "border-transparent bg-(--color-warning-soft) text-(--color-warning-text)",
+    blocked: "border-transparent bg-(--color-danger-soft) text-(--color-danger-text)",
+    muted: "border-(--color-border-subtle) bg-(--color-surface-subtle) text-(--color-text-muted)",
   };
   return (
     <ol className="space-y-2">
@@ -216,9 +216,9 @@ export function AccessPath({ steps }: { steps: AccessPathStep[] }) {
             {index + 1}
           </span>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-slate-950">{step.label}</div>
+            <div className="text-sm font-medium text-(--color-text)">{step.label}</div>
             {step.detail ? (
-              <div className="mt-0.5 text-xs leading-5 text-slate-600">{step.detail}</div>
+              <div className="mt-0.5 text-xs leading-5 text-(--color-text-muted)">{step.detail}</div>
             ) : null}
           </div>
         </li>
@@ -239,9 +239,9 @@ export function VerdictCard({
   action?: ReactNode;
 }) {
   const tone = {
-    allow: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    deny: "border-red-200 bg-red-50 text-red-800",
-    review: "border-amber-200 bg-amber-50 text-amber-800",
+    allow: "border-transparent bg-(--color-success-soft) text-(--color-success-text)",
+    deny: "border-transparent bg-(--color-danger-soft) text-(--color-danger-text)",
+    review: "border-transparent bg-(--color-warning-soft) text-(--color-warning-text)",
   }[verdict];
   return (
     <div className={cn("rounded-lg border p-4", tone)}>

@@ -21,11 +21,12 @@
   --radius-2xl: 1.5rem;
   --radius-pill: 999px;
 
-  /* Elevation scale */
+  /* Elevation scale — Console Refresh: 1px border + faint shadow */
   --shadow-none: none;
-  --shadow-xs: 0 1px 1px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.08);
-  --shadow-sm: 0 10px 20px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 16px 40px rgba(15, 23, 42, 0.12);
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 8px 24px -6px rgba(16, 24, 40, 0.12), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 24px 48px -12px rgba(16, 24, 40, 0.18);
 
   /* Motion */
   --motion-duration-fast: 120ms;
@@ -74,19 +75,19 @@
   /* Light mode palette - clean black/white */
   --color-surface-base: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-subtle: #f5f5f5;
+  --color-surface-subtle: #f6f7f9;
   --color-surface-inverse: #000000;
 
-  /* Text - pure black only, no gray */
-  --color-text-primary: #000000;
-  --color-text-secondary: #000000;
+  /* Text - refined ink ramp (Console Refresh), not pure black */
+  --color-text-primary: #1c1e21;
+  --color-text-secondary: #5f6368;
   /* Button text on colored backgrounds must always be white */
   --color-text-on-dark: #ffffff;
   --color-text-on-primary: #ffffff;
 
   /* Borders */
-  --color-border-subtle: rgba(0, 0, 0, 0.1);
-  --color-border-strong: rgba(0, 0, 0, 0.15);
+  --color-border-subtle: #eaecef;
+  --color-border-strong: #d8dbe0;
 
   /* Shared brand blue scale (Google-blue tuned) */
   --brand-blue-50: #e8f0fe;
@@ -104,11 +105,54 @@
   --color-primary: var(--brand-blue-600);
   --color-primary-strong: var(--brand-blue-700);
   --color-primary-soft: var(--brand-blue-50);
+  --color-primary-soft-strong: #d6e4fc; /* hover on soft */
+  --color-primary-text: #1a73e8; /* AA text-on-soft */
 
   /* Status colors */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  /* ── Console Refresh design tokens (prototype-aligned) ───────────────── */
+  /* Status soft fills + AA-safe text-on-soft */
+  --color-success-soft: #e6f6ec;
+  --color-success-text: #1a7f43;
+  --color-warning-soft: #fdf2dc;
+  --color-warning-text: #b45309;
+  --color-danger-soft: #fdeaea;
+  --color-danger-text: #c0322f;
+  /* "info" tone maps to primary */
+  --color-info: var(--color-primary);
+  --color-info-soft: var(--color-primary-soft);
+  --color-info-text: var(--color-primary-text);
+  /* Mono code / scope-string ink (theme-aware green) */
+  --color-code: #1a7f43;
+
+  /* Refined text hierarchy (additive — does not replace --color-text-primary) */
+  --color-text: #1c1e21;
+  --color-text-muted: #5f6368;
+  --color-text-subtle: #80868b;
+
+  /* Interaction washes + focus ring */
+  --color-hover: rgba(20, 22, 26, 0.045);
+  --color-press: rgba(20, 22, 26, 0.07);
+  --color-focus-ring: rgba(26, 115, 232, 0.35);
+
+  /* Sidebar canvas + quiet-active fill */
+  --color-sidebar-surface: #fafbfc;
+  --color-sidebar-accent-soft: #eef1f5;
+
+  /* Prototype motion aliases (console-screens.css) */
+  --dur-1: var(--motion-duration-fast);
+  --dur-2: var(--motion-duration-base);
+  --dur-3: var(--motion-duration-slow);
+  --ease: var(--motion-easing-standard);
+
+  /* Risk severity scale (Roles) */
+  --risk-low: #16a34a;       --risk-low-soft: #e6f6ec;    --risk-low-text: #1a7f43;
+  --risk-medium: #f59e0b;    --risk-medium-soft: #fdf2dc; --risk-medium-text: #b45309;
+  --risk-high: #f97316;      --risk-high-soft: #fdeede;   --risk-high-text: #c2410c;
+  --risk-critical: #ef4444;  --risk-critical-soft: #fdeaea; --risk-critical-text: #c0322f;
 
   /* Muted surfaces */
   --color-muted: #f5f5f5;
@@ -124,7 +168,7 @@
   --component-card-foreground: var(--color-text-primary);
   --component-card-border: var(--color-border-subtle);
   --component-card-shadow: var(--shadow-xs);
-  --component-card-radius: var(--radius-xs);
+  --component-card-radius: var(--radius-lg);
   --component-card-gap: var(--space-6);
   --component-card-padding-block: var(--space-7);
   --component-card-padding-inline: var(--space-7);
@@ -198,7 +242,7 @@
   --component-button-secondary-bg: var(--color-accent);
   --component-button-secondary-fg: var(--color-text-primary);
   --component-button-secondary-hover-bg: color-mix(in oklab, var(--color-accent) 85%, black 15%);
-  --component-button-outline-border: var(--color-border-subtle);
+  --component-button-outline-border: var(--color-border-strong);
 
   --component-button-cta-bg: color-mix(in oklab, var(--color-primary) 82%, white 18%);
   --component-button-cta-fg: var(--color-text-on-dark);
@@ -262,9 +306,9 @@
   --component-table-row-hover: rgba(0, 0, 0, 0.06);
   --component-table-row-selected: var(--color-primary-soft);
   --component-table-cell-padding-inline: var(--space-5);
-  --component-table-cell-padding-block: var(--space-3);
+  --component-table-cell-padding-block: 0.5625rem; /* compact density (9px) */
   --component-table-radius: var(--radius-lg);
-  --component-table-header-height: 3.5rem;
+  --component-table-header-height: 2.5rem; /* compact header */
   --component-table-row-height: auto;
   --component-table-shadow: var(--shadow-xs);
 
@@ -286,29 +330,66 @@
    * Minimal dark palette - only 3 surface levels
    * All neutrals are pure gray (no color tint)
    */
-  --color-surface-base: #121212;
-  --color-surface-raised: #1a1a1a;
-  --color-surface-subtle: #222222;
+  --color-surface-base: #0c0d0f;
+  --color-surface-raised: #16181c;
+  --color-surface-subtle: #131419;
   --color-surface-inverse: #ffffff;
 
-  /* Text - pure white only, no gray */
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #ffffff;
+  /* Dark elevation leans on borders, not shadow (Console Refresh) */
+  --shadow-xs: none;
+  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 28px 56px -12px rgba(0, 0, 0, 0.7);
+
+  /* Text - refined ink ramp (Console Refresh), not pure white */
+  --color-text-primary: #e8eaed;
+  --color-text-secondary: #9aa0a6;
   --color-text-on-dark: #ffffff;
 
-  /* Borders - white with low opacity */
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.12);
+  /* Borders */
+  --color-border-subtle: #23262c;
+  --color-border-strong: #34383f;
 
   /* Single accent color - blue */
   --color-primary: var(--brand-blue-300);
   --color-primary-strong: var(--brand-blue-400);
   --color-primary-soft: #102a56;
+  --color-primary-soft-strong: rgba(26, 115, 232, 0.24);
+  --color-primary-text: #7cb1f7; /* lighter for AA on dark */
 
   /* Status colors - muted versions */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  /* ── Console Refresh design tokens (dark) ───────────────────────────── */
+  --color-success-soft: rgba(34, 197, 94, 0.16);
+  --color-success-text: #5cd98a;
+  --color-warning-soft: rgba(245, 158, 11, 0.16);
+  --color-warning-text: #f5b942;
+  --color-danger-soft: rgba(239, 68, 68, 0.16);
+  --color-danger-text: #f6837f;
+  --color-info: var(--color-primary);
+  --color-info-soft: var(--color-primary-soft);
+  --color-info-text: var(--color-primary-text);
+  --color-code: #6ee7a8;
+
+  --color-text: #e8eaed;
+  --color-text-muted: #9aa0a6;
+  --color-text-subtle: #6c7176;
+
+  --color-hover: rgba(255, 255, 255, 0.055);
+  --color-press: rgba(255, 255, 255, 0.09);
+  --color-focus-ring: rgba(96, 165, 250, 0.45);
+
+  --color-sidebar-surface: #0f1013;
+  --color-sidebar-accent-soft: #1d2026;
+
+  /* Risk severity scale (Roles) — dark */
+  --risk-low: #4ade80;       --risk-low-soft: rgba(34, 197, 94, 0.16);    --risk-low-text: #5cd98a;
+  --risk-medium: #f5b942;    --risk-medium-soft: rgba(245, 158, 11, 0.16); --risk-medium-text: #f5b942;
+  --risk-high: #fb923c;      --risk-high-soft: rgba(249, 115, 22, 0.18);  --risk-high-text: #fdab6d;
+  --risk-critical: #f6837f;  --risk-critical-soft: rgba(239, 68, 68, 0.18); --risk-critical-text: #f6837f;
 
   /* Muted/accent same as subtle surface */
   --color-muted: #222222;
@@ -423,7 +504,7 @@
   --sidebar-foreground: var(--color-text-primary);
   --sidebar-primary: var(--color-primary);
   --sidebar-primary-foreground: var(--color-text-on-dark);
-  --sidebar-accent: var(--color-muted);
+  --sidebar-accent: var(--color-sidebar-accent-soft);
   --sidebar-accent-foreground: var(--color-text-primary);
   --sidebar-border: var(--color-border-subtle);
   --sidebar-ring: var(--color-primary-soft);
@@ -458,7 +539,7 @@
   --sidebar-foreground: var(--color-text-primary);
   --sidebar-primary: var(--color-primary);
   --sidebar-primary-foreground: var(--color-text-on-dark);
-  --sidebar-accent: var(--color-muted);
+  --sidebar-accent: var(--color-sidebar-accent-soft);
   --sidebar-accent-foreground: var(--color-text-primary);
   --sidebar-border: var(--component-card-border);
   --sidebar-ring: var(--color-primary-soft);

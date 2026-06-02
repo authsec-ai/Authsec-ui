@@ -1,108 +1,96 @@
 /**
- * `ApplicationHeader` — top of every Application detail page.
- *
- * Layout:
- *   [Name] [type badge]                       [Launch state pill]
- *   Protected URL: <url>
- *
- * The launch state pill reads `state === "ready"` (the real backend
- * signal), not `application.active`. The pill links to the Overview tab.
- *
- * The pill text is intentionally backend-truth, not a fabricated
- * blocker count. The Overview page itself shows the per-gate detail
- * sourced from `useGetSetupChecklistQuery` and `useGetActivationPreviewQuery`.
+ * `ApplicationHeader` — detail-shell object header (Console Refresh prototype):
+ * title + type badge, copyable mono resource URI, readiness/risk status
+ * cluster, tools-reviewed indicator, and a context-aware primary action.
+ * Renders inside a `[data-cr]` region.
  */
 
-import { Link } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import type { Application, Readiness } from "../types";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowRight, Check, CheckCircle2, Copy } from "lucide-react";
+import type { Application, Readiness, ReadinessState } from "../types";
 import { isLaunched } from "../lib/computeReadiness";
 import { computeNextBestAction, nextActionHref } from "../lib/computeNextBestAction";
-import { StatusBadge, toneFromReadiness } from "./ApplicationConsole";
 
 export interface ApplicationHeaderProps {
   application: Pick<
     Application,
     "id" | "name" | "resource_uri" | "active" | "state" | "setup_completed_at"
   >;
-  /** Reserved for future pill-status refinement; not currently consumed. */
   readiness?: Readiness;
   typeLabel?: string;
-  className?: string;
 }
 
-interface LaunchSummary {
-  label: string;
-  tone: "ok" | "warn" | "err" | "neutral";
-  href: string;
-}
-
-function summariseLaunch(
-  application: ApplicationHeaderProps["application"],
-): LaunchSummary {
-  const launchHref = `/applications/${application.id}/overview`;
-  if (isLaunched(application)) {
-    return { label: "Launched", tone: "ok", href: launchHref };
-  }
-  if (application.state === "scan_failed") {
-    return { label: "Scan failed", tone: "err", href: launchHref };
-  }
-  return { label: "Not launched", tone: "warn", href: launchHref };
+function toneClass(state: ReadinessState): string {
+  if (state === "ok") return "badge--success";
+  if (state === "warn") return "badge--warning";
+  if (state === "err") return "badge--danger";
+  return "badge--muted";
 }
 
 export function ApplicationHeader({
   application,
   readiness,
   typeLabel = "MCP",
-  className,
 }: ApplicationHeaderProps) {
-  const summary = summariseLaunch(application);
+  const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
+
+  const launched = isLaunched(application);
+  const launchTone = launched ? "badge--success" : application.state === "scan_failed" ? "badge--danger" : "badge--warning";
+  const launchLabel = launched ? "Launched" : application.state === "scan_failed" ? "Scan failed" : "Not launched";
   const next = readiness ? computeNextBestAction(application as Application, readiness) : null;
+  const toolsReviewed = readiness?.tools.state === "ok";
+
+  const copyUri = () => {
+    if (!application.resource_uri) return;
+    navigator.clipboard?.writeText(application.resource_uri).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1300);
+  };
+
   return (
-    <header
-      data-slot="application-header"
-      className={cn(
-        "flex flex-col gap-4 rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_1px_rgba(15,23,42,0.02)] lg:flex-row lg:items-center lg:justify-between",
-        className,
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-3">
-          <h1
-            data-slot="application-name"
-            className="truncate text-[24px] font-semibold leading-8 tracking-normal text-slate-950"
-          >
-            {application.name}
-          </h1>
-          {typeLabel && (
-            <StatusBadge>{typeLabel}</StatusBadge>
+    <header className="detail-header" data-slot="application-header">
+      <div className="dh-top">
+        <div className="dh-left">
+          <div className="dh-titlerow">
+            <h1 className="dh-title">{application.name}</h1>
+            <span className="badge badge--type">{typeLabel}</span>
+          </div>
+          {application.resource_uri && (
+            <button className={`dh-uri${copied ? " copied" : ""}`} title="Copy resource URI" onClick={copyUri}>
+              <span className="uri-txt mono">{application.resource_uri}</span>
+              <span className="uri-copy">{copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}</span>
+            </button>
           )}
         </div>
-        {application.resource_uri && (
-          <p className="mt-1 truncate font-mono text-sm text-slate-500">
-            {application.resource_uri}
-          </p>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <Link to={summary.href}>
-          <StatusBadge tone={summary.tone === "ok" ? "success" : summary.tone === "err" ? "danger" : "warning"}>
-            {summary.label}
-          </StatusBadge>
-        </Link>
-        {readiness?.tools ? (
-          <StatusBadge tone={toneFromReadiness(readiness.tools.state)}>
-            {readiness.tools.state === "ok" ? "Tools reviewed" : readiness.tools.status}
-          </StatusBadge>
-        ) : null}
-        {next ? (
-          <Link
-            to={nextActionHref(application.id, next)}
-            className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            {next.primary}
-          </Link>
-        ) : null}
+        <div className="dh-right">
+          <div className="dh-statuses">
+            <span className={`badge ${launchTone}`} onClick={() => navigate(`/applications/${application.id}/overview`)} style={{ cursor: "pointer" }}>
+              <span className="bdot" />
+              {launchLabel}
+            </span>
+            {readiness && readiness.tools.state !== "none" && !toolsReviewed && (
+              <span className={`badge ${toneClass(readiness.tools.state)}`}>
+                <span className="bdot" />
+                {readiness.tools.status}
+              </span>
+            )}
+          </div>
+          {toolsReviewed && (
+            <span className="tools-indicator">
+              <span className="ti-ic">
+                <CheckCircle2 className="icon-sm" />
+              </span>
+              Tools reviewed
+            </span>
+          )}
+          {next && (
+            <button className="btn btn-primary" onClick={() => navigate(nextActionHref(application.id, next))}>
+              {next.primary} <ArrowRight className="icon-sm" />
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

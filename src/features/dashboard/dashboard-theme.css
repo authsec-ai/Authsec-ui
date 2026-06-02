@@ -12,9 +12,10 @@
     --dash-text-2: var(--console-text-2);
     --dash-text-3: var(--console-text-3);
     --dash-accent: var(--console-accent);
-    --dash-success: #15803d;
-    --dash-warning: #b45309;
-    --dash-danger: #b91c1c;
+    /* Unified status-tone language (shared with Applications/Roles badges) */
+    --dash-success: var(--color-success-text);
+    --dash-warning: var(--color-warning-text);
+    --dash-danger: var(--color-danger-text);
     --dash-radius-sm: var(--console-radius-control);
     --dash-radius-md: var(--console-radius-control);
     --dash-radius-lg: calc(var(--console-radius-control) + 2px);
@@ -35,9 +36,9 @@
     --dash-text-2: var(--console-text-2);
     --dash-text-3: var(--console-text-3);
     --dash-accent: var(--console-accent);
-    --dash-success: #4ade80;
-    --dash-warning: #fbbf24;
-    --dash-danger: #fb7185;
+    --dash-success: var(--color-success-text);
+    --dash-warning: var(--color-warning-text);
+    --dash-danger: var(--color-danger-text);
     --dash-focus-ring: var(--console-focus-ring);
     --dash-hover-fill: var(--console-hover-fill);
     --dash-hover-outline: var(--console-hover-outline);

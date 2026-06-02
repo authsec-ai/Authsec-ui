@@ -20,7 +20,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "bg-black/5 dark:bg-white/5 inline-flex h-9 w-fit items-center justify-center rounded-lg p-1 gap-0.5",
+        "bg-(--color-surface-subtle) inline-flex h-9 w-fit items-center justify-center rounded-lg p-1 gap-0.5",
         className
       )}
       {...props}
@@ -34,9 +34,9 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
       data-slot="tabs-trigger"
       className={cn(
         "inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "text-foreground hover:text-foreground",
-        "data-[state=active]:bg-black/10 data-[state=active]:text-foreground dark:data-[state=active]:bg-white/10",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-black/20 dark:focus-visible:ring-white/20",
+        "text-(--color-text-muted) hover:text-(--color-text)",
+        "data-[state=active]:bg-(--color-surface-raised) data-[state=active]:text-(--color-text) data-[state=active]:shadow-(--shadow-xs)",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus-ring)",
         className
       )}
       {...props}
