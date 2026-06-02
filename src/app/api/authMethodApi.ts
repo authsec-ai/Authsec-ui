@@ -44,6 +44,7 @@ export interface CreateOIDCIdentityProviderConfig {
   userinfo_url: string;
   client_id: string;
   client_secret: string;
+  redirect_uri: string;
   scopes?: string; // space-delimited, e.g. "openid email profile"
   icon_url?: string;
 }

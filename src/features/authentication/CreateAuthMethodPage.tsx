@@ -349,6 +349,7 @@ export function CreateAuthMethodPage() {
           userinfo_url: form.userinfoUrl,
           client_id: form.clientId,
           client_secret: form.clientSecret,
+          redirect_uri: callbackUrl,
           scopes: form.scopes.join(" "),
         },
       }).unwrap();
