@@ -21,8 +21,6 @@ import {
   KeyRound,
   LayoutDashboard,
   Layers,
-  Link2,
-  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -77,12 +75,11 @@ const NAV_OBJECTS: NavItem[] = [
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
-// Workspace-level access control: roles, scopes, and assignments.
-// Application-specific roles and grants still live inside each Application's Access tab.
+// Workspace-level access control. Roles, Scopes and Assignments are three tabs
+// of ONE page (/access/*) — so the sidebar carries a single "Access Control"
+// entry rather than three rows that all open the same screen.
 const NAV_AUTHZ: NavItem[] = [
-  { title: "Roles", url: "/access/roles", icon: UserCog },
-  { title: "Scopes", url: "/access/scopes", icon: KeyRound },
-  { title: "Assignments", url: "/access/assignments", icon: Link2 },
+  { title: "Access Control", url: "/access/roles", icon: KeyRound },
 ];
 
 const NAV_MONITOR: NavItem[] = [
@@ -149,7 +146,9 @@ export function AppSidebar({
         isActive:
           location.pathname === item.url ||
           location.pathname.startsWith(`${item.url}/`) ||
-          (item.url === "/dashboard" && location.pathname === "/"),
+          (item.url === "/dashboard" && location.pathname === "/") ||
+          // "Access Control" is one nav row for the whole /access/* tabbed page.
+          (item.url.startsWith("/access") && location.pathname.startsWith("/access")),
       })),
     [location.pathname],
   );

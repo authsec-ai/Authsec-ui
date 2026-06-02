@@ -253,7 +253,7 @@ export default function ApplicationScopesPage() {
             ) : null}
             <Popover open={createOpen} onOpenChange={setCreateOpen}>
               <PopoverTrigger asChild>
-                <Button size="sm" className="h-9">
+                <Button size="sm" className="h-9 bg-blue-600 text-white hover:bg-blue-700">
                   <Plus className="mr-2 h-4 w-4" />
                   Create scope
                 </Button>

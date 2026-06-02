@@ -325,14 +325,6 @@ export default function ApplicationToolsPage() {
       />
 
       <TableCard>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs">
-          <span className="font-semibold text-slate-950">
-            {FILTER_DEFS.find((item) => item.key === filter)?.label} ({visibleTools.length})
-          </span>
-          <span className="text-slate-500">
-            Row actions open the tool inspector.
-          </span>
-        </div>
         <CardContent variant="flush">
           {isLoading ? (
             <div className="py-16 text-center text-sm text-muted-foreground">

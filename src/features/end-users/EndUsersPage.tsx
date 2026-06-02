@@ -139,7 +139,19 @@ function UserAccessSection({
   user: TenantEndUserState;
   workspaceId: string;
 }) {
-  const applications = user.applications ?? [];
+  // A user can hold several roles on the SAME application (e.g. admin + viewer
+  // on demo server). The backend snapshot returns one row per binding, so the
+  // raw list contains the app twice. Dedupe by application_id — one app is one
+  // app, regardless of how many roles the user has on it. The per-app effective
+  // access query below already aggregates every role/scope for that app.
+  const applications = useMemo(() => {
+    const seen = new Map<string, NonNullable<TenantEndUserState["applications"]>[number]>();
+    (user.applications ?? []).forEach((a) => {
+      if (!seen.has(a.application_id)) seen.set(a.application_id, a);
+    });
+    return Array.from(seen.values());
+  }, [user.applications]);
+
   const [selectedAppId, setSelectedAppId] = useState(applications[0]?.application_id ?? "");
   const effectiveAppId = selectedAppId || applications[0]?.application_id || "";
 
@@ -334,6 +346,13 @@ function UserDetailDrawer({
   const safeIndex = Number.isFinite(currentIndex) ? currentIndex : 0;
   const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
 
+  // Distinct applications (a user may hold multiple roles on one app — that's
+  // still one app, not N). Trust this over the backend's per-binding count.
+  const distinctAppCount = useMemo(
+    () => new Set((user.applications ?? []).map((a) => a.application_id)).size,
+    [user.applications],
+  );
+
   return (
     // SheetContent renders in a Radix portal — sits on top of the full screen
     // including the header, exactly like the Tools inspector on ApplicationToolsPage.
@@ -497,11 +516,9 @@ function UserDetailDrawer({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Access
             </p>
-            {(user.applications_count ?? 0) > 0 && (
+            {distinctAppCount > 0 && (
               <span className="text-[10px] text-muted-foreground">
-                {user.applications_count} app{user.applications_count !== 1 ? "s" : ""}
-                {(user.effective_scopes_count ?? 0) > 0 &&
-                  ` · ${user.effective_scopes_count} scope${user.effective_scopes_count !== 1 ? "s" : ""}`}
+                {distinctAppCount} app{distinctAppCount !== 1 ? "s" : ""}
               </span>
             )}
           </div>

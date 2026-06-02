@@ -59,8 +59,10 @@ import {
 } from "@/components/primitives";
 import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/utils/workspace";
+import { formatRoleName } from "@/utils/roleName";
 import { toast } from "@/lib/toast";
 
+import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import {
   useGetAuthSecRolesQuery,
   useAddUserDefinedRolesMutation,
@@ -330,6 +332,15 @@ function RolesTab({
     workspace_id: workspaceId,
   });
 
+  // uuid → application name, so auto-generated `rs-{uuid}:{type}` roles render
+  // as "demo server · admin" instead of the raw UUID.
+  const { data: resourceServers } = useListResourceServersQuery();
+  const appMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (resourceServers ?? []).forEach((rs) => m.set(rs.id, rs.name));
+    return m;
+  }, [resourceServers]);
+
   const [addRole, addRoleState] = useAddUserDefinedRolesMutation();
   const [deleteRoles] = useDeleteUserDefinedRolesMutation();
 
@@ -498,9 +509,21 @@ function RolesTab({
                         onClick={() => handleSelectRow(role, index)}
                       >
                         <TableCell>
-                          <div className="font-medium text-slate-900">
-                            {role.name}
-                          </div>
+                          {(() => {
+                            const fmt = formatRoleName(role.name, appMap);
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-900">
+                                  {fmt.primary}
+                                </span>
+                                {fmt.badge && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wide">
+                                    {fmt.badge}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {role.description && (
                             <div className="text-xs text-slate-500 mt-0.5">
                               {role.description}
@@ -509,7 +532,9 @@ function RolesTab({
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            Workspace
+                            {formatRoleName(role.name, appMap).isAppScoped
+                              ? "App-scoped"
+                              : "Workspace"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-slate-700">
@@ -989,6 +1014,13 @@ function AssignmentsTab({
     audience: "admin",
   });
 
+  const { data: resourceServers } = useListResourceServersQuery();
+  const appMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (resourceServers ?? []).forEach((rs) => m.set(rs.id, rs.name));
+    return m;
+  }, [resourceServers]);
+
   const [deleteBinding, deleteState] = useDeleteBindingMutation();
 
   const rows = useMemo<RoleBinding[]>(() => bindings ?? [], [bindings]);
@@ -1075,7 +1107,19 @@ function AssignmentsTab({
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-slate-700">
-                      {binding.role_name}
+                      {(() => {
+                        const fmt = formatRoleName(binding.role_name, appMap);
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-medium">{fmt.primary}</span>
+                            {fmt.badge && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wide">
+                                {fmt.badge}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-sm text-slate-700">
                       {binding.application?.name ?? (
@@ -1223,17 +1267,21 @@ export default function AccessControlPage({
           defaultValue={initialTab}
           className="flex flex-col flex-1 overflow-hidden"
         >
-          <div className="px-6 pt-4 border-b bg-white shrink-0">
-            <TabsList className="h-9">
-              <TabsTrigger value="roles" className="text-sm">
-                Roles
-              </TabsTrigger>
-              <TabsTrigger value="scopes" className="text-sm">
-                Scopes
-              </TabsTrigger>
-              <TabsTrigger value="assignments" className="text-sm">
-                Assignments
-              </TabsTrigger>
+          <div className="px-6 border-b bg-white shrink-0">
+            <TabsList className="h-auto gap-1 bg-transparent p-0 rounded-none">
+              {[
+                { value: "roles", label: "Roles" },
+                { value: "scopes", label: "Scopes" },
+                { value: "assignments", label: "Assignments" },
+              ].map((t) => (
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className="relative rounded-none border-0 bg-transparent px-3 py-3 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-800 data-[state=active]:bg-transparent data-[state=active]:text-blue-700 data-[state=active]:shadow-none after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-blue-600"
+                >
+                  {t.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </div>
 
