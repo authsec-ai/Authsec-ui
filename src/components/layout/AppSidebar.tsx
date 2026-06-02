@@ -16,6 +16,7 @@ import {
   Bot,
   BookOpen,
   ClipboardList,
+  CreditCard,
   Fingerprint,
   GlobeLock,
   KeyRound,
@@ -98,6 +99,7 @@ const NAV_CONFIGURE: NavItem[] = [
 
 const NAV_SETTINGS: NavItem[] = [
   { title: "Team", url: "/settings/team", icon: Users },
+  { title: "Billing", url: "/admin/billing", icon: CreditCard },
 ];
 
 export function AppSidebar({

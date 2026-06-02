@@ -25,6 +25,15 @@ import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
 import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
+import { BillingPage } from "./features/billing/BillingPage";
+
+const DevBypassPage = import.meta.env.DEV
+  ? React.lazy(() =>
+      import("./features/dev-bypass/DevBypassPage").then((m) => ({
+        default: m.DevBypassPage,
+      })),
+    )
+  : null;
 import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
 // import ResourcesPage from "./features/resources/ResourcesPage";
@@ -637,6 +646,28 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/admin/billing"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <BillingPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {import.meta.env.DEV && DevBypassPage && (
+                    <Route
+                      path="/dev/bypass"
+                      element={
+                        <React.Suspense
+                          fallback={<div className="p-6">Loading…</div>}
+                        >
+                          <DevBypassPage />
+                        </React.Suspense>
+                      }
+                    />
+                  )}
                   <Route
                     path="/authz/effective-access"
                     element={
