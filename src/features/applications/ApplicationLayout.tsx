@@ -61,7 +61,7 @@ export default function ApplicationLayout() {
   const readiness = computeReadiness(application);
 
   return (
-    <div className="min-h-screen bg-slate-50/70">
+    <div className="min-h-screen bg-background">
       <div className={consolePage}>
         <ApplicationHeader application={application} readiness={readiness} />
         <ApplicationDetailTabs

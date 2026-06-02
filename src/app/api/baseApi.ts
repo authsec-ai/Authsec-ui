@@ -162,6 +162,9 @@ export const baseApi = createApi({
     "TenantMembership",
     "TenantEndUserState",
     "RoleBinding",
+    "BillingSubscription",
+    "BillingUsage",
+    "BillingPlan",
   ],
   endpoints: () => ({}),
 });

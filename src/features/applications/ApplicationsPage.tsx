@@ -182,7 +182,7 @@ export default function ApplicationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/70">
+    <div className="min-h-screen bg-background">
       <div className={consolePage}>
         <SectionHeader
           title="Applications"
@@ -209,7 +209,7 @@ export default function ApplicationsPage() {
           <AllHealthyBanner />
         ) : null}
 
-        <Surface className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+        <Surface className="flex flex-wrap items-center gap-x-6 gap-y-2 border-border bg-card px-4 py-3">
           <InlineStat
             label="applications"
             value={loadingValue(isLoading, counts.total)}
@@ -275,7 +275,7 @@ export default function ApplicationsPage() {
               {pendingDelete ? (
                 <>
                   This permanently removes{" "}
-                  <span className="font-semibold text-slate-900">
+                  <span className="font-semibold text-slate-900 dark:text-white">
                     {pendingDelete.name}
                   </span>{" "}
                   and every approval, role, scope, and client tied to it. This

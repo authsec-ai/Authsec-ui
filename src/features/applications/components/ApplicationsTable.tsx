@@ -107,7 +107,7 @@ export function ApplicationsTable({
         approxWidth: 300,
         cell: ({ row }) => (
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-950">
+            <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">
               {row.original.application.name}
             </div>
             <div className="mt-1 truncate font-mono text-[12px] text-slate-500">
@@ -147,7 +147,7 @@ export function ApplicationsTable({
         priority: 3,
         approxWidth: 100,
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="text-sm text-slate-700 dark:text-slate-300">
             {row.original.application.end_users_count ?? 0}
           </span>
         ),
@@ -158,7 +158,7 @@ export function ApplicationsTable({
         priority: 4,
         approxWidth: 190,
         cell: ({ row }) => (
-          <span className="text-sm text-slate-600">{lastSignal(row.original.application)}</span>
+          <span className="text-sm text-slate-600 dark:text-slate-400">{lastSignal(row.original.application)}</span>
         ),
       },
       {
