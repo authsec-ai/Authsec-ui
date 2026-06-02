@@ -1,43 +1,32 @@
-import { useCallback, useMemo, useState } from "react";
+/**
+ * TrustDelegationPoliciesPage — Configure → Trust Delegation. Rebuilt to the
+ * Console Refresh prototype (`[data-cr]`): section-header, filter toolbar,
+ * bespoke table, kebab actions, prototype delete dialog. Real hooks preserved.
+ */
+
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { FilterCard, TableCard } from "@/theme/components/cards";
-import {
-  AlertTriangle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Eye,
+  GlobeLock,
   MoreHorizontal,
   Pencil,
   Power,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
-import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getErrorMessage } from "@/lib/error-utils";
 import { toast } from "@/lib/toast";
 import {
@@ -45,531 +34,313 @@ import {
   useListDelegationPoliciesQuery,
   useUpdateDelegationPolicyMutation,
 } from "@/app/api/trustDelegationApi";
-import { TrustDelegationPageFrame } from "./components/TrustDelegationPageFrame";
-import { TrustDelegationInfoBanner } from "./components/TrustDelegationInfoBanner";
 import type { DelegationPolicyUI } from "./types";
-import { getTrustDelegationErrorMessage, humanizePermissionKey } from "./utils";
+import { getTrustDelegationErrorMessage } from "./utils";
 
-function PolicyLabelCell({ policy }: { policy: DelegationPolicyUI }) {
-  return (
-    <div className="flex min-w-0 w-full items-start">
-      <div className="min-w-0 flex-1 space-y-1 overflow-hidden">
-        <div
-          className="truncate text-[14px] font-semibold leading-5 text-foreground"
-          title={`${policy.roleName} · ${policy.agentType}`}
-        >
-          {policy.roleName} · {policy.agentType}
-        </div>
-        <div
-          className="truncate font-mono text-[12.5px] leading-5 text-muted-foreground"
-          title={policy.clientLabel}
-        >
-          {policy.clientLabel}
-        </div>
-        <div className="truncate text-xs text-muted-foreground">
-          {policy.allowedPermissions.length} actions · {policy.maxTtlLabel}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PolicyCountCell({ policy }: { policy: DelegationPolicyUI }) {
-  return (
-    <span className="text-sm font-medium text-foreground">
-      {policy.allowedPermissions.length}
-    </span>
-  );
-}
-
-function PolicyDurationCell({ policy }: { policy: DelegationPolicyUI }) {
-  return (
-    <span className="text-sm text-foreground">
-      {policy.maxTtlLabel}
-    </span>
-  );
-}
-
-function PolicyExpandedRow({ policy }: { policy: DelegationPolicyUI }) {
-  const infoRows = [
-    { label: "Role", value: policy.roleName },
-    { label: "Target Type", value: policy.agentType },
-    { label: "Client", value: policy.clientLabel },
-    { label: "Maximum Duration", value: policy.maxTtlLabel },
-    { label: "Status", value: policy.enabled ? "Enabled" : "Disabled" },
-  ];
-
-  return (
-    <div className="min-w-0">
-      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-3.5">
-          <h4 className="text-[14px] font-semibold text-foreground">
-            Trust Delegation Details
-          </h4>
-          <div className="space-y-2.5 text-sm">
-            {infoRows.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between gap-3"
-              >
-                <span className="text-[12px] font-medium text-muted-foreground">
-                  {item.label}
-                </span>
-                <span
-                  className="truncate text-right text-[13px] text-foreground"
-                  title={item.value}
-                >
-                  {item.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div data-slot="table-expanded-divider" className="hidden w-px md:block" />
-
-        <div className="min-w-0 space-y-3.5">
-          <h4 className="text-[14px] font-semibold text-foreground">
-            Allowed Actions
-          </h4>
-          <div className="flex flex-wrap gap-1.5">
-            {policy.allowedPermissions.length > 0 ? (
-              policy.allowedPermissions.map((permission) => (
-                <Badge key={permission} variant="outline">
-                  {humanizePermissionKey(permission)}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-[13px] text-muted-foreground">
-                No actions configured
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PolicyStatusCell({ enabled }: { enabled: boolean }) {
-  return (
-    <Badge variant={enabled ? "default" : "secondary"}>
-      {enabled ? "Enabled" : "Disabled"}
-    </Badge>
-  );
-}
-
-function PolicyActionsCell({
-  policy,
-  onView,
-  onEdit,
-  onToggleEnabled,
-  onDelete,
-}: {
-  policy: DelegationPolicyUI;
-  onView: (policy: DelegationPolicyUI) => void;
-  onEdit: (policy: DelegationPolicyUI) => void;
-  onToggleEnabled: (policy: DelegationPolicyUI) => void;
-  onDelete: (policy: DelegationPolicyUI) => void;
-}) {
-  return (
-    <div className="flex items-center justify-end">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="admin-row-icon-btn h-8 w-8 p-0">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" visualVariant="row-actions" className="w-44">
-          <DropdownMenuItem onClick={() => onView(policy)}>
-            <Eye className="mr-2 h-4 w-4" />
-            View trust delegation
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onEdit(policy)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit trust delegation
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onToggleEnabled(policy)}>
-            <Power className="mr-2 h-4 w-4" />
-            {policy.enabled ? "Disable trust delegation" : "Enable trust delegation"}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDelete(policy)} className="text-destructive">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete trust delegation
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
+const PAGE_SIZE = 10;
 
 export function TrustDelegationPoliciesPage() {
   const navigate = useNavigate();
-  const {
-    data: policies = [],
-    isFetching,
-    error,
-  } = useListDelegationPoliciesQuery();
+  const { data: policies = [], isFetching, error } = useListDelegationPoliciesQuery();
   const [updatePolicy] = useUpdateDelegationPolicyMutation();
   const [deletePolicy] = useDeleteDelegationPolicyMutation();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [targetTypeFilter, setTargetTypeFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<DelegationPolicyUI | null>(null);
 
   const filteredPolicies = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-
-    return policies.filter((policy) => {
-      if (statusFilter !== "all") {
-        const expectedEnabled = statusFilter === "enabled";
-        if (policy.enabled !== expectedEnabled) return false;
-      }
-
-      if (roleFilter !== "all" && policy.roleName !== roleFilter) {
-        return false;
-      }
-
-      if (targetTypeFilter !== "all" && policy.agentType !== targetTypeFilter) {
-        return false;
-      }
-
-      if (clientFilter !== "all" && policy.clientId !== clientFilter) {
-        return false;
-      }
-
-      if (!normalizedSearch) return true;
-
-      return [
-        policy.roleName,
-        policy.agentType,
-        policy.clientLabel,
-        policy.allowedPermissions.join(" "),
-      ]
+    const q = searchQuery.trim().toLowerCase();
+    return policies.filter((p) => {
+      if (statusFilter !== "all" && p.enabled !== (statusFilter === "enabled")) return false;
+      if (roleFilter !== "all" && p.roleName !== roleFilter) return false;
+      if (targetTypeFilter !== "all" && p.agentType !== targetTypeFilter) return false;
+      if (clientFilter !== "all" && p.clientId !== clientFilter) return false;
+      if (!q) return true;
+      return [p.roleName, p.agentType, p.clientLabel, p.allowedPermissions.join(" ")]
         .join(" ")
         .toLowerCase()
-        .includes(normalizedSearch);
+        .includes(q);
     });
   }, [clientFilter, policies, roleFilter, searchQuery, statusFilter, targetTypeFilter]);
 
-  const roles = Array.from(new Set(policies.map((policy) => policy.roleName)));
-  const targetTypes = Array.from(new Set(policies.map((policy) => policy.agentType)));
+  const roles = Array.from(new Set(policies.map((p) => p.roleName)));
+  const targetTypes = Array.from(new Set(policies.map((p) => p.agentType)));
   const clients = Array.from(
-    new Map(
-      policies.map((policy) => [
-        policy.clientId,
-        { id: policy.clientId, label: policy.clientLabel },
-      ]),
-    ).values(),
+    new Map(policies.map((p) => [p.clientId, { id: p.clientId, label: p.clientLabel }])).values(),
   );
-  const activeFiltersCount =
-    (searchQuery.trim() ? 1 : 0) +
-    (statusFilter !== "all" ? 1 : 0) +
-    (roleFilter !== "all" ? 1 : 0) +
-    (targetTypeFilter !== "all" ? 1 : 0) +
-    (clientFilter !== "all" ? 1 : 0);
-  const errorMessage = error
-    ? getTrustDelegationErrorMessage(
-        error,
-        "Unable to load trust delegation records right now.",
-      )
-    : null;
-  const showInitialSkeleton =
-    isFetching && filteredPolicies.length === 0 && !errorMessage;
 
-  const handleClearFilters = () => {
+  const filtersActive =
+    searchQuery.trim() !== "" ||
+    statusFilter !== "all" ||
+    roleFilter !== "all" ||
+    targetTypeFilter !== "all" ||
+    clientFilter !== "all";
+
+  const total = filteredPolicies.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filteredPolicies.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const errorMessage = error
+    ? getTrustDelegationErrorMessage(error, "Unable to load trust delegation records right now.")
+    : null;
+  const showInitialSkeleton = isFetching && filteredPolicies.length === 0 && !errorMessage;
+
+  const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("all");
     setRoleFilter("all");
     setTargetTypeFilter("all");
     setClientFilter("all");
+    setPage(1);
+  };
+
+  const handleToggle = async (policy: DelegationPolicyUI) => {
+    try {
+      await updatePolicy({
+        id: policy.id,
+        body: {
+          role_name: policy.roleName,
+          agent_type: policy.agentType,
+          allowed_permissions: policy.allowedPermissions,
+          max_ttl_seconds: policy.maxTtlSeconds,
+          enabled: !policy.enabled,
+          client_id: policy.clientId,
+        },
+      }).unwrap();
+      toast.success(policy.enabled ? "Trust delegation disabled" : "Trust delegation enabled");
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Failed to update trust delegation"));
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-
     try {
       await deletePolicy(deleteTarget.id).unwrap();
       toast.success("Trust delegation deleted");
       setDeleteTarget(null);
-    } catch (requestError) {
-      toast.error(
-        getErrorMessage(requestError, "Failed to delete trust delegation"),
-      );
+    } catch (e) {
+      toast.error(getErrorMessage(e, "Failed to delete trust delegation"));
     }
   };
 
-  const renderExpandedRow = useCallback(
-    (row: { original: DelegationPolicyUI }) => (
-      <PolicyExpandedRow policy={row.original} />
-    ),
-    [],
-  );
-
-  const columns = useMemo<AdaptiveColumn<DelegationPolicyUI>[]>(() => {
-    return [
-      {
-        id: "policy",
-        header: "Trust Delegation",
-        accessorFn: (policy) => `${policy.roleName} ${policy.agentType} ${policy.clientLabel}`,
-        alwaysVisible: true,
-        enableSorting: true,
-        resizable: true,
-        approxWidth: 320,
-        cell: ({ row }) => <PolicyLabelCell policy={row.original} />,
-      },
-      {
-        id: "actionsCount",
-        header: "Allowed Actions",
-        accessorFn: (policy) => policy.allowedPermissions.length,
-        priority: 2,
-        enableSorting: true,
-        resizable: true,
-        approxWidth: 130,
-        cell: ({ row }) => <PolicyCountCell policy={row.original} />,
-      },
-      {
-        id: "duration",
-        header: "Max Duration",
-        accessorKey: "maxTtlLabel",
-        priority: 3,
-        enableSorting: true,
-        resizable: true,
-        approxWidth: 150,
-        cell: ({ row }) => <PolicyDurationCell policy={row.original} />,
-      },
-      {
-        id: "status",
-        header: "Status",
-        accessorFn: (policy) => (policy.enabled ? 1 : 0),
-        priority: 1,
-        enableSorting: true,
-        resizable: true,
-        approxWidth: 140,
-        cell: ({ row }) => <PolicyStatusCell enabled={row.original.enabled} />,
-      },
-      {
-        id: "actions",
-        header: "Actions",
-        alwaysVisible: true,
-        enableSorting: false,
-        resizable: false,
-        size: 80,
-        className: "w-[80px] text-right",
-        cellClassName: "text-right",
-        approxWidth: 100,
-        cell: ({ row }) => (
-          <PolicyActionsCell
-            policy={row.original}
-            onView={(policy) => navigate(`/trust-delegation/${policy.id}`)}
-            onEdit={(policy) => navigate(`/trust-delegation/${policy.id}/edit`)}
-            onToggleEnabled={(policy) => {
-              void (async () => {
-                try {
-                  await updatePolicy({
-                    id: policy.id,
-                    body: {
-                      role_name: policy.roleName,
-                      agent_type: policy.agentType,
-                      allowed_permissions: policy.allowedPermissions,
-                      max_ttl_seconds: policy.maxTtlSeconds,
-                      enabled: !policy.enabled,
-                      client_id: policy.clientId,
-                    },
-                  }).unwrap();
-
-                  toast.success(
-                    policy.enabled
-                      ? "Trust delegation disabled"
-                      : "Trust delegation enabled",
-                  );
-                } catch (requestError) {
-                  toast.error(
-                    getErrorMessage(
-                      requestError,
-                      "Failed to update trust delegation",
-                    ),
-                  );
-                }
-              })();
-            }}
-            onDelete={(policy) => setDeleteTarget(policy)}
-          />
-        ),
-      },
-    ];
-  }, [navigate, updatePolicy]);
-
   return (
-    <TrustDelegationPageFrame
-      title="Trust Delegation"
-      description="Manage saved trust delegation configurations for agents, workloads, and user-linked service identities."
-      actions={
-        <Button onClick={() => navigate("/trust-delegation/new")}>
-          Create trust delegation
-        </Button>
-      }
-    >
-      <TrustDelegationInfoBanner />
+    <div data-cr>
+      <div className="console-page">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Trust Delegation</h1>
+            <p className="sh-desc">
+              Saved trust delegation configurations for agents, workloads, and user-linked service
+              identities.
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={() => navigate("/trust-delegation/new")}>
+            Create trust delegation
+          </button>
+        </div>
 
-      <FilterCard>
-        <CardContent variant="compact">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Filters</span>
-              {activeFiltersCount > 0 && (
-                <span className="rounded bg-black/5 px-1.5 py-0.5 text-xs text-foreground dark:bg-white/10">
-                  {activeFiltersCount}
-                </span>
-              )}
-            </div>
-
-            <div className="flex w-full flex-1 flex-wrap items-center gap-2">
-              <div className="relative min-w-[240px] flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/50" />
-                <Input
-                  className="h-9 pl-9 text-sm"
-                  placeholder="Search trust delegations..."
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-              </div>
-
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="h-9 w-[132px] text-sm">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  {roles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-[132px] text-sm">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="enabled">Enabled</SelectItem>
-                  <SelectItem value="disabled">Disabled</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={targetTypeFilter} onValueChange={setTargetTypeFilter}>
-                <SelectTrigger className="h-9 w-[148px] text-sm">
-                <SelectValue placeholder="Target type" />
-              </SelectTrigger>
-              <SelectContent>
-                  <SelectItem value="all">All Target Types</SelectItem>
-                  {targetTypes.map((agentType) => (
-                    <SelectItem key={agentType} value={agentType}>
-                      {agentType}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger className="h-9 w-[168px] text-sm">
-                <SelectValue placeholder="Client" />
-              </SelectTrigger>
-              <SelectContent>
-                  <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {activeFiltersCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearFilters}
-                  className="h-9 text-sm text-foreground hover:text-foreground"
-                >
-                  Clear
-                </Button>
-              )}
+        <div className="roles-toolbar">
+          <div className={`search${searchQuery ? " has-value" : ""}`}>
+            <span className="search-ic"><Search className="icon" /></span>
+            <input
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              placeholder="Search trust delegations"
+              aria-label="Search trust delegations"
+            />
+            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearchQuery("")}>
+              <X className="icon-sm" />
+            </button>
+          </div>
+          <div className="filterset">
+            <span className="filterset-label">Status</span>
+            <div className="segmented">
+              {[["all", "All"], ["enabled", "Enabled"], ["disabled", "Disabled"]].map(([v, label]) => (
+                <button key={v} data-on={statusFilter === v} onClick={() => { setStatusFilter(v); setPage(1); }}>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-        </CardContent>
-      </FilterCard>
+          <div className="select">
+            <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }} aria-label="Role" style={{ minWidth: 120 }}>
+              <option value="all">All roles</option>
+              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <span className="chev"><ChevronDown className="icon-sm" /></span>
+          </div>
+          <div className="select">
+            <select value={targetTypeFilter} onChange={(e) => { setTargetTypeFilter(e.target.value); setPage(1); }} aria-label="Target type" style={{ minWidth: 130 }}>
+              <option value="all">All target types</option>
+              {targetTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <span className="chev"><ChevronDown className="icon-sm" /></span>
+          </div>
+          <div className="select">
+            <select value={clientFilter} onChange={(e) => { setClientFilter(e.target.value); setPage(1); }} aria-label="Client" style={{ minWidth: 140 }}>
+              <option value="all">All clients</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <span className="chev"><ChevronDown className="icon-sm" /></span>
+          </div>
+          {filtersActive && <button className="chip-clear" onClick={clearFilters}>Clear</button>}
+        </div>
 
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" />
-              Delete Trust Delegation
-            </DialogTitle>
-            <DialogDescription className="text-left">
-              This action cannot be undone. Future token issuance will be stopped but historical audit records are preserved.
-            </DialogDescription>
-          </DialogHeader>
-          {deleteTarget && (
-            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm">
-              <div className="font-medium text-foreground">{deleteTarget.roleName}</div>
-              <div className="mt-0.5 font-mono text-xs text-muted-foreground">ID: {deleteTarget.id}</div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={() => { void handleDelete(); }}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <TableCard className="transition-all duration-500">
-        <CardContent variant="flush">
+        <div className="table-card">
           {errorMessage ? (
-            <div className="flex flex-col items-center justify-center space-y-4 p-12">
-              <div className="rounded-full bg-red-50 p-4 dark:bg-red-950/20">
-                <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
-              </div>
-              <div className="space-y-1 text-center">
-                <h3 className="text-base font-semibold text-red-900 dark:text-red-100">
-                  Unable to Load Trust Delegation
-                </h3>
-                <p className="text-red-700 dark:text-red-300">{errorMessage}</p>
-              </div>
+            <div className="empty">
+              <span className="empty-ic" style={{ background: "var(--color-danger-soft)", color: "var(--color-danger-text)", borderColor: "transparent" }}>
+                <GlobeLock className="icon-lg" />
+              </span>
+              <h3 className="empty-title" style={{ color: "var(--color-danger-text)" }}>Unable to load trust delegation</h3>
+              <p className="empty-desc" style={{ color: "var(--color-danger-text)" }}>{errorMessage}</p>
             </div>
           ) : showInitialSkeleton ? (
-            <DataTableSkeleton rows={8} />
+            <div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div className="skeleton-row" key={i}>
+                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+                    <span className="sk sk-line" style={{ width: "34%" }} />
+                    <span className="sk sk-line" style={{ width: "46%", height: 9 }} />
+                  </span>
+                  <span className="sk sk-line" style={{ width: 60, margin: "0 24px" }} />
+                  <span className="sk sk-line" style={{ width: 90 }} />
+                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999 }} />
+                  <span className="sk sk-line" style={{ width: 28 }} />
+                </div>
+              ))}
+            </div>
+          ) : total === 0 ? (
+            <div className="empty">
+              <span className="empty-ic"><GlobeLock className="icon-lg" /></span>
+              <h3 className="empty-title">{filtersActive ? "No trust delegations match" : "No trust delegations yet"}</h3>
+              <p className="empty-desc">
+                {filtersActive
+                  ? "Try a different search term or reset the filters."
+                  : "Create a trust delegation to let agents and workloads obtain scoped tokens."}
+              </p>
+              <button className="btn btn-primary" onClick={filtersActive ? clearFilters : () => navigate("/trust-delegation/new")}>
+                {filtersActive ? "Clear filters" : "Create trust delegation"}
+              </button>
+            </div>
           ) : (
-            <AdaptiveTable
-              tableId="trust-delegations-policies"
-              data={filteredPolicies}
-              columns={columns}
-              enableSelection={false}
-              enableExpansion
-              renderExpandedRow={renderExpandedRow}
-              getRowId={(policy) => policy.id}
-              enableSorting
-              enablePagination
-              pagination={{
-                pageSize: 10,
-                pageSizeOptions: [5, 10, 25, 50],
-                alwaysVisible: true,
-              }}
-            />
+            <>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Trust Delegation</th>
+                    <th className="num th-apps">Actions</th>
+                    <th className="th-context">Max duration</th>
+                    <th>Status</th>
+                    <th className="th-actions" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((p) => (
+                    <tr key={p.id} tabIndex={0} onClick={() => navigate(`/trust-delegation/${p.id}`)}>
+                      <td>
+                        <div className="role-cell">
+                          <div className="role-name-row">
+                            <span className="role-name">{p.roleName} · {p.agentType}</span>
+                          </div>
+                          <span className="role-detail" style={{ fontFamily: "var(--font-family-mono)" }}>{p.clientLabel}</span>
+                        </div>
+                      </td>
+                      <td className={`num-cell col-apps${p.allowedPermissions.length === 0 ? " zero" : ""}`}>
+                        {p.allowedPermissions.length}
+                      </td>
+                      <td className="col-context">
+                        <span className="time-cell">{p.maxTtlLabel}</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${p.enabled ? "badge--success" : "badge--muted"}`}>
+                          <span className="bdot" />
+                          {p.enabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="icon-btn" aria-label="Trust delegation actions">
+                                <MoreHorizontal className="icon" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                              <DropdownMenuItem className="menu-item" onSelect={() => navigate(`/trust-delegation/${p.id}`)}>
+                                <span className="mi-ic"><Eye className="icon-sm" /></span>
+                                View trust delegation
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="menu-item" onSelect={() => navigate(`/trust-delegation/${p.id}/edit`)}>
+                                <span className="mi-ic"><Pencil className="icon-sm" /></span>
+                                Edit trust delegation
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="menu-item" onSelect={() => handleToggle(p)}>
+                                <span className="mi-ic"><Power className="icon-sm" /></span>
+                                {p.enabled ? "Disable" : "Enable"}
+                              </DropdownMenuItem>
+                              <div className="menu-sep" />
+                              <DropdownMenuItem className="menu-item danger" onSelect={() => setDeleteTarget(p)}>
+                                <span className="mi-ic"><Trash2 className="icon-sm" /></span>
+                                Delete trust delegation
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="table-foot">
+                <span className="foot-count">
+                  Showing <b>{(safePage - 1) * PAGE_SIZE + 1}</b>–<b>{(safePage - 1) * PAGE_SIZE + pageRows.length}</b> of{" "}
+                  <b>{total}</b>
+                </span>
+                <div className="pager">
+                  <span className="pager-label">Page</span>
+                  <div className="pager-btns">
+                    <button className="pager-btn" aria-label="Previous page" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                      <ChevronLeft className="icon-sm" />
+                    </button>
+                    <span className="pager-label mono">{safePage} / {totalPages}</span>
+                    <button className="pager-btn" aria-label="Next page" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                      <ChevronRight className="icon-sm" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
-        </CardContent>
-      </TableCard>
-    </TrustDelegationPageFrame>
+        </div>
+      </div>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
+          <div className="dialog" style={{ width: "100%" }}>
+            <span className="dg-icon"><Trash2 className="icon" /></span>
+            <DialogTitle className="dg-title">Delete trust delegation?</DialogTitle>
+            <DialogDescription className="dg-desc">
+              This stops future token issuance for this configuration. Historical audit records are
+              preserved. This can't be undone.
+            </DialogDescription>
+            {deleteTarget && <div className="dg-target">{deleteTarget.roleName} · {deleteTarget.agentType}</div>}
+            <div className="dg-actions">
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => void handleDelete()}>
+                <Trash2 className="icon-sm" /> Delete
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

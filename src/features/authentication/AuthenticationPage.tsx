@@ -1,267 +1,165 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { CardContent } from "../../components/ui/card";
-import { Shield, RotateCcw, ChevronsRight } from "lucide-react";
-import { IconPlus } from "@tabler/icons-react";
-import { Button } from "../../components/ui/button";
-import { TableCard } from "../../theme/components/cards";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
-import { SDKQuickHelp, AUTHENTICATION_SDK_HELP } from "@/features/sdk";
+/**
+ * AuthenticationPage — Configure → Identity Providers. Rebuilt to the Console
+ * Refresh prototype (`[data-cr]`): section-header, filter bar, bespoke table,
+ * kebab actions, prototype delete dialog. Preserves the unified OIDC+SAML data,
+ * toggle/delete mutations, client filter, and the Add Provider modal.
+ */
 
-// Import components
+import { useMemo, useState } from "react";
 import {
-  BulkActionsBar,
-  AuthenticationFilterCard,
-  AuthTableSkeleton,
-} from "./components";
-import { AuthProvidersTable } from "./components/AuthProvidersTable";
-import { AddAuthMethodModal } from "./components/AddAuthMethodModal";
-import { DeleteProviderConfirmDialog } from "./components/DeleteProviderConfirmDialog";
+  CheckCircle2,
+  ChevronDown,
+  ExternalLink,
+  Fingerprint,
+  MoreHorizontal,
+  Plus,
+  Power,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
-// Import types and API
-import type { AuthMethodStatus } from "./types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { AddAuthMethodModal } from "./components/AddAuthMethodModal";
 import { toast } from "@/lib/toast";
 import {
-  useShowAuthProvidersQuery,
-  useEditClientAuthProviderMutation,
   useUpdateProviderMutation,
   useDeleteProviderMutation,
-  type EditClientAuthProviderRequest,
   type UpdateProviderRequest,
   type DeleteProviderRequest,
 } from "../../app/api/authMethodApi";
-import {
-  useUpdateSamlProviderMutation,
-  useDeleteSamlProviderMutation,
-} from "../../app/api/samlApi";
+import { useUpdateSamlProviderMutation, useDeleteSamlProviderMutation } from "../../app/api/samlApi";
 import { useGetClientsQuery } from "../../app/api/clientApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { useUnifiedProviders } from "./hooks/useUnifiedProviders";
+import { ProviderIcon } from "./utils/provider-icons";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 
-/**
- * Identity Providers page component - provider-centric management console
- *
- * Focus areas:
- * - Inventory: Which auth methods exist and are enabled
- * - Reuse: Which services are plugged into each method
- * - Reliability: Login success rates and error tracking
- * - Housekeeping: Secret expiry monitoring
- * - Quick actions: One-click edit/clone/disable/attach operations
- */
 export function AuthenticationPage() {
-  const navigate = useNavigate();
-  const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
-  const [isAddMethodModalOpen, setIsAddMethodModalOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    searchQuery: "",
-    providerType: undefined as string | undefined,
-    status: undefined as string | undefined,
-  });
-
-  // Get session data for OIDC config
   const sessionData = SessionManager.getSession();
   const workspaceId = sessionData?.workspace_id;
 
-  // Client filtering state - no default selection
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
-
-  // Delete dialog state
-  const [deleteDialog, setDeleteDialog] = useState<{
-    open: boolean;
-    providerId: string;
-    providerName?: string;
-    providerType?: "oidc" | "saml";
-  }>({
-    open: false,
-    providerId: "",
-    providerName: undefined,
-    providerType: undefined,
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
+  const INFO_KEY = "idp_info_dismissed_v1";
+  const [infoDismissed, setInfoDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(INFO_KEY) === "1";
+    } catch {
+      return false;
+    }
   });
-
-  // Fetch clients using query hook
-  const {
-    data: clientsResponse,
-    isLoading: loadingClients,
-    error: clientsError,
-  } = useGetClientsQuery(
-    workspaceId
-      ? { workspace_id: workspaceId, active_only: false }
-      : { workspace_id: "", active_only: false },
-    { skip: !workspaceId },
-  );
-
-  // Mutations
-  const [editClientAuthProvider] = useEditClientAuthProviderMutation();
-  const [updateOidcProvider] = useUpdateProviderMutation();
-  const [deleteOidcProvider, { isLoading: isDeletingOidc }] =
-    useDeleteProviderMutation();
-  const [updateSamlProvider] = useUpdateSamlProviderMutation();
-  const [deleteSamlProvider, { isLoading: isDeletingSaml }] =
-    useDeleteSamlProviderMutation();
-
-  // Initialize guided tour
-  useTourStep({
-    tourConfig: TOUR_REGISTRY["authentication-setup"],
-  });
-
-  // Extract clients from response
-  const clients = useMemo(() => {
-    if (!clientsResponse?.clients) return [];
-    return Array.isArray(clientsResponse.clients)
-      ? clientsResponse.clients
-      : [];
-  }, [clientsResponse]);
-
-  // Handle filter changes from the filter card
-  const handleFiltersChange = (newFilters: any) => {
-    setFilters((prev) => ({
-      searchQuery: newFilters.searchQuery ?? prev.searchQuery ?? "",
-      providerType: newFilters.providerType,
-      status: newFilters.status,
-    }));
+  const dismissInfo = () => {
+    setInfoDismissed(true);
+    try {
+      localStorage.setItem(INFO_KEY, "1");
+    } catch {
+      /* ignore */
+    }
   };
 
-  // Fetch unified providers (both OIDC and SAML)
+  useTourStep({ tourConfig: TOUR_REGISTRY["authentication-setup"] });
+
+  const { data: clientsResponse, isLoading: loadingClients } = useGetClientsQuery(
+    workspaceId ? { workspace_id: workspaceId, active_only: false } : { workspace_id: "", active_only: false },
+    { skip: !workspaceId },
+  );
+  const clients = useMemo(
+    () => (Array.isArray(clientsResponse?.clients) ? clientsResponse!.clients : []),
+    [clientsResponse],
+  );
+
+  const [updateOidcProvider] = useUpdateProviderMutation();
+  const [deleteOidcProvider, { isLoading: isDeletingOidc }] = useDeleteProviderMutation();
+  const [updateSamlProvider] = useUpdateSamlProviderMutation();
+  const [deleteSamlProvider, { isLoading: isDeletingSaml }] = useDeleteSamlProviderMutation();
+
   const {
     providers: unifiedProviders,
     isLoading: isProvidersLoading,
     isError: hasProviderError,
-    error: providerError,
     refetch: refetchProviders,
-  } = useUnifiedProviders({
-    workspace_id: workspaceId || "",
-    client_id: selectedClientId || undefined,
-  });
+  } = useUnifiedProviders({ workspace_id: workspaceId || "", client_id: selectedClientId || undefined });
 
-  // Filter unified providers based on search, status, and provider type
-  const filteredProviders = useMemo(() => {
-    if (!unifiedProviders) return [];
-    return unifiedProviders.filter((provider) => {
-      // Search across common fields and provider-specific fields
-      const matchesSearch =
-        !filters.searchQuery ||
-        provider.display_name
-          ?.toLowerCase()
-          .includes(filters.searchQuery.toLowerCase()) ||
-        provider.provider_name
-          ?.toLowerCase()
-          .includes(filters.searchQuery.toLowerCase()) ||
-        provider.client_id
-          ?.toLowerCase()
-          .includes(filters.searchQuery.toLowerCase()) ||
-        (provider.provider_type === "oidc" &&
-          provider.callback_url
-            ?.toLowerCase()
-            .includes(filters.searchQuery.toLowerCase())) ||
-        (provider.provider_type === "saml" &&
-          provider.entity_id
-            ?.toLowerCase()
-            .includes(filters.searchQuery.toLowerCase())) ||
-        (provider.provider_type === "saml" &&
-          provider.sso_url
-            ?.toLowerCase()
-            .includes(filters.searchQuery.toLowerCase()));
-
-      const matchesStatus =
-        !filters.status ||
-        filters.status === (provider.is_active ? "active" : "inactive");
-
-      const matchesProviderType =
-        !filters.providerType ||
-        filters.providerType === provider.provider_type;
-
-      return matchesSearch && matchesStatus && matchesProviderType;
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (unifiedProviders ?? []).filter((p) => {
+      if (typeFilter !== "all" && p.provider_type !== typeFilter) return false;
+      if (statusFilter !== "all" && statusFilter !== (p.is_active ? "active" : "inactive")) return false;
+      if (!q) return true;
+      return [p.display_name, p.provider_name, p.client_id, p.callback_url, p.entity_id, p.sso_url]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
     });
-  }, [unifiedProviders, filters]);
+  }, [unifiedProviders, search, typeFilter, statusFilter]);
 
-  // Get selected providers data
-  const selectedProviders = useMemo(() => {
-    return filteredProviders.filter((p) => selectedMethods.includes(p.id));
-  }, [filteredProviders, selectedMethods]);
+  const filtersActive = search.trim() !== "" || typeFilter !== "all" || statusFilter !== "all" || !!selectedClientId;
 
-  // Selection handlers
-  const handleSelectAll = () => {
-    if (selectedMethods.length === filteredProviders.length) {
-      setSelectedMethods([]);
-    } else {
-      setSelectedMethods(filteredProviders.map((p) => p.id));
+  const handleToggleActive = async (providerId: string, isActive: boolean) => {
+    if (!workspaceId) return toast.error("Workspace context missing; please sign in again.");
+    const provider = (unifiedProviders ?? []).find((item) => item.id === providerId);
+    if (!provider) return toast.error("Provider not found.");
+    try {
+      if (provider.provider_type === "saml") {
+        await updateSamlProvider({
+          workspace_id: workspaceId,
+          provider_id: providerId.replace("saml-", ""),
+          is_active: isActive,
+        }).unwrap();
+      } else {
+        const payload: UpdateProviderRequest = {
+          workspace_id: workspaceId,
+          org_id: sessionData?.org_id || "",
+          provider_name: provider.provider_name,
+          display_name: provider.display_name,
+          client_id: provider.client_id || provider.hydra_client_id || workspaceId,
+          client_secret: "",
+          auth_url: provider.endpoints?.auth_url || "",
+          token_url: provider.endpoints?.token_url || "",
+          user_info_url: provider.endpoints?.user_info_url || "",
+          scopes: ["openid", "profile", "email"],
+          is_active: isActive,
+          updated_by: sessionData?.user?.email || "system",
+        };
+        await updateOidcProvider(payload).unwrap();
+      }
+      toast.success(`${provider.display_name} ${isActive ? "activated" : "deactivated"}`);
+      refetchProviders();
+    } catch (error: any) {
+      toast.error(error?.data?.message || `Failed to update ${provider.display_name}`);
     }
-  };
-
-  const handleRowSelectionChange = (selectedIds: string[]) => {
-    setSelectedMethods(selectedIds);
-  };
-
-  const handleClearSelection = () => {
-    setSelectedMethods([]);
-  };
-
-  // Bulk actions
-  const handleBulkAction = (action: string) => {
-    // TODO: Implement bulk actions
-    console.log(`Bulk action: ${action} on providers:`, selectedProviders);
-    setSelectedMethods([]);
-  };
-
-  // Provider management functions
-  const handleDuplicateProvider = (providerId: string) => {
-    // TODO: Implement provider duplication
-  };
-
-  const handleDeleteProvider = (providerId: string) => {
-    const provider = unifiedProviders.find((item) => item.id === providerId);
-    if (!provider) {
-      toast.error("Provider not found.");
-      return;
-    }
-
-    // Open delete confirmation modal
-    setDeleteDialog({
-      open: true,
-      providerId,
-      providerName: provider.display_name,
-      providerType: provider.provider_type === "saml" ? "saml" : "oidc",
-    });
   };
 
   const handleConfirmDelete = async () => {
-    if (!workspaceId) {
-      toast.error("Workspace context missing; please sign in again.");
-      setDeleteDialog({
-        open: false,
-        providerId: "",
-        providerName: undefined,
-        providerType: undefined,
-      });
+    if (!workspaceId || !deleteTarget) {
+      setDeleteTarget(null);
       return;
     }
-
-    const provider = unifiedProviders.find(
-      (item) => item.id === deleteDialog.providerId,
-    );
+    const provider = (unifiedProviders ?? []).find((item) => item.id === deleteTarget.id);
     if (!provider) {
       toast.error("Provider not found.");
-      setDeleteDialog({
-        open: false,
-        providerId: "",
-        providerName: undefined,
-        providerType: undefined,
-      });
+      setDeleteTarget(null);
       return;
     }
-
     try {
       if (provider.provider_type === "saml") {
-        // Delete SAML provider
-        const samlId = deleteDialog.providerId.replace("saml-", ""); // Remove prefix to get actual ID
         await deleteSamlProvider({
           workspace_id: workspaceId,
-          provider_id: samlId,
+          provider_id: deleteTarget.id.replace("saml-", ""),
         }).unwrap();
       } else {
-        // Delete OIDC provider
         const payload: DeleteProviderRequest = {
           workspace_id: workspaceId,
           client_id: provider.client_id,
@@ -269,256 +167,244 @@ export function AuthenticationPage() {
         };
         await deleteOidcProvider(payload).unwrap();
       }
-
       toast.success(`${provider.display_name} deleted successfully`);
-      setDeleteDialog({
-        open: false,
-        providerId: "",
-        providerName: undefined,
-        providerType: undefined,
-      });
+      setDeleteTarget(null);
       refetchProviders();
     } catch (error: any) {
-      const message =
-        error?.data?.message || `Failed to delete ${provider.display_name}`;
-      toast.error(message);
-      console.error("Delete provider error:", error);
-      // Keep modal open on error so user can retry or cancel
+      toast.error(error?.data?.message || `Failed to delete ${provider.display_name}`);
     }
   };
-
-  const handleToggleActive = async (providerId: string, isActive: boolean) => {
-    if (!workspaceId) {
-      toast.error("Workspace context missing; please sign in again.");
-      return;
-    }
-
-    const provider = unifiedProviders.find((item) => item.id === providerId);
-    if (!provider) {
-      toast.error("Provider not found.");
-      return;
-    }
-
-    try {
-      if (provider.provider_type === "saml") {
-        // Update SAML provider
-        const samlId = providerId.replace("saml-", ""); // Remove prefix to get actual ID
-        await updateSamlProvider({
-          workspace_id: workspaceId,
-          provider_id: samlId,
-          is_active: isActive,
-        }).unwrap();
-      } else {
-        // Update OIDC provider
-        const orgId = sessionData?.org_id || "";
-        const clientId =
-          provider.client_id || provider.hydra_client_id || workspaceId;
-
-        const payload: UpdateProviderRequest = {
-          workspace_id: workspaceId,
-          org_id: orgId,
-          provider_name: provider.provider_name,
-          display_name: provider.display_name,
-          client_id: clientId,
-          client_secret: "", // Client secret must be provided separately or kept as empty for updates
-          auth_url: provider.endpoints?.auth_url || "",
-          token_url: provider.endpoints?.token_url || "",
-          user_info_url: provider.endpoints?.user_info_url || "",
-          scopes: ["openid", "profile", "email"], // Default scopes, adjust as needed
-          is_active: isActive,
-          updated_by: sessionData?.user?.email || "system",
-        };
-
-        await updateOidcProvider(payload).unwrap();
-      }
-
-      toast.success(
-        `${provider.display_name} ${isActive ? "activated" : "deactivated"}`,
-      );
-      refetchProviders();
-    } catch (error: any) {
-      const message =
-        error?.data?.message ||
-        `Failed to ${isActive ? "activate" : "deactivate"} ${provider.display_name}`;
-      toast.error(message);
-      console.error("Update provider error:", error);
-    }
-  };
-
-  const handleViewConfiguration = (providerId: string) => {
-    // TODO: Show configuration modal
-  };
-
-  const handleTestConnection = (providerId: string) => {
-    // TODO: Implement connection test
-  };
-
-  const isInitialLoading = isProvidersLoading;
 
   return (
-    <div className="min-h-screen">
-      <div className="space-y-4 p-6 max-w-10xl mx-auto">
-        {/* Header */}
-        <PageHeader
-          title="Identity Providers"
-          description="Manage OIDC and SAML providers used by your workforce and end-user authentication flows."
-          actions={
-            <Button
-              onClick={() => setIsAddMethodModalOpen(true)}
-              data-tour-id="create-auth-method-button"
-            >
-              <IconPlus className="h-4 w-4 mr-2" />
-              Add Provider
-            </Button>
-          }
-        />
+    <div data-cr>
+      <div className="console-page">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Identity Providers</h1>
+            <p className="sh-desc">
+              Manage OIDC and SAML providers used by your workforce and end-user authentication flows.
+            </p>
+          </div>
+          <button className="btn btn-primary" data-tour-id="create-auth-method-button" onClick={() => setIsAddOpen(true)}>
+            <Plus className="icon-sm" /> Add provider
+          </button>
+        </div>
 
-        {/* Info Banner */}
-        <PageInfoBanner
-          title="Identity Provider Management"
-          description="Manage OIDC and SAML authentication methods for secure user identity verification across your applications."
-          featuresTitle="Key capabilities:"
-          features={[
-            { text: "Multiple protocol support (OIDC/SAML)" },
-            { text: "Real-time provider status monitoring" },
-            { text: "Enterprise SSO integration" },
-          ]}
-          primaryAction={{
-            label: "Read docs",
-            onClick: () =>
-              window.open(
-                "https://docs.authsec.dev/administration/category/authentication-5",
-                "_blank",
-              ),
-            variant: "outline",
-            className:
-              "bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 shadow-md hover:shadow-lg transition-all h-8 px-3 text-xs",
-            icon: ChevronsRight,
-          }}
-          faqsTitle="Common questions:"
-          faqs={[
-            {
-              id: "oidc-vs-saml",
-              question: "OIDC vs SAML - which should I use?",
-              answer:
-                "OIDC is modern, lightweight, and ideal for mobile/web apps. SAML is enterprise-focused with better support for legacy systems. Most new applications should use OIDC.",
-            },
-            {
-              id: "add-provider",
-              question: "How do I add an identity provider?",
-              answer:
-                "Click 'Add Method', choose OIDC or SAML, then configure the issuer URL, client credentials, and callback URLs. Test the connection before saving.",
-            },
-            {
-              id: "troubleshoot",
-              question: "Provider shows as inactive?",
-              answer:
-                "Check that your issuer URL is accessible, client credentials are correct, and redirect URIs match your application's callback URLs. Review logs for specific error details.",
-            },
-          ]}
-          storageKey="authentication-page"
-          dismissible={true}
-        />
-
-        {/* Filter Card */}
-        <AuthenticationFilterCard
-          onFiltersChange={handleFiltersChange}
-          initialFilters={filters}
-          clients={clients}
-          loadingClients={loadingClients}
-          selectedClientId={selectedClientId}
-          onClientChange={setSelectedClientId}
-        />
-
-        {/* Bulk Actions Bar */}
-        {selectedMethods.length > 0 && (
-          <BulkActionsBar
-            selectedProviders={selectedProviders}
-            onClearSelection={handleClearSelection}
-            onBulkAction={handleBulkAction}
-          />
+        {!infoDismissed && (
+          <div className="decision-banner" style={{ alignItems: "flex-start" }}>
+            <span className="db-icon"><Fingerprint className="icon" /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p className="db-title">Identity provider management</p>
+              <p className="db-text">
+                Manage OIDC and SAML authentication methods for secure user identity verification
+                across your applications.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2) var(--space-5)", marginTop: "var(--space-3)" }}>
+                {[
+                  "Multiple protocol support (OIDC / SAML)",
+                  "Real-time provider status monitoring",
+                  "Enterprise SSO integration",
+                ].map((cap) => (
+                  <span key={cap} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--color-text-muted)" }}>
+                    <CheckCircle2 className="icon-sm" style={{ color: "var(--color-primary)" }} />
+                    {cap}
+                  </span>
+                ))}
+              </div>
+              <a
+                className="btn btn-secondary"
+                href="https://docs.authsec.dev/administration/category/authentication-5"
+                target="_blank"
+                rel="noreferrer"
+                style={{ height: 32, padding: "0 12px", marginTop: "var(--space-4)" }}
+              >
+                <ExternalLink className="icon-sm" /> Read docs
+              </a>
+            </div>
+            <button className="icon-btn" aria-label="Dismiss" onClick={dismissInfo} style={{ flex: "none" }}>
+              <X className="icon-sm" />
+            </button>
+          </div>
         )}
 
-        {/* Enhanced Authentication Table */}
-        <div className="auth-table-container">
-          <style>{`
-            .auth-table-container [data-slot="table-container"] {
-              border: none !important;
-              background: transparent !important;
-            }
-            .auth-table-container [data-slot="table-header"] {
-              background: transparent !important;
-            }
-            .auth-table-container .bg-muted\\/50,
-            .auth-table-container .bg-muted\\/30,
-            .auth-table-container [class*="bg-muted"] {
-              background: transparent !important;
-            }
-            .auth-table-container .hover\\:bg-muted\\/50:hover,
-            .auth-table-container .hover\\:bg-muted\\/30:hover {
-              background: rgba(148, 163, 184, 0.1) !important;
-            }
-            .auth-table-container .shadow-xl {
-              box-shadow: none !important;
-            }
-          `}</style>
-          <TableCard className="transition-all duration-500">
-            <CardContent variant="flush">
-              <div className="relative">
-                {isInitialLoading ? (
-                  <AuthTableSkeleton rows={6} />
-                ) : (
-                  <AuthProvidersTable
-                    providers={filteredProviders}
-                    selectedProviderIds={selectedMethods}
-                    onSelectionChange={handleRowSelectionChange}
-                    onSelectAll={handleSelectAll}
-                    actions={{
-                      onDuplicate: handleDuplicateProvider,
-                      onDelete: handleDeleteProvider,
-                      onToggleActive: handleToggleActive,
-                      onViewConfiguration: handleViewConfiguration,
-                      onTestConnection: handleTestConnection,
-                    }}
-                  />
-                )}
-              </div>
-            </CardContent>
-          </TableCard>
+        <div className="roles-toolbar">
+          <div className={`search${search ? " has-value" : ""}`}>
+            <span className="search-ic"><Search className="icon" /></span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search providers"
+              aria-label="Search providers"
+            />
+            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
+              <X className="icon-sm" />
+            </button>
+          </div>
+          <div className="filterset">
+            <span className="filterset-label">Type</span>
+            <div className="segmented">
+              {[["all", "All"], ["oidc", "OIDC"], ["saml", "SAML"]].map(([v, label]) => (
+                <button key={v} data-on={typeFilter === v} onClick={() => setTypeFilter(v)}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="select">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status" style={{ minWidth: 120 }}>
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <span className="chev"><ChevronDown className="icon-sm" /></span>
+          </div>
+          <div className="select">
+            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} aria-label="Client" disabled={loadingClients} style={{ minWidth: 150 }}>
+              <option value="">All clients</option>
+              {clients.map((c: any) => (
+                <option key={c.client_id ?? c.id} value={c.client_id ?? c.id}>{c.name ?? c.client_name ?? c.client_id ?? c.id}</option>
+              ))}
+            </select>
+            <span className="chev"><ChevronDown className="icon-sm" /></span>
+          </div>
+          {filtersActive && (
+            <button className="chip-clear" onClick={() => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setSelectedClientId(""); }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="table-card">
+          {hasProviderError ? (
+            <div className="empty">
+              <span className="empty-ic" style={{ background: "var(--color-danger-soft)", color: "var(--color-danger-text)", borderColor: "transparent" }}>
+                <Fingerprint className="icon-lg" />
+              </span>
+              <h3 className="empty-title" style={{ color: "var(--color-danger-text)" }}>Unable to load providers</h3>
+              <p className="empty-desc" style={{ color: "var(--color-danger-text)" }}>We hit an error fetching identity providers.</p>
+            </div>
+          ) : isProvidersLoading ? (
+            <div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div className="skeleton-row" key={i}>
+                  <span className="sk" style={{ width: 36, height: 36, borderRadius: 8, flex: "none" }} />
+                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+                    <span className="sk sk-line" style={{ width: "30%" }} />
+                    <span className="sk sk-line" style={{ width: "20%", height: 9 }} />
+                  </span>
+                  <span className="sk sk-line" style={{ width: 64, height: 22, borderRadius: 999, margin: "0 24px" }} />
+                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999 }} />
+                  <span className="sk sk-line" style={{ width: 28 }} />
+                </div>
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="empty">
+              <span className="empty-ic"><Fingerprint className="icon-lg" /></span>
+              <h3 className="empty-title">{filtersActive ? "No providers match" : "No identity providers yet"}</h3>
+              <p className="empty-desc">
+                {filtersActive
+                  ? "Try a different search term or filter."
+                  : "Add an OIDC or SAML provider so your users can sign in."}
+              </p>
+              <button className="btn btn-primary" onClick={filtersActive ? () => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setSelectedClientId(""); } : () => setIsAddOpen(true)}>
+                {filtersActive ? "Clear filters" : (<><Plus className="icon-sm" /> Add provider</>)}
+              </button>
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th className="th-context">Configuration</th>
+                  <th className="th-actions" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => {
+                  const config = p.provider_type === "saml" ? p.entity_id : p.callback_url;
+                  return (
+                    <tr key={p.id} tabIndex={0}>
+                      <td>
+                        <div className="app-cell">
+                          <span className="app-glyph">
+                            <ProviderIcon providerName={p.provider_name} providerType={p.provider_type} className="icon-sm" />
+                          </span>
+                          <span className="ac-meta">
+                            <span className="ac-name">{p.display_name}</span>
+                            <span className="ac-uri" style={{ fontFamily: "var(--font-family-sans)" }}>by {p.provider_name}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge ${p.provider_type === "saml" ? "badge--accent" : "badge--info"}`}>
+                          <span className="bdot" />
+                          {p.provider_type === "saml" ? "SAML" : "OIDC"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${p.is_active ? "badge--success" : "badge--muted"}`}>
+                          <span className="bdot" />
+                          {p.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="col-context">
+                        <span className="ctx-uri" title={config} style={{ maxWidth: 280 }}>{config || "—"}</span>
+                      </td>
+                      <td>
+                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="icon-btn" aria-label="Provider actions">
+                                <MoreHorizontal className="icon" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                              <DropdownMenuItem className="menu-item" onSelect={() => handleToggleActive(p.id, !p.is_active)}>
+                                <span className="mi-ic"><Power className="icon-sm" /></span>
+                                {p.is_active ? "Deactivate" : "Activate"}
+                              </DropdownMenuItem>
+                              <div className="menu-sep" />
+                              <DropdownMenuItem className="menu-item danger" onSelect={() => setDeleteTarget({ id: p.id, name: p.display_name })}>
+                                <span className="mi-ic"><Trash2 className="icon-sm" /></span>
+                                Delete provider
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* Add Method Modal */}
-      <AddAuthMethodModal
-        open={isAddMethodModalOpen}
-        onOpenChange={setIsAddMethodModalOpen}
-      />
+      <AddAuthMethodModal open={isAddOpen} onOpenChange={setIsAddOpen} />
 
-      {/* Delete Provider Confirmation Dialog */}
-      <DeleteProviderConfirmDialog
-        open={deleteDialog.open}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteDialog({
-              open: false,
-              providerId: "",
-              providerName: undefined,
-              providerType: undefined,
-            });
-          }
-        }}
-        onConfirm={handleConfirmDelete}
-        providerId={deleteDialog.providerId}
-        providerName={deleteDialog.providerName}
-        providerType={deleteDialog.providerType}
-        isLoading={isDeletingOidc || isDeletingSaml}
-      />
-
-      {/* SDK Quick Help */}
-      <SDKQuickHelp
-        helpItems={AUTHENTICATION_SDK_HELP}
-        title="Authentication SDK"
-      />
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && !(isDeletingOidc || isDeletingSaml) && setDeleteTarget(null)}>
+        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
+          <div className="dialog" style={{ width: "100%" }}>
+            <span className="dg-icon"><Trash2 className="icon" /></span>
+            <DialogTitle className="dg-title">Delete provider?</DialogTitle>
+            <DialogDescription className="dg-desc">
+              This removes the provider configuration. Users relying on it can no longer sign in
+              through it. This can't be undone.
+            </DialogDescription>
+            {deleteTarget?.name && <div className="dg-target" style={{ fontFamily: "var(--font-family-sans)" }}>{deleteTarget.name}</div>}
+            <div className="dg-actions">
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={isDeletingOidc || isDeletingSaml}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={() => void handleConfirmDelete()} disabled={isDeletingOidc || isDeletingSaml}>
+                <Trash2 className="icon-sm" /> {isDeletingOidc || isDeletingSaml ? "Deleting…" : "Delete provider"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

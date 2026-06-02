@@ -522,9 +522,6 @@ export default function EndUsersPage() {
               workspace members.
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate("/developer/sdk-guides")}>
-            <Plus className="icon-sm" /> Invite user
-          </button>
         </div>
 
         <div className="filter-bar">

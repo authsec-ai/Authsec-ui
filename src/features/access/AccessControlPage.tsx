@@ -1,63 +1,45 @@
 /**
- * AccessControlPage — workspace-level access management.
+ * AccessControlPage — workspace-level access management (AuthZ).
  *
- * Which view renders is driven by the route (and the left sidebar links that
- * point at it) via the `initialTab` prop — there is no on-screen tab bar:
- *   roles       — workspace/app-scoped roles with inline right panel
- *   scopes      — cross-workspace scope catalog with inline right panel
- *   assignments — role binding table (replaces old Role Bindings page)
+ * Route-driven via `initialTab` (sidebar links point here):
+ *   roles       — workspace / app-scoped AuthSec roles
+ *   scopes      — cross-workspace scope catalog
+ *   assignments — role bindings
  *
- * Usage:
- *   <AccessControlPage initialTab="roles" />
+ * Rebuilt to match the Console Refresh prototype (bespoke `[data-cr]` markup:
+ * section-header, filter toolbar, prototype table, status/risk badges, Sheet
+ * detail drawers, dialogs), wired to the real RTK Query data + mutations.
  */
 
-import React, { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
-  Trash2,
-  Plus,
-  X,
-  MoreHorizontal,
   AlertTriangle,
-  ShieldCheck,
+  Building,
+  Check,
+  KeyRound,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Server,
+  Shield,
+  Trash2,
+  UserPlus,
+  X,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { CardContent } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
-  DialogHeader,
+  DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  SectionNav,
-  CollapsibleSection,
-  DrawerPrevNext,
-  ResourceTag,
-  toastWithUndo,
-} from "@/components/primitives";
-import { cn } from "@/lib/utils";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { formatRoleName } from "@/utils/roleName";
 import { toast } from "@/lib/toast";
@@ -80,8 +62,7 @@ import {
 
 import AssignRoleWizard from "./AssignRoleWizard";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
+// ─── Types ──────────────────────────────────────────────────────────────────
 interface AuthSecRole {
   id: string;
   name: string;
@@ -98,7 +79,6 @@ export interface AccessControlPageProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
   try {
@@ -108,207 +88,22 @@ function formatDate(iso?: string | null): string {
   }
 }
 
-function riskBadgeVariant(
-  risk: string
-): "destructive" | "secondary" | "outline" | "default" {
+function riskClass(risk?: string): string {
   switch (risk?.toLowerCase()) {
     case "critical":
+      return "badge--risk-critical";
     case "high":
-      return "destructive";
+      return "badge--risk-high";
     case "medium":
-      return "secondary";
+      return "badge--risk-medium";
     default:
-      return "outline";
+      return "badge--risk-low";
   }
 }
 
-// ─── Role right panel ─────────────────────────────────────────────────────────
-
-const ROLE_NAV_ITEMS = [
-  { id: "overview", label: "Overview" },
-  { id: "users", label: "Users" },
-  { id: "scopes", label: "Scopes" },
-  { id: "activity", label: "Activity" },
-];
-
-function RoleDetailPanel({
-  role,
-  onClose,
-  onPrev,
-  onNext,
-  hasPrev,
-  hasNext,
-  currentIndex,
-  total,
-  onDelete,
-  onAssignUsers,
-}: {
-  role: AuthSecRole;
-  onClose: () => void;
-  onPrev: () => void;
-  onNext: () => void;
-  hasPrev: boolean;
-  hasNext: boolean;
-  currentIndex: number;
-  total: number;
-  onDelete: (role: AuthSecRole) => void;
-  onAssignUsers: (roleId: string) => void;
-}) {
-  const [activeSection] = useState("overview");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-white border-b px-4 py-3 shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <DrawerPrevNext
-            onPrev={onPrev}
-            onNext={onNext}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-            currentIndex={currentIndex}
-            total={total}
-          />
-          <p className="text-sm font-semibold text-slate-900 truncate flex-1 text-center">
-            {role.name}
-          </p>
-          <button
-            type="button"
-            aria-label="Close role detail panel"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-            Edit name
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs text-red-700 border-red-200 hover:bg-red-50"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Delete
-          </Button>
-        </div>
-      </div>
-
-      {/* Section nav */}
-      <SectionNav sections={ROLE_NAV_ITEMS} activeId={activeSection} />
-
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
-        <CollapsibleSection id="overview" title="Overview" defaultOpen={true}>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Name</dt>
-              <dd className="font-medium text-slate-900">{role.name}</dd>
-            </div>
-            {role.description && (
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Description</dt>
-                <dd className="text-slate-700">{role.description}</dd>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Kind</dt>
-              <dd>
-                <Badge variant="outline" className="text-xs">
-                  Workspace-wide
-                </Badge>
-              </dd>
-            </div>
-            {role.created_at && (
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Created</dt>
-                <dd className="text-slate-700">{formatDate(role.created_at)}</dd>
-              </div>
-            )}
-          </dl>
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          id="users"
-          title="Users"
-          defaultOpen={true}
-          badge={role.users_assigned ?? 0}
-        >
-          {role.users_assigned && role.users_assigned > 0 ? (
-            <p className="text-sm text-slate-500">
-              {role.users_assigned} user
-              {role.users_assigned === 1 ? "" : "s"} assigned this role.
-            </p>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-sm text-slate-500">
-                No users assigned this role yet.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-2 text-xs"
-                onClick={() => onAssignUsers(role.id)}
-              >
-                + Assign users
-              </Button>
-            </div>
-          )}
-        </CollapsibleSection>
-
-        <CollapsibleSection id="scopes" title="Scopes" defaultOpen={false}>
-          <p className="text-xs text-slate-500 italic">
-            Scopes are derived from the role's permissions — configure
-            permissions to unlock scopes.
-          </p>
-        </CollapsibleSection>
-
-        <CollapsibleSection id="activity" title="Activity" defaultOpen={false}>
-          <p className="text-sm text-slate-500 text-center py-4">
-            Activity tracking coming soon.
-          </p>
-        </CollapsibleSection>
-      </div>
-
-      {/* Delete confirm dialog */}
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete role &quot;{role.name}&quot;?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            This action cannot be undone. Existing role bindings for this role
-            will be removed.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDelete(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setConfirmDelete(false);
-                onDelete(role);
-              }}
-            >
-              Delete role
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
+const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "—");
 
 // ─── Roles tab ────────────────────────────────────────────────────────────────
-
 function RolesTab({
   workspaceId,
   onAssignUsers,
@@ -317,23 +112,14 @@ function RolesTab({
   onAssignUsers: (roleId: string) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [kindFilter, setKindFilter] = useState<"all" | "workspace" | "app">(
-    "all"
-  );
+  const [kindFilter, setKindFilter] = useState<"all" | "workspace" | "app">("all");
   const [selectedRole, setSelectedRole] = useState<AuthSecRole | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-
-  // Create role form
+  const [confirmDelete, setConfirmDelete] = useState<AuthSecRole | null>(null);
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
 
-  const { data: roles, isLoading } = useGetAuthSecRolesQuery({
-    workspace_id: workspaceId,
-  });
-
-  // uuid → application name, so auto-generated `rs-{uuid}:{type}` roles render
-  // as "demo server · admin" instead of the raw UUID.
+  const { data: roles, isLoading } = useGetAuthSecRolesQuery({ workspace_id: workspaceId });
   const { data: resourceServers } = useListResourceServersQuery();
   const appMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -347,57 +133,34 @@ function RolesTab({
   const rows = useMemo<AuthSecRole[]>(() => {
     const list = (roles ?? []) as AuthSecRole[];
     return list.filter((r) => {
+      const fmt = formatRoleName(r.name, appMap);
       const matchSearch =
         !search ||
         r.name.toLowerCase().includes(search.toLowerCase()) ||
         r.description?.toLowerCase().includes(search.toLowerCase());
-      return matchSearch;
+      const matchKind =
+        kindFilter === "all" ||
+        (kindFilter === "app" ? fmt.isAppScoped : !fmt.isAppScoped);
+      return matchSearch && matchKind;
     });
-  }, [roles, search, kindFilter]);
-
-  const handleSelectRow = useCallback((role: AuthSecRole, index: number) => {
-    setSelectedRole(role);
-    setSelectedIndex(index);
-  }, []);
-
-  const handlePrev = useCallback(() => {
-    if (selectedIndex > 0) {
-      const newIdx = selectedIndex - 1;
-      setSelectedIndex(newIdx);
-      setSelectedRole(rows[newIdx]);
-    }
-  }, [selectedIndex, rows]);
-
-  const handleNext = useCallback(() => {
-    if (selectedIndex < rows.length - 1) {
-      const newIdx = selectedIndex + 1;
-      setSelectedIndex(newIdx);
-      setSelectedRole(rows[newIdx]);
-    }
-  }, [selectedIndex, rows]);
+  }, [roles, search, kindFilter, appMap]);
 
   const handleDelete = useCallback(
     async (role: AuthSecRole) => {
       try {
-        await deleteRoles({
-          workspace_id: workspaceId,
-          role_ids: [role.id],
-        }).unwrap();
+        await deleteRoles({ workspace_id: workspaceId, role_ids: [role.id] }).unwrap();
         toast.success("Role deleted");
         if (selectedRole?.id === role.id) setSelectedRole(null);
+        setConfirmDelete(null);
       } catch (e: unknown) {
-        const err = e as { data?: { error?: string } };
-        toast.error(err?.data?.error ?? "Failed to delete role");
+        toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to delete role");
       }
     },
-    [deleteRoles, workspaceId, selectedRole]
+    [deleteRoles, workspaceId, selectedRole],
   );
 
   const handleCreate = useCallback(async () => {
-    if (!newRoleName.trim()) {
-      toast.error("Role name is required");
-      return;
-    }
+    if (!newRoleName.trim()) return toast.error("Role name is required");
     try {
       await addRole({
         workspace_id: workspaceId,
@@ -409,424 +172,317 @@ function RolesTab({
       setNewRoleName("");
       setNewRoleDesc("");
     } catch (e: unknown) {
-      const err = e as { data?: { error?: string } };
-      toast.error(err?.data?.error ?? "Failed to create role");
+      toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to create role");
     }
   }, [addRole, workspaceId, newRoleName, newRoleDesc]);
 
+  const selectedFmt = selectedRole ? formatRoleName(selectedRole.name, appMap) : null;
+
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left — table */}
-      <div
-        className={cn(
-          "flex flex-col overflow-auto transition-all duration-200",
-          selectedRole ? "w-[55%] min-w-0 flex-none" : "flex-1"
-        )}
-      >
-        <div className="p-6 space-y-4">
-          {/* Filter bar */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Input
-                placeholder="Search roles..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9"
-              />
-            </div>
-            {/* Kind filters */}
-            <div className="flex gap-1.5">
+    <div data-cr>
+      <div className="content-inner">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Roles</h1>
+            <p className="sh-desc">
+              Workspace and application-scoped roles bundle permissions you can assign to operators
+              and end users.
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="icon-sm" /> Create role
+          </button>
+        </div>
+
+        <div className="roles-toolbar">
+          <div className={`search${search ? " has-value" : ""}`}>
+            <span className="search-ic">
+              <Search className="icon" />
+            </span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search roles"
+              aria-label="Search roles"
+            />
+            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
+              <X className="icon-sm" />
+            </button>
+          </div>
+          <div className="filterset">
+            <span className="filterset-label">Kind</span>
+            <div className="segmented">
               {(["all", "workspace", "app"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKindFilter(k)}
-                  className={cn(
-                    "inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold transition-colors",
-                    kindFilter === k
-                      ? "border-blue-200 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  )}
-                >
-                  {k === "all"
-                    ? "All"
-                    : k === "workspace"
-                    ? "Workspace"
-                    : "App-scoped"}
+                <button key={k} data-on={kindFilter === k} onClick={() => setKindFilter(k)}>
+                  {k === "all" ? "All" : k === "workspace" ? "Workspace" : "App-scoped"}
                 </button>
               ))}
             </div>
-            <Button
-              size="sm"
-              onClick={() => setShowCreateDialog(true)}
-              className="ml-auto text-white! [&_svg]:text-white!"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Role
-            </Button>
           </div>
+        </div>
 
-          <TableCard>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Role name</TableHead>
-                    <TableHead>Kind</TableHead>
-                    <TableHead># Users</TableHead>
-                    <TableHead># Permissions</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={5}>
-                          <Skeleton className="h-8 w-full" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="text-center py-12 text-slate-500"
-                      >
-                        {search
-                          ? "No roles match your search."
-                          : "No roles found. Create your first role to get started."}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((role, index) => (
-                      <TableRow
-                        key={role.id}
-                        className={cn(
-                          "cursor-pointer hover:bg-slate-50",
-                          selectedRole?.id === role.id && "bg-slate-50"
-                        )}
-                        onClick={() => handleSelectRow(role, index)}
-                      >
-                        <TableCell>
-                          {(() => {
-                            const fmt = formatRoleName(role.name, appMap);
-                            return (
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-900 dark:text-white">
-                                  {fmt.primary}
-                                </span>
-                                {fmt.badge && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wide">
-                                    {fmt.badge}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {role.description && (
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {role.description}
+        <div className="table-card">
+          {isLoading ? (
+            <SkeletonRows cols={4} />
+          ) : rows.length === 0 ? (
+            <div className="empty">
+              <span className="empty-ic">
+                <Shield className="icon-lg" />
+              </span>
+              <h3 className="empty-title">{search || kindFilter !== "all" ? "No roles match" : "No roles yet"}</h3>
+              <p className="empty-desc">
+                {search || kindFilter !== "all"
+                  ? "Try a different search term or filter."
+                  : "Create your first role to start bundling permissions."}
+              </p>
+              <button className="btn btn-primary" onClick={() => setShowCreateDialog(true)}>
+                <Plus className="icon-sm" /> Create role
+              </button>
+            </div>
+          ) : (
+            <>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th className="th-context">Kind</th>
+                    <th className="num">Users</th>
+                    <th className="num th-apps">Permissions</th>
+                    <th className="th-actions" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((role) => {
+                    const fmt = formatRoleName(role.name, appMap);
+                    return (
+                      <tr key={role.id} tabIndex={0} data-selected={selectedRole?.id === role.id} onClick={() => setSelectedRole(role)}>
+                        <td>
+                          <div className="role-cell">
+                            <div className="role-name-row">
+                              <span className="role-name">{fmt.primary}</span>
+                              {fmt.badge && (
+                                <span className="role-tag generated">{fmt.badge}</span>
+                              )}
                             </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {formatRoleName(role.name, appMap).isAppScoped
-                              ? "App-scoped"
-                              : "Workspace"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                          {role.users_assigned ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                          {role.permissions_count ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className="text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectRow(role, index);
-                                }}
-                              >
-                                View details
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-xs text-red-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(role);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </TableCard>
-
-          <div className="text-xs text-slate-500">
-            {rows.length} role{rows.length === 1 ? "" : "s"}
-          </div>
+                            {role.description && <span className="role-detail">{role.description}</span>}
+                          </div>
+                        </td>
+                        <td className="col-context">
+                          <span className={`kind-chip ${fmt.isAppScoped ? "app" : "workspace"}`}>
+                            {fmt.isAppScoped ? <Server className="kc-ic" /> : <Building className="kc-ic" />}
+                            {fmt.isAppScoped ? "App-scoped" : "Workspace"}
+                          </span>
+                        </td>
+                        <td className={`num-cell${!role.users_assigned ? " zero" : ""}`}>
+                          {role.users_assigned ?? 0}
+                        </td>
+                        <td className={`num-cell col-apps${!role.permissions_count ? " zero" : ""}`}>
+                          {role.permissions_count ?? 0}
+                        </td>
+                        <td>
+                          <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="icon-btn" aria-label="Role actions">
+                                  <MoreHorizontal className="icon" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                                <DropdownMenuItem className="menu-item" onSelect={() => setSelectedRole(role)}>
+                                  <span className="mi-ic"><KeyRound className="icon-sm" /></span>
+                                  View details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="menu-item" onSelect={() => onAssignUsers(role.id)}>
+                                  <span className="mi-ic"><UserPlus className="icon-sm" /></span>
+                                  Assign users
+                                </DropdownMenuItem>
+                                <div className="menu-sep" />
+                                <DropdownMenuItem className="menu-item danger" onSelect={() => setConfirmDelete(role)}>
+                                  <span className="mi-ic"><Trash2 className="icon-sm" /></span>
+                                  Delete role
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
+                {rows.length} role{rows.length === 1 ? "" : "s"}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Right — detail panel */}
-      {selectedRole && (
-        <div className="w-[45%] flex-none border-l bg-white overflow-y-auto">
-          <RoleDetailPanel
-            role={selectedRole}
-            onClose={() => setSelectedRole(null)}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            hasPrev={selectedIndex > 0}
-            hasNext={selectedIndex < rows.length - 1}
-            currentIndex={selectedIndex}
-            total={rows.length}
-            onDelete={handleDelete}
-            onAssignUsers={onAssignUsers}
-          />
-        </div>
-      )}
+      {/* Role detail drawer */}
+      <Sheet open={!!selectedRole} onOpenChange={(o) => !o && setSelectedRole(null)}>
+        <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+          {selectedRole && selectedFmt && (
+            <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
+              <div className="drawer-head">
+                <div className="drawer-head-top">
+                  <span className={`kind-chip ${selectedFmt.isAppScoped ? "app" : "workspace"}`}>
+                    {selectedFmt.isAppScoped ? <Server className="kc-ic" /> : <Building className="kc-ic" />}
+                    {selectedFmt.isAppScoped ? "App-scoped role" : "Workspace role"}
+                  </span>
+                  <button className="icon-btn" aria-label="Close" onClick={() => setSelectedRole(null)}>
+                    <X className="icon" />
+                  </button>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div className="drawer-email" style={{ fontSize: 18 }}>{selectedFmt.primary}</div>
+                  <div className="drawer-username" style={{ fontFamily: "var(--font-family-sans)" }}>
+                    {selectedFmt.isAppScoped ? "Application role" : "Workspace-wide · operator permissions"}
+                  </div>
+                </div>
+              </div>
+              <div className="drawer-body">
+                <div className="role-summary">
+                  <div className="summary-stat-grid">
+                    <div className="stat-card">
+                      <div className="sc-k">Assigned users</div>
+                      <div className="sc-v">{selectedRole.users_assigned ?? 0}</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="sc-k">Permissions</div>
+                      <div className="sc-v">{selectedRole.permissions_count ?? 0}</div>
+                    </div>
+                  </div>
+                  <div className="drawer-section">
+                    <p className="drawer-section-label">Details</p>
+                    <div className="detail-grid">
+                      {selectedRole.description && (
+                        <div className="detail full">
+                          <span className="detail-k">Description</span>
+                          <span className="detail-v" style={{ fontWeight: 400 }}>{selectedRole.description}</span>
+                        </div>
+                      )}
+                      <div className="detail">
+                        <span className="detail-k">Kind</span>
+                        <span className="detail-v">{selectedFmt.isAppScoped ? "App-scoped" : "Workspace"}</span>
+                      </div>
+                      <div className="detail">
+                        <span className="detail-k">Created</span>
+                        <span className="detail-v">{formatDate(selectedRole.created_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="drawer-foot">
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onAssignUsers(selectedRole.id)}>
+                  <UserPlus className="icon-sm" /> Assign users
+                </button>
+                <button className="btn btn-secondary" aria-label="Delete role" onClick={() => setConfirmDelete(selectedRole)}>
+                  <Trash2 className="icon-sm" />
+                </button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Create role dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Role</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="role-name"
-                className="text-sm font-medium text-slate-700"
-              >
-                Name <span className="text-red-500">*</span>
+        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
+          <div className="dialog" style={{ width: "100%" }}>
+            <DialogTitle className="dg-title">Create role</DialogTitle>
+            <DialogDescription className="dg-desc">
+              Name the role, then add permissions and assign users afterwards.
+            </DialogDescription>
+            <div className="wiz-field">
+              <label className="wiz-label" htmlFor="ac-role-name">
+                Name <span className="req">*</span>
               </label>
-              <Input
-                id="role-name"
+              <input
+                id="ac-role-name"
+                className="input"
+                style={{ width: "100%" }}
                 value={newRoleName}
                 onChange={(e) => setNewRoleName(e.target.value)}
                 placeholder="e.g. developer, read-only-ops"
               />
             </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="role-desc"
-                className="text-sm font-medium text-slate-700"
-              >
-                Description
-              </label>
+            <div className="wiz-field">
+              <label className="wiz-label" htmlFor="ac-role-desc">Description</label>
               <textarea
-                id="role-desc"
+                id="ac-role-desc"
+                className="textarea"
                 value={newRoleDesc}
                 onChange={(e) => setNewRoleDesc(e.target.value)}
                 placeholder="Optional description for this role"
-                className="w-full min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                rows={3}
               />
             </div>
+            <div className="dg-actions" style={{ marginTop: "var(--space-5)" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setNewRoleName("");
+                  setNewRoleDesc("");
+                }}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={handleCreate} disabled={addRoleState.isLoading || !newRoleName.trim()}>
+                <Check className="icon-sm" /> {addRoleState.isLoading ? "Creating…" : "Create role"}
+              </button>
+            </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCreateDialog(false);
-                setNewRoleName("");
-                setNewRoleDesc("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreate}
-              disabled={addRoleState.isLoading || !newRoleName.trim()}
-            >
-              {addRoleState.isLoading ? "Creating..." : "Create Role"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        role={confirmDelete}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={(r) => handleDelete(r)}
+      />
     </div>
   );
 }
 
-// ─── Scope right panel ────────────────────────────────────────────────────────
-
-const SCOPE_NAV_ITEMS = [
-  { id: "overview", label: "Overview" },
-  { id: "tools", label: "Tools" },
-  { id: "roles-granting", label: "Roles" },
-  { id: "users-computed", label: "Users" },
-];
-
-function ScopeDetailPanel({
-  scope,
-  onClose,
-  onPrev,
-  onNext,
-  hasPrev,
-  hasNext,
-  currentIndex,
-  total,
+function ConfirmDeleteDialog({
+  role,
+  onCancel,
+  onConfirm,
 }: {
-  scope: ScopeCatalogEntry;
-  onClose: () => void;
-  onPrev: () => void;
-  onNext: () => void;
-  hasPrev: boolean;
-  hasNext: boolean;
-  currentIndex: number;
-  total: number;
+  role: AuthSecRole | null;
+  onCancel: () => void;
+  onConfirm: (role: AuthSecRole) => void;
 }) {
-  const [activeSection] = useState("overview");
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-20 bg-white border-b px-4 py-3 shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <DrawerPrevNext
-            onPrev={onPrev}
-            onNext={onNext}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-            currentIndex={currentIndex}
-            total={total}
-          />
-          <p className="text-sm font-semibold text-slate-900 truncate flex-1 text-center font-mono">
-            {scope.scope_string}
-          </p>
-          <button
-            type="button"
-            aria-label="Close scope detail panel"
-            onClick={onClose}
-            className="inline-flex items-center justify-center h-7 w-7 rounded-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="h-4 w-4" />
-          </button>
+    <Dialog open={!!role} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
+        <div className="dialog" style={{ width: "100%" }}>
+          <span className="dg-icon">
+            <Trash2 className="icon" />
+          </span>
+          <DialogTitle className="dg-title">Delete role?</DialogTitle>
+          <DialogDescription className="dg-desc">
+            This removes the role and its bindings. Active sessions relying on it lose access. This
+            can't be undone.
+          </DialogDescription>
+          {role && <div className="dg-target" style={{ fontFamily: "var(--font-family-sans)" }}>{role.name}</div>}
+          <div className="dg-actions">
+            <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+            <button className="btn btn-danger" onClick={() => role && onConfirm(role)}>
+              <Trash2 className="icon-sm" /> Delete role
+            </button>
+          </div>
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-7 text-xs">
-            Edit
-          </Button>
-        </div>
-      </div>
-
-      {/* Section nav */}
-      <SectionNav sections={SCOPE_NAV_ITEMS} activeId={activeSection} />
-
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
-        <CollapsibleSection id="overview" title="Overview" defaultOpen={true}>
-          <dl className="space-y-2 text-sm">
-            <div>
-              <dt className="text-slate-500 text-xs mb-1">Scope string</dt>
-              <dd className="font-mono text-xs bg-slate-50 rounded px-2 py-1">
-                {scope.scope_string}
-              </dd>
-            </div>
-            {scope.display_name && (
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Display name</dt>
-                <dd className="text-slate-700">{scope.display_name}</dd>
-              </div>
-            )}
-            {scope.description && (
-              <div>
-                <dt className="text-slate-500 text-xs mb-1">Description</dt>
-                <dd className="text-slate-700 text-sm">{scope.description}</dd>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Risk</dt>
-              <dd>
-                <Badge
-                  variant={riskBadgeVariant(scope.risk_level)}
-                  className="text-xs capitalize"
-                >
-                  {scope.risk_level || "unknown"}
-                </Badge>
-              </dd>
-            </div>
-            {scope.application && (
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Application</dt>
-                <dd className="text-slate-700">{scope.application.name}</dd>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <dt className="text-slate-500">Kind</dt>
-              <dd>
-                <Badge variant="outline" className="text-xs capitalize">
-                  {scope.kind}
-                </Badge>
-              </dd>
-            </div>
-          </dl>
-        </CollapsibleSection>
-
-        <CollapsibleSection id="tools" title="Tools" defaultOpen={false}>
-          <p className="text-sm text-slate-500 italic">
-            Tool mappings visible in the Application &rarr; Tools tab.
-          </p>
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          id="roles-granting"
-          title="Roles (granting)"
-          defaultOpen={false}
-        >
-          <p className="text-sm text-slate-500 italic">
-            Grant chain analysis coming soon.
-          </p>
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          id="users-computed"
-          title="Users (computed)"
-          defaultOpen={false}
-        >
-          <p className="text-sm text-slate-500 italic">
-            Blast radius analysis coming soon.
-          </p>
-        </CollapsibleSection>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 // ─── Scopes tab ───────────────────────────────────────────────────────────────
-
 function ScopesTab() {
   const [search, setSearch] = useState("");
-  const [selectedScope, setSelectedScope] = useState<ScopeCatalogEntry | null>(
-    null
-  );
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
+  const [selected, setSelected] = useState<ScopeCatalogEntry | null>(null);
   const { data: scopeData, isLoading } = useListScopeCatalogQuery({ kind: "all" });
 
   const rows = useMemo<ScopeCatalogEntry[]>(() => {
@@ -837,402 +493,350 @@ function ScopesTab() {
       (sc) =>
         sc.scope_string.toLowerCase().includes(s) ||
         sc.display_name?.toLowerCase().includes(s) ||
-        sc.description?.toLowerCase().includes(s)
+        sc.description?.toLowerCase().includes(s),
     );
   }, [scopeData, search]);
 
-  const handleSelectRow = useCallback(
-    (scope: ScopeCatalogEntry, index: number) => {
-      setSelectedScope(scope);
-      setSelectedIndex(index);
-    },
-    []
-  );
-
-  const handlePrev = useCallback(() => {
-    if (selectedIndex > 0) {
-      const newIdx = selectedIndex - 1;
-      setSelectedIndex(newIdx);
-      setSelectedScope(rows[newIdx]);
-    }
-  }, [selectedIndex, rows]);
-
-  const handleNext = useCallback(() => {
-    if (selectedIndex < rows.length - 1) {
-      const newIdx = selectedIndex + 1;
-      setSelectedIndex(newIdx);
-      setSelectedScope(rows[newIdx]);
-    }
-  }, [selectedIndex, rows]);
-
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left — table */}
-      <div
-        className={cn(
-          "flex flex-col overflow-auto transition-all duration-200",
-          selectedScope ? "w-[55%] min-w-0 flex-none" : "flex-1"
-        )}
-      >
-        <div className="p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <Input
-              placeholder="Search scopes..."
+    <div data-cr>
+      <div className="content-inner">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Scopes</h1>
+            <p className="sh-desc">
+              The canonical OAuth scope vocabulary across this workspace's applications. Scopes
+              become permissions once bound to a role.
+            </p>
+          </div>
+        </div>
+
+        <div className="filter-bar">
+          <div className={`search${search ? " has-value" : ""}`}>
+            <span className="search-ic">
+              <Search className="icon" />
+            </span>
+            <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-9 flex-1 max-w-sm"
+              placeholder="Search scopes"
+              aria-label="Search scopes"
             />
+            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
+              <X className="icon-sm" />
+            </button>
           </div>
+        </div>
 
-          <TableCard>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Scope string</TableHead>
-                    <TableHead>Application</TableHead>
-                    <TableHead>Risk</TableHead>
-                    <TableHead># Tools</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell colSpan={5}>
-                          <Skeleton className="h-8 w-full" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : rows.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="text-center py-12 text-slate-500"
-                      >
-                        {search
-                          ? "No scopes match your search."
-                          : "No scopes found in this workspace."}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    rows.map((scope, index) => (
-                      <TableRow
-                        key={scope.id}
-                        className={cn(
-                          "cursor-pointer hover:bg-slate-50",
-                          selectedScope?.id === scope.id && "bg-slate-50"
-                        )}
-                        onClick={() => handleSelectRow(scope, index)}
-                      >
-                        <TableCell>
-                          <ResourceTag kind="scope" label={scope.scope_string} />
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                          {scope.application?.name ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={riskBadgeVariant(scope.risk_level)}
-                            className="text-xs capitalize"
-                          >
-                            {scope.risk_level || "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                          {scope.tools_count ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                className="text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectRow(scope, index);
-                                }}
-                              >
-                                View details
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </TableCard>
-
-          <div className="text-xs text-slate-500">
-            {rows.length} scope{rows.length === 1 ? "" : "s"}
-          </div>
+        <div className="table-card">
+          {isLoading ? (
+            <SkeletonRows cols={4} />
+          ) : rows.length === 0 ? (
+            <div className="empty">
+              <span className="empty-ic">
+                <KeyRound className="icon-lg" />
+              </span>
+              <h3 className="empty-title">{search ? "No scopes match" : "No scopes yet"}</h3>
+              <p className="empty-desc">
+                {search ? "Try a different search term." : "Scopes appear as you protect applications."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Scope</th>
+                    <th className="th-context">Application</th>
+                    <th>Risk</th>
+                    <th className="num th-apps">Tools</th>
+                    <th className="th-actions" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((scope) => (
+                    <tr key={scope.id} tabIndex={0} data-selected={selected?.id === scope.id} onClick={() => setSelected(scope)}>
+                      <td>
+                        <div className="role-cell">
+                          <div className="role-name-row">
+                            <span className="role-name mono">{scope.scope_string}</span>
+                          </div>
+                          {scope.display_name && <span className="role-detail">{scope.display_name}</span>}
+                        </div>
+                      </td>
+                      <td className="col-context">
+                        <span className="ctx-app">{scope.application?.name ?? "—"}</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${riskClass(scope.risk_level)}`}>
+                          <span className="bdot" />
+                          {cap(scope.risk_level)}
+                        </span>
+                      </td>
+                      <td className={`num-cell col-apps${!scope.tools_count ? " zero" : ""}`}>
+                        {scope.tools_count ?? 0}
+                      </td>
+                      <td>
+                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                          <button className="icon-btn" aria-label="View scope" onClick={() => setSelected(scope)}>
+                            <MoreHorizontal className="icon" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
+                {rows.length} scope{rows.length === 1 ? "" : "s"}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Right — detail panel */}
-      {selectedScope && (
-        <div className="w-[45%] flex-none border-l bg-white overflow-y-auto">
-          <ScopeDetailPanel
-            scope={selectedScope}
-            onClose={() => setSelectedScope(null)}
-            onPrev={handlePrev}
-            onNext={handleNext}
-            hasPrev={selectedIndex > 0}
-            hasNext={selectedIndex < rows.length - 1}
-            currentIndex={selectedIndex}
-            total={rows.length}
-          />
-        </div>
-      )}
+      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+          {selected && (
+            <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
+              <div className="drawer-head">
+                <div className="drawer-head-top">
+                  <span className={`badge ${riskClass(selected.risk_level)}`}>
+                    <span className="bdot" />
+                    {cap(selected.risk_level)} risk
+                  </span>
+                  <button className="icon-btn" aria-label="Close" onClick={() => setSelected(null)}>
+                    <X className="icon" />
+                  </button>
+                </div>
+                <div style={{ marginTop: 8 }}>
+                  <div className="drawer-email mono" style={{ fontSize: 16 }}>{selected.scope_string}</div>
+                  {selected.display_name && <div className="drawer-username" style={{ fontFamily: "var(--font-family-sans)" }}>{selected.display_name}</div>}
+                </div>
+              </div>
+              <div className="drawer-body">
+                <div className="drawer-section">
+                  <p className="drawer-section-label">Overview</p>
+                  <div className="detail-grid">
+                    <div className="detail full">
+                      <span className="detail-k">Scope string</span>
+                      <span className="detail-v mono">{selected.scope_string}</span>
+                    </div>
+                    {selected.description && (
+                      <div className="detail full">
+                        <span className="detail-k">Description</span>
+                        <span className="detail-v" style={{ fontWeight: 400 }}>{selected.description}</span>
+                      </div>
+                    )}
+                    <div className="detail">
+                      <span className="detail-k">Application</span>
+                      <span className="detail-v">{selected.application?.name ?? "—"}</span>
+                    </div>
+                    <div className="detail">
+                      <span className="detail-k">Kind</span>
+                      <span className="detail-v">{cap(selected.kind)}</span>
+                    </div>
+                    <div className="detail">
+                      <span className="detail-k">Tools</span>
+                      <span className="detail-v">{selected.tools_count ?? 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
 
-// ─── Assignments tab ──────────────────────────────────────────────────────────
-
-function AssignmentsTab({
-  onNewAssignment,
-}: {
-  onNewAssignment: () => void;
-}) {
+// ─── Assignments tab ────────────────────────────────────────────────────────────
+function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
-
-  const { data: bindings, isLoading } = useListBindingsQuery({
-    audience: "admin",
-  });
-
+  const { data: bindings, isLoading } = useListBindingsQuery({ audience: "admin" });
   const { data: resourceServers } = useListResourceServersQuery();
   const appMap = useMemo(() => {
     const m = new Map<string, string>();
     (resourceServers ?? []).forEach((rs) => m.set(rs.id, rs.name));
     return m;
   }, [resourceServers]);
-
   const [deleteBinding, deleteState] = useDeleteBindingMutation();
-
   const rows = useMemo<RoleBinding[]>(() => bindings ?? [], [bindings]);
-
-  const confirmRevokeBinding = useMemo(
-    () => rows.find((r) => r.id === confirmRevokeId) ?? null,
-    [rows, confirmRevokeId]
-  );
+  const confirmRevoke = useMemo(() => rows.find((r) => r.id === confirmRevokeId) ?? null, [rows, confirmRevokeId]);
 
   const handleRevoke = useCallback(
     async (bindingId: string) => {
       const binding = rows.find((r) => r.id === bindingId);
-      const subject =
-        binding?.email ?? binding?.username ?? binding?.user_id ?? "the user";
+      const subject = binding?.email ?? binding?.username ?? binding?.user_id ?? "the user";
       const roleLabel = binding?.role_name ?? "role";
       try {
         await deleteBinding(bindingId).unwrap();
-        toast.success(
-          `Revoked ${roleLabel} from ${subject}. Active sessions for connected apps have been terminated.`,
-        );
+        toast.success(`Revoked ${roleLabel} from ${subject}. Active sessions were terminated.`);
         setConfirmRevokeId(null);
       } catch (e: unknown) {
-        const err = e as { data?: { error?: string } };
-        toast.error(err?.data?.error ?? "Failed to revoke binding");
+        toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to revoke binding");
       }
     },
-    [deleteBinding, rows]
+    [deleteBinding, rows],
   );
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          {rows.length} assignment{rows.length === 1 ? "" : "s"}
-        </p>
-        <Button size="sm" onClick={onNewAssignment}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Assignment
-        </Button>
-      </div>
-
-      <TableCard>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Application</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell colSpan={7}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : rows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="text-center py-12 text-slate-500"
-                  >
-                    No assignments yet. Click &quot;New Assignment&quot; to
-                    assign a role to a user.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((binding) => (
-                  <TableRow key={binding.id} className="hover:bg-slate-50">
-                    <TableCell>
-                      <div className="font-medium text-slate-900 text-sm dark:text-white">
-                        {binding.email ??
-                          binding.username ??
-                          binding.user_id ??
-                          "—"}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                      {(() => {
-                        const fmt = formatRoleName(binding.role_name, appMap);
-                        return (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="font-medium">{fmt.primary}</span>
-                            {fmt.badge && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 uppercase tracking-wide">
-                                {fmt.badge}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                      {binding.application?.name ?? (
-                        <span className="text-slate-400">Workspace-wide</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-500">
-                      {binding.source ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-500">
-                      {binding.expires_at ? (
-                        formatDate(binding.expires_at)
-                      ) : (
-                        <span className="text-slate-400">Never</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-500">
-                      {formatDate(binding.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => setConfirmRevokeId(binding.id)}
-                      >
-                        Revoke
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </TableCard>
-
-      {/* Revoke confirm dialog */}
-      <Dialog
-        open={!!confirmRevokeId}
-        onOpenChange={(open) => {
-          if (!open) setConfirmRevokeId(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              Revoke role assignment?
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-            {confirmRevokeBinding && (
-              <p>
-                Revoke{" "}
-                <span className="font-medium text-slate-900 dark:text-white">
-                  {confirmRevokeBinding.role_name}
-                </span>{" "}
-                from{" "}
-                <span className="font-medium text-slate-900 dark:text-white">
-                  {confirmRevokeBinding.email ??
-                    confirmRevokeBinding.username ??
-                    confirmRevokeBinding.user_id}
-                </span>
-                {confirmRevokeBinding.application?.name && (
-                  <>
-                    {" "}on{" "}
-                    <span className="font-medium text-slate-900 dark:text-white">
-                      {confirmRevokeBinding.application.name}
-                    </span>
-                  </>
-                )}
-                ?
-              </p>
-            )}
-            <p>
-              Active sessions for connected apps will be terminated immediately.
-              Re-granting the role requires a new assignment.
+    <div data-cr>
+      <div className="content-inner">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Assignments</h1>
+            <p className="sh-desc">
+              Role bindings grant a user a role — workspace-wide or scoped to a single application.
             </p>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmRevokeId(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleteState.isLoading}
-              onClick={() => {
-                if (confirmRevokeId) handleRevoke(confirmRevokeId);
-              }}
-            >
-              {deleteState.isLoading ? "Revoking..." : "Revoke"}
-            </Button>
-          </DialogFooter>
+          <button className="btn btn-primary" onClick={onNewAssignment}>
+            <Plus className="icon-sm" /> New assignment
+          </button>
+        </div>
+
+        <div className="table-card">
+          {isLoading ? (
+            <SkeletonRows cols={5} />
+          ) : rows.length === 0 ? (
+            <div className="empty">
+              <span className="empty-ic">
+                <Link2Icon />
+              </span>
+              <h3 className="empty-title">No assignments yet</h3>
+              <p className="empty-desc">Assign a role to a user to grant access.</p>
+              <button className="btn btn-primary" onClick={onNewAssignment}>
+                <Plus className="icon-sm" /> New assignment
+              </button>
+            </div>
+          ) : (
+            <>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th className="th-context">Application</th>
+                    <th className="th-apps">Source</th>
+                    <th className="th-signal">Expires</th>
+                    <th className="th-actions" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((binding) => {
+                    const fmt = formatRoleName(binding.role_name, appMap);
+                    return (
+                      <tr key={binding.id} style={{ cursor: "default" }}>
+                        <td>
+                          <span className="user-email">{binding.email ?? binding.username ?? binding.user_id ?? "—"}</span>
+                        </td>
+                        <td>
+                          <span className="role-name-row">
+                            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text)" }}>{fmt.primary}</span>
+                            {fmt.badge && <span className="role-tag generated">{fmt.badge}</span>}
+                          </span>
+                        </td>
+                        <td className="col-context">
+                          <span className="ctx-app">
+                            {binding.application?.name ?? <span style={{ color: "var(--color-text-subtle)" }}>Workspace-wide</span>}
+                          </span>
+                        </td>
+                        <td className="col-apps">
+                          <span className="time-cell">{binding.source ?? "—"}</span>
+                        </td>
+                        <td className="col-signal">
+                          <span className="time-cell">
+                            {binding.expires_at ? formatDate(binding.expires_at) : "Never"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              className="btn btn-secondary"
+                              style={{ height: 30, padding: "0 12px", fontSize: 12.5, color: "var(--color-danger-text)" }}
+                              onClick={() => setConfirmRevokeId(binding.id)}
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
+                {rows.length} assignment{rows.length === 1 ? "" : "s"}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      <Dialog open={!!confirmRevokeId} onOpenChange={(o) => !o && setConfirmRevokeId(null)}>
+        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
+          <div className="dialog" style={{ width: "100%" }}>
+            <span className="dg-icon" style={{ background: "var(--color-warning-soft)", color: "var(--color-warning-text)" }}>
+              <AlertTriangle className="icon" />
+            </span>
+            <DialogTitle className="dg-title">Revoke role assignment?</DialogTitle>
+            <DialogDescription className="dg-desc">
+              {confirmRevoke ? (
+                <>
+                  Revoke <b>{confirmRevoke.role_name}</b> from{" "}
+                  <b>{confirmRevoke.email ?? confirmRevoke.username ?? confirmRevoke.user_id}</b>
+                  {confirmRevoke.application?.name ? <> on <b>{confirmRevoke.application.name}</b></> : ""}. Active
+                  sessions are terminated immediately.
+                </>
+              ) : (
+                "Active sessions are terminated immediately."
+              )}
+            </DialogDescription>
+            <div className="dg-actions">
+              <button className="btn btn-secondary" onClick={() => setConfirmRevokeId(null)}>Cancel</button>
+              <button
+                className="btn btn-danger"
+                disabled={deleteState.isLoading}
+                onClick={() => confirmRevokeId && handleRevoke(confirmRevokeId)}
+              >
+                {deleteState.isLoading ? "Revoking…" : "Revoke"}
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+function Link2Icon() {
+  return <KeyRound className="icon-lg" />;
+}
 
-export default function AccessControlPage({
-  initialTab = "roles",
-}: AccessControlPageProps) {
+function SkeletonRows({ cols }: { cols: number }) {
+  return (
+    <div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div className="skeleton-row" key={i}>
+          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+            <span className="sk sk-line" style={{ width: "32%" }} />
+            <span className="sk sk-line" style={{ width: "48%", height: 9 }} />
+          </span>
+          {Array.from({ length: cols - 1 }).map((_, j) => (
+            <span className="sk sk-line" key={j} style={{ width: 80, margin: "0 20px" }} />
+          ))}
+          <span className="sk sk-line" style={{ width: 28 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+export default function AccessControlPage({ initialTab = "roles" }: AccessControlPageProps) {
   const workspaceId = resolveWorkspaceId();
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [preselectedRoleId, setPreselectedRoleId] = useState<
-    string | undefined
-  >(undefined);
+  const [preselectedRoleId, setPreselectedRoleId] = useState<string | undefined>(undefined);
 
   const handleAssignUsers = useCallback((roleId: string) => {
     setPreselectedRoleId(roleId);
@@ -1242,46 +846,16 @@ export default function AccessControlPage({
   if (!workspaceId) {
     return (
       <div className="p-8">
-        <p className="text-slate-500 text-sm">
-          No tenant selected. Switch to a tenant to manage access control.
-        </p>
+        <p className="text-sm text-muted-foreground">No tenant selected. Switch to a tenant to manage access control.</p>
       </div>
     );
   }
 
   return (
     <>
-      <PageHeader
-        title="Access Control"
-        description="Manage workspace roles, OAuth scopes, and user assignments."
-        actions={
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <ShieldCheck className="h-4 w-4" />
-            Workspace: {workspaceId.slice(0, 8)}...
-          </div>
-        }
-      />
-
-      <div className="flex flex-col h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-        {initialTab === "roles" && (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <RolesTab
-              workspaceId={workspaceId}
-              onAssignUsers={handleAssignUsers}
-            />
-          </div>
-        )}
-        {initialTab === "scopes" && (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <ScopesTab />
-          </div>
-        )}
-        {initialTab === "assignments" && (
-          <div className="flex-1 overflow-auto">
-            <AssignmentsTab onNewAssignment={() => setWizardOpen(true)} />
-          </div>
-        )}
-      </div>
+      {initialTab === "roles" && <RolesTab workspaceId={workspaceId} onAssignUsers={handleAssignUsers} />}
+      {initialTab === "scopes" && <ScopesTab />}
+      {initialTab === "assignments" && <AssignmentsTab onNewAssignment={() => setWizardOpen(true)} />}
 
       <AssignRoleWizard
         open={wizardOpen}

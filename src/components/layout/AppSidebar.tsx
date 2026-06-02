@@ -14,7 +14,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
   Bot,
-  BookOpen,
   ClipboardList,
   CreditCard,
   Fingerprint,
@@ -22,6 +21,8 @@ import {
   KeyRound,
   LayoutDashboard,
   Layers,
+  Link2,
+  UserCog,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -76,11 +77,13 @@ const NAV_OBJECTS: NavItem[] = [
   { title: "AI Agents", url: "/agents", icon: Bot },
 ];
 
-// Workspace-level access control. Roles, Scopes and Assignments are three tabs
-// of ONE page (/access/*) — so the sidebar carries a single "Access Control"
-// entry rather than three rows that all open the same screen.
+// Workspace-level access control. Roles, Scopes and Assignments each get their
+// own sidebar row — every /access/* route renders its own section (no on-screen
+// tab bar), so one row per destination keeps the nav and the page in sync.
 const NAV_AUTHZ: NavItem[] = [
-  { title: "Access Control", url: "/access/roles", icon: KeyRound },
+  { title: "Roles", url: "/access/roles", icon: UserCog },
+  { title: "Scopes", url: "/access/scopes", icon: KeyRound },
+  { title: "Assignments", url: "/access/assignments", icon: Link2 },
 ];
 
 const NAV_MONITOR: NavItem[] = [
@@ -91,7 +94,6 @@ const NAV_CONFIGURE: NavItem[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
   { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock },
   { title: "Secrets", url: "/external-services", icon: KeyRound },
-  { title: "SDK Guides", url: "/developer/sdk-guides", icon: BookOpen },
 ];
 
 const NAV_SETTINGS: NavItem[] = [
@@ -148,9 +150,7 @@ export function AppSidebar({
         isActive:
           location.pathname === item.url ||
           location.pathname.startsWith(`${item.url}/`) ||
-          (item.url === "/dashboard" && location.pathname === "/") ||
-          // "Access Control" is one nav row for the whole /access/* tabbed page.
-          (item.url.startsWith("/access") && location.pathname.startsWith("/access")),
+          (item.url === "/dashboard" && location.pathname === "/"),
       })),
     [location.pathname],
   );
