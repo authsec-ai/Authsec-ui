@@ -509,12 +509,11 @@ function RolesTab({
                         onClick={() => handleSelectRow(role, index)}
                       >
                         <TableCell>
-<<<<<<< HEAD
                           {(() => {
                             const fmt = formatRoleName(role.name, appMap);
                             return (
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-900">
+                                <span className="font-medium text-slate-900 dark:text-white">
                                   {fmt.primary}
                                 </span>
                                 {fmt.badge && (
@@ -525,11 +524,6 @@ function RolesTab({
                               </div>
                             );
                           })()}
-=======
-                          <div className="font-medium text-slate-900 dark:text-white">
-                            {role.name}
-                          </div>
->>>>>>> 739fdc2d94542ad07b0e14bf3a32050d489f6fea
                           {role.description && (
                             <div className="text-xs text-slate-500 mt-0.5">
                               {role.description}
@@ -1112,8 +1106,7 @@ function AssignmentsTab({
                           "—"}
                       </div>
                     </TableCell>
-<<<<<<< HEAD
-                    <TableCell className="text-sm text-slate-700">
+                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                       {(() => {
                         const fmt = formatRoleName(binding.role_name, appMap);
                         return (
@@ -1127,10 +1120,6 @@ function AssignmentsTab({
                           </span>
                         );
                       })()}
-=======
-                    <TableCell className="text-sm text-slate-700 dark:text-slate-300">
-                      {binding.role_name}
->>>>>>> 739fdc2d94542ad07b0e14bf3a32050d489f6fea
                     </TableCell>
                     <TableCell className="text-sm text-slate-700 dark:text-slate-300">
                       {binding.application?.name ?? (
@@ -1274,37 +1263,8 @@ export default function AccessControlPage({
       />
 
       <div className="flex flex-col h-[calc(100vh-var(--page-header-height,140px))] overflow-hidden">
-<<<<<<< HEAD
-        <Tabs
-          defaultValue={initialTab}
-          className="flex flex-col flex-1 overflow-hidden"
-        >
-          <div className="px-6 border-b bg-white shrink-0">
-            <TabsList className="h-auto gap-1 bg-transparent p-0 rounded-none">
-              {[
-                { value: "roles", label: "Roles" },
-                { value: "scopes", label: "Scopes" },
-                { value: "assignments", label: "Assignments" },
-              ].map((t) => (
-                <TabsTrigger
-                  key={t.value}
-                  value={t.value}
-                  className="relative rounded-none border-0 bg-transparent px-3 py-3 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-800 data-[state=active]:bg-transparent data-[state=active]:text-blue-700 data-[state=active]:shadow-none after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-blue-600"
-                >
-                  {t.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="roles"
-            className="flex-1 overflow-hidden mt-0 data-[state=active]:flex data-[state=active]:flex-col"
-          >
-=======
         {initialTab === "roles" && (
           <div className="flex flex-1 flex-col overflow-hidden">
->>>>>>> 739fdc2d94542ad07b0e14bf3a32050d489f6fea
             <RolesTab
               workspaceId={workspaceId}
               onAssignUsers={handleAssignUsers}
