@@ -170,8 +170,9 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
     { skip: !effectiveAppId },
   );
 
-  // Only the scopes the user actually has access to (hide not_granted).
+  // Split effective scopes: granted (risk-colored) vs not granted (plain).
   const grantedScopes = (data?.scopes ?? []).filter((s) => s.status === "granted");
+  const ungrantedScopes = (data?.scopes ?? []).filter((s) => s.status !== "granted");
 
   const [deleteBinding, { isLoading: removing }] = useDeleteBindingMutation();
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
@@ -259,22 +260,43 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
               })}
             </div>
           )}
-          {grantedScopes.length > 0 && (
+          {data.scopes.length > 0 && (
             <div>
               <p className="drawer-section-label" style={{ marginBottom: 8 }}>
-                Granted scopes · {grantedScopes.length}
+                Scopes
               </p>
-              <div className="scope-chips">
-                {grantedScopes.map((scope) => (
-                  <span key={scope.id} className="scope-chip">
-                    <span className={cn("rdot", scope.risk_level)} />
-                    {scope.scope_string}
-                  </span>
-                ))}
-              </div>
+              {grantedScopes.length > 0 && (
+                <div style={{ marginBottom: ungrantedScopes.length > 0 ? 12 : 0 }}>
+                  <p style={{ fontSize: 12, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
+                    Granted · {grantedScopes.length}
+                  </p>
+                  <div className="scope-chips">
+                    {grantedScopes.map((scope) => (
+                      <span key={scope.id} className="scope-chip">
+                        <span className={cn("rdot", scope.risk_level)} />
+                        {scope.scope_string}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ungrantedScopes.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 12, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
+                    Not granted · {ungrantedScopes.length}
+                  </p>
+                  <div className="scope-chips">
+                    {ungrantedScopes.map((scope) => (
+                      <span key={scope.id} className="scope-chip" style={{ color: "var(--color-text-subtle)" }}>
+                        {scope.scope_string}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {data.roles.length === 0 && grantedScopes.length === 0 && (
+          {data.roles.length === 0 && data.scopes.length === 0 && (
             <p className="detail-v" style={{ color: "var(--color-text-subtle)", fontWeight: 400 }}>
               No roles or scopes assigned for this application.
             </p>
