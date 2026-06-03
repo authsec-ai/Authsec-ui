@@ -70,7 +70,7 @@ export function CommandSearchButton({ onClick }: { onClick: () => void }) {
     >
       <Search className="size-4 shrink-0" />
       <span className="flex-1 text-left max-md:hidden">Search…</span>
-      <kbd className="rounded-[5px] border border-(--color-border-subtle) bg-(--color-surface-base) px-1.5 py-0.5 font-mono text-[11px] leading-none font-medium text-(--color-text-muted) max-md:hidden">
+      <kbd className="rounded-[4px] border border-(--color-border-subtle) bg-(--color-surface-base) px-1.5 py-0.5 font-mono text-[11px] leading-none font-medium text-(--color-text-muted) max-md:hidden">
         ⌘K
       </kbd>
     </button>
