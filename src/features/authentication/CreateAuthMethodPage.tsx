@@ -103,14 +103,14 @@ const OIDC_TEMPLATES: ProviderTemplate[] = [
     accent: "bg-gradient-to-br from-[#E4F2FF] via-[#E9EDFF] to-white",
     scopes: ["openid", "profile", "email"],
     description: "Azure AD / Microsoft Entra ID",
-    authorization_url:
-      "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    authorization_url: "",
+    token_url: "",
     userinfo_url: "https://graph.microsoft.com/oidc/userinfo",
     consoleName: "Microsoft Entra admin center",
     consoleUrl: "https://entra.microsoft.com/",
     setupSteps: [
       "Open Entra admin center → Applications → App registrations → New",
+      "Copy the Directory (tenant) ID or verified tenant domain",
       "Set the platform to Web and paste the Callback URL below as the redirect URI",
       "Under Certificates & secrets, create a new client secret",
       "Copy the Application (client) ID and client secret value here",
@@ -220,6 +220,7 @@ interface FormState {
   authorizationUrl: string;
   tokenUrl: string;
   userinfoUrl: string;
+  microsoftTenant: string;
   scopes: string[];
 }
 
@@ -230,8 +231,28 @@ const blankFormState = (): FormState => ({
   authorizationUrl: "",
   tokenUrl: "",
   userinfoUrl: "",
+  microsoftTenant: "",
   scopes: [],
 });
+
+const normalizeMicrosoftTenant = (value: string) =>
+  value
+    .trim()
+    .replace(/^https?:\/\/login\.microsoftonline\.com\//i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+
+const microsoftEndpointsForTenant = (tenantValue: string) => {
+  const tenant = normalizeMicrosoftTenant(tenantValue);
+  if (!tenant) {
+    return { authorizationUrl: "", tokenUrl: "" };
+  }
+
+  return {
+    authorizationUrl: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
+    tokenUrl: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+  };
+};
 
 export function CreateAuthMethodPage() {
   const navigate = useNavigate();
@@ -267,13 +288,26 @@ export function CreateAuthMethodPage() {
     setSelectedTemplate(template.id);
     setForm((prev) => ({
       ...prev,
-      // Pre-fill known endpoints + scopes for known providers; keep any
-      // values the user already typed.
-      authorizationUrl: prev.authorizationUrl || template.authorization_url,
-      tokenUrl: prev.tokenUrl || template.token_url,
-      userinfoUrl: prev.userinfoUrl || template.userinfo_url,
-      scopes: prev.scopes.length ? prev.scopes : template.scopes,
-      displayName: prev.displayName || template.name,
+      authorizationUrl: template.authorization_url,
+      tokenUrl: template.token_url,
+      userinfoUrl: template.userinfo_url,
+      microsoftTenant: template.id === "microsoft" ? "" : prev.microsoftTenant,
+      scopes: template.scopes,
+      displayName: template.name,
+    }));
+  };
+
+  const handleMicrosoftTenantChange = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      microsoftTenant: value,
+      ...microsoftEndpointsForTenant(value),
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      microsoftTenant: "",
+      authorizationUrl: "",
+      tokenUrl: "",
     }));
   };
 
@@ -299,6 +333,12 @@ export function CreateAuthMethodPage() {
       if (!form.clientId.trim()) nextErrors.clientId = "Client ID is required";
       if (!form.clientSecret.trim())
         nextErrors.clientSecret = "Client Secret is required";
+      if (
+        selectedTemplate === "microsoft" &&
+        !normalizeMicrosoftTenant(form.microsoftTenant)
+      ) {
+        nextErrors.microsoftTenant = "Microsoft tenant ID/domain is required";
+      }
       if (!form.authorizationUrl.trim())
         nextErrors.authorizationUrl = "Authorization URL is required";
       if (!form.tokenUrl.trim()) nextErrors.tokenUrl = "Token URL is required";
@@ -323,6 +363,8 @@ export function CreateAuthMethodPage() {
           selectedTemplate &&
             form.clientId.trim() &&
             form.clientSecret.trim() &&
+            (selectedTemplate !== "microsoft" ||
+              normalizeMicrosoftTenant(form.microsoftTenant)) &&
             form.authorizationUrl.trim() &&
             form.tokenUrl.trim() &&
             form.userinfoUrl.trim(),
@@ -579,6 +621,35 @@ export function CreateAuthMethodPage() {
                       </p>
                     </FormField>
                   </div>
+
+                  {selectedTemplate === "microsoft" && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <FormField
+                        label="Microsoft tenant ID/domain"
+                        htmlFor="microsoftTenant"
+                        required
+                      >
+                        <FormInput
+                          id="microsoftTenant"
+                          placeholder="Directory tenant ID or contoso.onmicrosoft.com"
+                          value={form.microsoftTenant}
+                          onChange={(
+                            e: React.ChangeEvent<HTMLInputElement>,
+                          ) => handleMicrosoftTenantChange(e.target.value)}
+                          className="h-9 font-mono"
+                        />
+                        {errors.microsoftTenant && (
+                          <p className="text-xs text-destructive mt-1">
+                            {errors.microsoftTenant}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Use the Entra Directory tenant ID or verified tenant
+                          domain for this workspace provider.
+                        </p>
+                      </FormField>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <FormField
