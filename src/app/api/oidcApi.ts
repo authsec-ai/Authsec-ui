@@ -182,8 +182,14 @@ export interface UFlowOIDCProvidersResponse {
   providers: UFlowOIDCProvider[];
 }
 
+export interface UFlowOIDCProvidersRequest {
+  email?: string;
+  tenant_domain?: string;
+}
+
 export interface UFlowOIDCInitiateRequest {
   provider: string;
+  tenant_domain?: string;
 }
 
 export interface UFlowOIDCInitiateResponse {
@@ -584,10 +590,12 @@ export const oidcApi = createApi({
     // Get list of available OAuth providers
     getUFlowOIDCProviders: builder.mutation<
       UFlowOIDCProvidersResponse,
-      { email: string }
+      UFlowOIDCProvidersRequest
     >({
-      query: (_data) => ({
-        url: "/authsec/uflow/oidc/providers",
+      query: (data = {}) => ({
+        url: data.tenant_domain
+          ? `/authsec/uflow/oidc/providers?tenant_domain=${encodeURIComponent(data.tenant_domain)}`
+          : "/authsec/uflow/oidc/providers",
         method: "GET",
       }),
     }),

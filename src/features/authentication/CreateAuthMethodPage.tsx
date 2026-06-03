@@ -75,7 +75,7 @@ const OIDC_TEMPLATES: ProviderTemplate[] = [
     description: "Google OAuth 2.0 / OpenID Connect",
     authorization_url: "https://accounts.google.com/o/oauth2/v2/auth",
     token_url: "https://oauth2.googleapis.com/token",
-    userinfo_url: "https://www.googleapis.com/oauth2/v2/userinfo",
+    userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo",
     consoleName: "Google Cloud Console",
     consoleUrl: "https://console.cloud.google.com/apis/credentials",
     setupSteps: [
@@ -106,7 +106,7 @@ const OIDC_TEMPLATES: ProviderTemplate[] = [
     authorization_url:
       "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    userinfo_url: "https://graph.microsoft.com/v1.0/me",
+    userinfo_url: "https://graph.microsoft.com/oidc/userinfo",
     consoleName: "Microsoft Entra admin center",
     consoleUrl: "https://entra.microsoft.com/",
     setupSteps: [

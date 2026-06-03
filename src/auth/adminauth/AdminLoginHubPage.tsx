@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Loader2,
@@ -223,6 +223,24 @@ export function AdminLoginHubPage() {
     );
   }, [orderedUflowProviders, ssoProviderName]);
 
+  const fetchUFlowProviders = useCallback(
+    async (tenantDomainOverride?: string) => {
+      try {
+        const result = await getUFlowOIDCProviders({
+          tenant_domain: tenantDomainOverride,
+        }).unwrap();
+        const providers = result?.providers ?? [];
+        setUflowProviders(providers);
+        return providers;
+      } catch (error) {
+        console.error("[AdminLogin] Failed to fetch UFlow OAuth providers:", error);
+        setUflowProviders([]);
+        return [];
+      }
+    },
+    [getUFlowOIDCProviders],
+  );
+
   // Countdown timer for OTP resend
   useEffect(() => {
     if (flowStage === "otp" && timeLeft > 0 && !canResend) {
@@ -282,47 +300,11 @@ export function AdminLoginHubPage() {
     location.search,
   ]);
 
-  // Fetch UFlow OAuth providers on mount
+  // Fetch global/platform OAuth providers on mount. Workspace providers are
+  // fetched only after precheck resolves a tenant_domain.
   useEffect(() => {
-    console.log(
-      "[AdminLogin] 🚀 useEffect triggered - fetching UFlow providers",
-    );
-    console.log("[AdminLogin] 📍 API Base URL:", config.VITE_API_URL);
-    console.log(
-      "[AdminLogin] 🔧 Full endpoint:",
-      `${config.VITE_API_URL}/uflow/oidc/providers`,
-    );
-
-    const fetchUFlowProviders = async () => {
-      try {
-        console.log("[AdminLogin] 📤 Calling getUFlowOIDCProviders API...");
-        const result = await getUFlowOIDCProviders({ email: "" }).unwrap();
-        console.log("[AdminLogin] 📥 API Response:", result);
-
-        if (result?.providers) {
-          console.log("[AdminLogin] ✅ Setting providers:", result.providers);
-          setUflowProviders(result.providers);
-        } else {
-          console.warn("[AdminLogin] ⚠️ No providers in response");
-        }
-      } catch (error) {
-        console.error(
-          "[AdminLogin] ❌ Failed to fetch UFlow OAuth providers:",
-          error,
-        );
-        console.error(
-          "[AdminLogin] 💥 Error details:",
-          JSON.stringify(error, null, 2),
-        );
-        // Show error to user for debugging
-        toast.error(
-          "Failed to load login providers. Please check console for details.",
-        );
-      }
-    };
-
-    fetchUFlowProviders();
-  }, [getUFlowOIDCProviders]);
+    void fetchUFlowProviders();
+  }, [fetchUFlowProviders]);
 
   // Handle UFlow OAuth callback parameters
   useEffect(() => {
@@ -751,7 +733,7 @@ export function AdminLoginHubPage() {
     return rawMessage;
   };
 
-  const handlePrecheckResponse = (
+  const handlePrecheckResponse = async (
     response: AdminLoginPrecheckResponse,
     validatedEmail: string,
   ) => {
@@ -771,6 +753,16 @@ export function AdminLoginHubPage() {
     const requiredSsoProvider = getSsoRequiredProvider(response);
 
     if (response.exists && !passwordAllowed && nonEmailProviders.length > 0) {
+      const scopedProviders = response.tenant_domain
+        ? await fetchUFlowProviders(response.tenant_domain)
+        : await fetchUFlowProviders();
+      if (scopedProviders.length === 0) {
+        setIdleNotice({
+          tone: "error",
+          message: "This organization requires SSO, but no identity provider is available for this workspace.",
+        });
+        return;
+      }
       setSsoProviderName(requiredSsoProvider);
       setIdleNotice({
         tone: "info",
@@ -1016,6 +1008,7 @@ export function AdminLoginHubPage() {
 
       const response = await initiateUFlowOIDC({
         provider: provider.provider_name.toLowerCase(),
+        tenant_domain: tenantDomain.trim() || undefined,
       }).unwrap();
 
       // Store provider info and state in sessionStorage
@@ -1129,7 +1122,7 @@ export function AdminLoginHubPage() {
         "[ManualPrecheck] ✅ Valid response, using input email:",
         validatedEmail,
       );
-      handlePrecheckResponse(response, validatedEmail);
+      await handlePrecheckResponse(response, validatedEmail);
     } catch (error: any) {
       console.log("[ManualPrecheck] 💥 API Error:", error);
       const message = getPrecheckErrorMessage(error);
@@ -1525,16 +1518,18 @@ export function AdminLoginHubPage() {
                   </div>
                 ) : null}
 
-                <div className="flex items-center mb-6">
-                  <div className="flex-grow border-t border-gray-200" />
-                  <span className="flex-shrink-0 mx-4 text-sm text-gray-800">
-                    or use your identity provider
-                  </span>
-                  <div className="flex-grow border-t border-gray-200" />
-                </div>
+                {orderedUflowProviders.length > 0 && (
+                  <>
+                    <div className="flex items-center mb-6">
+                      <div className="flex-grow border-t border-gray-200" />
+                      <span className="flex-shrink-0 mx-4 text-sm text-gray-800">
+                        or use your identity provider
+                      </span>
+                      <div className="flex-grow border-t border-gray-200" />
+                    </div>
 
-                <div className="flex flex-col gap-3 mb-12">
-                  {orderedUflowProviders.map((provider) => {
+                    <div className="flex flex-col gap-3 mb-12">
+                      {orderedUflowProviders.map((provider) => {
                     const isLoading =
                       authenticatingProvider === provider.provider_name;
                     const Icon =
@@ -1577,8 +1572,10 @@ export function AdminLoginHubPage() {
                         )}
                       </Button>
                     );
-                  })}
-                </div>
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
