@@ -217,22 +217,14 @@ interface FormState {
   displayName: string;
   clientId: string;
   clientSecret: string;
-  authorizationUrl: string;
-  tokenUrl: string;
-  userinfoUrl: string;
   microsoftTenant: string;
-  scopes: string[];
 }
 
 const blankFormState = (): FormState => ({
   displayName: "",
   clientId: "",
   clientSecret: "",
-  authorizationUrl: "",
-  tokenUrl: "",
-  userinfoUrl: "",
   microsoftTenant: "",
-  scopes: [],
 });
 
 const normalizeMicrosoftTenant = (value: string) =>
@@ -251,6 +243,26 @@ const microsoftEndpointsForTenant = (tenantValue: string) => {
   return {
     authorizationUrl: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
     tokenUrl: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+  };
+};
+
+const providerPayloadForTemplate = (
+  template: ProviderTemplate,
+  microsoftTenant: string,
+) => {
+  const endpoints =
+    template.id === "microsoft"
+      ? microsoftEndpointsForTenant(microsoftTenant)
+      : {
+          authorizationUrl: template.authorization_url,
+          tokenUrl: template.token_url,
+        };
+
+  return {
+    authorizationUrl: endpoints.authorizationUrl,
+    tokenUrl: endpoints.tokenUrl,
+    userinfoUrl: template.userinfo_url,
+    scopes: template.scopes.join(" "),
   };
 };
 
@@ -288,11 +300,7 @@ export function CreateAuthMethodPage() {
     setSelectedTemplate(template.id);
     setForm((prev) => ({
       ...prev,
-      authorizationUrl: template.authorization_url,
-      tokenUrl: template.token_url,
-      userinfoUrl: template.userinfo_url,
       microsoftTenant: template.id === "microsoft" ? "" : prev.microsoftTenant,
-      scopes: template.scopes,
       displayName: template.name,
     }));
   };
@@ -301,13 +309,10 @@ export function CreateAuthMethodPage() {
     setForm((prev) => ({
       ...prev,
       microsoftTenant: value,
-      ...microsoftEndpointsForTenant(value),
     }));
     setErrors((prev) => ({
       ...prev,
       microsoftTenant: "",
-      authorizationUrl: "",
-      tokenUrl: "",
     }));
   };
 
@@ -339,11 +344,6 @@ export function CreateAuthMethodPage() {
       ) {
         nextErrors.microsoftTenant = "Microsoft tenant ID/domain is required";
       }
-      if (!form.authorizationUrl.trim())
-        nextErrors.authorizationUrl = "Authorization URL is required";
-      if (!form.tokenUrl.trim()) nextErrors.tokenUrl = "Token URL is required";
-      if (!form.userinfoUrl.trim())
-        nextErrors.userinfoUrl = "Userinfo URL is required";
 
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors);
@@ -364,10 +364,7 @@ export function CreateAuthMethodPage() {
             form.clientId.trim() &&
             form.clientSecret.trim() &&
             (selectedTemplate !== "microsoft" ||
-              normalizeMicrosoftTenant(form.microsoftTenant)) &&
-            form.authorizationUrl.trim() &&
-            form.tokenUrl.trim() &&
-            form.userinfoUrl.trim(),
+              normalizeMicrosoftTenant(form.microsoftTenant)),
         )
       : Boolean(workspaceId && selectedTemplate);
 
@@ -380,19 +377,31 @@ export function CreateAuthMethodPage() {
       toast.error("Pick a provider first.");
       return;
     }
+    const providerPayload = providerPayloadForTemplate(
+      selectedProviderTemplate,
+      form.microsoftTenant,
+    );
+    if (
+      !providerPayload.authorizationUrl ||
+      !providerPayload.tokenUrl ||
+      !providerPayload.userinfoUrl
+    ) {
+      toast.error("Provider configuration is incomplete.");
+      return;
+    }
     try {
       await createIdp({
         provider_type: "oidc",
         display_name: form.displayName || selectedProviderTemplate.name,
         config: {
           provider_name: selectedProviderTemplate.id,
-          authorization_url: form.authorizationUrl,
-          token_url: form.tokenUrl,
-          userinfo_url: form.userinfoUrl,
+          authorization_url: providerPayload.authorizationUrl,
+          token_url: providerPayload.tokenUrl,
+          userinfo_url: providerPayload.userinfoUrl,
           client_id: form.clientId,
           client_secret: form.clientSecret,
           redirect_uri: callbackUrl,
-          scopes: form.scopes.join(" "),
+          scopes: providerPayload.scopes,
         },
       }).unwrap();
       toast.success("Identity provider created!");
@@ -538,21 +547,6 @@ export function CreateAuthMethodPage() {
                         Label shown to users on the login screen.
                       </p>
                     </FormField>
-
-                    <FormField label="Scopes (space-separated)" htmlFor="scopes">
-                      <FormInput
-                        id="scopes"
-                        placeholder="openid email profile"
-                        value={form.scopes.join(" ")}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setForm({
-                            ...form,
-                            scopes: e.target.value.split(/\s+/).filter(Boolean),
-                          })
-                        }
-                        className="h-9 font-mono"
-                      />
-                    </FormField>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -650,53 +644,6 @@ export function CreateAuthMethodPage() {
                       </FormField>
                     </div>
                   )}
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <FormField
-                      label="Authorization URL"
-                      htmlFor="authUrl"
-                      required
-                    >
-                      <FormInput
-                        id="authUrl"
-                        placeholder="https://…/authorize"
-                        value={form.authorizationUrl}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setForm({
-                            ...form,
-                            authorizationUrl: e.target.value,
-                          })
-                        }
-                        className="h-9 font-mono"
-                      />
-                    </FormField>
-                    <FormField label="Token URL" htmlFor="tokenUrl" required>
-                      <FormInput
-                        id="tokenUrl"
-                        placeholder="https://…/token"
-                        value={form.tokenUrl}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setForm({ ...form, tokenUrl: e.target.value })
-                        }
-                        className="h-9 font-mono"
-                      />
-                    </FormField>
-                    <FormField
-                      label="UserInfo URL"
-                      htmlFor="userinfoUrl"
-                      required
-                    >
-                      <FormInput
-                        id="userinfoUrl"
-                        placeholder="https://…/userinfo"
-                        value={form.userinfoUrl}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setForm({ ...form, userinfoUrl: e.target.value })
-                        }
-                        className="h-9 font-mono"
-                      />
-                    </FormField>
-                  </div>
                 </div>
               )}
             </div>
@@ -736,43 +683,19 @@ export function CreateAuthMethodPage() {
                         {form.clientId || "—"}
                       </span>
                     </div>
+                    {selectedTemplate === "microsoft" && (
+                      <div className="flex justify-between gap-4">
+                        <span>Microsoft tenant:</span>
+                        <span className="font-mono truncate text-right">
+                          {normalizeMicrosoftTenant(form.microsoftTenant) ||
+                            "—"}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-4">
                       <span>Callback URL:</span>
                       <span className="font-mono truncate text-right">
                         {callbackUrl}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t pt-2.5">
-                  <h4 className="font-medium text-xs mb-1.5">Scopes</h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {form.scopes.map((scope) => (
-                      <FormBadge key={scope} variant="outline">
-                        {scope}
-                      </FormBadge>
-                    ))}
-                  </div>
-                </div>
-                <div className="border-t pt-2.5">
-                  <h4 className="font-medium text-xs mb-1">Endpoints</h4>
-                  <div className="space-y-1 text-[11px] text-muted-foreground">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">Authorization URL:</span>
-                      <span className="font-mono break-all">
-                        {form.authorizationUrl}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">Token URL:</span>
-                      <span className="font-mono break-all">
-                        {form.tokenUrl}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">UserInfo URL:</span>
-                      <span className="font-mono break-all">
-                        {form.userinfoUrl}
                       </span>
                     </div>
                   </div>
