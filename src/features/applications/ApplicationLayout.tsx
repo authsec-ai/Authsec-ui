@@ -63,12 +63,16 @@ export default function ApplicationLayout() {
   return (
     <div className="min-h-screen bg-background">
       <div className={consolePage}>
-        <ApplicationHeader application={application} readiness={readiness} />
-        <ApplicationDetailTabs
-          applicationId={application.id}
-          readiness={readiness}
-        />
-        <div>
+        <div data-cr>
+          <ApplicationHeader application={application} readiness={readiness} />
+          <div className="tabbar-wrap" style={{ marginTop: "var(--space-5)" }}>
+            <ApplicationDetailTabs
+              applicationId={application.id}
+              readiness={readiness}
+            />
+          </div>
+        </div>
+        <div style={{ marginTop: "var(--space-7)" }}>
           <Outlet
             context={{ application, readiness } satisfies ApplicationOutletContext}
           />

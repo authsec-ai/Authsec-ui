@@ -55,11 +55,13 @@
     --component-button-cta-radius: var(--component-button-radius);
     --component-table-radius: var(--admin-radius-panel);
 
-    --component-card-shadow: var(--shadow-none);
-    --component-form-section-shadow: var(--shadow-none);
+    /* Console Refresh elevation: faint shadow in light (border-led in dark,
+       since --shadow-xs is `none` under .dark). Toolbars stay flat. */
+    --component-card-shadow: var(--shadow-xs);
+    --component-form-section-shadow: var(--shadow-xs);
     --component-card-variant-header-shadow: var(--shadow-none);
     --component-card-variant-filter-shadow: var(--shadow-none);
-    --component-card-variant-table-shadow: var(--shadow-none);
+    --component-card-variant-table-shadow: var(--shadow-xs);
     --component-card-variant-pagination-shadow: var(--shadow-none);
   }
 
@@ -152,7 +154,7 @@
 
   /* Page header rhythm */
   [data-ui-scope="admin-shell"] [data-slot="page-shell-header"] [data-slot="page-header-title"] {
-    font-family: "Manrope", var(--font-family-sans);
+    font-family: var(--font-family-sans);
     font-weight: 700;
     letter-spacing: -0.03em;
     color: var(--editorial-text-1);
@@ -422,7 +424,7 @@
 
   [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-head"] {
     position: relative;
-    font-family: "Manrope", var(--font-family-sans);
+    font-family: var(--font-family-sans);
     font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--editorial-text-1);

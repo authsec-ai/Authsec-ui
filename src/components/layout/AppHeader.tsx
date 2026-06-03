@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
-import { Monitor } from "lucide-react";
+import { Bell, Monitor } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Breadcrumb } from "./Breadcrumb";
+import {
+  CommandPalette,
+  CommandSearchButton,
+  useCommandPalette,
+} from "./CommandPalette";
 import { useResponsiveLayout } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -12,10 +22,12 @@ interface AppHeaderProps {
   isRightSidebarOpen?: boolean;
 }
 
-export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: AppHeaderProps) {
+export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRightSidebarOpen: _isRightSidebarOpen = false }: AppHeaderProps) {
   const { shouldAutoCollapseSidebar } = useResponsiveLayout();
   const { open: sidebarOpen } = useSidebar();
   const [showAutoCollapseIndicator, setShowAutoCollapseIndicator] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   const shouldShowIndicator = shouldAutoCollapseSidebar && !sidebarOpen;
 
@@ -32,8 +44,24 @@ export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: 
     }
   }, [shouldShowIndicator]);
 
+  // Quiet scroll-shadow: only show the bottom border + faint shadow once
+  // content scrolls under the header (prototype `topbar[data-scrolled]`).
+  useEffect(() => {
+    const scrollArea = document.querySelector<HTMLElement>(
+      "[data-main-content-area='true']",
+    );
+    if (!scrollArea) return;
+    const onScroll = () => setScrolled(scrollArea.scrollTop > 4);
+    onScroll();
+    scrollArea.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollArea.removeEventListener("scroll", onScroll);
+  });
+
   return (
-    <header className="bg-[var(--app-shell-surface)] text-foreground border-[var(--app-shell-border)] flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
+    <header
+      data-scrolled={scrolled}
+      className="bg-[color-mix(in_srgb,var(--app-shell-surface)_82%,transparent)] text-foreground sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-transparent backdrop-blur-md transition-[border-color,box-shadow] duration-(--motion-duration-slow) data-[scrolled=true]:border-(--color-border-subtle) data-[scrolled=true]:shadow-(--shadow-xs)"
+    >
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
@@ -53,58 +81,57 @@ export function AppHeader({ onRightSidebarToggle, isRightSidebarOpen = false }: 
           </Tooltip>
         )}
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Breadcrumb />
         </div>
 
-        {/* <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" /> */}
-
         <div className="ml-auto flex items-center gap-2">
-          {/* Notifications */}
-          {/* <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 relative"
-            onClick={handleNotifications}
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 bg-red-500 rounded-full text-[9px] flex items-center justify-center text-white font-medium">
-              3
-            </span>
-          </Button> */}
+          <CommandSearchButton onClick={() => setPaletteOpen(true)} />
 
-          <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
+          {/* Notifications */}
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Notifications"
+                    className="relative grid size-9 place-items-center rounded-md text-(--color-text-muted) transition-colors hover:bg-(--color-hover) hover:text-(--color-text)"
+                  >
+                    <Bell className="size-[18px]" />
+                  </button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Notifications</p>
+              </TooltipContent>
+            </Tooltip>
+            <PopoverContent align="end" className="w-72 p-0">
+              <div className="border-b border-(--color-border-subtle) px-4 py-3">
+                <p className="text-[13px] font-semibold text-(--color-text)">
+                  Notifications
+                </p>
+              </div>
+              <div className="flex flex-col items-center gap-1 px-4 py-8 text-center">
+                <Bell className="size-5 text-(--color-text-subtle)" />
+                <p className="text-[13px] font-medium text-(--color-text)">
+                  You're all caught up
+                </p>
+                <p className="text-xs text-(--color-text-muted)">
+                  New activity and alerts will show up here.
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
 
           {/* Theme toggle */}
           <ModeToggle />
-
-          {/* <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" /> */}
-
-          {/* Ask AI Button
-          {onRightSidebarToggle && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className={`h-9 px-4 rounded-xl gap-2.5 font-semibold transition-all duration-200 shadow-sm ${
-                    isRightSidebarOpen
-                      ? "bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white shadow-lg shadow-slate-500/25"
-                      : "bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-700 hover:to-slate-800 text-white hover:shadow-md hover:shadow-slate-500/25"
-                  }`}
-                  onClick={onRightSidebarToggle}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  <span className="text-sm">Ask AI</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isRightSidebarOpen ? "Close" : "Open"} AI Copilot</p>
-              </TooltipContent>
-            </Tooltip>
-          )} */}
-
-
         </div>
       </div>
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </header>
   );
 }

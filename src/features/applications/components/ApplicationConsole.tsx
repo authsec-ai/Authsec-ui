@@ -9,10 +9,12 @@ export const consolePage =
   "mx-auto w-full max-w-[1280px] space-y-5 px-8 py-7";
 
 export const surface =
-  "rounded-lg border border-slate-200 dark:border-border bg-white dark:bg-card shadow-[0_1px_1px_rgba(15,23,42,0.02)]";
+  "rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) shadow-(--shadow-xs)";
 
 export type ConsoleTone = "neutral" | "info" | "success" | "warning" | "danger";
 
+// Token-driven tone language shared with the unified StatusBadge — theme-aware
+// (AA in light + dark) instead of hardcoded slate/blue Tailwind colors.
 const toneClasses: Record<ConsoleTone, {
   chip: string;
   dot: string;
@@ -20,34 +22,34 @@ const toneClasses: Record<ConsoleTone, {
   icon: string;
 }> = {
   neutral: {
-    chip: "border-slate-200 bg-slate-50 text-slate-600",
-    dot: "bg-slate-400",
-    banner: "border-slate-200 bg-white",
-    icon: "text-slate-500",
+    chip: "border-(--color-border-subtle) bg-(--color-surface-subtle) text-(--color-text-muted)",
+    dot: "bg-(--color-text-subtle)",
+    banner: "border-(--color-border-subtle) bg-(--color-surface-raised)",
+    icon: "text-(--color-text-muted)",
   },
   info: {
-    chip: "border-blue-200 bg-blue-50 text-blue-700",
-    dot: "bg-blue-600",
-    banner: "border-blue-200 bg-blue-50",
-    icon: "text-blue-600",
+    chip: "border-transparent bg-(--color-info-soft) text-(--color-info-text)",
+    dot: "bg-(--color-primary)",
+    banner: "border-[color-mix(in_srgb,var(--color-primary)_24%,transparent)] bg-(--color-primary-soft)",
+    icon: "text-(--color-info-text)",
   },
   success: {
-    chip: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    dot: "bg-emerald-600",
-    banner: "border-emerald-200 bg-emerald-50",
-    icon: "text-emerald-600",
+    chip: "border-transparent bg-(--color-success-soft) text-(--color-success-text)",
+    dot: "bg-(--color-success)",
+    banner: "border-[color-mix(in_srgb,var(--color-success)_24%,transparent)] bg-(--color-success-soft)",
+    icon: "text-(--color-success-text)",
   },
   warning: {
-    chip: "border-amber-200 bg-amber-50 text-amber-700",
-    dot: "bg-amber-500",
-    banner: "border-amber-200 bg-amber-50",
-    icon: "text-amber-600",
+    chip: "border-transparent bg-(--color-warning-soft) text-(--color-warning-text)",
+    dot: "bg-(--color-warning)",
+    banner: "border-[color-mix(in_srgb,var(--color-warning)_24%,transparent)] bg-(--color-warning-soft)",
+    icon: "text-(--color-warning-text)",
   },
   danger: {
-    chip: "border-red-200 bg-red-50 text-red-700",
-    dot: "bg-red-600",
-    banner: "border-red-200 bg-red-50",
-    icon: "text-red-600",
+    chip: "border-transparent bg-(--color-danger-soft) text-(--color-danger-text)",
+    dot: "bg-(--color-danger)",
+    banner: "border-[color-mix(in_srgb,var(--color-danger)_24%,transparent)] bg-(--color-danger-soft)",
+    icon: "text-(--color-danger-text)",
   },
 };
 
@@ -113,7 +115,7 @@ export function DecisionBanner({
     actionHref ? (
       <Link
         to={actionHref}
-        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-(--color-primary) px-3.5 text-sm font-semibold text-white transition hover:bg-(--color-primary-strong)"
       >
         {actionLabel}
         <ArrowRight className="size-3.5" />
@@ -122,7 +124,7 @@ export function DecisionBanner({
       <button
         type="button"
         onClick={onAction}
-        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-(--color-primary) px-3.5 text-sm font-semibold text-white transition hover:bg-(--color-primary-strong)"
       >
         {actionLabel}
         <ArrowRight className="size-3.5" />
@@ -137,14 +139,14 @@ export function DecisionBanner({
         t.banner,
       )}
     >
-      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full bg-white/70", t.icon)}>
+      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", t.icon)}>
         <Icon className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="text-base font-semibold leading-6 text-slate-950">
+        <h2 className="text-base font-semibold leading-6 text-(--color-text)">
           {title}
         </h2>
-        <p className="mt-0.5 max-w-4xl text-sm leading-5 text-slate-600">
+        <p className="mt-0.5 max-w-4xl text-sm leading-5 text-(--color-text-muted)">
           {body}
         </p>
       </div>
@@ -168,15 +170,15 @@ export function SectionHeader({
     <header className="flex items-start justify-between gap-6">
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.04em] text-(--color-text-subtle)">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-[24px] font-semibold leading-8 tracking-normal text-slate-950 dark:text-white">
+        <h1 className="text-[24px] font-semibold leading-8 tracking-[-0.02em] text-(--color-text)">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 max-w-3xl text-sm leading-5 text-slate-600">
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-(--color-text-muted)">
             {description}
           </p>
         ) : null}
