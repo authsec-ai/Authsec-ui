@@ -30,6 +30,7 @@ export interface IdentityProvider {
   display_name: string;
   config_ref: string;
   status: IdentityProviderStatus;
+  redirect_uri?: string;
   created_by_user_id: string;
   created_at: string;
   updated_at: string;

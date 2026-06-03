@@ -236,11 +236,17 @@ export interface AdminOIDCExchangeRequest {
 }
 
 export interface AdminOIDCExchangeSuccessResponse {
-  workspace_id: string;
-  email: string;
-  first_login: boolean;
-  otp_required: boolean;
-  mfa_required: boolean;
+  // hydra_login path: backend accepted Hydra and returns a redirect URL.
+  // Frontend must navigate to this URL directly (window.location.href).
+  success?: boolean;
+  redirect_to?: string;
+
+  // login/discover path: backend returns a session token and user info.
+  workspace_id?: string;
+  email?: string;
+  first_login?: boolean;
+  otp_required?: boolean;
+  mfa_required?: boolean;
   tenant_domain?: string;
   client_id?: string;
 }

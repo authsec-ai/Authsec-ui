@@ -116,7 +116,32 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     const runExchange = async () => {
       try {
         const response = await exchangeCode({ code, state }).unwrap();
-        handleExistingUser(response);
+
+        // hydra_login flow: backend accepted Hydra directly and returned a
+        // redirect URL. Navigate the browser there — same as email login's
+        // complete-local response handler.
+        if (response.redirect_to) {
+          setStatusMessage("Sign-in complete. Redirecting...");
+          window.location.href = response.redirect_to;
+          return;
+        }
+
+        // login/discover flow: backend returned a session token + user info.
+        // workspace_id and email are always present in this path.
+        if (!response.workspace_id || !response.email) {
+          setStatus("error");
+          setStatusMessage("Sign-in response missing user information. Please try again.");
+          return;
+        }
+        handleExistingUser({
+          workspace_id: response.workspace_id,
+          email: response.email,
+          first_login: response.first_login ?? false,
+          otp_required: response.otp_required ?? false,
+          mfa_required: response.mfa_required ?? false,
+          tenant_domain: response.tenant_domain,
+          client_id: response.client_id,
+        });
       } catch (err) {
         handleExchangeError(err as FetchBaseQueryError | SerializedError);
       }
@@ -125,7 +150,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     void runExchange();
   }, [code, state, errorParam, errorDescription, exchangeCode]);
 
-  const handleExistingUser = (data: AdminOIDCExchangeSuccessResponse) => {
+  const handleExistingUser = (data: Required<Pick<AdminOIDCExchangeSuccessResponse, "workspace_id" | "email" | "first_login">> & AdminOIDCExchangeSuccessResponse) => {
     const tenantDomain = data.tenant_domain || "";
     const currentHost = window.location.hostname;
     const shouldRedirect =
