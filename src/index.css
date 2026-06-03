@@ -135,7 +135,7 @@
    ────────────────────────────────────────────────────────────────────────── */
 :root,
 [data-theme="light"] {
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   --background: var(--color-surface-base);
   --foreground: var(--color-text-primary);
   --card: var(--color-surface-raised);
@@ -170,7 +170,7 @@
 }
 
 .dark {
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   --background: var(--color-surface-base);
   --foreground: var(--color-text-primary);
   --card: var(--color-surface-raised);

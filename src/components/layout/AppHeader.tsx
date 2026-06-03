@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
-import { Bell, Monitor } from "lucide-react";
+import { Monitor } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+// Hidden for now: notifications popover
+// import {
+//   Popover,
+//   PopoverContent,
+//   PopoverTrigger,
+// } from "@/components/ui/popover";
 import { Breadcrumb } from "./Breadcrumb";
-import {
-  CommandPalette,
-  CommandSearchButton,
-  useCommandPalette,
-} from "./CommandPalette";
+// Hidden for now: search bar / command palette (⌘K disabled)
+// import {
+//   CommandPalette,
+//   CommandSearchButton,
+//   useCommandPalette,
+// } from "./CommandPalette";
 import { useResponsiveLayout } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -27,7 +29,8 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
   const { open: sidebarOpen } = useSidebar();
   const [showAutoCollapseIndicator, setShowAutoCollapseIndicator] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
+  // Hidden for now: search bar / command palette (⌘K disabled)
+  // const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   const shouldShowIndicator = shouldAutoCollapseSidebar && !sidebarOpen;
 
@@ -86,10 +89,11 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <CommandSearchButton onClick={() => setPaletteOpen(true)} />
+          {/* Hidden for now: search bar / ⌘K command palette */}
+          {/* <CommandSearchButton onClick={() => setPaletteOpen(true)} /> */}
 
-          {/* Notifications */}
-          <Popover>
+          {/* Hidden for now: notifications */}
+          {/* <Popover>
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
@@ -122,7 +126,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
                 </p>
               </div>
             </PopoverContent>
-          </Popover>
+          </Popover> */}
 
           <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
 
@@ -131,7 +135,8 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
         </div>
       </div>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {/* Hidden for now: search bar / ⌘K command palette */}
+      {/* <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} /> */}
     </header>
   );
 }
