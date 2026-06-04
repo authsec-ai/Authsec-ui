@@ -576,8 +576,8 @@ export function ClientsPage() {
   const handlePreviewLogin = useCallback(async (clientId: string) => {
     const currentSession = SessionManager.getSession();
 
-    // Priority: 1) session tenant_domain, 2) extract from current hostname
-    let tenantDomainForOAuth = currentSession?.tenant_domain;
+    // Priority: 1) session workspace_domain, 2) extract from current hostname
+    let tenantDomainForOAuth = currentSession?.workspace_domain;
     let tenantDomainFromHostname: string | undefined;
 
     // Only extract from hostname if not found in session
@@ -601,7 +601,7 @@ export function ClientsPage() {
     // eslint-disable-next-line no-console
     console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
       clientId,
-      tenantDomainFromSession: currentSession?.tenant_domain,
+      tenantDomainFromSession: currentSession?.workspace_domain,
       tenantDomainFromHostname,
       finalTenantDomain: tenantDomainForOAuth,
       hydraPublicUrl,

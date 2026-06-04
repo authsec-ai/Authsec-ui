@@ -201,8 +201,8 @@ export function InviteUserModal({ isOpen, onClose, audience, onSuccess }: Invite
         first_name: firstName,
         last_name: lastName,
         roles: selectedRoleIds,
-        tenant_domain:
-          tenantDomain ?? sessionData?.tenant_domain ?? (sessionData as any)?.tenantDomain ?? "",
+        workspace_domain:
+          tenantDomain ?? sessionData?.workspace_domain ?? (sessionData as any)?.tenantDomain ?? "",
         workspace_id: workspaceId || "",
         client_id: clientId,
         project_id: projectId,

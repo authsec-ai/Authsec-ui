@@ -346,7 +346,7 @@ export const DynamicCellComponents = {
 
   tenantDomain: ({ user }: { user: ApiUser }) => (
     <span className="text-sm font-mono">
-      {user.tenant_domain || "—"}
+      {user.workspace_domain || "—"}
     </span>
   ),
 
@@ -386,7 +386,7 @@ export function getColumnAccessorKey(columnId: string): string {
     providerId: "provider_id",
     clientId: "client_id",
     projectId: "project_id",
-    tenantDomain: "tenant_domain",
+    tenantDomain: "workspace_domain",
     scopesCount: "scopes",
     resourcesCount: "resources"
   };

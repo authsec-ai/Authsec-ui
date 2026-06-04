@@ -28,7 +28,7 @@ interface TenantDomainSelectionModalProps {
   onSuccess: (data: {
     workspace_id: string;
     client_id: string;
-    tenant_domain: string;
+    workspace_domain: string;
   }) => void;
 }
 
@@ -101,7 +101,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
 
     try {
       const result = await completeRegistration({
-        tenant_domain: domain,
+        workspace_domain: domain,
         provider: userData.provider,
         email: userData.email,
         name: userData.name,
@@ -113,7 +113,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
         onSuccess({
           workspace_id: result.workspace_id,
           client_id: result.client_id,
-          tenant_domain: result.tenant_domain,
+          workspace_domain: result.workspace_domain,
         });
         onOpenChange(false);
       }

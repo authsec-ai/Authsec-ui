@@ -39,7 +39,7 @@ export interface User {
   project_id: string;
   name: string;
   email: string;
-  tenant_domain: string;
+  workspace_domain: string;
   provider: string;
   provider_id: string;
   provider_data: Record<string, any>;

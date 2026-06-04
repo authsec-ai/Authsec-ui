@@ -119,7 +119,7 @@ export interface CustomLoginStatusRequest {
   workspace_id: string;
   client_id?: string;
   email: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface CustomLoginStatusResponse {
@@ -134,7 +134,7 @@ export interface CustomLoginRegisterRequest {
   email: string;
   password: string;
   name: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface CustomLoginRegisterResponse {
@@ -184,12 +184,12 @@ export interface UFlowOIDCProvidersResponse {
 
 export interface UFlowOIDCProvidersRequest {
   email?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface UFlowOIDCInitiateRequest {
   provider: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface UFlowOIDCInitiateResponse {
@@ -209,7 +209,7 @@ export interface UFlowOIDCCallbackData {
   success: boolean;
   // For existing users
   client_id?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
   workspace_id?: string;
 }
 
@@ -220,7 +220,7 @@ export interface TenantDomainCheckResponse {
 }
 
 export interface CompleteUFlowOIDCRegistrationRequest {
-  tenant_domain: string;
+  workspace_domain: string;
   provider: string;
   email: string;
   name: string;
@@ -232,7 +232,7 @@ export interface CompleteUFlowOIDCRegistrationResponse {
   client_id: string;
   message: string;
   success: boolean;
-  tenant_domain: string;
+  workspace_domain: string;
   workspace_id: string;
 }
 
@@ -253,7 +253,7 @@ export interface AdminOIDCExchangeSuccessResponse {
   first_login?: boolean;
   otp_required?: boolean;
   mfa_required?: boolean;
-  tenant_domain?: string;
+  workspace_domain?: string;
   client_id?: string;
 }
 
@@ -261,7 +261,7 @@ export interface AdminOIDCExchangeErrorResponse {
   error?: string;
   message?: string;
   needs_domain?: boolean;
-  provider_data?: Omit<CompleteUFlowOIDCRegistrationRequest, "tenant_domain">;
+  provider_data?: Omit<CompleteUFlowOIDCRegistrationRequest, "workspace_domain">;
 }
 
 // Helper function to get session data
@@ -593,8 +593,8 @@ export const oidcApi = createApi({
       UFlowOIDCProvidersRequest
     >({
       query: (data = {}) => ({
-        url: data.tenant_domain
-          ? `/authsec/uflow/oidc/providers?tenant_domain=${encodeURIComponent(data.tenant_domain)}`
+        url: data.workspace_domain
+          ? `/authsec/uflow/oidc/providers?workspace_domain=${encodeURIComponent(data.workspace_domain)}`
           : "/authsec/uflow/oidc/providers",
         method: "GET",
       }),

@@ -3,7 +3,7 @@ import { baseApi } from "./baseApi";
 export interface LoginRequest {
   email: string;
   password: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface RegisterInitiateRequest {
@@ -11,7 +11,7 @@ export interface RegisterInitiateRequest {
   password: string;
   first_name: string;
   last_name: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface RegisterVerifyRequest {
@@ -66,7 +66,7 @@ export interface AdminLoginPrecheckResponse {
   email: string;
   exists: boolean;
   display_name?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
   next_step: "login" | "register";
   requires_password?: boolean;
   available_providers?: Array<"github" | "google" | "microsoft" | "email">;
@@ -76,14 +76,14 @@ export interface AdminBootstrapAccountRequest {
   email: string;
   password: string;
   confirm_password?: string;
-  tenant_domain: string;
+  workspace_domain: string;
 }
 
 export interface AdminBootstrapAccountResponse {
   message: string;
   status: "pending_verification" | "registered";
   workspace_id?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface ForgotPasswordResponse {
@@ -139,7 +139,7 @@ export const authApi = baseApi.injectEndpoints({
         const currentDomain = window.location.hostname;
         const bodyWithDomain = {
           ...credentials,
-          tenant_domain: credentials.tenant_domain ?? currentDomain,
+          workspace_domain: credentials.workspace_domain ?? currentDomain,
         };
         return {
           url: "/authsec/uflow/login",  //temporary change actual one being /auth/admin/login

@@ -148,7 +148,7 @@ const authSlice = createSlice({
         projects: [project],
         currentProject: project,
         workspace_id: workspaceId,
-        tenant_domain: jwtPayload?.tenant_domain,
+        workspace_domain: jwtPayload?.workspace_domain,
         project_id: actualProjectId, // Use project_id from JWT
         client_id: actualClientId, // Use client_id from JWT
         user_id: user?.id || actualClientId, // Use user ID or client_id as fallback

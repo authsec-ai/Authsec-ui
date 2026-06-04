@@ -22,7 +22,7 @@ export interface InviteAdminUser {
   username?: string;
   roles: string[];
   groups?: string[];
-  tenant_domain?: string;
+  workspace_domain?: string;
   workspace_id?: string;
   client_id?: string;
   project_id?: string;
@@ -54,7 +54,7 @@ export const adminInvitesApi = baseApi.injectEndpoints({
           username: data.username,
           roles: data.roles,
           groups: data.groups || [],
-          tenant_domain: data.tenant_domain,
+          workspace_domain: data.workspace_domain,
           workspace_id: data.workspace_id,
           client_id: data.client_id,
           project_id: data.project_id,

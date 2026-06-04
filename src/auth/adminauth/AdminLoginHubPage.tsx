@@ -227,7 +227,7 @@ export function AdminLoginHubPage() {
     async (tenantDomainOverride?: string) => {
       try {
         const result = await getUFlowOIDCProviders({
-          tenant_domain: tenantDomainOverride,
+          workspace_domain: tenantDomainOverride,
         }).unwrap();
         const providers = result?.providers ?? [];
         setUflowProviders(providers);
@@ -301,7 +301,7 @@ export function AdminLoginHubPage() {
   ]);
 
   // Fetch global/platform OAuth providers on mount. Workspace providers are
-  // fetched only after precheck resolves a tenant_domain.
+  // fetched only after precheck resolves a workspace_domain.
   useEffect(() => {
     void fetchUFlowProviders();
   }, [fetchUFlowProviders]);
@@ -363,7 +363,7 @@ export function AdminLoginHubPage() {
 
     const payload = decodeHandoff<{
       email: string;
-      tenant_domain?: string;
+      workspace_domain?: string;
       flow_stage?: FlowStage;
       verified?: boolean;
     }>(handoff);
@@ -385,8 +385,8 @@ export function AdminLoginHubPage() {
       setEmailInput(payload.email);
       setCheckedEmail(payload.email);
     }
-    if (payload.tenant_domain) {
-      setTenantDomain(payload.tenant_domain);
+    if (payload.workspace_domain) {
+      setTenantDomain(payload.workspace_domain);
     }
 
     if (payload.flow_stage === "existing") {
@@ -562,7 +562,7 @@ export function AdminLoginHubPage() {
     email: string,
     path: string = "/admin/login",
     verified: boolean = true,
-    handoffData?: { flow_stage?: FlowStage; tenant_domain?: string },
+    handoffData?: { flow_stage?: FlowStage; workspace_domain?: string },
   ): string => {
     console.log("[Redirect/buildUrl] 🔨 Building redirect URL");
     console.log("[Redirect/buildUrl] 📊 Inputs:", {
@@ -739,8 +739,8 @@ export function AdminLoginHubPage() {
   ) => {
     setCheckedEmail(validatedEmail);
 
-    if (response.tenant_domain) {
-      setTenantDomain(response.tenant_domain);
+    if (response.workspace_domain) {
+      setTenantDomain(response.workspace_domain);
     }
 
     const availableProviders = response.available_providers ?? [];
@@ -753,8 +753,8 @@ export function AdminLoginHubPage() {
     const requiredSsoProvider = getSsoRequiredProvider(response);
 
     if (response.exists && !passwordAllowed && nonEmailProviders.length > 0) {
-      const scopedProviders = response.tenant_domain
-        ? await fetchUFlowProviders(response.tenant_domain)
+      const scopedProviders = response.workspace_domain
+        ? await fetchUFlowProviders(response.workspace_domain)
         : await fetchUFlowProviders();
       if (scopedProviders.length === 0) {
         setIdleNotice({
@@ -776,9 +776,9 @@ export function AdminLoginHubPage() {
 
     clearIdleState();
 
-    if (response.exists && response.tenant_domain) {
+    if (response.exists && response.workspace_domain) {
       const currentDomain = window.location.hostname;
-      const targetDomain = response.tenant_domain;
+      const targetDomain = response.workspace_domain;
       const shouldRedirect =
         currentDomain !== targetDomain &&
         !currentDomain.includes("localhost") &&
@@ -792,7 +792,7 @@ export function AdminLoginHubPage() {
           true,
           {
             flow_stage: "existing",
-            tenant_domain: targetDomain,
+            workspace_domain: targetDomain,
           },
         );
 
@@ -1008,7 +1008,7 @@ export function AdminLoginHubPage() {
 
       const response = await initiateUFlowOIDC({
         provider: provider.provider_name.toLowerCase(),
-        tenant_domain: tenantDomain.trim() || undefined,
+        workspace_domain: tenantDomain.trim() || undefined,
       }).unwrap();
 
       // Store provider info and state in sessionStorage
@@ -1038,7 +1038,7 @@ export function AdminLoginHubPage() {
   const handleDomainModalSuccess = async (data: {
     workspace_id: string;
     client_id: string;
-    tenant_domain: string;
+    workspace_domain: string;
   }) => {
     console.log("Domain registration successful:", data);
 
@@ -1054,7 +1054,7 @@ export function AdminLoginHubPage() {
       // Set the email and tenant domain for OTP verification
       setEmailInput(uflowCallbackData.email);
       setCheckedEmail(uflowCallbackData.email);
-      setTenantDomain(data.tenant_domain);
+      setTenantDomain(data.workspace_domain);
 
       toast.success(
         "Workspace created! Check your email for verification code.",
@@ -1221,7 +1221,7 @@ export function AdminLoginHubPage() {
         email: currentEmail,
         password: newPassword,
         confirm_password: confirmPassword,
-        tenant_domain: tenantDomain.trim(),
+        workspace_domain: tenantDomain.trim(),
       }).unwrap();
 
       // Validate response
@@ -1231,8 +1231,8 @@ export function AdminLoginHubPage() {
       }
 
       // Store the tenant domain from response
-      if (response.tenant_domain) {
-        setTenantDomain(response.tenant_domain);
+      if (response.workspace_domain) {
+        setTenantDomain(response.workspace_domain);
       }
 
       toast.success(
@@ -1269,7 +1269,7 @@ export function AdminLoginHubPage() {
             true,
             {
               flow_stage: "existing",
-              tenant_domain: tenantDomain,
+              workspace_domain: tenantDomain,
             },
           );
           if (redirectUrl) {

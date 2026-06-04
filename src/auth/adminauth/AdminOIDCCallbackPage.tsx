@@ -63,7 +63,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
       const legacyProvider = urlParams.get("provider") || "";
       const legacyProviderUserId = urlParams.get("provider_user_id") || "";
       const legacyTenantId = urlParams.get("workspace_id") || "";
-      const legacyTenantDomain = urlParams.get("tenant_domain") || "";
+      const legacyTenantDomain = urlParams.get("workspace_domain") || "";
       const legacyFirstLogin = urlParams.get("first_login") === "true";
       const legacyNeedsDomain = urlParams.get("needs_domain") === "true";
       const legacySuccess = urlParams.get("success") === "true";
@@ -102,7 +102,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
           first_login: legacyFirstLogin,
           otp_required: false,
           mfa_required: true,
-          tenant_domain: legacyTenantDomain || undefined,
+          workspace_domain: legacyTenantDomain || undefined,
           client_id: urlParams.get("client_id") || undefined,
         });
         return;
@@ -139,7 +139,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
           first_login: response.first_login ?? false,
           otp_required: response.otp_required ?? false,
           mfa_required: response.mfa_required ?? false,
-          tenant_domain: response.tenant_domain,
+          workspace_domain: response.workspace_domain,
           client_id: response.client_id,
         });
       } catch (err) {
@@ -151,7 +151,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
   }, [code, state, errorParam, errorDescription, exchangeCode]);
 
   const handleExistingUser = (data: Required<Pick<AdminOIDCExchangeSuccessResponse, "workspace_id" | "email" | "first_login">> & AdminOIDCExchangeSuccessResponse) => {
-    const tenantDomain = data.tenant_domain || "";
+    const tenantDomain = data.workspace_domain || "";
     const currentHost = window.location.hostname;
     const shouldRedirect =
       tenantDomain &&
@@ -162,7 +162,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     if (shouldRedirect) {
       const handoffToken = encodeHandoff({
         email: data.email,
-        tenant_domain: tenantDomain,
+        workspace_domain: tenantDomain,
         workspace_id: data.workspace_id,
         first_login: data.first_login,
         target: "webauthn",
@@ -217,10 +217,10 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     setStatusMessage(message || "Failed to complete sign-in. Please try again.");
   };
 
-  const handleDomainSuccess = (result: { workspace_id: string; client_id: string; tenant_domain: string }) => {
+  const handleDomainSuccess = (result: { workspace_id: string; client_id: string; workspace_domain: string }) => {
     if (!providerData) return;
 
-    const tenantDomain = result.tenant_domain;
+    const tenantDomain = result.workspace_domain;
     const currentHost = window.location.hostname;
     const shouldRedirect =
       tenantDomain &&
@@ -231,7 +231,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     if (shouldRedirect) {
       const handoffToken = encodeHandoff({
         email: providerData.email,
-        tenant_domain: tenantDomain,
+        workspace_domain: tenantDomain,
         workspace_id: result.workspace_id,
         first_login: true,
         target: "webauthn",

@@ -13,7 +13,7 @@ export interface CustomLoginRequest {
   client_id?: string;
   email: string;
   password: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
 }
 
 export interface CustomLoginResponse {

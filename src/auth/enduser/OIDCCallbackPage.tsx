@@ -194,7 +194,7 @@ const OIDCCallbackPageInner: React.FC = () => {
 
           // Extract tenant and client info
           const workspaceId = urlParams.get("workspace_id");
-          const tenantDomain = urlParams.get("tenant_domain");
+          const tenantDomain = urlParams.get("workspace_domain");
 
           if (isAdminFlow) {
             // Admin flow - redirect to admin WebAuthn

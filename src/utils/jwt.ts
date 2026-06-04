@@ -13,7 +13,7 @@ export interface JWTPayload {
   roles: string[];
   scope?: string;
   scopes: string[];
-  tenant_domain?: string;
+  workspace_domain?: string;
   workspace_id: string;
   token_type: string;
   [key: string]: unknown;

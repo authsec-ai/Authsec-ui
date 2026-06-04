@@ -447,7 +447,7 @@ export function UsersPage() {
         client_id: user.client_id,
         workspace_id: user.workspace_id,
         project_id: user.project_id,
-        tenant_domain: user.tenant_domain,
+        workspace_domain: user.workspace_domain,
         provider_id: user.provider_id,
         provider_data: user.provider_data,
         MFAEnabled: user.mfa_enabled,

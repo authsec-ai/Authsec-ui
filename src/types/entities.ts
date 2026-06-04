@@ -560,7 +560,7 @@ export interface EnhancedUser {
   client_id?: string;
   workspace_id?: string;
   project_id?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
   provider_id?: string;
   provider_data?: any;
   external_id?: string;

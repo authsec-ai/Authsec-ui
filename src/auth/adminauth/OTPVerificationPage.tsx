@@ -30,7 +30,7 @@ export const OTPVerificationPage: React.FC = () => {
   const state = location.state as LocationState;
   const email = state?.email || searchParams.get("email") || undefined;
   const tenantDomain =
-    state?.tenantDomain || searchParams.get("tenant_domain") || undefined;
+    state?.tenantDomain || searchParams.get("workspace_domain") || undefined;
   
   const [verifyOtp] = useRegisterVerifyMutation();
   const [resendOtpMutation] = useResendOtpMutation();
@@ -63,7 +63,7 @@ export const OTPVerificationPage: React.FC = () => {
         toast.success("Account verified! Please login to continue.");
         if (tenantDomain) {
           const nextUrl = new URL("/admin/login", window.location.origin);
-          nextUrl.searchParams.set("tenant_domain", tenantDomain);
+          nextUrl.searchParams.set("workspace_domain", tenantDomain);
           nextUrl.searchParams.set("email", email);
           nextUrl.searchParams.set("verification_complete", "true");
           window.location.href = nextUrl.toString();

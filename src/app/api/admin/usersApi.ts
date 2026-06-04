@@ -36,7 +36,7 @@ export interface AdminUser {
   client_id?: string;
   workspace_id?: string;
   project_id?: string;
-  tenant_domain?: string;
+  workspace_domain?: string;
   provider?: string;
   provider_name?: string;
   provider_id?: string;

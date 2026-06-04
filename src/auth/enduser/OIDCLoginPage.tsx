@@ -600,7 +600,7 @@ const OIDCLoginPageInner: React.FC = () => {
       const statusResponse = await checkCustomLoginStatus({
         workspace_id: workspaceId,
         email,
-        ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
+        ...(tenantDomain ? { workspace_domain: tenantDomain } : {}),
       }).unwrap();
 
       // Treat presence of a response field as authoritative
@@ -696,7 +696,7 @@ const OIDCLoginPageInner: React.FC = () => {
         name: name.trim(),
         email,
         password,
-        ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
+        ...(tenantDomain ? { workspace_domain: tenantDomain } : {}),
       }).unwrap();
 
       if (!registerResponse?.error && registerResponse?.success) {
@@ -779,7 +779,7 @@ const OIDCLoginPageInner: React.FC = () => {
         workspace_id: workspaceId || "",
         email,
         password,
-        ...(tenantDomain ? { tenant_domain: tenantDomain } : {}),
+        ...(tenantDomain ? { workspace_domain: tenantDomain } : {}),
       }).unwrap();
 
       // Your API returns data directly: {workspace_id, email, first_login, otp_required, mfa_required}

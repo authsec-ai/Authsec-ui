@@ -364,7 +364,7 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
             <InfoLine label="Client ID" value={mergedUser.client_id} copyable />
             <InfoLine label="Workspace ID" value={mergedUser.workspace_id} copyable />
             <InfoLine label="Project ID" value={mergedUser.project_id} copyable />
-            <InfoLine label="Tenant Domain" value={mergedUser.tenant_domain} />
+            <InfoLine label="Tenant Domain" value={mergedUser.workspace_domain} />
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-foreground">Status</span>
               <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${
@@ -379,7 +379,7 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
             <InfoLine label="Provider" value={providerLabel} />
             <InfoLine label="Provider ID" value={mergedUser.provider_id} copyable />
             <InfoLine label="External ID" value={mergedUser.external_id} copyable />
-            <InfoLine label="Tenant Domain" value={mergedUser.tenant_domain} />
+            <InfoLine label="Tenant Domain" value={mergedUser.workspace_domain} />
             <InfoLine label="Updated At" value={updatedAtText} />
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-foreground">Last Login</span>

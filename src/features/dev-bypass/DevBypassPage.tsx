@@ -97,7 +97,7 @@ export function DevBypassPage() {
       currentProject: project,
       jwtPayload: { ...payload, tenant_id: tenantId },
       tenant_id: tenantId,
-      tenant_domain: payload.tenant_domain,
+      workspace_domain: payload.workspace_domain,
       project_id: payload.project_id || "",
       client_id: payload.client_id,
       user_id: payload.client_id,

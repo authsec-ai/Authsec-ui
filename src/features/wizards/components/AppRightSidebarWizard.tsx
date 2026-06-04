@@ -154,8 +154,8 @@ function UserAuthCompletionView({
   const handlePreviewLogin = async () => {
     if (!clientId) return;
 
-    // Priority: 1) session tenant_domain, 2) extract from current hostname
-    let tenantDomainForOAuth = session?.tenant_domain;
+    // Priority: 1) session workspace_domain, 2) extract from current hostname
+    let tenantDomainForOAuth = session?.workspace_domain;
     let tenantDomainFromHostname: string | undefined;
 
     // Only extract from hostname if not found in session
@@ -178,7 +178,7 @@ function UserAuthCompletionView({
     // eslint-disable-next-line no-console
     console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
       clientId,
-      tenantDomainFromSession: session?.tenant_domain,
+      tenantDomainFromSession: session?.workspace_domain,
       tenantDomainFromHostname,
       finalTenantDomain: tenantDomainForOAuth,
       hydraPublicUrl,

@@ -396,7 +396,7 @@ export function UserExpandedRow({ user }: { user: any }) {
   const hasProviderData = user.provider_data && typeof user.provider_data === 'object';
   const hasMfaInfo = user.MFAEnabled || user.MFAMethod?.length > 0;
   const isDirectoryUser = user.is_synced_user;
-  const hasExtendedInfo = user.username || user.tenant_domain;
+  const hasExtendedInfo = user.username || user.workspace_domain;
 
   // Helper function to format MFA methods
   const formatMfaMethods = (methods: string[] | null) => {
@@ -469,10 +469,10 @@ export function UserExpandedRow({ user }: { user: any }) {
                 {user.active ? "Active" : "Inactive"}
               </Badge>
             </div>
-            {user.tenant_domain && (
+            {user.workspace_domain && (
               <div className="flex justify-between items-center py-1">
                 <span className="text-foreground text-xs font-medium">Domain:</span>
-                <span className="text-xs">{user.tenant_domain}</span>
+                <span className="text-xs">{user.workspace_domain}</span>
               </div>
             )}
             <div className="flex justify-between items-center py-1">
@@ -829,13 +829,13 @@ export function createDynamicUserTableColumns(
     },
     tenantDomain: {
       id: "tenantDomain",
-      accessorKey: "tenant_domain",
+      accessorKey: "workspace_domain",
       header: "Tenant Domain",
       resizable: true,
       responsive: true,
       cell: ({ row }: { row: any }) => (
         <span className="text-sm font-mono">
-          {row.original.tenant_domain || "—"}
+          {row.original.workspace_domain || "—"}
         </span>
       ),
     },

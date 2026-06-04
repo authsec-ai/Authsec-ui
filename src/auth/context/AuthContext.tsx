@@ -129,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ success: boolean; requiresWebAuthn?: boolean; workspaceId?: string; email?: string; firstLogin?: boolean }> => {
     setIsLoading(true);
     try {
-      const result = await loginMutation({ email, password, tenant_domain: tenantDomainOverride });
+      const result = await loginMutation({ email, password, workspace_domain: tenantDomainOverride });
       
       if ('data' in result && result.data) {
         const { workspace_id, email: userEmail, first_login } = result.data;
@@ -188,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password,
         first_name: firstName || "",
         last_name: lastName || "",
-        tenant_domain: tenantDomain || ""
+        workspace_domain: tenantDomain || ""
       });
       
       if ('data' in result) {
