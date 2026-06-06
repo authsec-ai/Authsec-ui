@@ -64,6 +64,8 @@ import { M2MLogsPage } from "./features/logging/M2MLogsPage";
 import { VaultPage } from "./features/vault/VaultPage";
 
 import { ImportSecretsPage } from "./features/vault/ImportSecretsPage";
+import ScimConnectionsPage from "./features/scim-connections/ScimConnectionsPage";
+import DirectorySyncPage from "./features/directory-sync/DirectorySyncPage";
 import { RolesPage } from "./features/roles/RolesPage";
 import { RoleTemplatesPage } from "./features/roles/RoleTemplatesPage";
 import { AuthenticationPage } from "./features/authentication/AuthenticationPage";
@@ -930,6 +932,28 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <EditSamlMethodPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/scim-connections"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ScimConnectionsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/directory-sync"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <DirectorySyncPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

@@ -17,11 +17,13 @@ import {
   ClipboardList,
   CreditCard,
   Fingerprint,
+  FolderSync,
   GlobeLock,
   KeyRound,
   LayoutDashboard,
   Layers,
   Link2,
+  Shield,
   UserCog,
   Users,
   type LucideIcon,
@@ -92,6 +94,8 @@ const NAV_MONITOR: NavItem[] = [
 
 const NAV_CONFIGURE: NavItem[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
+  { title: "SCIM Connections", url: "/scim-connections", icon: Shield },
+  { title: "Directory Sync", url: "/directory-sync", icon: FolderSync },
   { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock },
   { title: "Secrets", url: "/external-services", icon: KeyRound },
 ];
