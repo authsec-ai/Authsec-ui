@@ -1,144 +1,161 @@
-import { useMemo } from "react";
-import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { RefreshCw, FolderSync, Settings, Plus } from "lucide-react";
-import toast from "react-hot-toast";
+/**
+ * DirectorySyncPage — Configure → Directory Sync.
+ * Overview of AD/Entra sync configurations. Follows Console Refresh pattern.
+ */
+
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  CheckCircle2,
+  ExternalLink,
+  FolderSync,
+  RefreshCw,
+  X,
+} from "lucide-react";
+import { toast } from "@/lib/toast";
+import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
+
+const INFO_KEY = "directory_sync_info_dismissed_v1";
 
 export default function DirectorySyncPage() {
   const { data: configs = [], isLoading, refetch } = useListSyncConfigsQuery({});
-  const isSyncing = false; // Trigger sync is done via the AD/Entra sync buttons on the Users page
   const navigate = useNavigate();
+  const [infoDismissed, setInfoDismissed] = useState(() => {
+    try { return localStorage.getItem(INFO_KEY) === "1"; } catch { return false; }
+  });
+  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(INFO_KEY, "1"); } catch {} };
 
   const adConfigs = useMemo(() => configs.filter((c: any) => c.source_type === "active_directory" || c.config_type === "ad"), [configs]);
   const entraConfigs = useMemo(() => configs.filter((c: any) => c.source_type === "entra_id" || c.config_type === "entra"), [configs]);
 
-  const handleSync = async (_configId: string, _sourceType: string) => {
-    toast("Use the AD/Entra sync buttons on the End Users page to trigger sync");
+  const handleRefresh = () => {
     refetch();
+    toast.info("Refreshed sync configurations");
   };
 
-  const statusBadge = (status: string) => {
+  const statusLabel = (status: string) => {
     switch (status) {
-      case "active": return <Badge variant="default">Active</Badge>;
-      case "error": return <Badge variant="destructive">Error</Badge>;
-      case "syncing": return <Badge variant="secondary">Syncing</Badge>;
-      default: return <Badge variant="outline">{status || "Unknown"}</Badge>;
+      case "active": return <span className="status-chip" data-status="active">Active</span>;
+      case "error": return <span className="status-chip" data-status="error">Error</span>;
+      case "syncing": return <span className="status-chip" data-status="pending">Syncing</span>;
+      default: return <span className="status-chip">{status || "Unknown"}</span>;
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Directory Sync</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage Active Directory and Entra ID synchronization. Users synced from directories are automatically provisioned with workspace memberships.
-          </p>
+    <div data-cr>
+      <div className="console-page">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">Directory Sync</h1>
+            <p className="sh-desc">
+              Active Directory and Entra ID synchronization. Synced users are automatically provisioned with workspace memberships.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <button className="btn btn-secondary" onClick={handleRefresh}>
+              <RefreshCw className="icon-sm" /> Refresh
+            </button>
+            <button className="btn btn-primary" onClick={() => navigate("/end-users")}>
+              <FolderSync className="icon-sm" /> Configure
+            </button>
+          </div>
         </div>
-        <Button variant="outline" onClick={() => navigate("/end-users")} className="gap-2">
-          <Plus className="h-4 w-4" /> Configure New Sync
-        </Button>
-      </div>
 
-      {isLoading ? (
-        <div className="text-muted-foreground">Loading sync configurations...</div>
-      ) : configs.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
-              <FolderSync className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="font-medium mb-2">No directory sync configured</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Connect Active Directory or Entra ID to automatically provision and deprovision users.
+        {/* Info banner */}
+        {!infoDismissed && (
+          <div className="decision-banner" style={{ alignItems: "flex-start" }}>
+            <span className="db-icon"><FolderSync className="icon" /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p className="db-title">Directory sync management</p>
+              <p className="db-text">
+                Sync users and groups from your corporate directory to AuthSec. Configure
+                sync connections in the End Users page, then monitor them here.
               </p>
-              <Button onClick={() => navigate("/end-users")}>
-                <Settings className="h-4 w-4 mr-2" /> Go to Users to Configure
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {adConfigs.length > 0 && (
-            <div>
-              <h2 className="text-lg font-medium mb-3">Active Directory</h2>
-              <div className="space-y-3">
-                {adConfigs.map((cfg: any) => (
-                  <Card key={cfg.id}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <CardTitle className="text-base">{cfg.config_name || cfg.name || "AD Sync"}</CardTitle>
-                          {statusBadge(cfg.status)}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSync(cfg.id, "ad")}
-                          disabled={isSyncing}
-                        >
-                          <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? "animate-spin" : ""}`} />
-                          Sync Now
-                        </Button>
-                      </div>
-                      <CardDescription>
-                        {cfg.server_url || cfg.connection_url || "No server configured"}
-                        {cfg.last_sync_at && ` · Last synced: ${new Date(cfg.last_sync_at).toLocaleString()}`}
-                      </CardDescription>
-                    </CardHeader>
-                    {cfg.last_sync_error && (
-                      <CardContent className="pt-0">
-                        <p className="text-sm text-destructive">{cfg.last_sync_error}</p>
-                      </CardContent>
-                    )}
-                  </Card>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2) var(--space-5)", marginTop: "var(--space-3)" }}>
+                {[
+                  "Active Directory (LDAP)",
+                  "Entra ID (Azure AD)",
+                  "Automatic workspace membership",
+                ].map((cap) => (
+                  <span key={cap} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--color-text-muted)" }}>
+                    <CheckCircle2 className="icon-sm" style={{ color: "var(--color-primary)" }} />
+                    {cap}
+                  </span>
                 ))}
               </div>
+              <a
+                className="btn btn-secondary"
+                href="https://docs.authsec.dev/directory-sync"
+                target="_blank"
+                rel="noreferrer"
+                style={{ height: 32, padding: "0 12px", marginTop: "var(--space-4)" }}
+              >
+                <ExternalLink className="icon-sm" /> Read docs
+              </a>
             </div>
-          )}
+            <button className="icon-btn" aria-label="Dismiss" onClick={dismissInfo} style={{ flex: "none" }}>
+              <X className="icon-sm" />
+            </button>
+          </div>
+        )}
 
-          {entraConfigs.length > 0 && (
-            <div>
-              <h2 className="text-lg font-medium mb-3">Entra ID (Azure AD)</h2>
-              <div className="space-y-3">
-                {entraConfigs.map((cfg: any) => (
-                  <Card key={cfg.id}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <CardTitle className="text-base">{cfg.config_name || cfg.name || "Entra Sync"}</CardTitle>
-                          {statusBadge(cfg.status)}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSync(cfg.id, "entra")}
-                          disabled={isSyncing}
-                        >
-                          <RefreshCw className={`h-4 w-4 mr-1 ${isSyncing ? "animate-spin" : ""}`} />
-                          Sync Now
-                        </Button>
-                      </div>
-                      <CardDescription>
-                        {cfg.entra_tenant_id && `Tenant: ${cfg.entra_tenant_id}`}
-                        {cfg.last_sync_at && ` · Last synced: ${new Date(cfg.last_sync_at).toLocaleString()}`}
-                      </CardDescription>
-                    </CardHeader>
-                    {cfg.last_sync_error && (
-                      <CardContent className="pt-0">
-                        <p className="text-sm text-destructive">{cfg.last_sync_error}</p>
-                      </CardContent>
-                    )}
-                  </Card>
+        {/* Content */}
+        {isLoading ? (
+          <p style={{ color: "var(--color-text-muted)", padding: "var(--space-6)" }}>Loading…</p>
+        ) : configs.length === 0 ? (
+          <div className="empty-state">
+            <FolderSync style={{ width: 40, height: 40, color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }} />
+            <p className="es-title">No directory sync configured</p>
+            <p className="es-desc">Connect Active Directory or Entra ID to automatically provision users.</p>
+            <button className="btn btn-primary" onClick={() => navigate("/end-users")} style={{ marginTop: "var(--space-4)" }}>
+              <FolderSync className="icon-sm" /> Go to End Users to Configure
+            </button>
+          </div>
+        ) : (
+          <div className="cr-table-wrap">
+            <table className="cr-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Last Sync</th>
+                  <th>Server / Tenant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adConfigs.map((cfg: any) => (
+                  <tr key={cfg.id}>
+                    <td style={{ fontWeight: 500 }}>{cfg.config_name || cfg.name || "AD Sync"}</td>
+                    <td><span className="status-chip">Active Directory</span></td>
+                    <td>{statusLabel(cfg.status)}</td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                      {cfg.last_sync_at ? new Date(cfg.last_sync_at).toLocaleString() : "Never"}
+                    </td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                      {cfg.server_url || cfg.connection_url || "—"}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+                {entraConfigs.map((cfg: any) => (
+                  <tr key={cfg.id}>
+                    <td style={{ fontWeight: 500 }}>{cfg.config_name || cfg.name || "Entra Sync"}</td>
+                    <td><span className="status-chip">Entra ID</span></td>
+                    <td>{statusLabel(cfg.status)}</td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                      {cfg.last_sync_at ? new Date(cfg.last_sync_at).toLocaleString() : "Never"}
+                    </td>
+                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                      {cfg.entra_tenant_id || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
