@@ -566,7 +566,7 @@ function BulkActionBar({
         ) : null}
         {someVisibleSelected || allVisibleSelected ? null : null}
         <span className="h-4 w-px bg-slate-200" aria-hidden />
-        <Button size="sm" className="h-8" onClick={onAssign}>
+        <Button size="sm" className="h-8 text-white" onClick={onAssign}>
           Assign access label
         </Button>
         <Button

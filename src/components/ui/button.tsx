@@ -24,8 +24,11 @@ const buttonVariants = cva(
       size: {
         default:
           "min-h-[var(--component-button-height-md)] px-[var(--component-button-padding-inline-md)] py-[var(--component-button-padding-block)]",
-        sm: "min-h-[var(--component-button-height-sm)] px-[var(--component-button-padding-inline-sm)] py-[var(--component-button-padding-block)] text-[var(--font-size-sm)]",
-        lg: "min-h-[var(--component-button-height-lg)] px-[var(--component-button-padding-inline-lg)] py-[var(--component-button-padding-block)] text-[var(--font-size-md)]",
+        // `length:` hint disambiguates these arbitrary font-size classes from
+        // text-color classes (e.g. `text-white` on the default variant) so
+        // tailwind-merge doesn't strip the color when both are present.
+        sm: "min-h-[var(--component-button-height-sm)] px-[var(--component-button-padding-inline-sm)] py-[var(--component-button-padding-block)] text-[length:var(--font-size-sm)]",
+        lg: "min-h-[var(--component-button-height-lg)] px-[var(--component-button-padding-inline-lg)] py-[var(--component-button-padding-block)] text-[length:var(--font-size-md)]",
         icon: "size-[var(--component-button-height-md)]",
       },
     },
