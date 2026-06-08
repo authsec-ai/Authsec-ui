@@ -25,14 +25,22 @@ import {
   samlEntityId,
   samlAcsUrl,
   samlMetadataUrl,
+  parseIdpMetadataXml,
+  presetForSlug,
+  ATTRIBUTE_MAPPING_PRESETS,
 } from "../../app/api/samlApi";
 import { useCreateIdentityProviderMutation } from "../../app/api/authMethodApi";
 import { SessionManager } from "../../utils/sessionManager";
 
+// NameID format options. `transient` is intentionally absent — the backend
+// uses NameID as the stable user identity key (provider_id), and transient
+// NameIDs are per-session, so picking transient would mint a fresh user on
+// every login and break user history. If a customer truly needs transient,
+// reach for a SAML attribute as the identity instead.
 const NAME_ID_FORMATS = [
   {
     value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-    label: "Email Address",
+    label: "Email Address (recommended)",
   },
   {
     value: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
@@ -42,11 +50,9 @@ const NAME_ID_FORMATS = [
     value: "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
     label: "Persistent",
   },
-  {
-    value: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
-    label: "Transient",
-  },
 ];
+
+const PROVIDER_PRESET_KEYS = Object.keys(ATTRIBUTE_MAPPING_PRESETS);
 
 // Wizard steps
 const WIZARD_STEPS = [
@@ -103,6 +109,87 @@ export function CreateSamlMethodPage() {
 
   const [createIdp, { isLoading: isCreating }] =
     useCreateIdentityProviderMutation();
+
+  const [idpMetadataXml, setIdpMetadataXml] = useState("");
+  const [metadataParseHint, setMetadataParseHint] = useState<
+    { tone: "ok" | "warn" | "err"; text: string } | null
+  >(null);
+
+  const handleApplyIdpMetadata = useCallback(() => {
+    const xml = idpMetadataXml.trim();
+    if (!xml) {
+      setMetadataParseHint({ tone: "err", text: "Paste IdP metadata XML first." });
+      return;
+    }
+    const parsed = parseIdpMetadataXml(xml);
+    if (!parsed) {
+      setMetadataParseHint({
+        tone: "err",
+        text: "Couldn't parse — make sure you pasted the IdP federation metadata (the XML containing <IDPSSODescriptor>).",
+      });
+      return;
+    }
+    const next = { ...formData };
+    const filled: string[] = [];
+    if (parsed.entity_id) {
+      next.entity_id = parsed.entity_id;
+      filled.push("Entity ID");
+    }
+    if (parsed.sso_url) {
+      next.sso_url = parsed.sso_url;
+      filled.push("SSO URL");
+    }
+    if (parsed.slo_url) {
+      next.slo_url = parsed.slo_url;
+      filled.push("SLO URL");
+    }
+    if (parsed.certificate) {
+      next.certificate = parsed.certificate;
+      filled.push("certificate");
+    }
+    if (
+      parsed.name_id_format &&
+      // Don't switch to transient even if the IdP declares it.
+      !parsed.name_id_format.includes("transient")
+    ) {
+      next.name_id_format = parsed.name_id_format;
+      filled.push("NameID format");
+    }
+    setFormData(next);
+    if (filled.length === 0) {
+      setMetadataParseHint({
+        tone: "warn",
+        text: "Parsed the XML but didn't find IdP entity/SSO/cert fields. Paste in manually below.",
+      });
+    } else {
+      setMetadataParseHint({
+        tone: "ok",
+        text: `Filled ${filled.join(", ")} from the metadata XML.`,
+      });
+    }
+  }, [idpMetadataXml, formData]);
+
+  // Auto-apply attribute mapping preset when the provider_name slug matches a
+  // known IdP (okta, azure-ad, adfs, onelogin, …). Only fires while the
+  // attribute fields are still at their initial Okta defaults — never
+  // clobbers explicit operator input.
+  useEffect(() => {
+    const slug = formData.provider_name.toLowerCase().trim();
+    if (!PROVIDER_PRESET_KEYS.includes(slug)) return;
+    const stillDefaults =
+      formData.attribute_email === "email" &&
+      formData.attribute_first_name === "firstName" &&
+      formData.attribute_last_name === "lastName";
+    if (!stillDefaults) return;
+    const preset = presetForSlug(slug);
+    setFormData((prev) => ({
+      ...prev,
+      attribute_email: preset.email,
+      attribute_first_name: preset.first_name,
+      attribute_last_name: preset.last_name,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.provider_name]);
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
 
@@ -407,8 +494,65 @@ export function CreateSamlMethodPage() {
               </h3>
               <p className="text-xs text-muted-foreground mb-3">
                 Copy these values from your SAML IdP admin console (Okta SSO
-                URL + cert, Azure AD federation metadata, etc.).
+                URL + cert, Azure AD federation metadata, etc.). The fastest
+                path is to paste the IdP's metadata XML below — we'll extract
+                everything automatically.
               </p>
+
+              {/* Paste-IdP-metadata shortcut. Most IdPs publish a federation
+                  metadata XML the operator can copy in one click — parsing it
+                  fills Entity ID, SSO URL, SLO URL, certificate, and NameID
+                  format in one shot. Eliminates the typo class of SAML bugs. */}
+              <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/30 p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold">
+                      Paste IdP metadata XML (recommended)
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Download "Federation Metadata XML" from your IdP (Azure
+                      AD: <em>App Registrations → Endpoints</em>; Okta:{" "}
+                      <em>Sign On → Identity Provider metadata</em>) and paste
+                      below to auto-fill the fields.
+                    </p>
+                  </div>
+                </div>
+                <textarea
+                  value={idpMetadataXml}
+                  onChange={(e) => {
+                    setIdpMetadataXml(e.target.value);
+                    setMetadataParseHint(null);
+                  }}
+                  placeholder='<EntityDescriptor entityID="https://sts.windows.net/.../" ...>'
+                  rows={4}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono resize-vertical"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] flex-1 min-w-0">
+                    {metadataParseHint && (
+                      <span
+                        className={cn(
+                          metadataParseHint.tone === "ok" && "text-green-700 dark:text-green-400",
+                          metadataParseHint.tone === "warn" && "text-amber-700 dark:text-amber-400",
+                          metadataParseHint.tone === "err" && "text-red-700 dark:text-red-400",
+                        )}
+                      >
+                        {metadataParseHint.text}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="text-white shrink-0"
+                    disabled={!idpMetadataXml.trim()}
+                    onClick={handleApplyIdpMetadata}
+                  >
+                    Apply metadata
+                  </Button>
+                </div>
+              </div>
 
               <div className="space-y-3">
                 <FormField

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import {
@@ -15,6 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "../../lib/toast";
+import { cn } from "../../lib/utils";
 import {
   FormRoot,
   FormBody,
@@ -29,16 +30,22 @@ import {
 import {
   useGetSamlProviderQuery,
   useUpdateSamlProviderMutation,
-  useLazyGetSamlMetadataQuery
+  parseIdpMetadataXml,
+  presetForSlug,
+  ATTRIBUTE_MAPPING_PRESETS,
+  samlEntityId,
+  samlAcsUrl,
 } from "../../app/api/samlApi";
 import { SessionManager } from "../../utils/sessionManager";
 
+// `transient` is intentionally absent — see CreateSamlMethodPage rationale.
 const NAME_ID_FORMATS = [
-  { value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress", label: "Email Address" },
+  { value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress", label: "Email Address (recommended)" },
   { value: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified", label: "Unspecified" },
   { value: "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent", label: "Persistent" },
-  { value: "urn:oasis:names:tc:SAML:2.0:nameid-format:transient", label: "Transient" },
 ];
+
+const PROVIDER_PRESET_KEYS = Object.keys(ATTRIBUTE_MAPPING_PRESETS);
 
 export function EditSamlMethodPage() {
   const navigate = useNavigate();
@@ -46,22 +53,37 @@ export function EditSamlMethodPage() {
   const session = SessionManager.getSession();
   const workspaceId = session?.workspace_id || "";
 
-  const [metadata, setMetadata] = useState<{ entity_id: string; acs_url: string } | null>(null);
   const [formData, setFormData] = useState({
     provider_name: "",
     display_name: "",
     entity_id: "",
     sso_url: "",
+    slo_url: "",
     certificate: "",
-    metadata_url: "",
     name_id_format: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
     attribute_email: "email",
     attribute_first_name: "firstName",
     attribute_last_name: "lastName",
     is_active: true,
-    sort_order: 1,
   });
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [idpMetadataXml, setIdpMetadataXml] = useState("");
+  const [metadataParseHint, setMetadataParseHint] = useState<
+    { tone: "ok" | "warn" | "err"; text: string } | null
+  >(null);
+
+  // SP metadata URLs are deterministic from the workspace ID — display them
+  // immediately so the operator can paste them into their IdP admin console.
+  const spMetadata = useMemo(
+    () =>
+      workspaceId
+        ? {
+            entity_id: samlEntityId(workspaceId),
+            acs_url: samlAcsUrl(workspaceId),
+          }
+        : null,
+    [workspaceId],
+  );
 
   // Fetch existing SAML provider data
   const { data: providerData, isLoading: isLoadingProvider } = useGetSamlProviderQuery(
@@ -69,51 +91,104 @@ export function EditSamlMethodPage() {
     { skip: !workspaceId || !id }
   );
 
-  const [fetchMetadata, { isLoading: loadingMetadata }] = useLazyGetSamlMetadataQuery();
   const [updateSamlProvider, { isLoading: isUpdating }] = useUpdateSamlProviderMutation();
 
   // Pre-populate form with existing provider data
   useEffect(() => {
     if (providerData?.provider) {
       const provider = providerData.provider;
+      // Filter out NameID `transient` — the backend disallows it, but legacy
+      // rows may still hold it. Fall back to the safer default.
+      const safeNameID = (provider.name_id_format || "").includes("transient")
+        ? "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+        : provider.name_id_format || "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
       setFormData({
         provider_name: provider.provider_name || "",
         display_name: provider.display_name || "",
         entity_id: provider.entity_id || "",
         sso_url: provider.sso_url || "",
+        slo_url: provider.slo_url || "",
         certificate: provider.certificate || "",
-        metadata_url: provider.metadata_url || "",
-        name_id_format: provider.name_id_format || "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+        name_id_format: safeNameID,
         attribute_email: provider.attribute_mapping?.email || "email",
         attribute_first_name: provider.attribute_mapping?.first_name || "firstName",
         attribute_last_name: provider.attribute_mapping?.last_name || "lastName",
         is_active: provider.is_active ?? true,
-        sort_order: provider.sort_order ?? 1,
-      });
-
-      // Set metadata from existing provider
-      setMetadata({
-        entity_id: provider.entity_id || "",
-        acs_url: "", // This should come from metadata endpoint if needed
       });
     }
   }, [providerData]);
 
-  // Fetch metadata when client_id is available
+  // Apply attribute mapping preset when slug matches and operator hasn't
+  // overridden the defaults yet. Same guard as Create page.
   useEffect(() => {
-    const clientId = providerData?.provider?.client_id;
-    if (clientId && workspaceId) {
-      fetchMetadata({ workspace_id: workspaceId, client_id: clientId })
-        .unwrap()
-        .then((data) => {
-          setMetadata({ entity_id: data.entity_id, acs_url: data.acs_url });
-        })
-        .catch(() => {
-          // If metadata fetch fails, keep the entity_id from provider
-          console.log("Could not fetch fresh metadata, using existing values");
-        });
+    const slug = formData.provider_name.toLowerCase().trim();
+    if (!PROVIDER_PRESET_KEYS.includes(slug)) return;
+    const loadedRow = providerData?.provider;
+    if (!loadedRow) return;
+    const stillStoredDefaults =
+      formData.attribute_email === loadedRow.attribute_mapping?.email &&
+      formData.attribute_first_name === loadedRow.attribute_mapping?.first_name &&
+      formData.attribute_last_name === loadedRow.attribute_mapping?.last_name;
+    if (!stillStoredDefaults) return;
+    // Already loaded from DB; do not auto-replace on Edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.provider_name, providerData?.provider]);
+
+  const handleApplyIdpMetadata = useCallback(() => {
+    const xml = idpMetadataXml.trim();
+    if (!xml) {
+      setMetadataParseHint({ tone: "err", text: "Paste IdP metadata XML first." });
+      return;
     }
-  }, [providerData?.provider?.client_id, workspaceId, fetchMetadata]);
+    const parsed = parseIdpMetadataXml(xml);
+    if (!parsed) {
+      setMetadataParseHint({
+        tone: "err",
+        text: "Couldn't parse — make sure you pasted IdP federation metadata (containing <IDPSSODescriptor>).",
+      });
+      return;
+    }
+    const filled: string[] = [];
+    setFormData((prev) => {
+      const next = { ...prev };
+      if (parsed.entity_id) { next.entity_id = parsed.entity_id; filled.push("Entity ID"); }
+      if (parsed.sso_url) { next.sso_url = parsed.sso_url; filled.push("SSO URL"); }
+      if (parsed.slo_url) { next.slo_url = parsed.slo_url; filled.push("SLO URL"); }
+      if (parsed.certificate) { next.certificate = parsed.certificate; filled.push("certificate"); }
+      if (parsed.name_id_format && !parsed.name_id_format.includes("transient")) {
+        next.name_id_format = parsed.name_id_format;
+        filled.push("NameID format");
+      }
+      return next;
+    });
+    if (filled.length === 0) {
+      setMetadataParseHint({
+        tone: "warn",
+        text: "Parsed the XML but didn't find IdP entity/SSO/cert fields.",
+      });
+    } else {
+      setMetadataParseHint({
+        tone: "ok",
+        text: `Filled ${filled.join(", ")} from the metadata XML.`,
+      });
+    }
+  }, [idpMetadataXml]);
+
+  const applyPreset = useCallback(() => {
+    const slug = formData.provider_name.toLowerCase().trim();
+    if (!PROVIDER_PRESET_KEYS.includes(slug)) {
+      toast.error(`No preset for "${formData.provider_name}". Known: ${PROVIDER_PRESET_KEYS.join(", ")}`);
+      return;
+    }
+    const preset = presetForSlug(slug);
+    setFormData((prev) => ({
+      ...prev,
+      attribute_email: preset.email,
+      attribute_first_name: preset.first_name,
+      attribute_last_name: preset.last_name,
+    }));
+    toast.success(`Applied ${slug} attribute mapping.`);
+  }, [formData.provider_name]);
 
   const canComplete = useMemo(
     () =>
@@ -139,15 +214,15 @@ export function EditSamlMethodPage() {
     }
 
     try {
-      const payload = {
+      await updateSamlProvider({
         workspace_id: workspaceId,
         provider_id: id,
         provider_name: formData.provider_name,
         display_name: formData.display_name,
         entity_id: formData.entity_id,
         sso_url: formData.sso_url,
+        slo_url: formData.slo_url || undefined,
         certificate: formData.certificate,
-        metadata_url: formData.metadata_url || undefined,
         name_id_format: formData.name_id_format,
         attribute_mapping: {
           email: formData.attribute_email,
@@ -155,16 +230,13 @@ export function EditSamlMethodPage() {
           last_name: formData.attribute_last_name,
         },
         is_active: formData.is_active,
-        sort_order: formData.sort_order,
-      };
-
-      await updateSamlProvider(payload).unwrap();
+      }).unwrap();
       toast.success("SAML provider updated successfully!");
       setShowConfirmDialog(false);
       navigate("/authentication");
     } catch (error: any) {
       console.error("Failed to update SAML provider:", error);
-      toast.error(error?.data?.message || "Failed to update SAML provider");
+      toast.error(error?.data?.error || error?.data?.message || "Failed to update SAML provider");
     }
   };
 
@@ -242,8 +314,8 @@ export function EditSamlMethodPage() {
 
         <FormRoot className="px-0" maxWidth="96rem">
           <FormBody>
-            {/* Service Provider Metadata */}
-            {metadata && (
+            {/* Service Provider Metadata — values the operator pastes into the IdP */}
+            {spMetadata && (
               <FormSection>
                 <FormSectionHeader
                   title="Service Provider Metadata"
@@ -252,17 +324,63 @@ export function EditSamlMethodPage() {
                 <FormGrid columns={2}>
                   <FormCopyField
                     label="Entity ID (Audience URL)"
-                    value={metadata.entity_id}
+                    value={spMetadata.entity_id}
                     description="Unique identifier for this service provider"
                   />
                   <FormCopyField
                     label="ACS URL (Reply URL)"
-                    value={metadata.acs_url}
+                    value={spMetadata.acs_url}
                     description="URL where SAML assertions are sent"
                   />
                 </FormGrid>
               </FormSection>
             )}
+
+            <FormDivider />
+
+            {/* Paste-IdP-metadata shortcut */}
+            <FormSection>
+              <FormSectionHeader
+                title="Replace from IdP metadata XML (optional)"
+                description="Paste the IdP's federation metadata XML to re-fill Entity ID, SSO URL, SLO URL, certificate, and NameID format in one shot."
+              />
+              <div className="space-y-3">
+                <textarea
+                  value={idpMetadataXml}
+                  onChange={(e) => {
+                    setIdpMetadataXml(e.target.value);
+                    setMetadataParseHint(null);
+                  }}
+                  placeholder='<EntityDescriptor entityID="..." ...>'
+                  rows={4}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono resize-vertical"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] flex-1 min-w-0">
+                    {metadataParseHint && (
+                      <span
+                        className={cn(
+                          metadataParseHint.tone === "ok" && "text-green-700 dark:text-green-400",
+                          metadataParseHint.tone === "warn" && "text-amber-700 dark:text-amber-400",
+                          metadataParseHint.tone === "err" && "text-red-700 dark:text-red-400",
+                        )}
+                      >
+                        {metadataParseHint.text}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="text-white shrink-0"
+                    disabled={!idpMetadataXml.trim()}
+                    onClick={handleApplyIdpMetadata}
+                  >
+                    Apply metadata
+                  </Button>
+                </div>
+              </div>
+            </FormSection>
 
             <FormDivider />
 
@@ -274,12 +392,24 @@ export function EditSamlMethodPage() {
               />
               <FormGrid columns={2}>
                 <FormField label="Provider Name" htmlFor="provider_name" required>
-                  <FormInput
-                    id="provider_name"
-                    value={formData.provider_name}
-                    onChange={(e) => setFormData({ ...formData, provider_name: e.target.value })}
-                    placeholder="e.g., okta, azure, google"
-                  />
+                  <div className="flex gap-2">
+                    <FormInput
+                      id="provider_name"
+                      value={formData.provider_name}
+                      onChange={(e) => setFormData({ ...formData, provider_name: e.target.value })}
+                      placeholder="e.g., okta, azure-ad, adfs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      title={`Apply attribute mapping preset for the current slug. Known: ${PROVIDER_PRESET_KEYS.join(", ")}`}
+                      onClick={applyPreset}
+                    >
+                      Apply preset
+                    </Button>
+                  </div>
                 </FormField>
 
                 <FormField label="Display Name" htmlFor="display_name" required>
@@ -320,6 +450,15 @@ export function EditSamlMethodPage() {
                   />
                 </FormField>
 
+                <FormField label="SLO URL (optional)" htmlFor="slo_url">
+                  <FormInput
+                    id="slo_url"
+                    value={formData.slo_url}
+                    onChange={(e) => setFormData({ ...formData, slo_url: e.target.value })}
+                    placeholder="https://idp.example.com/slo/saml"
+                  />
+                </FormField>
+
                 <FormField label="X.509 Certificate" htmlFor="certificate" required>
                   <textarea
                     id="certificate"
@@ -327,15 +466,6 @@ export function EditSamlMethodPage() {
                     onChange={(e) => setFormData({ ...formData, certificate: e.target.value })}
                     placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                     className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
-                  />
-                </FormField>
-
-                <FormField label="Metadata URL (Optional)" htmlFor="metadata_url">
-                  <FormInput
-                    id="metadata_url"
-                    value={formData.metadata_url}
-                    onChange={(e) => setFormData({ ...formData, metadata_url: e.target.value })}
-                    placeholder="https://idp.example.com/metadata.xml"
                   />
                 </FormField>
 
@@ -364,7 +494,7 @@ export function EditSamlMethodPage() {
                 title="Attribute Mapping"
                 description="Map SAML attributes to user properties."
               />
-              <FormGrid columns={3}>
+              <FormGrid columns={2}>
                 <FormField label="Email Attribute" htmlFor="attribute_email" required>
                   <FormInput
                     id="attribute_email"
@@ -396,23 +526,13 @@ export function EditSamlMethodPage() {
 
             <FormDivider />
 
-            {/* Advanced Settings */}
+            {/* Status */}
             <FormSection>
               <FormSectionHeader
-                title="Advanced Settings"
-                description="Additional configuration options."
+                title="Status"
+                description="Whether end users see this provider on the login page."
               />
               <FormGrid columns={2}>
-                <FormField label="Sort Order" htmlFor="sort_order">
-                  <FormInput
-                    id="sort_order"
-                    type="number"
-                    value={formData.sort_order}
-                    onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 1 })}
-                    min={1}
-                  />
-                </FormField>
-
                 <FormField label="Active" htmlFor="is_active">
                   <div className="flex items-center h-12">
                     <input

@@ -45,8 +45,6 @@ export const ENV_SHELL_LABELS: Record<EnvShell, string> = {
 const ENV_SECRET_PLACEHOLDER = "<paste the one-time introspection secret>";
 const ENV_UPSTREAM_PLACEHOLDER_GENERIC =
   "<your upstream service credential, if this MCP calls an external API>";
-const ENV_UPSTREAM_PLACEHOLDER_GITHUB =
-  "<your GitHub PAT or installation token>";
 
 export const DEFAULT_FORM: ResourceServerFormState = {
   name: "",
@@ -336,7 +334,7 @@ export function buildSDKContent(
   const intro = [
     "AuthSec owns protected-resource metadata, OAuth discovery/challenges, token validation, RBAC-backed scope enforcement, and auditability.",
     "Your MCP server still owns tool registration, upstream service credentials, tool execution, and any domain-specific authorization logic beyond scope-to-tool gating.",
-    "The access token presented to your MCP server is an AuthSec user token. It is not your upstream service credential and must not be forwarded to GitHub or any other provider.",
+    "The access token presented to your MCP server is an AuthSec user token. It is not your upstream service credential and must not be forwarded to any upstream provider.",
     `For this protected resource, clients discover metadata at ${metadataURL}. Path-based resources use the alias-only route ${metadataPath}.`,
   ];
 
@@ -399,7 +397,6 @@ export function getEnvPairs(
   server: Pick<ResourceServer, "id" | "resource_uri" | "name">,
   secret: string | null,
 ): Array<{ key: string; value: string; comment?: string }> {
-  const isGitHub = server.name.toLowerCase().includes("github");
   const secretValue = secret ?? ENV_SECRET_PLACEHOLDER;
   return [
     { key: "AUTHSEC_RESOURCE_SERVER_ID", value: server.id },
@@ -414,19 +411,16 @@ export function getEnvPairs(
     { key: "AUTHSEC_INTROSPECTION_SECRET", value: secretValue },
     { key: "AUTHSEC_POLICY_MODE", value: "remote_required" },
     { key: "AUTHSEC_PUBLISH_MANIFEST", value: "true" },
-    isGitHub
-      ? {
-          key: "AUTHSEC_UPSTREAM_GITHUB_TOKEN",
-          value: ENV_UPSTREAM_PLACEHOLDER_GITHUB,
-          comment:
-            "GitHub credential used by this MCP server to call the GitHub API on the user's behalf. Distinct from the AuthSec user token: AuthSec authorizes the user; this stays server-side.",
-        }
-      : {
-          key: "UPSTREAM_API_TOKEN",
-          value: ENV_UPSTREAM_PLACEHOLDER_GENERIC,
-          comment:
-            "Optional — only set this if your MCP server calls an external API on the user's behalf. Leave unset for AuthSec-only servers. This is NOT the AuthSec user token.",
-        },
+    // Optional — only set this if your MCP server calls an upstream API on
+    // the user's behalf. Leave unset for AuthSec-only servers. Whatever you
+    // name this var, this is NOT the AuthSec user token — keep upstream
+    // credentials server-side and never forward AuthSec tokens upstream.
+    {
+      key: "UPSTREAM_API_TOKEN",
+      value: ENV_UPSTREAM_PLACEHOLDER_GENERIC,
+      comment:
+        "Optional — only set this if your MCP server calls an upstream API on the user's behalf. NOT the AuthSec user token; keep upstream credentials server-side.",
+    },
   ];
 }
 
@@ -680,7 +674,6 @@ not reintroduce them:
    this at introspection time; if you hand-rewrite aud, introspection
    returns active=false.
 
-If the resource server is a GitHub MCP server, keep the GitHub PAT or installation token server-side. The AuthSec principal should only decide whether the tool is allowed; it should not replace the upstream GitHub credential.
 
 When in doubt, defer to ${profile.sdkDocsURL} and https://docs.authsec.dev/getting-started rather than improvising.
 
