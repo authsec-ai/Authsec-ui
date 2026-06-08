@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { formatRoleName } from "@/utils/roleName";
 import { toast } from "@/lib/toast";
@@ -321,6 +321,12 @@ function RolesTab({
       {/* Role detail drawer */}
       <Sheet open={!!selectedRole} onOpenChange={(o) => !o && setSelectedRole(null)}>
         <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+          <SheetTitle className="sr-only">
+            {selectedFmt ? `${selectedFmt.displayName} — role details` : "Role details"}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Inspect this role's scopes and bindings.
+          </SheetDescription>
           {selectedRole && selectedFmt && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">
@@ -596,6 +602,12 @@ function ScopesTab() {
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+          <SheetTitle className="sr-only">
+            {selected ? `${selected.display_name || selected.scope_string} — scope details` : "Scope details"}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Inspect this scope's risk, roles, and bindings.
+          </SheetDescription>
           {selected && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">

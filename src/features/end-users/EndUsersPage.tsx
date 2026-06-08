@@ -19,7 +19,7 @@ import {
   Plus,
 } from "lucide-react";
 
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   useListEndUsersQuery,
   useReactivateEndUserMutation,
@@ -753,6 +753,12 @@ export default function EndUsersPage() {
           data-cr
           className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110"
         >
+          <SheetTitle className="sr-only">
+            {selectedUser ? `${selectedUser.email} — user details` : "User details"}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Inspect this end-user's identity, sessions, and access.
+          </SheetDescription>
           {selectedUser && (
             <UserDetailDrawer
               user={selectedUser}

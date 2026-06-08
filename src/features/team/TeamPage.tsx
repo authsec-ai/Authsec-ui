@@ -26,7 +26,7 @@ import {
   type MembershipStatus,
   type TenantMembership,
 } from "@/app/api/membershipApi";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -414,6 +414,12 @@ export function TeamPage() {
       {/* Detail drawer */}
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+          <SheetTitle className="sr-only">
+            {selected ? `${selected.email} — team member` : "Team member"}
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Inspect this team member's role and access.
+          </SheetDescription>
           {selected && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">

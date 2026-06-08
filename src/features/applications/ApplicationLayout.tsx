@@ -65,7 +65,7 @@ export default function ApplicationLayout() {
       <div className={consolePage}>
         <div data-cr>
           <ApplicationHeader application={application} readiness={readiness} />
-          <div className="tabbar-wrap" style={{ marginTop: "var(--space-5)" }}>
+          <div className="tabbar-wrap">
             <ApplicationDetailTabs
               applicationId={application.id}
               readiness={readiness}

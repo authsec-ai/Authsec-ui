@@ -6,6 +6,8 @@ import {
   Sheet,
   SheetContent,
   SheetClose,
+  SheetTitle,
+  SheetDescription,
 } from "@/components/ui/sheet";
 
 export interface RightDrawerProps {
@@ -13,6 +15,11 @@ export interface RightDrawerProps {
   onClose: () => void;
   width?: number;
   pinnable?: boolean;
+  /** Accessible label for screen readers. Drawer content usually has its own
+   *  visual heading; this is rendered visually hidden to satisfy Radix Dialog
+   *  a11y. Defaults to a generic label so the primitive never warns. */
+  ariaTitle?: string;
+  ariaDescription?: string;
   children: React.ReactNode;
 }
 
@@ -29,6 +36,8 @@ export function RightDrawer({
   onClose,
   width = 520,
   pinnable = false,
+  ariaTitle = "Detail panel",
+  ariaDescription = "Side panel with additional details.",
   children,
 }: RightDrawerProps) {
   const [pinned, setPinned] = useState(false);
@@ -53,6 +62,8 @@ export function RightDrawer({
           }
         }}
       >
+        <SheetTitle className="sr-only">{ariaTitle}</SheetTitle>
+        <SheetDescription className="sr-only">{ariaDescription}</SheetDescription>
         {/* Custom header controls */}
         <div className="absolute top-3 right-3 flex items-center gap-1 z-50">
           {pinnable && (

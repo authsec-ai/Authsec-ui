@@ -9,7 +9,7 @@
 import { useNavigate } from "react-router-dom";
 import { KeyRound, Link2, Lock, Scan, Server, Sparkles, Star, X } from "lucide-react";
 
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { ApplicationRole } from "@/app/api/accessApi";
 
 type Risk = "low" | "medium" | "high" | "critical";
@@ -40,6 +40,12 @@ export function ApplicationRoleDrawer({
   return (
     <Sheet open={!!role} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+        <SheetTitle className="sr-only">
+          {role ? `${role.display_name || role.name} — role details` : "Role details"}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Application-scoped role summary, scopes, and handoffs.
+        </SheetDescription>
         {role && (
           <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
             <div className="drawer-head">

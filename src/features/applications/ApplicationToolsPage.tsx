@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { Loader2, Search, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -15,6 +15,15 @@ import {
 } from "@/components/console/iam-console";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,6 +40,7 @@ import {
 import { useMarkToolPublicMutation } from "@/app/api/setupWizardApi";
 import type {
   MCPToolResponse,
+  OAuthScopeResponse,
   RiskLevel,
 } from "@/app/api/types/scopeMatrix";
 import { cn } from "@/lib/utils";
@@ -125,8 +135,15 @@ export default function ApplicationToolsPage() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<MCPToolResponse | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
+  const [bulkMode, setBulkMode] = useState<"assign" | "remove" | null>(null);
+  const [updateMap, { isLoading: bulkSaving }] = useUpdateToolScopeMapMutation();
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix?.tools]);
+  const allScopes = useMemo<OAuthScopeResponse[]>(
+    () => matrix?.scopes ?? matrix?.unmapped_scopes ?? [],
+    [matrix?.scopes, matrix?.unmapped_scopes],
+  );
 
   const counts = useMemo(() => {
     let mapped = 0;
@@ -142,6 +159,36 @@ export default function ApplicationToolsPage() {
     }
     return { all: tools.length, mapped, public: publicCount, unmapped, advisory };
   }, [tools]);
+
+  const selectedTools = useMemo(
+    () => tools.filter((tool) => selectedToolIds.includes(tool.id)),
+    [tools, selectedToolIds],
+  );
+
+  // Scopes mapped to EVERY selected tool — the safe "remove" target. If only
+  // one tool is selected, this is just its scopes; with multiple, this is the
+  // intersection so removal applies cleanly across the whole selection.
+  const sharedScopes = useMemo(() => {
+    if (selectedTools.length === 0) return [];
+    const first = selectedTools[0].scopes;
+    return first.filter((scope) =>
+      selectedTools.every((tool) =>
+        tool.scopes.some((entry) => entry.scope_id === scope.scope_id),
+      ),
+    );
+  }, [selectedTools]);
+
+  // Scopes already mapped to ALL selected tools — hide these from the assign picker
+  // (mapping a tool to a scope it already has is a no-op the backend rejects).
+  const scopesAlreadyOnAll = useMemo(
+    () => new Set(sharedScopes.map((scope) => scope.scope_id)),
+    [sharedScopes],
+  );
+  const assignableScopes = useMemo(
+    () =>
+      allScopes.filter((scope) => !scopesAlreadyOnAll.has(scope.id)),
+    [allScopes, scopesAlreadyOnAll],
+  );
 
   const visibleTools = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -167,6 +214,75 @@ export default function ApplicationToolsPage() {
         .some((value) => String(value).toLowerCase().includes(q));
     });
   }, [filter, query, tools]);
+
+  const visibleToolIds = useMemo(
+    () => visibleTools.map((tool) => tool.id),
+    [visibleTools],
+  );
+  const allVisibleSelected =
+    visibleToolIds.length > 0 &&
+    visibleToolIds.every((id) => selectedToolIds.includes(id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleToolIds.some((id) => selectedToolIds.includes(id));
+
+  const handleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      // Drop only the currently-visible ones; preserve selections hidden by filter.
+      setSelectedToolIds((prev) => prev.filter((id) => !visibleToolIds.includes(id)));
+    } else {
+      setSelectedToolIds((prev) =>
+        Array.from(new Set([...prev, ...visibleToolIds])),
+      );
+    }
+  };
+
+  const applyBulkScopes = async (
+    scopeIds: string[],
+    mode: "assign" | "remove",
+  ) => {
+    if (scopeIds.length === 0 || selectedTools.length === 0) return;
+    const mappings = selectedTools.flatMap((tool) =>
+      scopeIds
+        // Skip no-op mappings the backend would reject:
+        //   - assign: tool already has this scope
+        //   - remove: tool doesn't have this scope
+        .filter((scopeId) => {
+          const has = tool.scopes.some((entry) => entry.scope_id === scopeId);
+          return mode === "assign" ? !has : has;
+        })
+        .map((scopeId) => ({
+          tool_id: tool.id,
+          scope_id: scopeId,
+          ...(mode === "remove" ? { remove: true } : {}),
+        })),
+    );
+    if (mappings.length === 0) {
+      toast(
+        mode === "assign"
+          ? "All selected tools already have these labels."
+          : "None of the selected tools have these labels.",
+      );
+      return;
+    }
+    try {
+      await updateMap({
+        rsId: application.id,
+        body: { mappings },
+      }).unwrap();
+      const toolNoun = selectedTools.length === 1 ? "tool" : "tools";
+      const labelNoun = scopeIds.length === 1 ? "label" : "labels";
+      toast.success(
+        mode === "assign"
+          ? `Mapped ${scopeIds.length} ${labelNoun} to ${selectedTools.length} ${toolNoun}.`
+          : `Removed ${scopeIds.length} ${labelNoun} from ${selectedTools.length} ${toolNoun}.`,
+      );
+      setBulkMode(null);
+      setSelectedToolIds([]);
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Bulk update failed.");
+    }
+  };
 
   const columns = useMemo<AdaptiveColumn<MCPToolResponse>[]>(
     () => [
@@ -342,7 +458,10 @@ export default function ApplicationToolsPage() {
               tableId="application-tools"
               data={visibleTools}
               columns={columns}
-              enableSelection={false}
+              enableSelection
+              selectedRowIds={selectedToolIds}
+              onRowSelectionChange={setSelectedToolIds}
+              onSelectAll={handleSelectAllVisible}
               enableExpansion={false}
               onRowClick={(tool) => setSelected(tool)}
               getRowId={(tool) => tool.id}
@@ -356,14 +475,297 @@ export default function ApplicationToolsPage() {
         tool={selected}
         applicationId={application.id}
         unmappedScopes={(() => {
-          const allScopes = matrix?.scopes ?? matrix?.unmapped_scopes ?? [];
           if (!selected) return [];
           const alreadyMapped = new Set(selected.scopes.map((scope) => scope.scope_id));
           return allScopes.filter((scope) => !alreadyMapped.has(scope.id));
         })()}
         onClose={() => setSelected(null)}
       />
+
+      <BulkActionBar
+        count={selectedToolIds.length}
+        allVisibleSelected={allVisibleSelected}
+        someVisibleSelected={someVisibleSelected}
+        visibleCount={visibleToolIds.length}
+        onSelectAllVisible={handleSelectAllVisible}
+        onAssign={() => setBulkMode("assign")}
+        onRemove={() => setBulkMode("remove")}
+        onClear={() => setSelectedToolIds([])}
+        canRemove={sharedScopes.length > 0}
+      />
+
+      <BulkScopeDialog
+        mode={bulkMode}
+        selectedTools={selectedTools}
+        scopes={bulkMode === "remove" ? sharedScopes.map(sharedToScope) : assignableScopes}
+        saving={bulkSaving}
+        onCancel={() => setBulkMode(null)}
+        onApply={(scopeIds) => {
+          if (!bulkMode) return;
+          void applyBulkScopes(scopeIds, bulkMode);
+        }}
+      />
     </div>
+  );
+}
+
+// Shared scopes carry the ScopeMapEntry shape (scope_id, scope_string, ...).
+// The dialog speaks OAuthScopeResponse shape (id, scope_string, ...). Map between.
+function sharedToScope(entry: {
+  scope_id: string;
+  scope_string: string;
+  display_name: string;
+  risk_level: RiskLevel;
+}): OAuthScopeResponse {
+  return {
+    id: entry.scope_id,
+    scope_string: entry.scope_string,
+    display_name: entry.display_name,
+    risk_level: entry.risk_level,
+    is_auto_discovered: false,
+  };
+}
+
+function BulkActionBar({
+  count,
+  allVisibleSelected,
+  someVisibleSelected,
+  visibleCount,
+  onSelectAllVisible,
+  onAssign,
+  onRemove,
+  onClear,
+  canRemove,
+}: {
+  count: number;
+  allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
+  visibleCount: number;
+  onSelectAllVisible: () => void;
+  onAssign: () => void;
+  onRemove: () => void;
+  onClear: () => void;
+  canRemove: boolean;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="pointer-events-none sticky bottom-4 z-40 flex justify-center">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
+        <span className="text-sm font-semibold text-slate-900">
+          {count} selected
+        </span>
+        {!allVisibleSelected && visibleCount > count ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={onSelectAllVisible}
+          >
+            Select all {visibleCount} in view
+          </Button>
+        ) : null}
+        {someVisibleSelected || allVisibleSelected ? null : null}
+        <span className="h-4 w-px bg-slate-200" aria-hidden />
+        <Button size="sm" className="h-8" onClick={onAssign}>
+          Assign access label
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8"
+          onClick={onRemove}
+          disabled={!canRemove}
+          title={
+            canRemove
+              ? undefined
+              : "Selected tools have no labels in common to remove."
+          }
+        >
+          Remove label
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={onClear}
+        >
+          <X className="mr-1 size-3" aria-hidden />
+          Clear
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function BulkScopeDialog({
+  mode,
+  selectedTools,
+  scopes,
+  saving,
+  onCancel,
+  onApply,
+}: {
+  mode: "assign" | "remove" | null;
+  selectedTools: MCPToolResponse[];
+  scopes: OAuthScopeResponse[];
+  saving: boolean;
+  onCancel: () => void;
+  onApply: (scopeIds: string[]) => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const open = mode !== null;
+
+  // Reset transient state whenever the dialog re-opens.
+  const onOpenChange = (next: boolean) => {
+    if (!next) {
+      setPicked([]);
+      setSearch("");
+      onCancel();
+    }
+  };
+
+  const filteredScopes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return scopes;
+    return scopes.filter((scope) =>
+      [scope.scope_string, scope.display_name, scope.description]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q)),
+    );
+  }, [scopes, search]);
+
+  const toggle = (id: string) =>
+    setPicked((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id],
+    );
+
+  const toolNoun = selectedTools.length === 1 ? "tool" : "tools";
+  const isAssign = mode === "assign";
+  const title = isAssign
+    ? `Assign access labels to ${selectedTools.length} ${toolNoun}`
+    : `Remove access labels from ${selectedTools.length} ${toolNoun}`;
+  const description = isAssign
+    ? "Pick one or more labels. Each label will be mapped to every selected tool that doesn't already have it."
+    : "Only labels mapped to every selected tool are shown. Removing applies across the whole selection.";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+
+        {selectedTools.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-2">
+            {selectedTools.slice(0, 6).map((tool) => (
+              <span
+                key={tool.id}
+                className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-slate-200"
+              >
+                {tool.name}
+              </span>
+            ))}
+            {selectedTools.length > 6 ? (
+              <span className="px-1 text-[11px] text-slate-500">
+                +{selectedTools.length - 6} more
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-400"
+            aria-hidden
+          />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={
+              isAssign ? "Search access labels..." : "Search shared labels..."
+            }
+            className="pl-8"
+          />
+        </div>
+
+        <div className="max-h-[320px] overflow-y-auto rounded-md border border-slate-200">
+          {filteredScopes.length === 0 ? (
+            <div className="py-8 text-center text-sm text-slate-500">
+              {scopes.length === 0
+                ? isAssign
+                  ? "No more labels left to assign."
+                  : "No labels are shared across this selection."
+                : "No labels match your search."}
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {filteredScopes.map((scope) => {
+                const checked = picked.includes(scope.id);
+                const tone = RISK_TONE[scope.risk_level];
+                return (
+                  <li key={scope.id}>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50",
+                        checked && "bg-slate-50",
+                      )}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggle(scope.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium text-slate-900">
+                            {scope.display_name || scope.scope_string}
+                          </span>
+                          <span
+                            className={cn(
+                              "rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                              tone.chip,
+                              tone.text,
+                            )}
+                          >
+                            {scope.risk_level}
+                          </span>
+                        </div>
+                        <div className="truncate font-mono text-[11px] text-slate-500">
+                          {scope.scope_string}
+                        </div>
+                      </div>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => onApply(picked)}
+            disabled={picked.length === 0 || saving}
+            variant={isAssign ? "default" : "destructive"}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Saving...
+              </>
+            ) : isAssign ? (
+              `Assign ${picked.length || ""} label${picked.length === 1 ? "" : "s"}`.trim()
+            ) : (
+              `Remove ${picked.length || ""} label${picked.length === 1 ? "" : "s"}`.trim()
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
