@@ -138,7 +138,7 @@ export const syncConfigsApi = baseApi.injectEndpoints({
 
     // POST /uflow/admin/sync-configs/list
     // List all sync configurations
-    listSyncConfigs: builder.query<ListSyncConfigsResponse, ListSyncConfigsRequest | void>({
+    listSyncConfigs: builder.query<SyncConfig[], ListSyncConfigsRequest | void>({
       query: (data = {}) => ({
         url: '/authsec/uflow/admin/sync-configs/list',
         method: 'POST',
@@ -146,6 +146,8 @@ export const syncConfigsApi = baseApi.injectEndpoints({
           sync_type: data.sync_type,
         }),
       }),
+      transformResponse: (response: ListSyncConfigsResponse) =>
+        Array.isArray(response?.configs) ? response.configs : [],
       providesTags: ['SyncConfig'],
     }),
 

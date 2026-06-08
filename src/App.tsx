@@ -25,7 +25,7 @@ import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
 import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
-import { BillingPage } from "./features/billing/BillingPage";
+
 
 const DevBypassPage = import.meta.env.DEV
   ? React.lazy(() =>
@@ -644,16 +644,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <TeamPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/billing"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <BillingPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

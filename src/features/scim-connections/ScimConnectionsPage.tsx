@@ -1,7 +1,8 @@
 /**
  * ScimConnectionsPage — Configure → SCIM Connections.
- * Manage SCIM 2.0 provisioning tokens. Follows the Console Refresh pattern
- * used by AuthenticationPage (section-header, decision-banner, bespoke table).
+ * Manage SCIM 2.0 provisioning tokens. Follows the same Console Refresh
+ * pattern used by AuthenticationPage and ApplicationsPage (table-card, empty
+ * state, skeleton loaders, dropdown actions, confirmation dialog).
  */
 
 import { useState } from "react";
@@ -33,9 +34,9 @@ import config from "@/config";
 const INFO_KEY = "scim_connections_info_dismissed_v1";
 
 export default function ScimConnectionsPage() {
-  const { data: connections = [], isLoading } = useListScimConnectionsQuery();
+  const { data: connections = [], isLoading, isError } = useListScimConnectionsQuery();
   const [createConnection, { isLoading: isCreating }] = useCreateScimConnectionMutation();
-  const [revokeConnection] = useRevokeScimConnectionMutation();
+  const [revokeConnection, { isLoading: isRevoking }] = useRevokeScimConnectionMutation();
   const [newToken, setNewToken] = useState<{ token: string; endpoint: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
   const [infoDismissed, setInfoDismissed] = useState(() => {
@@ -70,8 +71,9 @@ export default function ScimConnectionsPage() {
     toast.success("Copied to clipboard");
   };
 
-  const activeConns = connections.filter((c) => c.status === "active");
-  const revokedConns = connections.filter((c) => c.status !== "active");
+  const safeConnections = Array.isArray(connections) ? connections : [];
+  const activeConns = safeConnections.filter((c) => c.status === "active");
+  const revokedConns = safeConnections.filter((c) => c.status !== "active");
   const apiBase = config.VITE_API_URL || "";
 
   return (
@@ -166,79 +168,142 @@ export default function ScimConnectionsPage() {
         )}
 
         {/* Table */}
-        {isLoading ? (
-          <p style={{ color: "var(--color-text-muted)", padding: "var(--space-6)" }}>Loading…</p>
-        ) : connections.length === 0 && !newToken ? (
-          <div className="empty-state">
-            <Shield style={{ width: 40, height: 40, color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }} />
-            <p className="es-title">No SCIM connections</p>
-            <p className="es-desc">Create a connection to start provisioning users automatically.</p>
-            <button className="btn btn-primary" onClick={handleCreate} disabled={isCreating} style={{ marginTop: "var(--space-4)" }}>
-              <Plus className="icon-sm" /> Create First Connection
-            </button>
-          </div>
-        ) : (
-          <div className="cr-table-wrap">
-            <table className="cr-table">
+        <div className="table-card">
+          {isError ? (
+            <div className="empty">
+              <span className="empty-ic" style={{ background: "var(--color-danger-soft)", color: "var(--color-danger-text)", borderColor: "transparent" }}>
+                <Shield className="icon-lg" />
+              </span>
+              <h3 className="empty-title" style={{ color: "var(--color-danger-text)" }}>Unable to load connections</h3>
+              <p className="empty-desc" style={{ color: "var(--color-danger-text)" }}>We hit an error fetching SCIM connections.</p>
+            </div>
+          ) : isLoading ? (
+            <div>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div className="skeleton-row" key={i}>
+                  <span className="sk" style={{ width: 36, height: 36, borderRadius: 8, flex: "none" }} />
+                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
+                    <span className="sk sk-line" style={{ width: "30%" }} />
+                    <span className="sk sk-line" style={{ width: "20%", height: 9 }} />
+                  </span>
+                  <span className="sk sk-line" style={{ width: 64, height: 22, borderRadius: 999, margin: "0 24px" }} />
+                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999 }} />
+                </div>
+              ))}
+            </div>
+          ) : safeConnections.length === 0 && !newToken ? (
+            <div className="empty">
+              <span className="empty-ic"><Shield className="icon-lg" /></span>
+              <h3 className="empty-title">No SCIM connections</h3>
+              <p className="empty-desc">Create a connection to start provisioning users automatically.</p>
+              <button className="btn btn-primary" onClick={handleCreate} disabled={isCreating}>
+                <Plus className="icon-sm" /> Create first connection
+              </button>
+            </div>
+          ) : (
+            <table className="table">
               <thead>
                 <tr>
-                  <th>Connection ID</th>
+                  <th>Connection</th>
                   <th>Status</th>
-                  <th>SCIM Endpoint</th>
-                  <th>Created</th>
-                  <th style={{ width: 48 }}></th>
+                  <th className="th-context">SCIM Endpoint</th>
+                  <th className="th-actions" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {activeConns.map((conn) => (
-                  <tr key={conn.id}>
-                    <td><code style={{ fontSize: 12 }}>{conn.id.slice(0, 12)}…</code></td>
-                    <td><span className="status-chip" data-status="active">Active</span></td>
-                    <td><code style={{ fontSize: 11, color: "var(--color-text-muted)" }}>{apiBase}/authsec/uflow/scim/v2/c/{conn.id}/Users</code></td>
-                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>{new Date(conn.created_at).toLocaleDateString()}</td>
+                  <tr key={conn.id} tabIndex={0}>
                     <td>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="icon-btn"><MoreHorizontal className="icon-sm" /></button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                          <DropdownMenuItem onClick={() => copyToClipboard(`${apiBase}/authsec/uflow/scim/v2/c/${conn.id}/Users`)}>
-                            <Copy className="icon-sm" /> Copy endpoint
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget({ id: conn.id })}>
-                            <Trash2 className="icon-sm" /> Revoke
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="app-cell">
+                        <span className="app-glyph">
+                          <Shield className="icon-sm" />
+                        </span>
+                        <span className="ac-meta">
+                          <span className="ac-name"><code style={{ fontSize: 12 }}>{conn.id.slice(0, 12)}…</code></span>
+                          <span className="ac-uri">{new Date(conn.created_at).toLocaleDateString()}</span>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="badge badge--success">
+                        <span className="bdot" />
+                        Active
+                      </span>
+                    </td>
+                    <td className="col-context">
+                      <span className="ctx-uri" style={{ maxWidth: 320 }}>
+                        <code style={{ fontSize: 11 }}>{apiBase}/authsec/uflow/scim/v2/c/{conn.id}/Users</code>
+                      </span>
+                    </td>
+                    <td>
+                      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="icon-btn" aria-label="Connection actions">
+                              <MoreHorizontal className="icon" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                            <DropdownMenuItem className="menu-item" onSelect={() => copyToClipboard(`${apiBase}/authsec/uflow/scim/v2/c/${conn.id}/Users`)}>
+                              <span className="mi-ic"><Copy className="icon-sm" /></span>
+                              Copy endpoint
+                            </DropdownMenuItem>
+                            <div className="menu-sep" />
+                            <DropdownMenuItem className="menu-item danger" onSelect={() => setDeleteTarget({ id: conn.id })}>
+                              <span className="mi-ic"><Trash2 className="icon-sm" /></span>
+                              Revoke
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {revokedConns.map((conn) => (
-                  <tr key={conn.id} style={{ opacity: 0.5 }}>
-                    <td><code style={{ fontSize: 12 }}>{conn.id.slice(0, 12)}…</code></td>
-                    <td><span className="status-chip" data-status="error">Revoked</span></td>
-                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>—</td>
-                    <td style={{ color: "var(--color-text-muted)", fontSize: 13 }}>{new Date(conn.created_at).toLocaleDateString()}</td>
+                  <tr key={conn.id} tabIndex={0} style={{ opacity: 0.5 }}>
+                    <td>
+                      <div className="app-cell">
+                        <span className="app-glyph">
+                          <Shield className="icon-sm" />
+                        </span>
+                        <span className="ac-meta">
+                          <span className="ac-name"><code style={{ fontSize: 12 }}>{conn.id.slice(0, 12)}…</code></span>
+                          <span className="ac-uri">{new Date(conn.created_at).toLocaleDateString()}</span>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="badge badge--danger">
+                        <span className="bdot" />
+                        Revoked
+                      </span>
+                    </td>
+                    <td className="col-context">
+                      <span className="ctx-uri" style={{ color: "var(--color-text-muted)" }}>—</span>
+                    </td>
                     <td></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Revoke confirmation dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && !isRevoking && setDeleteTarget(null)}>
         <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
-          <div className="confirm-dialog">
-            <DialogTitle className="cd-title">Revoke SCIM connection</DialogTitle>
-            <DialogDescription className="cd-desc">
+          <div className="dialog" style={{ width: "100%" }}>
+            <span className="dg-icon"><Trash2 className="icon" /></span>
+            <DialogTitle className="dg-title">Revoke SCIM connection?</DialogTitle>
+            <DialogDescription className="dg-desc">
               Users provisioned via this token will no longer sync. This cannot be undone.
             </DialogDescription>
-            <div className="cd-actions">
-              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleRevoke}>Revoke</button>
+            <div className="dg-actions">
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={isRevoking}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleRevoke} disabled={isRevoking}>
+                <Trash2 className="icon-sm" /> {isRevoking ? "Revoking…" : "Revoke"}
+              </button>
             </div>
           </div>
         </DialogContent>

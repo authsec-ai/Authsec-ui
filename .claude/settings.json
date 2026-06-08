@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"scim\\\\|directory-sync\\\\|directory_sync\\\\|billing\\\\|identityProvider\" /Users/pc/Desktop/authnull/Authsec-ui/src/app/api/*)",
+      "Bash(find /Users/pc/Desktop/authnull/Authsec-ui -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"billing\" {} \\\\;)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}

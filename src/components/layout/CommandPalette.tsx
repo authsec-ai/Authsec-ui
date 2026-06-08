@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   ClipboardList,
-  CreditCard,
   Fingerprint,
   GlobeLock,
   KeyRound,
@@ -47,7 +46,6 @@ const DESTINATIONS: PaletteDestination[] = [
   { title: "Secrets", url: "/external-services", icon: KeyRound, group: "Configure", keywords: "external services" },
   { title: "SDK Guides", url: "/developer/sdk-guides", icon: BookOpen, group: "Configure" },
   { title: "Team", url: "/settings/team", icon: Users, group: "Settings" },
-  { title: "Billing", url: "/admin/billing", icon: CreditCard, group: "Settings" },
 ];
 
 const GROUP_ORDER = [

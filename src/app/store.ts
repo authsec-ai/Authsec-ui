@@ -16,8 +16,7 @@ import { workloadsApi } from "./api/workloadsApi"; // SPIRE workloads endpoints
 import { dashboardApi } from "./api/dashboardApi"; // Dashboard endpoints
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { iamAggregatesApi } from "./api/iamAggregatesApi"; // AI/MCP IAM cockpit read models
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { billingApi } from "./api/billingApi"; // Billing endpoints
+
 
 // New segregated authentication APIs
 import { userAuthApi } from "./api/userAuthApi"; // Direct email/password login

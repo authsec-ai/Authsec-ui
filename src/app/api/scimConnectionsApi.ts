@@ -22,6 +22,8 @@ export const scimConnectionsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listScimConnections: builder.query<ScimConnection[], void>({
       query: () => "/authsec/scim-connections",
+      transformResponse: (response: any) =>
+        Array.isArray(response) ? response : Array.isArray(response?.connections) ? response.connections : [],
       providesTags: ["SyncConfig"],
     }),
 
