@@ -22,15 +22,12 @@ import type {
   WorkloadsTableActions,
 } from "./utils/workloads-table-utils";
 import { createEntriesTableColumns } from "./utils/workloads-table-utils";
-import { FloatingFAQ } from "@/features/clients/components/FloatingFAQ";
+import { FloatingHelp } from "@/components/shared/FloatingHelp";
 import { WorkloadRegistrationGuide } from "./components/WorkloadRegistrationGuide";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import type { PageInfoBannerSection } from "@/components/shared/PageInfoBanner";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
-import type {
-  FloatingHelpItem,
-  FloatingHelpLanguageTab,
-} from "@/components/shared/FloatingHelp";
+import type { FloatingHelpItem } from "@/components/shared/FloatingHelp";
 import { SPIRE_FAQ_DATA as AGENT_DEPLOYMENT_DATA } from "@/features/wizards/components/spire-faq-data";
 
 interface CodeExample {
@@ -652,7 +649,7 @@ export function WorkloadCertificatePage() {
         </div>
       </div>
 
-      <FloatingFAQ faqData={SPRIRE_FAQ_DATA} />
+      <FloatingHelp items={SPRIRE_FAQ_DATA} />
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog

@@ -13,10 +13,18 @@ import {
   Loader2,
   Check,
   ChevronRight,
+  Copy,
   Settings,
+  Upload,
   X,
   Info,
 } from "lucide-react";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
 import { toast } from "../../lib/toast";
 import { cn } from "../../lib/utils";
 import { FormField, FormInput, FormCopyField } from "../../theme";
@@ -28,6 +36,7 @@ import {
   parseIdpMetadataXml,
   presetForSlug,
   ATTRIBUTE_MAPPING_PRESETS,
+  buildAuth0SettingsJson,
 } from "../../app/api/samlApi";
 import { useCreateIdentityProviderMutation } from "../../app/api/authMethodApi";
 import { SessionManager } from "../../utils/sessionManager";
@@ -499,6 +508,106 @@ export function CreateSamlMethodPage() {
                 everything automatically.
               </p>
 
+              {/* Provider setup instructions */}
+              {(() => {
+                const PROVIDER_HINTS: Record<string, { title: string; fields: Array<{ label: string; value: string }> }> = {
+                  auth0: {
+                    title: "Auth0 → Applications → [your app] → Addons → SAML2 Web App",
+                    fields: [
+                      { label: "Application Callback URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
+                      { label: "Settings JSON", value: "Use the copy button below ↓" },
+                    ],
+                  },
+                  okta: {
+                    title: "Okta → Applications → Create App Integration → SAML 2.0",
+                    fields: [
+                      { label: "Single sign-on URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
+                      { label: "Audience URI (SP Entity ID)", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
+                      { label: "Name ID format", value: "EmailAddress" },
+                      { label: "Application username", value: "Email" },
+                    ],
+                  },
+                  azure: {
+                    title: "Entra ID → Enterprise Apps → [app] → Single sign-on → SAML",
+                    fields: [
+                      { label: "Identifier (Entity ID)", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
+                      { label: "Reply URL (ACS URL)", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
+                      { label: "Sign on URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
+                    ],
+                  },
+                  generic: {
+                    title: "Generic SAML 2.0 IdP",
+                    fields: [
+                      { label: "ACS URL / Reply URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
+                      { label: "SP Entity ID / Audience URI", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
+                      { label: "NameID format", value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" },
+                    ],
+                  },
+                };
+                return (
+                  <div className="mb-4 rounded-lg border bg-muted/30 p-3">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">IdP setup reference</p>
+                    <Tabs defaultValue="generic">
+                      <TabsList className="h-7 mb-3">
+                        <TabsTrigger value="auth0" className="text-[11px] h-6 px-2.5">Auth0</TabsTrigger>
+                        <TabsTrigger value="okta" className="text-[11px] h-6 px-2.5">Okta</TabsTrigger>
+                        <TabsTrigger value="azure" className="text-[11px] h-6 px-2.5">Azure / Entra</TabsTrigger>
+                        <TabsTrigger value="generic" className="text-[11px] h-6 px-2.5">Generic</TabsTrigger>
+                      </TabsList>
+                      {(["auth0", "okta", "azure", "generic"] as const).map((key) => {
+                        const hint = PROVIDER_HINTS[key];
+                        return (
+                          <TabsContent key={key} value={key} className="mt-0">
+                            <p className="text-[11px] text-muted-foreground mb-2 font-medium">{hint.title}</p>
+                            <div className="space-y-1">
+                              {hint.fields.map((field) => (
+                                <div key={field.label} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
+                                  <span className="text-[11px] text-muted-foreground min-w-[160px] shrink-0">{field.label}</span>
+                                  <span className="text-[11px] font-mono flex-1 truncate">{field.value}</span>
+                                  <button
+                                    type="button"
+                                    aria-label={`Copy ${field.label}`}
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(field.value);
+                                      toast.success(`${field.label} copied!`);
+                                    }}
+                                    className="shrink-0 rounded p-0.5 hover:bg-muted"
+                                  >
+                                    <Copy className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            {key === "auth0" && workspaceId && (
+                              <div className="mt-3 space-y-2">
+                                <FormField label="Auth0 SAML2 Addon — Settings JSON (paste into Addons → SAML2 Web App → Settings)">
+                                  <div className="space-y-2">
+                                    <pre className="max-h-44 overflow-auto rounded-md border bg-background p-2 font-mono text-[11px] leading-tight">
+                                      {buildAuth0SettingsJson(workspaceId)}
+                                    </pre>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(buildAuth0SettingsJson(workspaceId));
+                                        toast.success("Auth0 Settings JSON copied!");
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent"
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                      Copy Auth0 Settings JSON
+                                    </button>
+                                  </div>
+                                </FormField>
+                              </div>
+                            )}
+                          </TabsContent>
+                        );
+                      })}
+                    </Tabs>
+                  </div>
+                );
+              })()}
+
               {/* Paste-IdP-metadata shortcut. Most IdPs publish a federation
                   metadata XML the operator can copy in one click — parsing it
                   fills Entity ID, SSO URL, SLO URL, certificate, and NameID
@@ -607,6 +716,27 @@ export function CreateSamlMethodPage() {
                   htmlFor="certificate"
                   required
                 >
+                  <div className="flex items-center gap-2 mt-1">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent">
+                      <Upload className="h-3 w-3" />
+                      Upload .pem / .crt
+                      <input
+                        type="file"
+                        accept=".pem,.crt,.cer"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setFormData({ ...formData, certificate: (ev.target?.result as string) ?? "" });
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">or paste below</span>
+                  </div>
                   <textarea
                     id="certificate"
                     placeholder="-----BEGIN CERTIFICATE-----&#10;MIIDtDCCApygAwIBAgIG...&#10;-----END CERTIFICATE-----"

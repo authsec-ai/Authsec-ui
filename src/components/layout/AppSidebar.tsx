@@ -3,25 +3,29 @@
  *
  * Layout (Launch Control IA):
  *   Dashboard
- *   Workspace : End Users, Applications, AI Agents
- *   Authz     : Application Roles, Role Bindings, Application Scopes
- *   Configure : Identity Providers, Trust Delegation, Secrets, SDK Guides
- *   Monitor : Audit Logs
+ *   Workspace : End Users, Applications, Clients
+ *   Authz     : Roles, Scopes, Assignments
+ *   Configure : Identity Providers, SCIM Connections, Directory Sync, Secrets
+ *   Monitor   : Audit Logs
+ *   Settings  : Team
+ *
+ * "AI Agents" and "Trust Delegation" used to live here but both surfaces were
+ * broken / out of scope; their routes still exist in App.tsx so direct links
+ * resolve, but the rail no longer advertises them. See plan phase 0.1.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import {
-  Bot,
   ClipboardList,
   Fingerprint,
   FolderSync,
-  GlobeLock,
   KeyRound,
   LayoutDashboard,
   Layers,
   Link2,
+  PlugZap,
   Shield,
   UserCog,
   Users,
@@ -74,8 +78,7 @@ const NAV_DASHBOARD: NavItem[] = [
 const NAV_OBJECTS: NavItem[] = [
   { title: "Users", url: "/end-users", icon: Users },
   { title: "Applications", url: "/applications", icon: Layers },
-  // { title: "Clients", url: "/clients", icon: PlugZap },
-  { title: "AI Agents", url: "/agents", icon: Bot },
+  { title: "Clients", url: "/clients", icon: PlugZap },
 ];
 
 // Workspace-level access control. Roles, Scopes and Assignments each get their
@@ -95,7 +98,6 @@ const NAV_CONFIGURE: NavItem[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
   { title: "SCIM Connections", url: "/scim-connections", icon: Shield },
   { title: "Directory Sync", url: "/directory-sync", icon: FolderSync },
-  { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock },
   { title: "Secrets", url: "/external-services", icon: KeyRound },
 ];
 

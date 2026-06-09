@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { OnboardClientModal } from "@/features/clients/components/OnboardClientModal";
 import { useGetAllClientsQuery } from "@/app/api/clientApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { cn } from "@/lib/utils";
@@ -79,13 +79,13 @@ interface ClientSelectionStepProps {
 }
 
 export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
+  const navigate = useNavigate();
   const session = SessionManager.getSession();
   const workspaceId = session?.workspace_id;
 
   const {
     data: clientsResponse,
     isLoading,
-    refetch,
   } = useGetAllClientsQuery(
     {
       workspace_id: workspaceId || "",
@@ -97,7 +97,6 @@ export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
   const [selectionMode, setSelectionMode] = useState<
     "default" | "existing" | "new"
   >("default");
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
 
   const clients = clientsResponse?.clients || [];
@@ -123,21 +122,6 @@ export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
     if (clientId) {
       onComplete(clientId);
     }
-  };
-
-  const handleClientCreated = (clientId: string) => {
-    // Refetch clients to get the newly created one
-    refetch();
-    setShowCreateModal(false);
-    setSelectionMode("new");
-    setSelectedClientId(clientId);
-
-    // Auto-complete step after client creation
-    setTimeout(() => {
-      if (clientId) {
-        onComplete(clientId);
-      }
-    }, 500);
   };
 
   return (
@@ -253,14 +237,14 @@ export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
               <Button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowCreateModal(true);
+                  navigate("/clients");
                 }}
                 size="sm"
                 variant="outline"
                 className="mt-3"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Create Client
+                Manage Clients
               </Button>
             )}
           </div>
@@ -286,13 +270,6 @@ export function ClientSelectionStep({ onComplete }: ClientSelectionStepProps) {
         </Button>
       </div>
 
-      {/* Client Creation Modal */}
-      <OnboardClientModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handleClientCreated}
-        preventNavigation={true}
-      />
     </div>
   );
 }

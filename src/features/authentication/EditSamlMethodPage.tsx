@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   CheckCircle,
   Loader2,
+  Upload,
 } from "lucide-react";
 import { toast } from "../../lib/toast";
 import { cn } from "../../lib/utils";
@@ -460,6 +461,27 @@ export function EditSamlMethodPage() {
                 </FormField>
 
                 <FormField label="X.509 Certificate" htmlFor="certificate" required>
+                  <div className="flex items-center gap-2 mt-1">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent">
+                      <Upload className="h-3 w-3" />
+                      Upload .pem / .crt
+                      <input
+                        type="file"
+                        accept=".pem,.crt,.cer"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setFormData({ ...formData, certificate: (ev.target?.result as string) ?? "" });
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">or paste below</span>
+                  </div>
                   <textarea
                     id="certificate"
                     value={formData.certificate}

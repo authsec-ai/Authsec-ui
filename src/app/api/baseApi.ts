@@ -165,6 +165,7 @@ export const baseApi = createApi({
     "BillingSubscription",
     "BillingUsage",
     "BillingPlan",
+    "MCPClient",
   ],
   endpoints: () => ({}),
 });

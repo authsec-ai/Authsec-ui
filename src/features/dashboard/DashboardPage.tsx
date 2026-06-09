@@ -1,470 +1,304 @@
-import React, { useState } from "react";
-import {
-  Activity,
-  LayoutDashboard,
-  Lock,
-  Package,
-  Shield,
-  Users,
-} from "lucide-react";
+/**
+ * DashboardPage — Phase 0.2 rewrite.
+ *
+ * Out: generic onboarding chrome (activation banner, setup tour list, SDK
+ *      integration tiles, RBAC "Soon" placeholder, recent-activity feed).
+ * In:  five hero metric cards (Apps total / healthy / needs attention,
+ *      End users, IdPs configured) + a 6-tile quick-start grid that lights
+ *      up ✓ as each setup step completes.
+ *
+ * Plan: /Users/pc/.claude/plans/honestly-i-am-hell-unified-tide.md §0.2.
+ */
+
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
+import {
+  CheckCircle2,
+  Fingerprint,
+  FolderSync,
+  Layers,
+  PlugZap,
+  Shield,
+  UserCog,
+  type LucideIcon,
+} from "lucide-react";
 
-import { SessionManager } from "../../utils/sessionManager";
-import { useGetAllClientsQuery } from "../../app/api/clientApi";
-import { useListDomainsQuery } from "../../app/api/domainApi";
-import { useGetExternalServicesQuery } from "../../app/api/externalServiceApi";
-import { useWizard } from "@/contexts/WizardContext";
-import { useRbacAudience } from "@/contexts/RbacAudienceContext";
+import { useListApplicationsQuery } from "@/app/api/applicationsApi";
+import { useListEndUsersQuery } from "@/app/api/membershipApi";
+import { useListIdentityProvidersQuery } from "@/app/api/authMethodApi";
+import { useListScimConnectionsQuery } from "@/app/api/scimConnectionsApi";
+import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
+import { useListApplicationRolesQuery } from "@/app/api/accessApi";
+import { cn } from "@/lib/utils";
 
-import { useDashboardData } from "./hooks/useDashboardData";
-import { useWizardStatus } from "./hooks/useWizardStatus";
-import { useDashboardOverview } from "./hooks/useDashboardOverview";
+/* ─────────────────────────────── tile primitives ─────────────────────────── */
 
-import { ActivationSection } from "./components/ActivationSection";
-import { DashboardGreeting } from "./components/DashboardGreeting";
-import { SetupTourList } from "./components/SetupTourList";
-import { DashboardSection } from "./components/DashboardSection";
-import { DashboardActionTile } from "./components/DashboardActionTile";
-import { DashboardOperationalStatusPanel } from "./components/DashboardOperationalStatusPanel";
-import { DashboardTile } from "./components/DashboardTile";
-import { ClientSelectionModal } from "./components/ClientSelectionModal";
-import { ServiceSelectionModal } from "./components/ServiceSelectionModal";
+interface MetricCardProps {
+  label: string;
+  value: number | string;
+  hint?: string;
+  tone?: "neutral" | "success" | "warning";
+  onClick?: () => void;
+}
 
-import "./dashboard-theme.css";
+function MetricCard({ label, value, hint, tone = "neutral", onClick }: MetricCardProps) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50/60"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50/60"
+        : "border-slate-200 bg-white";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        toneClass,
+        !onClick && "cursor-default hover:shadow-sm",
+      )}
+    >
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
+      <span className="text-2xl font-semibold text-slate-900">{value}</span>
+      {hint ? <span className="text-xs text-slate-500">{hint}</span> : null}
+    </button>
+  );
+}
+
+interface QuickStartTileProps {
+  icon: LucideIcon;
+  label: string;
+  description: string;
+  to: string;
+  done?: boolean;
+}
+
+function QuickStartTile({ icon: Icon, label, description, to, done }: QuickStartTileProps) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(to)}
+      className={cn(
+        "group flex flex-col gap-2 rounded-lg border bg-white p-4 text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        done ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex h-8 w-8 items-center justify-center rounded-md",
+            done ? "bg-emerald-100 text-emerald-700" : "bg-blue-50 text-blue-600",
+          )}
+        >
+          {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+        </span>
+        <span className="text-sm font-semibold text-slate-900">{label}</span>
+      </div>
+      <p className="text-xs leading-5 text-slate-600">{description}</p>
+      <span
+        className={cn(
+          "mt-auto text-xs font-medium",
+          done ? "text-emerald-700" : "text-blue-600 group-hover:text-blue-700",
+        )}
+      >
+        {done ? "Configured" : "Set up →"}
+      </span>
+    </button>
+  );
+}
+
+/* ────────────────────────────────── page ────────────────────────────────── */
 
 export function DashboardPage() {
-  const sessionData = SessionManager.getSession();
-  const workspaceId = sessionData?.workspace_id;
   const navigate = useNavigate();
-  const { audience } = useRbacAudience();
-  const { isActive, activeWizard, completedSteps } = useWizard();
 
-  const [showClientSelection, setShowClientSelection] = useState(false);
-  const [showServiceSelection, setShowServiceSelection] = useState(false);
+  // Hero metric sources — lightweight list queries already used elsewhere.
+  const { data: applications = [] } = useListApplicationsQuery({});
+  const { data: endUsersResp } = useListEndUsersQuery({ limit: 1 });
+  const { data: idps = [] } = useListIdentityProvidersQuery({});
+  const { data: scimConns = [] } = useListScimConnectionsQuery({});
+  const { data: syncConfigs = [] } = useListSyncConfigsQuery({});
+  const { data: appRoles } = useListApplicationRolesQuery();
 
-  const {
-    isLoading: dashboardLoading,
-    isError,
-    error,
-    quickActionsStatus,
-  } = useDashboardData({
-    workspaceId: workspaceId || "",
-  });
+  // Health derived client-side from ResourceServer.state. Backend can replace
+  // this with /authsec/applications/health-summary when liveness ships.
+  const { total, healthy, attention } = useMemo(() => {
+    const list = Array.isArray(applications) ? applications : [];
+    const t = list.length;
+    const h = list.filter((a: { state?: string }) => a?.state === "ready").length;
+    return { total: t, healthy: h, attention: t - h };
+  }, [applications]);
 
-  const { data: clientsData, isLoading: isClientsLoading } = useGetAllClientsQuery(
-    { workspace_id: workspaceId || "" },
-    { skip: !workspaceId },
+  const totalEndUsers = useMemo(() => {
+    const r = endUsersResp as
+      | { total?: number; total_count?: number; count?: number; users?: unknown[] }
+      | unknown[]
+      | undefined;
+    if (!r) return 0;
+    if (Array.isArray(r)) return r.length;
+    return r.total ?? r.total_count ?? r.count ?? (Array.isArray(r.users) ? r.users.length : 0);
+  }, [endUsersResp]);
+
+  const idpsConfigured = useMemo(
+    () =>
+      (Array.isArray(idps) ? idps : []).filter(
+        (p: { status?: string }) => p?.status === "configured",
+      ).length,
+    [idps],
   );
 
-  const { data: domainsData, isLoading: isDomainsLoading } = useListDomainsQuery(
-    { workspace_id: workspaceId || "" },
-    { skip: !workspaceId },
+  // "Done" predicates for quick-start tiles.
+  const hasIdp = idpsConfigured > 0;
+  const hasDirSync = (Array.isArray(syncConfigs) ? syncConfigs : []).some(
+    (c: { is_active?: boolean }) => c?.is_active !== false,
   );
+  const hasApplication = total > 0;
+  const hasScim = (Array.isArray(scimConns) ? scimConns : []).some(
+    (c: { status?: string }) => c?.status !== "revoked",
+  );
+  const hasClients = true; // always navigable
+  const hasRole = Array.isArray(appRoles?.roles) ? appRoles.roles.length > 0 : false;
 
-  const { data: servicesData, isLoading: isServicesLoading } = useGetExternalServicesQuery(
-    undefined,
+  const tiles: Array<QuickStartTileProps> = [
     {
-      skip: !workspaceId,
+      icon: Fingerprint,
+      label: "Wire an identity provider",
+      description:
+        "Connect Auth0, Okta, Azure AD or another SAML/OIDC IdP for end-user logins.",
+      to: "/identity-providers",
+      done: hasIdp,
     },
-  );
-
-  const userAuth = useWizardStatus("user-auth-wizard");
-
-  const completedWizards = React.useMemo(() => {
-    try {
-      const raw = localStorage.getItem("authsec_wizards");
-      if (!raw) return [] as string[];
-      const parsed = JSON.parse(raw) as { completedWizards?: unknown };
-      if (!Array.isArray(parsed.completedWizards)) return [] as string[];
-      return parsed.completedWizards.filter(
-        (wizardId): wizardId is string => typeof wizardId === "string",
-      );
-    } catch {
-      return [] as string[];
-    }
-  }, [isActive, activeWizard]);
-
-  const hasClient = (clientsData?.clients?.length || 0) > 0;
-  const customDomainAdded =
-    (domainsData || []).some((domain) => domain.kind === "custom") || false;
-
-  const isUserAuthWizard = activeWizard === "user-auth-wizard";
-  const activationStep1Done =
-    userAuth.isCompleted ||
-    (isUserAuthWizard && completedSteps.includes("client-selection"));
-  const activationStep2Done =
-    userAuth.isCompleted ||
-    (isUserAuthWizard && completedSteps.includes("integrate-sdk"));
-
-
-  const setupSteps = React.useMemo(() => {
-    const rbacConfigured = completedWizards.includes("rbac-wizard");
-    const sdkDeployed = completedWizards.includes("m2m-workload-wizard");
-
-    return [
-      { id: "create-client", done: hasClient },
-      { id: "configure-authentication", done: activationStep1Done },
-      { id: "setup-rbac", done: rbacConfigured },
-      { id: "add-domains", done: customDomainAdded },
-      { id: "deploy-sdk", done: sdkDeployed },
-    ];
-  }, [hasClient, activationStep1Done, completedWizards, customDomainAdded]);
-
-  const clientsCount = workspaceId
-    ? typeof clientsData?.clients?.length === "number"
-      ? clientsData.clients.length
-      : isClientsLoading
-        ? null
-        : 0
-    : null;
-
-  const customDomainCount = workspaceId
-    ? Array.isArray(domainsData)
-      ? domainsData.filter((domain) => domain.kind === "custom").length
-      : isDomainsLoading
-        ? null
-        : 0
-    : null;
-
-  const externalServiceCount = workspaceId
-    ? Array.isArray(servicesData)
-      ? servicesData.length
-      : isServicesLoading
-        ? null
-        : 0
-    : null;
-
-  const overview = useDashboardOverview({
-    setupSteps,
-    clientsCount,
-    customDomainCount,
-    externalServiceCount,
-    quickActionsStatus,
-    isLoading:
-      dashboardLoading || isClientsLoading || isDomainsLoading || isServicesLoading,
-  });
-
-  const operationalMap = React.useMemo(() => {
-    return new Map(overview.operationalItems.map((item) => [item.id, item]));
-  }, [overview.operationalItems]);
-
-  const adSyncOp = operationalMap.get("ad-sync");
-  const authMethodsOp = operationalMap.get("auth-methods");
-  const loggingOp = operationalMap.get("logging");
-
-  const externalServicesTileStatus =
-    externalServiceCount === null
-      ? { label: "Unknown", tone: "muted" as const, meta: "Inventory status unavailable" }
-      : externalServiceCount > 0
-        ? {
-            label: "Configured",
-            tone: "success" as const,
-            meta: `${externalServiceCount} service${externalServiceCount > 1 ? "s" : ""} connected`,
-          }
-        : {
-            label: "Needs Setup",
-            tone: "warning" as const,
-            meta: "No services configured yet",
-          };
-
-  const authSdkMeta =
-    clientsCount === null
-      ? "Client inventory unavailable"
-      : clientsCount > 0
-        ? `${clientsCount} client${clientsCount > 1 ? "s" : ""} available for onboarding`
-        : "Create a client before launching SDK onboarding";
-
-  const servicesSdkMeta =
-    externalServiceCount === null
-      ? "Service inventory unavailable"
-      : externalServiceCount > 0
-        ? `${externalServiceCount} service${externalServiceCount > 1 ? "s" : ""} available for SDK setup`
-        : "Add a service first to enable guided SDK setup";
-
-  const handleAuthSDKClick = () => {
-    const clients = clientsData?.clients || [];
-    if (clients.length > 0) {
-      setShowClientSelection(true);
-    } else {
-      toast.error("No clients present. Create a client first.");
-      navigate("/resource-servers");
-    }
-  };
-
-  const handleServicesSDKClick = () => {
-    const services = servicesData || [];
-    if (services.length > 0) {
-      setShowServiceSelection(true);
-    } else {
-      toast.error("No services present. Create a service first.");
-      navigate("/external-services/add");
-    }
-  };
-
-  const handleRecommendationClick = React.useCallback(() => {
-    switch (overview.setup.nextStepId) {
-      case "create-client":
-        navigate("/resource-servers");
-        return;
-      case "configure-authentication":
-        userAuth.launch();
-        return;
-      case "setup-rbac":
-        navigate(`/${audience}/permissions`);
-        return;
-      case "add-domains":
-        navigate("/custom-domains");
-        return;
-      case "deploy-sdk":
-        handleAuthSDKClick();
-        return;
-      default:
-        navigate("/resource-servers");
-    }
-  }, [
-    overview.setup.nextStepId,
-    navigate,
-    userAuth,
-    audience,
-    handleAuthSDKClick,
-  ]);
-
-  const handleOperationalItemClick = React.useCallback(
-    (item: { id: string }) => {
-      switch (item.id) {
-        case "ad-sync":
-          navigate("/admin/users", {
-            state: {
-              openDirectorySync: true,
-              provider: "ad",
-              mode: "configure",
-            },
-          });
-          return;
-        case "auth-methods":
-          navigate("/authentication");
-          return;
-        case "domains":
-          navigate("/custom-domains");
-          return;
-        case "logging":
-          navigate("/logs/auth");
-          return;
-        default:
-          break;
-      }
+    {
+      icon: FolderSync,
+      label: "Connect Directory Sync",
+      description:
+        "Import users from Active Directory or Entra ID on a schedule.",
+      to: "/directory-sync",
+      done: hasDirSync,
     },
-    [navigate],
-  );
+    {
+      icon: Layers,
+      label: "Wrap your first MCP server",
+      description:
+        "Register an MCP application and protect it with AuthSec OAuth + scopes.",
+      to: "/applications/new",
+      done: hasApplication,
+    },
+    {
+      icon: Shield,
+      label: "Configure SCIM provisioning",
+      description:
+        "Let your IdP push user provisioning events to AuthSec via SCIM 2.0.",
+      to: "/scim-connections",
+      done: hasScim,
+    },
+    {
+      icon: PlugZap,
+      label: "Manage clients",
+      description:
+        "Review OAuth clients (agents, apps, M2M services) registered across the workspace.",
+      to: "/clients",
+      done: hasClients,
+    },
+    {
+      icon: UserCog,
+      label: "Define roles & scopes",
+      description:
+        "Build role-based access for the tools your MCP servers expose.",
+      to: "/access/roles",
+      done: hasRole,
+    },
+  ];
 
-  if (isError) {
-    return (
-      <div data-dashboard="overview" className="dash-page h-full">
-        <div className="mx-auto max-w-[1600px] p-4 sm:p-6">
-          <DashboardTile className="p-6 sm:p-8">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="dash-icon-chip" data-tone="danger">
-                <LayoutDashboard className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold dash-text-1">
-                  Unable to Load Dashboard
-                </h2>
-                <p className="text-sm dash-text-2">
-                  {error?.message || "Failed to fetch dashboard data"}
-                </p>
-              </div>
-            </div>
-          </DashboardTile>
-        </div>
-      </div>
-    );
-  }
+  const completedTiles = tiles.filter((t) => t.done).length;
 
   return (
-    <div data-dashboard="overview" className="dash-page min-h-full">
-      <div className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-6 sm:py-5">
-        <DashboardGreeting workspaceId={workspaceId} />
+    <div className="mx-auto w-full max-w-[1280px] space-y-6 px-8 py-7">
+      {/* Header */}
+      <header className="space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+          Workspace overview
+        </h1>
+        <p className="text-sm text-slate-600">
+          Real counts across the workspace. Click any tile to jump to the section.
+        </p>
+      </header>
 
-        <ActivationSection
-          step1Done={activationStep1Done}
-          step2Done={activationStep2Done}
-          onStart={userAuth.launch}
-          isWizardActive={isActive}
+      {/* Row 1 — hero metrics */}
+      <section
+        aria-label="Hero metrics"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+      >
+        <MetricCard
+          label="Applications"
+          value={total}
+          hint="Total MCP applications"
+          onClick={() => navigate("/applications")}
         />
+        <MetricCard
+          label="Healthy"
+          value={healthy}
+          hint="state = ready"
+          tone={total > 0 && healthy === total ? "success" : "neutral"}
+          onClick={() => navigate("/applications")}
+        />
+        <MetricCard
+          label="Needs attention"
+          value={attention}
+          hint="setup / scan / failed"
+          tone={attention > 0 ? "warning" : "neutral"}
+          onClick={() => navigate("/applications")}
+        />
+        <MetricCard
+          label="End users"
+          value={totalEndUsers}
+          onClick={() => navigate("/end-users")}
+        />
+        <MetricCard
+          label="Identity providers"
+          value={idpsConfigured}
+          hint="configured"
+          onClick={() => navigate("/identity-providers")}
+        />
+      </section>
 
-        <div className="grid gap-4 xl:grid-cols-12">
-          <div className="space-y-4 xl:col-span-7">
-            <SetupTourList />
-
-            <DashboardSection
-              label="Integrations"
-              title="SDK Integrations"
-              description="Launch client and service SDK onboarding from a compact integration workspace."
-            >
-              <div className="dash-group-panel divide-y dash-divider">
-                <DashboardActionTile
-                  icon={Shield}
-                  iconTone="accent"
-                  title="Auth SDK"
-                  description="Add enterprise authentication to client apps with OAuth, SAML, and WebAuthn."
-                  statusLabel="Recommended"
-                  statusTone="accent"
-                  meta={authSdkMeta}
-                  primaryActionLabel="Open Setup"
-                  onPrimaryAction={handleAuthSDKClick}
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-                <DashboardActionTile
-                  icon={Package}
-                  iconTone="success"
-                  title="Services & Secrets SDK"
-                  description="Integrate third-party services and manage API credentials through the SDK path."
-                  statusLabel={
-                    externalServiceCount !== null && externalServiceCount > 0
-                      ? "Ready"
-                      : externalServiceCount === null
-                        ? "Unknown"
-                        : "Blocked"
-                  }
-                  statusTone={
-                    externalServiceCount !== null && externalServiceCount > 0
-                      ? "success"
-                      : externalServiceCount === null
-                        ? "muted"
-                        : "warning"
-                  }
-                  meta={servicesSdkMeta}
-                  primaryActionLabel="Open Setup"
-                  onPrimaryAction={handleServicesSDKClick}
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-                <DashboardActionTile
-                  icon={Lock}
-                  iconTone="muted"
-                  title="RBAC SDK"
-                  description="Fine-grained authorization SDK workflows for roles, resources, and permissions."
-                  statusLabel="Soon"
-                  statusTone="muted"
-                  meta="This flow is planned but not available in the current dashboard build."
-                  primaryActionLabel="Unavailable"
-                  onPrimaryAction={() => {}}
-                  primaryActionPriority="inline"
-                  disabled
-                  layout="row"
-                  framed={false}
-                />
-              </div>
-            </DashboardSection>
-          </div>
-
-          <div className="space-y-4 xl:col-span-5">
-            <DashboardOperationalStatusPanel
-              items={overview.operationalItems}
-              recommendation={overview.recommendation}
-              onRecommendationAction={handleRecommendationClick}
-              onItemAction={handleOperationalItemClick}
-            />
-
-            <DashboardSection
-              label="Actions"
-              title="Quick Actions"
-              description="Configuration shortcuts with current state visible before you click."
-            >
-              <div className="dash-group-panel divide-y dash-divider">
-                <DashboardActionTile
-                  icon={Users}
-                  iconTone="accent"
-                  title="Sync AD Users"
-                  description="Connect Active Directory or Entra ID and keep user identities in sync."
-                  statusLabel={adSyncOp?.statusLabel ?? "Unknown"}
-                  statusTone={adSyncOp?.tone ?? "muted"}
-                  meta={adSyncOp?.detail ?? "Directory sync status unavailable"}
-                  primaryActionLabel="Configure"
-                  onPrimaryAction={() =>
-                    navigate("/admin/users", {
-                      state: {
-                        openDirectorySync: true,
-                        provider: "ad",
-                        mode: "configure",
-                      },
-                    })
-                  }
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-                <DashboardActionTile
-                  icon={Shield}
-                  iconTone="accent"
-                  title="Auth Methods"
-                  description="Manage OIDC, SAML, and social providers for application sign-in."
-                  statusLabel={authMethodsOp?.statusLabel ?? "Unknown"}
-                  statusTone={authMethodsOp?.tone ?? "muted"}
-                  meta={authMethodsOp?.detail ?? "Auth provider status unavailable"}
-                  primaryActionLabel="Add Provider"
-                  onPrimaryAction={() => navigate("/authentication/create")}
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-                <DashboardActionTile
-                  icon={Package}
-                  iconTone="success"
-                  title="External Services"
-                  description="Connect third-party services and manage API credentials and secrets."
-                  statusLabel={externalServicesTileStatus.label}
-                  statusTone={externalServicesTileStatus.tone}
-                  meta={externalServicesTileStatus.meta}
-                  primaryActionLabel={
-                    externalServiceCount !== null && externalServiceCount > 0
-                      ? "Manage"
-                      : "Add Service"
-                  }
-                  onPrimaryAction={() => navigate("/external-services/add")}
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-                <DashboardActionTile
-                  icon={Activity}
-                  iconTone={loggingOp?.tone ?? "muted"}
-                  title="Auth Logs"
-                  description="Review authentication and audit log streams and validate pipeline health."
-                  statusLabel={loggingOp?.statusLabel ?? "Unknown"}
-                  statusTone={loggingOp?.tone ?? "muted"}
-                  meta={loggingOp?.detail ?? "Logging status unavailable"}
-                  primaryActionLabel="View Logs"
-                  onPrimaryAction={() => navigate("/logs/auth")}
-                  primaryActionPriority="inline"
-                  layout="row"
-                  framed={false}
-                  revealActionsOnHover
-                />
-              </div>
-            </DashboardSection>
-          </div>
+      {/* Row 2 — quick-start tiles */}
+      <section aria-label="Quick start">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Setup quick-starts</h2>
+          <span className="text-xs text-slate-500">
+            {completedTiles} / {tiles.length} configured
+          </span>
         </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {tiles.map((tile) => (
+            <QuickStartTile key={tile.to} {...tile} />
+          ))}
+        </div>
+      </section>
 
-        <ClientSelectionModal
-          isOpen={showClientSelection}
-          onClose={() => setShowClientSelection(false)}
-        />
-        <ServiceSelectionModal
-          isOpen={showServiceSelection}
-          onClose={() => setShowServiceSelection(false)}
-        />
-      </div>
+      {/* Row 3 — reference links */}
+      <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
+        <a className="hover:text-slate-900" href="/logs/audit">
+          Audit logs
+        </a>
+        <span aria-hidden>·</span>
+        <a className="hover:text-slate-900" href="/settings/team">
+          Team
+        </a>
+        <span aria-hidden>·</span>
+        <a
+          className="hover:text-slate-900"
+          href="https://docs.authsec.dev"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Docs
+        </a>
+      </footer>
     </div>
   );
 }

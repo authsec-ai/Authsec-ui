@@ -103,6 +103,7 @@ import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
 
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
+import { ClientsPage } from "./features/clients/ClientsPage";
 
 function LegacyTrustDelegationPolicyDetailRedirect() {
   const { policyId = "" } = useParams();
@@ -157,6 +158,11 @@ function LegacySDKGuidesRedirect() {
 function RedirectWithQuery({ to }: { to: string }) {
   const location = useLocation();
   return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+}
+
+function LegacyWorkloadEditRedirect() {
+  const { id = "" } = useParams<{ id?: string }>();
+  return <Navigate to={`/workloads/edit/${encodeURIComponent(id)}`} replace />;
 }
 
 /**
@@ -336,11 +342,13 @@ function AppContent() {
                        with their original components below. */}
                   <Route
                     path="/clients"
-                    element={<Navigate to="/applications" replace />}
-                  />
-                  <Route
-                    path="/clients/mcp"
-                    element={<Navigate to="/applications" replace />}
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ClientsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
                   />
                   <Route
                     path="/resource-servers"
@@ -502,35 +510,17 @@ function AppContent() {
 
                   <Route
                     path="/clients/workloads/create"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <WorkloadIdentitiesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/workloads/create" replace />}
                   />
 
                   <Route
                     path="/clients/workloads/edit/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <WorkloadIdentitiesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<LegacyWorkloadEditRedirect />}
                   />
 
                   <Route
                     path="/clients/workloads"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <WorkloadCertificatePage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/workloads" replace />}
                   />
 
                   <Route

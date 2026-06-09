@@ -1,965 +1,905 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../auth/context/AuthContext";
-import { Button } from "../../components/ui/button";
-import { CardContent } from "../../components/ui/card";
-import { useResponsiveCards } from "../../hooks/use-mobile";
+import { useMemo, useState } from "react";
 import {
+  Bot,
+  Copy,
+  Layers,
+  List,
+  Loader2,
+  Monitor,
+  MoreHorizontal,
+  Plus,
+  Terminal,
+  Users,
+  X,
+} from "lucide-react";
+import type { Row } from "@tanstack/react-table";
 
-  useGetAllClientsQuery,
-  useDeleteClientCompleteMutation,
-  useSetClientStatusMutation,
-
-  type EnhancedClientData,
-  type GetClientsRequest,
-} from "../../app/api/clientApi";
-import type {
-  ClientWithAuthMethods,
-  ClientsFilters,
-} from "../../types/entities";
-import { SessionManager } from "../../utils/sessionManager";
-import { toast } from "react-hot-toast";
-import { generateOAuth2AuthorizationUrl } from "../../utils/oauthUtils";
-
-import { DeleteConfirmDialog } from "./components/DeleteConfirmDialog";
-import { ClientAuthMethodsModal } from "./components/ClientAuthMethodsModal";
-import { OnboardClientModal } from "./components/OnboardClientModal";
-import { Plus, ServerCog, ChevronsRight, Mic } from "lucide-react";
-
-// Import components
-import { EnhancedClientsTable } from "./components/EnhancedClientsTable";
-import { NewClientSpotlightOverlay } from "./components/NewClientSpotlightOverlay";
-import { BulkActionsBar } from "./components/BulkActionsBar";
-import { RefreshingSkeleton } from "./components/ClientsPageSkeleton";
-import { FilterCard } from "./components/FilterCard";
-import { FloatingFAQ } from "./components/FloatingFAQ";
 import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "../../components/ui/tabs";
+  AdaptiveTable,
+  type AdaptiveColumn,
+} from "@/components/ui/adaptive-table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
+  ConsoleFilterBar,
+  EntityCell,
+} from "@/components/console/iam-console";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
-import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
-import { buildTrustDelegationPath } from "@/features/trust-delegation/utils";
-/**
- * Utility function to map API EnhancedClientData to ClientWithAuthMethods
- */
-function mapClientDataToTableFormat(
-  client: EnhancedClientData,
-): ClientWithAuthMethods {
-  console.log("Mapping enhanced client data:", {
-    rawClient: client,
-    name: client.name,
-    client_name: client.client_name,
-    authentication_methods: client.authentication_methods,
-    auth_methods_count: client.auth_methods_count,
-  });
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
-  const backendClientType =
-    typeof client.client_type === "string" ? client.client_type : undefined;
-  const clientType: ClientWithAuthMethods["type"] =
-    backendClientType === "application"
-      ? "mcp_server"
-      : backendClientType === "ai_agent"
-        ? "other"
-        : "other";
-  const email = client.email ?? "";
-  const emailPrefix = email
-    ? email.includes("@")
-      ? email.split("@")[0]
-      : email
-    : "unknown";
-  const tenantSuffix = client.workspace_id
-    ? client.workspace_id.slice(-8)
-    : "unknown";
-  const projectSuffix = client.project_id
-    ? client.project_id.slice(-8)
-    : "unknown";
-  const isActive = client.active ?? client.status?.toLowerCase() === "active";
-  const apiTags = Array.isArray(client.tags)
-    ? client.tags
-    : typeof client.tags === "string"
-      ? (client.tags as string)
-          .split(",")
-          .map((tag: string) => tag.trim())
-          .filter(Boolean)
-      : [];
+import {
+  useListWorkspaceClientsQuery,
+  useRevokeWorkspaceClientMutation,
+  type WorkspaceClientItem,
+} from "@/app/api/mcpClientsApi";
 
-  // Handle authentication_methods from EnhancedClientData
-  // It can be either an array of objects or a string
-  const authMethods: Array<{ id: string; name: string; isDefault: boolean }> =
-    [];
+import { CreateClientWizard } from "./CreateClientWizard";
 
-  if (Array.isArray(client.authentication_methods)) {
-    // Array of auth method objects
-    client.authentication_methods.forEach((method, index) => {
-      authMethods.push({
-        id: method.id || `auth-${index}`,
-        name: method.name || method.type || "Unknown",
-        isDefault: method.is_default ?? index === 0, // First one is default if not specified
-      });
-    });
-  } else if (typeof client.authentication_methods === "string") {
-    // String representation (e.g., "password,oidc")
-    const methodNames = client.authentication_methods
-      .split(",")
-      .map((m) => m.trim());
-    methodNames.forEach((methodName, index) => {
-      authMethods.push({
-        id: `auth-${index}`,
-        name: methodName,
-        isDefault: index === 0,
-      });
-    });
+// ─── Filter definitions ───────────────────────────────────────────────────────
+
+type KindFilter = "all" | "agent" | "human_app" | "m2m" | "cli";
+type ViewMode = "flat" | "grouped";
+
+const KIND_FILTERS: Array<{ key: KindFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "agent", label: "Agents" },
+  { key: "human_app", label: "Human apps" },
+  { key: "m2m", label: "M2M" },
+  { key: "cli", label: "CLI" },
+];
+
+// ─── Badge helpers ────────────────────────────────────────────────────────────
+
+const KIND_STYLES: Record<
+  WorkspaceClientItem["client_kind"],
+  { chip: string; text: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+  agent: {
+    chip: "border-[color:color-mix(in_oklch,var(--color-primary)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)]",
+    text: "text-[var(--color-primary)]",
+    icon: Bot,
+  },
+  human_app: {
+    chip: "border-[color:color-mix(in_oklch,var(--color-text-muted)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-text-muted)_8%,transparent)]",
+    text: "text-[var(--color-text-muted)]",
+    icon: Users,
+  },
+  m2m: {
+    chip: "border-[color:color-mix(in_oklch,#a855f7_25%,transparent)] bg-[color:color-mix(in_oklch,#a855f7_8%,transparent)]",
+    text: "text-purple-600",
+    icon: Monitor,
+  },
+  cli: {
+    chip: "border-[color:color-mix(in_oklch,#f59e0b_25%,transparent)] bg-[color:color-mix(in_oklch,#f59e0b_8%,transparent)]",
+    text: "text-amber-600",
+    icon: Terminal,
+  },
+};
+
+const KIND_LABELS: Record<WorkspaceClientItem["client_kind"], string> = {
+  agent: "Agent",
+  human_app: "Human app",
+  m2m: "M2M",
+  cli: "CLI",
+};
+
+const REGISTRATION_STYLES: Record<
+  string,
+  { chip: string; text: string }
+> = {
+  dcr: {
+    chip: "border-[color:color-mix(in_oklch,var(--color-text-muted)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-text-muted)_8%,transparent)]",
+    text: "text-[var(--color-text-muted)]",
+  },
+  prereg: {
+    chip: "border-[color:color-mix(in_oklch,var(--color-primary)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)]",
+    text: "text-[var(--color-primary)]",
+  },
+  cimd: {
+    chip: "border-[color:color-mix(in_oklch,var(--color-primary)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-primary)_8%,transparent)]",
+    text: "text-[var(--color-primary)]",
+  },
+};
+
+const REGISTRATION_LABELS: Record<string, string> = {
+  dcr: "DCR",
+  prereg: "Pre-reg",
+  cimd: "CIMD",
+};
+
+function statusTone(
+  status: string,
+  syncStatus: string,
+): { chip: string; text: string; label: string } {
+  if (syncStatus === "pending_delete" || status === "revoked") {
+    return {
+      chip: "border-[color:color-mix(in_oklch,var(--color-danger)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-danger)_8%,transparent)]",
+      text: "text-[var(--color-danger)]",
+      label: syncStatus === "pending_delete" ? "Pending delete" : "Revoked",
+    };
   }
-
-  console.log("Mapped authentication methods:", authMethods);
-
+  if (status === "pending_approval") {
+    return {
+      chip: "border-[color:color-mix(in_oklch,var(--color-warning)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_8%,transparent)]",
+      text: "text-[var(--color-warning)]",
+      label: "Pending approval",
+    };
+  }
+  if (syncStatus === "sync_error") {
+    return {
+      chip: "border-[color:color-mix(in_oklch,var(--color-warning)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_8%,transparent)]",
+      text: "text-[var(--color-warning)]",
+      label: "Sync error",
+    };
+  }
+  // approved / active
   return {
-    id: client.client_id,
-    workspace_id: client.workspace_id,
-    secret_id: typeof client.secret_id === "string" ? client.secret_id : null,
-    name: client.name || client.client_name || "Unnamed Client",
-    description:
-      client.description ||
-      `Client: ${client.name || client.client_name || "Unnamed Client"}`,
-    type: clientType,
-    client_type: backendClientType,
-    tags:
-      apiTags.length > 0
-        ? apiTags.join(",")
-        : `email:${emailPrefix},tenant:${tenantSuffix},project:${projectSuffix}`,
-    authentication_type: "custom" as const,
-    metadata: {
-      project_id: client.project_id,
-      workspace_id: client.workspace_id,
-      original_id: client.id,
-      email,
-      org_id: client.org_id,
-      hydra_client_id: client.hydra_client_id,
-      client_type: backendClientType,
-      agent_type: client.agent_type,
-      platform: client.platform,
-      platform_config: client.platform_config,
-      secret_id: client.secret_id,
-      spiffe_id: client.spiffe_id,
-      raw_client: {
-        ...client,
-        mfa_enabled: true, // Override: Always show MFA as ON
-      },
-      authentication_methods: authMethods,
-      auth_methods_count: client.auth_methods_count,
-      user_count: client.user_count,
-      last_modified_at: (client as any).last_modified_at,
-    },
-    roles: [],
-    mfa_config: null,
-    successful_authentications: null, // No data available from API
-    denied_authentications: null, // No data available from API
-    view_policies_applicable: [],
-    endpoint: `/clientms/clients/${client.client_id}`,
-    access_status: isActive ? ("active" as const) : ("disabled" as const),
-    access_level: "internal" as const,
-    total_requests: null, // No data available from API
-    last_accessed: (client as any).last_modified_at || client.updated_at,
-    updated_at: client.updated_at,
-    created_by: email,
-    attachedMethods: authMethods,
+    chip: "border-[color:color-mix(in_oklch,var(--color-success)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_8%,transparent)]",
+    text: "text-[var(--color-success)]",
+    label: "Approved",
   };
 }
 
-/**
- * Clients page component - Manage MCP Servers and AI Agents
- *
- * Features:
- * - Client onboarding and management
- * - API usage analytics
- * - Client configuration management
- * - Pro tips and recommendations
- * - Enhanced metrics and analytics
- */
-export function ClientsPage() {
-  const navigate = useNavigate();
-  const { currentProject } = useAuth();
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [drawerClient, setDrawerClient] =
-    useState<ClientWithAuthMethods | null>(null);
-  const [clients, setClients] = useState<EnhancedClientData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filtersState, setFiltersState] = useState<Partial<ClientsFilters>>({});
-  const [deleteDialog, setDeleteDialog] = useState<{
-    open: boolean;
-    clientId: string;
-    clientName?: string;
-  }>({
-    open: false,
-    clientId: "",
-    clientName: undefined,
-  });
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [authDialogClient, setAuthDialogClient] =
-    useState<ClientWithAuthMethods | null>(null);
-  const [showOnboardModal, setShowOnboardModal] = useState(false);
-  const [newlyCreatedClientId, setNewlyCreatedClientId] = useState<string | null>(null);
-  const [newClientStep, setNewClientStep] = useState(0);
-  const [tablePageIndex, setTablePageIndex] = useState<number | undefined>(undefined);
-  const [queryPage, setQueryPage] = useState(1);
+// ─── Relative time helper ─────────────────────────────────────────────────────
 
-  const handleNextNewClientStep = useCallback(() => {
-    setNewClientStep((s) => {
-      if (s >= 2) {
-        setNewlyCreatedClientId(null);
-        setNewClientStep(0);
-        setTablePageIndex(undefined);
-        return 0;
-      }
-      return s + 1;
-    });
-  }, []);
+function relativeTime(isoString: string | undefined): string {
+  if (!isoString) return "—";
+  const diff = Date.now() - new Date(isoString).getTime();
+  if (isNaN(diff)) return "—";
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
 
-  const handleDismissNewClient = useCallback(() => {
-    setNewlyCreatedClientId(null);
-    setNewClientStep(0);
-    setTablePageIndex(undefined);
-    // Do NOT reset queryPage — keep the user on the current page
-  }, []);
+// ─── Row actions ──────────────────────────────────────────────────────────────
 
-  // Initialize guided tour
-  useTourStep({
-    tourConfig: TOUR_REGISTRY["clients-onboarding"],
-  });
+function ClientRowActions({ client }: { client: WorkspaceClientItem }) {
+  const [revoking, setRevoking] = useState(false);
+  const [revokeClient] = useRevokeWorkspaceClientMutation();
 
-  // Animation refs
-
-  // AuthSec API integration
-  const [deleteClientComplete] = useDeleteClientCompleteMutation();
-  const [setClientStatus] = useSetClientStatusMutation();
-
-  // Get session data for tenant ID
-  const sessionData = SessionManager.getSession();
-  const workspaceId = sessionData?.workspace_id;
-
-  const queryArgs = useMemo(() => {
-    if (!workspaceId) return undefined;
-    const cleanedFilters: Record<string, any> = {};
-    Object.entries(filtersState || {}).forEach(([key, value]) => {
-      if (
-        value === undefined ||
-        value === null ||
-        (typeof value === "string" && value.trim() === "") ||
-        (Array.isArray(value) && value.length === 0)
-      ) {
-        return;
-      }
-      cleanedFilters[key] = value;
-    });
-
-    return {
-      workspace_id: workspaceId,
-      active_only: false,
-      filters: cleanedFilters,
-      page: queryPage,
-      limit: 10,
-    } as GetClientsRequest;
-  }, [workspaceId, filtersState, queryPage]);
-
-  // Use getAllClients to get enhanced data with authentication methods
-  const {
-    data: clientsResponse,
-    isLoading: clientsLoading,
-    error: clientsError,
-    refetch: refetchClients,
-  } = useGetAllClientsQuery(queryArgs as GetClientsRequest, {
-    skip: !queryArgs,
-    refetchOnMountOrArgChange: true,
-    // Disable aggressive refetching to prevent infinite loops
-    refetchOnFocus: false,
-    refetchOnReconnect: false,
-  });
-
-  // Load clients when component mounts or when data changes
-  React.useEffect(() => {
-    if (!workspaceId) {
-      // Allow the UI to render with empty data when no tenant/session is present
-      setClients([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(clientsLoading);
-
-    if (clientsResponse) {
-      console.log("Raw clients API response:", clientsResponse);
-      console.log("First client from API:", clientsResponse.clients?.[0]);
-
-      setClients(
-        Array.isArray(clientsResponse.clients) ? clientsResponse.clients : [],
-      );
-      setError(null);
-      return;
-    }
-
-    if (!clientsLoading && !clientsResponse) {
-      // No data returned yet; ensure we present an empty table without errors.
-      setClients([]);
-      if (!clientsError) {
-        setError(null);
-      }
-    }
-
-    if (clientsError && !clientsLoading) {
-      console.error("Failed to load clients:", clientsError);
-
-      const errorWithData = clientsError as {
-        status?: number;
-        data?: { message?: string; error?: string };
-      };
-      if (
-        errorWithData?.status === 500 &&
-        errorWithData?.data?.message?.includes("user not found")
-      ) {
-        setError(
-          "User not found in AuthSec system. Please complete OIDC login flow first.",
-        );
-      } else {
-        setError(
-          errorWithData?.data?.message ||
-            errorWithData?.data?.error ||
-            `API Error: ${errorWithData?.status || "Unknown"}`,
-        );
-      }
-    }
-  }, [workspaceId, clientsResponse, clientsError, clientsLoading]); // Removed sessionData from dependencies
-
-  // Responsive card system
-  const { mainAreaRef } = useResponsiveCards();
-
-  const getProjectName = () => {
-    return currentProject?.name || "your project";
-  };
-
-  // Create display clients from AuthSec API data with client-side filtering
-  const displayClients = React.useMemo(() => {
-    if (clients.length === 0) {
-      return []; // Return empty array if no clients
-    }
-
-    // Convert AuthSec client objects to displayable format
-    let filteredClients = clients.map(mapClientDataToTableFormat);
-
-    // Apply client-side filters as fallback (in case API doesn't support all filters)
-    if (filtersState) {
-      filteredClients = filteredClients.filter((client) => {
-        // Search filter (name, email, endpoint)
-        if (filtersState.search || filtersState.name || filtersState.email) {
-          const searchTerm = (
-            filtersState.search ||
-            filtersState.name ||
-            filtersState.email ||
-            ""
-          ).toLowerCase();
-          const matchesName = client.name?.toLowerCase().includes(searchTerm);
-          const matchesEmail = client.metadata?.email
-            ?.toLowerCase()
-            .includes(searchTerm);
-          const matchesEndpoint = client.endpoint
-            ?.toLowerCase()
-            .includes(searchTerm);
-          const matchesClientId = client.id?.toLowerCase().includes(searchTerm);
-
-          if (
-            !matchesName &&
-            !matchesEmail &&
-            !matchesEndpoint &&
-            !matchesClientId
-          ) {
-            return false;
-          }
-        }
-
-        // Status filter
-        if (filtersState.status) {
-          const statusMatch =
-            client.access_status === filtersState.access_status ||
-            client.metadata?.raw_client?.status?.toLowerCase() ===
-              filtersState.status.toLowerCase();
-          if (!statusMatch) {
-            return false;
-          }
-        }
-
-        if (filtersState.client_type) {
-          const rawClientType =
-            typeof client.client_type === "string"
-              ? client.client_type
-              : typeof client.metadata?.raw_client?.client_type === "string"
-                ? client.metadata.raw_client.client_type
-                : undefined;
-
-          if (rawClientType !== filtersState.client_type) {
-            return false;
-          }
-        }
-
-        return true;
-      });
-    }
-
-    return filteredClients;
-  }, [clients, filtersState]);
-
-  // Client-side fallback: compute page from displayClients index
-  // (skipped when server-side navigation already set tablePageIndex in onSuccess)
-  useEffect(() => {
-    if (!newlyCreatedClientId || !displayClients.length) return;
-    if (tablePageIndex !== undefined) return; // server-side nav already handled in onSuccess
-    const PAGE_SIZE = 10;
-    const idx = displayClients.findIndex((c) => {
-      const raw = (c.metadata?.raw_client as any) ?? c;
-      return (raw?.client_id || c.id) === newlyCreatedClientId;
-    });
-    if (idx === -1) return;
-    setTablePageIndex(Math.floor(idx / PAGE_SIZE) + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newlyCreatedClientId, displayClients]); // tablePageIndex intentionally excluded to avoid loop
-
-  const handleClearSelection = () => {
-    setSelectedClients([]);
-  };
-
-  // Delete client - show dialog
-  const handleDeleteClient = (clientId: string) => {
-    // Find the client to get its name
-    const client = clients.find((c) => c.client_id === clientId);
-    setDeleteDialog({
-      open: true,
-      clientId,
-      clientName: client?.name || client?.client_name,
+  const handleCopyId = () => {
+    void navigator.clipboard.writeText(client.client_id).then(() => {
+      toast.success("Client ID copied");
     });
   };
 
-  // Confirm delete client
-  const handleConfirmDelete = async () => {
-    const sessionData = SessionManager.getSession();
-    const workspaceId = sessionData?.workspace_id;
-    if (!workspaceId) {
-      toast.error("Missing tenant context");
+  const handleRevoke = async () => {
+    if (
+      !window.confirm(
+        `Revoke client "${client.client_name || client.client_id}"? This cannot be undone.`,
+      )
+    ) {
       return;
     }
-
-    setIsDeleting(true);
+    setRevoking(true);
     try {
-      await deleteClientComplete({
-        workspace_id: workspaceId,
-        client_id: deleteDialog.clientId,
+      await revokeClient({
+        rsId: client.resource_server_id,
+        clientId: client.client_id,
       }).unwrap();
-      toast.success("Client deleted successfully");
-      // Optimistically update list
-      setClients((prev) =>
-        prev.filter((client) => client.client_id !== deleteDialog.clientId),
-      );
-      // Explicitly refetch to ensure fresh data
-      refetchClients();
-    } catch (err: unknown) {
-      console.error("Delete failed", err);
-      const errorWithData = err as { data?: { message?: string } };
-      toast.error(errorWithData?.data?.message || "Failed to delete client");
+      toast.success("Client revoked");
+    } catch (err: any) {
+      toast.error(err?.data?.message ?? "Failed to revoke client");
     } finally {
-      setIsDeleting(false);
+      setRevoking(false);
     }
-  };
-
-  const handleToggleStatus = async (clientId: string) => {
-    const sessionData = SessionManager.getSession();
-    const workspaceId = sessionData?.workspace_id;
-
-    if (!workspaceId) {
-      toast.error("Missing tenant context");
-      return;
-    }
-
-    // Find current client to get its current status
-    const currentClient = clients.find((c) => c.client_id === clientId);
-    if (!currentClient) {
-      toast.error("Client not found");
-      return;
-    }
-
-    // Validate client ID format (should be UUID)
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(clientId)) {
-      toast.error("Invalid client ID format");
-      return;
-    }
-
-    try {
-      const newStatus = !currentClient.active;
-      await setClientStatus({
-        workspace_id: workspaceId,
-        client_id: clientId,
-        active: newStatus,
-      }).unwrap();
-
-      // Optimistically update the client in the list
-      setClients((prev) =>
-        prev.map((client) =>
-          client.client_id === clientId
-            ? {
-                ...client,
-                active: newStatus,
-                updated_at: new Date().toISOString(),
-              }
-            : client,
-        ),
-      );
-
-      toast.success(
-        `Client ${newStatus ? "activated" : "deactivated"} successfully`,
-      );
-
-      // Explicitly refetch to ensure fresh data
-      refetchClients();
-    } catch (error: unknown) {
-      console.error("Failed to toggle client status:", error);
-      const errorWithData = error as { data?: { message?: string } };
-      toast.error(
-        errorWithData?.data?.message || "Failed to toggle client status",
-      );
-    }
-  };
-
-  const handlePageChange = useCallback((page: number) => {
-    setQueryPage(page);
-    setTablePageIndex(page);
-  }, []);
-
-  const setFilters = useCallback((next: Partial<ClientsFilters>) => {
-    setFiltersState(next);
-    setQueryPage(1);
-    setTablePageIndex(1);
-  }, []);
-
-  const handleAddAuthMethod = useCallback(
-    (clientId: string) => {
-      navigate("/authentication/create", {
-        state: { prefillClientId: clientId },
-      });
-    },
-    [navigate],
-  );
-
-  const handleShowAuthMethods = useCallback(
-    (clientRecord: ClientWithAuthMethods) => {
-      console.info("[ClientsPage] Edit Auth Methods clicked", {
-        clientId: clientRecord.id,
-        name: clientRecord.name,
-      });
-      setAuthDialogClient(clientRecord);
-    },
-    [],
-  );
-
-  const handlePreviewLogin = useCallback(async (clientId: string) => {
-    const currentSession = SessionManager.getSession();
-
-    // Priority: 1) session workspace_domain, 2) extract from current hostname
-    let tenantDomainForOAuth = currentSession?.workspace_domain;
-    let tenantDomainFromHostname: string | undefined;
-
-    // Only extract from hostname if not found in session
-    if (!tenantDomainForOAuth) {
-      // Extract from hostname: dec10.app.authsec.dev -> dec10
-      const hostname = window.location.hostname;
-      const hostParts = hostname.split(".");
-      if (
-        hostParts.length >= 4 &&
-        hostParts[0] !== "app" &&
-        hostParts[0] !== "www"
-      ) {
-        tenantDomainFromHostname = hostParts[0];
-        tenantDomainForOAuth = tenantDomainFromHostname;
-      }
-    }
-
-    // Use hydra_public_url from the API response if available
-    const hydraPublicUrl = clientsResponse?.hydra_public_url;
-
-    // eslint-disable-next-line no-console
-    console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
-      clientId,
-      tenantDomainFromSession: currentSession?.workspace_domain,
-      tenantDomainFromHostname,
-      finalTenantDomain: tenantDomainForOAuth,
-      hydraPublicUrl,
-    });
-
-    try {
-      // Generate the OAuth2 authorization URL with PKCE
-      const { authorizationUrl, state, codeVerifier } = await generateOAuth2AuthorizationUrl({
-        clientId,
-        tenantDomain: tenantDomainForOAuth,
-        scopes: ["openid", "profile", "email"],
-        hydraPublicUrl,
-      });
-
-      // Persist verifier so the callback can send it to exchange-token
-      sessionStorage.setItem(`pkce_cv_${state}`, codeVerifier);
-
-      window.open(authorizationUrl, "_blank");
-      toast.success("Opening end-user login preview in a new tab");
-    } catch (error) {
-      console.error("Failed to generate OAuth2 URL:", error);
-      toast.error("Failed to generate login preview URL");
-    }
-  }, [clientsResponse]);
-
-  const handleConfigureVoiceAgent = useCallback(
-    (clientId: string) => {
-      navigate(`/clients/voice-agent?clientId=${clientId}`);
-    },
-    [navigate],
-  );
-
-  const handleTrustDelegation = useCallback(
-    (clientRecord: ClientWithAuthMethods) => {
-      navigate(
-        buildTrustDelegationPath("/trust-delegation/new", {
-          clientId: clientRecord.id,
-          agentType: "mcp-agent",
-        }),
-      );
-    },
-    [navigate],
-  );
-
-  const handleOpenVoiceAgentFromHeader = useCallback(() => {
-    navigate("/clients/voice-agent");
-  }, [navigate]);
-
-  // Bulk actions
-  const handleBulkAction = async (action: string) => {
-    // TODO: Replace with actual service calls when connected to backend
-    switch (action) {
-      case "enable":
-        // await ClientsService.bulkUpdateStatus(selectedClients, "active");
-        break;
-      case "disable":
-        // await ClientsService.bulkUpdateStatus(selectedClients, "disabled");
-        break;
-      case "bulk-assign-roles":
-        // TODO: Show role selection modal
-        // await ClientsService.bulkAssignRoles(selectedClients, selectedRoles);
-        break;
-      case "bulk-configure-mfa":
-        // TODO: Show MFA configuration modal
-        // await ClientsService.bulkConfigureMFA(selectedClients, mfaConfig);
-        break;
-      case "bulk-update-auth-type":
-        // TODO: Show auth type selection modal
-        // await ClientsService.bulkUpdateAuthType(selectedClients, selectedAuthType);
-        break;
-      case "bulk-reset-auth-stats":
-        // await ClientsService.bulkResetAuthStats(selectedClients);
-        break;
-      case "bulk-duplicate":
-        // TODO: Implement bulk duplication logic
-        break;
-      case "bulk-export-config":
-        // TODO: Generate and download configuration export
-        break;
-      case "bulk-security-report":
-        // TODO: Generate and download security report
-        break;
-      case "bulk-delete":
-        // TODO: Show confirmation dialog
-        // await ClientsService.bulkDeleteClients(selectedClients);
-        break;
-      default:
-        // Unknown action
-        break;
-    }
-
-    setSelectedClients([]);
   };
 
   return (
-    <div className="min-h-screen" ref={mainAreaRef} data-page="clients-mcp">
-      <div className="space-y-4 p-6 max-w-10xl mx-auto">
-        {/* Header */}
-        <PageHeader
-          title="MCP Servers / AI Agents"
-          description={`Manage MCP Servers and AI Agents for ${getProjectName()}`}
-          actions={
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={handleOpenVoiceAgentFromHeader}
-                className="admin-tonal-cta gap-2 shadow-none"
-                data-tone="voice"
-                data-tour-id="add-voice-agent-button"
-              >
-                <Mic className="h-4 w-4" />
-                Add Voice Agent
-              </Button>
-              <Button
-                onClick={() => setShowOnboardModal(true)}
-                className="shadow-none"
-                data-tour-id="onboard-button"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Onboard Client
-              </Button>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Client actions"
+            disabled={revoking}
+          >
+            {revoking ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="size-4" />
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          <DropdownMenuItem onSelect={handleCopyId}>
+            <Copy className="mr-2 size-4" />
+            Copy client ID
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => void handleRevoke()}
+            className="text-destructive focus:text-destructive"
+            disabled={client.status === "revoked"}
+          >
+            <X className="mr-2 size-4" />
+            Revoke
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// ─── Grouped row type ─────────────────────────────────────────────────────────
+
+interface GroupedClientRow {
+  groupKey: string;
+  displayName: string;
+  clientKind: WorkspaceClientItem["client_kind"];
+  application: string;
+  resourceServerId: string;
+  instanceCount: number;
+  lastTokenIssuedAt: string | undefined;
+  instances: WorkspaceClientItem[];
+}
+
+// ─── Grouped row actions (revoke all) ────────────────────────────────────────
+
+function GroupedRowActions({ group }: { group: GroupedClientRow }) {
+  const [revoking, setRevoking] = useState(false);
+  const [revokeClient] = useRevokeWorkspaceClientMutation();
+
+  const handleRevokeAll = async () => {
+    const active = group.instances.filter((c) => c.status !== "revoked");
+    if (active.length === 0) return;
+    if (
+      !window.confirm(
+        `Revoke all ${active.length} instance(s) of "${group.displayName}"? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setRevoking(true);
+    try {
+      await Promise.all(
+        active.map((c) =>
+          revokeClient({
+            rsId: c.resource_server_id,
+            clientId: c.client_id,
+          }).unwrap(),
+        ),
+      );
+      toast.success(`Revoked ${active.length} client(s)`);
+    } catch (err: any) {
+      toast.error(err?.data?.message ?? "Failed to revoke all clients");
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  const allRevoked = group.instances.every((c) => c.status === "revoked");
+
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Group actions"
+            disabled={revoking}
+          >
+            {revoking ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="size-4" />
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-44">
+          <DropdownMenuItem
+            onSelect={() => void handleRevokeAll()}
+            className="text-destructive focus:text-destructive"
+            disabled={allRevoked}
+          >
+            <X className="mr-2 size-4" />
+            Revoke all
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// ─── Expanded row for grouped table ──────────────────────────────────────────
+
+function ExpandedGroupRow({ row }: { row: Row<GroupedClientRow> }) {
+  const group = row.original;
+  const [revokeClient] = useRevokeWorkspaceClientMutation();
+  const [revokingIds, setRevokingIds] = useState<Set<string>>(new Set());
+
+  const handleRevoke = async (client: WorkspaceClientItem) => {
+    if (
+      !window.confirm(
+        `Revoke "${client.client_name || client.client_id}"? This cannot be undone.`,
+      )
+    )
+      return;
+    setRevokingIds((s) => new Set(s).add(client.client_id));
+    try {
+      await revokeClient({
+        rsId: client.resource_server_id,
+        clientId: client.client_id,
+      }).unwrap();
+      toast.success("Client revoked");
+    } catch (err: any) {
+      toast.error(err?.data?.message ?? "Failed to revoke client");
+    } finally {
+      setRevokingIds((s) => {
+        const next = new Set(s);
+        next.delete(client.client_id);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <div className="border-t bg-muted/30 px-4 py-3 space-y-1.5">
+      {group.instances.map((c) => {
+        const tone = statusTone(c.status, c.sync_status);
+        const isRevoking = revokingIds.has(c.client_id);
+        return (
+          <div
+            key={c.client_id}
+            className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-background/60 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                {c.client_name || c.client_id}
+              </p>
+              <p className="text-[11px] font-mono text-muted-foreground truncate">
+                {c.client_id}
+              </p>
             </div>
-          }
-        />
-
-        {/* Info Banner */}
-        <PageInfoBanner
-          title="Secure your MCP Servers and AI Agents"
-          description="Enterprise-grade authentication for AI agents with OAuth 2.0, SPIFFE/SPIRE identity, and RBAC."
-          featuresTitle="Key features:"
-          features={[
-            { text: "OAuth 2.1 with PKCE support" },
-            { text: "SPIFFE/SPIRE workload identity" },
-            { text: "Role-based access control" },
-          ]}
-          primaryAction={{
-            label: "Read docs",
-            onClick: () =>
-              window.open(
-                "https://docs.authsec.dev/administration/clients/",
-                "_blank",
-              ),
-            variant: "outline",
-            className:
-              "border border-[var(--editorial-border-soft)] bg-[var(--editorial-panel)] text-[var(--editorial-text-1)] hover:bg-[var(--editorial-panel-soft)] shadow-none h-8 px-3 text-xs",
-            icon: ChevronsRight,
-          }}
-          storageKey="clients-page-info"
-          dismissible={true}
-        />
-
-        {/* Filter/Search Card */}
-        <div data-tour-id="filter-card">
-          <FilterCard setFilters={setFilters} />
-        </div>
-
-        {/* Table */}
-        <div className="clients-table-container" data-tour-id="clients-table">
-          <TableCard className="transition-all duration-500">
-            <CardContent variant="flush">
-              {error ? (
-                <div className="p-6 text-center">
-                  <div className="flex flex-col items-center space-y-4">
-                    <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-full">
-                      <ServerCog className="h-8 w-8 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-semibold text-red-900 dark:text-red-100">
-                        Unable to Load Clients
-                      </h3>
-                      <p className="text-red-700 dark:text-red-300 mt-1">
-                        {error}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative">
-                  <EnhancedClientsTable
-                    data={displayClients}
-                    selectedClients={selectedClients}
-                    onSelectionChange={setSelectedClients}
-                    onDeleteClient={handleDeleteClient}
-                    onToggleStatus={handleToggleStatus}
-                    onViewSDK={(clientId) =>
-                      navigate(`/developer/sdk-guides/clients/${clientId}`)
-                    }
-                    onDelegateTrust={handleTrustDelegation}
-                    onAddAuthMethod={handleAddAuthMethod}
-                    onShowAuthMethods={handleShowAuthMethods}
-                    onPreviewLogin={handlePreviewLogin}
-                    onConfigureVoiceAgent={handleConfigureVoiceAgent}
-                    newClientId={newlyCreatedClientId ?? undefined}
-                    newClientStep={newClientStep}
-                    onNextNewClientStep={handleNextNewClientStep}
-                    onDismissNewClient={handleDismissNewClient}
-                    pageIndex={tablePageIndex}
-                    onPageIndexChange={handlePageChange}
-                    serverTotalItems={clientsResponse?.pagination?.total ?? clientsResponse?.total ?? 0}
-                  />
-                  {loading && displayClients.length > 0 && (
-                    <RefreshingSkeleton />
-                  )}
-                </div>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase shrink-0",
+                tone.chip,
+                tone.text,
               )}
-            </CardContent>
-          </TableCard>
+            >
+              <span className="size-1 rounded-full bg-current" aria-hidden />
+              {tone.label}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0 w-20 text-right">
+              {relativeTime(c.last_token_issued_at)}
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleRevoke(c);
+              }}
+              disabled={c.status === "revoked" || isRevoking}
+              className="shrink-0 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Revoke client"
+            >
+              {isRevoking ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <X className="size-3.5" />
+              )}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export function ClientsPage() {
+  const { data: clients, isLoading, isError, refetch } = useListWorkspaceClientsQuery();
+
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("grouped");
+  const [wizardOpen, setWizardOpen] = useState(false);
+
+  const counts = useMemo(() => {
+    const all = clients ?? [];
+    return {
+      all: all.length,
+      agent: all.filter((c) => c.client_kind === "agent").length,
+      human_app: all.filter((c) => c.client_kind === "human_app").length,
+      m2m: all.filter((c) => c.client_kind === "m2m").length,
+      cli: all.filter((c) => c.client_kind === "cli").length,
+    };
+  }, [clients]);
+
+  const visibleClients = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (clients ?? []).filter((c) => {
+      if (kindFilter !== "all" && c.client_kind !== kindFilter) return false;
+      if (!q) return true;
+      return [c.client_name, c.software_id, c.client_id, c.resource_server_name]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [clients, search, kindFilter]);
+
+  // ─── Grouped rows (client-side) ────────────────────────────────────────────
+
+  const groupedRows = useMemo<GroupedClientRow[]>(() => {
+    const map = new Map<string, WorkspaceClientItem[]>();
+    for (const c of visibleClients) {
+      const key = c.software_id || c.client_name || c.client_id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.push(c);
+      } else {
+        map.set(key, [c]);
+      }
+    }
+    return Array.from(map.entries()).map(([groupKey, instances]) => {
+      // Aggregate status: any revoked → danger; any pending → warning; else approved
+      const anyRevoked = instances.some((c) => c.status === "revoked");
+      const anyPending = instances.some(
+        (c) => c.status === "pending_approval" || c.sync_status === "sync_error",
+      );
+      const allApproved = instances.every(
+        (c) => c.status === "approved" && c.sync_status === "active",
+      );
+      void anyRevoked;
+      void anyPending;
+      void allApproved;
+
+      // Most recent last_token_issued_at across instances
+      const lastTokenIssuedAt = instances
+        .map((c) => c.last_token_issued_at)
+        .filter((t): t is string => Boolean(t))
+        .sort()
+        .at(-1);
+
+      return {
+        groupKey,
+        displayName:
+          instances[0].software_id ||
+          instances[0].client_name ||
+          instances[0].client_id,
+        clientKind: instances[0].client_kind,
+        application: instances[0].resource_server_name,
+        resourceServerId: instances[0].resource_server_id,
+        instanceCount: instances.length,
+        lastTokenIssuedAt,
+        instances,
+      };
+    });
+  }, [visibleClients]);
+
+  // ─── Aggregate status helper (for grouped rows) ───────────────────────────
+
+  function groupStatusTone(group: GroupedClientRow) {
+    const anyRevoked = group.instances.some((c) => c.status === "revoked");
+    const anyPending = group.instances.some(
+      (c) =>
+        c.status === "pending_approval" || c.sync_status === "sync_error",
+    );
+    if (anyRevoked) {
+      return {
+        chip: "border-[color:color-mix(in_oklch,var(--color-danger)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-danger)_8%,transparent)]",
+        text: "text-[var(--color-danger)]",
+        label: "Revoked",
+      };
+    }
+    if (anyPending) {
+      return {
+        chip: "border-[color:color-mix(in_oklch,var(--color-warning)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-warning)_8%,transparent)]",
+        text: "text-[var(--color-warning)]",
+        label: "Pending",
+      };
+    }
+    return {
+      chip: "border-[color:color-mix(in_oklch,var(--color-success)_25%,transparent)] bg-[color:color-mix(in_oklch,var(--color-success)_8%,transparent)]",
+      text: "text-[var(--color-success)]",
+      label: "Approved",
+    };
+  }
+
+  // ─── Flat columns ─────────────────────────────────────────────────────────
+
+  const flatColumns = useMemo<AdaptiveColumn<WorkspaceClientItem>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        alwaysVisible: true,
+        approxWidth: 240,
+        cell: ({ row }) => {
+          const c = row.original;
+          const displayName = c.client_name || c.software_id || c.client_id;
+          return (
+            <EntityCell
+              label={displayName}
+              detail={
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  {c.client_id}
+                </span>
+              }
+            />
+          );
+        },
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        priority: 1,
+        approxWidth: 130,
+        cell: ({ row }) => {
+          const c = row.original;
+          const style = KIND_STYLES[c.client_kind];
+          const Icon = style.icon;
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                style.chip,
+                style.text,
+              )}
+            >
+              <Icon className="size-3" aria-hidden />
+              {KIND_LABELS[c.client_kind]}
+            </span>
+          );
+        },
+      },
+      {
+        id: "application",
+        header: "Application",
+        priority: 2,
+        approxWidth: 180,
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">
+            {row.original.resource_server_name || (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "registration",
+        header: "Registration",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const type = row.original.registration_type;
+          const style =
+            REGISTRATION_STYLES[type] ?? REGISTRATION_STYLES.dcr;
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                style.chip,
+                style.text,
+              )}
+            >
+              <span className="size-1 rounded-full bg-current" aria-hidden />
+              {REGISTRATION_LABELS[type] ?? type}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 1,
+        approxWidth: 140,
+        cell: ({ row }) => {
+          const c = row.original;
+          const tone = statusTone(c.status, c.sync_status);
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                tone.chip,
+                tone.text,
+              )}
+            >
+              <span className="size-1 rounded-full bg-current" aria-hidden />
+              {tone.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "last-token",
+        header: "Last token",
+        priority: 4,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {relativeTime(row.original.last_token_issued_at)}
+          </span>
+        ),
+      },
+      {
+        id: "created",
+        header: "Created",
+        priority: 5,
+        approxWidth: 110,
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {relativeTime(row.original.created_at)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => <ClientRowActions client={row.original} />,
+      },
+    ],
+    [],
+  );
+
+  // ─── Grouped columns ──────────────────────────────────────────────────────
+
+  const groupedColumns = useMemo<AdaptiveColumn<GroupedClientRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        alwaysVisible: true,
+        approxWidth: 260,
+        cell: ({ row }) => {
+          const g = row.original;
+          return (
+            <EntityCell
+              label={g.displayName}
+              detail={
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">
+                    {g.instanceCount} instance{g.instanceCount === 1 ? "" : "s"}
+                  </span>
+                </span>
+              }
+            />
+          );
+        },
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        priority: 1,
+        approxWidth: 130,
+        cell: ({ row }) => {
+          const g = row.original;
+          const style = KIND_STYLES[g.clientKind];
+          const Icon = style.icon;
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                style.chip,
+                style.text,
+              )}
+            >
+              <Icon className="size-3" aria-hidden />
+              {KIND_LABELS[g.clientKind]}
+            </span>
+          );
+        },
+      },
+      {
+        id: "application",
+        header: "Application",
+        priority: 2,
+        approxWidth: 180,
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">
+            {row.original.application || (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 1,
+        approxWidth: 140,
+        cell: ({ row }) => {
+          const tone = groupStatusTone(row.original);
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase",
+                tone.chip,
+                tone.text,
+              )}
+            >
+              <span className="size-1 rounded-full bg-current" aria-hidden />
+              {tone.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "last-token",
+        header: "Last token",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {relativeTime(row.original.lastTokenIssuedAt)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => <GroupedRowActions group={row.original} />,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  const isEmpty = (clients?.length ?? 0) === 0;
+  const noMatch = !isEmpty && visibleClients.length === 0;
+
+  return (
+    <div className="space-y-4 p-6">
+      {/* Page header */}
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            Clients
+          </h1>
+          <p className="max-w-3xl text-sm leading-5 text-muted-foreground">
+            Workspace-wide view of every OAuth client registered against your
+            MCP applications — agents, human apps, machine-to-machine clients,
+            and CLI tools.
+          </p>
         </div>
+        <Button
+          onClick={() => setWizardOpen(true)}
+          size="sm"
+          className="shrink-0 text-white"
+        >
+          <Plus className="mr-1.5 h-4 w-4" />
+          Add client
+        </Button>
+      </header>
+
+      {/* Filter bar */}
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name, client ID, or application"
+        filters={KIND_FILTERS.map((f) => ({
+          key: f.key,
+          label: f.label,
+          count: counts[f.key],
+        }))}
+        activeFilter={kindFilter}
+        onFilterChange={(v) => setKindFilter(v as KindFilter)}
+        trailing={
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+            {visibleClients.length} client
+            {visibleClients.length === 1 ? "" : "s"}
+          </span>
+        }
+      />
+
+      {/* View toggle */}
+      <div className="flex items-center gap-2">
+        <Tabs
+          value={viewMode}
+          onValueChange={(v) => setViewMode(v as ViewMode)}
+        >
+          <TabsList className="h-8">
+            <TabsTrigger value="grouped" className="gap-1.5 text-xs px-3 h-7">
+              <Layers className="h-3.5 w-3.5" />
+              Grouped
+            </TabsTrigger>
+            <TabsTrigger value="flat" className="gap-1.5 text-xs px-3 h-7">
+              <List className="h-3.5 w-3.5" />
+              Flat
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {viewMode === "grouped" && (
+          <span className="text-[11px] text-muted-foreground">
+            Rows grouped by software_id — click a row to expand instances
+          </span>
+        )}
       </div>
 
-      {/* Bulk Actions Bar */}
-      {selectedClients.length > 0 && (
-        <BulkActionsBar
-          selectedCount={selectedClients.length}
-          onClearSelection={handleClearSelection}
-          onBulkAction={handleBulkAction}
-        />
-      )}
-
-      <ClientAuthMethodsModal
-        open={Boolean(authDialogClient)}
-        client={authDialogClient}
-        onClose={() => setAuthDialogClient(null)}
-      />
-
-      {/* Spotlight overlay for new client button guidance */}
-      <NewClientSpotlightOverlay
-        isActive={!!newlyCreatedClientId}
-        onDismiss={handleDismissNewClient}
-      />
-
-      {/* Onboard Client Modal */}
-      <OnboardClientModal
-        isOpen={showOnboardModal}
-        onClose={() => setShowOnboardModal(false)}
-        preventNavigation={true}
-        onSuccess={(clientId) => {
-          // Compute the page where the new client appears (oldest-first sort, new item at end)
-          const PAGE_SIZE = 10;
-          const targetPage = Math.max(1, Math.ceil(((clientsResponse?.pagination?.total ?? clientsResponse?.total ?? 0) + 1) / PAGE_SIZE));
-          setQueryPage(targetPage);       // RTK Query auto-refetches with new page
-          setTablePageIndex(targetPage);  // Jump table UI to that page
-          setNewClientStep(0);
-          setNewlyCreatedClientId(clientId);
-        }}
-      />
-
-      {/* Drawer (expanded details) */}
-      {drawerClient && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <div className="bg-background rounded-lg shadow-xl p-6 max-w-2xl w-full">
-            <div className="flex justify-between items-center mb-4">
-              <div className="font-bold text-base">{drawerClient.name}</div>
-              <Button variant="ghost" onClick={() => setDrawerClient(null)}>
-                Close
-              </Button>
+      {/* Table */}
+      <TableCard>
+        <CardContent variant="flush">
+          {isError ? (
+            <div className="py-16 text-center text-sm text-destructive">
+              Unable to load clients. Check your connection and try refreshing.
             </div>
-            <Tabs defaultValue="overview">
-              <TabsList className="mb-4">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="config">Config</TabsTrigger>
-                <TabsTrigger value="methods">Attached Methods</TabsTrigger>
-                <TabsTrigger value="audit">Audit</TabsTrigger>
-              </TabsList>
-              <TabsContent value="overview">
-                <div className="space-y-1">
-                  <div>
-                    <b>Client ID:</b> {drawerClient.id}
-                  </div>
-                  <div>
-                    <b>Access Status:</b> {drawerClient.access_status}
-                  </div>
-                  <div>
-                    <b>Default Method:</b>{" "}
-                    {drawerClient.attachedMethods.find((m) => m.isDefault)
-                      ?.name || "—"}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <b>Endpoint:</b>{" "}
-                    <span className="font-mono text-xs">
-                      {drawerClient.endpoint}
-                    </span>
-                  </div>
-                  <div>
-                    <b>Last Accessed:</b>{" "}
-                    {drawerClient.last_accessed || "Never"}
-                  </div>
-                  <div>
-                    <b>Created by:</b> {drawerClient.created_by || "System"}
-                  </div>
-                </div>
-              </TabsContent>
-              <TabsContent value="config">
-                <div>Config tab (coming soon)</div>
-              </TabsContent>
-              <TabsContent value="methods">
-                <div className="mb-2 flex justify-between items-center">
-                  <div className="font-semibold">Attached Methods</div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => alert("Attach more modal (mock)")}
-                  >
-                    Attach more
-                  </Button>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Attached</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Env</TableHead>
-                      <TableHead>Default?</TableHead>
-                      <TableHead>Toggle</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(drawerClient.attachedMethods || []).map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell>✅</TableCell>
-                        <TableCell>{m.name}</TableCell>
-                        <TableCell>{drawerClient.access_level}</TableCell>
-                        <TableCell>{m.isDefault ? "⭐" : ""}</TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={m.isDefault}
-                            onClick={() => alert("Detach (mock)")}
-                          >
-                            Detach
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TabsContent>
-              <TabsContent value="audit">
-                <div>Audit tab (coming soon)</div>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      )}
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              Loading clients…
+            </div>
+          ) : isEmpty || noMatch ? (
+            <div className="py-16 text-center">
+              <p className="text-sm font-medium text-foreground">
+                {isEmpty ? "No clients yet" : "No clients match this filter"}
+              </p>
+              <p className="mt-1 max-w-sm mx-auto text-xs leading-5 text-muted-foreground">
+                {isEmpty
+                  ? "Agents and apps that connect to your MCP servers appear here after they register. Dynamic Client Registration (DCR) creates rows automatically when a client first connects."
+                  : "Try a different search term or filter."}
+              </p>
+              {search || kindFilter !== "all" ? (
+                <button
+                  className="mt-4 text-xs font-semibold text-[var(--color-primary)] hover:underline"
+                  onClick={() => {
+                    setSearch("");
+                    setKindFilter("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+          ) : viewMode === "flat" ? (
+            <AdaptiveTable
+              tableId="workspace-clients-flat"
+              data={visibleClients}
+              columns={flatColumns}
+              getRowId={(c) => c.client_id}
+              enableSelection={false}
+              enableExpansion={false}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [10, 25, 50, 100],
+                alwaysVisible: true,
+              }}
+            />
+          ) : (
+            <AdaptiveTable
+              tableId="workspace-clients-grouped"
+              data={groupedRows}
+              columns={groupedColumns}
+              getRowId={(g) => g.groupKey}
+              enableSelection={false}
+              enableExpansion={true}
+              renderExpandedRow={(row) => <ExpandedGroupRow row={row} />}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [10, 25, 50, 100],
+                alwaysVisible: true,
+              }}
+            />
+          )}
+        </CardContent>
+      </TableCard>
 
-      {/* Delete Confirmation Dialog */}
-      <DeleteConfirmDialog
-        open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog((prev) => ({ ...prev, open }))}
-        onConfirm={handleConfirmDelete}
-        clientId={deleteDialog.clientId}
-        clientName={deleteDialog.clientName}
-        isLoading={isDeleting}
+      {/* Wizard */}
+      <CreateClientWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCreated={() => void refetch()}
       />
-
-      {/* Floating FAQ */}
-      <FloatingFAQ />
     </div>
   );
 }

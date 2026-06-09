@@ -203,7 +203,7 @@ export const trustDelegationApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getDelegationPermissionCatalog: builder.query<string[], void>({
       query: () => ({
-        url: "https://prod.api.authsec.ai/uflow/admin/me/roles-permissions",
+        url: "/authsec/uflow/admin/me/roles-permissions",
       }),
       transformResponse: (response: unknown) =>
         normalizeDelegationPermissionCatalog(response),

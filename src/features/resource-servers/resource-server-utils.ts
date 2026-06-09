@@ -588,7 +588,7 @@ MCP server responsibilities:
 - Keep upstream service credentials server-side only
 - Execute the actual tools
 - Use only AuthSec canonical scopes for tool checks
-- Never forward AuthSec user tokens to upstream systems such as GitHub
+- Never forward AuthSec user tokens to any upstream system
 
 Scope cleanup requirement:
 ${buildScopeCleanupInstruction(server)}

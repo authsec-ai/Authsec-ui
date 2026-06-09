@@ -6,12 +6,14 @@
  */
 
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2,
   ChevronDown,
   ExternalLink,
   Fingerprint,
   MoreHorizontal,
+  Pencil,
   Plus,
   Power,
   Search,
@@ -42,6 +44,7 @@ import { ProviderIcon } from "./utils/provider-icons";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 
 export function AuthenticationPage() {
+  const navigate = useNavigate();
   const sessionData = SessionManager.getSession();
   const workspaceId = sessionData?.workspace_id;
 
@@ -360,6 +363,14 @@ export function AuthenticationPage() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                              <DropdownMenuItem
+                                className="menu-item"
+                                onSelect={() => navigate(`/identity-providers/saml/edit/${p.id}`)}
+                              >
+                                <span className="mi-ic"><Pencil className="icon-sm" /></span>
+                                Edit
+                              </DropdownMenuItem>
+                              <div className="menu-sep" />
                               <DropdownMenuItem className="menu-item" onSelect={() => handleToggleActive(p.id, !p.is_active)}>
                                 <span className="mi-ic"><Power className="icon-sm" /></span>
                                 {p.is_active ? "Deactivate" : "Activate"}

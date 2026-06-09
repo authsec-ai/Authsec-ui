@@ -15,6 +15,7 @@
 //   GET    /saml/metadata/:workspace_id               (SP metadata XML)
 
 import { baseApi } from "./baseApi";
+import config from "../../config";
 
 // ---------------------------------------------------------------------------
 // SAML provider — payload shapes
@@ -94,17 +95,40 @@ export interface SamlSPMetadataRequest {
   workspaceId: string;
 }
 
-/** SP Entity ID / Audience URI — paste in your IdP's Audience field. */
-export const samlEntityId = (workspaceId: string): string =>
-  `${window.location.origin}/saml/metadata/${workspaceId}`;
+// Backend mounts SAML endpoints under `/authsec/hmgr/saml/*` on the API host
+// (VITE_API_URL), NOT on the UI origin. Earlier helpers used
+// `window.location.origin` + `/saml/...` — wrong on both counts (UI subdomain
+// ≠ API host, and the path was missing `/authsec/hmgr/`).
+//
+// The backend's CreateSAMLRequest (internal/hydra/models/saml_methods.go)
+// embeds the workspace-LESS audience + ACS URL in the AuthnRequest:
+//
+//   spEntityID = `${apiBase}/authsec/hmgr/saml/metadata`
+//   acsURL     = `${apiBase}/authsec/hmgr/saml/acs`
+//
+// Workspace context is carried in the SAML relay state, not the URL path.
+// So the Audience + ACS the operator pastes into Auth0/Okta are workspace-less.
+// Only the SP metadata XML URL is workspace-scoped (the GET handler needs
+// `:workspace_id` to look up the right cert).
 
-/** Assertion Consumer Service URL — paste in your IdP's ACS / Reply URL. */
-export const samlAcsUrl = (workspaceId: string): string =>
-  `${window.location.origin}/saml/acs/${workspaceId}`;
+const apiOrigin = (): string =>
+  config.VITE_API_URL.replace(/\/+$/, "");
 
-/** SP metadata XML URL — IdPs that import metadata XML can fetch this. */
+/** SP Entity ID / Audience URI — paste in your IdP's Audience field.
+ *  Workspace-less: matches what the backend embeds in the SAML AuthnRequest. */
+export const samlEntityId = (_workspaceId: string): string =>
+  `${apiOrigin()}/authsec/hmgr/saml/metadata`;
+
+/** Assertion Consumer Service URL — paste in your IdP's ACS / Reply URL.
+ *  Workspace-less: the workspace is carried in the SAML RelayState. */
+export const samlAcsUrl = (_workspaceId: string): string =>
+  `${apiOrigin()}/authsec/hmgr/saml/acs`;
+
+/** SP metadata XML URL — IdPs that import metadata XML can fetch this.
+ *  Workspace-scoped because the metadata GET handler needs to know which
+ *  workspace's cert + display name to render. */
 export const samlMetadataUrl = (workspaceId: string): string =>
-  `${window.location.origin}/saml/metadata/${workspaceId}`;
+  `${apiOrigin()}/authsec/hmgr/saml/metadata/${workspaceId}`;
 
 // ---------------------------------------------------------------------------
 // XML parsers — SP metadata + IdP federation metadata
@@ -310,6 +334,53 @@ export const ATTRIBUTE_MAPPING_PRESETS: Record<string, SamlAttributeMapping> = {
 export const presetForSlug = (slug: string): SamlAttributeMapping => {
   const key = slug.toLowerCase().trim();
   return ATTRIBUTE_MAPPING_PRESETS[key] || ATTRIBUTE_MAPPING_PRESETS.okta;
+};
+
+// ---------------------------------------------------------------------------
+// Auth0 SAML2 Web App "Settings" JSON generator
+// ---------------------------------------------------------------------------
+
+/**
+ * Auth0's SAML2 Web App addon takes a JSON "Settings" blob (Dashboard →
+ * Applications → My App → Addons → SAML2 Web App → Settings tab). Operators
+ * usually have to construct this by hand — wrong audience/recipient is the
+ * top source of "InvalidAudience" failures we've seen.
+ *
+ * This helper builds the canonical Settings JSON for a given workspace so
+ * the operator can copy it straight in. Values come from samlEntityId /
+ * samlAcsUrl so they automatically reflect any future backend route changes.
+ *
+ * Auth0 reference:
+ *   https://auth0.com/docs/authenticate/protocols/saml/saml-configuration/configure-auth0-saml-identity-provider
+ */
+export const buildAuth0SettingsJson = (workspaceId: string): string => {
+  const audience = samlEntityId(workspaceId);
+  const acs = samlAcsUrl(workspaceId);
+  const settings = {
+    audience,
+    recipient: acs,
+    destination: acs,
+    mappings: {
+      email:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+      given_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+      family_name:
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+      name: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
+      upn: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn",
+      groups: "http://schemas.xmlsoap.org/claims/Group",
+    },
+    nameIdentifierFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    nameIdentifierProbes: [
+      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    ],
+    signatureAlgorithm: "rsa-sha256",
+    digestAlgorithm: "sha256",
+    signResponse: false,
+    typedAttributes: true,
+  };
+  return JSON.stringify(settings, null, 2);
 };
 
 // ---------------------------------------------------------------------------

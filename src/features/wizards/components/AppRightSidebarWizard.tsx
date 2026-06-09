@@ -13,11 +13,8 @@ import { useNavigate } from "react-router-dom";
 import { useWizard } from "@/contexts/WizardContext";
 import { WizardProgress } from "./WizardProgress";
 import { Button } from "@/components/ui/button";
-import { ClientAuthMethodsModal } from "@/features/clients/components/ClientAuthMethodsModal";
-import { useGetAllClientsQuery } from "@/app/api/clientApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { toast } from "react-hot-toast";
-import type { ClientWithAuthMethods } from "@/types/entities";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { generateOAuth2AuthorizationUrl } from "@/utils/oauthUtils";
 
@@ -136,15 +133,6 @@ function UserAuthCompletionView({
   const navigate = useNavigate();
   const { setIsAwaitingPlatformAction } = useWizard();
   const session = SessionManager.getSession();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authModalClient, setAuthModalClient] =
-    useState<ClientWithAuthMethods | null>(null);
-
-  // Fetch clients for Edit Auth Methods action
-  const { data: clientsData } = useGetAllClientsQuery(
-    { workspace_id: session?.workspace_id || "", active_only: false },
-    { skip: !session?.workspace_id },
-  );
 
   const handleViewClient = () => {
     setIsAwaitingPlatformAction(true);
@@ -173,7 +161,7 @@ function UserAuthCompletionView({
       }
     }
 
-    const hydraPublicUrl = clientsData?.hydra_public_url;
+    const hydraPublicUrl = undefined;
 
     // eslint-disable-next-line no-console
     console.log("[PreviewLogin] 🔐 Generating OAuth URL with:", {
@@ -201,41 +189,6 @@ function UserAuthCompletionView({
     } catch (error) {
       console.error("Failed to generate OAuth2 URL:", error);
       toast.error("Failed to generate login preview URL");
-    }
-  };
-
-  const handleEditAuthMethods = () => {
-    if (!clientId || !clientsData?.clients) return;
-
-    const client = clientsData.clients.find((c) => c.client_id === clientId);
-    if (client) {
-      // Transform to ClientWithAuthMethods format
-      const clientWithAuthMethods: ClientWithAuthMethods = {
-        id: client.client_id,
-        name: client.name,
-        workspace_id: client.workspace_id,
-        secret_id: null,
-        description: null,
-        type: "mcp_server",
-        tags: "",
-        authentication_type: "sso",
-        metadata: {
-          raw_client: client,
-        },
-        roles: [],
-        mfa_config: null,
-        successful_authentications: null,
-        denied_authentications: null,
-        endpoint: "",
-        access_status: "active",
-        created_at: client.created_at || new Date().toISOString(),
-        updated_at: client.updated_at || new Date().toISOString(),
-        last_accessed: null,
-        attachedMethods: [],
-      };
-
-      setAuthModalClient(clientWithAuthMethods);
-      setAuthModalOpen(true);
     }
   };
 
@@ -282,19 +235,6 @@ function UserAuthCompletionView({
               Preview Login Page
             </Button>
 
-            {/* Button 3: Edit Auth Methods - Hidden for SAML */}
-            {authMethodType !== "saml2" && (
-              <Button
-                onClick={handleEditAuthMethods}
-                variant="outline"
-                className="w-full justify-start h-12 text-sm"
-                disabled={!clientId}
-              >
-                <Shield className="mr-3 h-4 w-4" />
-                Edit Auth Methods
-              </Button>
-            )}
-
             {/* Divider */}
             <div className="border-t border-border my-2" />
 
@@ -309,14 +249,6 @@ function UserAuthCompletionView({
         </div>
       </div>
 
-      {/* Auth Methods Modal */}
-      {authModalOpen && authModalClient && (
-        <ClientAuthMethodsModal
-          client={authModalClient}
-          open={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-        />
-      )}
     </>
   );
 }
