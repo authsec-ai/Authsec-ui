@@ -158,25 +158,48 @@ export default function ScimConnectionsPage() {
                 {/* Active IdP steps */}
                 {Object.entries(SCIM_IDP_INSTRUCTIONS).map(([key, idp]) =>
                   activeIdp === key ? (
-                    <ol
+                    <div
                       key={key}
                       id={`scim-idp-panel-${key}`}
                       role="tabpanel"
                       aria-labelledby={`scim-idp-tab-${key}`}
-                      style={{
-                        margin: 0,
-                        paddingLeft: "var(--space-5)",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "var(--space-2)",
-                      }}
+                      style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
                     >
-                      {idp.steps.map((step, i) => (
-                        <li key={i} style={{ fontSize: 12.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
-                          {step}
-                        </li>
-                      ))}
-                    </ol>
+                      {/* Field label hints */}
+                      <p style={{ fontSize: 11.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                        In <strong>{idp.label}</strong>, the endpoint field is called{" "}
+                        <strong>"{idp.endpointFieldLabel}"</strong> and the token field is called{" "}
+                        <strong>"{idp.tokenFieldLabel}"</strong>.
+                        {idp.freeTierNote && (
+                          <span> — {idp.freeTierNote}</span>
+                        )}
+                      </p>
+
+                      {/* Steps */}
+                      <ol style={{ margin: 0, paddingLeft: "var(--space-5)", display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+                        {idp.steps.map((step, i) => (
+                          <li key={i} style={{ fontSize: 12.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                            {step}
+                          </li>
+                        ))}
+                      </ol>
+
+                      {/* Gotchas */}
+                      {idp.gotchas.length > 0 && (
+                        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-warning)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
+                            Common gotchas
+                          </p>
+                          <ul style={{ margin: 0, paddingLeft: "var(--space-5)", display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
+                            {idp.gotchas.map((gotcha, i) => (
+                              <li key={i} style={{ fontSize: 12, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                                {gotcha}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   ) : null
                 )}
               </div>

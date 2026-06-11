@@ -32,6 +32,85 @@ export interface SamlIdpInstruction {
 
 export type SamlIdpKey = "auth0" | "okta" | "azure" | "generic";
 
+/**
+ * Per-(provider × field) helper copy. The wizard renders these inline under
+ * each AuthSec-side input so the operator knows what the equivalent field is
+ * called inside their IdP (e.g. "Okta calls this 'Issuer'"), reducing the
+ * "where do I get this value?" friction.
+ *
+ * Keys match `SamlIdpKey`; field names match the formData keys in
+ * CreateSamlMethodPage / EditSamlMethodPage (entity_id, sso_url, slo_url,
+ * certificate, name_id_format).
+ */
+export type SamlFieldKey =
+  | "entity_id"
+  | "sso_url"
+  | "slo_url"
+  | "certificate"
+  | "name_id_format";
+
+export const SAML_IDP_FIELD_HELP: Record<
+  SamlIdpKey,
+  Partial<Record<SamlFieldKey, string>>
+> = {
+  auth0: {
+    entity_id:
+      "Auth0 calls this 'Issuer'. Find it on the Addons → SAML2 Web App → Usage tab — it looks like 'urn:<your-tenant>.auth0.com'.",
+    sso_url:
+      "Auth0 calls this 'Identity Provider Login URL'. Same Usage tab, copy the SAML 2.0 SSO URL.",
+    certificate:
+      "Auth0 calls this the 'Identity Provider Certificate'. Usage tab → Download Certificate (.pem). Open in a text editor and paste the whole BEGIN/END block.",
+    name_id_format:
+      "Auth0 returns email by default. Leave on 'EmailAddress'.",
+  },
+  okta: {
+    entity_id:
+      "Okta calls this 'Identity Provider Issuer'. Find it under your app → Sign On tab → View SAML setup instructions.",
+    sso_url:
+      "Okta calls this 'Identity Provider Single Sign-On URL'. Same Sign On tab.",
+    slo_url:
+      "Optional. Okta does not publish SLO by default — leave blank unless your tenant explicitly has SLO enabled.",
+    certificate:
+      "Okta provides the 'X.509 Certificate' on the same setup instructions page. Click 'Download certificate' OR copy the PEM block directly.",
+    name_id_format:
+      "Set in Okta under Configure SAML → Name ID format. EmailAddress is the recommended pairing.",
+  },
+  azure: {
+    entity_id:
+      "Microsoft Entra calls this 'Azure AD Identifier' (section 4 — Set up <your app>). It looks like 'https://sts.windows.net/<tenant-guid>/'.",
+    sso_url:
+      "Microsoft Entra calls this 'Login URL' (section 4). It looks like 'https://login.microsoftonline.com/<tenant-guid>/saml2'.",
+    slo_url:
+      "Microsoft Entra calls this 'Logout URL' (section 4). Optional — only set if your app needs SLO.",
+    certificate:
+      "Section 3 — SAML Signing Certificate → Certificate (Base64) → Download. Open the .cer file in a text editor; paste including BEGIN/END markers.",
+    name_id_format:
+      "Configure under section 2 → User Attributes & Claims → Unique User Identifier (Name ID). EmailAddress is recommended.",
+  },
+  generic: {
+    entity_id:
+      "Your IdP usually calls this 'Issuer', 'Entity ID', or 'IdP Identifier'. It's the unique URI for the IdP itself.",
+    sso_url:
+      "Your IdP usually calls this 'SSO URL', 'SingleSignOnService', 'Login URL', or 'IdP Initiated URL'.",
+    slo_url:
+      "Your IdP usually calls this 'SLO URL' or 'SingleLogoutService'. Optional.",
+    certificate:
+      "Your IdP usually exposes this as 'Signing Certificate' / 'X.509 Certificate' / 'Public Certificate'. PEM format with BEGIN/END markers.",
+    name_id_format:
+      "Most IdPs default to EmailAddress. Avoid 'transient' — it mints a fresh user on every login.",
+  },
+};
+
+/** Map an arbitrary provider slug → SamlIdpKey for the instruction lookup. */
+export function resolveSamlIdpKey(slug: string | undefined | null): SamlIdpKey {
+  if (!slug) return "generic";
+  const s = slug.toLowerCase().trim();
+  if (s.includes("auth0")) return "auth0";
+  if (s.includes("okta")) return "okta";
+  if (s.includes("azure") || s.includes("entra") || s.includes("aad")) return "azure";
+  return "generic";
+}
+
 export const SAML_IDP_INSTRUCTIONS: Record<SamlIdpKey, SamlIdpInstruction> = {
   auth0: {
     label: "Auth0",
@@ -89,11 +168,11 @@ export const SAML_IDP_INSTRUCTIONS: Record<SamlIdpKey, SamlIdpInstruction> = {
       'Set Reply URL (Assertion Consumer Service URL) to the AuthSec ACS URL shown below.',
       'Set Sign on URL to the same ACS URL (required for SP-initiated login).',
       "Click Save.",
-      "Under section 3 (SAML Signing Certificate), download Certificate (Base64) — you will paste this into AuthSec.",
+      "Under section 3 (SAML Signing Certificate), download Certificate (Raw) — you will paste this into AuthSec. (Microsoft's UI label was 'Base64' until early 2026, then renamed to 'Raw' — same content, PEM-encoded.)",
       "From section 4, copy the Login URL — this is the SSO URL for AuthSec.",
     ],
     certLocation:
-      "Azure Portal → Entra ID → Enterprise Applications → [app] → Single sign-on → section 3 SAML Signing Certificate → Download Certificate (Base64)",
+      "Azure Portal → Entra ID → Enterprise Applications → [app] → Single sign-on → section 3 SAML Signing Certificate → Download Certificate (Raw) — same file Microsoft formerly labelled 'Base64'.",
     gotchas: [
       '"AADSTS50011: The redirect URI does not match" → Reply URL must match the AuthSec ACS URL exactly, including scheme and path.',
       "Azure requires the Identifier (Entity ID) to be unique across all apps in the tenant. If you get a collision, append a unique suffix.",

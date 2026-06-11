@@ -40,6 +40,12 @@ import {
 import { SessionManager } from "../../utils/sessionManager";
 import { SamlIdpReference } from "./CreateSamlMethodPage";
 import { buildAuth0SettingsJson } from "../../app/api/samlApi";
+import {
+  SAML_IDP_FIELD_HELP,
+  resolveSamlIdpKey,
+  type SamlIdpKey,
+  type SamlFieldKey,
+} from "./idp-instructions/saml";
 
 // `transient` is intentionally absent — see CreateSamlMethodPage rationale.
 const NAME_ID_FORMATS = [
@@ -70,6 +76,7 @@ export function EditSamlMethodPage() {
     is_active: true,
   });
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [providerKey, setProviderKey] = useState<SamlIdpKey>("okta");
   const [idpMetadataXml, setIdpMetadataXml] = useState("");
   const [metadataParseHint, setMetadataParseHint] = useState<
     { tone: "ok" | "warn" | "err"; text: string } | null
@@ -120,6 +127,14 @@ export function EditSamlMethodPage() {
       });
     }
   }, [providerData]);
+
+  // Keep providerKey in sync with formData.provider_name so the
+  // SamlIdpReference tab + per-field helper text reflect the current IdP.
+  useEffect(() => {
+    const resolved = resolveSamlIdpKey(formData.provider_name);
+    if (resolved !== providerKey) setProviderKey(resolved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.provider_name]);
 
   // Apply attribute mapping preset when slug matches and operator hasn't
   // overridden the defaults yet. Same guard as Create page.
@@ -245,6 +260,9 @@ export function EditSamlMethodPage() {
     }
   };
 
+  const fieldHelp = (field: SamlFieldKey): string | undefined =>
+    SAML_IDP_FIELD_HELP[providerKey]?.[field];
+
   if (isLoadingProvider) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-stone-950">
@@ -319,11 +337,15 @@ export function EditSamlMethodPage() {
 
         <FormRoot className="px-0" maxWidth="96rem">
           <FormBody>
-            {/* IdP setup reference (step-by-step cheatsheet per provider, includes SP metadata copy fields) */}
+            {/* IdP setup reference (step-by-step cheatsheet per provider, includes SP metadata copy fields).
+                Tab is driven by the current provider_name so the operator sees
+                the correct vendor by default. */}
             <SamlIdpReference
               spMetadata={spMetadata ?? null}
               workspaceId={workspaceId}
               buildAuth0SettingsJson={buildAuth0SettingsJson}
+              activeTab={providerKey}
+              onActiveTabChange={setProviderKey}
             />
 
             {/* Paste-IdP-metadata shortcut */}
@@ -427,6 +449,11 @@ export function EditSamlMethodPage() {
                     onChange={(e) => setFormData({ ...formData, entity_id: e.target.value })}
                     placeholder="https://your-idp.com/entity-id"
                   />
+                  {fieldHelp("entity_id") && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {fieldHelp("entity_id")}
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="SSO URL" htmlFor="sso_url" required>
@@ -436,6 +463,11 @@ export function EditSamlMethodPage() {
                     onChange={(e) => setFormData({ ...formData, sso_url: e.target.value })}
                     placeholder="https://idp.example.com/sso/saml"
                   />
+                  {fieldHelp("sso_url") && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {fieldHelp("sso_url")}
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="SLO URL (optional)" htmlFor="slo_url">
@@ -445,6 +477,11 @@ export function EditSamlMethodPage() {
                     onChange={(e) => setFormData({ ...formData, slo_url: e.target.value })}
                     placeholder="https://idp.example.com/slo/saml"
                   />
+                  {fieldHelp("slo_url") && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {fieldHelp("slo_url")}
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="X.509 Certificate" htmlFor="certificate" required>
@@ -476,6 +513,11 @@ export function EditSamlMethodPage() {
                     placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
                     className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono"
                   />
+                  {fieldHelp("certificate") && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {fieldHelp("certificate")}
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="Name ID Format" htmlFor="name_id_format" required>
@@ -491,6 +533,11 @@ export function EditSamlMethodPage() {
                       </option>
                     ))}
                   </select>
+                  {fieldHelp("name_id_format") && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {fieldHelp("name_id_format")}
+                    </p>
+                  )}
                 </FormField>
               </FormGrid>
             </FormSection>
