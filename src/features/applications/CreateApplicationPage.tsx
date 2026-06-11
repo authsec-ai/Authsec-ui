@@ -108,7 +108,7 @@ export default function CreateApplicationPage() {
     if (!form.public_base_url.trim()) return toast.error("Public base URL is required.");
     try {
       const response = await createApplication(
-        buildResourceServerPayload({ ...form, registration_modes: "dcr\ncimd", default_access_enabled: false }),
+        buildResourceServerPayload({ ...form, registration_modes: "dcr\ncimd\nprereg", default_access_enabled: false }),
       ).unwrap();
       toast.success("Application created. Now protect it.");
       navigate(`/applications/${response.id}/setup`, {

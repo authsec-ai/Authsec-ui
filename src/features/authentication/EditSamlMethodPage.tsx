@@ -38,6 +38,8 @@ import {
   samlAcsUrl,
 } from "../../app/api/samlApi";
 import { SessionManager } from "../../utils/sessionManager";
+import { SamlIdpReference } from "./CreateSamlMethodPage";
+import { buildAuth0SettingsJson } from "../../app/api/samlApi";
 
 // `transient` is intentionally absent — see CreateSamlMethodPage rationale.
 const NAME_ID_FORMATS = [
@@ -215,15 +217,17 @@ export function EditSamlMethodPage() {
     }
 
     try {
+      // Trim every IdP-side string — a single trailing space silently breaks
+      // SAML entity-ID comparison at validation time.
       await updateSamlProvider({
         workspace_id: workspaceId,
         provider_id: id,
-        provider_name: formData.provider_name,
-        display_name: formData.display_name,
-        entity_id: formData.entity_id,
-        sso_url: formData.sso_url,
-        slo_url: formData.slo_url || undefined,
-        certificate: formData.certificate,
+        provider_name: formData.provider_name.trim(),
+        display_name: formData.display_name.trim(),
+        entity_id: formData.entity_id.trim(),
+        sso_url: formData.sso_url.trim(),
+        slo_url: formData.slo_url.trim() || undefined,
+        certificate: formData.certificate.trim(),
         name_id_format: formData.name_id_format,
         attribute_mapping: {
           email: formData.attribute_email,
@@ -315,29 +319,12 @@ export function EditSamlMethodPage() {
 
         <FormRoot className="px-0" maxWidth="96rem">
           <FormBody>
-            {/* Service Provider Metadata — values the operator pastes into the IdP */}
-            {spMetadata && (
-              <FormSection>
-                <FormSectionHeader
-                  title="Service Provider Metadata"
-                  description="Provide these values to your Identity Provider (IdP)."
-                />
-                <FormGrid columns={2}>
-                  <FormCopyField
-                    label="Entity ID (Audience URL)"
-                    value={spMetadata.entity_id}
-                    description="Unique identifier for this service provider"
-                  />
-                  <FormCopyField
-                    label="ACS URL (Reply URL)"
-                    value={spMetadata.acs_url}
-                    description="URL where SAML assertions are sent"
-                  />
-                </FormGrid>
-              </FormSection>
-            )}
-
-            <FormDivider />
+            {/* IdP setup reference (step-by-step cheatsheet per provider, includes SP metadata copy fields) */}
+            <SamlIdpReference
+              spMetadata={spMetadata ?? null}
+              workspaceId={workspaceId}
+              buildAuth0SettingsJson={buildAuth0SettingsJson}
+            />
 
             {/* Paste-IdP-metadata shortcut */}
             <FormSection>

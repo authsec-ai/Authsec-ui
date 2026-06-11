@@ -40,6 +40,10 @@ import {
 } from "../../app/api/samlApi";
 import { useCreateIdentityProviderMutation } from "../../app/api/authMethodApi";
 import { SessionManager } from "../../utils/sessionManager";
+import {
+  SAML_IDP_INSTRUCTIONS,
+  type SamlIdpKey,
+} from "./idp-instructions/saml";
 
 // NameID format options. `transient` is intentionally absent — the backend
 // uses NameID as the stable user identity key (provider_id), and transient
@@ -241,15 +245,18 @@ export function CreateSamlMethodPage() {
       return;
     }
     try {
+      // Trim every IdP-side string — a single trailing space pasted into the
+      // textarea would otherwise silently break SAML login (entity ID mismatch
+      // where the two strings look identical to a human).
       await createIdp({
         provider_type: "saml",
-        display_name: formData.display_name,
+        display_name: formData.display_name.trim(),
         config: {
-          provider_name: formData.provider_name,
-          entity_id: formData.entity_id,
-          sso_url: formData.sso_url,
-          slo_url: formData.slo_url || undefined,
-          certificate: formData.certificate,
+          provider_name: formData.provider_name.trim(),
+          entity_id: formData.entity_id.trim(),
+          sso_url: formData.sso_url.trim(),
+          slo_url: formData.slo_url.trim() || undefined,
+          certificate: formData.certificate.trim(),
           name_id_format: formData.name_id_format,
           attribute_mapping: {
             email: formData.attribute_email,
@@ -375,56 +382,6 @@ export function CreateSamlMethodPage() {
                   </div>
                 </div>
 
-                {/* SP metadata — what to paste into the IdP admin console */}
-                {spMetadata && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/30 p-4 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Info className="h-4 w-4 mt-0.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                      <div>
-                        <h4 className="text-sm font-semibold">
-                          Service Provider Metadata
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          Paste these values into your SAML Identity Provider
-                          (Okta, Azure AD, OneLogin, etc.).
-                        </p>
-                      </div>
-                    </div>
-
-                    <FormField label="SP Entity ID (Audience URI)">
-                      <FormCopyField
-                        value={spMetadata.entity_id}
-                        onCopy={() => toast.success("Entity ID copied!")}
-                        className="font-mono text-sm"
-                      />
-                    </FormField>
-
-                    <FormField label="ACS URL (Assertion Consumer Service)">
-                      <FormCopyField
-                        value={spMetadata.acs_url}
-                        onCopy={() => toast.success("ACS URL copied!")}
-                        className="font-mono text-sm"
-                      />
-                    </FormField>
-
-                    <FormField label="SP Metadata XML URL (optional import)">
-                      <FormCopyField
-                        value={spMetadata.metadata_url}
-                        onCopy={() =>
-                          toast.success("Metadata URL copied!")
-                        }
-                        className="font-mono text-sm"
-                      />
-                    </FormField>
-
-                    {loadingMetadata && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Verifying SP metadata endpoint…
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Right: attribute mapping */}
@@ -509,104 +466,11 @@ export function CreateSamlMethodPage() {
               </p>
 
               {/* Provider setup instructions */}
-              {(() => {
-                const PROVIDER_HINTS: Record<string, { title: string; fields: Array<{ label: string; value: string }> }> = {
-                  auth0: {
-                    title: "Auth0 → Applications → [your app] → Addons → SAML2 Web App",
-                    fields: [
-                      { label: "Application Callback URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
-                      { label: "Settings JSON", value: "Use the copy button below ↓" },
-                    ],
-                  },
-                  okta: {
-                    title: "Okta → Applications → Create App Integration → SAML 2.0",
-                    fields: [
-                      { label: "Single sign-on URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
-                      { label: "Audience URI (SP Entity ID)", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
-                      { label: "Name ID format", value: "EmailAddress" },
-                      { label: "Application username", value: "Email" },
-                    ],
-                  },
-                  azure: {
-                    title: "Entra ID → Enterprise Apps → [app] → Single sign-on → SAML",
-                    fields: [
-                      { label: "Identifier (Entity ID)", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
-                      { label: "Reply URL (ACS URL)", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
-                      { label: "Sign on URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
-                    ],
-                  },
-                  generic: {
-                    title: "Generic SAML 2.0 IdP",
-                    fields: [
-                      { label: "ACS URL / Reply URL", value: spMetadata?.acs_url ?? "— load SP metadata first —" },
-                      { label: "SP Entity ID / Audience URI", value: spMetadata?.entity_id ?? "— load SP metadata first —" },
-                      { label: "NameID format", value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" },
-                    ],
-                  },
-                };
-                return (
-                  <div className="mb-4 rounded-lg border bg-muted/30 p-3">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">IdP setup reference</p>
-                    <Tabs defaultValue="generic">
-                      <TabsList className="h-7 mb-3">
-                        <TabsTrigger value="auth0" className="text-[11px] h-6 px-2.5">Auth0</TabsTrigger>
-                        <TabsTrigger value="okta" className="text-[11px] h-6 px-2.5">Okta</TabsTrigger>
-                        <TabsTrigger value="azure" className="text-[11px] h-6 px-2.5">Azure / Entra</TabsTrigger>
-                        <TabsTrigger value="generic" className="text-[11px] h-6 px-2.5">Generic</TabsTrigger>
-                      </TabsList>
-                      {(["auth0", "okta", "azure", "generic"] as const).map((key) => {
-                        const hint = PROVIDER_HINTS[key];
-                        return (
-                          <TabsContent key={key} value={key} className="mt-0">
-                            <p className="text-[11px] text-muted-foreground mb-2 font-medium">{hint.title}</p>
-                            <div className="space-y-1">
-                              {hint.fields.map((field) => (
-                                <div key={field.label} className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5">
-                                  <span className="text-[11px] text-muted-foreground min-w-[160px] shrink-0">{field.label}</span>
-                                  <span className="text-[11px] font-mono flex-1 truncate">{field.value}</span>
-                                  <button
-                                    type="button"
-                                    aria-label={`Copy ${field.label}`}
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(field.value);
-                                      toast.success(`${field.label} copied!`);
-                                    }}
-                                    className="shrink-0 rounded p-0.5 hover:bg-muted"
-                                  >
-                                    <Copy className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                            {key === "auth0" && workspaceId && (
-                              <div className="mt-3 space-y-2">
-                                <FormField label="Auth0 SAML2 Addon — Settings JSON (paste into Addons → SAML2 Web App → Settings)">
-                                  <div className="space-y-2">
-                                    <pre className="max-h-44 overflow-auto rounded-md border bg-background p-2 font-mono text-[11px] leading-tight">
-                                      {buildAuth0SettingsJson(workspaceId)}
-                                    </pre>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        navigator.clipboard.writeText(buildAuth0SettingsJson(workspaceId));
-                                        toast.success("Auth0 Settings JSON copied!");
-                                      }}
-                                      className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent"
-                                    >
-                                      <Copy className="h-3 w-3" />
-                                      Copy Auth0 Settings JSON
-                                    </button>
-                                  </div>
-                                </FormField>
-                              </div>
-                            )}
-                          </TabsContent>
-                        );
-                      })}
-                    </Tabs>
-                  </div>
-                );
-              })()}
+              <SamlIdpReference
+                spMetadata={spMetadata ?? null}
+                workspaceId={workspaceId}
+                buildAuth0SettingsJson={buildAuth0SettingsJson}
+              />
 
               {/* Paste-IdP-metadata shortcut. Most IdPs publish a federation
                   metadata XML the operator can copy in one click — parsing it
@@ -990,6 +854,172 @@ export function CreateSamlMethodPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Shared IdP reference panel (also used by EditSamlMethodPage) ─────────────
+
+export function SamlIdpReference({
+  spMetadata,
+  workspaceId,
+  buildAuth0SettingsJson: buildJson,
+}: {
+  spMetadata: { acs_url?: string; entity_id?: string } | null;
+  workspaceId: string | null;
+  buildAuth0SettingsJson: (wsId: string) => string;
+}) {
+  const acsUrl = spMetadata?.acs_url ?? "";
+  const entityId = spMetadata?.entity_id ?? "";
+  const placeholder = "— load SP metadata first —";
+
+  const FIELDS: Record<SamlIdpKey, Array<{ label: string; idpName: string; value: string }>> = {
+    auth0: [
+      { label: "Application Callback URL", idpName: "Addons → SAML2 Web App → Application Callback URL", value: acsUrl || placeholder },
+      { label: "Audience", idpName: "Addons → SAML2 Web App → Settings → audience", value: entityId || placeholder },
+    ],
+    okta: [
+      { label: "Single sign-on URL", idpName: "Configure SAML → Single sign-on URL", value: acsUrl || placeholder },
+      { label: "Audience URI (SP Entity ID)", idpName: "Configure SAML → Audience URI (SP Entity ID)", value: entityId || placeholder },
+      { label: "Name ID format", idpName: "Configure SAML → Name ID format", value: "EmailAddress" },
+    ],
+    azure: [
+      { label: "Identifier (Entity ID)", idpName: "Basic SAML Configuration → Identifier", value: entityId || placeholder },
+      { label: "Reply URL (ACS URL)", idpName: "Basic SAML Configuration → Reply URL", value: acsUrl || placeholder },
+      { label: "Sign on URL", idpName: "Basic SAML Configuration → Sign on URL", value: acsUrl || placeholder },
+    ],
+    generic: [
+      { label: "ACS URL / Reply URL", idpName: "ACS URL / Recipient URL / Reply URL / Callback URL", value: acsUrl || placeholder },
+      { label: "SP Entity ID / Audience URI", idpName: "Audience URI / SP Entity ID / SP Issuer", value: entityId || placeholder },
+      { label: "NameID format", idpName: "Name ID format", value: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" },
+    ],
+  };
+
+  const [activeTab, setActiveTab] = React.useState<SamlIdpKey>("okta");
+  const instruction = SAML_IDP_INSTRUCTIONS[activeTab];
+  const fields = FIELDS[activeTab];
+
+  return (
+    <div className="mb-4 rounded-lg border bg-muted/30 p-3 space-y-3">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+        IdP setup reference
+      </p>
+
+      {/* Tab strip */}
+      <div className="flex gap-1 flex-wrap">
+        {(["auth0", "okta", "azure", "generic"] as SamlIdpKey[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={cn(
+              "inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-semibold transition-colors",
+              activeTab === key
+                ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"
+                : "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)",
+            )}
+          >
+            {SAML_IDP_INSTRUCTIONS[key].label}
+          </button>
+        ))}
+      </div>
+
+      {/* Nav path */}
+      <p className="text-[11px] font-medium text-muted-foreground">
+        <span className="font-semibold text-foreground">Navigate to: </span>
+        {instruction.navPath}
+      </p>
+
+      {/* Field reference */}
+      <div className="space-y-1">
+        {fields.map((f) => (
+          <div
+            key={f.label}
+            className="flex items-center gap-2 rounded-md border bg-background px-2 py-1.5"
+          >
+            <span className="text-[11px] text-muted-foreground min-w-[180px] shrink-0 truncate" title={f.idpName}>
+              {f.label}
+            </span>
+            <span className="text-[11px] font-mono flex-1 truncate text-foreground">
+              {f.value}
+            </span>
+            <button
+              type="button"
+              aria-label={`Copy ${f.label}`}
+              onClick={() => {
+                if (f.value && f.value !== placeholder) {
+                  navigator.clipboard.writeText(f.value);
+                  toast.success(`${f.label} copied`);
+                }
+              }}
+              disabled={!f.value || f.value === placeholder}
+              className="shrink-0 rounded p-0.5 hover:bg-muted disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <Copy className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Steps */}
+      <details className="group">
+        <summary className="cursor-pointer text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors list-none flex items-center gap-1">
+          <Info className="h-3 w-3" />
+          Step-by-step guide
+        </summary>
+        <ol className="mt-2 space-y-1 pl-4 list-decimal">
+          {instruction.steps.map((step, i) => (
+            <li key={i} className="text-[11px] text-muted-foreground leading-relaxed">
+              {step}
+            </li>
+          ))}
+        </ol>
+        <div className="mt-2 text-[11px] text-muted-foreground">
+          <span className="font-semibold">Certificate: </span>
+          {instruction.certLocation}
+        </div>
+      </details>
+
+      {/* Gotchas */}
+      {instruction.gotchas.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-[11px] font-semibold text-[var(--color-warning)] hover:opacity-80 transition-opacity list-none flex items-center gap-1">
+            <Info className="h-3 w-3" />
+            Common gotchas
+          </summary>
+          <ul className="mt-2 space-y-1 pl-4 list-disc">
+            {instruction.gotchas.map((g, i) => (
+              <li key={i} className="text-[11px] text-muted-foreground leading-relaxed">
+                {g}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {/* Auth0 Settings JSON */}
+      {activeTab === "auth0" && workspaceId && (
+        <div className="space-y-2">
+          <FormField label="Auth0 SAML2 Addon — Settings JSON (paste into Addons → SAML2 Web App → Settings)">
+            <div className="space-y-2">
+              <pre className="max-h-44 overflow-auto rounded-md border bg-background p-2 font-mono text-[11px] leading-tight">
+                {buildJson(workspaceId)}
+              </pre>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(buildJson(workspaceId));
+                  toast.success("Auth0 Settings JSON copied!");
+                }}
+                className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-[11px] font-medium hover:bg-accent"
+              >
+                <Copy className="h-3 w-3" />
+                Copy Auth0 Settings JSON
+              </button>
+            </div>
+          </FormField>
+        </div>
+      )}
     </div>
   );
 }

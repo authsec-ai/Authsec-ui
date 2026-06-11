@@ -24,6 +24,7 @@ import {
   Loader2,
   RefreshCcw,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -32,6 +33,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   useRotateResourceServerSecretMutation,
+  useUpdateResourceServerMutation,
   type ResourceServerValidationCheck,
   type ResourceServerValidationResult,
   useValidateResourceServerMutation,
@@ -110,6 +112,26 @@ export default function ApplicationSetupPage() {
     useRotateResourceServerSecretMutation();
   const [validate, { isLoading: validating }] =
     useValidateResourceServerMutation();
+  const [updateRS, { isLoading: savingModes }] =
+    useUpdateResourceServerMutation();
+
+  const [regModes, setRegModes] = useState<string[]>(
+    application.registration_modes ?? ["dcr", "cimd"],
+  );
+
+  const toggleMode = async (mode: string) => {
+    const next = regModes.includes(mode)
+      ? regModes.filter((m) => m !== mode)
+      : [...regModes, mode];
+    setRegModes(next);
+    try {
+      await updateRS({ id: application.id, body: { registration_modes: next } }).unwrap();
+      toast.success("Registration modes updated.");
+    } catch {
+      setRegModes(regModes);
+      toast.error("Failed to save registration modes.");
+    }
+  };
 
   const [secretValue, setSecretValue] = useState<string | null>(createSecret);
   const [secretVisible, setSecretVisible] = useState(Boolean(createSecret));
@@ -408,6 +430,54 @@ export default function ApplicationSetupPage() {
           </div>
         ) : null}
       </SetupStep>
+      {/* ── Connector */}
+      <div className="ml-[33px] h-3 w-px bg-slate-200" />
+
+      {/* ── Client registration settings ────────────────────────────── */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mb-4 flex items-center gap-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+            <Settings2 className="size-4" />
+          </span>
+          <div>
+            <h3 className="text-[15px] font-semibold text-slate-950">Client registration</h3>
+            <p className="text-sm text-slate-500">
+              Control how AI agents and apps can register to access this MCP server.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <RegistrationModeRow
+            mode="prereg"
+            label="Pre-registration"
+            description="Admin creates a client in the UI and copies the client_id to the agent's .env. Best for controlled, named deployments."
+            enabled={regModes.includes("prereg")}
+            saving={savingModes}
+            onToggle={() => toggleMode("prereg")}
+          />
+          <RegistrationModeRow
+            mode="dcr"
+            label="Dynamic Client Registration (DCR)"
+            description="Agent calls POST /oauth/register at startup and gets its own client_id per install. Used by Claude Code, Cursor, and most MCP clients."
+            enabled={regModes.includes("dcr")}
+            saving={savingModes}
+            onToggle={() => toggleMode("dcr")}
+          />
+          <RegistrationModeRow
+            mode="cimd"
+            label="Client-Initiated Metadata Discovery (CIMD)"
+            description="Agent hosts a JSON file at a public URL; that URL becomes the client_id. One identity across all installs."
+            enabled={regModes.includes("cimd")}
+            saving={savingModes}
+            onToggle={() => toggleMode("cimd")}
+          />
+        </div>
+        {regModes.length === 0 && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            No registration mode is enabled — no clients can connect to this application.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -581,6 +651,53 @@ function CheckTile({
         </div>
         <p className="text-xs leading-relaxed text-slate-600">{body}</p>
       </div>
+    </div>
+  );
+}
+
+function RegistrationModeRow({
+  label,
+  description,
+  enabled,
+  saving,
+  onToggle,
+}: {
+  mode: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  saving: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-4 rounded-lg border px-4 py-3 transition-colors",
+        enabled ? "border-blue-200 bg-blue-50/60" : "border-slate-200 bg-white",
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold text-slate-900">{label}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        disabled={saving}
+        onClick={onToggle}
+        className={cn(
+          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50",
+          enabled ? "bg-blue-600" : "bg-slate-200",
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none inline-block size-4 rounded-full bg-white shadow-sm transition-transform",
+            enabled ? "translate-x-4" : "translate-x-0",
+          )}
+        />
+      </button>
     </div>
   );
 }

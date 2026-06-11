@@ -16,6 +16,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { SCIM_IDP_INSTRUCTIONS } from "./scimIdpInstructions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,7 @@ export default function ScimConnectionsPage() {
   const [createConnection, { isLoading: isCreating }] = useCreateScimConnectionMutation();
   const [revokeConnection, { isLoading: isRevoking }] = useRevokeScimConnectionMutation();
   const [newToken, setNewToken] = useState<{ token: string; endpoint: string } | null>(null);
+  const [activeIdp, setActiveIdp] = useState<string>("okta");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
   const [infoDismissed, setInfoDismissed] = useState(() => {
     try { return localStorage.getItem(INFO_KEY) === "1"; } catch { return false; }
@@ -117,6 +119,66 @@ export default function ScimConnectionsPage() {
                     <Copy className="icon-sm" />
                   </button>
                 </div>
+              </div>
+
+              {/* IdP paste instructions */}
+              <div style={{ marginTop: "var(--space-5)", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-4)" }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
+                  Where to paste in your IdP
+                </p>
+                {/* Tab strip */}
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: "var(--space-3)" }} role="tablist" aria-label="Identity provider instructions">
+                  {Object.entries(SCIM_IDP_INSTRUCTIONS).map(([key, idp]) => (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={activeIdp === key}
+                      aria-controls={`scim-idp-panel-${key}`}
+                      id={`scim-idp-tab-${key}`}
+                      onClick={() => setActiveIdp(key)}
+                      className="btn"
+                      style={{
+                        height: 28,
+                        padding: "0 10px",
+                        fontSize: 12,
+                        borderRadius: 6,
+                        border: "1px solid",
+                        borderColor: activeIdp === key ? "var(--color-primary)" : "var(--color-border)",
+                        background: activeIdp === key ? "var(--color-primary-soft, color-mix(in srgb, var(--color-primary) 12%, transparent))" : "transparent",
+                        color: activeIdp === key ? "var(--color-primary)" : "var(--color-text-muted)",
+                        fontWeight: activeIdp === key ? 600 : 400,
+                        cursor: "pointer",
+                        transition: "background 0.1s, border-color 0.1s, color 0.1s",
+                      }}
+                    >
+                      {idp.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Active IdP steps */}
+                {Object.entries(SCIM_IDP_INSTRUCTIONS).map(([key, idp]) =>
+                  activeIdp === key ? (
+                    <ol
+                      key={key}
+                      id={`scim-idp-panel-${key}`}
+                      role="tabpanel"
+                      aria-labelledby={`scim-idp-tab-${key}`}
+                      style={{
+                        margin: 0,
+                        paddingLeft: "var(--space-5)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--space-2)",
+                      }}
+                    >
+                      {idp.steps.map((step, i) => (
+                        <li key={i} style={{ fontSize: 12.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null
+                )}
               </div>
 
               <button className="btn btn-secondary" style={{ height: 32, padding: "0 12px", marginTop: "var(--space-4)" }} onClick={() => setNewToken(null)}>

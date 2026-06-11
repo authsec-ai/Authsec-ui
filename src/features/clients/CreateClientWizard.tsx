@@ -10,6 +10,7 @@ import {
   Check,
   CheckCircle,
   ChevronRight,
+  Info,
   Loader2,
   Monitor,
   Settings,
@@ -216,7 +217,14 @@ export function CreateClientWizard({
         setCreatedToken(anyResult.registration_access_token as string);
       }
     } catch (err: any) {
-      toast.error(err?.data?.error ?? "Failed to register client");
+      const msg = err?.data?.error ?? "";
+      if (typeof msg === "string" && msg.toLowerCase().includes("does not allow pre-registration")) {
+        toast.error(
+          "Pre-registration is disabled on this application. Either enable it in the application's Setup tab, or have the agent register itself via DCR or CIMD — see the banner on step 1 for the three flows.",
+        );
+      } else {
+        toast.error(msg || "Failed to register client");
+      }
     }
   };
 
@@ -276,6 +284,7 @@ export function CreateClientWizard({
     <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent
         side="right"
+        hideClose
         className="flex flex-col p-0 w-full sm:max-w-2xl h-full overflow-hidden"
       >
         {/* A11y: screen-reader title + description (CLAUDE.md contract) */}
@@ -309,6 +318,28 @@ export function CreateClientWizard({
           {/* Step 0 — Configuration */}
           {currentStepIndex === 0 && (
             <div className="space-y-5">
+              {/* Three-flows primer — explains when to use this wizard vs DCR vs CIMD */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/30 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="space-y-1.5 text-[11px] leading-relaxed">
+                    <p className="font-semibold text-foreground">
+                      Three ways to register a client — this wizard is one of them.
+                    </p>
+                    <p>
+                      <span className="font-semibold">Pre-registration (this wizard):</span> you create the client here, copy the
+                      generated <span className="font-mono">client_id</span> into the agent&apos;s <span className="font-mono">.env</span>. Use this when you control the agent and want explicit admin gating.
+                    </p>
+                    <p>
+                      <span className="font-semibold">DCR (RFC 7591):</span> the agent calls <span className="font-mono">POST /oauth/register</span> at startup with its own metadata. A fresh <span className="font-mono">client_id</span> is minted per install. No admin pre-work. Used by Claude Code, Cursor, etc.
+                    </p>
+                    <p>
+                      <span className="font-semibold">CIMD:</span> agent hosts a JSON metadata file at a public URL and sets <span className="font-mono">MCP_CLIENT_ID=&lt;url&gt;</span>. Server lazy-fetches the JSON on first authorize. The URL itself is the client_id.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <FormField label="Application" htmlFor="app-select" required>
                 <SearchableSelect
                   options={appOptions}
@@ -559,8 +590,9 @@ export function CreateClientWizard({
               )}
             </div>
 
-            {/* Center: step pills */}
-            <div className="flex items-center gap-2 flex-1 justify-center">
+            {/* Center: step pills. Labels are hidden on narrow widths so the
+                Next/Save button on the right never gets clipped. */}
+            <div className="hidden md:flex items-center gap-1 flex-1 justify-center min-w-0">
               {WIZARD_STEPS.map((step, index) => {
                 const StepIcon = step.icon;
                 const isActive = index === currentStepIndex;
@@ -569,14 +601,14 @@ export function CreateClientWizard({
                   <React.Fragment key={step.id}>
                     <div
                       className={cn(
-                        "flex items-center gap-2 rounded-lg px-3 py-2",
+                        "flex items-center gap-1.5 rounded-lg px-2 py-1.5 shrink-0",
                         isActive && "bg-primary/10",
                         isCompleted && "opacity-60",
                       )}
                     >
                       <div
                         className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                          "flex h-5 w-5 items-center justify-center rounded-full text-xs",
                           isCompleted && "bg-primary text-primary-foreground",
                           isActive && "bg-primary/20 text-primary",
                           !isActive &&
@@ -592,7 +624,7 @@ export function CreateClientWizard({
                       </div>
                       <span
                         className={cn(
-                          "text-sm font-medium",
+                          "text-xs font-medium hidden lg:inline",
                           isActive && "text-foreground",
                           !isActive && "text-muted-foreground",
                         )}
@@ -601,11 +633,16 @@ export function CreateClientWizard({
                       </span>
                     </div>
                     {index < WIZARD_STEPS.length - 1 && (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
                     )}
                   </React.Fragment>
                 );
               })}
+            </div>
+
+            {/* Compact step indicator for narrow widths */}
+            <div className="flex md:hidden items-center gap-1 text-xs text-muted-foreground">
+              Step {currentStepIndex + 1} of {WIZARD_STEPS.length}
             </div>
 
             {/* Right: next / save / done */}

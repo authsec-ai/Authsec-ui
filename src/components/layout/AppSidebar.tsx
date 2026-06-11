@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
+import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import {
   ClipboardList,
   Fingerprint,
@@ -55,6 +56,7 @@ interface NavItem {
   icon: LucideIcon;
   isActive?: boolean;
   onClick?: () => void;
+  badge?: number;
   /**
    * Items still tied to the legacy `/admin` operator prefix
    * opt in by setting `contextPrefixed: true`. Object-
@@ -115,6 +117,14 @@ export function AppSidebar({
   const dispatch = useAppDispatch();
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
+  // Pending client approval count — drives the sidebar badge on "Clients".
+  // RTK Query deduplicates: if ClientsPage is open, this is a cache read.
+  const { data: allClients } = useListWorkspaceClientsQuery();
+  const pendingClientCount = useMemo(
+    () => (allClients ?? []).filter((c) => c.status === "pending_approval").length,
+    [allClients],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -173,15 +183,22 @@ export function AppSidebar({
   );
 
   const nav = useMemo(
-    () => ({
-      dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
-      objects: attachHandlers(markActive(NAV_OBJECTS)),
-      authz: attachHandlers(markActive(prefixUrls(NAV_AUTHZ, contextPrefix))),
-      monitor: attachHandlers(markActive(NAV_MONITOR)),
-      configure: attachHandlers(markActive(NAV_CONFIGURE)),
-      settings: attachHandlers(markActive(NAV_SETTINGS)),
-    }),
-    [contextPrefix, prefixUrls, markActive, attachHandlers],
+    () => {
+      const baseObjects = markActive(NAV_OBJECTS).map((item) =>
+        item.url === "/clients"
+          ? { ...item, badge: pendingClientCount > 0 ? pendingClientCount : undefined }
+          : item,
+      );
+      return {
+        dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
+        objects: attachHandlers(baseObjects),
+        authz: attachHandlers(markActive(prefixUrls(NAV_AUTHZ, contextPrefix))),
+        monitor: attachHandlers(markActive(NAV_MONITOR)),
+        configure: attachHandlers(markActive(NAV_CONFIGURE)),
+        settings: attachHandlers(markActive(NAV_SETTINGS)),
+      };
+    },
+    [contextPrefix, prefixUrls, markActive, attachHandlers, pendingClientCount],
   );
 
   const handleWorkspaceIdClick = useCallback(

@@ -30,6 +30,8 @@ export function NavMain({
     icon?: LucideIcon;
     isActive?: boolean;
     onClick?: () => void;
+    /** Optional count badge. Shown as a small pill when > 0. Hidden in icon-only rail. */
+    badge?: number;
   }[];
   title?: string;
 }) {
@@ -47,6 +49,14 @@ export function NavMain({
             >
               {item.icon && <item.icon />}
               <span>{item.title}</span>
+              {item.badge != null && item.badge > 0 && (
+                <span
+                  className="ml-auto shrink-0 rounded-full bg-[color:color-mix(in_oklch,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[var(--color-warning)] group-data-[collapsible=icon]:hidden"
+                  aria-label={`${item.badge} pending`}
+                >
+                  {item.badge}
+                </span>
+              )}
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
