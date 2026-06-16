@@ -21,6 +21,9 @@ import { toast } from "react-hot-toast";
 import {
   useGetExternalServicesQuery,
   useDeleteExternalServiceMutation,
+  useConnectOAuthServiceMutation,
+  useGetServiceTokenQuery,
+  useDisconnectServiceMutation,
   type RawExternalService,
 } from "@/app/api/externalServiceApi";
 import {
@@ -33,6 +36,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 
 const AUTH_TONE: Record<string, string> = {
   oauth2: "badge--info",
+  oauth2_code: "badge--info",
   api_key: "badge--success",
   bearer_token: "badge--info",
   basic_auth: "badge--warning",
@@ -40,6 +44,7 @@ const AUTH_TONE: Record<string, string> = {
 };
 const AUTH_LABEL: Record<string, string> = {
   oauth2: "OAuth2",
+  oauth2_code: "OAuth (per-user)",
   api_key: "API key",
   bearer_token: "Bearer token",
   basic_auth: "Basic auth",
@@ -53,6 +58,70 @@ function formatDate(iso?: string): string {
   } catch {
     return "—";
   }
+}
+
+function OAuthStatusCell({ service }: { service: RawExternalService }) {
+  const { data: token, error, isLoading } = useGetServiceTokenQuery(service.id, {
+    skip: service.auth_type !== "oauth2_code",
+  });
+  const [connectService, connectState] = useConnectOAuthServiceMutation();
+  const [disconnect, disconnectState] = useDisconnectServiceMutation();
+
+  if (service.auth_type !== "oauth2_code") return null;
+
+  const handleConnect = async () => {
+    try {
+      const result = await connectService({
+        id: service.id,
+        redirect_after: window.location.href,
+      }).unwrap();
+      window.location.href = result.url;
+    } catch {
+      toast.error("Failed to start OAuth flow");
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnect(service.id).unwrap();
+      toast.success("Disconnected.");
+    } catch {
+      toast.error("Failed to disconnect.");
+    }
+  };
+
+  if (isLoading) {
+    return <span className="badge badge--muted"><span className="bdot" />Checking…</span>;
+  }
+
+  if (token) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span className="badge badge--success"><span className="bdot" />Connected</span>
+        <button
+          className="btn btn-secondary"
+          style={{ padding: "2px 10px", fontSize: "12px" }}
+          onClick={(e) => { e.stopPropagation(); void handleDisconnect(); }}
+          disabled={disconnectState.isLoading}
+        >
+          {disconnectState.isLoading ? "…" : "Disconnect"}
+        </button>
+      </div>
+    );
+  }
+
+  const isRefreshFailed = error && (error as any).status === 401;
+
+  return (
+    <button
+      className={`btn ${isRefreshFailed ? "btn-secondary" : "btn-primary"}`}
+      style={{ padding: "2px 10px", fontSize: "12px" }}
+      onClick={(e) => { e.stopPropagation(); void handleConnect(); }}
+      disabled={connectState.isLoading}
+    >
+      {connectState.isLoading ? "…" : isRefreshFailed ? "Reconnect" : "Connect"}
+    </button>
+  );
 }
 
 export function ExternalServicesPage() {
@@ -177,6 +246,7 @@ export function ExternalServicesPage() {
                   <th className="th-apps">Type</th>
                   <th>Auth</th>
                   <th className="th-context">Agent access</th>
+                  <th>Connection</th>
                   <th className="th-signal">Created</th>
                   <th className="th-actions" aria-label="Actions" />
                 </tr>
@@ -207,6 +277,9 @@ export function ExternalServicesPage() {
                         <span className="bdot" />
                         {s.agent_accessible ? "Enabled" : "Off"}
                       </span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <OAuthStatusCell service={s} />
                     </td>
                     <td className="col-signal">
                       <span className="time-cell">{formatDate(s.created_at)}</span>
