@@ -26,6 +26,7 @@ import {
   useDisconnectServiceMutation,
   type RawExternalService,
 } from "@/app/api/externalServiceApi";
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,7 +111,7 @@ function OAuthStatusCell({ service }: { service: RawExternalService }) {
     );
   }
 
-  const isRefreshFailed = error && (error as any).status === 401;
+  const isRefreshFailed = error && (error as FetchBaseQueryError).status === 401;
 
   return (
     <button
