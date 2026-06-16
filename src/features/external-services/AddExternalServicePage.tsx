@@ -10,8 +10,21 @@ import { toast } from "react-hot-toast";
 import {
   useCreateExternalServiceMutation,
   useGetExternalServicesQuery,
+  useConnectOAuthServiceMutation,
 } from "@/app/api/externalServiceApi";
 import type { RawExternalService } from "@/app/api/externalServiceApi";
+
+const OAUTH_PROVIDERS = [
+  { id: "google",    label: "Google",    initials: "G",  defaultScopes: "openid email profile" },
+  { id: "github",    label: "GitHub",    initials: "GH", defaultScopes: "read:user user:email" },
+  { id: "slack",     label: "Slack",     initials: "S",  defaultScopes: "users:read" },
+  { id: "microsoft", label: "Microsoft", initials: "MS", defaultScopes: "openid email profile" },
+  { id: "linear",    label: "Linear",    initials: "L",  defaultScopes: "read" },
+  { id: "notion",    label: "Notion",    initials: "N",  defaultScopes: "" },
+  { id: "custom",    label: "Custom",    initials: "?",  defaultScopes: "" },
+] as const;
+
+type OAuthProviderId = typeof OAUTH_PROVIDERS[number]["id"];
 
 interface ServiceFormData {
   name: string;
@@ -19,13 +32,18 @@ interface ServiceFormData {
   url: string;
   description: string;
   tags: string;
-  auth_type: "oauth2" | "api_key" | "basic_auth" | "bearer_token" | "none";
+  auth_type: "oauth2" | "oauth2_code" | "api_key" | "basic_auth" | "bearer_token" | "none";
   agent_accessible: boolean;
   api_key: string;
   bearer_token: string;
   client_id: string;
   client_secret: string;
   webhook_secret: string;
+  oauth_provider: OAuthProviderId | "";
+  oauth_authorize_url: string;
+  oauth_token_url: string;
+  oauth_default_scopes: string;
+  ms_tenant_id: string;
 }
 
 export function AddExternalServicePage() {
@@ -47,11 +65,18 @@ export function AddExternalServicePage() {
     client_id: "",
     client_secret: "",
     webhook_secret: "",
+    oauth_provider: "",
+    oauth_authorize_url: "",
+    oauth_token_url: "",
+    oauth_default_scopes: "",
+    ms_tenant_id: "",
   });
   const [isCreating, setIsCreating] = useState(false);
   const [createdService, setCreatedService] =
     useState<RawExternalService | null>(null);
   const [copiedSteps, setCopiedSteps] = useState<Set<string>>(new Set());
+  const [callbackUrl, setCallbackUrl] = useState("");
+  const [connectService] = useConnectOAuthServiceMutation();
 
   // SDK View Mode: If serviceId is present, find the service and show SDK section
   const isSDKViewMode = !!serviceId;
@@ -73,6 +98,7 @@ export function AddExternalServicePage() {
         tags: existingService.tags?.join(", ") || "",
         auth_type: existingService.auth_type as
           | "oauth2"
+          | "oauth2_code"
           | "api_key"
           | "basic_auth"
           | "bearer_token"
@@ -83,6 +109,11 @@ export function AddExternalServicePage() {
         client_id: "",
         client_secret: "",
         webhook_secret: "",
+        oauth_provider: "",
+        oauth_authorize_url: "",
+        oauth_token_url: "",
+        oauth_default_scopes: "",
+        ms_tenant_id: "",
       });
     }
   }, [isSDKViewMode, existingService]);
@@ -138,16 +169,15 @@ api_key = creds.credentials["api_key"]`;
       if (formData.auth_type === "bearer_token" && formData.bearer_token) {
         secret_data.access_token = formData.bearer_token;
       }
-      if (formData.auth_type === "oauth2") {
+      if (formData.auth_type === "oauth2" || formData.auth_type === "oauth2_code") {
         if (formData.client_id) secret_data.client_id = formData.client_id;
-        if (formData.client_secret)
-          secret_data.client_secret = formData.client_secret;
+        if (formData.client_secret) secret_data.client_secret = formData.client_secret;
       }
       if (formData.webhook_secret) {
         secret_data.webhook_secret = formData.webhook_secret;
       }
 
-      const payload = {
+      const payload: any = {
         name: formData.name,
         type: formData.type,
         url: formData.url,
@@ -162,7 +192,35 @@ api_key = creds.credentials["api_key"]`;
         secret_data,
       };
 
+      if (formData.auth_type === "oauth2_code") {
+        payload.oauth_provider = formData.oauth_provider;
+        payload.oauth_default_scopes = formData.oauth_default_scopes
+          .split(" ")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (formData.oauth_provider === "custom") {
+          payload.oauth_authorize_url = formData.oauth_authorize_url;
+          payload.oauth_token_url = formData.oauth_token_url;
+        }
+        if (formData.oauth_provider === "microsoft" && formData.ms_tenant_id) {
+          payload.auth_config = JSON.stringify({ ms_tenant_id: formData.ms_tenant_id });
+        }
+      }
+
       const created = await createService(payload).unwrap();
+      let fetchedCallbackUrl = "";
+      if (formData.auth_type === "oauth2_code") {
+        try {
+          const connectResult = await connectService({
+            id: created.id,
+            redirect_after: window.location.origin + "/external-services",
+          }).unwrap();
+          fetchedCallbackUrl = connectResult.callback_url;
+        } catch {
+          // stays empty; user sees fallback text
+        }
+      }
+      setCallbackUrl(fetchedCallbackUrl);
       // Cast to RawExternalService since the API returns the raw data
       setCreatedService(created as any as RawExternalService);
       toast.success(`${formData.name} service created successfully!`);
@@ -249,6 +307,37 @@ api_key = creds.credentials["api_key"]`;
           <div className="relative">
             {/* Vertical Timeline Line */}
             <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/50 via-primary/30 to-transparent" />
+
+            {/* Step 0: Callback URL — oauth2_code only */}
+                {formData.auth_type === "oauth2_code" && (
+                  <div className="relative flex gap-6 mb-6">
+                    <div className="relative z-10 flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full border-2 bg-background border-primary/30 flex items-center justify-center transition-all">
+                        <span className="text-sm font-semibold text-foreground">0</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 pt-2">
+                      <p className="text-sm font-medium text-foreground/70 mb-3">
+                        Register this callback URL in your{" "}
+                        {OAUTH_PROVIDERS.find((p) => p.id === formData.oauth_provider)?.label ?? "provider"}'s OAuth app settings
+                      </p>
+                      {callbackUrl ? (
+                        <CodeBlock
+                          label="Callback URL"
+                          code={callbackUrl}
+                          onCopy={() => handleCopy(callbackUrl, "callback-url")}
+                          copied={copiedSteps.has("callback-url")}
+                        />
+                      ) : (
+                        <div className="border border-border/60 rounded-lg p-3 bg-muted/30">
+                          <p className="text-sm text-muted-foreground">
+                            Click <strong>Connect</strong> from the services list to retrieve your callback URL. Register it in your provider's OAuth app before connecting users.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
             {/* Step 1: Install SDK */}
             <div className="relative flex gap-6 mb-6">
@@ -342,6 +431,7 @@ api_key = creds.credentials["api_key"]`;
             <Button
               onClick={() => {
                 setCreatedService(null);
+                setCallbackUrl("");
                 setFormData({
                   name: "",
                   type: "API",
@@ -355,6 +445,11 @@ api_key = creds.credentials["api_key"]`;
                   client_id: "",
                   client_secret: "",
                   webhook_secret: "",
+                  oauth_provider: "",
+                  oauth_authorize_url: "",
+                  oauth_token_url: "",
+                  oauth_default_scopes: "",
+                  ms_tenant_id: "",
                 });
               }}
             >
@@ -497,12 +592,48 @@ api_key = creds.credentials["api_key"]`;
                     >
                       <option value="api_key">API Key</option>
                       <option value="oauth2">OAuth 2.0</option>
+                      <option value="oauth2_code">OAuth 2.0 (per-user)</option>
                       <option value="bearer_token">Bearer Token</option>
                       <option value="basic_auth">Basic Auth</option>
                       <option value="none">None</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Provider picker — oauth2_code only */}
+                {formData.auth_type === "oauth2_code" && (
+                  <div className="space-y-2">
+                    <Label>OAuth Provider</Label>
+                    <div className="grid grid-cols-4 gap-3">
+                      {OAUTH_PROVIDERS.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              oauth_provider: p.id,
+                              oauth_default_scopes: p.defaultScopes,
+                              oauth_authorize_url: "",
+                              oauth_token_url: "",
+                              ms_tenant_id: "",
+                            }))
+                          }
+                          className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-colors ${
+                            formData.oauth_provider === p.id
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
+                          }`}
+                        >
+                          <span className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold mb-1">
+                            {p.initials}
+                          </span>
+                          <span className="text-xs font-medium">{p.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Conditional secret fields based on auth type */}
                 {formData.auth_type === "api_key" && (
@@ -539,7 +670,7 @@ api_key = creds.credentials["api_key"]`;
                   </div>
                 )}
 
-                {formData.auth_type === "oauth2" && (
+                {(formData.auth_type === "oauth2" || formData.auth_type === "oauth2_code") && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="client_id">Client ID</Label>
@@ -570,6 +701,73 @@ api_key = creds.credentials["api_key"]`;
                         }
                       />
                     </div>
+                  </div>
+                )}
+
+                {/* Microsoft: Azure AD tenant ID */}
+                {formData.auth_type === "oauth2_code" && formData.oauth_provider === "microsoft" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="ms_tenant_id">Azure AD Tenant ID *</Label>
+                    <Input
+                      id="ms_tenant_id"
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      value={formData.ms_tenant_id}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, ms_tenant_id: e.target.value }))
+                      }
+                      required
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Found in Azure Portal → Azure Active Directory → Overview.
+                    </p>
+                  </div>
+                )}
+
+                {/* Custom provider: authorize and token URLs */}
+                {formData.auth_type === "oauth2_code" && formData.oauth_provider === "custom" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="oauth_authorize_url">Authorization URL *</Label>
+                      <Input
+                        id="oauth_authorize_url"
+                        placeholder="https://provider.com/oauth/authorize"
+                        value={formData.oauth_authorize_url}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, oauth_authorize_url: e.target.value }))
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="oauth_token_url">Token URL *</Label>
+                      <Input
+                        id="oauth_token_url"
+                        placeholder="https://provider.com/oauth/token"
+                        value={formData.oauth_token_url}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, oauth_token_url: e.target.value }))
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Scopes — shown when a provider is selected */}
+                {formData.auth_type === "oauth2_code" && formData.oauth_provider !== "" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="oauth_default_scopes">Default Scopes</Label>
+                    <Input
+                      id="oauth_default_scopes"
+                      placeholder="openid email profile"
+                      value={formData.oauth_default_scopes}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, oauth_default_scopes: e.target.value }))
+                      }
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Space-separated. Pre-filled from template — edit to override.
+                    </p>
                   </div>
                 )}
 
