@@ -11,7 +11,7 @@ export interface RawExternalService {
   description?: string;
   tags?: string[];
   resource_id: number;
-  auth_type: "oauth2" | "api_key" | "basic_auth" | "bearer_token" | "none" | string;
+  auth_type: "oauth2" | "oauth2_code" | "api_key" | "basic_auth" | "bearer_token" | "none" | string;
   auth_config?: string;
   vault_path?: string;
   created_by?: string;
@@ -19,6 +19,10 @@ export interface RawExternalService {
   secret_data?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  oauth_provider?: OAuthProvider;
+  oauth_authorize_url?: string;
+  oauth_token_url?: string;
+  oauth_default_scopes?: string[];
 }
 
 export interface ExternalServiceRequest {
@@ -28,9 +32,14 @@ export interface ExternalServiceRequest {
   description?: string;
   tags?: string[];
   resource_id: number;
-  auth_type: "oauth2" | "api_key" | "basic_auth" | "bearer_token" | "none";
+  auth_type: "oauth2" | "oauth2_code" | "api_key" | "basic_auth" | "bearer_token" | "none";
   agent_accessible?: boolean;
   secret_data?: Record<string, any>;
+  oauth_provider?: OAuthProvider;
+  oauth_authorize_url?: string;
+  oauth_token_url?: string;
+  oauth_default_scopes?: string[];
+  auth_config?: string;
 }
 
 export interface ExternalServiceUpdateRequest {
@@ -39,9 +48,38 @@ export interface ExternalServiceUpdateRequest {
   url?: string;
   description?: string;
   tags?: string[];
-  auth_type?: "oauth2" | "api_key" | "basic_auth" | "bearer_token" | "none";
+  auth_type?: "oauth2" | "oauth2_code" | "api_key" | "basic_auth" | "bearer_token" | "none";
   agent_accessible?: boolean;
   secret_data?: Record<string, any>;
+  oauth_provider?: OAuthProvider;
+  oauth_authorize_url?: string;
+  oauth_token_url?: string;
+  oauth_default_scopes?: string[];
+}
+
+export type OAuthProvider = "google" | "github" | "slack" | "microsoft" | "linear" | "notion" | "custom";
+
+export interface OAuthConnectResponse {
+  url: string;
+  callback_url: string;
+}
+
+export interface ServiceTokenResponse {
+  access_token: string;
+  expires_at: string;
+  scopes: string[];
+}
+
+export interface ServiceConnection {
+  user_id: string;
+  scopes: string[];
+  connected_at: string;
+  expires_at: string | null;
+  refresh_error: string | null;
+}
+
+export interface ServiceConnectionsResponse {
+  connections: ServiceConnection[];
 }
 
 // Map raw backend service to UI ExternalService type
@@ -62,9 +100,7 @@ const deriveProviderFromUrl = (url?: string): string => {
 const mapRawToExternalService = (raw: RawExternalService): ExternalService => {
   const provider = deriveProviderFromUrl(raw.url);
   const status: ExternalService["status"] =
-    raw.auth_type === "none"
-      ? "needs_consent"
-      : raw.auth_type === "oauth2"
+    raw.auth_type === "none" || raw.auth_type === "oauth2" || raw.auth_type === "oauth2_code"
       ? "needs_consent"
       : "connected";
 
@@ -231,6 +267,33 @@ export const externalServiceApi = baseApi.injectEndpoints({
         ];
       },
     }),
+
+    connectOAuthService: builder.mutation<OAuthConnectResponse, { id: string; redirect_after: string }>({
+      query: ({ id, redirect_after }) => ({
+        url: `/authsec/exsvc/services/${id}/connect`,
+        method: "POST",
+        body: { redirect_after },
+      }),
+    }),
+
+    getServiceToken: builder.query<ServiceTokenResponse, string>({
+      query: (id) => ({ url: `/authsec/exsvc/services/${id}/token`, method: "GET" }),
+      providesTags: (_res, _err, id) => [{ type: "ExternalService", id: `${id}-token` }],
+    }),
+
+    disconnectService: builder.mutation<void, string>({
+      query: (id) => ({ url: `/authsec/exsvc/services/${id}/token`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "ExternalService", id: `${id}-token` },
+        { type: "ExternalService", id },
+        { type: "ExternalService", id: "LIST" },
+      ],
+    }),
+
+    getServiceConnections: builder.query<ServiceConnectionsResponse, string>({
+      query: (id) => ({ url: `/authsec/exsvc/services/${id}/connections`, method: "GET" }),
+      providesTags: (_res, _err, id) => [{ type: "ExternalService", id: `${id}-connections` }],
+    }),
   }),
   overrideExisting: true,
 });
@@ -243,4 +306,8 @@ export const {
   useCreateExternalServiceMutation,
   useUpdateExternalServiceMutation,
   useDeleteExternalServiceMutation,
+  useConnectOAuthServiceMutation,
+  useGetServiceTokenQuery,
+  useDisconnectServiceMutation,
+  useGetServiceConnectionsQuery,
 } = externalServiceApi;
