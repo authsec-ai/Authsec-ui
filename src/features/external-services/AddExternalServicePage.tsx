@@ -161,6 +161,12 @@ api_key = creds.credentials["api_key"]`;
     setIsCreating(true);
 
     try {
+      if (formData.auth_type === "oauth2_code" && !formData.oauth_provider) {
+        toast.error("Please select an OAuth provider.");
+        setIsCreating(false);
+        return;
+      }
+
       // Build secret_data based on auth_type
       const secret_data: any = {};
       if (formData.auth_type === "api_key" && formData.api_key) {
@@ -604,7 +610,7 @@ api_key = creds.credentials["api_key"]`;
                 {formData.auth_type === "oauth2_code" && (
                   <div className="space-y-2">
                     <Label>OAuth Provider</Label>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-7 gap-3">
                       {OAUTH_PROVIDERS.map((p) => (
                         <button
                           key={p.id}
