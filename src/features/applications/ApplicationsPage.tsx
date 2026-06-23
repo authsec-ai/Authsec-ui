@@ -115,7 +115,7 @@ const ROW_ACTIONS: Array<{ label: string; tab: string; icon: typeof ShieldCheck 
   { label: "Open overview", tab: "overview", icon: ExternalLink },
   { label: "Setup", tab: "setup", icon: ShieldCheck },
   { label: "Review tools", tab: "tools", icon: Wrench },
-  { label: "Manage access", tab: "access", icon: KeyRound },
+  { label: "Manage access", tab: "access-assignments", icon: KeyRound },
   { label: "Clients", tab: "clients", icon: Users },
   { label: "Run test login", tab: "test", icon: PlayCircle },
 ];

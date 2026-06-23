@@ -293,6 +293,22 @@ export const setupWizardApi = baseApi.injectEndpoints({
       query: (rsId) => `/authsec/applications/${rsId}/eligible-users`,
     }),
 
+    // POST /authsec/applications/:id/roles
+    createApplicationRole: builder.mutation<
+      RSRole,
+      { rsId: string; name: string; description?: string; scope_ids?: string[] }
+    >({
+      query: ({ rsId, name, description, scope_ids }) => ({
+        url: `/authsec/applications/${rsId}/roles`,
+        method: "POST",
+        body: { name, description, scope_ids: scope_ids ?? [] },
+      }),
+      invalidatesTags: (_result, _error, { rsId }) => [
+        { type: "ResourceServer" as const, id: `${rsId}-roles` },
+        { type: "ScopeMatrix" as const, id: rsId },
+      ],
+    }),
+
     // POST /authsec/applications/:id/tools
     // Manual tool entry — wizard "Path C" escape hatch. inventory_source is
     // forced to 'manual' on the backend; admin override of mcp_scan or
@@ -334,4 +350,5 @@ export const {
   useCreateRSBindingMutation,
   useDeleteRSBindingMutation,
   useListEligibleUsersQuery,
+  useCreateApplicationRoleMutation,
 } = setupWizardApi;

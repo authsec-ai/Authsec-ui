@@ -14,6 +14,8 @@ import { Outlet, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useGetApplicationQuery } from "@/app/api/applicationsApi";
+import { useListAccessRequestsQuery } from "@/app/api/agentIdentityApi";
+import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import { Card } from "@/components/ui/card";
 
 import { ApplicationDetailTabs } from "./components/ApplicationDetailTabs";
@@ -27,6 +29,20 @@ export default function ApplicationLayout() {
   const { data: application, isLoading, error } = useGetApplicationQuery(id ?? "", {
     skip: !id,
   });
+  // Lightweight pending count for the Requests tab badge — skipped until app loads.
+  const { data: requestsData } = useListAccessRequestsQuery(application?.id ?? "", {
+    skip: !application?.id,
+  });
+  const pendingRequestCount = (requestsData?.items ?? []).filter(
+    (r) => r.status === "pending",
+  ).length;
+  const { data: clientsData } = useListWorkspaceClientsQuery(
+    application?.id ? { resourceServerId: application.id } : undefined,
+    { skip: !application?.id },
+  );
+  const pendingClientCount = (clientsData ?? []).filter(
+    (c) => c.status === "pending_approval",
+  ).length;
 
   if (!id) {
     return (
@@ -69,6 +85,8 @@ export default function ApplicationLayout() {
             <ApplicationDetailTabs
               applicationId={application.id}
               readiness={readiness}
+              pendingRequestCount={pendingRequestCount}
+              pendingClientCount={pendingClientCount}
             />
           </div>
         </div>

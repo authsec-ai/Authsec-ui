@@ -11,7 +11,7 @@
  * Anything we can't honestly source from a backend response is omitted.
  */
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Users, Cpu, Link2, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   useGetActivationPreviewQuery,
   useGetSetupChecklistQuery,
 } from "@/app/api/setupWizardApi";
+import { useGetAccessSummaryQuery } from "@/app/api/agentIdentityApi";
 import { cn } from "@/lib/utils";
 
 import { useApplicationContext } from "./useApplicationContext";
@@ -36,6 +37,7 @@ export default function ApplicationOverviewPage() {
     useGetSetupChecklistQuery(application.id);
   const { data: preview, isLoading: previewLoading } =
     useGetActivationPreviewQuery(application.id);
+  const { data: accessSummary } = useGetAccessSummaryQuery(application.id);
 
   const firstFailing = checklist?.steps.find((s) => !s.complete);
   const firstFailingHref = firstFailing
@@ -159,6 +161,26 @@ export default function ApplicationOverviewPage() {
           <p className="mt-4 text-xs text-slate-500">
             New tools after launch are denied by default until mapped.
           </p>
+        </Surface>
+
+        {/* Access identity counts — sourced from /access-assignments/summary */}
+        <Surface className="p-5">
+          <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 mb-3">
+            Identity access
+          </p>
+          {accessSummary ? (
+            <ul className="space-y-2">
+              <AccessCountRow icon={<Users className="size-3.5" />} label="Users" value={accessSummary.user_assignments} href={`/applications/${application.id}/access-assignments`} />
+              <AccessCountRow icon={<Cpu className="size-3.5" />} label="Machine identities" value={accessSummary.service_account_assignments} href={`/applications/${application.id}/access-assignments`} />
+              <AccessCountRow icon={<Cpu className="size-3.5" />} label="Kubernetes workloads" value={accessSummary.workload_assignments} href={`/applications/${application.id}/workloads`} />
+              <AccessCountRow icon={<Link2 className="size-3.5" />} label="Active connections" value={accessSummary.active_connections} href={`/applications/${application.id}/connections`} />
+              {accessSummary.pending_requests > 0 && (
+                <AccessCountRow icon={<AlertCircle className="size-3.5 text-amber-500" />} label="Pending requests" value={accessSummary.pending_requests} href={`/applications/${application.id}/requests`} tone="warn" />
+              )}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-400">Loading…</p>
+          )}
         </Surface>
       </div>
       </div>
@@ -303,4 +325,38 @@ function tabForStep(step: number): string {
   if (step <= 4) return "tools";
   if (step === 5) return "access";
   return "launch";
+}
+
+function AccessCountRow({
+  icon,
+  label,
+  value,
+  href,
+  tone = "default",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  href: string;
+  tone?: "default" | "warn";
+}) {
+  return (
+    <li>
+      <Link
+        to={href}
+        className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-slate-50 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="text-slate-400">{icon}</span>
+          {label}
+        </span>
+        <span className={cn(
+          "text-sm font-semibold tabular-nums",
+          tone === "warn" ? "text-amber-600" : "text-slate-800",
+        )}>
+          {value}
+        </span>
+      </Link>
+    </li>
+  );
 }
