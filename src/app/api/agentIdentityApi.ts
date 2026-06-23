@@ -368,6 +368,26 @@ const agentIdentityApi = baseApi.injectEndpoints({
       query: (body) => ({ url: `/authsec/uflow/admin/service-accounts`, method: "POST", body }),
     }),
 
+    // PUT /authsec/uflow/admin/service-accounts/:sa_id — rename / re-describe.
+    updateWorkspaceServiceAccount: builder.mutation<
+      WorkspaceServiceAccount,
+      { saId: string; name?: string; description?: string }
+    >({
+      query: ({ saId, ...body }) => ({
+        url: `/authsec/uflow/admin/service-accounts/${saId}`,
+        method: "PUT",
+        body,
+      }),
+    }),
+
+    // DELETE /authsec/uflow/admin/service-accounts/:sa_id — remove the service account.
+    deleteWorkspaceServiceAccount: builder.mutation<{ message: string; id: string }, string>({
+      query: (saId) => ({
+        url: `/authsec/uflow/admin/service-accounts/${saId}`,
+        method: "DELETE",
+      }),
+    }),
+
     // POST /authsec/agents — mint a confidential A2A agent client
     // (authorization_code + token-exchange + secret) in this workspace.
     registerAgent: builder.mutation<
@@ -438,6 +458,8 @@ export const {
   useListServiceAccountAccessQuery,
   useGrantWorkloadAccessMutation,
   useCreateWorkspaceServiceAccountMutation,
+  useUpdateWorkspaceServiceAccountMutation,
+  useDeleteWorkspaceServiceAccountMutation,
   useProvisionWorkloadCredentialMutation,
   useRegisterAgentMutation,
 } = agentIdentityApi;

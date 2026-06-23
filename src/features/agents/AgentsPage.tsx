@@ -14,10 +14,13 @@
 
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Bot, ClipboardCopy, ExternalLink, Plus } from "lucide-react";
+import { Ban, Bot, ClipboardCopy, ExternalLink, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
+import {
+  useListWorkspaceClientsQuery,
+  useRevokeWorkspaceClientMutation,
+} from "@/app/api/mcpClientsApi";
 import { useRegisterAgentMutation } from "@/app/api/agentIdentityApi";
 import type { WorkspaceClientItem } from "@/app/api/mcpClientsApi";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { ConsoleFilterBar, EntityCell } from "@/components/console/iam-console";
+import { ConsoleFilterBar, ConsoleRowActions, EntityCell } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
 
@@ -222,10 +225,62 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "outlin
     revoked: { label: "Revoked", variant: "outline" },
   };
 
+// Revoke an agent's connection to a server. Backed by the connections DELETE
+// endpoint; the workspace-clients list invalidates on success so the row clears.
+function RevokeAgentDialog({
+  agent,
+  open,
+  onOpenChange,
+}: {
+  agent: WorkspaceClientItem | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [revoke, { isLoading }] = useRevokeWorkspaceClientMutation();
+
+  const submit = async () => {
+    if (!agent) return;
+    try {
+      await revoke({ rsId: agent.resource_server_id, clientId: agent.client_id }).unwrap();
+      toast.success("Connection revoked.");
+      onOpenChange(false);
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't revoke connection.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Revoke agent connection?</DialogTitle>
+          <DialogDescription>
+            This stops <span className="font-medium text-foreground">{agent?.client_name}</span> from
+            minting new tokens for{" "}
+            <span className="font-medium text-foreground">{agent?.resource_server_name}</span>.
+            Existing tokens expire at their normal lifetime.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="pt-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={() => void submit()} disabled={isLoading}>
+            <Ban className="mr-1.5 size-3.5" />
+            {isLoading ? "Revoking…" : "Revoke connection"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AgentsPage() {
   const { data, isLoading } = useListWorkspaceClientsQuery();
   const [query, setQuery] = useState("");
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<WorkspaceClientItem | null>(null);
 
   const agents = useMemo(() => {
     let items = (data ?? []).filter((c) => c.client_kind === "agent");
@@ -290,6 +345,39 @@ export default function AgentsPage() {
             <span className="text-xs text-muted-foreground">
               {valid ? formatDistanceToNow(ts, { addSuffix: true }) : "never"}
             </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const canRevoke =
+            row.original.status !== "revoked" && !!row.original.resource_server_id;
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions
+                items={[
+                  {
+                    label: "Copy client ID",
+                    icon: <ClipboardCopy className="size-4" />,
+                    onSelect: () => {
+                      void navigator.clipboard.writeText(row.original.client_id);
+                      toast.success("Client ID copied");
+                    },
+                  },
+                  {
+                    label: "Revoke connection",
+                    icon: <Ban className="size-4" />,
+                    destructive: true,
+                    disabled: !canRevoke,
+                    onSelect: () => setRevokeTarget(row.original),
+                  },
+                ]}
+              />
+            </div>
           );
         },
       },
@@ -362,6 +450,12 @@ export default function AgentsPage() {
       </TableCard>
 
       <RegisterAgentDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+
+      <RevokeAgentDialog
+        agent={revokeTarget}
+        open={!!revokeTarget}
+        onOpenChange={(v) => !v && setRevokeTarget(null)}
+      />
     </ConsolePage>
   );
 }

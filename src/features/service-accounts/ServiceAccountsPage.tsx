@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { ClipboardCopy, ExternalLink, Plus, Server } from "lucide-react";
+import { ClipboardCopy, ExternalLink, KeyRound, Pencil, Plus, Server, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
   useListWorkspaceServiceAccountsQuery,
   useCreateWorkspaceServiceAccountMutation,
+  useUpdateWorkspaceServiceAccountMutation,
+  useDeleteWorkspaceServiceAccountMutation,
   useProvisionWorkloadCredentialMutation,
   useListServiceAccountAccessQuery,
   type WorkspaceServiceAccount,
@@ -26,6 +28,7 @@ import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
+  ConsoleRowActions,
   EntityCell,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
@@ -479,6 +482,139 @@ function ServiceAccountDrawer({
   );
 }
 
+// ── Edit dialog ───────────────────────────────────────────────────────────────
+
+function EditServiceAccountDialog({
+  sa,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  sa: WorkspaceServiceAccount | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [update, { isLoading }] = useUpdateWorkspaceServiceAccountMutation();
+
+  // Sync form when the target changes.
+  useEffect(() => {
+    if (sa) {
+      setName(sa.name);
+      setDescription(sa.description ?? "");
+    }
+  }, [sa]);
+
+  const submit = async () => {
+    if (!sa) return;
+    if (!name.trim()) {
+      toast.error("Name is required.");
+      return;
+    }
+    try {
+      await update({ saId: sa.id, name: name.trim(), description: description.trim() }).unwrap();
+      toast.success("Service account updated.");
+      onSaved();
+      onOpenChange(false);
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't update service account.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit service account</DialogTitle>
+          <DialogDescription>Rename or re-describe this service account.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-sa-name">Name</Label>
+            <Input id="edit-sa-name" value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-sa-desc">Description</Label>
+            <Input
+              id="edit-sa-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional"
+              className="h-9"
+            />
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void submit()} disabled={!name.trim() || isLoading} className="text-white">
+              {isLoading ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Delete confirm ──────────────────────────────────────────────────────────────
+
+function DeleteServiceAccountDialog({
+  sa,
+  open,
+  onOpenChange,
+  onDeleted,
+}: {
+  sa: WorkspaceServiceAccount | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const [remove, { isLoading }] = useDeleteWorkspaceServiceAccountMutation();
+
+  const submit = async () => {
+    if (!sa) return;
+    try {
+      await remove(sa.id).unwrap();
+      toast.success("Service account deleted.");
+      onDeleted();
+      onOpenChange(false);
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't delete service account.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete service account?</DialogTitle>
+          <DialogDescription>
+            This permanently removes the service account and its credentials. Any server-to-server
+            call using it will stop working. This can't be undone.
+          </DialogDescription>
+        </DialogHeader>
+        {sa && (
+          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
+        )}
+        <DialogFooter className="pt-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={() => void submit()} disabled={isLoading}>
+            <Trash2 className="mr-1.5 size-3.5" />
+            {isLoading ? "Deleting…" : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ServiceAccountsPage() {
@@ -487,6 +623,8 @@ export default function ServiceAccountsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedSA, setSelectedSA] = useState<WorkspaceServiceAccount | null>(null);
+  const [editSA, setEditSA] = useState<WorkspaceServiceAccount | null>(null);
+  const [deleteSA, setDeleteSA] = useState<WorkspaceServiceAccount | null>(null);
 
   const items = useMemo(() => {
     let list = applyFilter(data ?? [], activeFilter);
@@ -561,6 +699,23 @@ export default function ServiceAccountsPage() {
             </span>
           );
         },
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ConsoleRowActions
+              items={[
+                { label: "View details", icon: <KeyRound className="size-4" />, onSelect: () => setSelectedSA(row.original) },
+                { label: "Edit", icon: <Pencil className="size-4" />, onSelect: () => setEditSA(row.original) },
+                { label: "Delete", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setDeleteSA(row.original) },
+              ]}
+            />
+          </div>
+        ),
       },
     ],
     [],
@@ -648,6 +803,20 @@ export default function ServiceAccountsPage() {
         sa={selectedSA}
         open={!!selectedSA}
         onClose={() => setSelectedSA(null)}
+      />
+
+      <EditServiceAccountDialog
+        sa={editSA}
+        open={!!editSA}
+        onOpenChange={(v) => !v && setEditSA(null)}
+        onSaved={() => void refetch()}
+      />
+
+      <DeleteServiceAccountDialog
+        sa={deleteSA}
+        open={!!deleteSA}
+        onOpenChange={(v) => !v && setDeleteSA(null)}
+        onDeleted={() => void refetch()}
       />
     </ConsolePage>
   );
