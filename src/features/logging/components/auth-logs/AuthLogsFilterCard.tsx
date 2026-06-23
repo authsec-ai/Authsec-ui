@@ -9,13 +9,10 @@ import {
   SelectValue,
 } from "../../../../components/ui/select";
 import { Button } from "../../../../components/ui/button";
-import type { AuthLog } from "../../../../types/entities";
 
-interface AuthLogsFilterParams {
-  logType?: AuthLog["logType"] | "all";
-  clientType?: AuthLog["clientType"] | "all";
-  status?: AuthLog["status"] | "all";
-  authMethod?: AuthLog["authMethod"] | "all";
+/** Only filters backed by the backend are kept here. */
+export interface AuthLogsFilterParams {
+  status?: "success" | "failure" | "all";
   timeRange?: string;
 }
 
@@ -58,7 +55,6 @@ export function AuthLogsFilterCard({
     <FilterShell>
       <CardContent variant="compact">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          {/* Title Section */}
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-foreground">Filters</span>
             {activeFiltersCount > 0 && (
@@ -68,36 +64,7 @@ export function AuthLogsFilterCard({
             )}
           </div>
 
-          {/* Filters */}
           <div className="flex w-full flex-1 flex-wrap items-center gap-2">
-            <Select
-              value={filters.logType || "all"}
-              onValueChange={(value) => handleFilterChange("logType", value)}
-            >
-              <SelectTrigger className="w-[130px] h-9 text-sm">
-                <SelectValue placeholder="Log Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="authn">Authentication</SelectItem>
-                <SelectItem value="authz">Authorization</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.clientType || "all"}
-              onValueChange={(value) => handleFilterChange("clientType", value)}
-            >
-              <SelectTrigger className="w-[130px] h-9 text-sm">
-                <SelectValue placeholder="Client Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clients</SelectItem>
-                <SelectItem value="mcp_server">MCP Server</SelectItem>
-                <SelectItem value="ai_agent">AI Agent</SelectItem>
-              </SelectContent>
-            </Select>
-
             <Select
               value={filters.status || "all"}
               onValueChange={(value) => handleFilterChange("status", value)}
@@ -109,6 +76,22 @@ export function AuthLogsFilterCard({
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="success">Success</SelectItem>
                 <SelectItem value="failure">Failure</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.timeRange || "all"}
+              onValueChange={(value) => handleFilterChange("timeRange", value)}
+            >
+              <SelectTrigger className="w-[150px] h-9 text-sm">
+                <SelectValue placeholder="Time Range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="5m">Last 5 minutes</SelectItem>
+                <SelectItem value="1h">Last hour</SelectItem>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
               </SelectContent>
             </Select>
 

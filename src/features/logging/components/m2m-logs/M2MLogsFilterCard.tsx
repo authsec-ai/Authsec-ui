@@ -1,37 +1,21 @@
 import { useState, useEffect } from "react";
 import { CardContent } from "../../../../components/ui/card";
 import { FilterCard } from "@/theme/components/cards";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../../../components/ui/select";
+import { Input } from "../../../../components/ui/input";
 import { Button } from "../../../../components/ui/button";
-import { ArrowDown, ArrowUp } from "lucide-react";
-import type { AuditLog } from "../../../../types/entities";
 
 interface M2MLogsFilterParams {
-  action?: AuditLog["action"] | "all";
-  resourceType?: AuditLog["resourceType"] | "all";
-  severity?: AuditLog["severity"] | "all";
-  status?: AuditLog["status"] | "all";
-  timeRange?: string;
-  sort_by?: "ts" | "service" | "event_type" | "operation";
-  sort_desc?: boolean;
+  client_id?: string;
 }
 
 interface M2MLogsFilterCardProps {
   onFiltersChange: (filters: M2MLogsFilterParams) => void;
   initialFilters: M2MLogsFilterParams;
-  onGroupByClick: () => void;
 }
 
 export function M2MLogsFilterCard({
   onFiltersChange,
   initialFilters,
-  onGroupByClick,
 }: M2MLogsFilterCardProps) {
   const [filters, setFilters] = useState<M2MLogsFilterParams>(initialFilters);
 
@@ -40,21 +24,11 @@ export function M2MLogsFilterCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  const handleFilterChange = (
-    key: keyof M2MLogsFilterParams,
-    value: string | boolean
-  ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
   const clearFilters = () => {
     setFilters({});
   };
 
-  const activeFiltersCount = Object.keys(filters).filter((key) => {
-    const value = filters[key as keyof M2MLogsFilterParams];
-    return value && value !== "all" && value !== false;
-  }).length;
+  const hasActiveFilters = !!(filters.client_id);
 
   return (
     <FilterCard>
@@ -62,92 +36,27 @@ export function M2MLogsFilterCard({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-foreground">Filters</span>
-            {activeFiltersCount > 0 && (
+            {hasActiveFilters && (
               <span className="text-xs text-foreground bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded">
-                {activeFiltersCount}
+                1
               </span>
             )}
           </div>
 
           <div className="flex w-full flex-1 flex-wrap items-center gap-2">
-            <Select
-              value={filters.action || "all"}
-              onValueChange={(value) => handleFilterChange("action", value)}
-            >
-              <SelectTrigger className="w-[130px] h-9 text-sm">
-                <SelectValue placeholder="Action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                <SelectItem value="create">Created</SelectItem>
-                <SelectItem value="update">Updated</SelectItem>
-                <SelectItem value="delete">Deleted</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.timeRange || "all"}
-              onValueChange={(value) => handleFilterChange("timeRange", value)}
-            >
-              <SelectTrigger className="w-[130px] h-9 text-sm">
-                <SelectValue placeholder="Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="5m">Last 5 minutes</SelectItem>
-                <SelectItem value="1h">Last hour</SelectItem>
-                <SelectItem value="24h">Last 24 hours</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.sort_by || "ts"}
-              onValueChange={(value) =>
-                handleFilterChange(
-                  "sort_by",
-                  value as "ts" | "service" | "event_type" | "operation"
-                )
+            <Input
+              className="w-[220px] h-9 text-sm"
+              placeholder="Filter by Client ID"
+              value={filters.client_id ?? ""}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  client_id: e.target.value || undefined,
+                }))
               }
-            >
-              <SelectTrigger className="w-[150px] h-9 text-sm">
-                <SelectValue placeholder="Sort By" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ts">Timestamp</SelectItem>
-                <SelectItem value="service">Service</SelectItem>
-                <SelectItem value="event_type">Event Type</SelectItem>
-                <SelectItem value="operation">Operation</SelectItem>
-              </SelectContent>
-            </Select>
+            />
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                handleFilterChange("sort_desc", !filters.sort_desc)
-              }
-              className="h-9 w-[150px] text-sm"
-              title={
-                filters.sort_desc === false
-                  ? "Sort ascending (oldest first)"
-                  : "Sort descending (newest first)"
-              }
-            >
-              {filters.sort_desc === false ? (
-                <>
-                  <ArrowUp className="h-4 w-4" />
-                  <span className="text-xs">Oldest first</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDown className="h-4 w-4" />
-                  <span className="text-xs">Newest first</span>
-                </>
-              )}
-            </Button>
-
-            {activeFiltersCount > 0 && (
+            {hasActiveFilters && (
               <Button
                 variant="ghost"
                 size="sm"

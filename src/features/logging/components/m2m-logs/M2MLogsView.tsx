@@ -5,22 +5,21 @@ import {
   Play,
   Pause,
   Download,
-  Copy,
   Terminal,
   CheckCircle,
   XCircle,
-  AlertTriangle,
+  MinusCircle,
   RotateCcw,
   Loader2,
   ChevronRight,
   ChevronDown,
   ChevronLeft,
 } from "lucide-react";
-import type { AuditLog } from "../../../../types/entities";
+import type { M2MLog } from "../../../../types/entities";
 import type { PaginationMetadata } from "../../../../app/api/logsApi";
 
 interface M2MLogsViewProps {
-  logs: AuditLog[];
+  logs: M2MLog[];
   onExport: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -28,126 +27,100 @@ interface M2MLogsViewProps {
   onPageChange?: (page: number) => void;
 }
 
-export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, pagination, onPageChange }: M2MLogsViewProps) {
+type EffectStyle = { text: string; icon: string };
+
+const EFFECT_STYLES: Record<string, EffectStyle> = {
+  permit: {
+    text: "text-emerald-700 dark:text-emerald-300",
+    icon: "text-emerald-600 dark:text-emerald-400",
+  },
+  deny: {
+    text: "text-rose-700 dark:text-rose-300",
+    icon: "text-rose-600 dark:text-rose-400",
+  },
+  no_policy: {
+    text: "text-amber-700 dark:text-amber-300",
+    icon: "text-amber-600 dark:text-amber-400",
+  },
+};
+
+function effectStyle(effect: string): EffectStyle {
+  return EFFECT_STYLES[effect] ?? EFFECT_STYLES.no_policy;
+}
+
+function EffectIcon({ effect }: { effect: string }) {
+  if (effect === "permit") return <CheckCircle className="h-4 w-4" />;
+  if (effect === "deny") return <XCircle className="h-4 w-4" />;
+  return <MinusCircle className="h-4 w-4" />;
+}
+
+function EffectBadge({ value, label }: { value: string; label?: string }) {
+  const cls =
+    value === "permit"
+      ? "badge--success"
+      : value === "deny"
+      ? "badge--danger"
+      : "badge--warning";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${
+        value === "permit"
+          ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300"
+          : value === "deny"
+          ? "border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300"
+          : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+      }`}
+    >
+      {label ?? value}
+    </span>
+  );
+}
+
+export function M2MLogsView({
+  logs,
+  onExport,
+  onRefresh,
+  isRefreshing,
+  pagination,
+  onPageChange,
+}: M2MLogsViewProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to top when logs change (e.g., page change)
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [pagination?.page]);
 
-  const toggleRowExpansion = (logId: string) => {
-    setExpandedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(logId)) {
-        newSet.delete(logId);
-      } else {
-        newSet.add(logId);
-      }
-      return newSet;
+  const toggleRowExpansion = (id: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
-  type LevelStyle = {
-    text: string;
-    icon: string;
+  const formatMainLine = (log: M2MLog) => {
+    const ts = new Date(log.createdAt).toISOString();
+    const pdp = log.pdpEffect.toUpperCase().padEnd(10);
+    return `[${ts}] ${pdp} client=${log.clientId} rs=${log.resourceServerId}`;
   };
 
-  const statusStyles: Record<AuditLog["status"], LevelStyle> = {
-    success: {
-      text: "text-emerald-700 dark:text-emerald-300",
-      icon: "text-emerald-600 dark:text-emerald-400",
-    },
-    failed: {
-      text: "text-rose-700 dark:text-rose-300",
-      icon: "text-rose-600 dark:text-rose-400",
-    },
-    pending: {
-      text: "text-amber-700 dark:text-amber-300",
-      icon: "text-amber-600 dark:text-amber-400",
-    },
-  };
-
-  const getStatusStyle = (status: AuditLog["status"]): LevelStyle => {
-    return statusStyles[status];
-  };
-
-  const getStatusIcon = (status: AuditLog["status"]) => {
-    switch (status) {
-      case "success":
-        return CheckCircle;
-      case "failed":
-        return XCircle;
-      case "pending":
-        return AlertTriangle;
-      default:
-        return CheckCircle;
-    }
-  };
-
-  const formatLogEntry = (log: AuditLog) => {
-    const timestamp = new Date(log.timestamp).toISOString();
-    const status = log.status.toUpperCase().padEnd(10);
-    const action = log.action.toUpperCase().padEnd(10);
-
-    // Main log line - using AuditLog fields
-    const mainLine = `[${timestamp}] ${status} ${action} actor=${log.actor.email || log.actor.username || 'undefined'} resource=${log.resourceType}/${log.resourceName}`;
-
-    // Details line
-    const details: string[] = [];
-    if (log.actor.userId) details.push(`actor_id=${log.actor.userId}`);
-    if (log.resourceId) details.push(`resource_id=${log.resourceId}`);
-    details.push(`severity=${log.severity}`);
-    details.push(`category=${log.category}`);
-    details.push(`ip=${log.ipAddress}`);
-
-    // Resource-specific details
-    let resourceDetails: string[] = [];
-    if (log.changes && log.changes.length > 0) {
-      resourceDetails.push(`changes=${log.changes.length}`);
-    }
-    if (log.rollbackAvailable) {
-      resourceDetails.push(`rollback_available=true`);
-    }
-
-    // Reason line
-    let reasonLine: string | null = null;
-    if (log.reason) {
-      reasonLine = `    reason="${log.reason}"`;
-    }
-
-    // Metadata line
-    let metadataLine: string | null = null;
-    if (log.metadata && Object.keys(log.metadata).length > 0) {
-      const metadataStr = Object.entries(log.metadata)
-        .slice(0, 3)
-        .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
-        .join(" ");
-      if (metadataStr) {
-        metadataLine = `    metadata: ${metadataStr}`;
-      }
-    }
-
-    return {
-      main: mainLine,
-      details: `    ${details.join(" ")}`,
-      resourceDetails: resourceDetails.length > 0 ? `    ${resourceDetails.join(" ")}` : null,
-      reason: reasonLine,
-      metadata: metadataLine,
-    };
-  };
-
-  const clearConsole = () => {
-    console.log("Console cleared");
+  const formatDetailsLine = (log: M2MLog) => {
+    const parts: string[] = [];
+    parts.push(`family=${log.tokenFamily}`);
+    parts.push(`subject=${log.subjectType}${log.subjectId ? `:${log.subjectId}` : ""}`);
+    parts.push(`gate=${log.gateEffect}`);
+    parts.push(`pdp_agrees=${log.pdpAgrees}`);
+    return `    ${parts.join(" ")}`;
   };
 
   return (
     <div className="overflow-hidden border border-slate-200 dark:border-neutral-900 bg-white dark:bg-neutral-950 shadow-lg dark:shadow-[0_24px_40px_rgba(5,5,8,0.45)]">
-      {/* Console Controls */}
+      {/* Controls */}
       <div className="flex items-center justify-between px-6 py-4 bg-slate-100 dark:bg-neutral-950/90 border-b border-slate-200 dark:border-neutral-900">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-slate-300 dark:border-neutral-800 bg-white dark:bg-neutral-950/80">
@@ -169,7 +142,7 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
             variant="ghost"
             size="sm"
             onClick={() => setIsPaused(!isPaused)}
-            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 transition-colors duration-150 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100 focus-visible:ring-1 focus-visible:ring-blue-300/40"
+            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100"
           >
             {isPaused ? <Play className="h-3 w-3 mr-1" /> : <Pause className="h-3 w-3 mr-1" />}
             {isPaused ? "Resume" : "Pause"}
@@ -178,28 +151,27 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
           <Button
             variant="ghost"
             size="sm"
-            onClick={onRefresh ?? clearConsole}
+            onClick={onRefresh}
             disabled={isRefreshing}
-            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 transition-colors duration-150 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100 focus-visible:ring-1 focus-visible:ring-blue-300/40 disabled:opacity-70"
+            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100 disabled:opacity-70"
           >
             {isRefreshing ? (
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             ) : (
               <RotateCcw className="h-3 w-3 mr-1" />
             )}
-            {onRefresh ? "Refresh" : "Clear"}
+            Refresh
           </Button>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={onExport}
-            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 transition-colors duration-150 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100 focus-visible:ring-1 focus-visible:ring-blue-300/40"
+            className="h-9 px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-neutral-900/70 hover:text-slate-900 dark:hover:text-blue-100"
           >
             <Download className="h-3 w-3 mr-1" />
             Export
           </Button>
-
         </div>
       </div>
 
@@ -216,14 +188,14 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
                 <p className="text-lg font-semibold tracking-[0.08em] text-slate-600 dark:text-zinc-300">
                   No M2M logs to display
                 </p>
-                <p className="text-sm text-slate-500 dark:text-zinc-500 mt-2">M2M logs will appear here in real-time</p>
+                <p className="text-sm text-slate-500 dark:text-zinc-500 mt-2">
+                  M2M token issuance logs will appear here
+                </p>
               </div>
             ) : (
               <div className="space-y-0 divide-y divide-slate-200 dark:divide-neutral-900/70">
                 {logs.map((log) => {
-                  const formatted = formatLogEntry(log);
-                  const statusStyle = getStatusStyle(log.status);
-                  const StatusIcon = getStatusIcon(log.status);
+                  const style = effectStyle(log.pdpEffect);
                   const isExpanded = expandedRows.has(log.id);
 
                   return (
@@ -240,109 +212,85 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
                           )}
                         </div>
 
-                        <div className="flex h-7 w-7 items-center justify-center shrink-0 mt-0.5">
-                          <StatusIcon className={`h-4 w-4 ${statusStyle.icon}`} />
+                        <div className={`flex h-7 w-7 items-center justify-center shrink-0 mt-0.5 ${style.icon}`}>
+                          <EffectIcon effect={log.pdpEffect} />
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className={`text-[13px] leading-relaxed ${statusStyle.text}`}>
-                            {formatted.main}
+                          <div className={`text-[13px] leading-relaxed ${style.text}`}>
+                            {formatMainLine(log)}
                           </div>
-
                           <div className="pl-2 text-[12px] text-slate-600 dark:text-zinc-500/80 whitespace-pre-wrap">
-                            {formatted.details}
+                            {formatDetailsLine(log)}
                           </div>
-
-                          {formatted.resourceDetails && (
-                            <div className="pl-2 text-[12px] text-slate-600 dark:text-zinc-500/80 whitespace-pre-wrap">
-                              {formatted.resourceDetails}
-                            </div>
-                          )}
-
-                          {formatted.reason && (
-                            <div className="pl-2 text-[12px] text-amber-600 dark:text-amber-400/80 whitespace-pre-wrap">
-                              {formatted.reason}
-                            </div>
-                          )}
-
-                          {formatted.metadata && (
-                            <div className="pl-2 text-[12px] text-blue-600 dark:text-blue-400/80 whitespace-pre-wrap break-all">
-                              {formatted.metadata}
-                            </div>
-                          )}
+                          {/* inline effect badges */}
+                          <div className="pl-2 flex flex-wrap items-center gap-1.5 mt-1">
+                            <EffectBadge value={log.pdpEffect} label={`PDP: ${log.pdpEffect}`} />
+                            <EffectBadge value={log.gateEffect} label={`Gate: ${log.gateEffect}`} />
+                            {log.scopesGranted && (
+                              <span className="text-[10px] text-slate-500 dark:text-zinc-500 font-mono">
+                                scopes={log.scopesGranted}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Expanded content */}
+                      {/* Expanded detail panel */}
                       {isExpanded && (
                         <div className="ml-16 mt-2 p-4 bg-slate-100/50 dark:bg-neutral-900/30 rounded-lg border border-slate-200 dark:border-neutral-800">
                           <div className="space-y-3 text-[12px] font-mono">
-                            {/* Actor Details */}
+                            {/* Token Info */}
                             <div>
-                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">Actor Details:</div>
+                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                                Token Info:
+                              </div>
                               <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400">
-                                {log.actor.userId && <div>• Actor ID: {log.actor.userId}</div>}
-                                {log.actor.username && <div>• Username: {log.actor.username}</div>}
-                                {log.actor.email && <div>• Email: {log.actor.email}</div>}
-                                {log.actor.role && <div>• Role: {log.actor.role}</div>}
+                                <div>• Token Family: {log.tokenFamily}</div>
+                                <div>• Client ID: {log.clientId}</div>
+                                <div>• Resource Server: {log.resourceServerId}</div>
+                                <div>• Workspace: {log.workspaceId}</div>
                               </div>
                             </div>
 
-                            {/* Resource Details */}
+                            {/* Subject */}
                             <div>
-                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">Resource Details:</div>
+                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                                Subject:
+                              </div>
                               <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400">
-                                <div>• Resource Type: {log.resourceType}</div>
-                                <div>• Resource Name: {log.resourceName}</div>
-                                {log.resourceId && <div>• Resource ID: {log.resourceId}</div>}
+                                <div>• Type: {log.subjectType}</div>
+                                {log.subjectId && <div>• ID: {log.subjectId}</div>}
                               </div>
                             </div>
 
-                            {/* System Context */}
+                            {/* PDP Decision */}
                             <div>
-                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">System Context:</div>
-                              <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400">
-                                {log.userAgent && <div>• User Agent: {log.userAgent}</div>}
-                                {log.correlationId && <div>• Request ID: {log.correlationId}</div>}
-                                <div>• IP Address: {log.ipAddress}</div>
+                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                                PDP Decision:
                               </div>
-                            </div>
-
-                            {/* Full Changes (show all details, not just count) */}
-                            {log.changes && log.changes.length > 0 && (
-                              <div>
-                                <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">Complete Changes ({log.changes.length}):</div>
-                                <div className="pl-3 space-y-2">
-                                  {log.changes.map((change, idx) => (
-                                    <div key={idx} className="text-slate-600 dark:text-zinc-400">
-                                      <div className="font-medium text-slate-700 dark:text-zinc-300">• {change.field}:</div>
-                                      <div className="pl-4 space-y-0.5">
-                                        {change.oldValue !== undefined && change.oldValue !== null && change.oldValue !== '' && (
-                                          <div className="text-rose-600 dark:text-rose-400">
-                                            - Old: {JSON.stringify(change.oldValue, null, 2)}
-                                          </div>
-                                        )}
-                                        <div className="text-emerald-600 dark:text-emerald-400">
-                                          + New: {JSON.stringify(change.newValue, null, 2)}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
+                              <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400">
+                                <div className="flex items-center gap-2">
+                                  • PDP Effect: <EffectBadge value={log.pdpEffect} />
                                 </div>
-                              </div>
-                            )}
-
-                            {/* Full Metadata (show all, not just first 3) */}
-                            {log.metadata && Object.keys(log.metadata).length > 0 && (
-                              <div>
-                                <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">Full Metadata ({Object.keys(log.metadata).length} entries):</div>
-                                <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400">
-                                  {Object.entries(log.metadata).map(([key, value]) => (
-                                    <div key={key} className="break-all">• {key}: {JSON.stringify(value)}</div>
-                                  ))}
+                                <div className="flex items-center gap-2">
+                                  • Gate Effect: <EffectBadge value={log.gateEffect} />
                                 </div>
+                                <div>• PDP Agrees: {log.pdpAgrees ? "Yes" : "No"}</div>
+                                {log.pdpReason && <div>• Reason: {log.pdpReason}</div>}
                               </div>
-                            )}
+                            </div>
+
+                            {/* Scopes */}
+                            <div>
+                              <div className="font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
+                                Scopes:
+                              </div>
+                              <div className="pl-3 space-y-1 text-slate-600 dark:text-zinc-400 break-all">
+                                <div>• Requested: {log.scopesRequested || "—"}</div>
+                                <div>• Granted: {log.scopesGranted || "—"}</div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -360,8 +308,12 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div
-              className={`w-2 h-2 rounded-full ${isPaused ? "bg-amber-500 dark:bg-amber-300" : "bg-emerald-500 dark:bg-emerald-300"}`}
-            ></div>
+              className={`w-2 h-2 rounded-full ${
+                isPaused
+                  ? "bg-amber-500 dark:bg-amber-300"
+                  : "bg-emerald-500 dark:bg-emerald-300"
+              }`}
+            />
             <span>Status: {isPaused ? "PAUSED" : "LIVE"}</span>
           </div>
         </div>
@@ -400,7 +352,7 @@ export function M2MLogsView({ logs, onExport, onRefresh, isRefreshing, paginatio
           <span className="rounded-full border border-slate-300 dark:border-neutral-800/60 bg-white dark:bg-neutral-900/70 px-3 py-1">
             Last updated:{" "}
             {logs.length > 0
-              ? new Date(logs[0].timestamp).toLocaleTimeString()
+              ? new Date(logs[0].createdAt).toLocaleTimeString()
               : "Never"}
           </span>
         </div>
