@@ -7,15 +7,10 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  RefreshCw,
-  ScrollText,
-  Settings,
-} from "lucide-react";
+import { ChevronDown, ScrollText, Settings } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ConsolePage } from "@/components/console/ConsolePage";
 
 import type { AuditLog } from "../../types/entities";
 import { useGetAuditLogsQuery } from "../../app/api/logsApi";
@@ -131,106 +126,94 @@ export function AuditLogsPage() {
   };
 
   return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Audit Logs</h1>
-            <p className="sh-desc">
-              Track configuration changes, admin actions, and system
-              modifications across this workspace.
+    <ConsolePage
+      title="Audit Logs"
+      description="Track configuration changes, admin actions, and system modifications across this workspace."
+      actions={
+        /* Refresh + Export live inside the log viewer's own control bar. */
+        <Button onClick={() => navigate("/logs/configure")} className="text-white">
+          <Settings className="icon-sm" /> Configure
+        </Button>
+      }
+    >
+      <div className="roles-toolbar">
+        <div className="filterset">
+          <span className="filterset-label">Action</span>
+          <div className="segmented">
+            {[
+              ["all", "All"],
+              ["create", "Created"],
+              ["update", "Updated"],
+              ["delete", "Deleted"],
+            ].map(([v, label]) => (
+              <button
+                key={v}
+                data-on={(filters.action ?? "all") === v}
+                onClick={() => setFilter({ action: v })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="select">
+          <select
+            value={filters.severity ?? "all"}
+            onChange={(e) => setFilter({ severity: e.target.value })}
+            aria-label="Severity"
+            style={{ minWidth: 130 }}
+          >
+            <option value="all">All severities</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+          <span className="chev">
+            <ChevronDown className="icon-sm" />
+          </span>
+        </div>
+      </div>
+
+      {isError ? (
+        <div className="table-card">
+          <div className="empty">
+            <span
+              className="empty-ic"
+              style={{
+                background: "var(--color-danger-soft)",
+                color: "var(--color-danger-text)",
+                borderColor: "transparent",
+              }}
+            >
+              <ScrollText className="icon-lg" />
+            </span>
+            <h3
+              className="empty-title"
+              style={{ color: "var(--color-danger-text)" }}
+            >
+              Failed to load audit logs
+            </h3>
+            <p
+              className="empty-desc"
+              style={{ color: "var(--color-danger-text)" }}
+            >
+              Please try again later.
             </p>
           </div>
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            {/* Refresh + Export live inside the log viewer's own control bar. */}
-            <button
-              className="btn btn-primary"
-              onClick={() => navigate("/logs/configure")}
-            >
-              <Settings className="icon-sm" /> Configure
-            </button>
-          </div>
         </div>
-
-        <div className="roles-toolbar">
-          <div className="filterset">
-            <span className="filterset-label">Action</span>
-            <div className="segmented">
-              {[
-                ["all", "All"],
-                ["create", "Created"],
-                ["update", "Updated"],
-                ["delete", "Deleted"],
-              ].map(([v, label]) => (
-                <button
-                  key={v}
-                  data-on={(filters.action ?? "all") === v}
-                  onClick={() => setFilter({ action: v })}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="select">
-            <select
-              value={filters.severity ?? "all"}
-              onChange={(e) => setFilter({ severity: e.target.value })}
-              aria-label="Severity"
-              style={{ minWidth: 130 }}
-            >
-              <option value="all">All severities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
-            </select>
-            <span className="chev">
-              <ChevronDown className="icon-sm" />
-            </span>
-          </div>
-        </div>
-
-        {isError ? (
-          <div className="table-card">
-            <div className="empty">
-              <span
-                className="empty-ic"
-                style={{
-                  background: "var(--color-danger-soft)",
-                  color: "var(--color-danger-text)",
-                  borderColor: "transparent",
-                }}
-              >
-                <ScrollText className="icon-lg" />
-              </span>
-              <h3
-                className="empty-title"
-                style={{ color: "var(--color-danger-text)" }}
-              >
-                Failed to load audit logs
-              </h3>
-              <p
-                className="empty-desc"
-                style={{ color: "var(--color-danger-text)" }}
-              >
-                Please try again later.
-              </p>
-            </div>
-          </div>
-        ) : (
-          // Legacy console-style log viewer: expandable rows, severity icons,
-          // live/paused, its own refresh/export/pagination controls.
-          <AuditLogsView
-            logs={rows}
-            onExport={handleExport}
-            onRefresh={() => refetch()}
-            isRefreshing={isLoading || isFetching}
-            pagination={data?.pagination}
-            onPageChange={(p) => setPage(p)}
-          />
-        )}
-      </div>
-    </div>
+      ) : (
+        // Legacy console-style log viewer: expandable rows, severity icons,
+        // live/paused, its own refresh/export/pagination controls.
+        <AuditLogsView
+          logs={rows}
+          onExport={handleExport}
+          onRefresh={() => refetch()}
+          isRefreshing={isLoading || isFetching}
+          pagination={data?.pagination}
+          onPageChange={(p) => setPage(p)}
+        />
+      )}
+    </ConsolePage>
   );
 }

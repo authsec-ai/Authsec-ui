@@ -1,11 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-  Search,
-  X,
-  ChevronDown,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -19,6 +13,16 @@ import {
 } from "lucide-react";
 
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { TableCard } from "@/theme/components/cards";
 import {
   useListEndUsersQuery,
   useReactivateEndUserMutation,
@@ -42,8 +46,6 @@ import { resolveWorkspaceId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 10;
 
 const AV_GRADIENTS = [
   "linear-gradient(150deg,#22c55e,#16a34a)",
@@ -472,7 +474,6 @@ export default function EndUsersPage() {
   const workspaceId = resolveWorkspaceId();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
-  const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<TenantEndUserState | null>(null);
 
   const { data, isLoading } = useListEndUsersQuery(
@@ -489,11 +490,17 @@ export default function EndUsersPage() {
 
   const rows: TenantEndUserState[] = useMemo(() => data?.items ?? [], [data]);
   const total = rows.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const filtersActive = search.trim() !== "" || statusFilter !== "all";
+  const statusFilters = useMemo(() => {
+    const all = data?.items ?? [];
+    const active = all.filter((u) => u.status === "active").length;
+    const suspended = all.filter((u) => u.status === "suspended").length;
+    return [
+      { key: "all", label: "All", count: all.length },
+      { key: "active", label: "Active", count: active },
+      { key: "suspended", label: "Suspended", count: suspended },
+    ];
+  }, [data]);
 
   const handleSuspend = useCallback(
     async (userId: string) => {
@@ -523,227 +530,163 @@ export default function EndUsersPage() {
     [workspaceId, reactivate],
   );
 
-  const clearFilters = () => {
-    setSearch("");
-    setStatusFilter("all");
-    setPage(1);
-  };
+  const columns = useMemo<AdaptiveColumn<TenantEndUserState>[]>(
+    () => [
+      {
+        id: "user",
+        header: "User",
+        alwaysVisible: true,
+        approxWidth: 280,
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <span className="avatar shrink-0" style={{ background: avatarBg(u) }}>
+                {userInitials(u)}
+              </span>
+              <EntityCell
+                label={userLabel(u)}
+                detail={`@${u.user_username ?? u.user_id}`}
+                monoDetail
+              />
+            </div>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 1,
+        approxWidth: 120,
+        cell: ({ row }) => <StatusPill status={row.original.status} />,
+      },
+      {
+        id: "apps",
+        header: "Apps",
+        priority: 3,
+        approxWidth: 80,
+        cell: ({ row }) => {
+          const count = row.original.applications_count ?? row.original.applications?.length ?? 0;
+          return (
+            <span className={cn("num-cell col-apps text-xs tabular-nums text-muted-foreground", count === 0 && "zero")}>
+              {count}
+            </span>
+          );
+        },
+      },
+      {
+        id: "lastActive",
+        header: "Last active",
+        priority: 2,
+        approxWidth: 140,
+        cell: ({ row }) => (
+          <span
+            className="time-cell text-xs text-muted-foreground"
+            title={formatDateTime(row.original.last_seen_at)}
+          >
+            {formatRelativeTime(row.original.last_seen_at)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions
+                items={[
+                  {
+                    label: "View details",
+                    onSelect: () => setSelectedUser(u),
+                  },
+                  u.status === "active"
+                    ? {
+                        label: "Suspend",
+                        icon: <ShieldOff className="size-4" />,
+                        onSelect: () => handleSuspend(u.user_id),
+                        disabled: suspendState.isLoading,
+                      }
+                    : {
+                        label: "Reactivate",
+                        icon: <ShieldCheck className="size-4" />,
+                        onSelect: () => handleReactivate(u.user_id),
+                        disabled: reactivateState.isLoading,
+                      },
+                ]}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [handleSuspend, handleReactivate, suspendState.isLoading, reactivateState.isLoading],
+  );
 
   if (!workspaceId) {
     return <div className="p-8 text-sm text-muted-foreground">No workspace selected.</div>;
   }
 
-  const showEmpty = !isLoading && pageRows.length === 0;
-
   return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">End Users</h1>
-            <p className="sh-desc">
-              Consumers of this workspace's published Applications. They connect via OAuth — not
-              workspace members.
-            </p>
-          </div>
-        </div>
+    <ConsolePage
+      title="End Users"
+      description="Consumers of this workspace's published Applications. They connect via OAuth — not workspace members."
+    >
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={(v) => {
+          setSearch(v);
+        }}
+        searchPlaceholder="Search by email, name, or username"
+        filters={statusFilters}
+        activeFilter={statusFilter}
+        onFilterChange={(v) => setStatusFilter(v as EndUserStatus | "all")}
+      />
 
-        <div className="filter-bar">
-          <div className={cn("search", search && "has-value")}>
-            <span className="search-ic">
-              <Search className="icon" />
-            </span>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by email, name, or username"
-              aria-label="Search end users"
-            />
-            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X className="icon-sm" />
-            </button>
-          </div>
-          <div className="select">
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value as EndUserStatus | "all");
-                setPage(1);
-              }}
-              aria-label="Filter by status"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-            </select>
-            <span className="chev">
-              <ChevronDown className="icon-sm" />
-            </span>
-          </div>
-        </div>
-
-        {filtersActive && (
-          <div className="chips">
-            {statusFilter !== "all" && (
-              <span className="chip">
-                Status: {statusMeta(statusFilter).label}
-                <button className="chip-x" aria-label="Remove filter" onClick={() => setStatusFilter("all")}>
-                  <X className="icon-sm" />
-                </button>
-              </span>
-            )}
-            {search.trim() && (
-              <span className="chip">
-                "{search.trim()}"
-                <button className="chip-x" aria-label="Remove filter" onClick={() => setSearch("")}>
-                  <X className="icon-sm" />
-                </button>
-              </span>
-            )}
-            <button className="chip-clear" onClick={clearFilters}>
-              Clear all
-            </button>
-          </div>
-        )}
-
-        <div className="table-card">
+      <TableCard>
+        <CardContent variant="flush">
           {isLoading ? (
-            <div>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div className="skeleton-row" key={i}>
-                  <span className="sk sk-avatar" />
-                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-                    <span className="sk sk-line" style={{ width: "42%" }} />
-                    <span className="sk sk-line" style={{ width: "22%", height: 9 }} />
-                  </span>
-                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999 }} />
-                  <span className="sk sk-line" style={{ width: 28, margin: "0 56px 0 40px" }} />
-                  <span className="sk sk-line" style={{ width: 52 }} />
-                </div>
-              ))}
-            </div>
-          ) : showEmpty ? (
-            <div className="empty">
-              <span className="empty-ic">
-                <Users className="icon-lg" />
-              </span>
-              <h3 className="empty-title">{filtersActive ? "No matching users" : "No end users yet"}</h3>
-              <p className="empty-desc">
-                {filtersActive
+            <div className="py-16 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="py-16 text-center">
+              <Users className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">
+                {search || statusFilter !== "all" ? "No matching users" : "No end users yet"}
+              </p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                {search || statusFilter !== "all"
                   ? "Try a different search term or clear the active filters."
                   : "When someone authorizes one of this workspace's Applications via OAuth, they'll appear here."}
               </p>
-              <button className="btn btn-secondary" onClick={filtersActive ? clearFilters : () => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
-                {filtersActive ? "Clear filters" : "View docs"}
-              </button>
+              {!search && statusFilter === "all" && (
+                <div className="mt-4 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("https://docs.authsec.dev/getting-started", "_blank")}
+                  >
+                    View docs
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
-            <>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Status</th>
-                    <th className="num th-apps">Apps</th>
-                    <th className="th-lastactive">Last active</th>
-                    <th className="th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((u) => {
-                    const apps = u.applications_count ?? u.applications?.length ?? 0;
-                    return (
-                      <tr
-                        key={u.user_id}
-                        tabIndex={0}
-                        data-selected={selectedUser?.user_id === u.user_id}
-                        onClick={() => setSelectedUser(u)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") setSelectedUser(u);
-                        }}
-                      >
-                        <td>
-                          <div className="user-cell">
-                            <span className="avatar" style={{ background: avatarBg(u) }}>
-                              {userInitials(u)}
-                            </span>
-                            <span className="user-meta">
-                              <span className="user-email">{userLabel(u)}</span>
-                              <span className="user-name">@{u.user_username ?? u.user_id}</span>
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <StatusPill status={u.status} />
-                        </td>
-                        <td className={cn("num-cell col-apps", apps === 0 && "zero")}>{apps}</td>
-                        <td className="col-lastactive">
-                          <span className="time-cell" title={formatDateTime(u.last_seen_at)}>
-                            {formatRelativeTime(u.last_seen_at)}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              className="icon-btn"
-                              aria-label="Row actions"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedUser(u);
-                              }}
-                            >
-                              <MoreHorizontal className="icon" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="table-foot">
-                <span className="foot-count">
-                  Showing <b>{(safePage - 1) * PAGE_SIZE + 1}</b>–<b>{(safePage - 1) * PAGE_SIZE + pageRows.length}</b> of{" "}
-                  <b>{total}</b> entries
-                  {filtersActive ? " · filtered" : ""}
-                </span>
-                <div className="pager">
-                  <span className="pager-label">Page</span>
-                  <div className="pager-btns">
-                    <button
-                      className="pager-btn"
-                      aria-label="Previous page"
-                      disabled={safePage <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      <ChevronLeft className="icon-sm" />
-                    </button>
-                    <span className="pager-label mono">
-                      {safePage} / {totalPages}
-                    </span>
-                    <button
-                      className="pager-btn"
-                      aria-label="Next page"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    >
-                      <ChevronRight className="icon-sm" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
+            <AdaptiveTable
+              tableId="end-users-inventory"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.user_id}
+              onRowClick={(row) => setSelectedUser(row.original)}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-
-        <p className="workspace-foot">
-          {total} end user{total === 1 ? "" : "s"} in this workspace.
-        </p>
-      </div>
+        </CardContent>
+      </TableCard>
 
       <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
         <SheetContent
@@ -752,7 +695,7 @@ export default function EndUsersPage() {
           className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110"
         >
           <SheetTitle className="sr-only">
-            {selectedUser ? `${selectedUser.email} — user details` : "User details"}
+            {selectedUser ? `${userLabel(selectedUser)} — user details` : "User details"}
           </SheetTitle>
           <SheetDescription className="sr-only">
             Inspect this end-user's identity, sessions, and access.
@@ -768,6 +711,10 @@ export default function EndUsersPage() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+
+      <p className="workspace-foot">
+        {total} end user{total === 1 ? "" : "s"} in this workspace.
+      </p>
+    </ConsolePage>
   );
 }

@@ -30,6 +30,7 @@ import { useListScimConnectionsQuery } from "@/app/api/scimConnectionsApi";
 import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
 import { useListApplicationRolesQuery } from "@/app/api/accessApi";
 import { cn } from "@/lib/utils";
+import { ConsolePage } from "@/components/console/ConsolePage";
 
 /* ─────────────────────────────── tile primitives ─────────────────────────── */
 
@@ -216,17 +217,10 @@ export function DashboardPage() {
   const completedTiles = tiles.filter((t) => t.done).length;
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] space-y-6 px-8 py-7">
-      {/* Header */}
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-950">
-          Workspace overview
-        </h1>
-        <p className="text-sm text-slate-600">
-          Real counts across the workspace. Click any tile to jump to the section.
-        </p>
-      </header>
-
+    <ConsolePage
+      title="Dashboard"
+      description="Real counts across the workspace. Click any tile to jump to the section."
+    >
       {/* Row 1 — hero metrics */}
       <section
         aria-label="Hero metrics"
@@ -299,6 +293,6 @@ export function DashboardPage() {
           Docs
         </a>
       </footer>
-    </div>
+    </ConsolePage>
   );
 }

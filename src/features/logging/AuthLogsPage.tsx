@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import type { AuthLog } from "../../types/entities";
-import { Activity, Settings, X, AlertCircle } from "lucide-react";
+import { Settings, X, AlertCircle } from "lucide-react";
+import { ConsolePage } from "@/components/console/ConsolePage";
 import {
   AuthLogsView,
   AuthLogsViewSkeleton,
@@ -130,37 +131,21 @@ export function AuthLogsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-stone-950">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div className="container mx-auto max-w-[1600px] px-6 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <Activity className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  Authentication Logs
-                </h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Monitor authentication attempts across this workspace
-                </p>
-              </div>
-            </div>
-            <Button
-              onClick={() => navigate("/logs/configure")}
-              className="gap-2"
-              data-tour-id="logs-configure"
-            >
-              <Settings className="h-4 w-4" />
-              Configure Logs
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto max-w-[1600px] px-6 py-6 space-y-6">
+    <ConsolePage
+      title="Auth Logs"
+      description="Monitor authentication attempts across this workspace"
+      actions={
+        <Button
+          onClick={() => navigate("/logs/configure")}
+          className="gap-2 text-white"
+          data-tour-id="logs-configure"
+        >
+          <Settings className="h-4 w-4" />
+          Configure Logs
+        </Button>
+      }
+    >
+      <div className="space-y-6">
         {/* User Selection Badge */}
         {userSelection && userSelection.values.length > 0 && (
           <div className="flex items-center gap-2 rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3">
@@ -238,6 +223,6 @@ export function AuthLogsPage() {
         onClose={() => setIsGroupByModalOpen(false)}
         onApply={handleGroupByApply}
       />
-    </div>
+    </ConsolePage>
   );
 }

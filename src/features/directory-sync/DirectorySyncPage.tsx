@@ -9,24 +9,27 @@ import { useMemo, useState } from "react";
 import {
   Edit2,
   FolderSync,
-  MoreHorizontal,
   Plus,
   RefreshCw,
   Trash2,
   Zap,
 } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Sheet,
   SheetContent,
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { TableCard } from "@/theme/components/cards";
 import { toast } from "@/lib/toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import {
@@ -43,12 +46,16 @@ import { EntraSyncInlineForm } from "@/features/users/components/EntraSyncInline
 
 type SheetKind = "ad" | "entra" | null;
 
+type SyncRow = SyncConfig & { typeLabel: string };
+
 export default function DirectorySyncPage() {
-  const { data: configs = [], isLoading, isError, refetch } =
+  const { data: configs = [], isLoading, refetch } =
     useListSyncConfigsQuery({});
   const [deleteConfig] = useDeleteSyncConfigMutation();
   const [syncAD] = useSyncActiveDirectoryMutation();
   const [syncEntra] = useSyncEntraIDMutation();
+
+  const [query, setQuery] = useState("");
 
   // Sheet state: which form is open + optional config being edited
   const [sheetKind, setSheetKind] = useState<SheetKind>(null);
@@ -74,7 +81,7 @@ export default function DirectorySyncPage() {
     refetch();
   };
 
-  const rows = useMemo(() => {
+  const allRows = useMemo<SyncRow[]>(() => {
     if (!Array.isArray(configs)) return [];
     return configs.map((c: SyncConfig) => ({
       ...c,
@@ -83,12 +90,24 @@ export default function DirectorySyncPage() {
     }));
   }, [configs]);
 
+  const rows = useMemo<SyncRow[]>(() => {
+    if (!query.trim()) return allRows;
+    const q = query.toLowerCase();
+    return allRows.filter(
+      (r) =>
+        r.config_name?.toLowerCase().includes(q) ||
+        r.typeLabel.toLowerCase().includes(q) ||
+        r.ad_config?.server?.toLowerCase().includes(q) ||
+        r.entra_config?.workspace_id?.toLowerCase().includes(q),
+    );
+  }, [allRows, query]);
+
   const handleRefresh = () => {
     refetch();
     toast.info("Refreshed sync configurations");
   };
 
-  const handleSyncNow = async (cfg: SyncConfig & { typeLabel: string }) => {
+  const handleSyncNow = async (cfg: SyncRow) => {
     try {
       if (cfg.typeLabel === "Entra ID") {
         await syncEntra({ provider: "entra", config_id: cfg.id }).unwrap();
@@ -118,266 +137,214 @@ export default function DirectorySyncPage() {
     }
   };
 
-  return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Directory Sync</h1>
-            <p className="sh-desc">
-              Active Directory and Entra ID synchronization. Synced users are
-              automatically provisioned with workspace memberships.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            <button className="btn btn-secondary" onClick={handleRefresh}>
-              <RefreshCw className="icon-sm" /> Refresh
-            </button>
-            <button className="btn btn-secondary" onClick={() => openAD()}>
-              <Plus className="icon-sm" /> Active Directory
-            </button>
-            <button className="btn btn-primary" onClick={() => openEntra()}>
-              <Plus className="icon-sm" /> Entra ID
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="table-card">
-          {isError ? (
-            <div className="empty">
-              <span
-                className="empty-ic"
-                style={{
-                  background: "var(--color-danger-soft)",
-                  color: "var(--color-danger-text)",
-                  borderColor: "transparent",
-                }}
-              >
-                <FolderSync className="icon-lg" />
-              </span>
-              <h3
-                className="empty-title"
-                style={{ color: "var(--color-danger-text)" }}
-              >
-                Unable to load configurations
-              </h3>
-              <p
-                className="empty-desc"
-                style={{ color: "var(--color-danger-text)" }}
-              >
-                We hit an error fetching directory sync configurations.
-              </p>
+  const columns = useMemo<AdaptiveColumn<SyncRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        alwaysVisible: true,
+        approxWidth: 280,
+        cell: ({ row }) => (
+          <EntityCell
+            label={row.original.config_name || "Sync Config"}
+            detail={
+              row.original.last_sync_at
+                ? `Last sync · ${new Date(row.original.last_sync_at).toLocaleDateString()}`
+                : "Never synced"
+            }
+          />
+        ),
+      },
+      {
+        id: "type",
+        header: "Type",
+        priority: 1,
+        approxWidth: 140,
+        cell: ({ row }) => (
+          <span
+            className={`badge ${
+              row.original.typeLabel === "Entra ID"
+                ? "badge--accent"
+                : "badge--info"
+            }`}
+          >
+            <span className="bdot" />
+            {row.original.typeLabel}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 2,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const cfg = row.original;
+          return (
+            <span
+              className={`badge ${
+                cfg.is_active
+                  ? "badge--success"
+                  : cfg.last_sync_status === "error"
+                  ? "badge--danger"
+                  : "badge--muted"
+              }`}
+            >
+              <span className="bdot" />
+              {cfg.is_active
+                ? "Active"
+                : cfg.last_sync_status === "error"
+                ? "Error"
+                : "Inactive"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "server",
+        header: "Server / Tenant",
+        priority: 3,
+        approxWidth: 280,
+        cell: ({ row }) => {
+          const cfg = row.original;
+          const value =
+            cfg.ad_config?.server ||
+            cfg.entra_config?.workspace_id ||
+            "—";
+          return (
+            <span
+              className="ctx-uri"
+              title={value}
+              style={{ maxWidth: 280 }}
+            >
+              {value}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const cfg = row.original;
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions
+                items={[
+                  {
+                    label: "Sync now",
+                    icon: <Zap className="size-4" />,
+                    onSelect: () => handleSyncNow(cfg),
+                  },
+                  {
+                    label: "Edit",
+                    icon: <Edit2 className="size-4" />,
+                    onSelect: () =>
+                      cfg.typeLabel === "Entra ID"
+                        ? openEntra(cfg)
+                        : openAD(cfg),
+                  },
+                  {
+                    label: "Delete",
+                    icon: <Trash2 className="size-4" />,
+                    destructive: true,
+                    onSelect: () => handleDelete(cfg),
+                  },
+                ]}
+              />
             </div>
-          ) : isLoading ? (
-            <div>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div className="skeleton-row" key={i}>
-                  <span
-                    className="sk"
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      flex: "none",
-                    }}
-                  />
-                  <span
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 7,
-                    }}
-                  >
-                    <span className="sk sk-line" style={{ width: "30%" }} />
-                    <span
-                      className="sk sk-line"
-                      style={{ width: "20%", height: 9 }}
-                    />
-                  </span>
-                  <span
-                    className="sk sk-line"
-                    style={{
-                      width: 64,
-                      height: 22,
-                      borderRadius: 999,
-                      margin: "0 24px",
-                    }}
-                  />
-                  <span
-                    className="sk sk-line"
-                    style={{ width: 72, height: 22, borderRadius: 999 }}
-                  />
-                </div>
-              ))}
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  return (
+    <ConsolePage
+      title="Directory Sync"
+      description="Active Directory and Entra ID synchronization. Synced users are automatically provisioned with workspace memberships."
+      actions={
+        <>
+          <Button variant="outline" onClick={handleRefresh}>
+            <RefreshCw className="mr-1.5 size-3.5" /> Refresh
+          </Button>
+          <Button variant="outline" onClick={() => openAD()}>
+            <Plus className="mr-1.5 size-3.5" /> Active Directory
+          </Button>
+          <Button className="text-white" onClick={() => openEntra()}>
+            <Plus className="mr-1.5 size-3.5" /> Entra ID
+          </Button>
+        </>
+      }
+    >
+      <ConsoleFilterBar
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search sync configurations…"
+      />
+
+      <TableCard>
+        <CardContent variant="flush">
+          {isLoading ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Loading…
             </div>
           ) : rows.length === 0 ? (
-            <div className="empty">
-              <span className="empty-ic">
-                <FolderSync className="icon-lg" />
-              </span>
-              <h3 className="empty-title">No directory sync configured</h3>
-              <p className="empty-desc">
-                Connect Active Directory or Entra ID to automatically provision
-                users.
+            <div className="py-16 text-center">
+              <FolderSync className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">
+                {query
+                  ? "No configurations match your search"
+                  : "No directory sync configured"}
               </p>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                <button className="btn btn-secondary" onClick={() => openAD()}>
-                  <Plus className="icon-sm" /> Active Directory
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => openEntra()}
-                >
-                  <Plus className="icon-sm" /> Entra ID
-                </button>
-              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {query
+                  ? "Try a different search term."
+                  : "Connect Active Directory or Entra ID to automatically provision users."}
+              </p>
+              {!query && (
+                <div className="mt-4 flex justify-center gap-2">
+                  <Button variant="outline" onClick={() => openAD()}>
+                    <Plus className="mr-1.5 size-3.5" /> Active Directory
+                  </Button>
+                  <Button className="text-white" onClick={() => openEntra()}>
+                    <Plus className="mr-1.5 size-3.5" /> Entra ID
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th className="th-context">Server / Tenant</th>
-                  <th className="th-actions" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((cfg) => (
-                  <tr key={cfg.id} tabIndex={0}>
-                    <td>
-                      <div className="app-cell">
-                        <span className="app-glyph">
-                          <FolderSync className="icon-sm" />
-                        </span>
-                        <span className="ac-meta">
-                          <span className="ac-name">
-                            {cfg.config_name || "Sync Config"}
-                          </span>
-                          <span className="ac-uri">
-                            {cfg.last_sync_at
-                              ? `Last sync · ${new Date(
-                                  cfg.last_sync_at
-                                ).toLocaleDateString()}`
-                              : "Never synced"}
-                          </span>
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          cfg.typeLabel === "Entra ID"
-                            ? "badge--accent"
-                            : "badge--info"
-                        }`}
-                      >
-                        <span className="bdot" />
-                        {cfg.typeLabel}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          cfg.is_active
-                            ? "badge--success"
-                            : cfg.last_sync_status === "error"
-                            ? "badge--danger"
-                            : "badge--muted"
-                        }`}
-                      >
-                        <span className="bdot" />
-                        {cfg.is_active
-                          ? "Active"
-                          : cfg.last_sync_status === "error"
-                          ? "Error"
-                          : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="col-context">
-                      <span
-                        className="ctx-uri"
-                        title={
-                          cfg.ad_config?.server ||
-                          cfg.entra_config?.workspace_id ||
-                          ""
-                        }
-                        style={{ maxWidth: 280 }}
-                      >
-                        {cfg.ad_config?.server ||
-                          cfg.entra_config?.workspace_id ||
-                          "—"}
-                      </span>
-                    </td>
-                    <td>
-                      <div
-                        className="row-actions"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              className="icon-btn"
-                              aria-label="Config actions"
-                            >
-                              <MoreHorizontal className="icon" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            data-cr
-                            className="min-w-52 p-1"
-                          >
-                            <DropdownMenuItem
-                              className="menu-item"
-                              onSelect={() => handleSyncNow(cfg)}
-                            >
-                              <span className="mi-ic">
-                                <Zap className="icon-sm" />
-                              </span>
-                              Sync now
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="menu-item"
-                              onSelect={() =>
-                                cfg.typeLabel === "Entra ID"
-                                  ? openEntra(cfg)
-                                  : openAD(cfg)
-                              }
-                            >
-                              <span className="mi-ic">
-                                <Edit2 className="icon-sm" />
-                              </span>
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="menu-item menu-item--danger"
-                              onSelect={() => handleDelete(cfg)}
-                            >
-                              <span className="mi-ic">
-                                <Trash2 className="icon-sm" />
-                              </span>
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <AdaptiveTable
+              tableId="directory-sync"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.id ?? ""}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       {/* AD Sheet */}
-      <Sheet open={sheetKind === "ad"} onOpenChange={(open) => { if (!open) closeSheet(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-hidden">
-          <SheetTitle className="sr-only">Configure Active Directory Sync</SheetTitle>
+      <Sheet
+        open={sheetKind === "ad"}
+        onOpenChange={(open) => {
+          if (!open) closeSheet();
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl p-0 overflow-hidden"
+        >
+          <SheetTitle className="sr-only">
+            Configure Active Directory Sync
+          </SheetTitle>
           <SheetDescription className="sr-only">
             Set up or edit an Active Directory sync configuration.
           </SheetDescription>
@@ -390,8 +357,16 @@ export default function DirectorySyncPage() {
       </Sheet>
 
       {/* Entra ID Sheet */}
-      <Sheet open={sheetKind === "entra"} onOpenChange={(open) => { if (!open) closeSheet(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-hidden">
+      <Sheet
+        open={sheetKind === "entra"}
+        onOpenChange={(open) => {
+          if (!open) closeSheet();
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-2xl p-0 overflow-hidden"
+        >
           <SheetTitle className="sr-only">Configure Entra ID Sync</SheetTitle>
           <SheetDescription className="sr-only">
             Set up or edit a Microsoft Entra ID sync configuration.
@@ -403,6 +378,6 @@ export default function DirectorySyncPage() {
           />
         </SheetContent>
       </Sheet>
-    </div>
+    </ConsolePage>
   );
 }

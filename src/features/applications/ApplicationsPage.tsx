@@ -29,6 +29,8 @@ import {
   useDeleteApplicationMutation,
   useListApplicationsQuery,
 } from "@/app/api/applicationsApi";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +41,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import {
+  ConsoleFilterBar,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { TableCard } from "@/theme/components/cards";
 
 import { computeReadiness, isLaunched } from "./lib/computeReadiness";
 import {
@@ -125,10 +134,22 @@ export default function ApplicationsPage() {
   const { data: applications, isLoading } = useListApplicationsQuery();
   const [deleteApplication, { isLoading: deleting }] = useDeleteApplicationMutation();
 
+  const [query, setQuery] = useState("");
+
   const rows: AppRow[] = useMemo(
     () => (applications ?? []).map((application) => ({ application, readiness: computeReadiness(application) })),
     [applications],
   );
+
+  const filteredRows = useMemo(() => {
+    if (!query.trim()) return rows;
+    const q = query.toLowerCase();
+    return rows.filter(
+      (row) =>
+        row.application.name.toLowerCase().includes(q) ||
+        (row.application.resource_uri ?? "").toLowerCase().includes(q),
+    );
+  }, [rows, query]);
 
   const counts: BucketCounts = useMemo(() => {
     const c = { total: rows.length, active: 0, inSetup: 0, blocked: 0 };
@@ -194,69 +215,178 @@ export default function ApplicationsPage() {
     ["blocked", "is-blocked", "blocked"],
   ];
 
-  return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Applications</h1>
-            <p className="sh-desc">
-              Triage protected MCP servers, APIs, and services by launch readiness and runtime risk.
-            </p>
-          </div>
-          <button className="btn btn-primary" onClick={() => navigate("/applications/new")}>
-            <Plus className="icon-sm" /> Create application
-          </button>
-        </div>
-
-        {isLoading ? null : showBanner ? (
-          <TriageBanner
-            pendingRows={pendingRows}
-            blockedCount={counts.blocked}
-            onDismiss={handleDismissBanner}
-          />
-        ) : counts.total > 0 ? (
-          <div className="banner banner--success">
-            <span className="bn-icon">
-              <CheckCircle2 className="icon" />
+  const columns = useMemo<AdaptiveColumn<AppRow>[]>(
+    () => [
+      {
+        id: "application",
+        header: "Application",
+        alwaysVisible: true,
+        approxWidth: 300,
+        cell: ({ row }) => {
+          const a = row.original.application;
+          const tone = toneFromState(row.original.readiness.launch.state);
+          const glyphTone = bucketRow(row.original) === "blocked" ? "danger" : tone;
+          return (
+            <div className="app-cell">
+              <span className={`app-glyph tone-${glyphTone}`}>
+                {glyphTone === "danger" ? <ShieldAlert className="icon" /> : <Server className="icon" />}
+              </span>
+              <EntityCell label={a.name} detail={a.resource_uri} />
+            </div>
+          );
+        },
+      },
+      {
+        id: "readiness",
+        header: "Readiness",
+        priority: 1,
+        approxWidth: 160,
+        cell: ({ row }) => {
+          const tone = toneFromState(row.original.readiness.launch.state);
+          return (
+            <span className={`badge badge--${tone}`}>
+              <span className="bdot" />
+              {readinessCopy(row.original)}
             </span>
-            <div className="bn-body">
-              <p className="bn-title">All applications healthy</p>
-              <p className="bn-sub">Runtime policy is active for every launched application.</p>
+          );
+        },
+      },
+      {
+        id: "risk",
+        header: "Risk",
+        priority: 2,
+        approxWidth: 130,
+        cell: ({ row }) => {
+          const risk = riskOf(row.original);
+          return (
+            <span className={`badge badge--${risk.tone}`}>
+              <span className="bdot" />
+              {risk.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "users",
+        header: "Users",
+        priority: 3,
+        approxWidth: 80,
+        cell: ({ row }) => {
+          const users = row.original.application.end_users_count ?? 0;
+          return (
+            <span className={`num-cell${users === 0 ? " zero" : ""}`}>{users}</span>
+          );
+        },
+      },
+      {
+        id: "lastSignal",
+        header: "Last signal",
+        priority: 4,
+        approxWidth: 180,
+        cell: ({ row }) => (
+          <span className="signal-cell">{lastSignal(row.original.application)}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const a = row.original.application;
+          return (
+            <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="icon-btn" aria-label="Row actions">
+                    <MoreHorizontal className="icon" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                  {ROW_ACTIONS.map(({ label, tab, icon: Icon }) => (
+                    <DropdownMenuItem
+                      key={tab}
+                      className="menu-item"
+                      onSelect={() => navigate(`/applications/${a.id}/${tab}`)}
+                    >
+                      <span className="mi-ic">
+                        <Icon className="icon-sm" />
+                      </span>
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
+                  <div className="menu-sep" />
+                  <DropdownMenuItem
+                    className="menu-item danger"
+                    onSelect={() => setPendingDelete(a)}
+                  >
+                    <span className="mi-ic">
+                      <Trash2 className="icon-sm" />
+                    </span>
+                    Delete application
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          );
+        },
+      },
+    ],
+    [navigate],
+  );
+
+  return (
+    <ConsolePage
+      title="Applications"
+      description="Triage protected MCP servers, APIs, and services by launch readiness and runtime risk."
+      actions={
+        <Button className="text-white" onClick={() => navigate("/applications/new")}>
+          <Plus className="icon-sm" /> Create application
+        </Button>
+      }
+    >
+      {isLoading ? null : showBanner ? (
+        <TriageBanner
+          pendingRows={pendingRows}
+          blockedCount={counts.blocked}
+          onDismiss={handleDismissBanner}
+        />
+      ) : counts.total > 0 ? (
+        <div className="banner banner--success">
+          <span className="bn-icon">
+            <CheckCircle2 className="icon" />
+          </span>
+          <div className="bn-body">
+            <p className="bn-title">All applications healthy</p>
+            <p className="bn-sub">Runtime policy is active for every launched application.</p>
           </div>
-        ) : null}
-
-        <div className="metric-strip">
-          {metricCells.map(([key, cls, label]) => {
-            const val = isLoading ? 0 : counts[key];
-            return (
-              <div className={cls === "is-total" ? "metric" : `metric${val === 0 ? " is-zero" : ""}`} key={cls}>
-                <span className={`m-dot ${cls}`} />
-                <span className="m-val">{isLoading ? "—" : val}</span>
-                <span className="m-label">{label}</span>
-              </div>
-            );
-          })}
         </div>
+      ) : null}
 
-        <div className="table-card">
-          {isLoading ? (
-            <div>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div className="skeleton-row" key={i}>
-                  <span className="sk" style={{ width: 36, height: 36, borderRadius: 8, flex: "none" }} />
-                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-                    <span className="sk sk-line" style={{ width: "38%" }} />
-                    <span className="sk sk-line" style={{ width: "28%", height: 9 }} />
-                  </span>
-                  <span className="sk sk-line" style={{ width: 96, height: 22, borderRadius: 999 }} />
-                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999, margin: "0 40px" }} />
-                  <span className="sk sk-line" style={{ width: 90 }} />
-                </div>
-              ))}
+      <div className="metric-strip">
+        {metricCells.map(([key, cls, label]) => {
+          const val = isLoading ? 0 : counts[key];
+          return (
+            <div className={cls === "is-total" ? "metric" : `metric${val === 0 ? " is-zero" : ""}`} key={cls}>
+              <span className={`m-dot ${cls}`} />
+              <span className="m-val">{isLoading ? "—" : val}</span>
+              <span className="m-label">{label}</span>
             </div>
-          ) : rows.length === 0 ? (
+          );
+        })}
+      </div>
+
+      <ConsoleFilterBar
+        search={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search applications…"
+      />
+
+      <TableCard>
+        <CardContent variant="flush">
+          {isLoading ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : filteredRows.length === 0 ? (
             <div className="empty">
               <span className="empty-ic">
                 <Server className="icon-lg" />
@@ -266,110 +396,24 @@ export default function ApplicationsPage() {
                 Register a protected MCP server or API and AuthSec will guide protection, tool review,
                 access, and launch.
               </p>
-              <button className="btn btn-primary" onClick={() => navigate("/applications/new")}>
+              <Button className="text-white" onClick={() => navigate("/applications/new")}>
                 <Plus className="icon-sm" /> Create the first application
-              </button>
+              </Button>
             </div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Application</th>
-                  <th>Readiness</th>
-                  <th className="th-risk">Risk</th>
-                  <th className="num">Users</th>
-                  <th className="th-signal">Last signal</th>
-                  <th className="th-actions" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const a = row.application;
-                  const tone = toneFromState(row.readiness.launch.state);
-                  const risk = riskOf(row);
-                  const users = a.end_users_count ?? 0;
-                  const glyphTone = bucketRow(row) === "blocked" ? "danger" : tone;
-                  return (
-                    <tr
-                      key={a.id}
-                      tabIndex={0}
-                      onClick={() => navigate(`/applications/${a.id}/overview`)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") navigate(`/applications/${a.id}/overview`);
-                      }}
-                    >
-                      <td>
-                        <div className="app-cell">
-                          <span className={`app-glyph tone-${glyphTone}`}>
-                            {glyphTone === "danger" ? <ShieldAlert className="icon" /> : <Server className="icon" />}
-                          </span>
-                          <span className="ac-meta">
-                            <span className="ac-name">{a.name}</span>
-                            <span className="ac-uri" title={a.resource_uri}>
-                              {a.resource_uri}
-                            </span>
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`badge badge--${tone}`}>
-                          <span className="bdot" />
-                          {readinessCopy(row)}
-                        </span>
-                      </td>
-                      <td className="col-risk">
-                        <span className={`badge badge--${risk.tone}`}>
-                          <span className="bdot" />
-                          {risk.label}
-                        </span>
-                      </td>
-                      <td className={`num-cell${users === 0 ? " zero" : ""}`}>{users}</td>
-                      <td className="col-signal">
-                        <span className="signal-cell">{lastSignal(a)}</span>
-                      </td>
-                      <td>
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="icon-btn" aria-label="Row actions">
-                                <MoreHorizontal className="icon" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                              {ROW_ACTIONS.map(({ label, tab, icon: Icon }) => (
-                                <DropdownMenuItem
-                                  key={tab}
-                                  className="menu-item"
-                                  onSelect={() => navigate(`/applications/${a.id}/${tab}`)}
-                                >
-                                  <span className="mi-ic">
-                                    <Icon className="icon-sm" />
-                                  </span>
-                                  {label}
-                                </DropdownMenuItem>
-                              ))}
-                              <div className="menu-sep" />
-                              <DropdownMenuItem
-                                className="menu-item danger"
-                                onSelect={() => setPendingDelete(a)}
-                              >
-                                <span className="mi-ic">
-                                  <Trash2 className="icon-sm" />
-                                </span>
-                                Delete application
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <AdaptiveTable
+              tableId="applications"
+              data={filteredRows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.application.id}
+              onRowClick={(row) => navigate(`/applications/${row.original.application.id}/overview`)}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && !deleting && setPendingDelete(null)}>
         <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
@@ -394,7 +438,7 @@ export default function ApplicationsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </ConsolePage>
   );
 }
 

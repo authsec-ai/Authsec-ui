@@ -30,6 +30,7 @@ import {
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
+import { ConsolePage } from "@/components/console/ConsolePage";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
@@ -566,18 +567,11 @@ export default function ServiceAccountsPage() {
   );
 
   return (
-    <div data-cr>
-      <div className="console-page">
-      <div className="section-header">
-        <div>
-          <h1 className="sh-title">Service Accounts</h1>
-          <p className="sh-desc">
-            Machine principals for server-to-server (M2M) calls. Each service account holds a
-            credential — client secret, private-key JWT, or Kubernetes SPIFFE SVID — and is granted
-            access to specific MCP servers independently of any user session.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <ConsolePage
+      title="Service Accounts"
+      description="Machine principals for server-to-server (M2M) calls. Each service account holds a credential — client secret, private-key JWT, or Kubernetes SPIFFE SVID — and is granted access to specific MCP servers independently of any user session."
+      actions={
+        <>
           <Button variant="outline" asChild>
             <a href={DOCS_URL} target="_blank" rel="noreferrer">
               <ExternalLink className="mr-1.5 size-3.5" />
@@ -588,9 +582,9 @@ export default function ServiceAccountsPage() {
             <Plus className="mr-1.5 size-3.5" />
             Create service account
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
@@ -655,7 +649,6 @@ export default function ServiceAccountsPage() {
         open={!!selectedSA}
         onClose={() => setSelectedSA(null)}
       />
-      </div>
-    </div>
+    </ConsolePage>
   );
 }

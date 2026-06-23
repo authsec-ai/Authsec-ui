@@ -36,6 +36,7 @@ import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { ConsoleFilterBar, EntityCell } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
+import { ConsolePage } from "@/components/console/ConsolePage";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
 
@@ -297,18 +298,11 @@ export default function AgentsPage() {
   );
 
   return (
-    <div data-cr>
-      <div className="console-page">
-      <div className="section-header">
-        <div>
-          <h1 className="sh-title">Agents</h1>
-          <p className="sh-desc">
-            AI agents that act on behalf of a logged-in user. Each is a confidential client that
-            signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG). An agent
-            appears below once it connects to its first server.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <ConsolePage
+      title="Agents"
+      description="AI agents that act on behalf of a logged-in user. Each is a confidential client that signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG). An agent appears below once it connects to its first server."
+      actions={
+        <>
           <Button variant="outline" asChild>
             <a href={DOCS_URL} target="_blank" rel="noreferrer">
               <ExternalLink className="mr-1.5 size-3.5" />
@@ -319,9 +313,9 @@ export default function AgentsPage() {
             <Plus className="mr-1.5 size-3.5" />
             Register agent
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
@@ -368,7 +362,6 @@ export default function AgentsPage() {
       </TableCard>
 
       <RegisterAgentDialog open={registerOpen} onOpenChange={setRegisterOpen} />
-      </div>
-    </div>
+    </ConsolePage>
   );
 }

@@ -6,20 +6,18 @@
  *   scopes      — cross-workspace scope catalog
  *   assignments — role bindings
  *
- * Rebuilt to match the Console Refresh prototype (bespoke `[data-cr]` markup:
- * section-header, filter toolbar, prototype table, status/risk badges, Sheet
- * detail drawers, dialogs), wired to the real RTK Query data + mutations.
+ * Rendered on the canonical console standard: <ConsolePage> shell +
+ * <ConsoleFilterBar> + <TableCard>/<AdaptiveTable>. Detail drawers + dialogs
+ * reuse the shared [data-cr] primitives. This file is the reference other
+ * console pages are aligned to.
  */
 
 import { useState, useMemo, useCallback } from "react";
 import {
   AlertTriangle,
   Building,
-  Check,
   KeyRound,
-  MoreHorizontal,
   Plus,
-  Search,
   Server,
   Shield,
   Trash2,
@@ -33,13 +31,20 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { CardContent } from "@/components/ui/card";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { TableCard } from "@/theme/components/cards";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { formatRoleName } from "@/utils/roleName";
 import { toast } from "@/lib/toast";
@@ -103,6 +108,19 @@ function riskClass(risk?: string): string {
 
 const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "—");
 
+function KindChip({ appScoped }: { appScoped: boolean }) {
+  return (
+    <span className={`kind-chip ${appScoped ? "app" : "workspace"}`}>
+      {appScoped ? <Server className="kc-ic" /> : <Building className="kc-ic" />}
+      {appScoped ? "App-scoped" : "Workspace"}
+    </span>
+  );
+}
+
+function LoadingState({ label }: { label: string }) {
+  return <div className="py-16 text-center text-sm text-muted-foreground">{label}</div>;
+}
+
 // ─── Roles tab ────────────────────────────────────────────────────────────────
 function RolesTab({
   workspaceId,
@@ -145,6 +163,16 @@ function RolesTab({
     });
   }, [roles, search, kindFilter, appMap]);
 
+  const filters = useMemo(() => {
+    const list = (roles ?? []) as AuthSecRole[];
+    const app = list.filter((r) => formatRoleName(r.name, appMap).isAppScoped).length;
+    return [
+      { key: "all", label: "All", count: list.length },
+      { key: "workspace", label: "Workspace", count: list.length - app },
+      { key: "app", label: "App-scoped", count: app },
+    ];
+  }, [roles, appMap]);
+
   const handleDelete = useCallback(
     async (role: AuthSecRole) => {
       try {
@@ -178,145 +206,126 @@ function RolesTab({
 
   const selectedFmt = selectedRole ? formatRoleName(selectedRole.name, appMap) : null;
 
-  return (
-    <div data-cr>
-      <div className="content-inner">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Roles</h1>
-            <p className="sh-desc">
-              Workspace and application-scoped roles bundle permissions you can assign to operators
-              and end users.
-            </p>
-          </div>
-          <button className="btn btn-primary" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="icon-sm" /> Create role
-          </button>
-        </div>
-
-        <div className="roles-toolbar">
-          <div className={`search${search ? " has-value" : ""}`}>
-            <span className="search-ic">
-              <Search className="icon" />
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search roles"
-              aria-label="Search roles"
+  const columns = useMemo<AdaptiveColumn<AuthSecRole>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Role",
+        alwaysVisible: true,
+        approxWidth: 320,
+        cell: ({ row }) => {
+          const fmt = formatRoleName(row.original.name, appMap);
+          return (
+            <EntityCell
+              label={fmt.primary}
+              detail={row.original.description}
+              badge={fmt.badge ? <span className="role-tag generated">{fmt.badge}</span> : undefined}
             />
-            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X className="icon-sm" />
-            </button>
+          );
+        },
+      },
+      {
+        id: "kind",
+        header: "Kind",
+        priority: 1,
+        approxWidth: 160,
+        cell: ({ row }) => <KindChip appScoped={formatRoleName(row.original.name, appMap).isAppScoped} />,
+      },
+      {
+        id: "users",
+        header: "Users",
+        priority: 3,
+        approxWidth: 90,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground tabular-nums">{row.original.users_assigned ?? 0}</span>
+        ),
+      },
+      {
+        id: "perms",
+        header: "Permissions",
+        priority: 2,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground tabular-nums">{row.original.permissions_count ?? 0}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ConsoleRowActions
+              items={[
+                { label: "View details", icon: <KeyRound className="size-4" />, onSelect: () => setSelectedRole(row.original) },
+                { label: "Assign users", icon: <UserPlus className="size-4" />, onSelect: () => onAssignUsers(row.original.id) },
+                { label: "Delete role", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setConfirmDelete(row.original) },
+              ]}
+            />
           </div>
-          <div className="filterset">
-            <span className="filterset-label">Kind</span>
-            <div className="segmented">
-              {(["all", "workspace", "app"] as const).map((k) => (
-                <button key={k} data-on={kindFilter === k} onClick={() => setKindFilter(k)}>
-                  {k === "all" ? "All" : k === "workspace" ? "Workspace" : "App-scoped"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        ),
+      },
+    ],
+    [appMap, onAssignUsers],
+  );
 
-        <div className="table-card">
+  return (
+    <ConsolePage
+      title="Roles"
+      description="Workspace and application-scoped roles bundle permissions you can assign to operators and end users."
+      actions={
+        <Button onClick={() => setShowCreateDialog(true)} className="text-white">
+          <Plus className="mr-1.5 size-3.5" /> Create role
+        </Button>
+      }
+    >
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search roles"
+        filters={filters}
+        activeFilter={kindFilter}
+        onFilterChange={(v) => setKindFilter(v as "all" | "workspace" | "app")}
+      />
+
+      <TableCard>
+        <CardContent variant="flush">
           {isLoading ? (
-            <SkeletonRows cols={4} />
+            <LoadingState label="Loading roles…" />
           ) : rows.length === 0 ? (
-            <div className="empty">
-              <span className="empty-ic">
-                <Shield className="icon-lg" />
-              </span>
-              <h3 className="empty-title">{search || kindFilter !== "all" ? "No roles match" : "No roles yet"}</h3>
-              <p className="empty-desc">
+            <div className="py-16 text-center">
+              <Shield className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">
+                {search || kindFilter !== "all" ? "No roles match" : "No roles yet"}
+              </p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 {search || kindFilter !== "all"
                   ? "Try a different search term or filter."
                   : "Create your first role to start bundling permissions."}
               </p>
-              <button className="btn btn-primary" onClick={() => setShowCreateDialog(true)}>
-                <Plus className="icon-sm" /> Create role
-              </button>
+              {!search && kindFilter === "all" && (
+                <div className="mt-4 flex justify-center">
+                  <Button size="sm" onClick={() => setShowCreateDialog(true)} className="text-white">
+                    <Plus className="mr-1.5 size-3.5" /> Create role
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
-            <>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th className="th-context">Kind</th>
-                    <th className="num">Users</th>
-                    <th className="num th-apps">Permissions</th>
-                    <th className="th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((role) => {
-                    const fmt = formatRoleName(role.name, appMap);
-                    return (
-                      <tr key={role.id} tabIndex={0} data-selected={selectedRole?.id === role.id} onClick={() => setSelectedRole(role)}>
-                        <td>
-                          <div className="role-cell">
-                            <div className="role-name-row">
-                              <span className="role-name">{fmt.primary}</span>
-                              {fmt.badge && (
-                                <span className="role-tag generated">{fmt.badge}</span>
-                              )}
-                            </div>
-                            {role.description && <span className="role-detail">{role.description}</span>}
-                          </div>
-                        </td>
-                        <td className="col-context">
-                          <span className={`kind-chip ${fmt.isAppScoped ? "app" : "workspace"}`}>
-                            {fmt.isAppScoped ? <Server className="kc-ic" /> : <Building className="kc-ic" />}
-                            {fmt.isAppScoped ? "App-scoped" : "Workspace"}
-                          </span>
-                        </td>
-                        <td className={`num-cell${!role.users_assigned ? " zero" : ""}`}>
-                          {role.users_assigned ?? 0}
-                        </td>
-                        <td className={`num-cell col-apps${!role.permissions_count ? " zero" : ""}`}>
-                          {role.permissions_count ?? 0}
-                        </td>
-                        <td>
-                          <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="icon-btn" aria-label="Role actions">
-                                  <MoreHorizontal className="icon" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                                <DropdownMenuItem className="menu-item" onSelect={() => setSelectedRole(role)}>
-                                  <span className="mi-ic"><KeyRound className="icon-sm" /></span>
-                                  View details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="menu-item" onSelect={() => onAssignUsers(role.id)}>
-                                  <span className="mi-ic"><UserPlus className="icon-sm" /></span>
-                                  Assign users
-                                </DropdownMenuItem>
-                                <div className="menu-sep" />
-                                <DropdownMenuItem className="menu-item danger" onSelect={() => setConfirmDelete(role)}>
-                                  <span className="mi-ic"><Trash2 className="icon-sm" /></span>
-                                  Delete role
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
-                {rows.length} role{rows.length === 1 ? "" : "s"}
-              </p>
-            </>
+            <AdaptiveTable
+              tableId="roles-inventory"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.id}
+              onRowClick={(r) => setSelectedRole(r)}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       {/* Role detail drawer */}
       <Sheet open={!!selectedRole} onOpenChange={(o) => !o && setSelectedRole(null)}>
@@ -324,17 +333,12 @@ function RolesTab({
           <SheetTitle className="sr-only">
             {selectedFmt ? `${selectedFmt.displayName} — role details` : "Role details"}
           </SheetTitle>
-          <SheetDescription className="sr-only">
-            Inspect this role's scopes and bindings.
-          </SheetDescription>
+          <SheetDescription className="sr-only">Inspect this role's scopes and bindings.</SheetDescription>
           {selectedRole && selectedFmt && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">
                 <div className="drawer-head-top">
-                  <span className={`kind-chip ${selectedFmt.isAppScoped ? "app" : "workspace"}`}>
-                    {selectedFmt.isAppScoped ? <Server className="kc-ic" /> : <Building className="kc-ic" />}
-                    {selectedFmt.isAppScoped ? "App-scoped role" : "Workspace role"}
-                  </span>
+                  <KindChip appScoped={selectedFmt.isAppScoped} />
                   <button className="icon-btn" aria-label="Close" onClick={() => setSelectedRole(null)}>
                     <X className="icon" />
                   </button>
@@ -380,12 +384,12 @@ function RolesTab({
                 </div>
               </div>
               <div className="drawer-foot">
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onAssignUsers(selectedRole.id)}>
-                  <UserPlus className="icon-sm" /> Assign users
-                </button>
-                <button className="btn btn-secondary" aria-label="Delete role" onClick={() => setConfirmDelete(selectedRole)}>
-                  <Trash2 className="icon-sm" />
-                </button>
+                <Button className="text-white" style={{ flex: 1 }} onClick={() => onAssignUsers(selectedRole.id)}>
+                  <UserPlus className="mr-1.5 size-3.5" /> Assign users
+                </Button>
+                <Button variant="outline" aria-label="Delete role" onClick={() => setConfirmDelete(selectedRole)}>
+                  <Trash2 className="size-3.5" />
+                </Button>
               </div>
             </div>
           )}
@@ -394,38 +398,34 @@ function RolesTab({
 
       {/* Create role dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
-          <div className="dialog" style={{ width: "100%" }}>
-            <DialogTitle className="dg-title">Create role</DialogTitle>
-            <DialogDescription className="dg-desc">
-              Name the role, then add permissions and assign users afterwards.
-            </DialogDescription>
-            <div className="wiz-field">
-              <label className="wiz-label" htmlFor="ac-role-name">
-                Name <span className="req">*</span>
-              </label>
-              <input
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Create role</DialogTitle>
+          <DialogDescription>
+            Name the role, then add permissions and assign users afterwards.
+          </DialogDescription>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ac-role-name">Name</Label>
+              <Input
                 id="ac-role-name"
-                className="input"
-                style={{ width: "100%" }}
                 value={newRoleName}
                 onChange={(e) => setNewRoleName(e.target.value)}
                 placeholder="e.g. developer, read-only-ops"
+                className="h-9"
               />
             </div>
-            <div className="wiz-field">
-              <label className="wiz-label" htmlFor="ac-role-desc">Description</label>
-              <textarea
+            <div className="space-y-1.5">
+              <Label htmlFor="ac-role-desc">Description</Label>
+              <Textarea
                 id="ac-role-desc"
-                className="textarea"
                 value={newRoleDesc}
                 onChange={(e) => setNewRoleDesc(e.target.value)}
                 placeholder="Optional description for this role"
               />
             </div>
-            <div className="dg-actions" style={{ marginTop: "var(--space-5)" }}>
-              <button
-                className="btn btn-secondary"
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="ghost"
                 onClick={() => {
                   setShowCreateDialog(false);
                   setNewRoleName("");
@@ -433,10 +433,10 @@ function RolesTab({
                 }}
               >
                 Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleCreate} disabled={addRoleState.isLoading || !newRoleName.trim()}>
-                <Check className="icon-sm" /> {addRoleState.isLoading ? "Creating…" : "Create role"}
-              </button>
+              </Button>
+              <Button className="text-white" onClick={handleCreate} disabled={addRoleState.isLoading || !newRoleName.trim()}>
+                {addRoleState.isLoading ? "Creating…" : "Create role"}
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -447,7 +447,7 @@ function RolesTab({
         onCancel={() => setConfirmDelete(null)}
         onConfirm={(r) => handleDelete(r)}
       />
-    </div>
+    </ConsolePage>
   );
 }
 
@@ -462,23 +462,20 @@ function ConfirmDeleteDialog({
 }) {
   return (
     <Dialog open={!!role} onOpenChange={(o) => !o && onCancel()}>
-      <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
-        <div className="dialog" style={{ width: "100%" }}>
-          <span className="dg-icon">
-            <Trash2 className="icon" />
-          </span>
-          <DialogTitle className="dg-title">Delete role?</DialogTitle>
-          <DialogDescription className="dg-desc">
-            This removes the role and its bindings. Active sessions relying on it lose access. This
-            can't be undone.
-          </DialogDescription>
-          {role && <div className="dg-target" style={{ fontFamily: "var(--font-family-sans)" }}>{role.name}</div>}
-          <div className="dg-actions">
-            <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-            <button className="btn btn-danger" onClick={() => role && onConfirm(role)}>
-              <Trash2 className="icon-sm" /> Delete role
-            </button>
-          </div>
+      <DialogContent className="sm:max-w-md">
+        <DialogTitle>Delete role?</DialogTitle>
+        <DialogDescription>
+          This removes the role and its bindings. Active sessions relying on it lose access. This
+          can't be undone.
+        </DialogDescription>
+        {role && (
+          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{role.name}</div>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" onClick={() => role && onConfirm(role)}>
+            <Trash2 className="mr-1.5 size-3.5" /> Delete role
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -503,111 +500,89 @@ function ScopesTab() {
     );
   }, [scopeData, search]);
 
+  const columns = useMemo<AdaptiveColumn<ScopeCatalogEntry>[]>(
+    () => [
+      {
+        id: "scope",
+        header: "Scope",
+        alwaysVisible: true,
+        approxWidth: 320,
+        cell: ({ row }) => (
+          <EntityCell label={<span className="font-mono">{row.original.scope_string}</span>} detail={row.original.display_name} />
+        ),
+      },
+      {
+        id: "application",
+        header: "Application",
+        priority: 1,
+        approxWidth: 180,
+        cell: ({ row }) => <span className="text-xs text-slate-700">{row.original.application?.name ?? "—"}</span>,
+      },
+      {
+        id: "risk",
+        header: "Risk",
+        priority: 2,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className={`badge ${riskClass(row.original.risk_level)}`}>
+            <span className="bdot" />
+            {cap(row.original.risk_level)}
+          </span>
+        ),
+      },
+      {
+        id: "tools",
+        header: "Tools",
+        priority: 3,
+        approxWidth: 90,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground tabular-nums">{row.original.tools_count ?? 0}</span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
-    <div data-cr>
-      <div className="content-inner">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Scopes</h1>
-            <p className="sh-desc">
-              The canonical OAuth scope vocabulary across this workspace's applications. Scopes
-              become permissions once bound to a role.
-            </p>
-          </div>
-        </div>
+    <ConsolePage
+      title="Scopes"
+      description="The canonical OAuth scope vocabulary across this workspace's applications. Scopes become permissions once bound to a role."
+    >
+      <ConsoleFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search scopes" />
 
-        <div className="filter-bar">
-          <div className={`search${search ? " has-value" : ""}`}>
-            <span className="search-ic">
-              <Search className="icon" />
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search scopes"
-              aria-label="Search scopes"
-            />
-            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X className="icon-sm" />
-            </button>
-          </div>
-        </div>
-
-        <div className="table-card">
+      <TableCard>
+        <CardContent variant="flush">
           {isLoading ? (
-            <SkeletonRows cols={4} />
+            <LoadingState label="Loading scopes…" />
           ) : rows.length === 0 ? (
-            <div className="empty">
-              <span className="empty-ic">
-                <KeyRound className="icon-lg" />
-              </span>
-              <h3 className="empty-title">{search ? "No scopes match" : "No scopes yet"}</h3>
-              <p className="empty-desc">
+            <div className="py-16 text-center">
+              <KeyRound className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">{search ? "No scopes match" : "No scopes yet"}</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 {search ? "Try a different search term." : "Scopes appear as you protect applications."}
               </p>
             </div>
           ) : (
-            <>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Scope</th>
-                    <th className="th-context">Application</th>
-                    <th>Risk</th>
-                    <th className="num th-apps">Tools</th>
-                    <th className="th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((scope) => (
-                    <tr key={scope.id} tabIndex={0} data-selected={selected?.id === scope.id} onClick={() => setSelected(scope)}>
-                      <td>
-                        <div className="role-cell">
-                          <div className="role-name-row">
-                            <span className="role-name mono">{scope.scope_string}</span>
-                          </div>
-                          {scope.display_name && <span className="role-detail">{scope.display_name}</span>}
-                        </div>
-                      </td>
-                      <td className="col-context">
-                        <span className="ctx-app">{scope.application?.name ?? "—"}</span>
-                      </td>
-                      <td>
-                        <span className={`badge ${riskClass(scope.risk_level)}`}>
-                          <span className="bdot" />
-                          {cap(scope.risk_level)}
-                        </span>
-                      </td>
-                      <td className={`num-cell col-apps${!scope.tools_count ? " zero" : ""}`}>
-                        {scope.tools_count ?? 0}
-                      </td>
-                      <td>
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <button className="icon-btn" aria-label="View scope" onClick={() => setSelected(scope)}>
-                            <MoreHorizontal className="icon" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
-                {rows.length} scope{rows.length === 1 ? "" : "s"}
-              </p>
-            </>
+            <AdaptiveTable
+              tableId="scopes-inventory"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(s) => s.id}
+              onRowClick={(s) => setSelected(s)}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
             {selected ? `${selected.display_name || selected.scope_string} — scope details` : "Scope details"}
           </SheetTitle>
-          <SheetDescription className="sr-only">
-            Inspect this scope's risk, roles, and bindings.
-          </SheetDescription>
+          <SheetDescription className="sr-only">Inspect this scope's risk, roles, and bindings.</SheetDescription>
           {selected && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">
@@ -622,7 +597,9 @@ function ScopesTab() {
                 </div>
                 <div style={{ marginTop: 8 }}>
                   <div className="drawer-email mono" style={{ fontSize: 16 }}>{selected.scope_string}</div>
-                  {selected.display_name && <div className="drawer-username" style={{ fontFamily: "var(--font-family-sans)" }}>{selected.display_name}</div>}
+                  {selected.display_name && (
+                    <div className="drawer-username" style={{ fontFamily: "var(--font-family-sans)" }}>{selected.display_name}</div>
+                  )}
                 </div>
               </div>
               <div className="drawer-body">
@@ -658,12 +635,13 @@ function ScopesTab() {
           )}
         </SheetContent>
       </Sheet>
-    </div>
+    </ConsolePage>
   );
 }
 
 // ─── Assignments tab ────────────────────────────────────────────────────────────
 function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
+  const [search, setSearch] = useState("");
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
   const { data: bindings, isLoading } = useListBindingsQuery({ audience: "admin" });
   const { data: resourceServers } = useListResourceServersQuery();
@@ -673,12 +651,26 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
     return m;
   }, [resourceServers]);
   const [deleteBinding, deleteState] = useDeleteBindingMutation();
-  const rows = useMemo<RoleBinding[]>(() => bindings ?? [], [bindings]);
-  const confirmRevoke = useMemo(() => rows.find((r) => r.id === confirmRevokeId) ?? null, [rows, confirmRevokeId]);
+
+  const rows = useMemo<RoleBinding[]>(() => {
+    const list = bindings ?? [];
+    if (!search) return list;
+    const s = search.toLowerCase();
+    return list.filter((b) =>
+      [b.email, b.username, b.user_id, b.role_name, b.application?.name, b.source]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(s)),
+    );
+  }, [bindings, search]);
+
+  const confirmRevoke = useMemo(
+    () => (bindings ?? []).find((r) => r.id === confirmRevokeId) ?? null,
+    [bindings, confirmRevokeId],
+  );
 
   const handleRevoke = useCallback(
     async (bindingId: string) => {
-      const binding = rows.find((r) => r.id === bindingId);
+      const binding = (bindings ?? []).find((r) => r.id === bindingId);
       const subject = binding?.email ?? binding?.username ?? binding?.user_id ?? "the user";
       const roleLabel = binding?.role_name ?? "role";
       try {
@@ -689,158 +681,162 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
         toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to revoke binding");
       }
     },
-    [deleteBinding, rows],
+    [deleteBinding, bindings],
+  );
+
+  const columns = useMemo<AdaptiveColumn<RoleBinding>[]>(
+    () => [
+      {
+        id: "user",
+        header: "User",
+        alwaysVisible: true,
+        approxWidth: 260,
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.original.email ?? row.original.username ?? row.original.user_id ?? "—"}</span>
+        ),
+      },
+      {
+        id: "role",
+        header: "Role",
+        priority: 1,
+        approxWidth: 200,
+        cell: ({ row }) => {
+          const fmt = formatRoleName(row.original.role_name, appMap);
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-sm font-medium text-foreground">{fmt.primary}</span>
+              {fmt.badge && <span className="role-tag generated">{fmt.badge}</span>}
+            </span>
+          );
+        },
+      },
+      {
+        id: "application",
+        header: "Application",
+        priority: 2,
+        approxWidth: 180,
+        cell: ({ row }) =>
+          row.original.application?.name ? (
+            <span className="text-xs text-slate-700">{row.original.application.name}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Workspace-wide</span>
+          ),
+      },
+      {
+        id: "source",
+        header: "Source",
+        priority: 4,
+        approxWidth: 120,
+        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.source ?? "—"}</span>,
+      },
+      {
+        id: "expires",
+        header: "Expires",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{row.original.expires_at ? formatDate(row.original.expires_at) : "Never"}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 90,
+        cell: ({ row }) => (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-(--color-danger-text)"
+            onClick={() => setConfirmRevokeId(row.original.id)}
+          >
+            Revoke
+          </Button>
+        ),
+      },
+    ],
+    [appMap],
   );
 
   return (
-    <div data-cr>
-      <div className="content-inner">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Assignments</h1>
-            <p className="sh-desc">
-              Role bindings grant a user a role — workspace-wide or scoped to a single application.
-            </p>
-          </div>
-          <button className="btn btn-primary" onClick={onNewAssignment}>
-            <Plus className="icon-sm" /> New assignment
-          </button>
-        </div>
+    <ConsolePage
+      title="Assignments"
+      description="Role bindings grant a user a role — workspace-wide or scoped to a single application."
+      actions={
+        <Button onClick={onNewAssignment} className="text-white">
+          <Plus className="mr-1.5 size-3.5" /> New assignment
+        </Button>
+      }
+    >
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search users, roles, applications, or sources"
+      />
 
-        <div className="table-card">
+      <TableCard>
+        <CardContent variant="flush">
           {isLoading ? (
-            <SkeletonRows cols={5} />
+            <LoadingState label="Loading assignments…" />
           ) : rows.length === 0 ? (
-            <div className="empty">
-              <span className="empty-ic">
-                <Link2Icon />
-              </span>
-              <h3 className="empty-title">No assignments yet</h3>
-              <p className="empty-desc">Assign a role to a user to grant access.</p>
-              <button className="btn btn-primary" onClick={onNewAssignment}>
-                <Plus className="icon-sm" /> New assignment
-              </button>
+            <div className="py-16 text-center">
+              <KeyRound className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">{search ? "No assignments match" : "No assignments yet"}</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                {search ? "Try a different search term." : "Assign a role to a user to grant access."}
+              </p>
+              {!search && (
+                <div className="mt-4 flex justify-center">
+                  <Button size="sm" onClick={onNewAssignment} className="text-white">
+                    <Plus className="mr-1.5 size-3.5" /> New assignment
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
-            <>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th className="th-context">Application</th>
-                    <th className="th-apps">Source</th>
-                    <th className="th-signal">Expires</th>
-                    <th className="th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((binding) => {
-                    const fmt = formatRoleName(binding.role_name, appMap);
-                    return (
-                      <tr key={binding.id} style={{ cursor: "default" }}>
-                        <td>
-                          <span className="user-email">{binding.email ?? binding.username ?? binding.user_id ?? "—"}</span>
-                        </td>
-                        <td>
-                          <span className="role-name-row">
-                            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text)" }}>{fmt.primary}</span>
-                            {fmt.badge && <span className="role-tag generated">{fmt.badge}</span>}
-                          </span>
-                        </td>
-                        <td className="col-context">
-                          <span className="ctx-app">
-                            {binding.application?.name ?? <span style={{ color: "var(--color-text-subtle)" }}>Workspace-wide</span>}
-                          </span>
-                        </td>
-                        <td className="col-apps">
-                          <span className="time-cell">{binding.source ?? "—"}</span>
-                        </td>
-                        <td className="col-signal">
-                          <span className="time-cell">
-                            {binding.expires_at ? formatDate(binding.expires_at) : "Never"}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="row-actions">
-                            <button
-                              className="btn btn-secondary"
-                              style={{ height: 30, padding: "0 12px", fontSize: 12.5, color: "var(--color-danger-text)" }}
-                              onClick={() => setConfirmRevokeId(binding.id)}
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="workspace-foot" style={{ margin: 0, padding: "var(--space-3) var(--space-5)", borderTop: "1px solid var(--color-border-subtle)", background: "var(--color-surface-subtle)" }}>
-                {rows.length} assignment{rows.length === 1 ? "" : "s"}
-              </p>
-            </>
+            <AdaptiveTable
+              tableId="assignments-inventory"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(b) => b.id}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       <Dialog open={!!confirmRevokeId} onOpenChange={(o) => !o && setConfirmRevokeId(null)}>
-        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
-          <div className="dialog" style={{ width: "100%" }}>
-            <span className="dg-icon" style={{ background: "var(--color-warning-soft)", color: "var(--color-warning-text)" }}>
-              <AlertTriangle className="icon" />
-            </span>
-            <DialogTitle className="dg-title">Revoke role assignment?</DialogTitle>
-            <DialogDescription className="dg-desc">
-              {confirmRevoke ? (
-                <>
-                  Revoke <b>{confirmRevoke.role_name}</b> from{" "}
-                  <b>{confirmRevoke.email ?? confirmRevoke.username ?? confirmRevoke.user_id}</b>
-                  {confirmRevoke.application?.name ? <> on <b>{confirmRevoke.application.name}</b></> : ""}. Active
-                  sessions are terminated immediately.
-                </>
-              ) : (
-                "Active sessions are terminated immediately."
-              )}
-            </DialogDescription>
-            <div className="dg-actions">
-              <button className="btn btn-secondary" onClick={() => setConfirmRevokeId(null)}>Cancel</button>
-              <button
-                className="btn btn-danger"
-                disabled={deleteState.isLoading}
-                onClick={() => confirmRevokeId && handleRevoke(confirmRevokeId)}
-              >
-                {deleteState.isLoading ? "Revoking…" : "Revoke"}
-              </button>
-            </div>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-(--color-warning-text)" /> Revoke role assignment?
+          </DialogTitle>
+          <DialogDescription>
+            {confirmRevoke ? (
+              <>
+                Revoke <b>{confirmRevoke.role_name}</b> from{" "}
+                <b>{confirmRevoke.email ?? confirmRevoke.username ?? confirmRevoke.user_id}</b>
+                {confirmRevoke.application?.name ? <> on <b>{confirmRevoke.application.name}</b></> : ""}. Active
+                sessions are terminated immediately.
+              </>
+            ) : (
+              "Active sessions are terminated immediately."
+            )}
+          </DialogDescription>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setConfirmRevokeId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteState.isLoading}
+              onClick={() => confirmRevokeId && handleRevoke(confirmRevokeId)}
+            >
+              {deleteState.isLoading ? "Revoking…" : "Revoke"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function Link2Icon() {
-  return <KeyRound className="icon-lg" />;
-}
-
-function SkeletonRows({ cols }: { cols: number }) {
-  return (
-    <div>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div className="skeleton-row" key={i}>
-          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-            <span className="sk sk-line" style={{ width: "32%" }} />
-            <span className="sk sk-line" style={{ width: "48%", height: 9 }} />
-          </span>
-          {Array.from({ length: cols - 1 }).map((_, j) => (
-            <span className="sk sk-line" key={j} style={{ width: 80, margin: "0 20px" }} />
-          ))}
-          <span className="sk sk-line" style={{ width: 28 }} />
-        </div>
-      ))}
-    </div>
+    </ConsolePage>
   );
 }
 
@@ -857,9 +853,11 @@ export default function AccessControlPage({ initialTab = "roles" }: AccessContro
 
   if (!workspaceId) {
     return (
-      <div className="p-8">
-        <p className="text-sm text-muted-foreground">No tenant selected. Switch to a tenant to manage access control.</p>
-      </div>
+      <ConsolePage title="Access control">
+        <p className="text-sm text-muted-foreground">
+          No workspace selected. Switch to a workspace to manage access control.
+        </p>
+      </ConsolePage>
     );
   }
 

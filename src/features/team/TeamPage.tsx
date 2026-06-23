@@ -1,15 +1,12 @@
 /**
  * TeamPage — Settings → Team. Rebuilt to the Console Refresh prototype
- * (`[data-cr]`): page-head + filter bar + bespoke members table + Sheet detail
- * drawer. Wired to the real membership hooks + mutations.
+ * (`[data-cr]`): ConsolePage shell + ConsoleFilterBar + TableCard +
+ * AdaptiveTable. Wired to the real membership hooks + mutations.
  */
 
 import { useState, useMemo, useCallback } from "react";
 import {
   Check,
-  ChevronDown,
-  MoreHorizontal,
-  Search,
   ShieldCheck,
   ShieldOff,
   Trash2,
@@ -34,11 +31,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  ConsoleFilterBar,
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { TableCard } from "@/theme/components/cards";
 import { toast } from "@/lib/toast";
 import { resolveWorkspaceId } from "@/utils/workspace";
-import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 10;
 const AV = [
   "linear-gradient(150deg,#22c55e,#16a34a)",
   "linear-gradient(150deg,#f59e0b,#d97706)",
@@ -119,7 +124,6 @@ export function TeamPage() {
   const workspaceId = resolveWorkspaceId();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<MembershipStatus | "all">("all");
-  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<TenantMembership | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<TenantMembership | null>(null);
 
@@ -144,10 +148,18 @@ export function TeamPage() {
   }, [allRows, search]);
 
   const total = rows.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const filtersActive = search.trim() !== "" || statusFilter !== "all";
+
+  // Status filter pills
+  const statusFilters = useMemo(() => {
+    const allItems = data?.items ?? [];
+    return [
+      { key: "all", label: "All statuses", count: allItems.length },
+      { key: "active", label: "Active", count: allItems.filter((m) => m.status === "active").length },
+      { key: "invited", label: "Invited", count: allItems.filter((m) => m.status === "invited").length },
+      { key: "suspended", label: "Suspended", count: allItems.filter((m) => m.status === "suspended").length },
+      { key: "left", label: "Left", count: allItems.filter((m) => m.status === "left").length },
+    ];
+  }, [data]);
 
   const handleSuspend = useCallback(
     async (userId: string) => {
@@ -200,222 +212,185 @@ export function TeamPage() {
     [workspaceId, update],
   );
 
+  const columns = useMemo<AdaptiveColumn<TenantMembership>[]>(
+    () => [
+      {
+        id: "member",
+        header: "Member",
+        alwaysVisible: true,
+        approxWidth: 300,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <span
+                className="avatar"
+                style={{ background: avatarBg(m) }}
+              >
+                {memberInitials(m)}
+              </span>
+              <EntityCell
+                label={memberLabel(m)}
+                detail={m.user_name && m.user_name !== "Not Provided" ? m.user_name : undefined}
+              />
+            </div>
+          );
+        },
+      },
+      {
+        id: "type",
+        header: "Type",
+        priority: 1,
+        approxWidth: 160,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <span className={`badge ${typeTone(m.membership_type)}`}>
+              <span className="bdot" />
+              {TYPE_LABEL[m.membership_type] ?? m.membership_type}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 2,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const m = row.original;
+          const meta = statusMeta(m.status);
+          return (
+            <span className={`badge ${meta.tone}`}>
+              <span className="bdot" />
+              {meta.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "joined",
+        header: "Joined",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span className="time-cell">{formatDate(row.original.joined_at)}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions
+                items={[
+                  {
+                    label: "View details",
+                    icon: <UserCog className="size-4" />,
+                    onSelect: () => setSelected(m),
+                  },
+                  ...(m.status === "suspended"
+                    ? [
+                        {
+                          label: "Reactivate",
+                          icon: <ShieldCheck className="size-4" />,
+                          onSelect: () => handleReactivate(m.user_id),
+                        },
+                      ]
+                    : [
+                        {
+                          label: "Suspend",
+                          icon: <ShieldOff className="size-4" />,
+                          onSelect: () => handleSuspend(m.user_id),
+                        },
+                      ]),
+                  {
+                    label: "Remove",
+                    icon: <Trash2 className="size-4" />,
+                    destructive: true,
+                    onSelect: () => setConfirmRemove(m),
+                  },
+                ]}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [handleReactivate, handleSuspend],
+  );
+
   if (!workspaceId) {
     return <div className="p-8 text-sm text-muted-foreground">No workspace selected.</div>;
   }
 
-  const showEmpty = !isLoading && pageRows.length === 0;
-
   return (
-    <div data-cr>
-      <div className="content-inner">
-        <div className="page-head">
-          <div>
-            <h1 className="page-title">Team</h1>
-            <p className="page-desc">
-              Workspace operators and their access. To invite a new member, use the Invite Users flow.
-            </p>
-          </div>
-        </div>
+    <ConsolePage
+      title="Team"
+      description="Workspace operators and their access. To invite a new member, use the Invite Users flow."
+    >
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={(v) => setSearch(v)}
+        searchPlaceholder="Search by email, name, or ID"
+        filters={statusFilters}
+        activeFilter={statusFilter}
+        onFilterChange={(v) => setStatusFilter(v as MembershipStatus | "all")}
+      />
 
-        <div className="filter-bar">
-          <div className={cn("search", search && "has-value")}>
-            <span className="search-ic"><Search className="icon" /></span>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search by email, name, or ID"
-              aria-label="Search members"
-            />
-            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X className="icon-sm" />
-            </button>
-          </div>
-          <div className="select">
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as MembershipStatus | "all"); setPage(1); }}
-              aria-label="Filter by status"
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="invited">Invited</option>
-              <option value="suspended">Suspended</option>
-              <option value="left">Left</option>
-            </select>
-            <span className="chev"><ChevronDown className="icon-sm" /></span>
-          </div>
-        </div>
-
-        {filtersActive && (
-          <div className="chips">
-            {statusFilter !== "all" && (
-              <span className="chip">
-                Status: {statusMeta(statusFilter).label}
-                <button className="chip-x" aria-label="Remove filter" onClick={() => setStatusFilter("all")}>
-                  <X className="icon-sm" />
-                </button>
-              </span>
-            )}
-            {search.trim() && (
-              <span className="chip">
-                "{search.trim()}"
-                <button className="chip-x" aria-label="Remove filter" onClick={() => setSearch("")}>
-                  <X className="icon-sm" />
-                </button>
-              </span>
-            )}
-            <button className="chip-clear" onClick={() => { setSearch(""); setStatusFilter("all"); setPage(1); }}>
-              Clear all
-            </button>
-          </div>
-        )}
-
-        <div className="table-card">
+      <TableCard>
+        <CardContent variant="flush">
           {isLoading ? (
-            <div>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div className="skeleton-row" key={i}>
-                  <span className="sk sk-avatar" />
-                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-                    <span className="sk sk-line" style={{ width: "42%" }} />
-                    <span className="sk sk-line" style={{ width: "24%", height: 9 }} />
-                  </span>
-                  <span className="sk sk-line" style={{ width: 80, height: 22, borderRadius: 999 }} />
-                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999, margin: "0 40px" }} />
-                  <span className="sk sk-line" style={{ width: 60 }} />
-                </div>
-              ))}
-            </div>
-          ) : showEmpty ? (
-            <div className="empty">
-              <span className="empty-ic"><Users className="icon-lg" /></span>
-              <h3 className="empty-title">{filtersActive ? "No members match" : "No team members yet"}</h3>
-              <p className="empty-desc">
-                {filtersActive
+            <div className="py-16 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="py-16 text-center">
+              <Users className="mx-auto mb-3 size-7 text-slate-300" />
+              <p className="text-sm font-medium text-foreground">
+                {search.trim() || statusFilter !== "all" ? "No members match" : "No team members yet"}
+              </p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+                {search.trim() || statusFilter !== "all"
                   ? "Try a different search term or clear the active filters."
                   : "Invite users to your workspace to give them operator access."}
               </p>
-              {filtersActive && (
-                <button className="btn btn-secondary" onClick={() => { setSearch(""); setStatusFilter("all"); }}>
-                  Clear filters
-                </button>
+              {(search.trim() || statusFilter !== "all") && (
+                <div className="mt-4 flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setSearch(""); setStatusFilter("all"); }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
               )}
             </div>
           ) : (
-            <>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Member</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th className="th-lastactive">Joined</th>
-                    <th className="th-actions" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((m) => (
-                    <tr
-                      key={m.id}
-                      tabIndex={0}
-                      data-selected={selected?.id === m.id}
-                      onClick={() => setSelected(m)}
-                      onKeyDown={(e) => { if (e.key === "Enter") setSelected(m); }}
-                    >
-                      <td>
-                        <div className="user-cell">
-                          <span className="avatar" style={{ background: avatarBg(m) }}>{memberInitials(m)}</span>
-                          <span className="user-meta">
-                            <span className="user-email">{memberLabel(m)}</span>
-                            {m.user_name && m.user_name !== "Not Provided" && (
-                              <span className="user-name" style={{ fontFamily: "var(--font-family-sans)" }}>{m.user_name}</span>
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`badge ${typeTone(m.membership_type)}`}>
-                          <span className="bdot" />
-                          {TYPE_LABEL[m.membership_type] ?? m.membership_type}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${statusMeta(m.status).tone}`}>
-                          <span className="bdot" />
-                          {statusMeta(m.status).label}
-                        </span>
-                      </td>
-                      <td className="col-lastactive">
-                        <span className="time-cell">{formatDate(m.joined_at)}</span>
-                      </td>
-                      <td>
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="icon-btn" aria-label="Member actions">
-                                <MoreHorizontal className="icon" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                              <DropdownMenuItem className="menu-item" onSelect={() => setSelected(m)}>
-                                <span className="mi-ic"><UserCog className="icon-sm" /></span>
-                                View details
-                              </DropdownMenuItem>
-                              {m.status === "suspended" ? (
-                                <DropdownMenuItem className="menu-item" onSelect={() => handleReactivate(m.user_id)}>
-                                  <span className="mi-ic"><ShieldCheck className="icon-sm" /></span>
-                                  Reactivate
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem className="menu-item" onSelect={() => handleSuspend(m.user_id)}>
-                                  <span className="mi-ic"><ShieldOff className="icon-sm" /></span>
-                                  Suspend
-                                </DropdownMenuItem>
-                              )}
-                              <div className="menu-sep" />
-                              <DropdownMenuItem className="menu-item danger" onSelect={() => setConfirmRemove(m)}>
-                                <span className="mi-ic"><Trash2 className="icon-sm" /></span>
-                                Remove
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="table-foot">
-                <span className="foot-count">
-                  Showing <b>{(safePage - 1) * PAGE_SIZE + 1}</b>–<b>{(safePage - 1) * PAGE_SIZE + pageRows.length}</b> of{" "}
-                  <b>{total}</b> member{total === 1 ? "" : "s"}
-                </span>
-                <div className="pager">
-                  <span className="pager-label">Page</span>
-                  <div className="pager-btns">
-                    <button className="pager-btn" aria-label="Previous page" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                      <X className="icon-sm" style={{ display: "none" }} />‹
-                    </button>
-                    <span className="pager-label mono">{safePage} / {totalPages}</span>
-                    <button className="pager-btn" aria-label="Next page" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                      ›
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
+            <AdaptiveTable
+              tableId="team-members"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.id}
+              onRowClick={(r) => setSelected(r)}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
+        </CardContent>
+      </TableCard>
 
-        <p className="workspace-foot">{total} member{total === 1 ? "" : "s"} in this workspace.</p>
-      </div>
+      <p className="text-xs text-muted-foreground">{total} member{total === 1 ? "" : "s"} in this workspace.</p>
 
       {/* Detail drawer */}
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
-            {selected ? `${selected.email} — team member` : "Team member"}
+            {selected ? `${memberLabel(selected)} — team member` : "Team member"}
           </SheetTitle>
           <SheetDescription className="sr-only">
             Inspect this team member's role and access.
@@ -535,7 +510,7 @@ export function TeamPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </ConsolePage>
   );
 }
 

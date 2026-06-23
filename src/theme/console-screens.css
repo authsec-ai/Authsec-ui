@@ -16,16 +16,18 @@
 [data-cr] svg { display: block; flex: none; }
 
 /* ---------- containers ---------- */
-[data-cr] .console-page { max-width: 1280px; margin: 0 auto; padding: 28px 32px 48px; }
-[data-cr] .content-inner { max-width: 1180px; margin: 0 auto; padding: var(--space-8) var(--space-8) var(--space-9); }
+/* Single canonical container + header treatment for every console page.
+   `.content-inner` is kept as an alias of `.console-page` so any page still on
+   the older class lands at the same width/padding as the rest. */
+[data-cr] .console-page,
+[data-cr] .content-inner { max-width: 1280px; margin: 0 auto; padding: 28px 32px 48px; }
 
-[data-cr] .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); margin-bottom: var(--space-7); }
-[data-cr] .page-title { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--color-text); margin: 0 0 6px; }
-[data-cr] .page-desc { font-size: 14px; color: var(--color-text-muted); max-width: 60ch; margin: 0; line-height: 1.55; }
-
-[data-cr] .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); margin-bottom: var(--space-6); }
-[data-cr] .sh-title { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px; color: var(--color-text); }
-[data-cr] .sh-desc { font-size: 14px; color: var(--color-text-muted); margin: 0; max-width: 64ch; line-height: 1.55; }
+[data-cr] .page-head,
+[data-cr] .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); margin-bottom: var(--space-6); }
+[data-cr] .page-title,
+[data-cr] .sh-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--color-text); margin: 0 0 6px; }
+[data-cr] .page-desc,
+[data-cr] .sh-desc { font-size: 14px; color: var(--color-text-muted); margin: 0; max-width: 560px; line-height: 1.6; }
 [data-cr] .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-subtle); margin: 0 0 6px; }
 
 /* ---------- buttons ---------- */

@@ -1,30 +1,36 @@
 /**
  * AuthenticationPage — Configure → Identity Providers. Rebuilt to the Console
- * Refresh prototype (`[data-cr]`): section-header, filter bar, bespoke table,
- * kebab actions, prototype delete dialog. Preserves the unified OIDC+SAML data,
- * toggle/delete mutations, client filter, and the Add Provider modal.
+ * standard: ConsolePage + ConsoleFilterBar + TableCard + AdaptiveTable.
+ * Preserves the unified OIDC+SAML data, toggle/delete mutations, client filter,
+ * and the Add Provider modal.
  */
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ChevronDown,
-  MoreHorizontal,
   Pencil,
   Plus,
   Power,
-  Search,
   Trash2,
-  X,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import {
+  ConsoleFilterBar,
+  EntityCell,
+} from "@/components/console/iam-console";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { TableCard } from "@/theme/components/cards";
+
 import { AddAuthMethodModal } from "./components/AddAuthMethodModal";
 import { toast } from "@/lib/toast";
 import {
@@ -39,6 +45,9 @@ import { SessionManager } from "../../utils/sessionManager";
 import { useUnifiedProviders } from "./hooks/useUnifiedProviders";
 import { ProviderIcon } from "./utils/provider-icons";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
+
+// Row type inferred from unified providers hook
+type UnifiedProvider = ReturnType<typeof useUnifiedProviders>["providers"][number];
 
 export function AuthenticationPage() {
   const navigate = useNavigate();
@@ -159,188 +168,286 @@ export function AuthenticationPage() {
     }
   };
 
-  return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="section-header">
-          <div>
-            <h1 className="sh-title">Identity Providers</h1>
-            <p className="sh-desc">
-              Manage OIDC and SAML providers used by your workforce and end-user authentication flows.
-            </p>
-          </div>
-          <button className="btn btn-primary" data-tour-id="create-auth-method-button" onClick={() => setIsAddOpen(true)}>
-            <Plus className="icon-sm" /> Add provider
-          </button>
-        </div>
+  // ─── Type filter pills ──────────────────────────────────────────────────────
+  const allProviders = unifiedProviders ?? [];
+  const typeFilters = useMemo(
+    () => [
+      { key: "all", label: "All", count: allProviders.length },
+      { key: "oidc", label: "OIDC", count: allProviders.filter((p) => p.provider_type === "oidc").length },
+      { key: "saml", label: "SAML", count: allProviders.filter((p) => p.provider_type === "saml").length },
+    ],
+    [allProviders],
+  );
 
+  // ─── Client + status trailing selects ──────────────────────────────────────
+  const trailingControls = (
+    <div className="flex items-center gap-2">
+      <select
+        value={statusFilter}
+        onChange={(e) => setStatusFilter(e.target.value)}
+        aria-label="Status"
+        className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        style={{ minWidth: 130 }}
+      >
+        <option value="all">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <select
+        value={selectedClientId}
+        onChange={(e) => setSelectedClientId(e.target.value)}
+        aria-label="Client"
+        disabled={loadingClients}
+        className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+        style={{ minWidth: 160 }}
+      >
+        <option value="">All clients</option>
+        {clients.map((c: any) => (
+          <option key={c.client_id ?? c.id} value={c.client_id ?? c.id}>
+            {c.name ?? c.client_name ?? c.client_id ?? c.id}
+          </option>
+        ))}
+      </select>
+      {filtersActive && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSearch("");
+            setTypeFilter("all");
+            setStatusFilter("all");
+            setSelectedClientId("");
+          }}
+        >
+          Clear
+        </Button>
+      )}
+    </div>
+  );
 
-        <div className="roles-toolbar">
-          <div className={`search${search ? " has-value" : ""}`}>
-            <span className="search-ic"><Search className="icon" /></span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search providers"
-              aria-label="Search providers"
-            />
-            <button className="clear-ic" aria-label="Clear search" onClick={() => setSearch("")}>
-              <X className="icon-sm" />
-            </button>
-          </div>
-          <div className="filterset">
-            <span className="filterset-label">Type</span>
-            <div className="segmented">
-              {[["all", "All"], ["oidc", "OIDC"], ["saml", "SAML"]].map(([v, label]) => (
-                <button key={v} data-on={typeFilter === v} onClick={() => setTypeFilter(v)}>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="select">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status" style={{ minWidth: 120 }}>
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <span className="chev"><ChevronDown className="icon-sm" /></span>
-          </div>
-          <div className="select">
-            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} aria-label="Client" disabled={loadingClients} style={{ minWidth: 150 }}>
-              <option value="">All clients</option>
-              {clients.map((c: any) => (
-                <option key={c.client_id ?? c.id} value={c.client_id ?? c.id}>{c.name ?? c.client_name ?? c.client_id ?? c.id}</option>
-              ))}
-            </select>
-            <span className="chev"><ChevronDown className="icon-sm" /></span>
-          </div>
-          {filtersActive && (
-            <button className="chip-clear" onClick={() => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setSelectedClientId(""); }}>
-              Clear
-            </button>
-          )}
-        </div>
-
-        <div className="table-card">
-          {hasProviderError ? (
-            <div className="empty">
-              <span className="empty-ic" style={{ background: "var(--color-danger-soft)", color: "var(--color-danger-text)", borderColor: "transparent" }}>
-                <Fingerprint className="icon-lg" />
+  // ─── Columns ────────────────────────────────────────────────────────────────
+  const columns = useMemo<AdaptiveColumn<UnifiedProvider>[]>(
+    () => [
+      {
+        id: "provider",
+        header: "Provider",
+        alwaysVisible: true,
+        approxWidth: 240,
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+                <ProviderIcon providerName={p.provider_name} providerType={p.provider_type} className="size-4" />
               </span>
-              <h3 className="empty-title" style={{ color: "var(--color-danger-text)" }}>Unable to load providers</h3>
-              <p className="empty-desc" style={{ color: "var(--color-danger-text)" }}>We hit an error fetching identity providers.</p>
+              <EntityCell
+                label={p.display_name}
+                detail={`by ${p.provider_name}`}
+              />
+            </div>
+          );
+        },
+      },
+      {
+        id: "type",
+        header: "Type",
+        approxWidth: 100,
+        priority: 1,
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <span className={`badge ${p.provider_type === "saml" ? "badge--accent" : "badge--info"}`}>
+              <span className="bdot" />
+              {p.provider_type === "saml" ? "SAML" : "OIDC"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        approxWidth: 110,
+        priority: 2,
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <span className={`badge ${p.is_active ? "badge--success" : "badge--muted"}`}>
+              <span className="bdot" />
+              {p.is_active ? "Active" : "Inactive"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "configuration",
+        header: "Configuration",
+        approxWidth: 280,
+        priority: 3,
+        cell: ({ row }) => {
+          const p = row.original;
+          const config = p.provider_type === "saml" ? p.entity_id : p.callback_url;
+          return (
+            <span
+              className="block max-w-[280px] truncate font-mono text-xs text-muted-foreground"
+              title={config}
+            >
+              {config || "—"}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "",
+        alwaysVisible: true,
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <div onClick={(e) => e.stopPropagation()} className="flex justify-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Provider actions">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="19" cy="12" r="1" />
+                      <circle cx="5" cy="12" r="1" />
+                    </svg>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
+                  <DropdownMenuItem
+                    className="menu-item"
+                    onSelect={() => navigate(`/identity-providers/saml/edit/${p.id}`)}
+                  >
+                    <span className="mi-ic"><Pencil className="icon-sm" /></span>
+                    Edit
+                  </DropdownMenuItem>
+                  <div className="menu-sep" />
+                  <DropdownMenuItem
+                    className="menu-item"
+                    onSelect={() => handleToggleActive(p.id, !p.is_active)}
+                  >
+                    <span className="mi-ic"><Power className="icon-sm" /></span>
+                    {p.is_active ? "Deactivate" : "Activate"}
+                  </DropdownMenuItem>
+                  <div className="menu-sep" />
+                  <DropdownMenuItem
+                    className="menu-item danger"
+                    onSelect={() => setDeleteTarget({ id: p.id, name: p.display_name })}
+                  >
+                    <span className="mi-ic"><Trash2 className="icon-sm" /></span>
+                    Delete provider
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, handleToggleActive],
+  );
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <ConsolePage
+      title="Identity Providers"
+      description="Manage OIDC and SAML providers used by your workforce and end-user authentication flows."
+      actions={
+        <Button
+          className="text-white"
+          data-tour-id="create-auth-method-button"
+          onClick={() => setIsAddOpen(true)}
+        >
+          <Plus className="mr-1.5 size-4" />
+          Add provider
+        </Button>
+      }
+    >
+      <ConsoleFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search providers"
+        filters={typeFilters}
+        activeFilter={typeFilter}
+        onFilterChange={setTypeFilter}
+        trailing={trailingControls}
+      />
+
+      <TableCard>
+        <CardContent variant="flush">
+          {hasProviderError ? (
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Unable to load identity providers. Please try refreshing.
             </div>
           ) : isProvidersLoading ? (
-            <div>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div className="skeleton-row" key={i}>
-                  <span className="sk" style={{ width: 36, height: 36, borderRadius: 8, flex: "none" }} />
-                  <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-                    <span className="sk sk-line" style={{ width: "30%" }} />
-                    <span className="sk sk-line" style={{ width: "20%", height: 9 }} />
-                  </span>
-                  <span className="sk sk-line" style={{ width: 64, height: 22, borderRadius: 999, margin: "0 24px" }} />
-                  <span className="sk sk-line" style={{ width: 72, height: 22, borderRadius: 999 }} />
-                  <span className="sk sk-line" style={{ width: 28 }} />
-                </div>
-              ))}
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Loading…
             </div>
           ) : rows.length === 0 ? (
-            <div className="empty">
-              <span className="empty-ic"><Fingerprint className="icon-lg" /></span>
-              <h3 className="empty-title">{filtersActive ? "No providers match" : "No identity providers yet"}</h3>
-              <p className="empty-desc">
+            <div className="py-16 text-center">
+              <p className="text-sm font-medium text-foreground">
+                {filtersActive ? "No providers match" : "No identity providers yet"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 {filtersActive
                   ? "Try a different search term or filter."
                   : "Add an OIDC or SAML provider so your users can sign in."}
               </p>
-              <button className="btn btn-primary" onClick={filtersActive ? () => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setSelectedClientId(""); } : () => setIsAddOpen(true)}>
-                {filtersActive ? "Clear filters" : (<><Plus className="icon-sm" /> Add provider</>)}
-              </button>
+              <div className="mt-4">
+                {filtersActive ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setTypeFilter("all");
+                      setStatusFilter("all");
+                      setSelectedClientId("");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button className="text-white" onClick={() => setIsAddOpen(true)}>
+                    <Plus className="mr-1.5 size-4" />
+                    Add provider
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Provider</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th className="th-context">Configuration</th>
-                  <th className="th-actions" aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p) => {
-                  const config = p.provider_type === "saml" ? p.entity_id : p.callback_url;
-                  return (
-                    <tr key={p.id} tabIndex={0}>
-                      <td>
-                        <div className="app-cell">
-                          <span className="app-glyph">
-                            <ProviderIcon providerName={p.provider_name} providerType={p.provider_type} className="icon-sm" />
-                          </span>
-                          <span className="ac-meta">
-                            <span className="ac-name">{p.display_name}</span>
-                            <span className="ac-uri" style={{ fontFamily: "var(--font-family-sans)" }}>by {p.provider_name}</span>
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`badge ${p.provider_type === "saml" ? "badge--accent" : "badge--info"}`}>
-                          <span className="bdot" />
-                          {p.provider_type === "saml" ? "SAML" : "OIDC"}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${p.is_active ? "badge--success" : "badge--muted"}`}>
-                          <span className="bdot" />
-                          {p.is_active ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="col-context">
-                        <span className="ctx-uri" title={config} style={{ maxWidth: 280 }}>{config || "—"}</span>
-                      </td>
-                      <td>
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="icon-btn" aria-label="Provider actions">
-                                <MoreHorizontal className="icon" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                              <DropdownMenuItem
-                                className="menu-item"
-                                onSelect={() => navigate(`/identity-providers/saml/edit/${p.id}`)}
-                              >
-                                <span className="mi-ic"><Pencil className="icon-sm" /></span>
-                                Edit
-                              </DropdownMenuItem>
-                              <div className="menu-sep" />
-                              <DropdownMenuItem className="menu-item" onSelect={() => handleToggleActive(p.id, !p.is_active)}>
-                                <span className="mi-ic"><Power className="icon-sm" /></span>
-                                {p.is_active ? "Deactivate" : "Activate"}
-                              </DropdownMenuItem>
-                              <div className="menu-sep" />
-                              <DropdownMenuItem className="menu-item danger" onSelect={() => setDeleteTarget({ id: p.id, name: p.display_name })}>
-                                <span className="mi-ic"><Trash2 className="icon-sm" /></span>
-                                Delete provider
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <AdaptiveTable
+              tableId="identity-providers"
+              data={rows}
+              columns={columns}
+              enableSelection={false}
+              enableExpansion={false}
+              getRowId={(r) => r.id}
+              pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            />
           )}
-        </div>
-      </div>
+        </CardContent>
+      </TableCard>
 
       <AddAuthMethodModal open={isAddOpen} onOpenChange={setIsAddOpen} />
 
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && !(isDeletingOidc || isDeletingSaml) && setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && !(isDeletingOidc || isDeletingSaml) && setDeleteTarget(null)}
+      >
         <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
           <div className="dialog" style={{ width: "100%" }}>
             <span className="dg-icon"><Trash2 className="icon" /></span>
@@ -349,18 +456,31 @@ export function AuthenticationPage() {
               This removes the provider configuration. Users relying on it can no longer sign in
               through it. This can't be undone.
             </DialogDescription>
-            {deleteTarget?.name && <div className="dg-target" style={{ fontFamily: "var(--font-family-sans)" }}>{deleteTarget.name}</div>}
+            {deleteTarget?.name && (
+              <div className="dg-target" style={{ fontFamily: "var(--font-family-sans)" }}>
+                {deleteTarget.name}
+              </div>
+            )}
             <div className="dg-actions">
-              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={isDeletingOidc || isDeletingSaml}>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeletingOidc || isDeletingSaml}
+              >
                 Cancel
-              </button>
-              <button className="btn btn-danger" onClick={() => void handleConfirmDelete()} disabled={isDeletingOidc || isDeletingSaml}>
-                <Trash2 className="icon-sm" /> {isDeletingOidc || isDeletingSaml ? "Deleting…" : "Delete provider"}
-              </button>
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => void handleConfirmDelete()}
+                disabled={isDeletingOidc || isDeletingSaml}
+              >
+                <Trash2 className="mr-1.5 size-4" />
+                {isDeletingOidc || isDeletingSaml ? "Deleting…" : "Delete provider"}
+              </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </ConsolePage>
   );
 }

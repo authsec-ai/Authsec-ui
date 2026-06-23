@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ShieldCheck, Plus, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -25,6 +25,7 @@ import {
   EntityCell,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
+import { ConsolePage } from "@/components/console/ConsolePage";
 import BrokeringPoliciesCard from "./BrokeringPoliciesCard";
 import WorkloadProvidersCard from "./WorkloadProvidersCard";
 import {
@@ -335,37 +336,26 @@ export default function TrustedIssuersPage() {
   );
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3 pb-1">
-        <ShieldCheck className="size-5 text-muted-foreground" />
-        <div>
-          <h1 className="text-lg font-semibold leading-none">Trusted Issuers</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            External identity providers whose assertions are accepted for cross-app agent access.
-          </p>
-        </div>
-      </div>
-
+    <ConsolePage
+      title="Trusted Issuers"
+      description="External identity providers whose assertions are accepted for cross-app agent access."
+      actions={
+        <Button onClick={() => setCreateOpen(true)} className="text-white">
+          <Plus className="mr-1.5 size-3.5" />
+          Add issuer
+        </Button>
+      }
+    >
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
         searchPlaceholder="Search issuers"
         trailing={
-          <div className="flex items-center gap-2">
-            {query.trim() && (
-              <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
-                Clear
-              </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-              className="text-white"
-            >
-              <Plus className="mr-1.5 size-3.5" />
-              Add issuer
+          query.trim() ? (
+            <Button variant="ghost" size="sm" onClick={() => setQuery("")}>
+              Clear
             </Button>
-          </div>
+          ) : null
         }
       />
 
@@ -410,6 +400,6 @@ export default function TrustedIssuersPage() {
 
       <CreateIssuerDialog open={createOpen} onOpenChange={setCreateOpen} />
       <RevokeIssuerDialog issuer={revokeTarget} onOpenChange={(v) => { if (!v) setRevokeTarget(null); }} />
-    </div>
+    </ConsolePage>
   );
 }
