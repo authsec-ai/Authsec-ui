@@ -408,7 +408,7 @@ export default function ApplicationsPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.application.id}
-              onRowClick={(row) => navigate(`/applications/${row.original.application.id}/overview`)}
+              onRowClick={(row) => navigate(`/applications/${row.application.id}/overview`)}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}

@@ -681,7 +681,7 @@ export default function EndUsersPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.user_id}
-              onRowClick={(row) => setSelectedUser(row.original)}
+              onRowClick={(row) => setSelectedUser(row)}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}
