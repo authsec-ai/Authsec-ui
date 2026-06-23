@@ -6,6 +6,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Don't scan docs for class candidates — CLAUDE.md contains literal example
+   strings like `text-[length:var(...)]` that Tailwind would otherwise emit as
+   invalid utilities (the `var(...)` placeholder fails CSS minification). */
+@source not "../**/*.md";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
