@@ -48,10 +48,16 @@ export type ClientsTableScope =
   | { kind: "workspace" }
   | { kind: "resource_server"; rsId: string };
 
+interface ClientsTableProps {
+  scope: ClientsTableScope;
+  statusFilter?: StatusFilter;
+  onStatusFilterChange?: (status: StatusFilter) => void;
+}
+
 // ─── Filter types ─────────────────────────────────────────────────────────────
 
 type KindFilter = "all" | "agent" | "human_app" | "m2m" | "cli";
-type StatusFilter = "all" | "pending_approval" | "approved" | "revoked";
+export type StatusFilter = "all" | "pending_approval" | "approved" | "revoked";
 type ViewMode = "flat" | "grouped";
 
 const KIND_FILTERS: Array<{ key: KindFilter; label: string }> = [
@@ -275,6 +281,80 @@ function ClientRowActions({ client }: { client: WorkspaceClientItem }) {
   );
 }
 
+function PendingClientDecision({ client }: { client: WorkspaceClientItem }) {
+  const [approveClient, { isLoading: approving }] =
+    useApproveWorkspaceClientMutation();
+  const [revokeClient, { isLoading: denying }] = useRevokeWorkspaceClientMutation();
+
+  if (client.status !== "pending_approval") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        {client.status === "approved" ? "Approved" : "—"}
+      </span>
+    );
+  }
+
+  const handleApprove = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    try {
+      await approveClient({
+        rsId: client.resource_server_id,
+        clientId: client.client_id,
+      }).unwrap();
+      toast.success("Client approved for this workspace");
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string; message?: string } };
+      toast.error(e?.data?.message ?? e?.data?.error ?? "Failed to approve client");
+    }
+  };
+
+  const handleDeny = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (
+      !window.confirm(
+        `Deny "${client.client_name || client.client_id}"?\n\nThis client will not be able to connect to ${client.resource_server_name || "this application"}.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await revokeClient({
+        rsId: client.resource_server_id,
+        clientId: client.client_id,
+      }).unwrap();
+      toast.success("Request denied");
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string; message?: string } };
+      toast.error(e?.data?.message ?? e?.data?.error ?? "Failed to deny request");
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        className="h-7 px-2 text-xs text-white"
+        onClick={handleApprove}
+        disabled={approving || denying}
+      >
+        {approving ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Check className="mr-1 size-3" />}
+        Approve
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 border-rose-200 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+        onClick={handleDeny}
+        disabled={approving || denying}
+      >
+        {denying ? <Loader2 className="mr-1 size-3 animate-spin" /> : <X className="mr-1 size-3" />}
+        Deny
+      </Button>
+    </div>
+  );
+}
+
 // ─── Grouped row type ─────────────────────────────────────────────────────────
 
 interface GroupedClientRow {
@@ -353,6 +433,99 @@ function GroupedRowActions({ group }: { group: GroupedClientRow }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  );
+}
+
+function GroupPendingDecision({ group }: { group: GroupedClientRow }) {
+  const pending = group.instances.filter((c) => c.status === "pending_approval");
+  const [approveClient] = useApproveWorkspaceClientMutation();
+  const [revokeClient] = useRevokeWorkspaceClientMutation();
+  const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
+
+  if (pending.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const handleApprove = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setBusy("approve");
+    try {
+      await Promise.all(
+        pending.map((client) =>
+          approveClient({
+            rsId: client.resource_server_id,
+            clientId: client.client_id,
+          }).unwrap(),
+        ),
+      );
+      toast.success(
+        pending.length === 1
+          ? "Client approved for this workspace"
+          : `Approved ${pending.length} pending clients`,
+      );
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string; message?: string } };
+      toast.error(e?.data?.message ?? e?.data?.error ?? "Failed to approve clients");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDeny = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (
+      !window.confirm(
+        `Deny ${pending.length} pending request${pending.length === 1 ? "" : "s"} for "${group.displayName}"?`,
+      )
+    ) {
+      return;
+    }
+
+    setBusy("deny");
+    try {
+      await Promise.all(
+        pending.map((client) =>
+          revokeClient({
+            rsId: client.resource_server_id,
+            clientId: client.client_id,
+          }).unwrap(),
+        ),
+      );
+      toast.success(
+        pending.length === 1
+          ? "Request denied"
+          : `Denied ${pending.length} pending requests`,
+      );
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string; message?: string } };
+      toast.error(e?.data?.message ?? e?.data?.error ?? "Failed to deny requests");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        className="h-7 px-2 text-xs text-white"
+        onClick={handleApprove}
+        disabled={busy !== null}
+      >
+        {busy === "approve" ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Check className="mr-1 size-3" />}
+        Approve
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 border-rose-200 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+        onClick={handleDeny}
+        disabled={busy !== null}
+      >
+        {busy === "deny" ? <Loader2 className="mr-1 size-3 animate-spin" /> : <X className="mr-1 size-3" />}
+        Deny
+      </Button>
     </div>
   );
 }
@@ -537,7 +710,11 @@ function groupStatusTone(group: GroupedClientRow) {
 
 // ─── Main table component ─────────────────────────────────────────────────────
 
-export function ClientsTable({ scope }: { scope: ClientsTableScope }) {
+export function ClientsTable({
+  scope,
+  statusFilter: controlledStatusFilter,
+  onStatusFilterChange,
+}: ClientsTableProps) {
   const queryArg =
     scope.kind === "resource_server"
       ? { resourceServerId: scope.rsId }
@@ -547,8 +724,11 @@ export function ClientsTable({ scope }: { scope: ClientsTableScope }) {
 
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [internalStatusFilter, setInternalStatusFilter] =
+    useState<StatusFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grouped");
+  const statusFilter = controlledStatusFilter ?? internalStatusFilter;
+  const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
 
   const kindCounts = useMemo(() => {
     const all = clients ?? [];
@@ -770,6 +950,13 @@ export function ClientsTable({ scope }: { scope: ClientsTableScope }) {
         ),
       },
       {
+        id: "decision",
+        header: "Decision",
+        alwaysVisible: true,
+        approxWidth: 180,
+        cell: ({ row }) => <PendingClientDecision client={row.original} />,
+      },
+      {
         id: "actions",
         header: "",
         alwaysVisible: true,
@@ -877,6 +1064,13 @@ export function ClientsTable({ scope }: { scope: ClientsTableScope }) {
             {relativeTime(row.original.lastTokenIssuedAt)}
           </span>
         ),
+      },
+      {
+        id: "decision",
+        header: "Decision",
+        alwaysVisible: true,
+        approxWidth: 180,
+        cell: ({ row }) => <GroupPendingDecision group={row.original} />,
       },
       {
         id: "actions",

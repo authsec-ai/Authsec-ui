@@ -9,7 +9,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Check, Code2, Copy } from "lucide-react";
-import "@/features/sdk/sdk-editorial-theme.css";
 
 interface SDKIntegrationDialogProps {
   open: boolean;

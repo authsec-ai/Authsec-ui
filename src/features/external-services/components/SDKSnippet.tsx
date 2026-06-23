@@ -82,7 +82,7 @@ def connect():
   };
 
   const openDocs = () => {
-    window.open("https://docs.authsec.com/external-services", "_blank");
+    window.open("https://docs.authsec.dev/getting-started", "_blank");
   };
 
   return (

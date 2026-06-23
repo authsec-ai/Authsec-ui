@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   ResponsiveDataTable,
   type ResponsiveTableConfig,
@@ -13,7 +13,6 @@ import {
   createResourcesColumns,
   type ResourcesTableActions,
 } from "../utils/resources-table-utils";
-import { ViewSDKModal, generateResourceSDKCode } from "@/features/sdk";
 
 interface EnhancedResourcesTableProps {
   data: Resource[];
@@ -42,21 +41,12 @@ function EnhancedResourcesTableContent({
   const [internalSelection, setInternalSelection] = React.useState<string[]>([]);
   const isControlledSelection = typeof onSelectionChange === "function";
   const selection = isControlledSelection ? selectedResources : internalSelection;
-  const [sdkModalOpen, setSdkModalOpen] = useState(false);
-  const [selectedResourceForSDK, setSelectedResourceForSDK] = useState<Resource | null>(null);
-
-  const handleViewSDK = useCallback((resource: Resource) => {
-    setSelectedResourceForSDK(resource);
-    setSdkModalOpen(true);
-  }, []);
-
   const actions: ResourcesTableActions = useMemo(
     () => ({
       onEditResource: (resource: Resource) => onEditResource(resource.id),
       onDeleteResource: (resource: Resource) => onDeleteResource(resource.id),
-      onViewSDK: handleViewSDK,
     }),
-    [onEditResource, onDeleteResource, handleViewSDK]
+    [onEditResource, onDeleteResource]
   );
 
   const columns = useMemo(() => {
@@ -106,31 +96,9 @@ function EnhancedResourcesTableContent({
     getRowId: (row) => row.id,
   };
 
-  const sdkCode = selectedResourceForSDK
-    ? generateResourceSDKCode({
-        id: selectedResourceForSDK.id,
-        name: selectedResourceForSDK.name,
-        description: selectedResourceForSDK.description,
-      })
-    : { python: [], typescript: [] };
-
   return (
     <>
       <ResponsiveDataTable {...tableConfig} />
-
-      {selectedResourceForSDK && (
-        <ViewSDKModal
-          open={sdkModalOpen}
-          onOpenChange={setSdkModalOpen}
-          title={`SDK Code for ${selectedResourceForSDK.name}`}
-          description="Use this code to check access, protect tools, or manage this resource in your application."
-          entityType="Resource"
-          entityName={selectedResourceForSDK.name}
-          pythonCode={sdkCode.python}
-          typescriptCode={sdkCode.typescript}
-          docsLink="/docs/sdk/resources"
-        />
-      )}
     </>
   );
 }

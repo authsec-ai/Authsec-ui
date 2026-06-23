@@ -166,6 +166,12 @@ export const baseApi = createApi({
     "BillingUsage",
     "BillingPlan",
     "MCPClient",
+    // Agent Identity — Wave 1
+    "AccessAssignment",
+    "AgentRequest",
+    "AgentConnection",
+    // Agent Identity — Wave 2
+    "TrustedIssuer",
   ],
   endpoints: () => ({}),
 });

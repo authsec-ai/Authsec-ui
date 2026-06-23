@@ -5,11 +5,13 @@ import { Button } from "@/components/ui/button";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 
 import { ClientsTable } from "./ClientsTable";
+import type { StatusFilter } from "./ClientsTable";
 import { CreateClientWizard } from "./CreateClientWizard";
 
 export function ClientsPage() {
   const { data: clients, refetch } = useListWorkspaceClientsQuery();
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const pendingCount = useMemo(
     () => (clients ?? []).filter((c) => c.status === "pending_approval").length,
@@ -27,7 +29,7 @@ export function ClientsPage() {
             </h1>
             {pendingCount > 0 && (
               <button
-                onClick={() => {/* handled by status chip in ClientsTable */}}
+                onClick={() => setStatusFilter("pending_approval")}
                 className="inline-flex items-center gap-1 rounded-full bg-[color:color-mix(in_oklch,var(--color-warning)_15%,transparent)] px-2.5 py-1 text-xs font-semibold text-[var(--color-warning)] hover:bg-[color:color-mix(in_oklch,var(--color-warning)_22%,transparent)] transition-colors"
                 aria-label={`${pendingCount} clients awaiting approval`}
               >
@@ -39,6 +41,12 @@ export function ClientsPage() {
           <p className="max-w-3xl text-sm leading-5 text-muted-foreground">
             Clients with access to this workspace's MCP servers. Revoking affects only this workspace.
           </p>
+          {pendingCount > 0 && (
+            <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
+              Pending client registrations can be approved or denied in the table below. Role-based
+              access requests still live inside each application's Requests tab.
+            </p>
+          )}
         </div>
         <Button
           onClick={() => setWizardOpen(true)}
@@ -50,7 +58,11 @@ export function ClientsPage() {
         </Button>
       </header>
 
-      <ClientsTable scope={{ kind: "workspace" }} />
+      <ClientsTable
+        scope={{ kind: "workspace" }}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+      />
 
       <CreateClientWizard
         open={wizardOpen}

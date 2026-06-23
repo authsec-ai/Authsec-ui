@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { X, ArrowRight } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { useGetExternalServicesQuery } from "../../../app/api/externalServiceApi";
@@ -14,7 +13,6 @@ export function ServiceSelectionModal({
   isOpen,
   onClose,
 }: ServiceSelectionModalProps) {
-  const navigate = useNavigate();
   const sessionData = SessionManager.getSession();
   const workspaceId = sessionData?.workspace_id || "";
   const { data: servicesData, isLoading } = useGetExternalServicesQuery(
@@ -28,7 +26,7 @@ export function ServiceSelectionModal({
 
   const handleContinue = () => {
     if (selectedServiceId) {
-      navigate(`/sdk/external-services/${selectedServiceId}`);
+      window.open("https://docs.authsec.dev/getting-started", "_blank");
       onClose();
     }
   };

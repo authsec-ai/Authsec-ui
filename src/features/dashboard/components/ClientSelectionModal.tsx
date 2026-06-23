@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +21,6 @@ export function ClientSelectionModal({
   isOpen,
   onClose,
 }: ClientSelectionModalProps) {
-  const navigate = useNavigate();
   const sessionData = SessionManager.getSession();
   const workspaceId = sessionData?.workspace_id || "";
 
@@ -40,7 +38,7 @@ export function ClientSelectionModal({
 
   const handleContinue = () => {
     if (selectedClient) {
-      navigate(`/developer/sdk-guides/clients/${selectedClient}`);
+      window.open("https://docs.authsec.dev/getting-started", "_blank");
       onClose();
     }
   };

@@ -63,7 +63,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
   return (
     <header
       data-scrolled={scrolled}
-      className="bg-[color-mix(in_srgb,var(--app-shell-surface)_82%,transparent)] text-foreground sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-transparent backdrop-blur-md transition-[border-color,box-shadow] duration-(--motion-duration-slow) data-[scrolled=true]:border-(--color-border-subtle) data-[scrolled=true]:shadow-(--shadow-xs)"
+      className="bg-[color-mix(in_srgb,var(--app-shell-surface)_82%,transparent)] text-foreground sticky top-0 z-40 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-[var(--app-shell-border)] backdrop-blur-md transition-[border-color,box-shadow] duration-(--motion-duration-slow) data-[scrolled=true]:border-(--color-border-subtle) data-[scrolled=true]:shadow-(--shadow-xs)"
     >
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />

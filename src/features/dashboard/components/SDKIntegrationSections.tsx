@@ -53,7 +53,7 @@ export function SDKIntegrationSections() {
   };
 
   const handleRBACClick = () => {
-    navigate("/developer/sdk-guides/rbac?module=rbac");
+    window.open("https://docs.authsec.dev/getting-started", "_blank");
   };
 
   const sdkCards = [

@@ -10,7 +10,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, Code2, Copy, HelpCircle, X, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import "@/features/sdk/sdk-editorial-theme.css";
 
 export interface HelpCodeStep {
   label: string;

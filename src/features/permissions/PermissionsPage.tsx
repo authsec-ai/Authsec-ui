@@ -35,7 +35,6 @@ import {
   type ResponsiveColumnDef,
 } from "@/components/ui/responsive-data-table";
 import { ResponsiveTableProvider } from "@/components/ui/responsive-table";
-import { SDKQuickHelp, PERMISSIONS_SDK_HELP } from "@/features/sdk";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { Shield, Lock, Users } from "lucide-react";
@@ -636,9 +635,6 @@ export function PermissionsPage() {
         onOpenChange={setCreateModalOpen}
         onSuccess={handlePermissionModalSuccess}
       />
-
-      {/* SDK Quick Help */}
-      <SDKQuickHelp helpItems={PERMISSIONS_SDK_HELP} title="Permissions SDK" />
     </div>
   );
 }

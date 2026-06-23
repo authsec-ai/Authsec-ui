@@ -1,5 +1,4 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ResponsiveDataTable,
   type ResponsiveTableConfig,
@@ -41,8 +40,6 @@ export function EnhancedExternalServicesTable({
   onSelectAll,
   onCreateService,
 }: EnhancedExternalServicesTableProps) {
-  const navigate = useNavigate();
-
   // If parent controls selection use that, otherwise maintain internal state
   const [internalSelected, setInternalSelected] = React.useState<string[]>([]);
   const selectedRowIds = externalSelected.length > 0 ? externalSelected : internalSelected;
@@ -63,9 +60,9 @@ export function EnhancedExternalServicesTable({
     setServiceToDelete(service);
   };
 
-  const handleViewSDK = (service: RawExternalService) => {
-    // Navigate to SDK page for this service
-    navigate(`/sdk/external-services/${service.id}`);
+  const handleViewSDK = (_service: RawExternalService) => {
+    // Open external SDK docs in a new tab
+    window.open("https://docs.authsec.dev/getting-started", "_blank");
   };
 
   const handleViewSecret = (service: RawExternalService) => {

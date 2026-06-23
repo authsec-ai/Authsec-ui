@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ResponsiveDataTable,
   type ResponsiveTableConfig,
@@ -13,7 +13,6 @@ import {
   RoleExpandedRow,
   type RoleTableActions,
 } from "../utils/role-table-utils";
-import { ViewSDKModal, generateRoleSDKCode } from "@/features/sdk";
 
 interface EnhancedRolesTableProps {
   data: EnhancedRole[];
@@ -54,15 +53,8 @@ export function EnhancedRolesTable({
   */
   const [internalSelected, setInternalSelected] = useState<string[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sdkModalOpen, setSdkModalOpen] = useState(false);
-  const [selectedRoleForSDK, setSelectedRoleForSDK] = useState<EnhancedRole | null>(null);
 
   const selectedRowIds = externalSelected.length > 0 ? externalSelected : internalSelected;
-
-  const handleViewSDK = useCallback((role: EnhancedRole) => {
-    setSelectedRoleForSDK(role);
-    setSdkModalOpen(true);
-  }, []);
 
   // Handle row expansion
   const handleToggleExpand = (rowId: string) => {
@@ -89,9 +81,8 @@ export function EnhancedRolesTable({
       onAssignUsers: onAssignUsers || ((id) => toast.info(`Assign users to role ${id}`)),
       onEditPermissions: onEditPermissions || ((id) => toast.info(`Edit permissions for role ${id}`)),
       onViewVersionHistory: onViewVersionHistory || ((id) => toast.info(`View version history for role ${id}`)),
-      onViewSDK: handleViewSDK,
     }),
-    [onEditRole, onDuplicateRole, onDeleteRole, onAssignUsers, onEditPermissions, onViewVersionHistory, handleViewSDK]
+    [onEditRole, onDuplicateRole, onDeleteRole, onAssignUsers, onEditPermissions, onViewVersionHistory]
   );
 
   const columns = useMemo(() => createRoleTableColumns(
@@ -159,35 +150,11 @@ export function EnhancedRolesTable({
     rowClassName,
   };
 
-  const sdkCode = selectedRoleForSDK
-    ? generateRoleSDKCode({
-        id: selectedRoleForSDK.id,
-        name: selectedRoleForSDK.name,
-        description: selectedRoleForSDK.description,
-        permissions: selectedRoleForSDK.permissions,
-        grants: (selectedRoleForSDK as any).grants,
-      })
-    : { python: [], typescript: [] };
-
   return (
     <>
       <ResponsiveTableProvider tableType="roles">
         <ResponsiveDataTable {...tableConfig} />
       </ResponsiveTableProvider>
-
-      {selectedRoleForSDK && (
-        <ViewSDKModal
-          open={sdkModalOpen}
-          onOpenChange={setSdkModalOpen}
-          title={`SDK Code for ${selectedRoleForSDK.name}`}
-          description="Use this code to check role membership, protect tools, or manage this role in your application."
-          entityType="Role"
-          entityName={selectedRoleForSDK.name}
-          pythonCode={sdkCode.python}
-          typescriptCode={sdkCode.typescript}
-          docsLink="/docs/sdk/roles"
-        />
-      )}
     </>
   );
 }

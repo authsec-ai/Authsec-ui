@@ -1,5 +1,4 @@
 import { useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -471,7 +470,6 @@ function UserDetailDrawer({
 
 export default function EndUsersPage() {
   const workspaceId = resolveWorkspaceId();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
   const [page, setPage] = useState(1);
@@ -639,8 +637,8 @@ export default function EndUsersPage() {
                   ? "Try a different search term or clear the active filters."
                   : "When someone authorizes one of this workspace's Applications via OAuth, they'll appear here."}
               </p>
-              <button className="btn btn-secondary" onClick={filtersActive ? clearFilters : () => navigate("/developer/sdk-guides")}>
-                {filtersActive ? "Clear filters" : "View SDK guides"}
+              <button className="btn btn-secondary" onClick={filtersActive ? clearFilters : () => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
+                {filtersActive ? "Clear filters" : "View docs"}
               </button>
             </div>
           ) : (

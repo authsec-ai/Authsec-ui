@@ -41,9 +41,9 @@ export function ResourceServerPromptPage() {
                 Details
               </Button>
               {server ? (
-                <Button variant="outline" onClick={() => navigate(`/resource-servers/${server.id}/sdk`)}>
+                <Button variant="outline" onClick={() => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
                   <Code2 className="mr-2 h-4 w-4" />
-                  View SDK
+                  View Docs
                 </Button>
               ) : null}
             </div>

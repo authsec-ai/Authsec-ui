@@ -47,7 +47,7 @@ ${grantsStr}
 
   const handleDocsClick = () => {
     // Open docs in new tab
-    window.open("/developer/sdk-guides/rbac?module=rbac", "_blank");
+    window.open("https://docs.authsec.dev/getting-started", "_blank");
   };
 
   return (

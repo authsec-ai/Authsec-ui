@@ -14,7 +14,6 @@ import {
   Edit,
   Trash2,
   Code,
-  Code2,
   Database,
   Globe,
   Copy,
@@ -43,7 +42,6 @@ export const ResourcesTableUtils = {
 export interface ResourcesTableActions {
   onEditResource: (resource: Resource) => void;
   onDeleteResource: (resource: Resource) => void;
-  onViewSDK?: (resource: Resource) => void;
 }
 
 // Cell: Resource overview (name and description)
@@ -84,15 +82,6 @@ export function ActionsCell({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" visualVariant="row-actions" className="w-48">
-        {actions.onViewSDK && (
-          <DropdownMenuItem
-            onClick={() => actions.onViewSDK?.(resource)}
-            className="admin-menu-item-sdk"
-          >
-            <Code2 className="mr-2 h-4 w-4" />
-            View SDK Code
-          </DropdownMenuItem>
-        )}
         <DropdownMenuItem onClick={() => actions.onEditResource(resource)}>
           <Edit className="mr-2 h-4 w-4" />
           Edit Resource

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { SDKQuickHelp, ROLE_BINDINGS_SDK_HELP } from "@/features/sdk";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 
 /**
@@ -101,12 +100,6 @@ export function MappingsPage() {
           />
         </div>
       </div>
-
-      {/* SDK Quick Help */}
-      <SDKQuickHelp
-        entityType="Role Bindings"
-        helpItems={ROLE_BINDINGS_SDK_HELP}
-      />
     </div>
   );
 }

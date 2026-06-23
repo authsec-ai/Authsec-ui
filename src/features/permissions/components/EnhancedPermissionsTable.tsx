@@ -11,16 +11,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
-import { Trash2, Shield, Database, Key, Calendar, MoreHorizontal, Code2 } from "lucide-react";
+import { Trash2, Shield, Database, Key, Calendar, MoreHorizontal } from "lucide-react";
 import type { Permission } from "@/app/api/permissionsApi";
 import { useDeletePermissionsMutation } from "@/app/api/permissionsApi";
 import { toast } from "@/lib/toast";
 import { SessionManager } from "@/utils/sessionManager";
-import { ViewSDKModal, generatePermissionSDKCode } from "@/features/sdk";
 import { DeletePermissionConfirmDialog } from "./DeletePermissionConfirmDialog";
 
 interface EnhancedPermissionsTableProps {
@@ -120,15 +118,8 @@ export function EnhancedPermissionsTable({
 }: EnhancedPermissionsTableProps) {
   const [deletePermissions, { isLoading: isDeleting }] = useDeletePermissionsMutation();
   const workspaceId = SessionManager.getSession()?.workspace_id || "";
-  const [sdkModalOpen, setSdkModalOpen] = useState(false);
-  const [selectedPermissionForSDK, setSelectedPermissionForSDK] = useState<Permission | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [permissionToDelete, setPermissionToDelete] = useState<Permission | null>(null);
-
-  const handleViewSDK = useCallback((permission: Permission) => {
-    setSelectedPermissionForSDK(permission);
-    setSdkModalOpen(true);
-  }, []);
 
   const handleDeleteClick = useCallback((permission: Permission) => {
     setPermissionToDelete(permission);
@@ -204,11 +195,6 @@ export function EnhancedPermissionsTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" visualVariant="row-actions" className="w-48">
-              <DropdownMenuItem onClick={() => handleViewSDK(row.original)}>
-                <Code2 className="mr-2 h-4 w-4" />
-                View SDK Code
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => handleDeleteClick(row.original)}
                 className="text-destructive focus:text-destructive"
@@ -225,7 +211,7 @@ export function EnhancedPermissionsTable({
         cellClassName: "text-center",
       },
     ],
-    [handleDeleteClick, handleViewSDK]
+    [handleDeleteClick]
   );
 
   const tableConfig: ResponsiveTableConfig<Permission> = {
@@ -263,34 +249,11 @@ export function EnhancedPermissionsTable({
     getRowId: (row) => row.id,
   };
 
-  const sdkCode = selectedPermissionForSDK
-    ? generatePermissionSDKCode({
-        action: selectedPermissionForSDK.action,
-        resource: selectedPermissionForSDK.resource,
-        full_permission_string: selectedPermissionForSDK.full_permission_string,
-        description: selectedPermissionForSDK.description,
-      })
-    : { python: [], typescript: [] };
-
   return (
     <>
       <ResponsiveTableProvider tableType="permissions">
         <ResponsiveDataTable {...tableConfig} />
       </ResponsiveTableProvider>
-
-      {selectedPermissionForSDK && (
-        <ViewSDKModal
-          open={sdkModalOpen}
-          onOpenChange={setSdkModalOpen}
-          title={`SDK Code for ${selectedPermissionForSDK.full_permission_string}`}
-          description="Use this code to check, enforce, or manage this permission in your application."
-          entityType="Permission"
-          entityName={selectedPermissionForSDK.full_permission_string}
-          pythonCode={sdkCode.python}
-          typescriptCode={sdkCode.typescript}
-          docsLink="/docs/sdk/permissions"
-        />
-      )}
 
       {permissionToDelete && (
         <DeletePermissionConfirmDialog

@@ -183,7 +183,7 @@ export function ExternalServicesPage() {
               </thead>
               <tbody>
                 {rows.map((s) => (
-                  <tr key={s.id} tabIndex={0} onClick={() => navigate(`/sdk/external-services/${s.id}`)}>
+                  <tr key={s.id} tabIndex={0} onClick={() => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
                     <td>
                       <div className="app-cell">
                         <span className="app-glyph tone-info"><KeyRound className="icon-sm" /></span>
@@ -220,9 +220,9 @@ export function ExternalServicesPage() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                            <DropdownMenuItem className="menu-item" onSelect={() => navigate(`/sdk/external-services/${s.id}`)}>
+                            <DropdownMenuItem className="menu-item" onSelect={() => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
                               <span className="mi-ic"><Code2 className="icon-sm" /></span>
-                              View SDK code
+                              View docs
                             </DropdownMenuItem>
                             <div className="menu-sep" />
                             <DropdownMenuItem className="menu-item danger" onSelect={() => setDeleteTarget(s)}>

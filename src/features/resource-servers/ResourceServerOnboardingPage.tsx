@@ -56,9 +56,9 @@ export default function ResourceServerOnboardingPage() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Details
               </Button>
-              <Button variant="outline" onClick={() => navigate(`/resource-servers/${server.id}/sdk`)}>
+              <Button variant="outline" onClick={() => window.open("https://docs.authsec.dev/getting-started", "_blank")}>
                 <Copy className="mr-2 h-4 w-4" />
-                SDK
+                Docs
               </Button>
             </div>
           }

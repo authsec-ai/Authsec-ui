@@ -30,9 +30,7 @@ import {
   Pause,
   Play,
   Plus,
-  Code2,
 } from "lucide-react";
-import { ViewSDKModal, generateAuthMethodSDKCode } from "@/features/sdk";
 
 // Get provider icon
 const getProviderIcon = (providerType?: string) => {
@@ -90,13 +88,6 @@ export function EnhancedAuthTable({
   onCreateMethod,
 }: EnhancedAuthTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sdkModalOpen, setSdkModalOpen] = useState(false);
-  const [selectedMethodForSDK, setSelectedMethodForSDK] = useState<AuthMethod | null>(null);
-
-  const handleViewSDK = (method: AuthMethod) => {
-    setSelectedMethodForSDK(method);
-    setSdkModalOpen(true);
-  };
 
   const toggleRowExpansion = (methodId: string) => {
     const newExpanded = new Set(expandedRows);
@@ -230,10 +221,6 @@ export function EnhancedAuthTable({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" visualVariant="row-actions" className="w-48">
-                        <DropdownMenuItem onClick={() => handleViewSDK(method)}>
-                          <Code2 className="mr-2 h-4 w-4" />
-                          View SDK Code
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onEditMethod(method.id)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
@@ -359,28 +346,6 @@ export function EnhancedAuthTable({
           })}
         </TableBody>
       </Table>
-
-      {selectedMethodForSDK && (
-        <ViewSDKModal
-          open={sdkModalOpen}
-          onOpenChange={setSdkModalOpen}
-          title={`SDK Code for ${selectedMethodForSDK.displayName || selectedMethodForSDK.name}`}
-          description="Use this code to integrate this authentication method into your application."
-          entityType="Auth Method"
-          entityName={selectedMethodForSDK.displayName || selectedMethodForSDK.name || "Auth Method"}
-          pythonCode={generateAuthMethodSDKCode({
-            id: selectedMethodForSDK.id,
-            name: selectedMethodForSDK.name,
-            displayName: selectedMethodForSDK.displayName,
-            providerType: selectedMethodForSDK.providerType,
-            provider: selectedMethodForSDK.provider,
-            methodKey: selectedMethodForSDK.methodKey,
-            type: selectedMethodForSDK.type,
-          }).python}
-          typescriptCode={[]}
-          docsLink="/docs/sdk/authentication"
-        />
-      )}
     </div>
   );
 }

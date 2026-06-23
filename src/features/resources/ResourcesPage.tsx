@@ -25,7 +25,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { performDiscreteDeletes } from "@/utils/bulk-actions";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { SDKQuickHelp, RESOURCES_SDK_HELP } from "@/features/sdk";
 
 export default function ResourcesPage() {
   const navigate = useContextualNavigate();
@@ -280,11 +279,6 @@ export default function ResourcesPage() {
         />
       )}
 
-      {/* SDK Quick Help */}
-      <SDKQuickHelp
-        helpItems={RESOURCES_SDK_HELP}
-        title="Resources SDK"
-      />
     </div>
   );
 }

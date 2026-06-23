@@ -16,7 +16,6 @@ import {
   UserPlus,
   History,
   Lock,
-  Code2,
 } from "lucide-react";
 import type { EnhancedRole } from "@/types/entities";
 import type { ResponsiveColumnDef } from "@/components/ui/responsive-data-table";
@@ -38,7 +37,6 @@ export interface RoleTableActions {
   onAssignUsers: (id: string) => void;
   onEditPermissions: (id: string) => void;
   onViewVersionHistory: (id: string) => void;
-  onViewSDK?: (role: EnhancedRole) => void;
 }
 
 // Utility functions
@@ -182,15 +180,6 @@ export function RoleActionsCell({
           visualVariant="row-actions"
           className="w-48"
         >
-          {actions.onViewSDK && (
-            <DropdownMenuItem
-              onClick={() => actions.onViewSDK?.(role)}
-              className="admin-menu-item-sdk"
-            >
-              <Code2 className="mr-2 h-4 w-4" />
-              View SDK Code
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem onClick={() => actions.onAssignUsers(role.id)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Assign Users

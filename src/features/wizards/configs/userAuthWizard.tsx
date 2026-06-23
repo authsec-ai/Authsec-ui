@@ -57,11 +57,11 @@ export const userAuthWizard: WizardConfig = {
       briefDescription: "Add AuthSec SDK for user authentication",
       icon: <Code2 className="h-5 w-5" />,
       actionLabel: "View SDK Integration",
-      actionType: "navigate",
+      actionType: "dialog",
       actionPayload: {
-        route: "/developer/sdk-guides/clients/:clientId",
+        handler: "sdk-integration",
       },
-      completionTrigger: "navigation-return",
+      completionTrigger: "manual",
     },
   ],
   onComplete: () => {
