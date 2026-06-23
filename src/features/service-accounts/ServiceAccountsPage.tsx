@@ -566,11 +566,12 @@ export default function ServiceAccountsPage() {
   );
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Service Accounts</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+    <div data-cr>
+      <div className="console-page">
+      <div className="section-header">
+        <div>
+          <h1 className="sh-title">Service Accounts</h1>
+          <p className="sh-desc">
             Machine principals for server-to-server (M2M) calls. Each service account holds a
             credential — client secret, private-key JWT, or Kubernetes SPIFFE SVID — and is granted
             access to specific MCP servers independently of any user session.
@@ -588,7 +589,7 @@ export default function ServiceAccountsPage() {
             Create service account
           </Button>
         </div>
-      </header>
+      </div>
 
       <ConsoleFilterBar
         search={query}
@@ -654,6 +655,7 @@ export default function ServiceAccountsPage() {
         open={!!selectedSA}
         onClose={() => setSelectedSA(null)}
       />
+      </div>
     </div>
   );
 }

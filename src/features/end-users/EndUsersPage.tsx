@@ -537,11 +537,11 @@ export default function EndUsersPage() {
 
   return (
     <div data-cr>
-      <div className="content-inner">
-        <div className="page-head">
+      <div className="console-page">
+        <div className="section-header">
           <div>
-            <h1 className="page-title">End Users</h1>
-            <p className="page-desc">
+            <h1 className="sh-title">End Users</h1>
+            <p className="sh-desc">
               Consumers of this workspace's published Applications. They connect via OAuth — not
               workspace members.
             </p>

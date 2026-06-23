@@ -8,10 +8,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CheckCircle2,
   ChevronDown,
-  ExternalLink,
-  Fingerprint,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -54,22 +51,6 @@ export function AuthenticationPage() {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name?: string } | null>(null);
-  const INFO_KEY = "idp_info_dismissed_v1";
-  const [infoDismissed, setInfoDismissed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(INFO_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const dismissInfo = () => {
-    setInfoDismissed(true);
-    try {
-      localStorage.setItem(INFO_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-  };
 
   useTourStep({ tourConfig: TOUR_REGISTRY["authentication-setup"] });
 
@@ -193,42 +174,6 @@ export function AuthenticationPage() {
           </button>
         </div>
 
-        {!infoDismissed && (
-          <div className="decision-banner" style={{ alignItems: "flex-start" }}>
-            <span className="db-icon"><Fingerprint className="icon" /></span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p className="db-title">Identity provider management</p>
-              <p className="db-text">
-                Manage OIDC and SAML authentication methods for secure user identity verification
-                across your applications.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2) var(--space-5)", marginTop: "var(--space-3)" }}>
-                {[
-                  "Multiple protocol support (OIDC / SAML)",
-                  "Real-time provider status monitoring",
-                  "Enterprise SSO integration",
-                ].map((cap) => (
-                  <span key={cap} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--color-text-muted)" }}>
-                    <CheckCircle2 className="icon-sm" style={{ color: "var(--color-primary)" }} />
-                    {cap}
-                  </span>
-                ))}
-              </div>
-              <a
-                className="btn btn-secondary"
-                href="https://docs.authsec.dev/administration/category/authentication-5"
-                target="_blank"
-                rel="noreferrer"
-                style={{ height: 32, padding: "0 12px", marginTop: "var(--space-4)" }}
-              >
-                <ExternalLink className="icon-sm" /> Read docs
-              </a>
-            </div>
-            <button className="icon-btn" aria-label="Dismiss" onClick={dismissInfo} style={{ flex: "none" }}>
-              <X className="icon-sm" />
-            </button>
-          </div>
-        )}
 
         <div className="roles-toolbar">
           <div className={`search${search ? " has-value" : ""}`}>

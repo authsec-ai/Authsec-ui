@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { Plus } from "lucide-react";
 import { RoleBindingsTable } from "./components/RoleBindingsTable";
 import { Button } from "@/components/ui/button";
@@ -56,45 +55,48 @@ export function RoleBindingsPage() {
   );
 
   return (
-    <div className="min-h-screen">
-      <div className="space-y-4 p-6 max-w-10xl mx-auto">
-        <PageHeader
-          title={copy.title}
-          description={copy.description}
-          actions={
-            <Button
-              onClick={() => setMapModalOpen(true)}
-              data-tour-id="create-binding-button"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {copy.buttonText}
-            </Button>
-          }
-        />
-
-        <div data-tour-id="bindings-filters">
-          <ConsoleFilterBar
-            search={roleScopeSearch}
-            onSearchChange={setRoleScopeSearch}
-            searchPlaceholder="Search users, applications, roles, or sources"
-            trailing={
-              roleScopeSearch.trim() ? (
-                <Button variant="ghost" size="sm" onClick={() => setRoleScopeSearch("")}>
-                  Clear
-                </Button>
-              ) : null
-            }
-          />
+    <div data-cr>
+      <div className="console-page">
+        <div className="section-header">
+          <div>
+            <h1 className="sh-title">{copy.title}</h1>
+            <p className="sh-desc">{copy.description}</p>
+          </div>
+          <Button
+            onClick={() => setMapModalOpen(true)}
+            data-tour-id="create-binding-button"
+            className="text-white"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {copy.buttonText}
+          </Button>
         </div>
 
-        <div data-tour-id="bindings-table">
-          <RoleBindingsTable
-            searchQuery={roleScopeSearch}
-            isMapModalOpen={mapModalOpen}
-            onMapModalOpenChange={setMapModalOpen}
-            onBindingSuccess={handleBindingModalSuccess}
-            audience={audience}
-          />
+        <div className="space-y-4">
+          <div data-tour-id="bindings-filters">
+            <ConsoleFilterBar
+              search={roleScopeSearch}
+              onSearchChange={setRoleScopeSearch}
+              searchPlaceholder="Search users, applications, roles, or sources"
+              trailing={
+                roleScopeSearch.trim() ? (
+                  <Button variant="ghost" size="sm" onClick={() => setRoleScopeSearch("")}>
+                    Clear
+                  </Button>
+                ) : null
+              }
+            />
+          </div>
+
+          <div data-tour-id="bindings-table">
+            <RoleBindingsTable
+              searchQuery={roleScopeSearch}
+              isMapModalOpen={mapModalOpen}
+              onMapModalOpenChange={setMapModalOpen}
+              onBindingSuccess={handleBindingModalSuccess}
+              audience={audience}
+            />
+          </div>
         </div>
       </div>
     </div>

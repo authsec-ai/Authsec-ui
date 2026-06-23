@@ -297,11 +297,12 @@ export default function AgentsPage() {
   );
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Agents</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+    <div data-cr>
+      <div className="console-page">
+      <div className="section-header">
+        <div>
+          <h1 className="sh-title">Agents</h1>
+          <p className="sh-desc">
             AI agents that act on behalf of a logged-in user. Each is a confidential client that
             signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG). An agent
             appears below once it connects to its first server.
@@ -319,7 +320,7 @@ export default function AgentsPage() {
             Register agent
           </Button>
         </div>
-      </header>
+      </div>
 
       <ConsoleFilterBar
         search={query}
@@ -367,6 +368,7 @@ export default function AgentsPage() {
       </TableCard>
 
       <RegisterAgentDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+      </div>
     </div>
   );
 }
