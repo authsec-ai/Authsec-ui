@@ -301,9 +301,14 @@ export default function AgentsPage() {
         id: "name",
         header: "Agent",
         alwaysVisible: true,
-        approxWidth: 260,
+        approxWidth: 280,
         cell: ({ row }) => (
-          <EntityCell label={row.original.client_name} detail={row.original.client_id} />
+          <div className="flex items-center gap-3">
+            <span className="app-glyph">
+              <Bot className="size-4" />
+            </span>
+            <EntityCell label={row.original.client_name} detail={row.original.client_id} />
+          </div>
         ),
       },
       {

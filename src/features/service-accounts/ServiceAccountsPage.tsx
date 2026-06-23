@@ -657,9 +657,14 @@ export default function ServiceAccountsPage() {
         id: "name",
         header: "Service account",
         alwaysVisible: true,
-        approxWidth: 260,
+        approxWidth: 280,
         cell: ({ row }) => (
-          <EntityCell label={row.original.name} detail={row.original.oauth_client_id ?? row.original.spiffe_id} />
+          <div className="flex items-center gap-3">
+            <span className="app-glyph">
+              <Server className="size-4" />
+            </span>
+            <EntityCell label={row.original.name} detail={row.original.oauth_client_id ?? row.original.spiffe_id} />
+          </div>
         ),
       },
       {
