@@ -25,6 +25,7 @@ import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
 import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
+import TrustedIssuersPage from "./features/settings/TrustedIssuersPage";
 
 
 const DevBypassPage = import.meta.env.DEV
@@ -46,16 +47,16 @@ import ApplicationLayout from "./features/applications/ApplicationLayout";
 import ApplicationSetupPage from "./features/applications/ApplicationSetupPage";
 import ApplicationToolsPage from "./features/applications/ApplicationToolsPage";
 import ApplicationScopesPage from "./features/applications/ApplicationScopesPage";
-import ApplicationAccessPage from "./features/applications/ApplicationAccessPage";
-import ApplicationRoleBindingsPage from "./features/applications/ApplicationRoleBindingsPage";
+import ApplicationAccessPageV2 from "./features/applications/ApplicationAccessPageV2";
+import ApplicationConnectionsPage from "./features/applications/ApplicationConnectionsPage";
+import ApplicationRolesPage from "./features/applications/ApplicationRolesPage";
 import ApplicationConsentGrantsPage from "./features/applications/ApplicationConsentGrantsPage";
 import ApplicationClientsPage from "./features/applications/ApplicationClientsPage";
 import ApplicationTestPage from "./features/applications/ApplicationTestPage";
 import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage";
 import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
-import { WorkloadIdentitiesPage } from "./features/workloads/WorkloadIdentitiesPage";
-import { WorkloadCertificatePage } from "./features/workloads/WorkloadCertificatePage";
-import { AgentsPage } from "./features/workloads/components/AgentsPage";
+import AgentsPage from "./features/agents/AgentsPage";
+import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -96,7 +97,6 @@ import {
 import { PermissionsPage } from "./features/permissions/PermissionsPage";
 import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
 import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
-import SDKHubPage from "./features/sdk/SDKHubPage";
 import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
@@ -134,25 +134,8 @@ function LegacyResourceServerRedirect({
   return <Navigate to={`/applications/${encoded}/${section}`} replace />;
 }
 
-function LegacyExternalServiceSdkRedirect() {
-  const { serviceId } = useParams<{ serviceId?: string }>();
-  const target = serviceId
-    ? `/developer/sdk-guides/external-services/${encodeURIComponent(serviceId)}`
-    : "/developer/sdk-guides/external-services";
-
-  return <Navigate to={target} replace />;
-}
-
 function LegacySDKGuidesRedirect() {
-  const { surface, entityId } = useParams<{
-    surface?: string;
-    entityId?: string;
-  }>();
-  const target = ["/developer/sdk-guides", surface, entityId]
-    .filter(Boolean)
-    .join("/");
-
-  return <Navigate to={target} replace />;
+  return <Navigate to="/applications" replace />;
 }
 
 function RedirectWithQuery({ to }: { to: string }) {
@@ -160,10 +143,6 @@ function RedirectWithQuery({ to }: { to: string }) {
   return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
 }
 
-function LegacyWorkloadEditRedirect() {
-  const { id = "" } = useParams<{ id?: string }>();
-  return <Navigate to={`/workloads/edit/${encodeURIComponent(id)}`} replace />;
-}
 
 /**
  * App content component that uses session initialization
@@ -426,8 +405,13 @@ function AppContent() {
                     <Route path="setup" element={<ApplicationSetupPage />} />
                     <Route path="tools" element={<ApplicationToolsPage />} />
                     <Route path="scopes" element={<ApplicationScopesPage />} />
-                    <Route path="access" element={<ApplicationAccessPage />} />
-                    <Route path="role-bindings" element={<ApplicationRoleBindingsPage />} />
+                    <Route path="access" element={<Navigate to="access-assignments" replace />} />
+                    <Route path="role-bindings" element={<Navigate to="access-assignments" replace />} />
+                    <Route path="workloads" element={<Navigate to="connections" replace />} />
+                    <Route path="requests" element={<Navigate to="connections" replace />} />
+                    <Route path="roles" element={<ApplicationRolesPage />} />
+                    <Route path="access-assignments" element={<ApplicationAccessPageV2 />} />
+                    <Route path="connections" element={<ApplicationConnectionsPage />} />
                     <Route path="consent-grants" element={<ApplicationConsentGrantsPage />} />
                     <Route path="clients" element={<ApplicationClientsPage />} />
                     <Route path="test" element={<ApplicationTestPage />} />
@@ -510,47 +494,45 @@ function AppContent() {
 
                   <Route
                     path="/clients/workloads/create"
-                    element={<Navigate to="/workloads/create" replace />}
+                    element={<Navigate to="/service-accounts" replace />}
                   />
 
                   <Route
                     path="/clients/workloads/edit/:id"
-                    element={<LegacyWorkloadEditRedirect />}
+                    element={<Navigate to="/service-accounts" replace />}
                   />
 
                   <Route
                     path="/clients/workloads"
-                    element={<Navigate to="/workloads" replace />}
-                  />
-
-                  <Route
-                    path="/workloads/create"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <WorkloadIdentitiesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/workloads/edit/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <WorkloadIdentitiesPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/service-accounts" replace />}
                   />
 
                   <Route
                     path="/workloads"
+                    element={<Navigate to="/service-accounts" replace />}
+                  />
+
+                  <Route
+                    path="/workloads/create"
+                    element={<Navigate to="/service-accounts" replace />}
+                  />
+
+                  <Route
+                    path="/workloads/edit/:id"
+                    element={<Navigate to="/service-accounts" replace />}
+                  />
+
+                  <Route
+                    path="/workloads/certificates"
+                    element={<Navigate to="/service-accounts" replace />}
+                  />
+
+                  <Route
+                    path="/service-accounts"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <WorkloadCertificatePage />
+                          <ServiceAccountsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -634,6 +616,16 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <TeamPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings/trusted-issuers"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <TrustedIssuersPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1061,7 +1053,7 @@ function AppContent() {
 
                   <Route
                     path="/external-services/:serviceId/sdk"
-                    element={<LegacyExternalServiceSdkRedirect />}
+                    element={<Navigate to="/external-services" replace />}
                   />
 
                   <Route
@@ -1081,35 +1073,17 @@ function AppContent() {
 
                   <Route
                     path="/developer/sdk-guides"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <SDKHubPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
 
                   <Route
                     path="/developer/sdk-guides/:surface"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <SDKHubPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
 
                   <Route
                     path="/developer/sdk-guides/:surface/:entityId"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <SDKHubPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<Navigate to="/applications" replace />}
                   />
 
                   {/* Custom Domains */}

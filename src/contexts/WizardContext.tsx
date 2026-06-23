@@ -161,8 +161,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
       ) {
         const wasOnOnboardPage =
           previousLocation.current.pathname.startsWith("/clients/onboard/") ||
-          previousLocation.current.pathname.startsWith("/sdk/clients/") ||
-          previousLocation.current.pathname.startsWith("/developer/sdk-guides/clients/");
+          previousLocation.current.pathname.startsWith("/sdk/clients/");
         const isBackOnDashboard =
           location.pathname === "/" || location.pathname === "/dashboard";
 

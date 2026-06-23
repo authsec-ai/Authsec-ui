@@ -243,21 +243,44 @@ export interface AuthLog {
   username?: string;
   email?: string;
   agentId?: string;
-  clientType: 'mcp_server' | 'ai_agent';
-  clientId: string;
-  clientName: string;
-  authMethod: 'password' | 'oauth' | 'saml' | 'webauthn' | 'totp' | 'sms';
+  // Real fields from backend
+  requestId?: string;
+  actorRealm?: string;
+  workspaceId?: string;
+  // Fabricated / not backed by backend — optional
+  clientType?: 'mcp_server' | 'ai_agent';
+  clientId?: string;
+  clientName?: string;
+  authMethod?: 'password' | 'oauth' | 'saml' | 'webauthn' | 'totp' | 'sms';
   status: 'success' | 'failure' | 'denied' | 'suspicious';
   ipAddress: string;
   location?: string;
   userAgent: string;
   resource?: string; // for authz logs
-  action?: string; // for authz logs
-  mfaUsed: boolean;
+  action?: string;
+  mfaUsed?: boolean;
   sessionId?: string;
   failureReason?: string;
   metadata: Record<string, any>;
   rawPayload?: RawAuthLogPayload; // Complete raw API payload for detailed view
+}
+
+/** M2M token-issuance log row from /authsec/logs/m2m/paginated */
+export interface M2MLog {
+  id: string;
+  createdAt: string;
+  workspaceId: string;
+  tokenFamily: string;
+  clientId: string;
+  subjectType: string;
+  subjectId?: string;
+  resourceServerId: string;
+  pdpEffect: 'permit' | 'deny' | 'no_policy';
+  gateEffect: 'permit' | 'deny';
+  pdpAgrees: boolean;
+  scopesRequested: string;
+  scopesGranted: string;
+  pdpReason?: string;
 }
 
 export interface RawAuthLogPayload {

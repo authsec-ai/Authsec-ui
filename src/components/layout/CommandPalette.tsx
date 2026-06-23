@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BookOpen,
   ClipboardList,
   Fingerprint,
   GlobeLock,
@@ -44,7 +43,6 @@ const DESTINATIONS: PaletteDestination[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint, group: "Configure", keywords: "auth methods oauth saml" },
   { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock, group: "Configure" },
   { title: "Secrets", url: "/external-services", icon: KeyRound, group: "Configure", keywords: "external services" },
-  { title: "SDK Guides", url: "/developer/sdk-guides", icon: BookOpen, group: "Configure" },
   { title: "Team", url: "/settings/team", icon: Users, group: "Settings" },
 ];
 

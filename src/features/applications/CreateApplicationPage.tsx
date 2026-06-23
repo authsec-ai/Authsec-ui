@@ -238,7 +238,7 @@ export default function CreateApplicationPage() {
                     </button>
                   ))}
                 </div>
-                <a className="btn btn-secondary" href="/developer/sdk-guides" style={{ height: 32, padding: "0 12px" }}>
+                <a className="btn btn-secondary" href="https://docs.authsec.dev/getting-started" target="_blank" rel="noreferrer" style={{ height: 32, padding: "0 12px" }}>
                   <ExternalLink className="icon-sm" /> Docs
                 </a>
               </div>

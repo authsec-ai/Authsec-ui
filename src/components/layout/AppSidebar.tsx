@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import {
+  Bot,
   ClipboardList,
   Fingerprint,
   FolderSync,
@@ -27,7 +28,9 @@ import {
   Layers,
   Link2,
   PlugZap,
+  Server,
   Shield,
+  ShieldCheck,
   UserCog,
   Users,
   type LucideIcon,
@@ -80,6 +83,8 @@ const NAV_DASHBOARD: NavItem[] = [
 const NAV_OBJECTS: NavItem[] = [
   { title: "Users", url: "/end-users", icon: Users },
   { title: "Applications", url: "/applications", icon: Layers },
+  { title: "Service Accounts", url: "/service-accounts", icon: Server },
+  { title: "Agents", url: "/agents", icon: Bot },
   { title: "Clients", url: "/clients", icon: PlugZap },
 ];
 
@@ -93,7 +98,9 @@ const NAV_AUTHZ: NavItem[] = [
 ];
 
 const NAV_MONITOR: NavItem[] = [
+  { title: "Auth Logs", url: "/logs/auth", icon: ShieldCheck },
   { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList },
+  { title: "M2M Logs", url: "/logs/m2m", icon: PlugZap },
 ];
 
 const NAV_CONFIGURE: NavItem[] = [
@@ -105,6 +112,7 @@ const NAV_CONFIGURE: NavItem[] = [
 
 const NAV_SETTINGS: NavItem[] = [
   { title: "Team", url: "/settings/team", icon: Users },
+  { title: "Trusted Issuers", url: "/settings/trusted-issuers", icon: ShieldCheck },
 ];
 
 export function AppSidebar({

@@ -108,6 +108,43 @@ one it doesn't) — the backend will silently drop them but they pollute logs.
 
 ---
 
+## Terminology — always follow market standards
+
+Every label, heading, button, and tooltip in the UI is the product's public
+voice. Security buyers compare AuthSec against Okta, Auth0, AWS IAM, and GCP
+Identity the moment they open it. Mismatched terminology signals immaturity
+and creates support burden.
+
+**Hard rule: before writing any UI copy (page title, sidebar label, button
+text, empty-state, dialog heading, error message), check what the dominant
+security vendors call the same concept. Use that name. Do not invent product
+jargon where a standard term exists.**
+
+### Canonical term map for UI copy
+
+| Concept | ✅ Use this | ❌ Never use this |
+|---|---|---|
+| Non-human identity with client_id + secret for M2M | **Service Account** | "Workload" for credential-based M2M |
+| k8s pod / SPIFFE SVID identity | **Workload** | "Service Account" for k8s identities |
+| Sidebar section covering both | **Workloads** only if the page clearly separates the two types with correct sub-labels | Unnamed mix |
+| OAuth registered application | **Client** or **Application** (consistent with Okta/Auth0) | custom names |
+| Token permission string | **Scope** | "Permission" at the OAuth UI layer |
+| RBAC permission node | **Permission** | "Scope" at the RBAC layer |
+| Organization boundary | **Workspace** | "Tenant" |
+| Cross-app agent delegation | **Agent** (product term) — explain as "acts on behalf of a user" | internal protocol names as UI copy |
+
+### Concrete example that triggered this rule (2026-06-22)
+
+The Workloads page conflates credential-based M2M identities (industry:
+**Service Accounts**) with SPIFFE/k8s pod identities (industry: **Workloads**)
+under one "Workloads" label. A developer registers a "Workload" to do M2M
+and gets confused because every AWS/GCP/Okta doc calls that a Service Account.
+The fix is not a one-off patch — it is a standing rule: when copying UI labels,
+always use the market term, then verify it against at least one of
+AWS IAM / GCP IAM / Okta / Auth0 docs before shipping.
+
+---
+
 ## Anti-patterns to refuse
 
 - Primary `<Button>` with anything other than white text — read the contract above
