@@ -40,7 +40,6 @@ import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-tab
 import { ConsoleFilterBar, ConsoleRowActions, EntityCell } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
-import { DialogHeading } from "@/components/console/detail";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
 
@@ -102,16 +101,11 @@ function RegisterAgentDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogHeading
-            icon={<Bot />}
-            title={<DialogTitle>Register AI agent</DialogTitle>}
-            description={
-              <DialogDescription>
-                Creates a confidential client that logs a user in and calls MCP servers on their
-                behalf (cross-app / ID-JAG). Use these values in the agent's config.
-              </DialogDescription>
-            }
-          />
+          <DialogTitle>Register AI agent</DialogTitle>
+          <DialogDescription>
+            Creates a confidential client that logs a user in and calls MCP servers on their
+            behalf (cross-app / ID-JAG). Use these values in the agent's config.
+          </DialogDescription>
         </DialogHeader>
 
         {result ? (
@@ -260,18 +254,13 @@ function RevokeAgentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogHeading
-            icon={<Ban />}
-            title={<DialogTitle>Revoke agent connection?</DialogTitle>}
-            description={
-              <DialogDescription>
-                This stops <span className="font-medium text-foreground">{agent?.client_name}</span> from
-                minting new tokens for{" "}
-                <span className="font-medium text-foreground">{agent?.resource_server_name}</span>.
-                Existing tokens expire at their normal lifetime.
-              </DialogDescription>
-            }
-          />
+          <DialogTitle>Revoke agent connection?</DialogTitle>
+          <DialogDescription>
+            This stops <span className="font-medium text-foreground">{agent?.client_name}</span> from
+            minting new tokens for{" "}
+            <span className="font-medium text-foreground">{agent?.resource_server_name}</span>.
+            Existing tokens expire at their normal lifetime.
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter className="pt-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

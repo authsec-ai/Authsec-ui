@@ -43,7 +43,6 @@ import {
   CopyField,
   DrawerEmpty,
   DrawerFooter,
-  DialogHeading,
 } from "@/components/console/detail";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 
@@ -198,17 +197,12 @@ function CreateServiceAccountDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogHeading
-            icon={<Server />}
-            title={<DialogTitle>Create service account</DialogTitle>}
-            description={
-              <DialogDescription>
-                {step === "form"
-                  ? "A service account is a machine principal. Pick an auth method — you can change it later."
-                  : "Save these values now — the secret won't be shown again."}
-              </DialogDescription>
-            }
-          />
+          <DialogTitle>Create service account</DialogTitle>
+          <DialogDescription>
+            {step === "form"
+              ? "A service account is a machine principal. Pick an auth method — you can change it later."
+              : "Save these values now — the secret won't be shown again."}
+          </DialogDescription>
         </DialogHeader>
 
         {step === "form" ? (
@@ -409,7 +403,6 @@ function ServiceAccountDrawer({
       ariaDescription="Service account details and access grants"
     >
       <DrawerHeader
-        icon={<Server />}
         title={sa.name}
         subtitle={sa.description || "Service account · M2M principal"}
         badge={<Badge variant={badge.variant}>{badge.label}</Badge>}
@@ -539,11 +532,8 @@ function EditServiceAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogHeading
-            icon={<Pencil />}
-            title={<DialogTitle>Edit service account</DialogTitle>}
-            description={<DialogDescription>Rename or re-describe this service account.</DialogDescription>}
-          />
+          <DialogTitle>Edit service account</DialogTitle>
+          <DialogDescription>Rename or re-describe this service account.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
@@ -606,16 +596,11 @@ function DeleteServiceAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogHeading
-            icon={<Trash2 />}
-            title={<DialogTitle>Delete service account?</DialogTitle>}
-            description={
-              <DialogDescription>
-                This permanently removes the service account and its credentials. Any
-                server-to-server call using it will stop working. This can't be undone.
-              </DialogDescription>
-            }
-          />
+          <DialogTitle>Delete service account?</DialogTitle>
+          <DialogDescription>
+            This permanently removes the service account and its credentials. Any server-to-server
+            call using it will stop working. This can't be undone.
+          </DialogDescription>
         </DialogHeader>
         {sa && (
           <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
