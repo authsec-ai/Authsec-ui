@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -17,6 +18,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DialogHeading } from "@/components/console/detail";
 import {
   Select,
   SelectContent,
@@ -82,11 +84,16 @@ export default function GrantWorkloadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Grant workload access</DialogTitle>
-          <DialogDescription>
-            Let an existing workload call this MCP server with a role. This never
-            changes the workload's identity or credential.
-          </DialogDescription>
+          <DialogHeading
+            icon={<ShieldCheck />}
+            title={<DialogTitle>Grant workload access</DialogTitle>}
+            description={
+              <DialogDescription>
+                Let an existing workload call this MCP server with a role. This never
+                changes the workload's identity or credential.
+              </DialogDescription>
+            }
+          />
         </DialogHeader>
 
         <div className="space-y-4 py-2">

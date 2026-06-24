@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, CheckCircle2, XCircle, ShieldCheck, Ban } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -26,6 +26,7 @@ import {
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { DialogHeading } from "@/components/console/detail";
 import BrokeringPoliciesCard from "./BrokeringPoliciesCard";
 import WorkloadProvidersCard from "./WorkloadProvidersCard";
 import {
@@ -92,10 +93,15 @@ function CreateIssuerDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add trusted issuer</DialogTitle>
-          <DialogDescription>
-            Register an external identity provider whose assertions will be accepted for cross-app access.
-          </DialogDescription>
+          <DialogHeading
+            icon={<ShieldCheck />}
+            title={<DialogTitle>Add trusted issuer</DialogTitle>}
+            description={
+              <DialogDescription>
+                Register an external identity provider whose assertions will be accepted for cross-app access.
+              </DialogDescription>
+            }
+          />
         </DialogHeader>
 
         <div className="space-y-4 py-1">
@@ -216,12 +222,17 @@ function RevokeIssuerDialog({
     <Dialog open={!!issuer} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Revoke trusted issuer</DialogTitle>
-          <DialogDescription>
-            This will block new cross-app access from{" "}
-            <span className="font-medium text-foreground">{issuer?.provider_name}</span>{" "}
-            and immediately revoke all active XAA tokens issued via this issuer.
-          </DialogDescription>
+          <DialogHeading
+            icon={<Ban />}
+            title={<DialogTitle>Revoke trusted issuer</DialogTitle>}
+            description={
+              <DialogDescription>
+                This will block new cross-app access from{" "}
+                <span className="font-medium text-foreground">{issuer?.provider_name}</span>{" "}
+                and immediately revoke all active XAA tokens issued via this issuer.
+              </DialogDescription>
+            }
+          />
         </DialogHeader>
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
           Any agent connections granted through this issuer will lose access at their next token introspection.

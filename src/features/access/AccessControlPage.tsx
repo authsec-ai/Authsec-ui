@@ -44,6 +44,7 @@ import {
   EntityCell,
 } from "@/components/console/iam-console";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { DialogHeading } from "@/components/console/detail";
 import { TableCard } from "@/theme/components/cards";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { formatRoleName } from "@/utils/roleName";
@@ -399,10 +400,15 @@ function RolesTab({
       {/* Create role dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Create role</DialogTitle>
-          <DialogDescription>
-            Name the role, then add permissions and assign users afterwards.
-          </DialogDescription>
+          <DialogHeading
+            icon={<Plus />}
+            title={<DialogTitle>Create role</DialogTitle>}
+            description={
+              <DialogDescription>
+                Name the role, then add permissions and assign users afterwards.
+              </DialogDescription>
+            }
+          />
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label htmlFor="ac-role-name">Name</Label>
@@ -463,11 +469,16 @@ function ConfirmDeleteDialog({
   return (
     <Dialog open={!!role} onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="sm:max-w-md">
-        <DialogTitle>Delete role?</DialogTitle>
-        <DialogDescription>
-          This removes the role and its bindings. Active sessions relying on it lose access. This
-          can't be undone.
-        </DialogDescription>
+        <DialogHeading
+          icon={<Trash2 />}
+          title={<DialogTitle>Delete role?</DialogTitle>}
+          description={
+            <DialogDescription>
+              This removes the role and its bindings. Active sessions relying on it lose access.
+              This can't be undone.
+            </DialogDescription>
+          }
+        />
         {role && (
           <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{role.name}</div>
         )}
@@ -809,9 +820,10 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
 
       <Dialog open={!!confirmRevokeId} onOpenChange={(o) => !o && setConfirmRevokeId(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-(--color-warning-text)" /> Revoke role assignment?
-          </DialogTitle>
+          <DialogHeading
+            icon={<AlertTriangle />}
+            title={<DialogTitle>Revoke role assignment?</DialogTitle>}
+            description={
           <DialogDescription>
             {confirmRevoke ? (
               <>
@@ -824,6 +836,8 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
               "Active sessions are terminated immediately."
             )}
           </DialogDescription>
+            }
+          />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setConfirmRevokeId(null)}>Cancel</Button>
             <Button

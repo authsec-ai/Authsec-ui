@@ -34,6 +34,17 @@ import {
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import {
+  DrawerHeader,
+  DrawerBody,
+  DrawerSection,
+  DetailGrid,
+  DetailRow,
+  CopyField,
+  DrawerEmpty,
+  DrawerFooter,
+  DialogHeading,
+} from "@/components/console/detail";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
@@ -187,12 +198,17 @@ function CreateServiceAccountDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create service account</DialogTitle>
-          <DialogDescription>
-            {step === "form"
-              ? "A service account is a machine principal. Pick an auth method — you can change it later."
-              : "Save these values now — the secret won't be shown again."}
-          </DialogDescription>
+          <DialogHeading
+            icon={<Server />}
+            title={<DialogTitle>Create service account</DialogTitle>}
+            description={
+              <DialogDescription>
+                {step === "form"
+                  ? "A service account is a machine principal. Pick an auth method — you can change it later."
+                  : "Save these values now — the secret won't be shown again."}
+              </DialogDescription>
+            }
+          />
         </DialogHeader>
 
         {step === "form" ? (
@@ -367,10 +383,14 @@ function ServiceAccountDrawer({
   sa,
   open,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   sa: WorkspaceServiceAccount | null;
   open: boolean;
   onClose: () => void;
+  onEdit: (sa: WorkspaceServiceAccount) => void;
+  onDelete: (sa: WorkspaceServiceAccount) => void;
 }) {
   const { data: accessData, isLoading: accessLoading } = useListServiceAccountAccessQuery(
     sa?.id ?? "",
@@ -388,67 +408,44 @@ function ServiceAccountDrawer({
       ariaTitle={sa.name}
       ariaDescription="Service account details and access grants"
     >
-      <div className="space-y-6 px-6 py-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <Server className="size-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold text-foreground">{sa.name}</h2>
-            <Badge variant={badge.variant} className="ml-1">{badge.label}</Badge>
-          </div>
-          {sa.description && (
-            <p className="mt-1 text-sm text-muted-foreground">{sa.description}</p>
-          )}
-        </div>
+      <DrawerHeader
+        icon={<Server />}
+        title={sa.name}
+        subtitle={sa.description || "Service account · M2M principal"}
+        badge={<Badge variant={badge.variant}>{badge.label}</Badge>}
+      />
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          {sa.oauth_client_id && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">Client ID</p>
-              <p className="font-mono text-xs break-all text-foreground">{sa.oauth_client_id}</p>
-            </div>
-          )}
-          {sa.spiffe_id && (
-            <div className="col-span-2">
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">SPIFFE ID</p>
-              <p className="font-mono text-xs break-all text-foreground">{sa.spiffe_id}</p>
-            </div>
-          )}
-          {sa.owner_email && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">Owner</p>
-              <p className="text-xs text-foreground">{sa.owner_email}</p>
-            </div>
-          )}
-          {sa.owner_team && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">Team</p>
-              <p className="text-xs text-foreground">{sa.owner_team}</p>
-            </div>
-          )}
-          {sa.last_seen_at && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-0.5">Last seen</p>
-              <p className="text-xs text-foreground">
-                {formatDistanceToNow(new Date(sa.last_seen_at), { addSuffix: true })}
-              </p>
-            </div>
-          )}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-0.5">Created</p>
-            <p className="text-xs text-foreground">
-              {formatDistanceToNow(new Date(sa.created_at), { addSuffix: true })}
-            </p>
-          </div>
-        </div>
+      <DrawerBody>
+        <DrawerSection label="Identity">
+          <DetailGrid>
+            {sa.oauth_client_id && <CopyField label="Client ID" value={sa.oauth_client_id} />}
+            {sa.spiffe_id && <CopyField label="SPIFFE ID" value={sa.spiffe_id} />}
+            {sa.owner_email && <DetailRow label="Owner" value={sa.owner_email} />}
+            {sa.owner_team && <DetailRow label="Team" value={sa.owner_team} />}
+            <DetailRow
+              label="Created"
+              value={formatDistanceToNow(new Date(sa.created_at), { addSuffix: true })}
+            />
+            <DetailRow
+              label="Last seen"
+              value={
+                sa.last_seen_at
+                  ? formatDistanceToNow(new Date(sa.last_seen_at), { addSuffix: true })
+                  : "never"
+              }
+            />
+          </DetailGrid>
+        </DrawerSection>
 
-        <div>
-          <h3 className="mb-3 text-sm font-medium text-foreground">Access grants</h3>
+        <DrawerSection label="Access grants">
           {accessLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : !accessData?.items.length ? (
-            <p className="text-sm text-muted-foreground">
-              No access grants yet. Grant access from an MCP server's Access Assignments tab.
-            </p>
+            <DrawerEmpty
+              icon={<KeyRound />}
+              title="No access grants yet"
+              description="Grant this service account access from an MCP server's Access tab."
+            />
           ) : (
             <div className="space-y-2">
               {accessData.items.map((item) => (
@@ -476,8 +473,22 @@ function ServiceAccountDrawer({
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </DrawerSection>
+      </DrawerBody>
+
+      <DrawerFooter>
+        <Button variant="outline" className="flex-1" onClick={() => onEdit(sa)}>
+          <Pencil className="mr-1.5 size-3.5" /> Edit
+        </Button>
+        <Button
+          variant="outline"
+          aria-label="Delete service account"
+          className="text-(--color-danger-text)"
+          onClick={() => onDelete(sa)}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </DrawerFooter>
     </RightDrawer>
   );
 }
@@ -528,8 +539,11 @@ function EditServiceAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit service account</DialogTitle>
-          <DialogDescription>Rename or re-describe this service account.</DialogDescription>
+          <DialogHeading
+            icon={<Pencil />}
+            title={<DialogTitle>Edit service account</DialogTitle>}
+            description={<DialogDescription>Rename or re-describe this service account.</DialogDescription>}
+          />
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
@@ -592,11 +606,16 @@ function DeleteServiceAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete service account?</DialogTitle>
-          <DialogDescription>
-            This permanently removes the service account and its credentials. Any server-to-server
-            call using it will stop working. This can't be undone.
-          </DialogDescription>
+          <DialogHeading
+            icon={<Trash2 />}
+            title={<DialogTitle>Delete service account?</DialogTitle>}
+            description={
+              <DialogDescription>
+                This permanently removes the service account and its credentials. Any
+                server-to-server call using it will stop working. This can't be undone.
+              </DialogDescription>
+            }
+          />
         </DialogHeader>
         {sa && (
           <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
@@ -808,6 +827,14 @@ export default function ServiceAccountsPage() {
         sa={selectedSA}
         open={!!selectedSA}
         onClose={() => setSelectedSA(null)}
+        onEdit={(sa) => {
+          setSelectedSA(null);
+          setEditSA(sa);
+        }}
+        onDelete={(sa) => {
+          setSelectedSA(null);
+          setDeleteSA(sa);
+        }}
       />
 
       <EditServiceAccountDialog
