@@ -245,8 +245,8 @@ function DraggableRow<TData>({
       data-expanded={isExpanded ? "true" : "false"}
       style={style}
       className={cn(
-        "relative group transition-all duration-200",
-        interactive && "cursor-pointer hover:bg-muted/30",
+        "relative group transition-colors duration-150 hover:bg-[var(--component-table-row-hover)]",
+        interactive && "cursor-pointer",
         isDragging && "shadow-lg bg-background border-2 border-primary/20",
         rowClassName?.(row.original)
       )}

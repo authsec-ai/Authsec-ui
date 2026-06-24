@@ -388,7 +388,7 @@ export function TeamPage() {
 
       {/* Detail drawer */}
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+        <SheetContent side="right" hideClose data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
             {selected ? `${memberLabel(selected)} — team member` : "Team member"}
           </SheetTitle>

@@ -180,8 +180,8 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="flex w-full flex-col sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="border-b px-6 pt-6 pb-4">
           <SheetTitle className="flex items-center gap-2">
             <Cpu className="size-4 text-muted-foreground" />
             Connect Kubernetes workload
@@ -191,7 +191,7 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-1 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5">
           <StepBar step={step} />
 
           {/* ── Step 0: Workload ── */}
@@ -357,7 +357,7 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
         </div>
 
         {/* ── footer ── */}
-        <div className="border-t pt-4 flex justify-between">
+        <div className="border-t px-6 py-4 flex justify-between">
           {step === 3 ? (
             <>
               <span />

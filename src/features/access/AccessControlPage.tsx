@@ -329,7 +329,7 @@ function RolesTab({
 
       {/* Role detail drawer */}
       <Sheet open={!!selectedRole} onOpenChange={(o) => !o && setSelectedRole(null)}>
-        <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+        <SheetContent side="right" hideClose data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
             {selectedFmt ? `${selectedFmt.displayName} — role details` : "Role details"}
           </SheetTitle>
@@ -582,7 +582,7 @@ function ScopesTab() {
       </TableCard>
 
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-        <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+        <SheetContent side="right" hideClose data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
             {selected ? `${selected.display_name || selected.scope_string} — scope details` : "Scope details"}
           </SheetTitle>

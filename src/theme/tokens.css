@@ -300,13 +300,13 @@
   --badge-purple-foreground: var(--color-text-on-dark);
 
   --component-table-surface: var(--color-surface-raised);
-  --component-table-border: var(--color-border-subtle);
+  --component-table-border: #ebedf0; /* light row dividers — was border-subtle (#d6dadf), read as heavy */
   --component-table-header-bg: var(--color-surface-subtle);
   --component-table-header-fg: var(--color-text-primary);
-  --component-table-row-hover: rgba(0, 0, 0, 0.06);
+  --component-table-row-hover: #f4f6f8; /* clearly visible row hover */
   --component-table-row-selected: var(--color-primary-soft);
   --component-table-cell-padding-inline: var(--space-5);
-  --component-table-cell-padding-block: 0.5625rem; /* compact density (9px) */
+  --component-table-cell-padding-block: 0.8125rem; /* roomier rows (13px) */
   --component-table-radius: var(--radius-lg);
   --component-table-header-height: 2.5rem; /* compact header */
   --component-table-row-height: auto;
@@ -426,10 +426,10 @@
 
   /* Table */
   --component-table-surface: var(--color-surface-raised);
-  --component-table-border: var(--color-border-subtle);
+  --component-table-border: rgba(255, 255, 255, 0.08); /* light row dividers (dark) */
   --component-table-header-bg: var(--color-surface-subtle);
   --component-table-header-fg: var(--color-text-primary);
-  --component-table-row-hover: rgba(255, 255, 255, 0.08);
+  --component-table-row-hover: rgba(255, 255, 255, 0.06);
   --component-table-row-selected: color-mix(in oklab, var(--color-primary) 14%, transparent);
 
   /* Form callouts */

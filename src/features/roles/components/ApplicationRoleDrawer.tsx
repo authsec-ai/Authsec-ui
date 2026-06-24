@@ -39,7 +39,7 @@ export function ApplicationRoleDrawer({
 
   return (
     <Sheet open={!!role} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
+      <SheetContent side="right" hideClose data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
         <SheetTitle className="sr-only">
           {role ? `${role.display_name || role.name} — role details` : "Role details"}
         </SheetTitle>

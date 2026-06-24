@@ -46,6 +46,7 @@ export function RightDrawer({
     <Sheet open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
       <SheetContent
         side="right"
+        hideClose
         style={{ width }}
         className={cn(
           "flex flex-col gap-0 p-0 overflow-hidden",
