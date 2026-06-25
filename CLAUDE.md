@@ -108,6 +108,33 @@ one it doesn't) — the backend will silently drop them but they pollute logs.
 
 ---
 
+## Console page standard — one shell for every page
+
+Every sidebar/console page renders through **one central shell**, so width,
+header, and spacing are identical product-wide. Do **not** hand-roll page
+headers (`<div data-cr><div className="console-page"><div className="section-header">`).
+
+- **Page shell:** [src/components/console/ConsolePage.tsx](src/components/console/ConsolePage.tsx)
+  — `<ConsolePage title description actions>`. Emits `data-cr → .console-page →
+  .section-header → .space-y-4` body.
+- **Table stack inside it:** `<ConsoleFilterBar>` (search + optional segmented
+  filter pills) → `<TableCard><CardContent variant="flush">` → `<AdaptiveTable>`
+  (columns are `AdaptiveColumn[]`; identity column uses `<EntityCell>`; row actions
+  via `<ConsoleRowActions>`). **`onRowClick` gets the row DATA item directly** — no
+  `.original`.
+- **Drawers + modals:** [src/components/console/detail.tsx](src/components/console/detail.tsx)
+  — `DrawerHeader / DrawerBody / DrawerSection / DetailGrid / DetailRow / CopyField /
+  DrawerEmpty / DrawerFooter`. No icon chips in headers. A `Sheet` that renders its
+  own close button MUST pass `hideClose` to `SheetContent`, else you get a double-X.
+- **Reference pages:** `src/features/access/AccessControlPage.tsx` (tables) and
+  `src/features/service-accounts/ServiceAccountsPage.tsx` (tables + drawer + CRUD).
+- Look is tuned centrally — `src/theme/console-screens.css` (`.sh-title`/`.sh-desc`),
+  `src/theme/tokens.css` (`--component-table-*` border/hover/padding),
+  `src/components/ui/dialog.tsx`, `src/components/ui/select.tsx`. Tune there, not
+  per-page. Keep existing color tokens; don't add new colors.
+
+---
+
 ## Terminology — always follow market standards
 
 Every label, heading, button, and tooltip in the UI is the product's public

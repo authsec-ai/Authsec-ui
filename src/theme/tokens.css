@@ -303,7 +303,7 @@
   --component-table-border: #ebedf0; /* light row dividers — was border-subtle (#d6dadf), read as heavy */
   --component-table-header-bg: var(--color-surface-subtle);
   --component-table-header-fg: var(--color-text-primary);
-  --component-table-row-hover: #f4f6f8; /* clearly visible row hover */
+  --component-table-row-hover: #e7ecf3; /* clearly visible cool-gray row hover */
   --component-table-row-selected: var(--color-primary-soft);
   --component-table-cell-padding-inline: var(--space-5);
   --component-table-cell-padding-block: 0.8125rem; /* roomier rows (13px) */
