@@ -182,3 +182,16 @@ AWS IAM / GCP IAM / Okta / Auth0 docs before shipping.
   in `data-cr` scope — they aren't
 - Starting the dev server to verify UI changes (the routes need the backend)
 - Adding tests the user didn't ask for
+
+---
+
+## Deep docs index
+
+Load the relevant doc before working in that area.
+
+| I'm about to… | Read this first |
+|---|---|
+| Add a new page / understand how pages are structured | [`docs/architecture.md`](docs/architecture.md) |
+| Add a new API slice / RTK Query endpoint | [`docs/rtk-query.md`](docs/rtk-query.md) |
+| Add or modify a console page layout, drawer, or table | [`docs/console-standard.md`](docs/console-standard.md) |
+| Follow TypeScript / React / Tailwind conventions | [`docs/coding-practices.md`](docs/coding-practices.md) |
