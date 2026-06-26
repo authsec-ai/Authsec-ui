@@ -25,6 +25,15 @@ export interface CreateWorkloadRequest {
   selectors?: Record<string, string>;
 }
 
+export interface CreateFederatedWorkloadRequest {
+  provider_id: string;
+  external_spiffe_id: string;
+  role_id: string;
+  service_account_id?: string;
+  service_account_name?: string;
+  description?: string;
+}
+
 export interface CreateWorkloadResponse {
   workload_id: string;
   spiffe_id: string;
@@ -57,6 +66,15 @@ const appWorkloadsApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { rsId }) => [{ type: "Workload" as const, id: rsId }],
     }),
 
+    createFederatedWorkload: builder.mutation<CreateWorkloadResponse, { rsId: string } & CreateFederatedWorkloadRequest>({
+      query: ({ rsId, ...body }) => ({
+        url: `/authsec/applications/${rsId}/access/federated-workload`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_r, _e, { rsId }) => [{ type: "Workload" as const, id: rsId }],
+    }),
+
     revokeAppWorkload: builder.mutation<{ status: string }, { rsId: string; wid: string }>({
       query: ({ rsId, wid }) => ({
         url: `/authsec/applications/${rsId}/workloads/${wid}`,
@@ -70,5 +88,6 @@ const appWorkloadsApi = baseApi.injectEndpoints({
 export const {
   useListAppWorkloadsQuery,
   useCreateAppWorkloadMutation,
+  useCreateFederatedWorkloadMutation,
   useRevokeAppWorkloadMutation,
 } = appWorkloadsApi;

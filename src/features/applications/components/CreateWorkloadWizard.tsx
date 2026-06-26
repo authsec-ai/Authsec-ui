@@ -16,9 +16,11 @@ import { toast } from "react-hot-toast";
 import { useListRSRolesQuery } from "@/app/api/setupWizardApi";
 import {
   useCreateAppWorkloadMutation,
+  useCreateFederatedWorkloadMutation,
   useListAppWorkloadsQuery,
   type CreateWorkloadResponse,
 } from "@/app/api/appWorkloadsApi";
+import { useListWorkloadProvidersQuery } from "@/app/api/workloadProvidersApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,12 +43,13 @@ import KubernetesDeploymentChecklist from "./KubernetesDeploymentChecklist";
 
 // ── step bar ───────────────────────────────────────────────────────────────────
 
-const STEPS = ["Workload", "Access", "Kubernetes", "Install"];
+const MANAGED_STEPS = ["Workload", "Access", "Kubernetes", "Install"];
+const FEDERATED_STEPS = ["Workload", "Access", "Trust", "Install"];
 
-function StepBar({ step }: { step: number }) {
+function StepBar({ step, steps }: { step: number; steps: string[] }) {
   return (
     <div className="flex items-center gap-1.5 pb-4">
-      {STEPS.map((label, i) => (
+      {steps.map((label, i) => (
         <div key={label} className="flex items-center gap-1.5">
           <div
             className={cn(
@@ -68,7 +71,7 @@ function StepBar({ step }: { step: number }) {
           >
             {label}
           </span>
-          {i < STEPS.length - 1 && (
+          {i < steps.length - 1 && (
             <div className="h-px w-4 bg-border" />
           )}
         </div>
@@ -110,26 +113,45 @@ interface Props {
   rsId: string;
 }
 
+type WorkloadMode = "managed" | "federated";
+
 interface WizardState {
   saName: string;
   roleId: string;
   namespace: string;
   serviceAccount: string;
+  providerId: string;
+  externalSpiffeId: string;
 }
 
-const EMPTY: WizardState = { saName: "", roleId: "", namespace: "", serviceAccount: "" };
+const EMPTY: WizardState = {
+  saName: "",
+  roleId: "",
+  namespace: "",
+  serviceAccount: "",
+  providerId: "",
+  externalSpiffeId: "",
+};
 
 export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props) {
   const [step, setStep] = useState(0);
+  const [mode, setMode] = useState<WorkloadMode>("managed");
   const [state, setState] = useState<WizardState>(EMPTY);
   const [result, setResult] = useState<CreateWorkloadResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
   const { data: rolesData } = useListRSRolesQuery(rsId, { skip: !open });
   const [createWorkload, { isLoading: creating }] = useCreateAppWorkloadMutation();
+  const [createFederated, { isLoading: creatingFederated }] = useCreateFederatedWorkloadMutation();
+  const { data: providersData } = useListWorkloadProvidersQuery(undefined, { skip: !open });
   const { data: workloadsData, refetch } = useListAppWorkloadsQuery(rsId, { skip: !result });
 
   const roles = rolesData?.roles ?? [];
+  const spiffeProviders = (providersData?.items ?? []).filter(
+    (p) => p.kind === "spiffe" && p.status === "active",
+  );
+  const steps = mode === "federated" ? FEDERATED_STEPS : MANAGED_STEPS;
+  const busy = creating || creatingFederated;
 
   const liveStatus = result
     ? workloadsData?.items?.find((w) => w.workload_id === result.workload_id)?.status
@@ -137,6 +159,7 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
 
   const handleClose = () => {
     setStep(0);
+    setMode("managed");
     setState(EMPTY);
     setResult(null);
     setCopied(false);
@@ -144,19 +167,31 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
   };
 
   const handleCreate = async () => {
-    if (!state.saName.trim() || !state.roleId) return;
-    const selectors: Record<string, string> = {};
-    if (state.namespace.trim()) selectors["k8s:ns"] = state.namespace.trim();
-    if (state.serviceAccount.trim()) selectors["k8s:sa"] = state.serviceAccount.trim();
-
+    if (!state.roleId) return;
     try {
-      const res = await createWorkload({
-        rsId,
-        service_account_name: state.saName.trim(),
-        role_id: state.roleId,
-        platform: "kubernetes",
-        selectors,
-      }).unwrap();
+      let res: CreateWorkloadResponse;
+      if (mode === "federated") {
+        if (!state.providerId || !state.externalSpiffeId.trim() || !state.saName.trim()) return;
+        res = await createFederated({
+          rsId,
+          provider_id: state.providerId,
+          external_spiffe_id: state.externalSpiffeId.trim(),
+          role_id: state.roleId,
+          service_account_name: state.saName.trim(),
+        }).unwrap();
+      } else {
+        if (!state.saName.trim()) return;
+        const selectors: Record<string, string> = {};
+        if (state.namespace.trim()) selectors["k8s:ns"] = state.namespace.trim();
+        if (state.serviceAccount.trim()) selectors["k8s:sa"] = state.serviceAccount.trim();
+        res = await createWorkload({
+          rsId,
+          service_account_name: state.saName.trim(),
+          role_id: state.roleId,
+          platform: "kubernetes",
+          selectors,
+        }).unwrap();
+      }
       setResult(res);
       setStep(3);
     } catch (err) {
@@ -192,14 +227,46 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          <StepBar step={step} />
+          <StepBar step={step} steps={steps} />
 
           {/* ── Step 0: Workload ── */}
           {step === 0 && (
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>SPIRE setup</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMode("managed")}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-left text-xs transition",
+                      mode === "managed"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted",
+                    )}
+                  >
+                    <span className="block font-medium text-foreground">AuthSec-managed</span>
+                    <span className="block text-muted-foreground">We mint the SPIFFE ID.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("federated")}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-left text-xs transition",
+                      mode === "federated"
+                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        : "border-border hover:bg-muted",
+                    )}
+                  >
+                    <span className="block font-medium text-foreground">Bring your own SPIRE</span>
+                    <span className="block text-muted-foreground">Federate an external trust domain.</span>
+                  </button>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Name the workload that will run in Kubernetes. AuthSec creates the internal machine
-                identity for you, but the pod authenticates with SPIFFE/SPIRE, not a long-lived secret.
+                {mode === "federated"
+                  ? "Register a workload whose SPIFFE ID is issued by your own SPIRE. You'll pick the federated trust domain and paste the exact SPIFFE ID next."
+                  : "Name the workload that will run in Kubernetes. AuthSec creates the internal machine identity for you, but the pod authenticates with SPIFFE/SPIRE, not a long-lived secret."}
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="wl-sa-name">Workload name</Label>
@@ -246,8 +313,8 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
             </div>
           )}
 
-          {/* ── Step 2: Selectors ── */}
-          {step === 2 && (
+          {/* ── Step 2 (managed): K8s selectors ── */}
+          {step === 2 && mode === "managed" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 These selectors identify the pod allowed to receive this SPIFFE identity. Use the
@@ -273,6 +340,64 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
                   onChange={(e) => setState((s) => ({ ...s, serviceAccount: e.target.value }))}
                 />
               </div>
+            </div>
+          )}
+
+          {/* ── Step 2 (federated): trust domain + external SPIFFE ID ── */}
+          {step === 2 && mode === "federated" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Pick the federated trust domain (a registered workload identity provider) and paste
+                the exact SPIFFE ID your SPIRE issues to this workload.
+              </p>
+              {spiffeProviders.length === 0 ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  No SPIFFE providers registered yet. Add one under{" "}
+                  <span className="font-medium">Trusted Issuers → Workload Providers</span> first,
+                  then come back here.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wl-provider">Trust domain (provider)</Label>
+                    <Select
+                      value={state.providerId}
+                      onValueChange={(v) => setState((s) => ({ ...s, providerId: v }))}
+                    >
+                      <SelectTrigger id="wl-provider">
+                        <SelectValue placeholder="Select a registered SPIRE provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spiffeProviders.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                            {p.trust_domain && (
+                              <span className="ml-2 font-mono text-xs text-muted-foreground">
+                                {p.trust_domain}
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wl-ext-spiffe">External SPIFFE ID</Label>
+                    <Input
+                      id="wl-ext-spiffe"
+                      autoComplete="off"
+                      className="font-mono text-xs"
+                      placeholder="spiffe://your-trust-domain/ns/prod/sa/api"
+                      value={state.externalSpiffeId}
+                      onChange={(e) => setState((s) => ({ ...s, externalSpiffeId: e.target.value }))}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Must match the SVID's <code className="font-mono">sub</code> exactly, and its
+                      trust domain must match the selected provider.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -388,10 +513,14 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
               ) : (
                 <Button
                   onClick={handleCreate}
-                  disabled={creating}
+                  disabled={
+                    busy ||
+                    (mode === "federated" &&
+                      (!state.providerId || !state.externalSpiffeId.trim()))
+                  }
                   className="text-white"
                 >
-                  {creating ? (
+                  {busy ? (
                     <>
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                       Registering…
