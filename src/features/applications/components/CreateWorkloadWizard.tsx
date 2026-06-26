@@ -20,7 +20,10 @@ import {
   useListAppWorkloadsQuery,
   type CreateWorkloadResponse,
 } from "@/app/api/appWorkloadsApi";
-import { useListWorkloadProvidersQuery } from "@/app/api/workloadProvidersApi";
+import {
+  useListWorkloadProvidersQuery,
+  useCreateWorkloadProviderMutation,
+} from "@/app/api/workloadProvidersApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -143,8 +146,14 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
   const { data: rolesData } = useListRSRolesQuery(rsId, { skip: !open });
   const [createWorkload, { isLoading: creating }] = useCreateAppWorkloadMutation();
   const [createFederated, { isLoading: creatingFederated }] = useCreateFederatedWorkloadMutation();
-  const { data: providersData } = useListWorkloadProvidersQuery(undefined, { skip: !open });
+  const { data: providersData, refetch: refetchProviders } = useListWorkloadProvidersQuery(undefined, { skip: !open });
+  const [createProvider, { isLoading: creatingProvider }] = useCreateWorkloadProviderMutation();
   const { data: workloadsData, refetch } = useListAppWorkloadsQuery(rsId, { skip: !result });
+
+  // Inline "add SPIRE provider" so the user never has to leave the wizard to
+  // register a trust domain (the previous "go to Trusted Issuers" round-trip was
+  // a trap — that page also has the unrelated ID-JAG issuers table).
+  const [newProvider, setNewProvider] = useState({ name: "", issuer: "", trustDomain: "" });
 
   const roles = rolesData?.roles ?? [];
   const spiffeProviders = (providersData?.items ?? []).filter(
@@ -161,9 +170,32 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
     setStep(0);
     setMode("managed");
     setState(EMPTY);
+    setNewProvider({ name: "", issuer: "", trustDomain: "" });
     setResult(null);
     setCopied(false);
     onOpenChange(false);
+  };
+
+  const handleAddProvider = async () => {
+    if (!newProvider.name.trim() || !newProvider.issuer.trim() || !newProvider.trustDomain.trim()) {
+      toast.error("Name, issuer URL, and trust domain are required.");
+      return;
+    }
+    try {
+      const created = await createProvider({
+        name: newProvider.name.trim(),
+        kind: "spiffe",
+        issuer: newProvider.issuer.trim(),
+        trust_domain: newProvider.trustDomain.trim(),
+      }).unwrap();
+      await refetchProviders();
+      setState((s) => ({ ...s, providerId: created.id }));
+      setNewProvider({ name: "", issuer: "", trustDomain: "" });
+      toast.success("Trust domain registered.");
+    } catch (err) {
+      const e = err as { data?: { error?: string } };
+      toast.error(e?.data?.error ?? "Failed to register provider.");
+    }
   };
 
   const handleCreate = async () => {
@@ -351,10 +383,61 @@ export default function CreateWorkloadWizard({ open, onOpenChange, rsId }: Props
                 the exact SPIFFE ID your SPIRE issues to this workload.
               </p>
               {spiffeProviders.length === 0 ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  No SPIFFE providers registered yet. Add one under{" "}
-                  <span className="font-medium">Trusted Issuers → Workload Providers</span> first,
-                  then come back here.
+                <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    No federated trust domain registered yet. Add the SPIRE trust domain that
+                    issues this workload's SVID — its OIDC discovery endpoint must be reachable.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="np-name">Name</Label>
+                    <Input
+                      id="np-name"
+                      autoComplete="off"
+                      placeholder="e.g. prod-spire"
+                      value={newProvider.name}
+                      onChange={(e) => setNewProvider((p) => ({ ...p, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="np-issuer">Issuer URL</Label>
+                    <Input
+                      id="np-issuer"
+                      autoComplete="off"
+                      className="font-mono text-xs"
+                      placeholder="http://20.41.237.163"
+                      value={newProvider.issuer}
+                      onChange={(e) => setNewProvider((p) => ({ ...p, issuer: e.target.value }))}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Must equal the SVID's <code className="font-mono">iss</code> exactly.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="np-td">Trust domain</Label>
+                    <Input
+                      id="np-td"
+                      autoComplete="off"
+                      className="font-mono text-xs"
+                      placeholder="your-trust-domain"
+                      value={newProvider.trustDomain}
+                      onChange={(e) => setNewProvider((p) => ({ ...p, trustDomain: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddProvider}
+                    disabled={creatingProvider}
+                  >
+                    {creatingProvider ? (
+                      <>
+                        <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                        Registering…
+                      </>
+                    ) : (
+                      "Register trust domain"
+                    )}
+                  </Button>
                 </div>
               ) : (
                 <>
