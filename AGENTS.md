@@ -174,14 +174,17 @@ AWS IAM / GCP IAM / Okta / Auth0 docs before shipping.
 
 ## Mandatory steps after any edit
 
-Run these before calling a task done. No exceptions.
+**Run `/ship` before calling a task done.** It covers verification, SDK check, docs
+check, and commit in one place. Do not skip it.
 
-1. **`npx tsc --noEmit`** — must exit 0. Do not skip, do not substitute with "it looks right."
-2. **SDK check** — ask: could a machine caller (agent, workload, MCP server) need this programmatically, not just via the admin console? If yes, note parity work in `sdk-authsec/`. If no, state why in one sentence.
-3. **Docs check** — does a developer or operator need to know this feature exists? If yes, run `/docs`. If no, state why.
-4. **Commit** — stage only the files you touched; write a commit message focused on the why.
+Quick reminder of what `/ship` enforces:
+1. `npx tsc --noEmit` — must exit 0
+2. SDK check — state explicitly whether a machine caller needs this (yes/no + one sentence why)
+3. Docs check — state explicitly whether `/docs` is needed (yes/no + one sentence why)
+4. Commit — stage only touched files; no `Co-Authored-By` lines; message describes the why
 
-If you used the Rescan/Refresh pattern or any existing mutation, confirm the RTK `invalidatesTags` chain is correct — the table must auto-refetch without a page reload.
+If you used the Rescan/Refresh pattern or any existing mutation, confirm the RTK
+`invalidatesTags` chain is correct — the table must auto-refetch without a page reload.
 
 ---
 
