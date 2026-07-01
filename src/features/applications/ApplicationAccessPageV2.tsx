@@ -57,7 +57,6 @@ import {
   type ResourceServerRoleOption,
 } from "@/app/api/resourceServersApi";
 import {
-  useAddUserDefinedRolesMutation,
   useGetAuthSecRoleDetailQuery,
 } from "@/app/api/rolesApi";
 import {
@@ -78,6 +77,7 @@ import {
 import {
   useListRSRolesQuery,
   useListEligibleUsersQuery,
+  useCreateApplicationRoleMutation,
 } from "@/app/api/setupWizardApi";
 import { cn } from "@/lib/utils";
 
@@ -366,10 +366,8 @@ function RoleCard({
 
 function ThreeColumnMatrix({
   applicationId,
-  workspaceId,
 }: {
   applicationId: string;
-  workspaceId: string;
 }) {
   const {
     data: policy,
@@ -383,7 +381,7 @@ function ThreeColumnMatrix({
     useUpdateResourceServerAccessPolicyMutation();
   const [updateScopeGrants, { isLoading: savingGrants }] =
     useUpdateApplicationRoleScopeGrantsMutation();
-  const [addRole, { isLoading: addingRole }] = useAddUserDefinedRolesMutation();
+  const [addRole, { isLoading: addingRole }] = useCreateApplicationRoleMutation();
   const [createScope, { isLoading: addingScope }] =
     useCreateResourceServerScopeMutation();
 
@@ -530,16 +528,14 @@ function ThreeColumnMatrix({
     if (!raw) { toast.error("Role name is required."); return; }
     const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     if (!slug) { toast.error("Use letters or numbers for the role name."); return; }
-    const name = `rs-${applicationId}:${slug}`;
-    if (roleOptions.some((r) => r.name === name)) {
+    const expectedName = `rs-${applicationId}:${slug}`;
+    if (roleOptions.some((r) => r.name === expectedName)) {
       toast.error("A role with that name already exists."); return;
     }
     try {
       await addRole({
-        workspace_id: workspaceId,
-        name,
-        description: "",
-        permission_strings: [],
+        rsId: applicationId,
+        name: raw,
       }).unwrap();
       toast.success(`Role "${slug}" created.`);
       setNewRoleName("");
@@ -1274,7 +1270,7 @@ export default function ApplicationAccessPageV2() {
 
   return (
     <div className="space-y-6">
-      <ThreeColumnMatrix applicationId={application.id} workspaceId={application.workspace_id} />
+      <ThreeColumnMatrix applicationId={application.id} />
 
       <div>
         <div className="mb-2 flex items-center gap-2">

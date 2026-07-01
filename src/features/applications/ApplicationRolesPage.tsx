@@ -214,7 +214,9 @@ export default function ApplicationRolesPage() {
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading } = useListRSRolesQuery(application.id);
+  const { data, isLoading } = useListRSRolesQuery(application?.id ?? "", {
+    skip: !application?.id,
+  });
 
   const roles = useMemo(() => {
     const items = data?.roles ?? [];
@@ -339,11 +341,13 @@ export default function ApplicationRolesPage() {
         </CardContent>
       </TableCard>
 
-      <CreateRoleDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        rsId={application.id}
-      />
+      {application?.id && (
+        <CreateRoleDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          rsId={application.id}
+        />
+      )}
     </div>
   );
 }

@@ -294,7 +294,7 @@ export const setupWizardApi = baseApi.injectEndpoints({
     }),
 
     // POST /authsec/applications/:id/roles
-    createApplicationRole: builder.mutation<
+    createRSRole: builder.mutation<
       RSRole,
       { rsId: string; name: string; description?: string; scope_ids?: string[] }
     >({
@@ -350,5 +350,8 @@ export const {
   useCreateRSBindingMutation,
   useDeleteRSBindingMutation,
   useListEligibleUsersQuery,
-  useCreateApplicationRoleMutation,
+  useCreateRSRoleMutation,
 } = setupWizardApi;
+
+// Re-export with the old name for backward compatibility with existing imports.
+export const useCreateApplicationRoleMutation = useCreateRSRoleMutation;

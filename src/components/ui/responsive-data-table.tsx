@@ -732,7 +732,7 @@ export function ResponsiveDataTable<TData>({
                               data-clickable={hasRowInteraction ? "true" : "false"}
                               data-expanded={isExpanded ? "true" : "false"}
                               className={cn(
-                                "transition-colors",
+                                "transition-colors hover:bg-[var(--component-table-row-hover)]",
                                 hasRowInteraction && "cursor-pointer",
                                 rowClassName?.(row.original)
                               )}

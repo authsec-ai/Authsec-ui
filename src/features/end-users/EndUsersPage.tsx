@@ -31,7 +31,7 @@ import {
   type TenantEndUserState,
 } from "@/app/api/membershipApi";
 import { useGetApplicationEffectiveAccessQuery } from "@/app/api/accessApi";
-import { useDeleteBindingMutation } from "@/app/api/bindingsApi";
+import { useDeleteAssignmentMutation } from "@/app/api/agentIdentityApi";
 import AssignRoleWizard from "@/features/access/AssignRoleWizard";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -175,19 +175,19 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
   const grantedScopes = (data?.scopes ?? []).filter((s) => s.status === "granted");
   const ungrantedScopes = (data?.scopes ?? []).filter((s) => s.status !== "granted");
 
-  const [deleteBinding, { isLoading: removing }] = useDeleteBindingMutation();
+  const [deleteAssignment, { isLoading: removing }] = useDeleteAssignmentMutation();
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
 
   const handleRemoveRole = useCallback(
     async (bindingId: string | undefined, roleLabel: string) => {
-      if (!bindingId) {
+      if (!bindingId || !effectiveAppId) {
         toast.error("This role can't be removed from here — open the role to manage it.");
         return;
       }
       if (!window.confirm(`Remove "${roleLabel}" from ${userLabel(user)}?`)) return;
       setPendingRemoveId(bindingId);
       try {
-        await deleteBinding(bindingId).unwrap();
+        await deleteAssignment({ rsId: effectiveAppId, assignmentId: bindingId }).unwrap();
         toast.success(`${roleLabel} removed.`);
       } catch (err: any) {
         toast.error(err?.data?.error ?? "Failed to remove role.");
@@ -195,7 +195,7 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
         setPendingRemoveId(null);
       }
     },
-    [deleteBinding, user],
+    [deleteAssignment, user, effectiveAppId],
   );
 
   if (applications.length === 0) {

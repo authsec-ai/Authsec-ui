@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, Search, ShieldAlert, Sparkles, X } from "lucide-react";
+import { Loader2, RefreshCw, Search, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   useGetScopeMatrixQuery,
+  useRescanResourceServerMutation,
   useUpdateToolScopeMapMutation,
 } from "@/app/api/scopeMatrixApi";
 import { useMarkToolPublicMutation } from "@/app/api/setupWizardApi";
@@ -138,6 +139,7 @@ export default function ApplicationToolsPage() {
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   const [bulkMode, setBulkMode] = useState<"assign" | "remove" | null>(null);
   const [updateMap, { isLoading: bulkSaving }] = useUpdateToolScopeMapMutation();
+  const [rescan, { isLoading: rescanning }] = useRescanResourceServerMutation();
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix?.tools]);
   const allScopes = useMemo<OAuthScopeResponse[]>(
@@ -284,6 +286,15 @@ export default function ApplicationToolsPage() {
     }
   };
 
+  const handleRefreshTools = async () => {
+    try {
+      await rescan(application.id).unwrap();
+      toast.success("Tools refreshed");
+    } catch {
+      toast.error("Failed to refresh tools — MCP server may be unreachable");
+    }
+  };
+
   const columns = useMemo<AdaptiveColumn<MCPToolResponse>[]>(
     () => [
       {
@@ -408,14 +419,25 @@ export default function ApplicationToolsPage() {
 
   return (
     <div className="space-y-4">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-950">
-          Tools
-        </h2>
-        <p className="max-w-3xl text-sm leading-5 text-slate-600">
-          Review every MCP capability this application exposes, what gates it,
-          and which tools are denied until mapped.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+            Tools
+          </h2>
+          <p className="max-w-3xl text-sm leading-5 text-slate-600">
+            Review every MCP capability this application exposes, what gates it,
+            and which tools are denied until mapped.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshTools}
+          disabled={rescanning}
+        >
+          <RefreshCw className={cn("mr-1.5 size-3.5", rescanning && "animate-spin")} />
+          {rescanning ? "Refreshing…" : "Refresh Tools"}
+        </Button>
       </header>
 
       <ConsoleFilterBar
@@ -450,7 +472,7 @@ export default function ApplicationToolsPage() {
           ) : visibleTools.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
               {tools.length === 0
-                ? "No tools discovered yet. Deploy the SDK and run a scan."
+                ? "No tools discovered yet. Click Refresh Tools to scan the MCP server."
                 : "No tools match this filter."}
             </div>
           ) : (

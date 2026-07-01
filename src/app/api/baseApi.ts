@@ -162,9 +162,6 @@ export const baseApi = createApi({
     "TenantMembership",
     "TenantEndUserState",
     "RoleBinding",
-    "BillingSubscription",
-    "BillingUsage",
-    "BillingPlan",
     "MCPClient",
     // Agent Identity — Wave 1
     "AccessAssignment",
