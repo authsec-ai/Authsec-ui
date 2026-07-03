@@ -3,15 +3,20 @@
  *
  * Layout (Launch Control IA):
  *   Dashboard
- *   Workspace : End Users, Applications, Clients
- *   Authz     : Roles, Scopes, Assignments
- *   Configure : Identity Providers, SCIM Connections, Directory Sync, Secrets
- *   Monitor   : Audit Logs
- *   Settings  : Team
+ *   Workspace   : End Users, Applications, Clients
+ *   Authz       : Roles, Scopes, Assignments
+ *   Governance  : Access Requests, Certifications, SoD, Lifecycle, Ownership, Policies, Risk, Audit
+ *   Configure   : Identity Providers, SCIM Connections, Directory Sync, Secrets
+ *   Monitor     : Audit Logs
+ *   Settings    : Team
  *
- * "AI Agents" and "Trust Delegation" used to live here but both surfaces were
- * broken / out of scope; their routes still exist in App.tsx so direct links
- * resolve, but the rail no longer advertises them. See plan phase 0.1.
+ * The Governance group is the IGA console (ARCHITECTURE 1.md / v3, §11) — all
+ * shells today, no backend. Its 8 items mirror the architecture's page table
+ * exactly.
+ *
+ * "Trust Delegation" used to live here but the surface was broken / out of
+ * scope; its routes still exist in App.tsx so direct links resolve, but the
+ * rail no longer advertises it. See plan phase 0.1.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,20 +24,28 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import {
+  BadgeCheck,
   Bot,
   ClipboardList,
+  FileCheck2,
   Fingerprint,
   FolderSync,
+  History,
+  Inbox,
   KeyRound,
   LayoutDashboard,
   Layers,
   Link2,
   PlugZap,
+  Scale,
   Server,
   Shield,
   ShieldCheck,
+  Sparkles,
+  UserCheck,
   UserCog,
   Users,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -95,6 +108,20 @@ const NAV_AUTHZ: NavItem[] = [
   { title: "Roles", url: "/access/roles", icon: UserCog },
   { title: "Scopes", url: "/access/scopes", icon: KeyRound },
   { title: "Assignments", url: "/access/assignments", icon: Link2 },
+];
+
+// Governance (IGA) console — reviews and controls over the access Authz
+// defines. Mirrors ARCHITECTURE 1.md (v3) §11's page table exactly. All
+// shells today, no backend; see AGENTS.md for the page pattern.
+const NAV_GOVERNANCE: NavItem[] = [
+  { title: "Access Requests", url: "/governance/access-requests", icon: Inbox },
+  { title: "Certifications", url: "/governance/certifications", icon: BadgeCheck },
+  { title: "SoD", url: "/governance/sod", icon: Scale },
+  { title: "Lifecycle", url: "/governance/lifecycle", icon: Workflow },
+  { title: "Ownership", url: "/governance/ownership", icon: UserCheck },
+  { title: "Policies", url: "/governance/policies", icon: FileCheck2 },
+  { title: "Risk", url: "/governance/risk", icon: Sparkles },
+  { title: "Audit", url: "/governance/audit", icon: History },
 ];
 
 const NAV_MONITOR: NavItem[] = [
@@ -201,6 +228,7 @@ export function AppSidebar({
         dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
         objects: attachHandlers(baseObjects),
         authz: attachHandlers(markActive(prefixUrls(NAV_AUTHZ, contextPrefix))),
+        governance: attachHandlers(markActive(NAV_GOVERNANCE)),
         monitor: attachHandlers(markActive(NAV_MONITOR)),
         configure: attachHandlers(markActive(NAV_CONFIGURE)),
         settings: attachHandlers(markActive(NAV_SETTINGS)),
@@ -280,6 +308,7 @@ export function AppSidebar({
         <NavMain items={nav.dashboard} />
         <NavMain title="Workspace" items={nav.objects} />
         <NavMain title="Authz" items={nav.authz} />
+        <NavMain title="Governance" items={nav.governance} />
         <NavMain title="Configure" items={nav.configure} />
         <NavMain title="Monitor" items={nav.monitor} />
         <NavMain title="Settings" items={nav.settings} />

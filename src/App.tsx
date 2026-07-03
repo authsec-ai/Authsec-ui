@@ -67,6 +67,14 @@ import { VaultPage } from "./features/vault/VaultPage";
 import { ImportSecretsPage } from "./features/vault/ImportSecretsPage";
 import ScimConnectionsPage from "./features/scim-connections/ScimConnectionsPage";
 import DirectorySyncPage from "./features/directory-sync/DirectorySyncPage";
+import AccessRequestsPage from "./features/governance/AccessRequestsPage";
+import CertificationsPage from "./features/governance/CertificationsPage";
+import SodPage from "./features/governance/SodPage";
+import LifecyclePage from "./features/governance/LifecyclePage";
+import OwnershipPage from "./features/governance/OwnershipPage";
+import PoliciesPage from "./features/governance/PoliciesPage";
+import RiskPage from "./features/governance/RiskPage";
+import AuditPage from "./features/governance/AuditPage";
 import { RolesPage } from "./features/roles/RolesPage";
 import { RoleTemplatesPage } from "./features/roles/RoleTemplatesPage";
 import { AuthenticationPage } from "./features/authentication/AuthenticationPage";
@@ -926,6 +934,92 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <DirectorySyncPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* ── Governance (IGA) console — ARCHITECTURE 1.md (v3) §11 — shells, no backend yet ── */}
+                  <Route
+                    path="/governance"
+                    element={<Navigate to="/governance/access-requests" replace />}
+                  />
+                  <Route
+                    path="/governance/access-requests"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <AccessRequestsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/certifications"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <CertificationsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/sod"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <SodPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/lifecycle"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <LifecyclePage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/ownership"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <OwnershipPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/policies"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <PoliciesPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/risk"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <RiskPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/audit"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <AuditPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

@@ -23,6 +23,7 @@ const QUIET_ACTIVE_NAV =
 export function NavMain({
   items,
   title,
+  titleBadge,
 }: {
   items: {
     title: string;
@@ -34,10 +35,21 @@ export function NavMain({
     badge?: number;
   }[];
   title?: string;
+  /** Optional label-level badge, e.g. a "New" pill next to the group title. */
+  titleBadge?: string;
 }) {
   return (
     <SidebarGroup>
-      {title && <SidebarGroupLabel>{title}</SidebarGroupLabel>}
+      {title && (
+        <SidebarGroupLabel className="flex items-center gap-1.5">
+          {title}
+          {titleBadge && (
+            <span className="rounded-full bg-[color:color-mix(in_oklch,var(--color-primary)_16%,transparent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-(--color-primary) group-data-[collapsible=icon]:hidden">
+              {titleBadge}
+            </span>
+          )}
+        </SidebarGroupLabel>
+      )}
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.title}>
