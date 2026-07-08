@@ -43,8 +43,10 @@ import {
   useListConnectorAssignmentsQuery,
   useCreateConnectorAssignmentMutation,
   useDeleteConnectorAssignmentMutation,
+  useGetConnectorAuditQuery,
 } from "@/app/api/connectorsApi";
 import { ConnectorBadge } from "./ConnectorBadge";
+import { ProviderAppForm } from "./ProviderAppForm";
 import { providerMeta, getWorkspaceId } from "./providerMeta";
 import { deriveConnectionHealth, HEALTH_LABEL, type ConnectionHealth } from "./connectionHealth";
 
@@ -113,6 +115,11 @@ export function ConnectorDrawer({
     connectorId ?? "",
     { skip: !connectorId },
   );
+  const { data: auditRows, isLoading: auditLoading } = useGetConnectorAuditQuery(
+    { connectorId: connectorId ?? "" },
+    { skip: !connectorId || tab !== "activity" },
+  );
+  const [showAppForm, setShowAppForm] = useState(false);
 
   const [updateConnector] = useUpdateConnectorMutation();
   const [deleteConnector, { isLoading: deleting }] = useDeleteConnectorMutation();
@@ -132,6 +139,7 @@ export function ConnectorDrawer({
     setConfirmDeleteOpen(false);
     setNewClientId("");
     setNewActionKey(ALL_ACTIONS);
+    setShowAppForm(false);
     onClose();
   };
 
@@ -245,6 +253,7 @@ export function ConnectorDrawer({
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="access">Access</TabsTrigger>
                   <TabsTrigger value="actions">Actions</TabsTrigger>
+                  <TabsTrigger value="activity">Activity</TabsTrigger>
                   <TabsTrigger value="use">Use</TabsTrigger>
                 </TabsList>
               </div>
@@ -353,6 +362,35 @@ export function ConnectorDrawer({
                         {reconnecting ? "Redirecting…" : connection ? "Reconnect" : "Connect"}
                       </Button>
                     </div>
+                  </DrawerSection>
+
+                  <DrawerSection
+                    label="Workspace OAuth app"
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => setShowAppForm((v) => !v)}
+                        className="text-[11px] font-medium text-(--color-primary-text)"
+                      >
+                        {showAppForm ? "Hide" : "Configure"}
+                      </button>
+                    }
+                  >
+                    {showAppForm ? (
+                      <div className="rounded-lg border p-3">
+                        <ProviderAppForm
+                          providerKey={connector.provider_key}
+                          providerName={provider?.display_name ?? connector.provider_key}
+                          onSaved={() => setShowAppForm(false)}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[11.5px] text-muted-foreground">
+                        Connect flows use this workspace's own {provider?.display_name ?? "provider"}{" "}
+                        OAuth app if one is configured, else the deployment default. Configuration is
+                        write-only — saving replaces the previous app.
+                      </p>
+                    )}
                   </DrawerSection>
 
                   <DrawerSection label="Details">
@@ -469,6 +507,61 @@ export function ConnectorDrawer({
                     </div>
                   )}
                 </DrawerSection>
+                </TabsContent>
+
+                <TabsContent value="activity" className="space-y-6">
+                  <DrawerSection label="Action log — who did what, allowed or denied">
+                    {auditLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    ) : !auditRows?.length ? (
+                      <DrawerEmpty
+                        icon={<Zap />}
+                        title="No actions recorded yet"
+                        description="Every broker action attempt (allow and deny) lands here with the agent identity, token type, and outcome."
+                      />
+                    ) : (
+                      <div className="space-y-1.5">
+                        {auditRows.map((row) => (
+                          <div key={row.id} className="rounded-md border px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[11.5px] text-foreground">
+                                {row.action_key}
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                                  row.outcome === "allow"
+                                    ? "bg-(--color-success-soft) text-(--color-success-text)"
+                                    : "bg-(--color-danger-soft) text-(--color-danger-text)",
+                                )}
+                              >
+                                {row.outcome}
+                                {row.http_status ? ` · ${row.http_status}` : ""}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
+                              {row.actor_client_id && (
+                                <>
+                                  {" · agent "}
+                                  <span className="font-mono">{row.actor_client_id.slice(0, 8)}…</span>
+                                </>
+                              )}
+                              {row.token_family && <> · {row.token_family}</>}
+                              {typeof row.latency_ms === "number" && row.latency_ms > 0 && (
+                                <> · {row.latency_ms}ms</>
+                              )}
+                            </p>
+                            {row.deny_reason && (
+                              <p className="mt-1 rounded bg-(--color-danger-soft) px-2 py-1 text-[11px] text-(--color-danger-text)">
+                                {row.deny_reason}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </DrawerSection>
                 </TabsContent>
 
                 <TabsContent value="use" className="space-y-6">

@@ -21,6 +21,7 @@ import {
   useStartConnectorOAuthMutation,
 } from "@/app/api/connectorsApi";
 import { ConnectorBadge } from "./ConnectorBadge";
+import { ProviderAppForm } from "./ProviderAppForm";
 import { providerMeta } from "./providerMeta";
 
 type Step = "provider" | "connect";
@@ -48,6 +49,7 @@ export function AddConnectorDialog({
   const [name, setName] = useState("");
   const [agentAccessible, setAgentAccessible] = useState(false);
   const [connectorId, setConnectorId] = useState<string | null>(null);
+  const [showAppForm, setShowAppForm] = useState(false);
   const [scopes, setScopes] = useState<string[]>([]);
 
   const selectedProvider = providers?.find((p) => p.key === providerKey) ?? null;
@@ -59,6 +61,7 @@ export function AddConnectorDialog({
     setAgentAccessible(false);
     setConnectorId(null);
     setScopes([]);
+    setShowAppForm(false);
   };
 
   const close = () => {
@@ -269,6 +272,25 @@ export function AddConnectorDialog({
                   You'll approve access on {selectedProvider?.display_name}'s own consent screen.
                   AuthSec stores the credential in its vault and refreshes it automatically — no one
                   in this workspace ever sees it.
+                </div>
+
+                <div className="rounded-md border px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAppForm((v) => !v)}
+                    className="text-[12px] font-medium text-(--color-primary-text)"
+                  >
+                    {showAppForm ? "Hide workspace OAuth app setup" : "Connect failing? Configure this workspace's own OAuth app"}
+                  </button>
+                  {showAppForm && selectedProvider && (
+                    <div className="mt-3">
+                      <ProviderAppForm
+                        providerKey={selectedProvider.key}
+                        providerName={selectedProvider.display_name}
+                        onSaved={() => setShowAppForm(false)}
+                      />
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

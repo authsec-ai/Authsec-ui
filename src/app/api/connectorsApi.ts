@@ -105,6 +105,33 @@ export interface CreateAssignmentRequest {
   action_key?: string | null;
 }
 
+/** One row per broker action attempt (allow or deny) — the accountability
+ * record: who (subject), which agent (actor), which token, what, outcome. */
+export interface ConnectorActionAudit {
+  id: string;
+  workspace_id: string;
+  connector_id?: string;
+  action_key: string;
+  outcome: "allow" | "deny";
+  deny_reason?: string;
+  subject_type?: string;
+  subject_id?: string;
+  actor_client_id?: string;
+  actor_spiffe_id?: string;
+  token_family?: string;
+  token_jti?: string;
+  http_status?: number;
+  latency_ms?: number;
+  created_at: string;
+}
+
+export interface SetProviderAppRequest {
+  providerKey: string;
+  client_id: string;
+  client_secret?: string;
+  redirect_uri: string;
+}
+
 export const connectorsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listConnectorProviders: builder.query<ConnectorProvider[], void>({
@@ -204,6 +231,31 @@ export const connectorsApi = baseApi.injectEndpoints({
         { type: "ExternalService", id: `${connectorId}:assignments` },
       ],
     }),
+
+    getConnectorAudit: builder.query<
+      ConnectorActionAudit[],
+      { connectorId: string; limit?: number }
+    >({
+      query: ({ connectorId, limit = 100 }) =>
+        `/authsec/connectors/${connectorId}/audit?limit=${limit}`,
+      transformResponse: (res: { audit: ConnectorActionAudit[] }) => res.audit ?? [],
+      providesTags: (_result, _error, { connectorId }) => [
+        { type: "ExternalService", id: `${connectorId}:audit` },
+      ],
+    }),
+
+    // Write-only by design: there is no GET for a workspace's provider app
+    // (the secret lives in Vault; client_id/redirect are set-and-forget).
+    setProviderApp: builder.mutation<
+      { status: string; provider: string },
+      SetProviderAppRequest
+    >({
+      query: ({ providerKey, ...body }) => ({
+        url: `/authsec/connectors/providers/${providerKey}/app`,
+        method: "POST",
+        body,
+      }),
+    }),
   }),
 });
 
@@ -218,4 +270,6 @@ export const {
   useListConnectorAssignmentsQuery,
   useCreateConnectorAssignmentMutation,
   useDeleteConnectorAssignmentMutation,
+  useGetConnectorAuditQuery,
+  useSetProviderAppMutation,
 } = connectorsApi;
