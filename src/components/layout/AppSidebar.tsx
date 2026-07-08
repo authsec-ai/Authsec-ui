@@ -5,13 +5,17 @@
  *   Dashboard
  *   Workspace : End Users, Applications, Clients
  *   Authz     : Roles, Scopes, Assignments
- *   Configure : Identity Providers, SCIM Connections, Directory Sync, Secrets
+ *   Configure : Identity Providers, SCIM Connections, Directory Sync, Connectors
  *   Monitor   : Audit Logs
  *   Settings  : Team
  *
  * "AI Agents" and "Trust Delegation" used to live here but both surfaces were
  * broken / out of scope; their routes still exist in App.tsx so direct links
  * resolve, but the rail no longer advertises them. See plan phase 0.1.
+ *
+ * "Secrets" (/external-services) was replaced by "Connectors" (/connectors)
+ * — the old page was mock data with no real API behind it. Its route/files
+ * are left in place in case anything still links to it directly.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,6 +24,7 @@ import { toast } from "react-hot-toast";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import {
   Bot,
+  Cable,
   ClipboardList,
   Fingerprint,
   FolderSync,
@@ -107,7 +112,7 @@ const NAV_CONFIGURE: NavItem[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
   { title: "SCIM Connections", url: "/scim-connections", icon: Shield },
   { title: "Directory Sync", url: "/directory-sync", icon: FolderSync },
-  { title: "Secrets", url: "/external-services", icon: KeyRound },
+  { title: "Connectors", url: "/connectors", icon: Cable },
 ];
 
 const NAV_SETTINGS: NavItem[] = [

@@ -57,6 +57,7 @@ import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage
 import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
 import AgentsPage from "./features/agents/AgentsPage";
 import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
+import ConnectorsPage from "./features/connectors/ConnectorsPage";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -533,6 +534,17 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <ServiceAccountsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/connectors"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ConnectorsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
