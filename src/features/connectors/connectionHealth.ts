@@ -17,9 +17,9 @@ export function deriveConnectionHealth(
   // the Overview tab's Reconnect flow, which restarts a *workspace* OAuth
   // grant. Falling back to a user connection here would silently reconnect
   // using someone's personal scopes/consent under a workspace-level label.
-  const connection = connections.find((c) => c.scope === "workspace") ?? null;
+  const connection = connections.find((c) => c.binding_type === "workspace") ?? null;
 
-  if (!connection || connection.status === "revoked") {
+  if (!connection || connection.status === "revoked" || connection.status === "disconnected") {
     return { label: "not_connected", connection };
   }
   if (connection.status === "error" || connection.last_refresh_error) {

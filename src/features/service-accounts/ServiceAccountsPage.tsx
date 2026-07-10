@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { ClipboardCopy, ExternalLink, KeyRound, Pencil, Plus, Server, Trash2 } from "lucide-react";
+import { ClipboardCopy, ExternalLink, KeyRound, Pencil, Plus, RotateCcw, Server, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -9,6 +9,7 @@ import {
   useUpdateWorkspaceServiceAccountMutation,
   useDeleteWorkspaceServiceAccountMutation,
   useProvisionWorkloadCredentialMutation,
+  useRotateWorkloadCredentialMutation,
   useListServiceAccountAccessQuery,
   type WorkspaceServiceAccount,
 } from "@/app/api/agentIdentityApi";
@@ -134,6 +135,8 @@ function CreateServiceAccountDialog({
   const [step, setStep] = useState<WizardStep>("form");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerTeam, setOwnerTeam] = useState("");
   const [authChoice, setAuthChoice] = useState<WizardAuthChoice>("secret");
   const [jwksUri, setJwksUri] = useState("");
   const [result, setResult] = useState<CreateResult | null>(null);
@@ -145,6 +148,8 @@ function CreateServiceAccountDialog({
     setStep("form");
     setName("");
     setDescription("");
+    setOwnerEmail("");
+    setOwnerTeam("");
     setAuthChoice("secret");
     setJwksUri("");
     setResult(null);
@@ -155,6 +160,10 @@ function CreateServiceAccountDialog({
       toast.error("Name is required.");
       return;
     }
+    if (!ownerEmail.trim()) {
+      toast.error("An accountable owner is required for every agent.");
+      return;
+    }
     if (authChoice === "jwks" && !jwksUri.trim()) {
       toast.error("JWKS URI is required for private-key JWT.");
       return;
@@ -162,6 +171,8 @@ function CreateServiceAccountDialog({
     try {
       const sa = await createSA({
         name: name.trim(),
+        owner_email: ownerEmail.trim(),
+        ...(ownerTeam.trim() ? { owner_team: ownerTeam.trim() } : {}),
         ...(description.trim() ? { description: description.trim() } : {}),
       }).unwrap();
 
@@ -219,15 +230,44 @@ function CreateServiceAccountDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sa-desc">Description</Label>
+              <Label htmlFor="sa-owner">Owner email *</Label>
               <Input
-                id="sa-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Optional"
+                id="sa-owner"
+                type="email"
+                value={ownerEmail}
+                onChange={(e) => setOwnerEmail(e.target.value)}
+                placeholder="priya@acme.com"
                 autoComplete="off"
                 className="h-9"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Accountable human for everything this agent does — including actions with no
+                human in the loop. Required.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sa-team">Team</Label>
+                <Input
+                  id="sa-team"
+                  value={ownerTeam}
+                  onChange={(e) => setOwnerTeam(e.target.value)}
+                  placeholder="Optional"
+                  autoComplete="off"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sa-desc">Description</Label>
+                <Input
+                  id="sa-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Optional"
+                  autoComplete="off"
+                  className="h-9"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -278,7 +318,7 @@ function CreateServiceAccountDialog({
               </Button>
               <Button
                 onClick={() => void handleCreate()}
-                disabled={!name.trim() || isLoading}
+                disabled={!name.trim() || !ownerEmail.trim() || isLoading}
                 className="text-white"
               >
                 {isLoading ? "Creating…" : "Create service account"}
@@ -473,6 +513,7 @@ function ServiceAccountDrawer({
         <Button variant="outline" className="flex-1" onClick={() => onEdit(sa)}>
           <Pencil className="mr-1.5 size-3.5" /> Edit
         </Button>
+        {method === "credential" && <RotateSecretButton sa={sa} />}
         <Button
           variant="outline"
           aria-label="Delete service account"
@@ -483,6 +524,112 @@ function ServiceAccountDrawer({
         </Button>
       </DrawerFooter>
     </RightDrawer>
+  );
+}
+
+// ── Rotate secret ───────────────────────────────────────────────────────────
+
+function RotateSecretButton({ sa }: { sa: WorkspaceServiceAccount }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [newSecret, setNewSecret] = useState<{ client_id: string; client_secret: string } | null>(
+    null,
+  );
+  const [rotate, { isLoading }] = useRotateWorkloadCredentialMutation();
+
+  const copy = (val: string) => {
+    void navigator.clipboard.writeText(val);
+    toast.success("Copied");
+  };
+
+  const submit = async () => {
+    try {
+      const res = await rotate({ saId: sa.id }).unwrap();
+      if (res.client_secret) {
+        setNewSecret({ client_id: res.client_id, client_secret: res.client_secret });
+      }
+      setConfirmOpen(false);
+      toast.success("Secret rotated. The previous secret no longer works.");
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't rotate the secret.");
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        aria-label="Rotate client secret"
+        title="Rotate client secret"
+        onClick={() => setConfirmOpen(true)}
+      >
+        <RotateCcw className="size-3.5" />
+      </Button>
+
+      {/* Confirm */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rotate client secret?</DialogTitle>
+            <DialogDescription>
+              A new secret is generated and the current one stops working immediately. The{" "}
+              <span className="font-medium">client ID stays the same</span>, so existing access
+              grants keep working — you only need to update the secret wherever this account
+              authenticates. The new secret is shown once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
+          <DialogFooter className="pt-2">
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void submit()} disabled={isLoading} className="text-white">
+              <RotateCcw className="mr-1.5 size-3.5" />
+              {isLoading ? "Rotating…" : "Rotate secret"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Show new secret once */}
+      <Dialog open={!!newSecret} onOpenChange={(v) => !v && setNewSecret(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New client secret</DialogTitle>
+            <DialogDescription>
+              Copy it now — it won't be shown again. The previous secret is already revoked.
+            </DialogDescription>
+          </DialogHeader>
+          {newSecret && (
+            <div className="space-y-3 py-1">
+              {(
+                [
+                  ["CLIENT_ID", newSecret.client_id],
+                  ["CLIENT_SECRET", newSecret.client_secret],
+                ] as const
+              ).map(([label, val]) => (
+                <div key={label} className="space-y-1">
+                  <Label>{label}</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
+                      {val}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => copy(val)}>
+                      <ClipboardCopy className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setNewSecret(null)} className="text-white">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

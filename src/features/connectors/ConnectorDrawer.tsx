@@ -288,7 +288,7 @@ export function ConnectorDrawer({
                     <div className="rounded-lg border p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <p className="text-[13px] font-medium text-foreground">
-                          {connection?.scope === "user" ? "User connection" : "Workspace connection"}
+                          {connection?.binding_type === "user" ? "User connection" : "Workspace connection"}
                         </p>
                         <HealthPill health={health} />
                       </div>
@@ -298,8 +298,27 @@ export function ConnectorDrawer({
                           <DetailGrid>
                             <DetailRow
                               label="Method"
-                              value={connection.auth_type === "oauth2" ? "OAuth 2.0" : "API key"}
+                              value={
+                                connection.auth_method === "oauth2"
+                                  ? "OAuth 2.0"
+                                  : connection.auth_method === "github_app"
+                                    ? "GitHub App"
+                                    : "API key"
+                              }
                             />
+                            {(connection.external_org_name || connection.external_account_name) && (
+                              <DetailRow
+                                label="Account"
+                                value={
+                                  connection.external_org_name
+                                    ? `${connection.external_org_name}${connection.external_account_name ? ` · ${connection.external_account_name}` : ""}`
+                                    : (connection.external_account_name ?? "")
+                                }
+                              />
+                            )}
+                            {connection.connected_by && (
+                              <DetailRow label="Connected by" value={connection.connected_by} />
+                            )}
                             <DetailRow
                               label="Expires"
                               value={
@@ -521,44 +540,58 @@ export function ConnectorDrawer({
                       />
                     ) : (
                       <div className="space-y-1.5">
-                        {auditRows.map((row) => (
-                          <div key={row.id} className="rounded-md border px-3 py-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-[11.5px] text-foreground">
-                                {row.action_key}
-                              </span>
-                              <span
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
-                                  row.outcome === "allow"
-                                    ? "bg-(--color-success-soft) text-(--color-success-text)"
-                                    : "bg-(--color-danger-soft) text-(--color-danger-text)",
+                        {auditRows.map((row) => {
+                          // F8: allow-but-provider-failed reads amber, not green.
+                          const providerFailed =
+                            typeof row.provider_status === "number" && row.provider_status >= 400;
+                          const pillClass =
+                            row.authz_outcome === "deny"
+                              ? "bg-(--color-danger-soft) text-(--color-danger-text)"
+                              : providerFailed
+                                ? "bg-(--color-warning-soft) text-(--color-warning-text)"
+                                : "bg-(--color-success-soft) text-(--color-success-text)";
+                          const statusBits = [
+                            typeof row.broker_status === "number" ? `broker ${row.broker_status}` : null,
+                            typeof row.provider_status === "number" ? `provider ${row.provider_status}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ");
+                          return (
+                            <div key={row.id} className="rounded-md border px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-[11.5px] text-foreground">
+                                  {row.action_key}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                                    pillClass,
+                                  )}
+                                >
+                                  {row.action_outcome ?? row.authz_outcome}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-[11px] text-muted-foreground">
+                                {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
+                                {statusBits && <> · {statusBits}</>}
+                                {row.subject_id ? (
+                                  <> · on behalf of <span className="font-mono">{row.subject_id.slice(0, 8)}…</span></>
+                                ) : row.actor_client_id ? (
+                                  <> · agent <span className="font-mono">{row.actor_client_id.slice(0, 8)}…</span></>
+                                ) : null}
+                                {row.token_family && <> · {row.token_family}</>}
+                                {typeof row.latency_ms === "number" && row.latency_ms > 0 && (
+                                  <> · {row.latency_ms}ms</>
                                 )}
-                              >
-                                {row.outcome}
-                                {row.http_status ? ` · ${row.http_status}` : ""}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-[11px] text-muted-foreground">
-                              {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
-                              {row.actor_client_id && (
-                                <>
-                                  {" · agent "}
-                                  <span className="font-mono">{row.actor_client_id.slice(0, 8)}…</span>
-                                </>
-                              )}
-                              {row.token_family && <> · {row.token_family}</>}
-                              {typeof row.latency_ms === "number" && row.latency_ms > 0 && (
-                                <> · {row.latency_ms}ms</>
-                              )}
-                            </p>
-                            {row.deny_reason && (
-                              <p className="mt-1 rounded bg-(--color-danger-soft) px-2 py-1 text-[11px] text-(--color-danger-text)">
-                                {row.deny_reason}
                               </p>
-                            )}
-                          </div>
-                        ))}
+                              {row.deny_reason && (
+                                <p className="mt-1 rounded bg-(--color-danger-soft) px-2 py-1 text-[11px] text-(--color-danger-text)">
+                                  {row.deny_reason}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </DrawerSection>

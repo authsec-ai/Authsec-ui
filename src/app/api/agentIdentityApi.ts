@@ -363,7 +363,7 @@ const agentIdentityApi = baseApi.injectEndpoints({
     // workload identity (no server grant; access is granted separately).
     createWorkspaceServiceAccount: builder.mutation<
       WorkspaceServiceAccount,
-      { name: string; description?: string }
+      { name: string; description?: string; owner_email: string; owner_team?: string }
     >({
       query: (body) => ({ url: `/authsec/uflow/admin/service-accounts`, method: "POST", body }),
     }),
@@ -407,6 +407,19 @@ const agentIdentityApi = baseApi.injectEndpoints({
         url: `/authsec/uflow/admin/service-accounts/${saId}/credentials`,
         method: "POST",
         body,
+      }),
+    }),
+
+    // POST /authsec/uflow/admin/service-accounts/:sa_id/credentials/rotate —
+    // mint a fresh client secret for the SA's existing credential, revoking the
+    // old one. client_id is unchanged; the new plaintext is shown once.
+    rotateWorkloadCredential: builder.mutation<
+      { client_id: string; token_endpoint_auth_method: string; client_secret?: string },
+      { saId: string }
+    >({
+      query: ({ saId }) => ({
+        url: `/authsec/uflow/admin/service-accounts/${saId}/credentials/rotate`,
+        method: "POST",
       }),
     }),
 
@@ -461,5 +474,6 @@ export const {
   useUpdateWorkspaceServiceAccountMutation,
   useDeleteWorkspaceServiceAccountMutation,
   useProvisionWorkloadCredentialMutation,
+  useRotateWorkloadCredentialMutation,
   useRegisterAgentMutation,
 } = agentIdentityApi;
