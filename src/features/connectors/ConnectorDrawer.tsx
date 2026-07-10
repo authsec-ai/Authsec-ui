@@ -108,6 +108,7 @@ export function ConnectorDrawer({
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [newClientId, setNewClientId] = useState("");
   const [newActionKey, setNewActionKey] = useState(ALL_ACTIONS);
+  const [newConstraints, setNewConstraints] = useState("");
 
   const { data, isLoading } = useGetConnectorQuery(connectorId ?? "", { skip: !connectorId });
   const { data: providers } = useListConnectorProvidersQuery();
@@ -139,6 +140,7 @@ export function ConnectorDrawer({
     setConfirmDeleteOpen(false);
     setNewClientId("");
     setNewActionKey(ALL_ACTIONS);
+    setNewConstraints("");
     setShowAppForm(false);
     onClose();
   };
@@ -187,15 +189,26 @@ export function ConnectorDrawer({
       toast.error("Client ID is required.");
       return;
     }
+    let constraints: Record<string, unknown> | undefined;
+    if (newConstraints.trim()) {
+      try {
+        constraints = JSON.parse(newConstraints);
+      } catch {
+        toast.error("Input constraints must be valid JSON.");
+        return;
+      }
+    }
     try {
       await createAssignment({
         connectorId: connector.id,
         client_id: newClientId.trim(),
         action_key: newActionKey === ALL_ACTIONS ? undefined : newActionKey,
+        ...(constraints ? { input_constraints: constraints } : {}),
       }).unwrap();
       toast.success("Access granted.");
       setNewClientId("");
       setNewActionKey(ALL_ACTIONS);
+      setNewConstraints("");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't grant access.");
@@ -444,6 +457,11 @@ export function ConnectorDrawer({
                             <p className="text-[11px] text-muted-foreground">
                               {a.action_key ?? "All actions"}
                             </p>
+                            {a.input_constraints && Object.keys(a.input_constraints).length > 0 && (
+                              <p className="mt-0.5 truncate font-mono text-[10px] text-(--color-primary-text)">
+                                limited to {JSON.stringify(a.input_constraints)}
+                              </p>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -479,6 +497,20 @@ export function ConnectorDrawer({
                         ))}
                       </SelectContent>
                     </Select>
+                    <div>
+                      <textarea
+                        value={newConstraints}
+                        onChange={(e) => setNewConstraints(e.target.value)}
+                        placeholder={'Input limits (optional JSON) — {"owner":{"equals":"acme-eng"}}'}
+                        rows={2}
+                        className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[11px]"
+                        spellCheck={false}
+                      />
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        Restrict which inputs this agent may pass. Calls outside the allowlist are
+                        denied before the provider is touched.
+                      </p>
+                    </div>
                     <Button
                       size="sm"
                       className="w-full text-[length:var(--text-sm)] text-white"

@@ -20,6 +20,10 @@ import {
   useCreateConnectorMutation,
   useStartConnectorOAuthMutation,
 } from "@/app/api/connectorsApi";
+import {
+  useSetGitHubAppMutation,
+  useConnectGitHubAppMutation,
+} from "@/app/api/connectorsApi";
 import { ConnectorBadge } from "./ConnectorBadge";
 import { ProviderAppForm } from "./ProviderAppForm";
 import { providerMeta } from "./providerMeta";
@@ -43,6 +47,8 @@ export function AddConnectorDialog({
   } = useListConnectorProvidersQuery();
   const [createConnector, { isLoading: creating }] = useCreateConnectorMutation();
   const [startOAuth, { isLoading: connecting }] = useStartConnectorOAuthMutation();
+  const [setGitHubApp, { isLoading: savingApp }] = useSetGitHubAppMutation();
+  const [connectGitHubApp, { isLoading: connectingApp }] = useConnectGitHubAppMutation();
 
   const [step, setStep] = useState<Step>("provider");
   const [providerKey, setProviderKey] = useState<string | null>(null);
@@ -51,6 +57,12 @@ export function AddConnectorDialog({
   const [connectorId, setConnectorId] = useState<string | null>(null);
   const [showAppForm, setShowAppForm] = useState(false);
   const [scopes, setScopes] = useState<string[]>([]);
+  // GitHub-App path (F1/D2).
+  const [ghShowRegister, setGhShowRegister] = useState(false);
+  const [ghAppId, setGhAppId] = useState("");
+  const [ghPrivateKey, setGhPrivateKey] = useState("");
+  const [ghInstallationId, setGhInstallationId] = useState("");
+  const [ghOrgName, setGhOrgName] = useState("");
 
   const selectedProvider = providers?.find((p) => p.key === providerKey) ?? null;
 
@@ -62,6 +74,11 @@ export function AddConnectorDialog({
     setConnectorId(null);
     setScopes([]);
     setShowAppForm(false);
+    setGhShowRegister(false);
+    setGhAppId("");
+    setGhPrivateKey("");
+    setGhInstallationId("");
+    setGhOrgName("");
   };
 
   const close = () => {
@@ -114,7 +131,44 @@ export function AddConnectorDialog({
     }
   };
 
+  const isGitHub = selectedProvider?.key === "github";
   const supportsOAuth = selectedProvider?.supported_auth_methods.includes("oauth2") ?? false;
+
+  const handleRegisterGitHubApp = async () => {
+    if (!ghAppId.trim() || !ghPrivateKey.trim()) {
+      toast.error("App ID and private key are required.");
+      return;
+    }
+    try {
+      await setGitHubApp({ app_id: ghAppId.trim(), private_key: ghPrivateKey.trim() }).unwrap();
+      toast.success("GitHub App registered for this workspace.");
+      setGhShowRegister(false);
+      setGhPrivateKey("");
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't register the GitHub App.");
+    }
+  };
+
+  const handleConnectGitHubApp = async () => {
+    if (!connectorId) return;
+    if (!ghInstallationId.trim()) {
+      toast.error("Installation ID is required.");
+      return;
+    }
+    try {
+      await connectGitHubApp({
+        connectorId,
+        installation_id: ghInstallationId.trim(),
+        ...(ghOrgName.trim() ? { org_name: ghOrgName.trim() } : {}),
+      }).unwrap();
+      toast.success("GitHub connected.");
+      close();
+    } catch (err) {
+      const apiErr = err as { data?: { error?: string } };
+      toast.error(apiErr?.data?.error ?? "Couldn't connect the GitHub App.");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : close())}>
@@ -229,7 +283,89 @@ export function AddConnectorDialog({
           </div>
         ) : (
           <div className="space-y-4 py-2">
-            {supportsOAuth ? (
+            {isGitHub ? (
+              <>
+                <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
+                  GitHub connects as an <span className="font-medium">installed GitHub App</span> — a
+                  bot identity scoped to selected repos, not tied to any person. It survives anyone
+                  leaving the org. One connector per GitHub organization.
+                </div>
+
+                <div className="rounded-md border">
+                  <button
+                    type="button"
+                    onClick={() => setGhShowRegister((v) => !v)}
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-[12.5px] font-medium"
+                  >
+                    <span>Step 1 · Register this workspace's GitHub App</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {ghShowRegister ? "Hide" : "Set up"}
+                    </span>
+                  </button>
+                  {ghShowRegister && (
+                    <div className="space-y-2 border-t px-3 py-3">
+                      <p className="text-[11px] text-muted-foreground">
+                        One-time per workspace. Create a GitHub App in your org, then paste its App ID
+                        and a generated private key (PEM). The key is stored in AuthSec's vault.
+                      </p>
+                      <Input
+                        value={ghAppId}
+                        onChange={(e) => setGhAppId(e.target.value)}
+                        placeholder="App ID (e.g. 123456)"
+                        className="h-9 font-mono text-xs"
+                        autoComplete="off"
+                      />
+                      <textarea
+                        value={ghPrivateKey}
+                        onChange={(e) => setGhPrivateKey(e.target.value)}
+                        placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                        rows={3}
+                        className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[11px]"
+                        spellCheck={false}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleRegisterGitHubApp()}
+                        disabled={savingApp || !ghAppId.trim() || !ghPrivateKey.trim()}
+                      >
+                        {savingApp ? "Saving…" : "Save GitHub App"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 rounded-md border px-3 py-3">
+                  <p className="text-[12.5px] font-medium">Step 2 · Install on your org &amp; connect</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Install the App on the GitHub organization (selecting repos there), then paste the
+                    installation ID from the install URL.
+                  </p>
+                  <Input
+                    value={ghOrgName}
+                    onChange={(e) => setGhOrgName(e.target.value)}
+                    placeholder="Organization (e.g. acme-eng)"
+                    className="h-9 text-xs"
+                    autoComplete="off"
+                  />
+                  <Input
+                    value={ghInstallationId}
+                    onChange={(e) => setGhInstallationId(e.target.value)}
+                    placeholder="Installation ID (e.g. 45678901)"
+                    className="h-9 font-mono text-xs"
+                    autoComplete="off"
+                  />
+                  <Button
+                    onClick={() => void handleConnectGitHubApp()}
+                    disabled={connectingApp || !ghInstallationId.trim()}
+                    className="w-full text-[length:var(--text-sm)] text-white"
+                  >
+                    <ExternalLink className="mr-1.5 size-3.5" />
+                    {connectingApp ? "Connecting…" : "Connect GitHub"}
+                  </Button>
+                </div>
+              </>
+            ) : supportsOAuth ? (
               <>
                 <div>
                   <p className="mb-2 text-[13px] font-medium text-foreground">Permissions to request</p>
@@ -301,7 +437,7 @@ export function AddConnectorDialog({
             )}
 
             <DialogFooter className="pt-2">
-              {supportsOAuth ? (
+              {supportsOAuth || isGitHub ? (
                 <Button variant="ghost" onClick={close}>
                   Skip — connect later
                 </Button>
