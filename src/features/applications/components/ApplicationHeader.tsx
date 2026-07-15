@@ -7,17 +7,10 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Check, CheckCircle2, Copy, MoreHorizontal, Trash2 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ArrowRight, Check, CheckCircle2, Copy } from "lucide-react";
 import type { Application, Readiness, ReadinessState } from "../types";
 import { isLaunched } from "../lib/computeReadiness";
 import { computeNextBestAction, nextActionHref } from "../lib/computeNextBestAction";
-import { DeleteApplicationDialog } from "./DeleteApplicationDialog";
 
 export interface ApplicationHeaderProps {
   application: Pick<
@@ -42,7 +35,6 @@ export function ApplicationHeader({
 }: ApplicationHeaderProps) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const launched = isLaunched(application);
   const launchTone = launched ? "badge--success" : application.state === "scan_failed" ? "badge--danger" : "badge--warning";
@@ -58,8 +50,7 @@ export function ApplicationHeader({
   };
 
   return (
-    <>
-      <header className="detail-header" data-slot="application-header">
+    <header className="detail-header" data-slot="application-header">
       <div className="dh-top">
         <div className="dh-left">
           <div className="dh-titlerow">
@@ -99,33 +90,8 @@ export function ApplicationHeader({
               {next.primary} <ArrowRight className="icon-sm" />
             </button>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="btn btn-secondary" aria-label="Application actions">
-                <MoreHorizontal className="icon-sm" /> Actions
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-              <DropdownMenuItem
-                className="menu-item danger"
-                onSelect={() => setDeleteOpen(true)}
-              >
-                <span className="mi-ic">
-                  <Trash2 className="icon-sm" />
-                </span>
-                Delete application
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
-      </header>
-      <DeleteApplicationDialog
-        application={application}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onDeleted={() => navigate("/applications", { replace: true })}
-      />
-    </>
+    </header>
   );
 }

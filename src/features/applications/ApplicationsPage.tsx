@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ExternalLink,
   KeyRound,
-  MoreHorizontal,
   PlayCircle,
   Plus,
   Server,
@@ -26,16 +25,11 @@ import {
 import { useListApplicationsQuery } from "@/app/api/applicationsApi";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
   ConsoleFilterBar,
+  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
@@ -273,38 +267,23 @@ export default function ApplicationsPage() {
         cell: ({ row }) => {
           const a = row.original.application;
           return (
-            <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="icon-btn" aria-label="Row actions">
-                    <MoreHorizontal className="icon" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                  {ROW_ACTIONS.map(({ label, tab, icon: Icon }) => (
-                    <DropdownMenuItem
-                      key={tab}
-                      className="menu-item"
-                      onSelect={() => navigate(`/applications/${a.id}/${tab}`)}
-                    >
-                      <span className="mi-ic">
-                        <Icon className="icon-sm" />
-                      </span>
-                      {label}
-                    </DropdownMenuItem>
-                  ))}
-                  <div className="menu-sep" />
-                  <DropdownMenuItem
-                    className="menu-item danger"
-                    onSelect={() => setPendingDelete(a)}
-                  >
-                    <span className="mi-ic">
-                      <Trash2 className="icon-sm" />
-                    </span>
-                    Delete application
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions
+                label={`Actions for ${a.name}`}
+                items={[
+                  ...ROW_ACTIONS.map(({ label, tab, icon: Icon }) => ({
+                    label,
+                    icon: <Icon className="size-4" />,
+                    onSelect: () => navigate(`/applications/${a.id}/${tab}`),
+                  })),
+                  {
+                    label: "Delete application",
+                    icon: <Trash2 className="size-4" />,
+                    destructive: true,
+                    onSelect: () => setPendingDelete(a),
+                  },
+                ]}
+              />
             </div>
           );
         },
