@@ -351,12 +351,12 @@ export default function ApplicationToolsPage() {
         approxWidth: 280,
         cell: ({ row }) =>
           row.original.scopes.length === 0 ? (
-            <span className="text-xs italic text-slate-500">
+            <span className="text-xs italic text-muted-foreground">
               {row.original.is_public ? "Public access" : "No label assigned"}
             </span>
           ) : (
             <span
-              className="block truncate text-xs text-slate-700"
+              className="block truncate text-xs text-muted-foreground"
               title={row.original.scopes.map((scope) => scope.scope_string).join(", ")}
             >
               {row.original.scopes
@@ -421,10 +421,10 @@ export default function ApplicationToolsPage() {
     <div className="space-y-4">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
             Tools
           </h2>
-          <p className="max-w-3xl text-sm leading-5 text-slate-600">
+          <p className="max-w-3xl text-sm leading-5 text-muted-foreground">
             Review every MCP capability this application exposes, what gates it,
             and which tools are denied until mapped.
           </p>
@@ -572,8 +572,8 @@ function BulkActionBar({
   if (count === 0) return null;
   return (
     <div className="pointer-events-none sticky bottom-4 z-40 flex justify-center">
-      <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
-        <span className="text-sm font-semibold text-slate-900">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-full border border-border bg-card px-4 py-2 shadow-lg">
+        <span className="text-sm font-semibold text-foreground">
           {count} selected
         </span>
         {!allVisibleSelected && visibleCount > count ? (
@@ -587,7 +587,7 @@ function BulkActionBar({
           </Button>
         ) : null}
         {someVisibleSelected || allVisibleSelected ? null : null}
-        <span className="h-4 w-px bg-slate-200" aria-hidden />
+        <span className="h-4 w-px bg-border" aria-hidden />
         <Button size="sm" className="h-8 text-white" onClick={onAssign}>
           Assign access label
         </Button>
@@ -680,17 +680,17 @@ function BulkScopeDialog({
         </DialogHeader>
 
         {selectedTools.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-2">
+          <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-muted p-2">
             {selectedTools.slice(0, 6).map((tool) => (
               <span
                 key={tool.id}
-                className="rounded-md bg-white px-2 py-0.5 font-mono text-[11px] text-slate-700 ring-1 ring-slate-200"
+                className="rounded-md bg-card px-2 py-0.5 font-mono text-[11px] text-foreground ring-1 ring-border"
               >
                 {tool.name}
               </span>
             ))}
             {selectedTools.length > 6 ? (
-              <span className="px-1 text-[11px] text-slate-500">
+              <span className="px-1 text-[11px] text-muted-foreground">
                 +{selectedTools.length - 6} more
               </span>
             ) : null}
@@ -699,7 +699,7 @@ function BulkScopeDialog({
 
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-400"
+            className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground"
             aria-hidden
           />
           <Input
@@ -712,9 +712,9 @@ function BulkScopeDialog({
           />
         </div>
 
-        <div className="max-h-[320px] overflow-y-auto rounded-md border border-slate-200">
+        <div className="max-h-[320px] overflow-y-auto rounded-md border border-border">
           {filteredScopes.length === 0 ? (
-            <div className="py-8 text-center text-sm text-slate-500">
+            <div className="py-8 text-center text-sm text-muted-foreground">
               {scopes.length === 0
                 ? isAssign
                   ? "No more labels left to assign."
@@ -722,7 +722,7 @@ function BulkScopeDialog({
                 : "No labels match your search."}
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {filteredScopes.map((scope) => {
                 const checked = picked.includes(scope.id);
                 const tone = RISK_TONE[scope.risk_level];
@@ -730,8 +730,8 @@ function BulkScopeDialog({
                   <li key={scope.id}>
                     <label
                       className={cn(
-                        "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50",
-                        checked && "bg-slate-50",
+                        "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted",
+                        checked && "bg-muted",
                       )}
                     >
                       <Checkbox
@@ -740,7 +740,7 @@ function BulkScopeDialog({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="truncate font-medium text-slate-900">
+                          <span className="truncate font-medium text-foreground">
                             {scope.display_name || scope.scope_string}
                           </span>
                           <span
@@ -753,7 +753,7 @@ function BulkScopeDialog({
                             {scope.risk_level}
                           </span>
                         </div>
-                        <div className="truncate font-mono text-[11px] text-slate-500">
+                        <div className="truncate font-mono text-[11px] text-muted-foreground">
                           {scope.scope_string}
                         </div>
                       </div>
@@ -873,11 +873,11 @@ function ToolInspectorDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex h-full flex-col overflow-hidden p-0 sm:max-w-[560px]">
-        <SheetHeader className="border-b border-slate-200 bg-white px-6 py-5 text-left">
-          <SheetTitle className="break-all font-mono text-2xl font-semibold leading-8 tracking-normal text-slate-950">
+        <SheetHeader className="border-b border-border bg-card px-6 py-5 text-left">
+          <SheetTitle className="break-all font-mono text-2xl font-semibold leading-8 tracking-normal text-foreground">
             {tool.name}
           </SheetTitle>
-          <SheetDescription className="text-sm leading-5 text-slate-600">
+          <SheetDescription className="text-sm leading-5 text-muted-foreground">
             {tool.title || tool.description || "MCP tool access inspector"}
           </SheetDescription>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -905,7 +905,7 @@ function ToolInspectorDrawer({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-6 py-5">
+        <div className="flex-1 space-y-4 overflow-y-auto bg-muted/60 px-6 py-5">
           <VerdictCard
             verdict={decision === "unmapped" ? "deny" : decision === "advisory" ? "review" : "allow"}
             title={
@@ -929,7 +929,7 @@ function ToolInspectorDrawer({
           />
 
           <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Access path
             </h3>
             <AccessPath
@@ -961,19 +961,19 @@ function ToolInspectorDrawer({
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Access labels
               </h3>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {tool.scopes.length} mapped
               </span>
             </div>
             {tool.scopes.length === 0 ? (
-              <p className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">
+              <p className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
                 No mapped labels yet.
               </p>
             ) : (
-              <ul className="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
                 {tool.scopes.map((scope) => (
                   <li
                     key={scope.scope_id}
@@ -1011,7 +1011,7 @@ function ToolInspectorDrawer({
 
           {unmappedScopes.length > 0 ? (
             <section className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Map to access label
               </h3>
               <div className="grid gap-2">
@@ -1027,7 +1027,7 @@ function ToolInspectorDrawer({
                     <span className="min-w-0 truncate">
                       {scope.display_name || scope.scope_string}
                     </span>
-                    <span className="shrink-0 text-xs text-slate-500">Map</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">Map</span>
                   </Button>
                 ))}
               </div>
@@ -1036,14 +1036,14 @@ function ToolInspectorDrawer({
 
           {tool.suggested_scopes?.length ? (
             <section className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 SDK suggestions
               </h3>
               <div className="flex flex-wrap gap-2">
                 {tool.suggested_scopes.map((scope) => (
                   <span
                     key={scope}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-xs text-slate-700"
+                    className="rounded-md border border-border bg-card px-2 py-1 font-mono text-xs text-foreground"
                   >
                     {scope}
                   </span>
@@ -1052,18 +1052,18 @@ function ToolInspectorDrawer({
             </section>
           ) : null}
 
-          <section className="space-y-3 rounded-lg border border-red-200 bg-white p-4">
+          <section className="space-y-3 rounded-lg border border-red-200 bg-card p-4">
             <div className="flex items-center gap-2">
               {tool.is_public ? (
                 <ShieldAlert className="size-4 text-red-600" />
               ) : (
-                <Sparkles className="size-4 text-slate-500" />
+                <Sparkles className="size-4 text-muted-foreground" />
               )}
               <h3 className="text-xs font-bold uppercase tracking-wide text-red-600">
                 Public exposure
               </h3>
             </div>
-            <p className="text-sm leading-5 text-slate-600">
+            <p className="text-sm leading-5 text-muted-foreground">
               Public tools are callable by any authenticated token for this
               application. To mark public, type the exact tool name.
             </p>
@@ -1077,7 +1077,7 @@ function ToolInspectorDrawer({
               <div>
                 <Label
                   htmlFor="confirm-name"
-                  className="text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                  className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground"
                 >
                   Type the tool name
                 </Label>
@@ -1104,7 +1104,7 @@ function ToolInspectorDrawer({
             </Button>
           </section>
 
-          <p className="text-xs leading-5 text-slate-500">
+          <p className="text-xs leading-5 text-muted-foreground">
             Risk note: {riskReasonForTool(tool)}
           </p>
         </div>

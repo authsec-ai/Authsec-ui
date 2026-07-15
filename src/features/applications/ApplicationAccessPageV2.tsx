@@ -65,6 +65,7 @@ import {
 } from "@/app/api/scopeMatrixApi";
 import type {
   OAuthScope,
+  RiskLevel,
   ScopePermission,
   ScopeSource,
 } from "@/app/api/types/scopeMatrix";
@@ -100,7 +101,7 @@ const SCOPE_SOURCE_TOOLTIP: Record<ScopeSource, string> = {
 
 const SCOPE_SOURCE_STYLE: Record<ScopeSource, string> = {
   preset: "border-blue-200 bg-blue-50 text-blue-700",
-  discovered: "border-slate-200 bg-slate-50 text-slate-600",
+  discovered: "border-border bg-muted text-muted-foreground",
   manifest: "border-indigo-200 bg-indigo-50 text-indigo-700",
   manual: "border-amber-200 bg-amber-50 text-amber-700",
 };
@@ -244,15 +245,15 @@ function GrantedScopeRow({
         "flex items-start justify-between gap-2 rounded-md border p-2",
         variant === "queued"
           ? "border-blue-200 bg-blue-50/60"
-          : "border-slate-200 bg-white",
+          : "border-border bg-card",
       )}
     >
       <div className="min-w-0">
-        <p className="truncate font-mono text-xs font-semibold text-slate-950">
+        <p className="truncate font-mono text-xs font-semibold text-foreground">
           {scope.scope_string}
         </p>
         {scope.description && (
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-slate-500">
+          <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
             {scope.description}
           </p>
         )}
@@ -294,7 +295,7 @@ function RoleCard({
         "flex items-stretch gap-1 rounded-md border transition-colors",
         selected
           ? "border-blue-300 bg-blue-50/60 ring-1 ring-blue-200"
-          : "border-slate-200 bg-white hover:bg-slate-50",
+          : "border-border bg-card hover:bg-muted",
       )}
     >
       <button
@@ -304,7 +305,7 @@ function RoleCard({
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold text-slate-950">
+            <p className="truncate text-sm font-semibold text-foreground">
               {formatApplicationRoleName(role.name)}
             </p>
             {isDefault && (
@@ -322,7 +323,7 @@ function RoleCard({
               </span>
             )}
           </div>
-          <p className="mt-0.5 text-[11px] text-slate-500">{subLabel}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{subLabel}</p>
         </div>
         <span
           className={cn(
@@ -341,7 +342,7 @@ function RoleCard({
             type="button"
             disabled={saving}
             aria-label={`Actions for ${formatApplicationRoleName(role.name)}`}
-            className="flex shrink-0 items-center justify-center rounded-r-md px-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+            className="flex shrink-0 items-center justify-center rounded-r-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
             <MoreVertical className="size-4" />
           </button>
@@ -405,7 +406,9 @@ function ThreeColumnMatrix({
   const [newRoleName, setNewRoleName] = useState("");
   const [showAddScope, setShowAddScope] = useState(false);
   const [newScopeString, setNewScopeString] = useState("");
+  const [newScopeDisplayName, setNewScopeDisplayName] = useState("");
   const [newScopeDescription, setNewScopeDescription] = useState("");
+  const [newScopeRisk, setNewScopeRisk] = useState<RiskLevel>("low");
 
   // Seed selected role with default or first available
   useEffect(() => {
@@ -555,14 +558,16 @@ function ThreeColumnMatrix({
         rsId: applicationId,
         body: {
           scope_string: scopeString,
-          display_name: scopeString,
+          display_name: newScopeDisplayName.trim() || scopeString,
           description: newScopeDescription.trim() || undefined,
-          risk_level: "low",
+          risk_level: newScopeRisk,
         },
       }).unwrap();
       toast.success(`Scope "${scopeString}" created.`);
       setNewScopeString("");
+      setNewScopeDisplayName("");
       setNewScopeDescription("");
+      setNewScopeRisk("low");
       setShowAddScope(false);
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
@@ -657,7 +662,7 @@ function ThreeColumnMatrix({
         </Surface>
       )}
       {showViewerEmptyHelper && (
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="text-xs leading-5 text-muted-foreground">
           {selectedRoleLabel} is the default but grants nothing until you
           assign at least one scope to it.
         </p>
@@ -668,7 +673,7 @@ function ThreeColumnMatrix({
         <Surface className="p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-semibold text-slate-950">Roles</h3>
+              <h3 className="text-sm font-semibold text-foreground">Roles</h3>
               <HelpTooltip content="Bundles of scopes that you assign to users." />
             </div>
             <button
@@ -680,14 +685,14 @@ function ThreeColumnMatrix({
                 "flex size-6 items-center justify-center rounded-full border transition-colors",
                 showAddRole
                   ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                  : "border-border bg-card text-muted-foreground hover:border-border hover:text-foreground",
               )}
             >
               <Plus className="size-3.5" />
             </button>
           </div>
           {showAddRole && (
-            <div className="mt-3 space-y-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-2.5">
+            <div className="mt-3 space-y-2 rounded-md border border-dashed border-border bg-muted p-2.5">
               <Input
                 value={newRoleName}
                 onChange={(e) => setNewRoleName(e.target.value)}
@@ -716,12 +721,12 @@ function ThreeColumnMatrix({
             </div>
           )}
           {policyLoading && !policy ? (
-            <p className="mt-3 text-sm text-slate-500">
+            <p className="mt-3 text-sm text-muted-foreground">
               <Loader2 className="mr-2 inline size-4 animate-spin" />
               Loading roles…
             </p>
           ) : roleOptions.length === 0 ? (
-            <div className="mt-3 rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-500">
+            <div className="mt-3 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
               No roles yet. Define them on the Setup tab, then come back to
               grant scopes.
             </div>
@@ -747,7 +752,7 @@ function ThreeColumnMatrix({
         <Surface className="flex flex-col p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-sm font-semibold text-slate-950">
+              <h3 className="text-sm font-semibold text-foreground">
                 Available scopes
               </h3>
               <HelpTooltip content="All scopes that exist for this Application. They can exist without being granted." />
@@ -761,19 +766,25 @@ function ThreeColumnMatrix({
                 "flex size-6 items-center justify-center rounded-full border transition-colors",
                 showAddScope
                   ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                  : "border-border bg-card text-muted-foreground hover:border-border hover:text-foreground",
               )}
             >
               <Plus className="size-3.5" />
             </button>
           </div>
           {showAddScope && (
-            <div className="mt-3 space-y-2 rounded-md border border-dashed border-slate-300 bg-slate-50 p-2.5">
+            <div className="mt-3 space-y-2 rounded-md border border-dashed border-border bg-muted p-2.5">
               <Input
                 value={newScopeString}
                 onChange={(e) => setNewScopeString(e.target.value)}
                 placeholder="Scope string (e.g. demo:tools:read)"
                 className="h-8 text-sm font-mono"
+              />
+              <Input
+                value={newScopeDisplayName}
+                onChange={(e) => setNewScopeDisplayName(e.target.value)}
+                placeholder="Display name (defaults to scope string)"
+                className="h-8 text-sm"
               />
               <Input
                 value={newScopeDescription}
@@ -784,6 +795,23 @@ function ThreeColumnMatrix({
                   if (e.key === "Enter") { e.preventDefault(); void handleCreateScope(); }
                 }}
               />
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-muted-foreground">Risk</span>
+                <Select
+                  value={newScopeRisk}
+                  onValueChange={(v) => setNewScopeRisk(v as RiskLevel)}
+                >
+                  <SelectTrigger className="h-8 flex-1 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -791,7 +819,9 @@ function ThreeColumnMatrix({
                   onClick={() => {
                     setShowAddScope(false);
                     setNewScopeString("");
+                    setNewScopeDisplayName("");
                     setNewScopeDescription("");
+                    setNewScopeRisk("low");
                   }}
                 >
                   Cancel
@@ -814,17 +844,17 @@ function ThreeColumnMatrix({
           />
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
             {scopesLoading ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 <Loader2 className="mr-2 inline size-4 animate-spin" />
                 Loading scopes…
               </p>
             ) : roleDetailLoading ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 <Loader2 className="mr-2 inline size-4 animate-spin" />
                 Loading grants…
               </p>
             ) : visibleScopes.length === 0 ? (
-              <p className="text-sm text-slate-500">No scopes match this search.</p>
+              <p className="text-sm text-muted-foreground">No scopes match this search.</p>
             ) : (
               <ul className="space-y-1.5">
                 {visibleScopes.map((scope) => {
@@ -838,7 +868,7 @@ function ThreeColumnMatrix({
                           "flex cursor-pointer items-start gap-2 rounded-md border p-2 transition-colors",
                           checked
                             ? "border-blue-300 bg-blue-50/60"
-                            : "border-slate-200 bg-white hover:bg-slate-50",
+                            : "border-border bg-card hover:bg-muted",
                           alreadyGranted && "opacity-60",
                         )}
                       >
@@ -851,7 +881,7 @@ function ThreeColumnMatrix({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="truncate font-mono text-xs font-semibold text-slate-950">
+                            <p className="truncate font-mono text-xs font-semibold text-foreground">
                               {scope.scope_string}
                             </p>
                             <span
@@ -865,7 +895,7 @@ function ThreeColumnMatrix({
                             </span>
                           </div>
                           {scope.description && (
-                            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-slate-500">
+                            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
                               {scope.description}
                             </p>
                           )}
@@ -895,14 +925,14 @@ function ThreeColumnMatrix({
         {/* Pane 3 — Granted to selected role */}
         <Surface className="flex flex-col p-4">
           <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-semibold text-slate-950">
+            <h3 className="text-sm font-semibold text-foreground">
               Granted to {selectedRoleLabel}
             </h3>
             <HelpTooltip content="Scopes currently in this role. Removing a scope here doesn't delete it — it stays available." />
           </div>
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
             {!selectedRole ? (
-              <p className="text-sm text-slate-500">Pick a role to see its grants.</p>
+              <p className="text-sm text-muted-foreground">Pick a role to see its grants.</p>
             ) : grantedScopes.length === 0 ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
                 {selectedRoleLabel} has no grants yet — users will authenticate
@@ -912,7 +942,7 @@ function ThreeColumnMatrix({
               <div className="space-y-3">
                 {existingGrantedScopes.length > 0 && (
                   <section>
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                       Existing ({existingGrantedScopes.length})
                     </p>
                     <ul className="space-y-1.5">
@@ -1111,7 +1141,7 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
   );
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="rounded-lg border border-border bg-card shadow-sm">
       {/* Collapsible header */}
       <button
         type="button"
@@ -1120,23 +1150,23 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
         aria-expanded={open}
       >
         <div className="flex items-center gap-2">
-          <Users className="size-4 text-slate-500" />
-          <span className="text-sm font-semibold text-slate-950">Who has access</span>
+          <Users className="size-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">Who has access</span>
           {(data?.items ?? []).length > 0 && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
               {data!.items.length}
             </span>
           )}
         </div>
         {open ? (
-          <ChevronUp className="size-4 text-slate-400" />
+          <ChevronUp className="size-4 text-muted-foreground" />
         ) : (
-          <ChevronDown className="size-4 text-slate-400" />
+          <ChevronDown className="size-4 text-muted-foreground" />
         )}
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 p-4 pt-3 space-y-4">
+        <div className="border-t border-border p-4 pt-3 space-y-4">
           <ConsoleFilterBar
             search={query}
             onSearchChange={setQuery}
@@ -1274,22 +1304,22 @@ export default function ApplicationAccessPageV2() {
 
       <div>
         <div className="mb-2 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Identity assignments
           </span>
-          <div className="h-px flex-1 bg-slate-200" />
+          <div className="h-px flex-1 bg-border" />
         </div>
         <WhoHasAccessPanel applicationId={application.id} />
       </div>
 
       <div>
         <div className="mb-2 flex items-center gap-2">
-          <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Troubleshoot
           </span>
-          <div className="h-px flex-1 bg-slate-200" />
+          <div className="h-px flex-1 bg-border" />
         </div>
         <WorkloadAccessDebugger applicationId={application.id} />
       </div>

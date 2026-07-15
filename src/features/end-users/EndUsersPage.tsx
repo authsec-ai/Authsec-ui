@@ -359,7 +359,7 @@ function UserDetailDrawer({
             <div className="drawer-username">@{user.user_username ?? user.user_id}</div>
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button className="btn btn-secondary" style={{ height: 34, padding: "0 12px" }} onClick={() => setAssignOpen(true)}>
             <Plus className="icon-sm" /> Assign role
           </button>
@@ -576,6 +576,7 @@ export default function EndUsersPage() {
         header: "Apps",
         priority: 3,
         approxWidth: 80,
+        className: "text-right",
         cell: ({ row }) => {
           const count = row.original.applications_count ?? row.original.applications?.length ?? 0;
           return (

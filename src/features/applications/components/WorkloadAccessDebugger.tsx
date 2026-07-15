@@ -59,7 +59,7 @@ function CheckRow({ check, dim }: { check: SimulateCheck; dim: boolean }) {
     <li
       className={cn(
         "flex items-start gap-2 rounded-md border p-2.5",
-        ok ? "border-slate-200 bg-white" : "border-red-200 bg-red-50/60",
+        ok ? "border-border bg-card" : "border-red-200 bg-red-50/60",
         dim && "opacity-50",
       )}
     >
@@ -69,7 +69,7 @@ function CheckRow({ check, dim }: { check: SimulateCheck; dim: boolean }) {
         <XCircle className="mt-0.5 size-4 shrink-0 text-red-600" />
       )}
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-950">
+        <p className="text-sm font-medium text-foreground">
           {CHECK_LABEL[check.name] ?? check.name}
         </p>
         {!ok && check.reason && (
@@ -136,7 +136,7 @@ export default function WorkloadAccessDebugger({
   return (
     <Surface className="space-y-4 p-4">
       <header className="space-y-1">
-        <h3 className="text-sm font-semibold text-slate-950">Debug access</h3>
+        <h3 className="text-sm font-semibold text-foreground">Debug access</h3>
         <p className="text-xs text-muted-foreground">
           Pick a caller and AuthSec tells you exactly why it can or can't reach
           this MCP server.
@@ -207,7 +207,7 @@ export default function WorkloadAccessDebugger({
             }
             rows={3}
             autoComplete="off"
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-950 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+            className="w-full rounded-md border border-border bg-card px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
           />
         </div>
       )}
@@ -233,7 +233,7 @@ export default function WorkloadAccessDebugger({
       </Button>
 
       {result && (
-        <div className="space-y-3 border-t border-slate-100 pt-3">
+        <div className="space-y-3 border-t border-border pt-3">
           {result.would_mint ? (
             <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />

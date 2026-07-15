@@ -295,7 +295,7 @@ function RolesTab({
             <LoadingState label="Loading roles…" />
           ) : rows.length === 0 ? (
             <div className="py-16 text-center">
-              <Shield className="mx-auto mb-3 size-7 text-slate-300" />
+              <Shield className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">
                 {search || kindFilter !== "all" ? "No roles match" : "No roles yet"}
               </p>
@@ -520,7 +520,7 @@ function ScopesTab() {
         header: "Application",
         priority: 1,
         approxWidth: 180,
-        cell: ({ row }) => <span className="text-xs text-slate-700">{row.original.application?.name ?? "—"}</span>,
+        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.application?.name ?? "—"}</span>,
       },
       {
         id: "risk",
@@ -560,7 +560,7 @@ function ScopesTab() {
             <LoadingState label="Loading scopes…" />
           ) : rows.length === 0 ? (
             <div className="py-16 text-center">
-              <KeyRound className="mx-auto mb-3 size-7 text-slate-300" />
+              <KeyRound className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">{search ? "No scopes match" : "No scopes yet"}</p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 {search ? "Try a different search term." : "Scopes appear as you protect applications."}
@@ -721,7 +721,7 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
         approxWidth: 180,
         cell: ({ row }) =>
           row.original.application?.name ? (
-            <span className="text-xs text-slate-700">{row.original.application.name}</span>
+            <span className="text-xs text-muted-foreground">{row.original.application.name}</span>
           ) : (
             <span className="text-xs text-muted-foreground">Workspace-wide</span>
           ),
@@ -784,7 +784,7 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
             <LoadingState label="Loading assignments…" />
           ) : rows.length === 0 ? (
             <div className="py-16 text-center">
-              <KeyRound className="mx-auto mb-3 size-7 text-slate-300" />
+              <KeyRound className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">{search ? "No assignments match" : "No assignments yet"}</p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 {search ? "Try a different search term." : "Assign a role to a user to grant access."}

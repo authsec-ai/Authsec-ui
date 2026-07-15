@@ -229,7 +229,7 @@ export default function ApplicationLaunchPage() {
               </Link>
             </Button>
           </div>
-          <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          <div className="divide-y divide-border rounded-lg border border-border">
             {checklistLoading && !checklist ? (
               <div className="p-4 text-sm text-muted-foreground">
                 <Loader2 className="mr-2 inline size-4 animate-spin" />
@@ -346,7 +346,7 @@ function ActionQueueRow({
   );
 
   return (
-    <div className="flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 gap-3">
         <span
           className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full border ${toneClass[item.tone]}`}
@@ -360,8 +360,8 @@ function ActionQueueRow({
           )}
         </span>
         <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-slate-950">{item.title}</h4>
-          <p className="mt-1 text-sm leading-5 text-slate-600">{item.body}</p>
+          <h4 className="text-sm font-semibold text-foreground">{item.title}</h4>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">{item.body}</p>
         </div>
       </div>
       <div className="shrink-0">{action}</div>
@@ -414,9 +414,9 @@ function ProofPoint({
   action: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
-      <h4 className="text-sm font-semibold text-slate-950">{title}</h4>
-      <p className="mt-1 min-h-10 text-xs leading-5 text-slate-600">{body}</p>
+    <div className="rounded-lg border border-border p-3">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <p className="mt-1 min-h-10 text-xs leading-5 text-muted-foreground">{body}</p>
       <Separator className="my-3" />
       <Button asChild variant="ghost" size="sm" className="px-0">
         <Link to={href}>

@@ -281,7 +281,7 @@ function CreateServiceAccountDialog({
                     className={[
                       "w-full rounded-lg border px-4 py-3 text-left transition-colors",
                       authChoice === card.method
-                        ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
+                        ? "border-[var(--component-button-primary-bg)] bg-blue-500/10"
                         : "border-border hover:border-[var(--color-border-strong)]",
                     ].join(" ")}
                   >
@@ -351,7 +351,7 @@ function CreateServiceAccountDialog({
                     </div>
                   </div>
                 ))}
-                <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
+                <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
                   Use <span className="font-mono text-[11px]">client_credentials</span> grant with{" "}
                   <span className="font-mono text-[11px]">client_secret_basic</span> auth.
                   Grant this service account access to an MCP server from its{" "}
@@ -371,23 +371,23 @@ function CreateServiceAccountDialog({
                     </Button>
                   </div>
                 </div>
-                <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
+                <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
                   Sign a <span className="font-mono text-[11px]">client_assertion</span> JWT with
                   your private key and pass it as{" "}
                   <span className="font-mono text-[11px]">client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer</span>.{" "}
-                  <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-700 hover:underline inline-flex items-center gap-0.5">
+                  <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5">
                     Docs <ExternalLink className="size-3" />
                   </a>
                 </div>
               </>
             ) : (
-              <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
-                <p className="font-medium text-slate-700 mb-1">Service account created — no credential provisioned.</p>
+              <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">Service account created — no credential provisioned.</p>
                 Kubernetes/SPIFFE identity is configured <span className="font-medium">per MCP server</span>,
                 not at the workspace level. Go to the MCP server's{" "}
                 <span className="font-medium">Workloads</span> tab and grant this service account
                 access. At runtime your pod presents its SPIFFE SVID.{" "}
-                <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-700 hover:underline inline-flex items-center gap-0.5">
+                <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5">
                   SPIFFE guide <ExternalLink className="size-3" />
                 </a>
               </div>
@@ -836,7 +836,7 @@ export default function ServiceAccountsPage() {
         approxWidth: 160,
         cell: ({ row }) =>
           row.original.owner_email ? (
-            <span className="text-xs text-slate-700">{row.original.owner_email}</span>
+            <span className="text-xs text-muted-foreground">{row.original.owner_email}</span>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           ),
@@ -913,7 +913,7 @@ export default function ServiceAccountsPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="py-16 text-center">
-              <Server className="mx-auto mb-3 size-7 text-slate-300" />
+              <Server className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">
                 {query || activeFilter !== "all"
                   ? "No service accounts match this filter."

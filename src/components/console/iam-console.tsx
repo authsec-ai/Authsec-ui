@@ -149,7 +149,7 @@ export function EntityCell({
   return (
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2">
-        <div className="truncate font-medium text-foreground">{label}</div>
+        <div className="truncate font-medium text-foreground" title={typeof label === "string" ? label : undefined}>{label}</div>
         {badge}
       </div>
       {detail ? (
@@ -158,6 +158,7 @@ export function EntityCell({
             "mt-0.5 truncate text-xs text-muted-foreground",
             monoDetail && "font-mono",
           )}
+          title={typeof detail === "string" ? detail : undefined}
         >
           {detail}
         </div>

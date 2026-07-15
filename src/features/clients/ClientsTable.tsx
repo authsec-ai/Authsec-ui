@@ -815,6 +815,8 @@ export function ClientsTable({
 
   // ─── Flat columns ──────────────────────────────────────────────────────────
 
+  const hasPending = (statusCounts.pending_approval ?? 0) > 0;
+
   const flatColumns = useMemo<AdaptiveColumn<WorkspaceClientItem>[]>(
     () => [
       {
@@ -949,13 +951,17 @@ export function ClientsTable({
           </span>
         ),
       },
-      {
-        id: "decision",
-        header: "Decision",
-        alwaysVisible: true,
-        approxWidth: 180,
-        cell: ({ row }) => <PendingClientDecision client={row.original} />,
-      },
+      ...(hasPending
+        ? [
+            {
+              id: "decision",
+              header: "Decision",
+              alwaysVisible: true,
+              approxWidth: 180,
+              cell: ({ row }: { row: { original: WorkspaceClientItem } }) => <PendingClientDecision client={row.original} />,
+            } satisfies AdaptiveColumn<WorkspaceClientItem>,
+          ]
+        : []),
       {
         id: "actions",
         header: "",
@@ -964,7 +970,7 @@ export function ClientsTable({
         cell: ({ row }) => <ClientRowActions client={row.original} />,
       },
     ],
-    [],
+    [hasPending],
   );
 
   // ─── Grouped columns ───────────────────────────────────────────────────────
@@ -1065,13 +1071,17 @@ export function ClientsTable({
           </span>
         ),
       },
-      {
-        id: "decision",
-        header: "Decision",
-        alwaysVisible: true,
-        approxWidth: 180,
-        cell: ({ row }) => <GroupPendingDecision group={row.original} />,
-      },
+      ...(hasPending
+        ? [
+            {
+              id: "decision",
+              header: "Decision",
+              alwaysVisible: true,
+              approxWidth: 180,
+              cell: ({ row }: { row: { original: GroupedClientRow } }) => <GroupPendingDecision group={row.original} />,
+            } satisfies AdaptiveColumn<GroupedClientRow>,
+          ]
+        : []),
       {
         id: "actions",
         header: "",
@@ -1081,7 +1091,7 @@ export function ClientsTable({
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [hasPending],
   );
 
   // ─── Render ────────────────────────────────────────────────────────────────

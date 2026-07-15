@@ -16,14 +16,14 @@ interface Props {
 }
 
 const RISK_OPTIONS: { value: RiskLevel; label: string; tone: string }[] = [
-  { value: "low", label: "Low", tone: "bg-gray-100 text-gray-700" },
-  { value: "medium", label: "Medium", tone: "bg-blue-100 text-blue-800" },
-  { value: "high", label: "High", tone: "bg-orange-100 text-orange-800" },
-  { value: "critical", label: "Critical", tone: "bg-red-100 text-red-800" },
+  { value: "low", label: "Low", tone: "bg-muted text-muted-foreground" },
+  { value: "medium", label: "Medium", tone: "bg-blue-500/10 text-blue-700 dark:text-blue-400" },
+  { value: "high", label: "High", tone: "bg-orange-500/10 text-orange-700 dark:text-orange-400" },
+  { value: "critical", label: "Critical", tone: "bg-red-500/10 text-red-700 dark:text-red-400" },
 ];
 
 function riskTone(level: RiskLevel | undefined): string {
-  return RISK_OPTIONS.find((r) => r.value === level)?.tone ?? "bg-gray-100 text-gray-600";
+  return RISK_OPTIONS.find((r) => r.value === level)?.tone ?? "bg-muted text-muted-foreground";
 }
 
 export function ScopesTab({ rsId, onChange }: Props) {
@@ -104,8 +104,8 @@ export function ScopesTab({ rsId, onChange }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Step 3: Define scopes</h2>
-        <p className="mt-1 text-sm text-gray-600">
+        <h2 className="text-lg font-semibold text-foreground">Step 3: Define scopes</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Scopes are the named permissions you'll attach to MCP tools. End-users
           see these on the consent screen and only the scopes they're granted
           flow into their access tokens.
@@ -113,11 +113,11 @@ export function ScopesTab({ rsId, onChange }: Props) {
       </div>
 
       {/* Inline create form */}
-      <div className="rounded-md border border-gray-200 bg-white p-4">
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">Create scope</h3>
+      <div className="rounded-md border border-border bg-card p-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">Create scope</h3>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="text-sm">
-            <span className="block text-xs font-medium text-gray-700 mb-1">
+            <span className="block text-xs font-medium text-muted-foreground mb-1">
               Scope string <span className="text-red-500">*</span>
             </span>
             <input
@@ -125,21 +125,21 @@ export function ScopesTab({ rsId, onChange }: Props) {
               value={scopeString}
               onChange={(e) => setScopeString(e.target.value)}
               placeholder="e.g. repos:read"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-mono"
+              className="w-full rounded border border-border px-2 py-1.5 text-sm font-mono"
             />
           </label>
           <label className="text-sm">
-            <span className="block text-xs font-medium text-gray-700 mb-1">Display name</span>
+            <span className="block text-xs font-medium text-muted-foreground mb-1">Display name</span>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="(defaults to scope string)"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-full rounded border border-border px-2 py-1.5 text-sm"
             />
           </label>
           <label className="text-sm md:col-span-2">
-            <span className="block text-xs font-medium text-gray-700 mb-1">
+            <span className="block text-xs font-medium text-muted-foreground mb-1">
               Description (shown on consent screen)
             </span>
             <input
@@ -147,15 +147,15 @@ export function ScopesTab({ rsId, onChange }: Props) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. Read repository metadata, including private repos"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-full rounded border border-border px-2 py-1.5 text-sm"
             />
           </label>
           <label className="text-sm">
-            <span className="block text-xs font-medium text-gray-700 mb-1">Risk level</span>
+            <span className="block text-xs font-medium text-muted-foreground mb-1">Risk level</span>
             <select
               value={riskLevel}
               onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-full rounded border border-border px-2 py-1.5 text-sm"
             >
               {RISK_OPTIONS.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -177,20 +177,20 @@ export function ScopesTab({ rsId, onChange }: Props) {
       </div>
 
       {/* Scope list */}
-      <div className="rounded-md border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <h3 className="text-sm font-semibold text-gray-800">
+      <div className="rounded-md border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h3 className="text-sm font-semibold text-foreground">
             {scopes.length} scope{scopes.length !== 1 ? "s" : ""} registered
           </h3>
         </div>
         {isLoading ? (
-          <div className="p-6 text-center text-sm text-gray-400">Loading scopes…</div>
+          <div className="p-6 text-center text-sm text-muted-foreground">Loading scopes…</div>
         ) : scopes.length === 0 ? (
-          <div className="p-6 text-center text-sm text-gray-500">
+          <div className="p-6 text-center text-sm text-muted-foreground">
             No scopes yet. Add one above to start mapping tools.
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {scopes.map((scope) => {
               const toolCount = toolCountByScopeID.get(scope.id) ?? 0;
               return (
@@ -200,7 +200,7 @@ export function ScopesTab({ rsId, onChange }: Props) {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-sm font-semibold text-gray-900">
+                      <code className="font-mono text-sm font-semibold text-foreground">
                         {scope.scope_string}
                       </code>
                       <span
@@ -217,14 +217,14 @@ export function ScopesTab({ rsId, onChange }: Props) {
                       )}
                     </div>
                     {scope.display_name && scope.display_name !== scope.scope_string && (
-                      <div className="mt-0.5 text-xs text-gray-700">{scope.display_name}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{scope.display_name}</div>
                     )}
                     {scope.description && (
-                      <div className="mt-1 text-xs text-gray-500">{scope.description}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{scope.description}</div>
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       used by <strong>{toolCount}</strong> tool{toolCount !== 1 ? "s" : ""}
                     </span>
                     <button

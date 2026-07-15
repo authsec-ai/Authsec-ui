@@ -92,8 +92,13 @@ removed on 2026-06-08.)
 This app's authenticated routes can't be previewed without the backend stack
 running. **Do not start the dev server to verify a UI change** — it'll just
 sit at the login wall. Verify with `npx tsc --noEmit` and `npx eslint <file>`.
-For visual review, the user has the live stage app at
-`https://*.stage.authsec.dev` and will eyeball changes after deploy.
+
+
+
+but in a case that you have been given the token then proceed to /dev/bypass and 
+enter that token and then you can locally test it. there is no stage.authsec.dev
+refer to the actual backend and how the production stack is running and setup everything accordingly
+by doing some digging
 
 ---
 
