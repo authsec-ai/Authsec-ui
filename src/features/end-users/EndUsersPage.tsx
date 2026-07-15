@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ShieldCheck,
   ShieldOff,
@@ -10,6 +11,7 @@ import {
   Clock,
   Calendar,
   Plus,
+  Network,
 } from "lucide-react";
 
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -324,6 +326,7 @@ function UserDetailDrawer({
   reactivateLoading: boolean;
 }) {
   const [assignOpen, setAssignOpen] = useState(false);
+  const navigate = useNavigate();
   const m = statusMeta(user.status);
 
   // A user may hold multiple roles on one app — that's still one app, not N.
@@ -379,6 +382,13 @@ function UserDetailDrawer({
               <ShieldCheck className="icon-sm" /> Reactivate
             </button>
           )}
+          <button
+            className="btn btn-secondary"
+            style={{ height: 34, padding: "0 12px" }}
+            onClick={() => navigate(`/authz/effective-access?user_id=${user.user_id}`)}
+          >
+            <Network className="icon-sm" /> View effective access
+          </button>
         </div>
       </div>
 
@@ -472,6 +482,7 @@ function UserDetailDrawer({
 
 export default function EndUsersPage() {
   const workspaceId = resolveWorkspaceId();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
   const [selectedUser, setSelectedUser] = useState<TenantEndUserState | null>(null);
@@ -603,6 +614,11 @@ export default function EndUsersPage() {
                     label: "View details",
                     onSelect: () => setSelectedUser(u),
                   },
+                  {
+                    label: "View effective access",
+                    icon: <Network className="size-4" />,
+                    onSelect: () => navigate(`/authz/effective-access?user_id=${u.user_id}`),
+                  },
                   u.status === "active"
                     ? {
                         label: "Suspend",
@@ -623,7 +639,7 @@ export default function EndUsersPage() {
         },
       },
     ],
-    [handleSuspend, handleReactivate, suspendState.isLoading, reactivateState.isLoading],
+    [handleSuspend, handleReactivate, suspendState.isLoading, reactivateState.isLoading, navigate],
   );
 
   if (!workspaceId) {

@@ -406,10 +406,10 @@ function AppContent() {
                     <Route path="setup" element={<ApplicationSetupPage />} />
                     <Route path="tools" element={<ApplicationToolsPage />} />
                     <Route path="scopes" element={<ApplicationScopesPage />} />
-                    <Route path="access" element={<Navigate to="access-assignments" replace />} />
-                    <Route path="role-bindings" element={<Navigate to="access-assignments" replace />} />
-                    <Route path="workloads" element={<Navigate to="connections" replace />} />
-                    <Route path="requests" element={<Navigate to="connections" replace />} />
+                    <Route path="access" element={<Navigate to="../access-assignments" replace />} />
+                    <Route path="role-bindings" element={<Navigate to="../access-assignments" replace />} />
+                    <Route path="workloads" element={<Navigate to="../connections" replace />} />
+                    <Route path="requests" element={<Navigate to="../connections" replace />} />
                     <Route path="roles" element={<ApplicationRolesPage />} />
                     <Route path="access-assignments" element={<ApplicationAccessPageV2 />} />
                     <Route path="connections" element={<ApplicationConnectionsPage />} />
@@ -417,6 +417,10 @@ function AppContent() {
                     <Route path="clients" element={<ApplicationClientsPage />} />
                     <Route path="test" element={<ApplicationTestPage />} />
                     <Route path="activity" element={<ApplicationActivityPage />} />
+                    {/* Any unknown application subpath falls back to overview instead
+                        of a silent blank screen (previously an unmatched nested route
+                        rendered nothing and logged nothing). */}
+                    <Route path="*" element={<Navigate to="overview" replace />} />
                   </Route>
 
                   <Route

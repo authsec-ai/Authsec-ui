@@ -632,7 +632,7 @@ export function ConnectorDrawer({
                 <TabsContent value="use" className="space-y-6">
                   <DrawerSection label="1 · Mint a broker token">
                     <CodeBlock
-                      code={`curl -su "$CLIENT_ID:$CLIENT_SECRET" https://mcpauthz.com/oauth/token \\
+                      code={`curl -su "$CLIENT_ID:$CLIENT_SECRET" https://app.authsec.ai/oauth/token \\
   -d grant_type=client_credentials \\
   -d resource=authsec://broker/connectors/${workspaceId || "{workspace_id}"} \\
   -d scope=connector:execute`}
@@ -641,7 +641,7 @@ export function ConnectorDrawer({
 
                   <DrawerSection label="2 · Execute an action">
                     <CodeBlock
-                      code={`curl -X POST https://api.mcpauthz.com/broker/connectors/${connector.id}/actions/${
+                      code={`curl -X POST https://app.authsec.ai/broker/connectors/${connector.id}/actions/${
                         firstAction?.action_key ?? "ACTION_KEY"
                       }:execute \\
   -H "Authorization: Bearer $TOKEN" \\

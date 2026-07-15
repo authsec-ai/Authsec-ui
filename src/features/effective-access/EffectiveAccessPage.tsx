@@ -72,7 +72,20 @@ export default function EffectiveAccessPage() {
   }, [userId, applicationId]);
 
   const scopes = data?.scopes ?? [];
-  const users = endUsers?.items ?? [];
+
+  // When arriving deep-linked with ?user_id= (e.g. from the Users page), the
+  // selected user may not be in the current search page — inject it so the
+  // dropdown shows a label instead of appearing blank.
+  const userOptions = useMemo(() => {
+    const list = (endUsers?.items ?? []).map((u) => ({
+      id: u.user_id,
+      label: u.user_email || u.user_username || u.user_id,
+    }));
+    if (userId && !list.some((o) => o.id === userId)) {
+      list.unshift({ id: userId, label: data?.user.email || data?.user.name || userId });
+    }
+    return list;
+  }, [endUsers, userId, data]);
 
   const columns = useMemo<AdaptiveColumn<EffectiveAccessScope>[]>(
     () => [
@@ -143,12 +156,12 @@ export default function EffectiveAccessPage() {
                   ? {
                       label: "Add via role",
                       icon: <KeyRound className="size-4" />,
-                      onSelect: () => navigate(`/applications/${applicationId}/access`),
+                      onSelect: () => navigate(`/applications/${applicationId}/access-assignments`),
                     }
                   : {
                       label: "Review sources",
                       icon: <KeyRound className="size-4" />,
-                      onSelect: () => navigate(`/admin/authz/role-bindings?user_id=${userId}`),
+                      onSelect: () => navigate(`/authz/role-bindings?user_id=${userId}`),
                     },
                 {
                   label: "Remove only source",
@@ -204,9 +217,9 @@ export default function EffectiveAccessPage() {
                   <SelectValue placeholder="Select an end user" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.user_id} value={user.user_id}>
-                      {user.user_email || user.user_username || user.user_id}
+                  {userOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id}>
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -235,7 +248,7 @@ export default function EffectiveAccessPage() {
             <div className="flex items-end">
               <Button
                 variant="outline"
-                onClick={() => navigate(`/applications/${applicationId}/access`)}
+                onClick={() => navigate(`/applications/${applicationId}/access-assignments`)}
                 disabled={!applicationId}
               >
                 Configure access
@@ -277,6 +290,19 @@ export default function EffectiveAccessPage() {
               },
             ]}
           />
+          {!data.roles.length ? (
+            <div className="lg:col-span-2 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                {data.user.email || data.user.name} has no role on {data.application.name} yet.
+              </span>
+              <Button
+                className="ml-auto"
+                onClick={() => navigate(`/applications/${applicationId}/access-assignments`)}
+              >
+                Assign a role
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

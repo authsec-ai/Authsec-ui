@@ -119,7 +119,7 @@ export default function WorkloadProvidersCard() {
             <div className="space-y-1.5">
               <Label htmlFor="wip-iss">Issuer URL</Label>
               <Input id="wip-iss" value={issuer} onChange={(e) => setIssuer(e.target.value)}
-                placeholder={kind === "oidc" ? "https://token.actions.githubusercontent.com" : "https://spire.mcpauthz.com"}
+                placeholder={kind === "oidc" ? "https://token.actions.githubusercontent.com" : "https://spire.app.authsec.ai"}
                 autoComplete="off" className="h-9 font-mono text-xs" />
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function WorkloadProvidersCard() {
               <div className="space-y-1.5">
                 <Label htmlFor="wip-td">Trust domain</Label>
                 <Input id="wip-td" value={trustDomain} onChange={(e) => setTrustDomain(e.target.value)}
-                  placeholder="spire.mcpauthz.com" autoComplete="off" className="h-9 font-mono text-xs" />
+                  placeholder="spire.app.authsec.ai" autoComplete="off" className="h-9 font-mono text-xs" />
               </div>
             ) : (
               <div className="space-y-1.5">
