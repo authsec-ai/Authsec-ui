@@ -669,10 +669,10 @@ not reintroduce them:
    cannot grant per-tool access in the UI — they only see the underlying
    scope strings.
 
-8. The OAuth audience is your resource_uri (${server.resource_uri}), not
-   your public_base_url and not the MCP endpoint URL. The SDK enforces
-   this at introspection time; if you hand-rewrite aud, introspection
-   returns active=false.
+8. The OAuth audience is the exact MCP endpoint resource_uri
+   (${server.resource_uri}), including its protected path. It is not merely
+   the public_base_url or origin. The SDK enforces this at introspection time;
+   if you hand-rewrite aud, introspection returns active=false.
 
 
 When in doubt, defer to ${profile.sdkDocsURL} and https://docs.authsec.dev/getting-started rather than improvising.
