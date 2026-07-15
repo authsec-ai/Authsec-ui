@@ -20,7 +20,7 @@
    `.content-inner` is kept as an alias of `.console-page` so any page still on
    the older class lands at the same width/padding as the rest. */
 [data-cr] .console-page,
-[data-cr] .content-inner { max-width: 1280px; margin: 0 auto; padding: 28px 32px 48px; }
+[data-cr] .content-inner { max-width: var(--console-max-width, 1280px); margin: 0 auto; padding: 28px 32px 48px; }
 
 [data-cr] .page-head,
 [data-cr] .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); margin-bottom: var(--space-6); }

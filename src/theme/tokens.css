@@ -163,6 +163,12 @@
   --color-chart-4: oklch(0.488 0.243 264.376);
   --color-chart-5: oklch(0.424 0.199 265.638);
 
+  /* Console content width — single knob for how wide every console page runs.
+     Was a hardcoded 1280px in two places (console-screens.css + the app
+     console shell); widened so content breathes on large monitors instead of
+     sitting in a narrow centered column. Tune here, propagates everywhere. */
+  --console-max-width: 1600px;
+
   /* Component defaults */
   --component-card-background: var(--color-surface-raised);
   --component-card-foreground: var(--color-text-primary);
@@ -361,6 +367,15 @@
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  /* Chart series — brighter/lighter than the light-mode ramp so bars and
+     areas keep contrast against dark surfaces (light ramp bottoms out at
+     L≈0.42 which reads near-black on a dark card). */
+  --color-chart-1: oklch(0.72 0.13 250);
+  --color-chart-2: oklch(0.70 0.17 259);
+  --color-chart-3: oklch(0.78 0.14 238);
+  --color-chart-4: oklch(0.66 0.19 264);
+  --color-chart-5: oklch(0.82 0.11 228);
 
   /* ── Console Refresh design tokens (dark) ───────────────────────────── */
   --color-success-soft: rgba(34, 197, 94, 0.16);

@@ -23,7 +23,6 @@ import AccessControlPage from "./features/access/AccessControlPage";
 
 import { UsersPage } from "./features/users/UsersPage";
 import EndUsersPage from "./features/end-users/EndUsersPage";
-import EndUserDetailPage from "./features/end-users/EndUserDetailPage";
 import TeamPage from "./features/team/TeamPage";
 import TrustedIssuersPage from "./features/settings/TrustedIssuersPage";
 

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { ReadinessState } from "../types";
 
 export const consolePage =
-  "mx-auto w-full max-w-[1280px] space-y-5 px-8 py-7";
+  "mx-auto w-full max-w-(--console-max-width) space-y-5 px-8 py-7";
 
 export const surface =
   "rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) shadow-(--shadow-xs)";

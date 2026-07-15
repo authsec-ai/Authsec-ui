@@ -45,25 +45,25 @@ interface MetricCardProps {
 function MetricCard({ label, value, hint, tone = "neutral", onClick }: MetricCardProps) {
   const toneClass =
     tone === "success"
-      ? "border-emerald-200 bg-emerald-50/60"
+      ? "border-transparent bg-(--color-success-soft)"
       : tone === "warning"
-        ? "border-amber-200 bg-amber-50/60"
-        : "border-slate-200 bg-white";
+        ? "border-transparent bg-(--color-warning-soft)"
+        : "border-(--color-border-subtle) bg-(--color-surface-raised)";
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        "flex w-full flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-(--shadow-xs) transition hover:shadow-(--shadow-sm) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
         toneClass,
-        !onClick && "cursor-default hover:shadow-sm",
+        !onClick && "cursor-default hover:shadow-(--shadow-xs)",
       )}
     >
-      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+      <span className="text-xs font-medium uppercase tracking-wide text-(--color-text-muted)">
         {label}
       </span>
-      <span className="text-2xl font-semibold text-slate-900">{value}</span>
-      {hint ? <span className="text-xs text-slate-500">{hint}</span> : null}
+      <span className="text-2xl font-semibold text-(--color-text)">{value}</span>
+      {hint ? <span className="text-xs text-(--color-text-muted)">{hint}</span> : null}
     </button>
   );
 }
@@ -83,26 +83,30 @@ function QuickStartTile({ icon: Icon, label, description, to, done }: QuickStart
       type="button"
       onClick={() => navigate(to)}
       className={cn(
-        "group flex flex-col gap-2 rounded-lg border bg-white p-4 text-left shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-        done ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200",
+        "group flex flex-col gap-2 rounded-lg border p-4 text-left shadow-(--shadow-xs) transition hover:shadow-(--shadow-sm) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
+        done
+          ? "border-transparent bg-(--color-success-soft)"
+          : "border-(--color-border-subtle) bg-(--color-surface-raised)",
       )}
     >
       <div className="flex items-center gap-2">
         <span
           className={cn(
             "inline-flex h-8 w-8 items-center justify-center rounded-md",
-            done ? "bg-emerald-100 text-emerald-700" : "bg-blue-50 text-blue-600",
+            done
+              ? "bg-(--color-success-soft) text-(--color-success-text)"
+              : "bg-(--color-primary-soft) text-(--color-primary-text)",
           )}
         >
           {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
         </span>
-        <span className="text-sm font-semibold text-slate-900">{label}</span>
+        <span className="text-sm font-semibold text-(--color-text)">{label}</span>
       </div>
-      <p className="text-xs leading-5 text-slate-600">{description}</p>
+      <p className="text-xs leading-5 text-(--color-text-muted)">{description}</p>
       <span
         className={cn(
           "mt-auto text-xs font-medium",
-          done ? "text-emerald-700" : "text-blue-600 group-hover:text-blue-700",
+          done ? "text-(--color-success-text)" : "text-(--color-primary-text)",
         )}
       >
         {done ? "Configured" : "Set up →"}
@@ -262,8 +266,8 @@ export function DashboardPage() {
       {/* Row 2 — quick-start tiles */}
       <section aria-label="Quick start">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Setup quick-starts</h2>
-          <span className="text-xs text-slate-500">
+          <h2 className="text-sm font-semibold text-(--color-text)">Setup quick-starts</h2>
+          <span className="text-xs text-(--color-text-muted)">
             {completedTiles} / {tiles.length} configured
           </span>
         </div>
@@ -275,17 +279,17 @@ export function DashboardPage() {
       </section>
 
       {/* Row 3 — reference links */}
-      <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-4 text-xs text-slate-500">
-        <a className="hover:text-slate-900" href="/logs/audit">
+      <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-(--color-border-subtle) pt-4 text-xs text-(--color-text-muted)">
+        <a className="hover:text-(--color-text)" href="/logs/audit">
           Audit logs
         </a>
         <span aria-hidden>·</span>
-        <a className="hover:text-slate-900" href="/settings/team">
+        <a className="hover:text-(--color-text)" href="/settings/team">
           Team
         </a>
         <span aria-hidden>·</span>
         <a
-          className="hover:text-slate-900"
+          className="hover:text-(--color-text)"
           href="https://docs.authsec.dev"
           target="_blank"
           rel="noreferrer"
