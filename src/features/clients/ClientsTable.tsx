@@ -726,7 +726,7 @@ export function ClientsTable({
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [internalStatusFilter, setInternalStatusFilter] =
     useState<StatusFilter>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("grouped");
+  const viewMode: ViewMode = "flat";
   const statusFilter = controlledStatusFilter ?? internalStatusFilter;
   const setStatusFilter = onStatusFilterChange ?? setInternalStatusFilter;
 
@@ -1159,22 +1159,7 @@ export function ClientsTable({
           })}
         </div>
 
-        {/* Grouped / flat toggle */}
-        <Tabs
-          value={viewMode}
-          onValueChange={(v) => setViewMode(v as ViewMode)}
-        >
-          <TabsList className="h-7">
-            <TabsTrigger value="grouped" className="gap-1.5 text-xs px-2.5 h-6">
-              <Layers className="h-3 w-3" />
-              Grouped
-            </TabsTrigger>
-            <TabsTrigger value="flat" className="gap-1.5 text-xs px-2.5 h-6">
-              <List className="h-3 w-3" />
-              Flat
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* View toggle removed — flat view only */}
       </div>
 
       {/* Table */}
