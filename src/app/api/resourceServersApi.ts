@@ -186,7 +186,10 @@ export const resourceServersApi = baseApi.injectEndpoints({
         url: `/authsec/applications/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: [{ type: "ResourceServer", id: "LIST" }],
+      invalidatesTags: (_result, _error, id) => [
+        { type: "ResourceServer", id },
+        { type: "ResourceServer", id: "LIST" },
+      ],
     }),
 
     rotateResourceServerSecret: builder.mutation<

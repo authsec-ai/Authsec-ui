@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, RefreshCw, Search, ShieldAlert, Sparkles, X } from "lucide-react";
+import { KeyRound, Loader2, RefreshCw, Search, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -138,8 +138,18 @@ export default function ApplicationToolsPage() {
   const [query, setQuery] = useState("");
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   const [bulkMode, setBulkMode] = useState<"assign" | "remove" | null>(null);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [scanToken, setScanToken] = useState("");
+  const [scanError, setScanError] = useState<string | null>(null);
   const [updateMap, { isLoading: bulkSaving }] = useUpdateToolScopeMapMutation();
   const [rescan, { isLoading: rescanning }] = useRescanResourceServerMutation();
+
+  const closeTokenDialog = () => {
+    if (rescanning) return;
+    setTokenDialogOpen(false);
+    setScanToken("");
+    setScanError(null);
+  };
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix?.tools]);
   const allScopes = useMemo<OAuthScopeResponse[]>(
@@ -286,12 +296,63 @@ export default function ApplicationToolsPage() {
     }
   };
 
-  const handleRefreshTools = async () => {
+  const handleRefreshTools = async (mcpToken?: string) => {
     try {
-      await rescan(application.id).unwrap();
-      toast.success("Tools refreshed");
-    } catch {
-      toast.error("Failed to refresh tools — MCP server may be unreachable");
+      const response = await rescan({
+        rsId: application.id,
+        mcpToken,
+      }).unwrap();
+      const result = response.result;
+      const toolChanges = result.tools_added + result.tools_updated + result.tools_removed;
+      const scopeChanges = result.scopes_added + result.scopes_removed;
+      if (response.last_scan_status === "partial") {
+        toast.error(
+          "Live tools were checked, but protected-resource metadata was unavailable. Scopes were not reconciled.",
+        );
+      } else if (mcpToken) {
+        toast.success(
+          toolChanges > 0 || scopeChanges > 0
+            ? `Token-visible tools checked: +${result.tools_added} / ~${result.tools_updated}; scopes +${result.scopes_added} / -${result.scopes_removed}. Inventory hidden from this token was preserved.`
+            : "Token-visible tools and protected-resource scopes were checked. Inventory hidden from this token was preserved.",
+        );
+      } else if (toolChanges > 0 || scopeChanges > 0) {
+        toast.success(
+          `Live MCP check complete: tools +${result.tools_added} / ~${result.tools_updated} / -${result.tools_removed}; scopes +${result.scopes_added} / -${result.scopes_removed}.`,
+        );
+      } else {
+        toast.success("Live MCP tools and protected-resource scopes are current.");
+      }
+      if (result.warnings?.length) {
+        toast(result.warnings[0], { icon: "⚠️" });
+      }
+      setTokenDialogOpen(false);
+      setScanToken("");
+      setScanError(null);
+      setSelected(null);
+      setSelectedToolIds([]);
+      setBulkMode(null);
+    } catch (err) {
+      const apiErr = err as {
+        status?: number;
+        data?: { code?: string; error?: string; failure_reason?: string };
+      };
+      if (apiErr?.data?.code === "mcp_token_required" || apiErr?.status === 428) {
+        setTokenDialogOpen(true);
+        if (mcpToken) setScanToken("");
+        setScanError(
+          mcpToken
+            ? apiErr?.data?.failure_reason ??
+                "The MCP server rejected that token. Paste a fresh token that can call tools/list."
+            : null,
+        );
+        return;
+      }
+      if (mcpToken) setScanToken("");
+      toast.error(
+        apiErr?.data?.failure_reason ??
+          apiErr?.data?.error ??
+          "Failed to refresh tools — MCP server may be unreachable.",
+      );
     }
   };
 
@@ -432,7 +493,7 @@ export default function ApplicationToolsPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={handleRefreshTools}
+          onClick={() => void handleRefreshTools()}
           disabled={rescanning}
         >
           <RefreshCw className={cn("mr-1.5 size-3.5", rescanning && "animate-spin")} />
@@ -503,6 +564,88 @@ export default function ApplicationToolsPage() {
         })()}
         onClose={() => setSelected(null)}
       />
+
+      <Dialog
+        open={tokenDialogOpen}
+        onOpenChange={(open) => {
+          if (open) setTokenDialogOpen(true);
+          else closeTokenDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Authenticate the live MCP inventory check</DialogTitle>
+            <DialogDescription>
+              This server correctly protects <code>tools/list</code>. Paste a
+              bearer token that can enumerate its tools. AuthSec forwards it
+              only for this refresh and never stores it.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!rescanning && scanToken.trim()) {
+                void handleRefreshTools(scanToken.trim());
+              }
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="mcp-scan-token">MCP bearer token</Label>
+              <Input
+                id="mcp-scan-token"
+                type="password"
+                autoComplete="off"
+                aria-invalid={scanError ? true : undefined}
+                aria-describedby={scanError ? "mcp-scan-token-error" : "mcp-scan-token-help"}
+                value={scanToken}
+                onChange={(event) => {
+                  setScanToken(event.target.value);
+                  setScanError(null);
+                }}
+                placeholder="Paste a token with tools/list access"
+              />
+              <p id="mcp-scan-token-help" className="text-xs leading-5 text-muted-foreground">
+                A successful refresh calls the actual MCP server, reconciles the
+                tools visible to this token, and refreshes OAuth scopes from
+                protected-resource metadata. The SDK manifest remains the
+                authoritative complete inventory for SDK-protected servers.
+              </p>
+              {scanError ? (
+                <p
+                  id="mcp-scan-token-error"
+                  role="alert"
+                  className="text-sm text-[var(--color-danger)]"
+                >
+                  {scanError}
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeTokenDialog}
+                disabled={rescanning}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="text-white"
+                disabled={rescanning || !scanToken.trim()}
+              >
+                {rescanning ? (
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                ) : (
+                  <KeyRound className="mr-1.5 size-4" />
+                )}
+                {rescanning ? "Checking live server…" : "Authenticate and refresh"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <BulkActionBar
         count={selectedToolIds.length}

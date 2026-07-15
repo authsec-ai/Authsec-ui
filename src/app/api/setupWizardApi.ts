@@ -240,7 +240,9 @@ export const setupWizardApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { rsId }) => [
         { type: "ResourceServer" as const, id: rsId },
+        { type: "ResourceServer" as const, id: "LIST" },
         { type: "ScopeMatrix" as const, id: rsId },
+        { type: "OAuthScope" as const, id: "LIST" },
       ],
     }),
 

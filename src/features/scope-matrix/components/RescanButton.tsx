@@ -12,7 +12,7 @@ export function RescanButton({ rsId }: RescanButtonProps) {
 
   const handleRescan = async () => {
     try {
-      await rescanResourceServer(rsId).unwrap();
+      await rescanResourceServer({ rsId }).unwrap();
       toast.success("Resource server rescanned successfully");
     } catch (error) {
       toast.error("Failed to rescan resource server");

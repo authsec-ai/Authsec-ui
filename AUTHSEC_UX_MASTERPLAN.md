@@ -44,7 +44,7 @@ The global sidebar should stay task-oriented:
 - Applications list: show application identity, compact readiness summary, and next action. Avoid wide status pills that force horizontal scroll.
 - Create application: ask only endpoint identity and client connection modes. Keep scope templates optional and explicitly non-granting.
 - SDK setup: make the one-time secret compact and dismissible after acknowledgement. Lead with the coding-agent prompt and show env/config as copyable implementation artifacts.
-- Tools: treat this as a policy workbench. Search, filter, inspect, bulk-map, and distinguish suggested policy from runtime-effective admin overrides.
+- Tools: treat this as a policy workbench. Search, filter, inspect, bulk-map, and distinguish suggested policy from runtime-effective admin overrides. **Refresh Tools** is a live MCP reconciliation action, not a cache reload: it must complete `tools/list`, prompt for a one-shot bearer token on protected servers, reconcile protected-resource scopes, and report the actual add/update/remove result.
 - Access: present default access as the scalable baseline, manual bindings as exceptions, and activation preview as concise stats plus scope chips.
 - Test: be honest that current backend only supports readiness test-login, not user x client x tool simulation.
 - Launch: present backend-enforced gates with direct fix actions. Activation should feel like a review checklist, not a huge warning page.

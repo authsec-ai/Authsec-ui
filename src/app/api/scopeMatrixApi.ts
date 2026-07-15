@@ -19,6 +19,25 @@ import type {
   UpdateToolScopeMapRequest,
 } from "./types/scopeMatrix";
 
+export interface ResourceServerRescanResult {
+  tools_added: number;
+  tools_updated: number;
+  tools_removed: number;
+  scopes_added: number;
+  scopes_removed: number;
+  unmapped_scopes: string[] | null;
+  warnings: string[] | null;
+  failure_reason?: string;
+}
+
+export interface ResourceServerRescanResponse {
+  result: ResourceServerRescanResult;
+  status?: string;
+  last_scan_status?: string;
+  scan_generation?: number;
+  last_successful_generation?: number;
+}
+
 export const scopeMatrixApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // GET /authsec/applications/:id/scope-matrix
@@ -31,15 +50,20 @@ export const scopeMatrixApi = baseApi.injectEndpoints({
     }),
 
     // POST /authsec/applications/:id/rescan
-    rescanResourceServer: builder.mutation<unknown, string>({
-      query: (rsId) => ({
+    rescanResourceServer: builder.mutation<
+      ResourceServerRescanResponse,
+      { rsId: string; mcpToken?: string }
+    >({
+      query: ({ rsId, mcpToken }) => ({
         url: `/authsec/applications/${rsId}/rescan`,
         method: "POST",
+        body: mcpToken ? { mcp_token: mcpToken } : undefined,
       }),
-      invalidatesTags: (_result, _error, rsId) => [
+      invalidatesTags: (_result, _error, { rsId }) => [
         { type: "ScopeMatrix" as const, id: rsId },
         { type: "OAuthScope" as const, id: "LIST" },
         { type: "ResourceServer" as const, id: rsId },
+        { type: "ResourceServer" as const, id: "LIST" },
       ],
     }),
 

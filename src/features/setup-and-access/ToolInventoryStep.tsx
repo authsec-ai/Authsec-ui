@@ -49,7 +49,7 @@ export function ToolInventoryStep({ rsId, toolCount, onRefresh }: Props) {
     } catch (err) {
       // RTK Query surfaces fetch errors with status + data shape.
       const apiErr = err as { status?: number; data?: { error?: string } };
-      if (apiErr?.status === 401) {
+      if (apiErr?.status === 401 || apiErr?.status === 428) {
         setScanError(
           "AuthSec couldn't list tools with that token. The MCP server returned 401. Paste a fresh, unexpired token from the RS owner."
         );

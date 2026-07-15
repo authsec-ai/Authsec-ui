@@ -23,18 +23,9 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import toast from "react-hot-toast";
-
-import {
-  useDeleteApplicationMutation,
-  useListApplicationsQuery,
-} from "@/app/api/applicationsApi";
+import { useListApplicationsQuery } from "@/app/api/applicationsApi";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +40,7 @@ import {
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 
+import { DeleteApplicationDialog } from "./components/DeleteApplicationDialog";
 import { computeReadiness, isLaunched } from "./lib/computeReadiness";
 import {
   computeNextBestAction,
@@ -132,7 +124,6 @@ const ROW_ACTIONS: Array<{ label: string; tab: string; icon: typeof ShieldCheck 
 export default function ApplicationsPage() {
   const navigate = useNavigate();
   const { data: applications, isLoading } = useListApplicationsQuery();
-  const [deleteApplication, { isLoading: deleting }] = useDeleteApplicationMutation();
 
   const [query, setQuery] = useState("");
 
@@ -194,19 +185,6 @@ export default function ApplicationsPage() {
   const showBanner = pendingRows.length > 0 && dismissedSignature !== pendingSignature;
 
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
-
-  const handleConfirmDelete = async () => {
-    if (!pendingDelete) return;
-    const target = pendingDelete;
-    try {
-      await deleteApplication(target.id).unwrap();
-      toast.success(`Deleted "${target.name}".`);
-      setPendingDelete(null);
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't delete application.");
-    }
-  };
 
   const metricCells: Array<[keyof BucketCounts, string, string]> = [
     ["total", "is-total", "applications"],
@@ -415,29 +393,13 @@ export default function ApplicationsPage() {
         </CardContent>
       </TableCard>
 
-      <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && !deleting && setPendingDelete(null)}>
-        <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
-          <div className="dialog" style={{ width: "100%" }}>
-            <span className="dg-icon">
-              <Trash2 className="icon" />
-            </span>
-            <h2 className="dg-title">Delete application?</h2>
-            <p className="dg-desc">
-              This removes the protected application, its canonical scopes, introspection secret, and
-              imported tools. Active clients will lose access immediately. This can't be undone.
-            </p>
-            {pendingDelete?.resource_uri && <div className="dg-target">{pendingDelete.resource_uri}</div>}
-            <div className="dg-actions">
-              <button className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deleting}>
-                Cancel
-              </button>
-              <button className="btn btn-danger" onClick={() => void handleConfirmDelete()} disabled={deleting}>
-                <Trash2 className="icon-sm" /> {deleting ? "Deleting…" : "Delete application"}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DeleteApplicationDialog
+        application={pendingDelete}
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      />
     </ConsolePage>
   );
 }
