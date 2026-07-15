@@ -94,6 +94,9 @@ export function DecisionBanner({
   actionLabel,
   actionHref,
   onAction,
+  actionDisabled,
+  secondaryLabel,
+  secondaryHref,
 }: {
   tone?: ConsoleTone;
   title: ReactNode;
@@ -101,6 +104,9 @@ export function DecisionBanner({
   actionLabel?: string;
   actionHref?: string;
   onAction?: () => void;
+  actionDisabled?: boolean;
+  secondaryLabel?: string;
+  secondaryHref?: string;
 }) {
   const t = toneClasses[tone];
   const Icon =
@@ -111,11 +117,13 @@ export function DecisionBanner({
         : tone === "warning"
           ? AlertTriangle
           : Circle;
+  const primaryClass =
+    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-(--color-primary) px-3.5 text-sm font-semibold text-white transition hover:bg-(--color-primary-strong) disabled:pointer-events-none disabled:opacity-60";
   const action = actionLabel ? (
     actionHref ? (
       <Link
         to={actionHref}
-        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-(--color-primary) px-3.5 text-sm font-semibold text-white transition hover:bg-(--color-primary-strong)"
+        className={cn(primaryClass, actionDisabled && "pointer-events-none opacity-60")}
       >
         {actionLabel}
         <ArrowRight className="size-3.5" />
@@ -124,13 +132,23 @@ export function DecisionBanner({
       <button
         type="button"
         onClick={onAction}
-        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-(--color-primary) px-3.5 text-sm font-semibold text-white transition hover:bg-(--color-primary-strong)"
+        disabled={actionDisabled}
+        className={primaryClass}
       >
         {actionLabel}
         <ArrowRight className="size-3.5" />
       </button>
     )
   ) : null;
+  const secondary =
+    secondaryLabel && secondaryHref ? (
+      <Link
+        to={secondaryHref}
+        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-3.5 text-sm font-semibold text-(--color-text) transition hover:bg-(--color-surface-subtle)"
+      >
+        {secondaryLabel}
+      </Link>
+    ) : null;
 
   return (
     <section
@@ -150,7 +168,12 @@ export function DecisionBanner({
           {body}
         </p>
       </div>
-      {action}
+      {action || secondary ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {secondary}
+          {action}
+        </div>
+      ) : null}
     </section>
   );
 }

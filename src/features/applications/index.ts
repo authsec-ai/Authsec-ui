@@ -33,7 +33,6 @@ export { default as ApplicationLayout } from "./ApplicationLayout";
 export { useApplicationContext } from "./useApplicationContext";
 export { default as ApplicationsPage } from "./ApplicationsPage";
 export { default as CreateApplicationPage } from "./CreateApplicationPage";
-export { default as ApplicationOverviewPage } from "./ApplicationOverviewPage";
 export { default as ApplicationSetupPage } from "./ApplicationSetupPage";
 export { default as ApplicationToolsPage } from "./ApplicationToolsPage";
 export { default as ApplicationAccessPage } from "./ApplicationAccessPage";
