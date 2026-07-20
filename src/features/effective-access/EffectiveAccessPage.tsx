@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { KeyRound, Search, ShieldOff } from "lucide-react";
+import { Check, ChevronsUpDown, KeyRound, ShieldOff } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 import { useListApplicationsQuery } from "@/app/api/applicationsApi";
 import {
@@ -9,15 +10,34 @@ import {
 } from "@/app/api/accessApi";
 import { useListEndUsersQuery } from "@/app/api/membershipApi";
 import { useDeleteRSBindingMutation } from "@/app/api/setupWizardApi";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import {
+  DecisionBanner,
+  StatusBadge,
+  type ConsoleTone,
+} from "@/components/console/status";
+import {
+  ConsoleRowActions,
+  EntityCell,
+} from "@/components/console/iam-console";
 import {
   AdaptiveTable,
   type AdaptiveColumn,
 } from "@/components/ui/adaptive-table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -25,21 +45,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AccessPath,
-  ConsoleRowActions,
-  EntityCell,
-  VerdictCard,
-} from "@/components/console/iam-console";
-import { TableCard } from "@/theme/components/cards";
+import { FilterCard, TableCard } from "@/theme/components/cards";
+import { cn } from "@/lib/utils";
 import { resolveWorkspaceId } from "@/utils/workspace";
-import { toast } from "react-hot-toast";
 
-function riskVariant(risk?: string): "default" | "secondary" | "destructive" | "outline" {
-  if (risk === "high" || risk === "critical") return "destructive";
-  if (risk === "medium") return "secondary";
-  if (risk === "low") return "default";
-  return "outline";
+/**
+ * Effective Access — resolve whether one user can reach one application's
+ * scopes, why, and the safest next fix.
+ *
+ * Layout follows the console standard: ConsolePage shell (no boxed header),
+ * a two-field resolver bar, one DecisionBanner verdict carrying the only CTA,
+ * and the scope table. Internal role names (`rs-<uuid>:viewer`) are never
+ * shown raw — see displayRoleName.
+ */
+
+function riskTone(risk?: string): ConsoleTone {
+  if (risk === "high" || risk === "critical") return "danger";
+  if (risk === "medium") return "warning";
+  return "neutral";
+}
+
+/** `rs-<uuid>:viewer` → `Viewer`; anything else passes through untouched. */
+function displayRoleName(name: string): string {
+  const stripped = name.replace(/^rs-[0-9a-fA-F-]{36}:/, "");
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 export default function EffectiveAccessPage() {
@@ -72,10 +101,14 @@ export default function EffectiveAccessPage() {
   }, [userId, applicationId]);
 
   const scopes = data?.scopes ?? [];
+  const grantedCount = scopes.filter((s) => s.status === "granted").length;
+  const who = data?.user.email || data?.user.name || "This user";
+  const selectedApplication = applications.find((a) => a.id === applicationId);
+  const configureHref = `/applications/${applicationId}/access-assignments`;
 
   // When arriving deep-linked with ?user_id= (e.g. from the Users page), the
   // selected user may not be in the current search page — inject it so the
-  // dropdown shows a label instead of appearing blank.
+  // picker shows a label instead of appearing blank.
   const userOptions = useMemo(() => {
     const list = (endUsers?.items ?? []).map((u) => ({
       id: u.user_id,
@@ -108,27 +141,27 @@ export default function EffectiveAccessPage() {
         priority: 1,
         approxWidth: 130,
         cell: ({ row }) => (
-          <Badge variant={row.original.status === "granted" ? "default" : "outline"}>
+          <StatusBadge tone={row.original.status === "granted" ? "success" : "neutral"}>
             {row.original.status === "granted" ? "Granted" : "Not granted"}
-          </Badge>
+          </StatusBadge>
         ),
       },
       {
         id: "through",
-        header: "Why",
+        header: "Granted through",
         priority: 2,
         approxWidth: 240,
         cell: ({ row }) =>
           (row.original.granted_through ?? []).length ? (
             <div className="flex flex-wrap gap-1">
               {(row.original.granted_through ?? []).map((source) => (
-                <Badge key={`${source.binding_id}:${source.role_id}`} variant="secondary">
-                  {source.role_name}
-                </Badge>
+                <StatusBadge key={`${source.binding_id}:${source.role_id}`} tone="info">
+                  {displayRoleName(source.role_name)}
+                </StatusBadge>
               ))}
             </div>
           ) : (
-            <span className="text-sm text-muted-foreground">No role grants this scope</span>
+            <span className="text-sm text-(--color-text-muted)">No role grants this scope</span>
           ),
       },
       {
@@ -137,9 +170,9 @@ export default function EffectiveAccessPage() {
         priority: 3,
         approxWidth: 130,
         cell: ({ row }) => (
-          <Badge variant={riskVariant(row.original.risk_level)}>
+          <StatusBadge tone={riskTone(row.original.risk_level)}>
             {row.original.risk_level || "unspecified"}
-          </Badge>
+          </StatusBadge>
         ),
       },
       {
@@ -154,19 +187,23 @@ export default function EffectiveAccessPage() {
               items={[
                 row.original.status !== "granted"
                   ? {
-                      label: "Add via role",
+                      label: "Grant via role",
                       icon: <KeyRound className="size-4" />,
-                      onSelect: () => navigate(`/applications/${applicationId}/access-assignments`),
+                      onSelect: () => navigate(configureHref),
                     }
                   : {
-                      label: "Review sources",
+                      label: "View role bindings",
                       icon: <KeyRound className="size-4" />,
                       onSelect: () => navigate(`/authz/role-bindings?user_id=${userId}`),
                     },
                 {
-                  label: "Remove only source",
+                  label: "Remove role binding",
                   icon: <ShieldOff className="size-4" />,
-                  disabled: row.original.status !== "granted" || !row.original.removable || sources.length !== 1 || deletingBinding,
+                  disabled:
+                    row.original.status !== "granted" ||
+                    !row.original.removable ||
+                    sources.length !== 1 ||
+                    deletingBinding,
                   destructive: true,
                   onSelect: async () => {
                     try {
@@ -188,47 +225,36 @@ export default function EffectiveAccessPage() {
         },
       },
     ],
-    [applicationId, deleteBinding, deletingBinding, navigate, refetch, userId],
+    [applicationId, configureHref, deleteBinding, deletingBinding, navigate, refetch, userId],
   );
 
   return (
-    <div className="space-y-4 p-6">
-      <PageHeader
-        title="Effective Access"
-        description="Resolve whether a user can reach an application capability, why, and the safest next fix."
-      />
-
-      <TableCard>
+    <ConsolePage
+      title="Effective Access"
+      description="Resolve whether a user can reach an application capability, why, and the safest next fix."
+    >
+      <FilterCard>
         <CardContent variant="compact">
-          <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End user</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={userSearch}
-                  onChange={(event) => setUserSearch(event.target.value)}
-                  placeholder="Search users by email or username"
-                  className="pl-9"
-                />
-              </div>
-              <Select value={userId} onValueChange={setUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an end user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userOptions.map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-(--color-text)" htmlFor="ea-user">
+                End user
+              </label>
+              <UserCombobox
+                id="ea-user"
+                value={userId}
+                options={userOptions}
+                search={userSearch}
+                onSearchChange={setUserSearch}
+                onSelect={setUserId}
+              />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Application</label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-(--color-text)" htmlFor="ea-application">
+                Application
+              </label>
               <Select value={applicationId} onValueChange={setApplicationId}>
-                <SelectTrigger>
+                <SelectTrigger id="ea-application">
                   <SelectValue placeholder="Select an application" />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,83 +265,46 @@ export default function EffectiveAccessPage() {
                   ))}
                 </SelectContent>
               </Select>
-              {data?.application.resource_uri ? (
-                <div className="truncate font-mono text-xs text-muted-foreground">
-                  {data.application.resource_uri}
+              {selectedApplication?.resource_uri ? (
+                <div className="truncate font-mono text-xs text-(--color-text-muted)">
+                  {selectedApplication.resource_uri}
                 </div>
               ) : null}
             </div>
-            <div className="flex items-end">
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/applications/${applicationId}/access-assignments`)}
-                disabled={!applicationId}
-              >
-                Configure access
-              </Button>
-            </div>
           </div>
         </CardContent>
-      </TableCard>
+      </FilterCard>
 
       {data ? (
-        <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <VerdictCard
-            verdict={data.roles.length ? "allow" : "deny"}
-            title={data.roles.length ? "Application access is active" : "No application role grants access"}
-            body={
-              data.roles.length
-                ? `${data.user.email || data.user.name} resolves through ${data.roles.length} application role${data.roles.length === 1 ? "" : "s"}.`
-                : "Assign an application role, then confirm the client requested the matching scope."
-            }
+        data.roles.length ? (
+          <DecisionBanner
+            tone="success"
+            title="Access is active"
+            body={`${who} holds ${data.roles.map((role) => role.label).join(", ")} on ${data.application.name} · ${grantedCount} of ${scopes.length} scopes granted.`}
+            actionLabel="Configure access"
+            actionHref={configureHref}
           />
-          <AccessPath
-            steps={[
-              {
-                label: "User selected",
-                detail: data.user.email || data.user.name || userId,
-                state: "ok",
-              },
-              {
-                label: "Application selected",
-                detail: data.application.name,
-                state: "ok",
-              },
-              {
-                label: data.roles.length ? "Role binding active" : "Missing role binding",
-                detail: data.roles.length
-                  ? data.roles.map((role) => role.label).join(", ")
-                  : "No role path currently grants application scopes.",
-                state: data.roles.length ? "ok" : "blocked",
-              },
-            ]}
+        ) : (
+          <DecisionBanner
+            tone="danger"
+            title="No role grants access"
+            body={`${who} has no role on ${data.application.name}. Assign an application role, then confirm the client requests the matching scope.`}
+            actionLabel="Assign a role"
+            actionHref={configureHref}
           />
-          {!data.roles.length ? (
-            <div className="lg:col-span-2 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
-              <span className="text-sm text-muted-foreground">
-                {data.user.email || data.user.name} has no role on {data.application.name} yet.
-              </span>
-              <Button
-                className="ml-auto"
-                onClick={() => navigate(`/applications/${applicationId}/access-assignments`)}
-              >
-                Assign a role
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        )
       ) : null}
 
       {!applicationId || !userId ? (
-        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Select both an end user and an Application to compute effective access.
+        <div className="rounded-lg border border-dashed border-(--color-border-strong) bg-(--color-surface-subtle) p-8 text-center text-sm text-(--color-text-muted)">
+          Select an end user and an application to compute effective access.
         </div>
       ) : (
         <TableCard>
           <CardContent variant="flush">
             {isLoading ? (
-              <div className="py-16 text-center text-sm text-muted-foreground">
-                Resolving effective access...
+              <div className="py-16 text-center text-sm text-(--color-text-muted)">
+                Resolving effective access…
               </div>
             ) : (
               <AdaptiveTable
@@ -331,13 +320,74 @@ export default function EffectiveAccessPage() {
           </CardContent>
         </TableCard>
       )}
+    </ConsolePage>
+  );
+}
 
-      {data ? (
-        <div className="text-xs text-muted-foreground">
-          {data.user.email || data.user.name} has {data.roles.length} role
-          {data.roles.length === 1 ? "" : "s"} on {data.application.name}.
-        </div>
-      ) : null}
-    </div>
+function UserCombobox({
+  id,
+  value,
+  options,
+  search,
+  onSearchChange,
+  onSelect,
+}: {
+  id?: string;
+  value: string;
+  options: { id: string; label: string }[];
+  search: string;
+  onSearchChange: (value: string) => void;
+  onSelect: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          {selected ? (
+            <span className="truncate">{selected.label}</span>
+          ) : (
+            <span className="text-(--color-text-subtle)">Search users by email or username</span>
+          )}
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        {/* Search is server-side (the `q` param) — disable cmdk's own filter. */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={search}
+            onValueChange={onSearchChange}
+            placeholder="Search by email or username"
+          />
+          <CommandList>
+            <CommandEmpty>No users match.</CommandEmpty>
+            {options.map((option) => (
+              <CommandItem
+                key={option.id}
+                value={option.id}
+                onSelect={() => {
+                  onSelect(option.id);
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={cn("size-4", value === option.id ? "opacity-100" : "opacity-0")}
+                />
+                <span className="truncate">{option.label}</span>
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
