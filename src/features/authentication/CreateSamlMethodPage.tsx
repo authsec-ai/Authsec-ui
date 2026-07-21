@@ -304,7 +304,7 @@ export function CreateSamlMethodPage() {
     SAML_IDP_FIELD_HELP[providerKey]?.[field];
 
   return (
-    <div className="flex flex-col h-[90vh] w-full">
+    <div className="flex min-h-full w-full flex-col">
       {/* Header */}
       <div className="flex-shrink-0 border-b py-4 px-8">
         <div className="flex items-center justify-between">
@@ -319,16 +319,17 @@ export function CreateSamlMethodPage() {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/authentication")}
-            className="h-8 w-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+            aria-label="Close"
+            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Body — single continuous form, no step machinery */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 min-h-0">
-        <div className="mx-auto w-full max-w-4xl space-y-8">
+      {/* Body — single continuous form, page scrolls as one document */}
+      <div className="flex-1 px-8 py-6">
+        <div className="w-full space-y-8">
           {/* ── Provider picker ─────────────────────────────────────── */}
           <section className="space-y-3">
             <SectionHeader
@@ -644,9 +645,9 @@ export function CreateSamlMethodPage() {
         </div>
       </div>
 
-      {/* Footer — single Save action */}
-      <div className="flex-shrink-0 border-t bg-background py-4 px-8">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-4">
+      {/* Footer — single Save action, stays pinned while the form scrolls */}
+      <div className="sticky bottom-0 z-10 flex-shrink-0 border-t bg-background py-4 px-8">
+        <div className="flex w-full items-center justify-between gap-4">
           <Button variant="outline" onClick={() => navigate("/authentication")}>
             Cancel
           </Button>

@@ -223,9 +223,9 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
   };
 
   return (
-    <div className="flex flex-col h-[90vh] w-full">
+    <div className="flex h-full min-h-[85vh] w-full flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 border-b py-4 px-8">
+      <div className="flex-shrink-0 border-b py-4 px-6">
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <h2 className="text-lg font-semibold">Configure Entra ID Sync</h2>
@@ -240,7 +240,8 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+            aria-label="Close"
+            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -248,8 +249,8 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       </div>
 
       {/* Content - scrollable area */}
-      <div className="flex-1 overflow-y-auto px-8 py-4 min-h-0">
-        <div className="w-full max-w-6xl">
+      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+        <div className="w-full">
           {currentStepIndex === 0 && (
             <div className="space-y-3">
               <div className="mb-4">
@@ -363,10 +364,10 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
       </div>
 
       {/* Footer Actions - fixed at bottom, never scrolls */}
-      <div className="flex-shrink-0 border-t bg-background pt-4 pb-4 mt-auto px-8">
-        <div className="flex items-center justify-between gap-4">
+      <div className="flex-shrink-0 border-t bg-background pt-4 pb-4 mt-auto px-6">
+        <div className="flex items-center justify-between gap-3">
           {/* Back/Cancel Button on Left */}
-          <div className="flex items-center gap-2 min-w-[120px]">
+          <div className="flex shrink-0 items-center">
             <Button variant="outline" onClick={handleBack} size="default">
               {currentStepIndex > 0 ? (
                 <>
@@ -379,8 +380,9 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
             </Button>
           </div>
 
-          {/* Progress Steps in Center */}
-          <div className="flex items-center gap-2 flex-1 justify-center">
+          {/* Progress Steps in Center — label shown for the active step only so the
+              bar fits inside the 2xl sheet without clipping the Next button */}
+          <div className="flex min-w-0 items-center justify-center gap-1.5">
             {WIZARD_STEPS.map((step, index) => {
               const StepIcon = step.icon;
               const isActive = index === currentStepIndex;
@@ -389,15 +391,16 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
               return (
                 <React.Fragment key={step.id}>
                   <div
+                    title={step.label}
                     className={cn(
-                      "flex items-center gap-2 rounded-lg px-3 py-2",
+                      "flex items-center gap-2 rounded-lg px-2 py-1.5",
                       isActive && "bg-primary/10",
                       isCompleted && "opacity-60"
                     )}
                   >
                     <div
                       className={cn(
-                        "flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs",
                         isCompleted && "bg-primary text-primary-foreground",
                         isActive && "bg-primary/20 text-primary",
                         !isActive && !isCompleted && "bg-muted text-muted-foreground"
@@ -409,18 +412,14 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
                         <StepIcon className="h-3 w-3" />
                       )}
                     </div>
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        isActive && "text-foreground",
-                        !isActive && "text-muted-foreground"
-                      )}
-                    >
-                      {step.label}
-                    </span>
+                    {isActive && (
+                      <span className="whitespace-nowrap text-sm font-medium text-foreground">
+                        {step.label}
+                      </span>
+                    )}
                   </div>
                   {index < WIZARD_STEPS.length - 1 && (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
                 </React.Fragment>
               );
@@ -428,7 +427,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
           </div>
 
           {/* Next/Finish Button on Right */}
-          <div className="flex items-center gap-2 min-w-[120px] justify-end">
+          <div className="flex shrink-0 items-center justify-end">
             {currentStepIndex < WIZARD_STEPS.length - 1 ? (
               <Button onClick={handleNext} disabled={!canProceed()} size="default">
                 Next

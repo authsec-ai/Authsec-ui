@@ -714,21 +714,9 @@ export function UsersPage() {
         return;
       }
 
-      const suggestedName = suggestGroupName();
-      const selectedUserLabels = selectedUserDetails.map(
-        (user: any) => user.email || user.name || user.id
-      );
-
-      navigate("/groups/create", {
-        state: {
-          prefillGroup: {
-            suggestedName: suggestedName || (isAdmin ? "new-admin-group" : "new-user-group"),
-            selectedUserIds: selectedUsers,
-            selectedUserEmails: selectedUserLabels,
-            source: `users-bulk-create-${contextKey}`,
-          },
-        },
-      });
+      // Group management is not yet available in this build (routes are
+      // disabled). Avoid dead-ending on a non-existent /groups/create URL.
+      toast.info("Group creation isn't available yet.");
       return;
     }
 

@@ -21,7 +21,8 @@ import {
   Star,
   Copy,
 } from "lucide-react";
-import { useContextualNavigate } from "@/hooks/useContextualNavigate";
+import { useNavigate } from "react-router-dom";
+import { toast } from "@/lib/toast";
 
 interface RoleTemplate {
   id: string;
@@ -42,7 +43,7 @@ interface RoleTemplate {
  * Role Templates Page - Pre-built role templates for common use cases
  */
 export function RoleTemplatesPage() {
-  const navigate = useContextualNavigate();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
@@ -298,14 +299,15 @@ export function RoleTemplatesPage() {
   const popularTemplates = roleTemplates.filter((t) => t.popular);
 
   const handleUseTemplate = (template: RoleTemplate) => {
-    // Navigate to create role page with template data
-    console.warn("Using template:", template);
-    navigate("/roles/create", { state: { template } });
+    // Role creation lives in the wizard on the Roles page (there is no
+    // dedicated /roles/create route). Send the user there instead of a dead URL.
+    toast.info(`Create a role for "${template.name}" from the Roles page.`);
+    navigate("/access/roles");
   };
 
   const handleCloneTemplate = (template: RoleTemplate) => {
-    console.warn("Cloning template:", template);
-    // Here you would create a copy of the template
+    toast.info(`Cloning "${template.name}" — create the role from the Roles page.`);
+    navigate("/access/roles");
   };
 
   const getCategoryIcon = (category: string) => {

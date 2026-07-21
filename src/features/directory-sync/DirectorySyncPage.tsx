@@ -340,6 +340,7 @@ export default function DirectorySyncPage() {
       >
         <SheetContent
           side="right"
+          hideClose
           className="w-full sm:max-w-2xl p-0 overflow-hidden"
         >
           <SheetTitle className="sr-only">
@@ -365,6 +366,7 @@ export default function DirectorySyncPage() {
       >
         <SheetContent
           side="right"
+          hideClose
           className="w-full sm:max-w-2xl p-0 overflow-hidden"
         >
           <SheetTitle className="sr-only">Configure Entra ID Sync</SheetTitle>
