@@ -80,7 +80,7 @@ export interface ScopeMapEntry {
   risk_level: RiskLevel;
   auto_matched: boolean;
   /** "admin_override" mappings are runtime-effective; "sdk_suggested" is advisory only. */
-  source?: ScopeMapSource;
+  source: ScopeMapSource;
 }
 
 export interface MCPToolResponse {

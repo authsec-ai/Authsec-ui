@@ -43,6 +43,7 @@ import type {
   MCPToolResponse,
   OAuthScopeResponse,
   RiskLevel,
+  ScopeMapEntry,
 } from "@/app/api/types/scopeMatrix";
 import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
@@ -80,10 +81,37 @@ const RISK_TONE: Record<RiskLevel, { chip: string; text: string }> = {
   },
 };
 
+/** Runtime policy only honors operator-created mappings.
+ *
+ * The scope-matrix response also carries `sdk_suggested` rows in `tool.scopes`
+ * so an operator can promote them. Those rows are advisory and must never be
+ * counted, displayed, removed, or skipped as if they were assigned policy.
+ */
+function assignedScopes(tool: MCPToolResponse): ScopeMapEntry[] {
+  return tool.scopes.filter(
+    (scope) => scope.source === "admin_override",
+  );
+}
+
+/** Return server-suggested scopes that have not been assigned as runtime policy. */
+function pendingScopeSuggestions(tool: MCPToolResponse): string[] {
+  const assigned = new Set(
+    assignedScopes(tool).map((scope) => scope.scope_string),
+  );
+  return Array.from(
+    new Set([
+      ...(tool.suggested_scopes ?? []),
+      ...tool.scopes
+        .filter((scope) => scope.source === "sdk_suggested")
+        .map((scope) => scope.scope_string),
+    ]),
+  ).filter((scope) => !assigned.has(scope));
+}
+
 function classifyTool(tool: MCPToolResponse): ToolDecision {
   if (tool.is_public) return "public";
-  if (tool.scopes.some((scope) => scope.source === "admin_override")) return "mapped";
-  if (tool.scopes.length > 0) return "advisory";
+  if (assignedScopes(tool).length > 0) return "mapped";
+  if (pendingScopeSuggestions(tool).length > 0) return "advisory";
   return "unmapped";
 }
 
@@ -110,23 +138,24 @@ function riskReasonForScope(scopeString: string): string {
 }
 
 function riskReasonForTool(tool: MCPToolResponse): string {
-  if (tool.scopes.length === 0) {
+  const suggestions = pendingScopeSuggestions(tool);
+  if (tool.scopes.length === 0 && suggestions.length === 0) {
     return tool.is_public
       ? "Public exposure bypasses scope checks."
-      : "Unmapped tools are denied until an access label is assigned.";
+      : "Unmapped tools are denied until a scope is assigned.";
   }
   const order: RiskLevel[] = ["critical", "high", "medium", "low"];
   for (const risk of order) {
     const scope = tool.scopes.find((entry) => entry.risk_level === risk);
     if (scope) return riskReasonForScope(scope.scope_string);
   }
-  return riskReasonForScope(tool.scopes[0].scope_string);
+  const scopeString = tool.scopes[0]?.scope_string ?? suggestions[0];
+  return riskReasonForScope(scopeString);
 }
 
 function decisionLabel(decision: ToolDecision): string {
   if (decision === "public") return "Public";
   if (decision === "mapped") return "Role-gated";
-  if (decision === "advisory") return "Suggested only";
   return "Denied";
 }
 
@@ -134,7 +163,7 @@ export default function ApplicationToolsPage() {
   const { application } = useApplicationContext();
   const { data: matrix, isLoading } = useGetScopeMatrixQuery(application.id);
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [selected, setSelected] = useState<MCPToolResponse | null>(null);
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   const [bulkMode, setBulkMode] = useState<"assign" | "remove" | null>(null);
@@ -152,6 +181,10 @@ export default function ApplicationToolsPage() {
   };
 
   const tools = useMemo(() => matrix?.tools ?? [], [matrix?.tools]);
+  const selected = useMemo(
+    () => tools.find((tool) => tool.id === selectedToolId) ?? null,
+    [selectedToolId, tools],
+  );
   const allScopes = useMemo<OAuthScopeResponse[]>(
     () => matrix?.scopes ?? matrix?.unmapped_scopes ?? [],
     [matrix?.scopes, matrix?.unmapped_scopes],
@@ -182,10 +215,10 @@ export default function ApplicationToolsPage() {
   // intersection so removal applies cleanly across the whole selection.
   const sharedScopes = useMemo(() => {
     if (selectedTools.length === 0) return [];
-    const first = selectedTools[0].scopes;
+    const first = assignedScopes(selectedTools[0]);
     return first.filter((scope) =>
       selectedTools.every((tool) =>
-        tool.scopes.some((entry) => entry.scope_id === scope.scope_id),
+        assignedScopes(tool).some((entry) => entry.scope_id === scope.scope_id),
       ),
     );
   }, [selectedTools]);
@@ -212,7 +245,8 @@ export default function ApplicationToolsPage() {
           (decision === "unmapped" || decision === "advisory" || decision === "public")) ||
         (filter === "mapped" && decision === "mapped") ||
         (filter === "public" && decision === "public") ||
-        (filter === "denied" && decision === "unmapped");
+        (filter === "denied" &&
+          (decision === "unmapped" || decision === "advisory"));
       if (!matchesFilter) return false;
       if (!q) return true;
       return [
@@ -259,7 +293,9 @@ export default function ApplicationToolsPage() {
         //   - assign: tool already has this scope
         //   - remove: tool doesn't have this scope
         .filter((scopeId) => {
-          const has = tool.scopes.some((entry) => entry.scope_id === scopeId);
+          const has = assignedScopes(tool).some(
+            (entry) => entry.scope_id === scopeId,
+          );
           return mode === "assign" ? !has : has;
         })
         .map((scopeId) => ({
@@ -271,8 +307,8 @@ export default function ApplicationToolsPage() {
     if (mappings.length === 0) {
       toast(
         mode === "assign"
-          ? "All selected tools already have these labels."
-          : "None of the selected tools have these labels.",
+          ? "All selected tools already have these scopes."
+          : "None of the selected tools have these scopes.",
       );
       return;
     }
@@ -282,11 +318,11 @@ export default function ApplicationToolsPage() {
         body: { mappings },
       }).unwrap();
       const toolNoun = selectedTools.length === 1 ? "tool" : "tools";
-      const labelNoun = scopeIds.length === 1 ? "label" : "labels";
+      const scopeNoun = scopeIds.length === 1 ? "scope" : "scopes";
       toast.success(
         mode === "assign"
-          ? `Mapped ${scopeIds.length} ${labelNoun} to ${selectedTools.length} ${toolNoun}.`
-          : `Removed ${scopeIds.length} ${labelNoun} from ${selectedTools.length} ${toolNoun}.`,
+          ? `Assigned ${scopeIds.length} ${scopeNoun} to ${selectedTools.length} ${toolNoun}.`
+          : `Removed ${scopeIds.length} ${scopeNoun} from ${selectedTools.length} ${toolNoun}.`,
       );
       setBulkMode(null);
       setSelectedToolIds([]);
@@ -328,7 +364,7 @@ export default function ApplicationToolsPage() {
       setTokenDialogOpen(false);
       setScanToken("");
       setScanError(null);
-      setSelected(null);
+      setSelectedToolId(null);
       setSelectedToolIds([]);
       setBulkMode(null);
     } catch (err) {
@@ -379,7 +415,6 @@ export default function ApplicationToolsPage() {
           const decision = classifyTool(row.original);
           if (decision === "public") return <StatusBadge tone="info">public</StatusBadge>;
           if (decision === "mapped") return <StatusBadge tone="success">role-gated</StatusBadge>;
-          if (decision === "advisory") return <StatusBadge tone="warning">suggested</StatusBadge>;
           return <StatusBadge tone="warning">denied</StatusBadge>;
         },
       },
@@ -407,41 +442,49 @@ export default function ApplicationToolsPage() {
       },
       {
         id: "access-label",
-        header: "Access label",
+        header: "Assigned scopes",
         priority: 3,
         approxWidth: 280,
-        cell: ({ row }) =>
-          row.original.scopes.length === 0 ? (
+        cell: ({ row }) => {
+          const scopes = assignedScopes(row.original);
+          const suggestionCount = pendingScopeSuggestions(row.original).length;
+          return scopes.length === 0 ? (
             <span className="text-xs italic text-muted-foreground">
-              {row.original.is_public ? "Public access" : "No label assigned"}
+              {row.original.is_public
+                ? "Public access"
+                : suggestionCount > 0
+                  ? `No scope assigned · ${suggestionCount} suggested`
+                  : "No scope assigned"}
             </span>
           ) : (
             <span
               className="block truncate text-xs text-muted-foreground"
-              title={row.original.scopes.map((scope) => scope.scope_string).join(", ")}
+              title={scopes.map((scope) => scope.scope_string).join(", ")}
             >
-              {row.original.scopes
+              {scopes
                 .map((scope) => scope.display_name || scope.scope_string)
                 .join(", ")}
             </span>
-          ),
+          );
+        },
       },
       {
-        id: "used-by",
-        header: "Used by",
+        id: "policy",
+        header: "Policy",
         priority: 4,
         approxWidth: 160,
-        cell: ({ row }) =>
-          row.original.is_public ? (
-            <span className="text-sm">Any app token</span>
-          ) : row.original.scopes.length ? (
+        cell: ({ row }) => {
+          const scopes = assignedScopes(row.original);
+          return row.original.is_public ? (
+            <span className="text-sm">Scope checks bypassed</span>
+          ) : scopes.length ? (
             <span className="text-sm">
-              {row.original.scopes.length} access label
-              {row.original.scopes.length === 1 ? "" : "s"}
+              {scopes.length} assigned scope{scopes.length === 1 ? "" : "s"}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">No users</span>
-          ),
+            <span className="text-sm text-muted-foreground">Deny by default</span>
+          );
+        },
       },
       {
         id: "denies",
@@ -449,8 +492,8 @@ export default function ApplicationToolsPage() {
         priority: 5,
         approxWidth: 150,
         cell: ({ row }) =>
-          classifyTool(row.original) === "unmapped" ? (
-            <span className="text-sm text-amber-700">Denied until mapped</span>
+          ["unmapped", "advisory"].includes(classifyTool(row.original)) ? (
+            <span className="text-sm text-amber-700">Denied until assigned</span>
           ) : (
             <span className="text-sm text-muted-foreground">No signal</span>
           ),
@@ -463,13 +506,13 @@ export default function ApplicationToolsPage() {
         cell: ({ row }) => (
           <ConsoleRowActions
             items={[
-              { label: "Inspect access", onSelect: () => setSelected(row.original) },
+              { label: "Inspect access", onSelect: () => setSelectedToolId(row.original.id) },
               {
                 label: row.original.is_public ? "Remove public exposure" : "Review public exposure",
-                onSelect: () => setSelected(row.original),
+                onSelect: () => setSelectedToolId(row.original.id),
                 destructive: row.original.is_public,
               },
-              { label: "Simulate access", onSelect: () => setSelected(row.original) },
+              { label: "Simulate access", onSelect: () => setSelectedToolId(row.original.id) },
             ]}
           />
         ),
@@ -504,7 +547,7 @@ export default function ApplicationToolsPage() {
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search tools, access labels, or descriptions"
+        searchPlaceholder="Search tools, scopes, or descriptions"
         filters={FILTER_DEFS.map((filterDef) => ({
           key: filterDef.key,
           label: filterDef.label,
@@ -517,7 +560,7 @@ export default function ApplicationToolsPage() {
                   ? counts.mapped
                   : filterDef.key === "public"
                     ? counts.public
-                    : counts.unmapped,
+                    : counts.unmapped + counts.advisory,
         }))}
         activeFilter={filter}
         onFilterChange={(next) => setFilter(next as FilterKey)}
@@ -546,7 +589,7 @@ export default function ApplicationToolsPage() {
               onRowSelectionChange={setSelectedToolIds}
               onSelectAll={handleSelectAllVisible}
               enableExpansion={false}
-              onRowClick={(tool) => setSelected(tool)}
+              onRowClick={(tool) => setSelectedToolId(tool.id)}
               getRowId={(tool) => tool.id}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
@@ -557,12 +600,21 @@ export default function ApplicationToolsPage() {
       <ToolInspectorDrawer
         tool={selected}
         applicationId={application.id}
-        unmappedScopes={(() => {
+        availableScopes={(() => {
           if (!selected) return [];
-          const alreadyMapped = new Set(selected.scopes.map((scope) => scope.scope_id));
-          return allScopes.filter((scope) => !alreadyMapped.has(scope.id));
+          const alreadyAssigned = new Set(
+            assignedScopes(selected).map((scope) => scope.scope_id),
+          );
+          const suggestions = new Set(pendingScopeSuggestions(selected));
+          return allScopes
+            .filter((scope) => !alreadyAssigned.has(scope.id))
+            .sort(
+              (left, right) =>
+                Number(suggestions.has(right.scope_string)) -
+                Number(suggestions.has(left.scope_string)),
+            );
         })()}
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedToolId(null)}
       />
 
       <Dialog
@@ -648,7 +700,7 @@ export default function ApplicationToolsPage() {
       </Dialog>
 
       <BulkActionBar
-        count={selectedToolIds.length}
+        count={selectedTools.length}
         allVisibleSelected={allVisibleSelected}
         someVisibleSelected={someVisibleSelected}
         visibleCount={visibleToolIds.length}
@@ -732,7 +784,7 @@ function BulkActionBar({
         {someVisibleSelected || allVisibleSelected ? null : null}
         <span className="h-4 w-px bg-border" aria-hidden />
         <Button size="sm" className="h-8 text-white" onClick={onAssign}>
-          Assign access label
+          Assign scope
         </Button>
         <Button
           size="sm"
@@ -743,10 +795,10 @@ function BulkActionBar({
           title={
             canRemove
               ? undefined
-              : "Selected tools have no labels in common to remove."
+              : "Selected tools have no runtime scopes in common to remove."
           }
         >
-          Remove label
+          Remove scope
         </Button>
         <Button
           variant="ghost"
@@ -808,11 +860,11 @@ function BulkScopeDialog({
   const toolNoun = selectedTools.length === 1 ? "tool" : "tools";
   const isAssign = mode === "assign";
   const title = isAssign
-    ? `Assign access labels to ${selectedTools.length} ${toolNoun}`
-    : `Remove access labels from ${selectedTools.length} ${toolNoun}`;
+    ? `Assign scopes to ${selectedTools.length} ${toolNoun}`
+    : `Remove scopes from ${selectedTools.length} ${toolNoun}`;
   const description = isAssign
-    ? "Pick one or more labels. Each label will be mapped to every selected tool that doesn't already have it."
-    : "Only labels mapped to every selected tool are shown. Removing applies across the whole selection.";
+    ? "Pick one or more scopes. Each scope will be assigned to every selected tool that doesn't already have it."
+    : "Only runtime scopes assigned to every selected tool are shown. Suggested scopes are advisory and are never removed as runtime policy.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -849,7 +901,7 @@ function BulkScopeDialog({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={
-              isAssign ? "Search access labels..." : "Search shared labels..."
+              isAssign ? "Search scopes..." : "Search shared scopes..."
             }
             className="pl-8"
           />
@@ -860,9 +912,9 @@ function BulkScopeDialog({
             <div className="py-8 text-center text-sm text-muted-foreground">
               {scopes.length === 0
                 ? isAssign
-                  ? "No more labels left to assign."
-                  : "No labels are shared across this selection."
-                : "No labels match your search."}
+                  ? "No more scopes left to assign."
+                  : "No runtime scopes are shared across this selection."
+                : "No scopes match your search."}
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -923,9 +975,9 @@ function BulkScopeDialog({
                 Saving...
               </>
             ) : isAssign ? (
-              `Assign ${picked.length || ""} label${picked.length === 1 ? "" : "s"}`.trim()
+              `Assign ${picked.length || ""} scope${picked.length === 1 ? "" : "s"}`.trim()
             ) : (
-              `Remove ${picked.length || ""} label${picked.length === 1 ? "" : "s"}`.trim()
+              `Remove ${picked.length || ""} scope${picked.length === 1 ? "" : "s"}`.trim()
             )}
           </Button>
         </DialogFooter>
@@ -937,12 +989,12 @@ function BulkScopeDialog({
 function ToolInspectorDrawer({
   tool,
   applicationId,
-  unmappedScopes,
+  availableScopes,
   onClose,
 }: {
   tool: MCPToolResponse | null;
   applicationId: string;
-  unmappedScopes: { id: string; scope_string: string; display_name: string }[];
+  availableScopes: OAuthScopeResponse[];
   onClose: () => void;
 }) {
   const [confirmName, setConfirmName] = useState("");
@@ -958,15 +1010,20 @@ function ToolInspectorDrawer({
   };
 
   if (!tool) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent />
-      </Sheet>
-    );
+    return null;
   }
 
   const decision = classifyTool(tool);
   const risk = effectiveRisk(tool);
+  const scopes = assignedScopes(tool);
+  const suggestions = pendingScopeSuggestions(tool);
+  const suggestionSet = new Set(suggestions);
+  const suggestedAvailableScopes = availableScopes.filter((scope) =>
+    suggestionSet.has(scope.scope_string),
+  );
+  const otherAvailableScopes = availableScopes.filter(
+    (scope) => !suggestionSet.has(scope.scope_string),
+  );
   const canChangePublic = tool.is_public || confirmName === tool.name;
 
   const handleMap = async (scopeId: string) => {
@@ -975,7 +1032,7 @@ function ToolInspectorDrawer({
         rsId: applicationId,
         body: { mappings: [{ tool_id: tool.id, scope_id: scopeId }] },
       }).unwrap();
-      toast.success("Access label mapped.");
+      toast.success("Scope assigned.");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't apply mapping.");
@@ -988,7 +1045,7 @@ function ToolInspectorDrawer({
         rsId: applicationId,
         body: { mappings: [{ tool_id: tool.id, scope_id: scopeId, remove: true }] },
       }).unwrap();
-      toast.success("Access label removed.");
+      toast.success("Scope removed.");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't remove mapping.");
@@ -1045,29 +1102,39 @@ function ToolInspectorDrawer({
               <span className="size-1.5 rounded-full bg-current" aria-hidden />
               {risk} risk
             </span>
+            {suggestions.length > 0 ? (
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold leading-5 text-amber-700">
+                {suggestions.length} suggested scope
+                {suggestions.length === 1 ? "" : "s"} not assigned
+              </span>
+            ) : null}
           </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto bg-muted/60 px-6 py-5">
           <VerdictCard
-            verdict={decision === "unmapped" ? "deny" : decision === "advisory" ? "review" : "allow"}
+            verdict={
+              decision === "unmapped" || decision === "advisory"
+                ? "deny"
+                : "allow"
+            }
             title={
               decision === "unmapped"
-                ? "Denied until mapped"
+                ? "Denied until a scope is assigned"
                 : decision === "advisory"
-                  ? "Suggestion is not runtime policy"
+                  ? "Denied — suggested scope is not assigned"
                   : decision === "public"
                     ? "Callable without a scope check"
-                    : "Callable through access labels"
+                    : "Callable through assigned scopes"
             }
             body={
               decision === "unmapped"
-                ? "The SDK will fail closed for this tool until an operator maps it to an access label."
+                ? "The SDK fails closed for this tool until an operator assigns a scope."
                 : decision === "advisory"
-                  ? "Suggested scopes document intent, but only admin mappings are enforced."
+                  ? "The MCP server recommends a scope, but recommendations never grant access. Assign it below to make it runtime policy."
                   : decision === "public"
                     ? "Any authenticated token for this application audience can call this tool."
-                    : "Users need a role that grants one of the mapped access labels."
+                    : "Users need a role that grants one of the assigned scopes."
             }
           />
 
@@ -1083,20 +1150,24 @@ function ToolInspectorDrawer({
                   state: "ok",
                 },
                 {
-                  label: tool.is_public ? "Public exposure" : "Access label mapping",
+                  label: tool.is_public ? "Public exposure" : "Runtime scope assignment",
                   detail: tool.is_public
                     ? "No role scope is required while public exposure is enabled."
-                    : tool.scopes.length
-                      ? `${tool.scopes.length} mapped label${tool.scopes.length === 1 ? "" : "s"} gate this tool.`
-                      : "No label assigned; runtime denies the tool.",
-                  state: tool.is_public || tool.scopes.length ? "ok" : "blocked",
+                    : scopes.length
+                      ? `${scopes.length} assigned scope${scopes.length === 1 ? "" : "s"} gate this tool.`
+                      : suggestions.length
+                        ? "No scope assigned; the server suggestion is advisory only."
+                        : "No scope assigned; runtime denies the tool.",
+                  state: tool.is_public || scopes.length ? "ok" : "blocked",
                 },
                 {
-                  label: "User role grants label",
+                  label: "User role grants scope",
                   detail: tool.is_public
                     ? "Skipped because the tool is public."
-                    : "Open Access or Effective Access to inspect who receives this label.",
-                  state: tool.is_public ? "muted" : tool.scopes.length ? "warn" : "blocked",
+                    : scopes.length
+                      ? "Open Access or Effective Access to inspect who receives this scope."
+                      : "Unavailable until a runtime scope is assigned.",
+                  state: tool.is_public ? "muted" : scopes.length ? "warn" : "blocked",
                 },
               ]}
             />
@@ -1105,19 +1176,19 @@ function ToolInspectorDrawer({
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Access labels
+                Assigned scopes
               </h3>
               <span className="text-xs text-muted-foreground">
-                {tool.scopes.length} mapped
+                {scopes.length} assigned
               </span>
             </div>
-            {tool.scopes.length === 0 ? (
+            {scopes.length === 0 ? (
               <p className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
-                No mapped labels yet.
+                No runtime scope is assigned. Requests to this tool are denied.
               </p>
             ) : (
               <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-                {tool.scopes.map((scope) => (
+                {scopes.map((scope) => (
                   <li
                     key={scope.scope_id}
                     className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto]"
@@ -1150,15 +1221,70 @@ function ToolInspectorDrawer({
                 ))}
               </ul>
             )}
+            {tool.is_public && scopes.length > 0 ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                These assignments are not enforced while public exposure is enabled.
+              </p>
+            ) : null}
           </section>
 
-          {unmappedScopes.length > 0 ? (
+          {suggestions.length > 0 ? (
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                  Suggested scopes — not assigned
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Advisory metadata published by the MCP server. Assign a scope
+                  to make it enforceable runtime policy.
+                </p>
+              </div>
+              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-amber-200 bg-card">
+                {suggestions.map((scopeString) => {
+                  const available = suggestedAvailableScopes.find(
+                    (scope) => scope.scope_string === scopeString,
+                  );
+                  return (
+                    <li
+                      key={scopeString}
+                      className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs text-foreground">
+                          {scopeString}
+                        </p>
+                        <p className="mt-1 text-xs text-amber-700">
+                          Suggested only · currently denied
+                        </p>
+                      </div>
+                      {available ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={mapping}
+                          onClick={() => handleMap(available.id)}
+                        >
+                          Assign scope
+                        </Button>
+                      ) : (
+                        <span className="self-center text-xs text-muted-foreground">
+                          Scope not registered
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          {otherAvailableScopes.length > 0 ? (
             <section className="space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Map to access label
+                Other available scopes
               </h3>
               <div className="grid gap-2">
-                {unmappedScopes.slice(0, 8).map((scope) => (
+                {otherAvailableScopes.slice(0, 8).map((scope) => (
                   <Button
                     key={scope.id}
                     variant="outline"
@@ -1170,26 +1296,8 @@ function ToolInspectorDrawer({
                     <span className="min-w-0 truncate">
                       {scope.display_name || scope.scope_string}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">Map</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">Assign</span>
                   </Button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {tool.suggested_scopes?.length ? (
-            <section className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                SDK suggestions
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {tool.suggested_scopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className="rounded-md border border-border bg-card px-2 py-1 font-mono text-xs text-foreground"
-                  >
-                    {scope}
-                  </span>
                 ))}
               </div>
             </section>
