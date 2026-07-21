@@ -436,7 +436,7 @@ export function CreateAuthMethodPage() {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/authentication")}
-            className="h-8 w-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+            className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </Button>

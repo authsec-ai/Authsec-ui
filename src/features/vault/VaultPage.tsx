@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "@/lib/toast";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import {
@@ -172,8 +173,10 @@ export function VaultPage() {
   };
 
   // Secret management functions
-  const handleEditSecret = (secretId: string) => {
-    navigate(`/vault/${secretId}/edit`);
+  const handleEditSecret = (_secretId: string) => {
+    // Secret create/edit screens aren't built yet (only /vault and
+    // /vault/import exist). Give feedback instead of dead-ending on a 404.
+    toast.info("Editing secrets isn't available yet.");
   };
 
   const handleCopySecret = (secretId: string) => {
@@ -409,7 +412,7 @@ export function VaultPage() {
         onDeleteSecret={handleDeleteSecret}
         onToggleVisibility={toggleSecretVisibility}
         visibleSecrets={visibleSecrets}
-        onCreateSecret={() => navigate("/vault/create")}
+        onCreateSecret={() => toast.info("Creating secrets isn't available yet.")}
       />
 
       {/* Bulk Actions Bar */}

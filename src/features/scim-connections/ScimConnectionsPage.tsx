@@ -44,7 +44,12 @@ type ScimConnection = {
 };
 
 export default function ScimConnectionsPage() {
-  const { data: connections = [], isLoading, isError } = useListScimConnectionsQuery();
+  const { data: connections = [], isLoading, isError } = useListScimConnectionsQuery(
+    undefined,
+    // Retry on every mount/navigation so a transient failure doesn't leave the
+    // page stuck on a cached error until a full reload.
+    { refetchOnMountOrArgChange: true },
+  );
   const [createConnection, { isLoading: isCreating }] = useCreateScimConnectionMutation();
   const [revokeConnection, { isLoading: isRevoking }] = useRevokeScimConnectionMutation();
   const [newToken, setNewToken] = useState<{ token: string; endpoint: string } | null>(null);
@@ -103,12 +108,22 @@ export default function ScimConnectionsPage() {
         header: "Connection",
         alwaysVisible: true,
         approxWidth: 240,
-        cell: ({ row }) => (
-          <EntityCell
-            label={<code style={{ fontSize: 12 }}>{row.original.id.slice(0, 12)}…</code>}
-            detail={new Date(row.original.created_at).toLocaleDateString()}
-          />
-        ),
+        cell: ({ row }) => {
+          const id = row.original.id ?? "";
+          const created = row.original.created_at
+            ? new Date(row.original.created_at)
+            : null;
+          const createdLabel =
+            created && !Number.isNaN(created.getTime())
+              ? created.toLocaleDateString()
+              : "—";
+          return (
+            <EntityCell
+              label={<code style={{ fontSize: 12 }}>{id ? `${id.slice(0, 12)}…` : "—"}</code>}
+              detail={createdLabel}
+            />
+          );
+        },
       },
       {
         id: "status",

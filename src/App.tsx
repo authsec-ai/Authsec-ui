@@ -22,6 +22,8 @@ import { DashboardPage } from "./features/dashboard/DashboardPage";
 import AccessControlPage from "./features/access/AccessControlPage";
 
 import { UsersPage } from "./features/users/UsersPage";
+import NotFoundPage from "./components/shared/NotFoundPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import EndUsersPage from "./features/end-users/EndUsersPage";
 import TeamPage from "./features/team/TeamPage";
 import TrustedIssuersPage from "./features/settings/TrustedIssuersPage";
@@ -147,6 +149,16 @@ function RedirectWithQuery({ to }: { to: string }) {
 /**
  * App content component that uses session initialization
  */
+/**
+ * Route-scoped error boundary. Keying by pathname remounts the boundary on
+ * navigation, so a crash on one page clears itself when the user navigates
+ * away instead of wedging the whole app until a manual reload.
+ */
+function RoutedErrorBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function AppContent() {
   useSessionInit();
 
@@ -157,6 +169,7 @@ function AppContent() {
           <WizardProvider>
             <GuidedTourProvider>
               <div className="min-h-screen bg-background text-foreground">
+                <RoutedErrorBoundary>
                 <Routes>
                   {/* Auth routes - accessible without authentication */}
                   <Route path="/admin/login" element={<UnifiedAuthFlowPage />} />
@@ -822,6 +835,10 @@ function AppContent() {
                       path="consent-grants"
                       element={<Navigate to="/applications" replace />}
                     />
+
+                    {/* Bare or unknown context paths must not render a blank page */}
+                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route path="*" element={<NotFoundPage />} />
                   </Route>
 
                   {/* Legacy redirects - redirect old paths to admin context */}
@@ -1222,7 +1239,11 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               /> */}
+
+                  {/* Global catch-all — unmatched URLs must never render a blank page */}
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                </RoutedErrorBoundary>
 
                 {/* Professional toast notification system */}
                 <Toaster
