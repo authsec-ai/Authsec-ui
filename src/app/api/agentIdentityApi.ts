@@ -363,7 +363,7 @@ const agentIdentityApi = baseApi.injectEndpoints({
     // workload identity (no server grant; access is granted separately).
     createWorkspaceServiceAccount: builder.mutation<
       WorkspaceServiceAccount,
-      { name: string; description?: string }
+      { name: string; description?: string; owner_email?: string }
     >({
       query: (body) => ({ url: `/authsec/uflow/admin/service-accounts`, method: "POST", body }),
     }),
@@ -395,6 +395,7 @@ const agentIdentityApi = baseApi.injectEndpoints({
       { name: string; redirect_uris?: string[] }
     >({
       query: (body) => ({ url: `/authsec/agents`, method: "POST", body }),
+      invalidatesTags: [{ type: "MCPClient" as const, id: "LIST" }],
     }),
 
     // POST /authsec/uflow/admin/service-accounts/:sa_id/credentials — provision a

@@ -419,7 +419,7 @@ export function getEnvPairs(
       key: "UPSTREAM_API_TOKEN",
       value: ENV_UPSTREAM_PLACEHOLDER_GENERIC,
       comment:
-        "Optional — only set this if your MCP server calls an upstream API on the user's behalf. NOT the AuthSec user token; keep upstream credentials server-side.",
+        "Optional — only set this if your MCP server calls an upstream API (GitHub, Slack, etc.) on the user's behalf. This is a server-owned credential, NOT the AuthSec user token. AuthSec bearer tokens and upstream bearer tokens are separate credential layers; never mix them.",
     },
   ];
 }
@@ -585,10 +585,11 @@ AuthSec responsibilities:
 - Maintain consent, auditability, and resource server registration
 
 MCP server responsibilities:
-- Keep upstream service credentials server-side only
+- Keep upstream service credentials (GitHub PATs, API keys, etc.) server-side only — AuthSec bearer tokens and upstream bearer tokens MUST use separate credential layers
 - Execute the actual tools
 - Use only AuthSec canonical scopes for tool checks
-- Never forward AuthSec user tokens to any upstream system
+- Never forward AuthSec user tokens to any upstream system (e.g. GitHub API, Slack API)
+- If the server proxies to an upstream that also uses Bearer auth (GitHub, Slack, etc.), authenticate to that upstream with a dedicated server-owned credential, never the AuthSec user token
 
 Scope cleanup requirement:
 ${buildScopeCleanupInstruction(server)}

@@ -80,6 +80,15 @@ const trustedIssuersApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [{ type: "TrustedIssuer" as const, id: "LIST" }],
     }),
+
+    // POST /authsec/token-revocation — revoke a single token by its JTI.
+    revokeByJti: builder.mutation<{ status: string }, { jti: string }>({
+      query: (body) => ({
+        url: "/authsec/token-revocation",
+        method: "POST",
+        body,
+      }),
+    }),
   }),
 });
 
@@ -88,4 +97,5 @@ export const {
   useCreateTrustedIssuerMutation,
   useTestTrustedIssuerMutation,
   useRevokeTrustedIssuerMutation,
+  useRevokeByJtiMutation,
 } = trustedIssuersApi;

@@ -339,6 +339,8 @@ export interface AuditLog {
     role: string;
   };
   action: 'created' | 'updated' | 'deleted' | 'enabled' | 'disabled';
+  /** The original backend event name before category mapping (e.g. "UpdatedOAuthScope"). */
+  rawAction?: string;
   resourceType: 'user' | 'group' | 'role' | 'client' | 'resource' | 'auth_method' | 'config';
   resourceId: string;
   resourceName: string;

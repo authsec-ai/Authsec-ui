@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw, Search, ShieldAlert, Sparkles, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -138,6 +139,9 @@ export default function ApplicationToolsPage() {
   const [query, setQuery] = useState("");
   const [selectedToolIds, setSelectedToolIds] = useState<string[]>([]);
   const [bulkMode, setBulkMode] = useState<"assign" | "remove" | null>(null);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [rescanToken, setRescanToken] = useState("");
+  const [rescanError, setRescanError] = useState<string | null>(null);
   const [updateMap, { isLoading: bulkSaving }] = useUpdateToolScopeMapMutation();
   const [rescan, { isLoading: rescanning }] = useRescanResourceServerMutation();
 
@@ -290,8 +294,49 @@ export default function ApplicationToolsPage() {
     try {
       await rescan(application.id).unwrap();
       toast.success("Tools refreshed");
-    } catch {
-      toast.error("Failed to refresh tools — MCP server may be unreachable");
+    } catch (err) {
+      const apiErr = err as { status?: number; data?: { error?: string; code?: string } };
+      if (
+        apiErr?.data?.code === "mcp_token_required" ||
+        apiErr?.data?.error?.toLowerCase().includes("mcp_token")
+      ) {
+        setRescanToken("");
+        setRescanError(null);
+        setTokenDialogOpen(true);
+      } else {
+        toast.error("Failed to refresh tools — MCP server may be unreachable");
+      }
+    }
+  };
+
+  const handleTokenRescan = async () => {
+    if (!rescanToken.trim()) {
+      setRescanError("Paste a bearer token for the MCP server.");
+      return;
+    }
+    setRescanError(null);
+    try {
+      await rescan({ rsId: application.id, mcpToken: rescanToken }).unwrap();
+      toast.success("Tools refreshed");
+      setRescanToken(""); // never persist the token
+      setTokenDialogOpen(false);
+    } catch (err) {
+      const apiErr = err as { status?: number; data?: { error?: string } };
+      if (apiErr?.status === 401) {
+        setRescanError(
+          "The MCP server rejected that token (401). Paste a fresh, unexpired bearer token.",
+        );
+      } else if (apiErr?.status === 403) {
+        setRescanError(
+          "Token authenticated but the server returned 403. The token needs read access to the tool inventory.",
+        );
+      } else if (apiErr?.status === 504 || apiErr?.status === 408) {
+        setRescanError(
+          "Couldn't reach the MCP server within 30 s. Check the public base URL and try again.",
+        );
+      } else {
+        setRescanError(apiErr?.data?.error ?? "Scan failed. Check the token and try again.");
+      }
     }
   };
 
@@ -527,6 +572,66 @@ export default function ApplicationToolsPage() {
           void applyBulkScopes(scopeIds, bulkMode);
         }}
       />
+
+      {/* One-shot MCP token dialog — shown when the server requires a bearer token for tools/list */}
+      <Dialog
+        open={tokenDialogOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setRescanToken("");
+            setRescanError(null);
+          }
+          setTokenDialogOpen(next);
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>MCP server requires authentication</DialogTitle>
+            <DialogDescription>
+              This server&apos;s <code className="text-xs">tools/list</code> endpoint
+              requires a bearer token. Paste a one-time token below — it won&apos;t
+              be stored.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="rescan-token">Bearer token</Label>
+            <Textarea
+              id="rescan-token"
+              rows={3}
+              value={rescanToken}
+              onChange={(e) => setRescanToken(e.target.value)}
+              placeholder="Paste token from the MCP server owner…"
+              className="font-mono text-xs"
+            />
+            {rescanError && (
+              <p className="text-sm text-red-600">{rescanError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setTokenDialogOpen(false)}
+              disabled={rescanning}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleTokenRescan}
+              disabled={!rescanToken.trim() || rescanning}
+              className="text-white"
+            >
+              {rescanning ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Scanning…
+                </>
+              ) : (
+                "Scan with token"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

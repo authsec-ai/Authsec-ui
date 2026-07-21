@@ -231,12 +231,47 @@ export const accessApi = baseApi.injectEndpoints({
         { type: "ScopeMatrix", id: applicationId },
       ],
     }),
+
+    // DELETE /authsec/applications/:appId/roles/:roleId
+    deleteApplicationRole: builder.mutation<
+      void,
+      { applicationId: string; roleId: string }
+    >({
+      query: ({ applicationId, roleId }) => ({
+        url: `/authsec/applications/${applicationId}/roles/${roleId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _error, { applicationId }) => [
+        { type: "ApplicationRole", id: "LIST" },
+        { type: "ApplicationAccess", id: applicationId },
+        { type: "ResourceServer", id: `${applicationId}-roles` },
+        { type: "ResourceServer", id: `${applicationId}-bindings` },
+      ],
+    }),
+
+    // PUT /authsec/applications/:appId/roles/:roleId
+    updateApplicationRole: builder.mutation<
+      ApplicationRole,
+      { applicationId: string; roleId: string; body: { name?: string; description?: string; scope_ids?: string[] } }
+    >({
+      query: ({ applicationId, roleId, body }) => ({
+        url: `/authsec/applications/${applicationId}/roles/${roleId}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: (_result, _error, { applicationId }) => [
+        { type: "ApplicationRole", id: "LIST" },
+        { type: "ApplicationAccess", id: applicationId },
+      ],
+    }),
   }),
 });
 
 export const {
   useListApplicationRolesQuery,
   useCreateApplicationRoleMutation,
+  useDeleteApplicationRoleMutation,
+  useUpdateApplicationRoleMutation,
   useListApplicationAccessUsersQuery,
   useGetApplicationEffectiveAccessQuery,
   useListScopeCatalogQuery,

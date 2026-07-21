@@ -6,10 +6,10 @@
  * (OIDC login → token-exchange → jwt-bearer). It is a different entity from a
  * Service Account (a machine principal with no user) — see /service-accounts.
  *
- * There is no dedicated agent-list endpoint yet, so the inventory is derived by
- * filtering the workspace client registry to client_kind="agent". An agent
- * surfaces here once it has connected to at least one MCP server. The register
- * action mints the confidential client (POST /authsec/agents).
+ * The inventory is derived by filtering the workspace client registry to
+ * client_kind="agent". The register action mints the confidential client
+ * (POST /authsec/agents) and invalidates the client cache so the new entry
+ * appears immediately.
  */
 
 import { useMemo, useState } from "react";
@@ -393,7 +393,7 @@ export default function AgentsPage() {
   return (
     <ConsolePage
       title="Agents"
-      description="AI agents that act on behalf of a logged-in user. Each is a confidential client that signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG). An agent appears below once it connects to its first server."
+      description="AI agents that act on behalf of a logged-in user. Each is a confidential client that signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG)."
       actions={
         <>
           <Button variant="outline" asChild>
@@ -429,7 +429,6 @@ export default function AgentsPage() {
                 <>
                   <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                     Register an agent to get its client credentials, then point your agent at them.
-                    It shows up here after its first connection to an MCP server.
                   </p>
                   <div className="mt-4 flex justify-center">
                     <Button size="sm" onClick={() => setRegisterOpen(true)} className="text-white">

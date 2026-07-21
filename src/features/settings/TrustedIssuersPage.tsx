@@ -7,6 +7,7 @@ import {
   useCreateTrustedIssuerMutation,
   useRevokeTrustedIssuerMutation,
   useTestTrustedIssuerMutation,
+  useRevokeByJtiMutation,
   type TrustedIssuer,
   type CreateTrustedIssuerRequest,
 } from "@/app/api/trustedIssuersApi";
@@ -243,6 +244,61 @@ function RevokeIssuerDialog({
   );
 }
 
+// ── JTI revocation card ──────────────────────────────────────────────────────
+
+function RevokeByJtiCard() {
+  const [jti, setJti] = useState("");
+  const [revokeByJti, { isLoading }] = useRevokeByJtiMutation();
+
+  const handleRevoke = async () => {
+    if (!jti.trim()) {
+      toast.error("Enter a JTI to revoke.");
+      return;
+    }
+    try {
+      await revokeByJti({ jti: jti.trim() }).unwrap();
+      toast.success("Token revoked.");
+      setJti("");
+    } catch (err) {
+      const e = err as { data?: { error?: string } };
+      toast.error(e?.data?.error ?? "Couldn't revoke token.");
+    }
+  };
+
+  return (
+    <TableCard>
+      <CardContent className="p-4">
+        <h3 className="text-sm font-semibold text-slate-950">Revoke a token by JTI</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Immediately revoke a single token using its <code className="text-[11px]">jti</code> claim.
+          The token will fail introspection on the next check.
+        </p>
+        <div className="mt-3 flex items-end gap-2">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Label htmlFor="jti-input">Token JTI</Label>
+            <Input
+              id="jti-input"
+              value={jti}
+              onChange={(e) => setJti(e.target.value)}
+              placeholder="Paste the jti claim value"
+              className="h-9 font-mono text-xs"
+              autoComplete="off"
+            />
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleRevoke}
+            disabled={!jti.trim() || isLoading}
+          >
+            {isLoading ? "Revoking…" : "Revoke"}
+          </Button>
+        </div>
+      </CardContent>
+    </TableCard>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TrustedIssuersPage() {
@@ -397,6 +453,8 @@ export default function TrustedIssuersPage() {
       <WorkloadProvidersCard />
 
       <BrokeringPoliciesCard />
+
+      <RevokeByJtiCard />
 
       <CreateIssuerDialog open={createOpen} onOpenChange={setCreateOpen} />
       <RevokeIssuerDialog issuer={revokeTarget} onOpenChange={(v) => { if (!v) setRevokeTarget(null); }} />
