@@ -96,8 +96,8 @@ export default function ScimConnectionsPage() {
     if (!q) return safeConnections;
     return safeConnections.filter(
       (c) =>
-        c.id.toLowerCase().includes(q) ||
-        c.status.toLowerCase().includes(q),
+        (c.id ?? "").toLowerCase().includes(q) ||
+        (c.status ?? "").toLowerCase().includes(q),
     );
   }, [safeConnections, query]);
 
@@ -109,9 +109,9 @@ export default function ScimConnectionsPage() {
         alwaysVisible: true,
         approxWidth: 240,
         cell: ({ row }) => {
-          const id = row.original.id ?? "";
-          const created = row.original.created_at
-            ? new Date(row.original.created_at)
+          const id = row.original?.id ?? "";
+          const created = row.original?.created_at
+            ? new Date(row.original?.created_at)
             : null;
           const createdLabel =
             created && !Number.isNaN(created.getTime())
@@ -130,7 +130,7 @@ export default function ScimConnectionsPage() {
         header: "Status",
         approxWidth: 120,
         cell: ({ row }) =>
-          row.original.status === "active" ? (
+          row.original?.status === "active" ? (
             <span className="badge badge--success">
               <span className="bdot" />
               Active
@@ -148,10 +148,10 @@ export default function ScimConnectionsPage() {
         approxWidth: 340,
         priority: 1,
         cell: ({ row }) =>
-          row.original.status === "active" ? (
+          row.original?.status === "active" ? (
             <span className="ctx-uri" style={{ maxWidth: 320 }}>
               <code style={{ fontSize: 11 }}>
-                {apiBase}/authsec/uflow/scim/v2/c/{row.original.id}/Users
+                {apiBase}/authsec/uflow/scim/v2/c/{row.original?.id}/Users
               </code>
             </span>
           ) : (
@@ -164,7 +164,7 @@ export default function ScimConnectionsPage() {
         alwaysVisible: true,
         approxWidth: 56,
         cell: ({ row }) =>
-          row.original.status === "active" ? (
+          row.original?.status === "active" ? (
             <div onClick={(e) => e.stopPropagation()}>
               <ConsoleRowActions
                 label="Connection actions"
@@ -174,13 +174,13 @@ export default function ScimConnectionsPage() {
                     icon: <Copy className="size-4" />,
                     onSelect: () =>
                       copyToClipboard(
-                        `${apiBase}/authsec/uflow/scim/v2/c/${row.original.id}/Users`,
+                        `${apiBase}/authsec/uflow/scim/v2/c/${row.original?.id}/Users`,
                       ),
                   },
                   {
                     label: "Revoke",
                     icon: <Trash2 className="size-4" />,
-                    onSelect: () => setDeleteTarget({ id: row.original.id }),
+                    onSelect: () => setDeleteTarget({ id: row.original?.id }),
                     destructive: true,
                   },
                 ]}
@@ -397,7 +397,7 @@ export default function ScimConnectionsPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.id}
-              rowClassName={(row) => row.original.status !== "active" ? "opacity-50" : undefined}
+              rowClassName={(row) => row.original?.status !== "active" ? "opacity-50" : undefined}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}
