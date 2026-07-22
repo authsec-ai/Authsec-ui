@@ -46,6 +46,7 @@ import {
   DrawerFooter,
 } from "@/components/console/detail";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
+import { formatRoleName } from "@/utils/roleName";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
 
@@ -453,8 +454,8 @@ function ServiceAccountDrawer({
           <DetailGrid>
             {sa.oauth_client_id && <CopyField label="Client ID" value={sa.oauth_client_id} />}
             {sa.spiffe_id && <CopyField label="SPIFFE ID" value={sa.spiffe_id} />}
-            {sa.owner_email && <DetailRow label="Owner" value={sa.owner_email} />}
-            {sa.owner_team && <DetailRow label="Team" value={sa.owner_team} />}
+            {sa.owner_email && <DetailRow label="Owner" value={sa.owner_email} full />}
+            {sa.owner_team && <DetailRow label="Team" value={sa.owner_team} full />}
             <DetailRow
               label="Created"
               value={formatDistanceToNow(new Date(sa.created_at), { addSuffix: true })}
@@ -481,14 +482,16 @@ function ServiceAccountDrawer({
             />
           ) : (
             <div className="space-y-2">
-              {accessData.items.map((item) => (
+              {accessData.items.map((item) => {
+                const fmt = formatRoleName(item.role_name);
+                return (
                 <div
                   key={`${item.resource_server_id}:${item.role_id}`}
                   className="rounded-lg border p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">{item.resource_server_name}</p>
-                    <Badge variant="secondary" className="shrink-0">{item.role_name}</Badge>
+                    <p className="text-sm font-medium text-foreground truncate">{item.resource_server_name}</p>
+                    <Badge variant="secondary" className="shrink-0 capitalize">{fmt.badge || fmt.primary}</Badge>
                   </div>
                   {item.effective_scopes.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -503,7 +506,8 @@ function ServiceAccountDrawer({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </DrawerSection>
