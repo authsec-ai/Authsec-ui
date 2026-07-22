@@ -29,6 +29,7 @@ import { useListIdentityProvidersQuery } from "@/app/api/authMethodApi";
 import { useListScimConnectionsQuery } from "@/app/api/scimConnectionsApi";
 import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
 import { useListApplicationRolesQuery } from "@/app/api/accessApi";
+import { resolveWorkspaceId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
 import { ConsolePage } from "@/components/console/ConsolePage";
 
@@ -121,10 +122,16 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   // Hero metric sources — lightweight list queries already used elsewhere.
-  const { data: applications = [] } = useListApplicationsQuery({});
-  const { data: endUsersResp } = useListEndUsersQuery({ limit: 1 });
+  const workspaceId = resolveWorkspaceId();
+  const { data: applications = [] } = useListApplicationsQuery();
+  const { data: endUsersResp } = useListEndUsersQuery(
+    { workspaceId: workspaceId ?? "" },
+    { skip: !workspaceId },
+  );
+  // NOTE: limit is not a supported param — the query returns all; we only use
+  // the count downstream so the full list is fine.
   const { data: idps = [] } = useListIdentityProvidersQuery({});
-  const { data: scimConns = [] } = useListScimConnectionsQuery({});
+  const { data: scimConns = [] } = useListScimConnectionsQuery();
   const { data: syncConfigs = [] } = useListSyncConfigsQuery({});
   const { data: appRoles } = useListApplicationRolesQuery();
 
