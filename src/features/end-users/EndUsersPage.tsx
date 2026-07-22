@@ -649,7 +649,7 @@ export default function EndUsersPage() {
 
   return (
     <ConsolePage
-      title="End Users"
+      title="User Identities"
       description="Consumers of this workspace's published Applications. They connect via OAuth — not workspace members."
     >
       <ConsoleFilterBar
