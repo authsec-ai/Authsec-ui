@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CardContent } from "@/components/ui/card";
+// CardContent removed — table renders directly inside the outer card now
 import { HelpTooltip } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -48,7 +48,7 @@ import {
   ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
-import { TableCard } from "@/theme/components/cards";
+// TableCard removed — outer card IS the single visual boundary
 
 import {
   useGetResourceServerAccessPolicyQuery,
@@ -1166,11 +1166,12 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
       </button>
 
       {open && (
-        <div className="border-t border-border p-4 pt-3 space-y-4">
+        <div className="px-4 pb-4 pt-2 space-y-3">
           <ConsoleFilterBar
             search={query}
             onSearchChange={setQuery}
             searchPlaceholder="Search identities, roles, or scopes"
+            className="border-0 shadow-none p-0"
             trailing={
               <div className="flex items-center gap-2">
                 {query.trim() && (
@@ -1209,8 +1210,7 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
             }
           />
 
-          <TableCard>
-            <CardContent variant="flush">
+          <div className="rounded-md border border-border overflow-hidden">
               {isLoading ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   Loading access assignments…
@@ -1264,8 +1264,7 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
                   pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
                 />
               )}
-            </CardContent>
-          </TableCard>
+          </div>
         </div>
       )}
 
