@@ -1,8 +1,8 @@
 /**
- * `CrossAppDebugger` — debug why a cross-workspace (A2A / ID-JAG) caller can't
- * reach this MCP server (plan Journey 8). Runs the redemption-path checks unique
- * to the cross-app flow: §19 same-domain, connection approval, and the brokering
- * deny gate. Backed by POST /applications/:id/token-test/simulate-xaa.
+ * `CrossAppDebugger` — debug why an A2A / ID-JAG caller can't reach this MCP
+ * server (plan Journey 8). Runs the redemption-path checks unique to the
+ * cross-app flow: distinct caller/target, connection approval, and the
+ * brokering deny gate. Backed by POST /applications/:id/token-test/simulate-xaa.
  */
 
 import { useMemo, useState } from "react";
@@ -27,7 +27,7 @@ import { Surface } from "./ApplicationConsole";
 import { cn } from "@/lib/utils";
 
 const CHECK_LABEL: Record<string, string> = {
-  not_same_workspace: "Cross-workspace (not §19 same-domain)",
+  not_self_delegation: "Agent is distinct from this Application",
   connection_approved: "Connection approved for this server",
   brokering_permitted: "Brokering permits redemption",
 };
@@ -70,8 +70,8 @@ export default function CrossAppDebugger({ applicationId }: { applicationId: str
       <header className="space-y-1">
         <h3 className="text-sm font-semibold text-slate-950">Debug a cross-app caller</h3>
         <p className="text-xs text-muted-foreground">
-          Why can't an agent from another workspace reach this server? Checks the
-          cross-app failure modes (§19 same-domain, approval, brokering).
+          Why can't an agent reach this server? Same-workspace agents are valid;
+          this checks caller/target separation, approval, and brokering.
         </p>
       </header>
 

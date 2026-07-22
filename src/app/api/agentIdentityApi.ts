@@ -187,8 +187,12 @@ const agentIdentityApi = baseApi.injectEndpoints({
         method: "POST",
         body: { user_id: userId, role_id: roleId },
       }),
+      // EffectiveAccess (type-only) refreshes the end-user drawer's ROLES/SCOPES
+      // view, which reads getApplicationEffectiveAccess — a different tag than
+      // AccessAssignment. Without it a newly assigned role doesn't appear.
       invalidatesTags: (_result, _error, { rsId }) => [
         { type: "AccessAssignment" as const, id: rsId },
+        { type: "EffectiveAccess" as const },
       ],
     }),
 
@@ -204,6 +208,7 @@ const agentIdentityApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { rsId }) => [
         { type: "AccessAssignment" as const, id: rsId },
+        { type: "EffectiveAccess" as const },
       ],
     }),
 
@@ -216,8 +221,12 @@ const agentIdentityApi = baseApi.injectEndpoints({
         url: `/authsec/applications/${rsId}/access-assignments/${assignmentId}`,
         method: "DELETE",
       }),
+      // EffectiveAccess (type-only) forces the end-user drawer to refetch after
+      // a role is removed — the reported "deleted role still shows" bug. The
+      // drawer reads getApplicationEffectiveAccess, not AccessAssignment.
       invalidatesTags: (_result, _error, { rsId }) => [
         { type: "AccessAssignment" as const, id: rsId },
+        { type: "EffectiveAccess" as const },
       ],
     }),
 
@@ -243,6 +252,7 @@ const agentIdentityApi = baseApi.injectEndpoints({
         { type: "AgentRequest" as const, id: rsId },
         { type: "AgentConnection" as const, id: rsId },
         { type: "AccessAssignment" as const, id: rsId },
+        { type: "EffectiveAccess" as const },
       ],
     }),
 
@@ -322,8 +332,8 @@ const agentIdentityApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // POST /authsec/applications/:id/token-test/simulate-xaa — cross-workspace
-    // (A2A / ID-JAG) debug: §19 same-domain, registration approval, brokering.
+    // POST /authsec/applications/:id/token-test/simulate-xaa — cross-application
+    // (A2A / ID-JAG) debug: distinct caller/target, approval, and brokering.
     simulateXaa: builder.mutation<
       SimulateTokenResponse,
       { rsId: string; client_id: string }

@@ -72,7 +72,7 @@ export default function BrokeringPoliciesCard() {
         <div>
           <h2 className="text-sm font-semibold text-slate-950">Cross-app brokering</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Permit/deny rules for cross-workspace ID-JAG issuance &amp; redemption.
+            Permit/deny rules for cross-application ID-JAG issuance &amp; redemption.
             No rules means permit; a <span className="font-semibold">deny</span> wins.
           </p>
         </div>
