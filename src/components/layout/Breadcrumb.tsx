@@ -43,6 +43,9 @@ export function Breadcrumb() {
         case "enduser":
           label = "End-User";
           break;
+        case "end-users":
+          label = "User Identities";
+          break;
         case "users":
           label = "Users";
           break;
