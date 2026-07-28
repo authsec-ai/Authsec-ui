@@ -112,7 +112,8 @@ export function AuditLogsView({
     const timestamp = new Date(log.timestamp).toISOString();
     const severity = getSeverityStyle(log.severity).label.padEnd(8);
     const category = log.category.toUpperCase().padEnd(12);
-    const action = log.action.toUpperCase().padEnd(8);
+    // Show the concrete backend event name when available, fall back to abstract category
+    const action = (log.rawAction ?? log.action).toUpperCase().padEnd(8);
 
     // Main log line
     const mainLine = `[${timestamp}] ${severity} ${category} actor=${log.actor.email} action=${action} resource=${log.resourceType}/${log.resourceName}`;

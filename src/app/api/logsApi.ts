@@ -167,6 +167,7 @@ function mapAuditRow(row: RawAuditRow): AuditLog {
       role: row.actorRealm,
     },
     action,
+    rawAction: row.action,
     resourceType,
     resourceId: row.resourceId,
     resourceName: row.resourceId,

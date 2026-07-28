@@ -31,16 +31,27 @@ export const scopeMatrixApi = baseApi.injectEndpoints({
     }),
 
     // POST /authsec/applications/:id/rescan
-    rescanResourceServer: builder.mutation<unknown, string>({
-      query: (rsId) => ({
-        url: `/authsec/applications/${rsId}/rescan`,
-        method: "POST",
-      }),
-      invalidatesTags: (_result, _error, rsId) => [
-        { type: "ScopeMatrix" as const, id: rsId },
-        { type: "OAuthScope" as const, id: "LIST" },
-        { type: "ResourceServer" as const, id: rsId },
-      ],
+    rescanResourceServer: builder.mutation<
+      unknown,
+      string | { rsId: string; mcpToken: string }
+    >({
+      query: (arg) => {
+        const rsId = typeof arg === "string" ? arg : arg.rsId;
+        const mcpToken = typeof arg === "string" ? undefined : arg.mcpToken;
+        return {
+          url: `/authsec/applications/${rsId}/rescan`,
+          method: "POST",
+          body: mcpToken ? { mcp_token: mcpToken } : {},
+        };
+      },
+      invalidatesTags: (_result, _error, arg) => {
+        const rsId = typeof arg === "string" ? arg : arg.rsId;
+        return [
+          { type: "ScopeMatrix" as const, id: rsId },
+          { type: "OAuthScope" as const, id: "LIST" },
+          { type: "ResourceServer" as const, id: rsId },
+        ];
+      },
     }),
 
     // GET /authsec/applications/:id/scopes

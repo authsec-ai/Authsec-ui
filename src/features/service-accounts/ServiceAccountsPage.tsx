@@ -134,6 +134,7 @@ function CreateServiceAccountDialog({
   const [step, setStep] = useState<WizardStep>("form");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [authChoice, setAuthChoice] = useState<WizardAuthChoice>("secret");
   const [jwksUri, setJwksUri] = useState("");
   const [result, setResult] = useState<CreateResult | null>(null);
@@ -145,6 +146,7 @@ function CreateServiceAccountDialog({
     setStep("form");
     setName("");
     setDescription("");
+    setOwnerEmail("");
     setAuthChoice("secret");
     setJwksUri("");
     setResult(null);
@@ -163,6 +165,7 @@ function CreateServiceAccountDialog({
       const sa = await createSA({
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
+        ...(ownerEmail.trim() ? { owner_email: ownerEmail.trim() } : {}),
       }).unwrap();
 
       let credential: CreateResult["credential"] | undefined;
@@ -228,6 +231,21 @@ function CreateServiceAccountDialog({
                 autoComplete="off"
                 className="h-9"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sa-owner">Owner email</Label>
+              <Input
+                id="sa-owner"
+                type="email"
+                value={ownerEmail}
+                onChange={(e) => setOwnerEmail(e.target.value)}
+                placeholder="team-lead@company.com"
+                autoComplete="off"
+                className="h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                The person or team responsible for this service account.
+              </p>
             </div>
 
             <div className="space-y-2">

@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { useListApplicationRolesQuery, type ApplicationRole } from "@/app/api/accessApi";
+import { useListApplicationRolesQuery, useDeleteApplicationRoleMutation, type ApplicationRole } from "@/app/api/accessApi";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +69,7 @@ export function RolesPage() {
     source: sourceFilter === "all" ? undefined : sourceFilter,
     default: defaultFilter === "all" ? undefined : defaultFilter === "default",
   });
+  const [deleteRole] = useDeleteApplicationRoleMutation();
 
   const roles = useMemo(() => data?.roles ?? [], [data?.roles]);
   const total = roles.length;
@@ -320,9 +321,18 @@ export function RolesPage() {
                                 <DropdownMenuItem
                                   className="menu-item danger"
                                   disabled={isProtected(role)}
-                                  onSelect={() => {
+                                  onSelect={async () => {
                                     if (isProtected(role)) return;
-                                    toast("Delete a role from the application's Access page.");
+                                    try {
+                                      await deleteRole({
+                                        applicationId: role.application.id,
+                                        roleId: role.id,
+                                      }).unwrap();
+                                      toast.success(`Role "${role.label}" deleted.`);
+                                    } catch (err) {
+                                      const apiErr = err as { data?: { error?: string } };
+                                      toast.error(apiErr?.data?.error ?? "Couldn't delete role.");
+                                    }
                                   }}
                                 >
                                   <span className="mi-ic">
