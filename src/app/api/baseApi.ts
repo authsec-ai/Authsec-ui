@@ -169,6 +169,9 @@ export const baseApi = createApi({
     "AgentConnection",
     // Agent Identity — Wave 2
     "TrustedIssuer",
+    // Discovery (prototype — see app/api/discoveryApi.ts)
+    "DiscoverySource",
+    "DiscoveredAgent",
   ],
   endpoints: () => ({}),
 });

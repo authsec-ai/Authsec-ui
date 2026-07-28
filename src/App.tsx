@@ -59,6 +59,8 @@ import ApplicationActivityPage from "./features/applications/ApplicationActivity
 import AgentsPage from "./features/agents/AgentsPage";
 import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
 import ConnectorsPage from "./features/connectors/ConnectorsPage";
+import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
+import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -561,6 +563,28 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <ConnectorsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Discovery (prototype — team discovery doc §9) */}
+                  <Route
+                    path="/discovery/integrations"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <DiscoveryIntegrationsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/discovery/agents"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <DiscoveredAgentsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

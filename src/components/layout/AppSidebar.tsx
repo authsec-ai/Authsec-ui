@@ -33,6 +33,8 @@ import {
   Layers,
   Link2,
   PlugZap,
+  Radar,
+  ScanSearch,
   Server,
   Shield,
   ShieldCheck,
@@ -106,6 +108,13 @@ const NAV_MONITOR: NavItem[] = [
   { title: "Auth Logs", url: "/logs/auth", icon: ShieldCheck },
   { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList },
   { title: "M2M Logs", url: "/logs/m2m", icon: PlugZap },
+];
+
+// Agent discovery. "Integrations" — not "Connectors" — because Connectors is the
+// existing outbound action broker and owns that word in shipped API/RBAC surface.
+const NAV_DISCOVERY: NavItem[] = [
+  { title: "Integrations", url: "/discovery/integrations", icon: Radar },
+  { title: "Discovered Agents", url: "/discovery/agents", icon: ScanSearch },
 ];
 
 const NAV_CONFIGURE: NavItem[] = [
@@ -206,6 +215,7 @@ export function AppSidebar({
         dashboard: attachHandlers(markActive(NAV_DASHBOARD)),
         objects: attachHandlers(baseObjects),
         authz: attachHandlers(markActive(prefixUrls(NAV_AUTHZ, contextPrefix))),
+        discovery: attachHandlers(markActive(NAV_DISCOVERY)),
         monitor: attachHandlers(markActive(NAV_MONITOR)),
         configure: attachHandlers(markActive(NAV_CONFIGURE)),
         settings: attachHandlers(markActive(NAV_SETTINGS)),
@@ -285,6 +295,7 @@ export function AppSidebar({
         <NavMain items={nav.dashboard} />
         <NavMain title="Workspace" items={nav.objects} />
         <NavMain title="Authz" items={nav.authz} />
+        <NavMain title="Discovery" items={nav.discovery} />
         <NavMain title="Configure" items={nav.configure} />
         <NavMain title="Monitor" items={nav.monitor} />
         <NavMain title="Settings" items={nav.settings} />
