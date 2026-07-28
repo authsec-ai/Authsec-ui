@@ -67,6 +67,8 @@ import { VaultPage } from "./features/vault/VaultPage";
 import { ImportSecretsPage } from "./features/vault/ImportSecretsPage";
 import ScimConnectionsPage from "./features/scim-connections/ScimConnectionsPage";
 import DirectorySyncPage from "./features/directory-sync/DirectorySyncPage";
+import DiscoveryPage from "./features/governance/DiscoveryPage";
+import ConnectorsPage from "./features/governance/ConnectorsPage";
 import AccessRequestsPage from "./features/governance/AccessRequestsPage";
 import CertificationsPage from "./features/governance/CertificationsPage";
 import SodPage from "./features/governance/SodPage";
@@ -939,10 +941,30 @@ function AppContent() {
                     }
                   />
 
-                  {/* ── Governance (IGA) console — ARCHITECTURE 1.md (v3) §11 — shells, no backend yet ── */}
+                  {/* ── Governance (IGA) console — ARCHITECTURE 1.md (v3) §11 + v4 §14 discovery — shells, no backend yet ── */}
                   <Route
                     path="/governance"
                     element={<Navigate to="/governance/access-requests" replace />}
+                  />
+                  <Route
+                    path="/governance/discovery"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <DiscoveryPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/governance/discovery/connectors"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ConnectorsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
                   />
                   <Route
                     path="/governance/access-requests"

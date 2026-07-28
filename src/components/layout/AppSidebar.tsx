@@ -37,6 +37,7 @@ import {
   Layers,
   Link2,
   PlugZap,
+  Radar,
   Scale,
   Server,
   Shield,
@@ -111,9 +112,11 @@ const NAV_AUTHZ: NavItem[] = [
 ];
 
 // Governance (IGA) console — reviews and controls over the access Authz
-// defines. Mirrors ARCHITECTURE 1.md (v3) §11's page table exactly. All
-// shells today, no backend; see AGENTS.md for the page pattern.
+// defines. Mirrors ARCHITECTURE 1.md (v3) §11's page table, plus the v4 §14
+// agent-discovery inventory. All shells today, no backend; see AGENTS.md for
+// the page pattern.
 const NAV_GOVERNANCE: NavItem[] = [
+  { title: "Agent Discovery", url: "/governance/discovery", icon: Radar },
   { title: "Access Requests", url: "/governance/access-requests", icon: Inbox },
   { title: "Certifications", url: "/governance/certifications", icon: BadgeCheck },
   { title: "SoD", url: "/governance/sod", icon: Scale },
