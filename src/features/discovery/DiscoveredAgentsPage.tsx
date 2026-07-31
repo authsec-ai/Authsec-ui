@@ -40,7 +40,11 @@ import {
   type DiscoveredAgentStatus,
 } from "@/app/api/discoveryApi";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
-import { ClaimAgentDialog, QuarantineAgentDialog } from "./ClaimAgentDialog";
+import {
+  ClaimAgentDialog,
+  ClassifyAgentDialog,
+  QuarantineAgentDialog,
+} from "./ClaimAgentDialog";
 
 type Filter = "all" | "unregistered" | "registered" | "quarantined" | "ignored";
 
@@ -96,6 +100,7 @@ export default function DiscoveredAgentsPage() {
   const [selected, setSelected] = useState<DiscoveredAgent | null>(null);
   const [claimTarget, setClaimTarget] = useState<DiscoveredAgent | null>(null);
   const [quarantineTarget, setQuarantineTarget] = useState<DiscoveredAgent | null>(null);
+  const [classifyTarget, setClassifyTarget] = useState<DiscoveredAgent | null>(null);
 
   const agents = useMemo(() => data?.agents ?? [], [data]);
 
@@ -230,6 +235,7 @@ export default function DiscoveredAgentsPage() {
           const agent = row.original;
           const actions: ConsoleActionItem[] = [
             { label: "View details", onSelect: () => setSelected(agent) },
+            { label: "Correct classification…", onSelect: () => setClassifyTarget(agent) },
           ];
           // status only moves forward: an unregistered agent can be claimed or
           // quarantined; anything else is already decided.
@@ -435,6 +441,13 @@ export default function DiscoveredAgentsPage() {
         agent={quarantineTarget}
         open={quarantineTarget !== null}
         onOpenChange={(o) => !o && setQuarantineTarget(null)}
+        onDone={() => void refetch()}
+      />
+
+      <ClassifyAgentDialog
+        agent={classifyTarget}
+        open={classifyTarget !== null}
+        onOpenChange={(o) => !o && setClassifyTarget(null)}
         onDone={() => void refetch()}
       />
     </ConsolePage>

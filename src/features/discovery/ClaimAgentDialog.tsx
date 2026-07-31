@@ -8,9 +8,13 @@
  *
  * Quarantine is the alternative: the agent stays visible and flagged, and can
  * no longer be claimed.
+ *
+ * Classify is neither: it corrects what discovery inferred (origin, archetype)
+ * without moving the agent's status. A collector guesses these from workload
+ * shape and is regularly wrong, so an operator needs to be able to say so.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -36,9 +40,12 @@ import { useListMembersQuery } from "@/app/api/membershipApi";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import {
   ARCHETYPE_LABELS,
+  ORIGIN_LABELS,
   useClaimAgentMutation,
   useQuarantineAgentMutation,
+  useUpdateDiscoveredAgentMutation,
   type AgentArchetype,
+  type DeploymentOrigin,
   type DiscoveredAgent,
 } from "@/app/api/discoveryApi";
 
@@ -317,6 +324,136 @@ export function QuarantineAgentDialog({
             onClick={() => void submit()}
           >
             {saving ? "Quarantining…" : "Quarantine"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Correct what discovery inferred about an agent. Backed by
+ * PUT /authsec/discovery/agents/:id, whose fields are all pointers server-side,
+ * so sending only what changed leaves the rest untouched.
+ */
+export function ClassifyAgentDialog({
+  agent,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  agent: DiscoveredAgent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}) {
+  const [origin, setOrigin] = useState<DeploymentOrigin | "">("");
+  const [archetype, setArchetype] = useState<Exclude<AgentArchetype, ""> | "">("");
+  const [update, { isLoading: saving }] = useUpdateDiscoveredAgentMutation();
+
+  // Seed from the agent each time the dialog opens, so the selects show what is
+  // currently recorded rather than an empty form the operator has to re-derive.
+  useEffect(() => {
+    if (!open || !agent) return;
+    setOrigin(agent.deployment_origin);
+    setArchetype(agent.archetype === "" ? "" : agent.archetype);
+  }, [open, agent]);
+
+  const originChanged = agent != null && origin !== "" && origin !== agent.deployment_origin;
+  const archetypeChanged = agent != null && archetype !== "" && archetype !== agent.archetype;
+  const dirty = originChanged || archetypeChanged;
+
+  const submit = async () => {
+    if (!agent || !dirty) return;
+    try {
+      await update({
+        id: agent.id,
+        ...(originChanged ? { deployment_origin: origin as DeploymentOrigin } : {}),
+        ...(archetypeChanged
+          ? { archetype: archetype as Exclude<AgentArchetype, ""> }
+          : {}),
+      }).unwrap();
+      toast.success(`${agent.display_name || agent.fingerprint} reclassified.`);
+      onDone();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not update the agent."));
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Correct classification</DialogTitle>
+          <DialogDescription>
+            Discovery infers these from workload shape and is regularly wrong. Correcting
+            them does not change the agent's status — claim and quarantine stay separate
+            decisions.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <Label>Agent</Label>
+            <div className="rounded-md bg-muted px-3 py-2 font-mono text-[11px]">
+              {agent?.display_name || agent?.fingerprint}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cls-origin">Deployment origin</Label>
+            <Select value={origin} onValueChange={(v) => setOrigin(v as DeploymentOrigin)}>
+              <SelectTrigger id="cls-origin">
+                <SelectValue placeholder="Select an origin…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(ORIGIN_LABELS) as DeploymentOrigin[]).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {ORIGIN_LABELS[k]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Whether a person stood this agent up by hand or a pipeline created it.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cls-archetype">Archetype</Label>
+            <Select
+              value={archetype}
+              onValueChange={(v) => setArchetype(v as Exclude<AgentArchetype, "">)}
+            >
+              <SelectTrigger id="cls-archetype">
+                <SelectValue placeholder="Select an archetype…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="autonomous">{ARCHETYPE_LABELS.autonomous}</SelectItem>
+                <SelectItem value="user_delegated">
+                  {ARCHETYPE_LABELS.user_delegated}
+                </SelectItem>
+                <SelectItem value="hybrid">{ARCHETYPE_LABELS.hybrid}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              A user-delegated agent borrows a scoped slice of a person's authority and can
+              never exceed the delegating user.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="text-[length:var(--text-sm)] text-white"
+            disabled={!dirty || saving}
+            onClick={() => void submit()}
+          >
+            {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
