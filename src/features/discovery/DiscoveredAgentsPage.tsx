@@ -39,6 +39,7 @@ import {
   type DiscoveredAgent,
   type DiscoveredAgentStatus,
 } from "@/app/api/discoveryApi";
+import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import { ClaimAgentDialog, QuarantineAgentDialog } from "./ClaimAgentDialog";
 
 type Filter = "all" | "unregistered" | "registered" | "quarantined" | "ignored";
@@ -83,6 +84,14 @@ export default function DiscoveredAgentsPage() {
     filter === "all" ? undefined : { status: filter },
   );
   const { data: coverage } = useGetAgentCoverageQuery();
+  // matched_client_id is an mcp_oauth_clients.id. Resolve it to a name so the
+  // column reads as an identity rather than as an opaque uuid prefix.
+  const { data: clients } = useListWorkspaceClientsQuery();
+  const clientNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of clients ?? []) m.set(c.id, c.client_name || c.client_id);
+    return m;
+  }, [clients]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DiscoveredAgent | null>(null);
   const [claimTarget, setClaimTarget] = useState<DiscoveredAgent | null>(null);
@@ -180,14 +189,20 @@ export default function DiscoveredAgentsPage() {
         header: "Matched identity",
         priority: 4,
         approxWidth: 160,
-        cell: ({ row }) =>
-          row.original.matched_client_id ? (
-            <span className="font-mono text-xs text-muted-foreground">
-              {row.original.matched_client_id.slice(0, 8)}…
+        cell: ({ row }) => {
+          const cid = row.original.matched_client_id;
+          if (!cid) return <span className="text-xs text-muted-foreground">Unmatched</span>;
+          const name = clientNameById.get(cid);
+          // Fall back to the uuid prefix when the client list has not landed yet
+          // or the row points at a client outside the current page of results.
+          return name ? (
+            <span className="block max-w-[150px] truncate text-xs" title={name}>
+              {name}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">Unmatched</span>
-          ),
+            <span className="font-mono text-xs text-muted-foreground">{cid.slice(0, 8)}…</span>
+          );
+        },
       },
       {
         id: "last_seen_at",
@@ -236,7 +251,9 @@ export default function DiscoveredAgentsPage() {
         },
       },
     ],
-    [],
+    // clientNameById must be here: it is empty on first render and the matched
+    // identity column would otherwise keep rendering uuid prefixes forever.
+    [clientNameById],
   );
 
   return (

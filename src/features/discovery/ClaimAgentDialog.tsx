@@ -91,8 +91,16 @@ export function ClaimAgentDialog({
         .map((c) => ({ id: c.id, label: c.client_name || c.client_id, sub: c.client_id })),
     [clients],
   );
+  // ListMembers decorates each row with the joined user via
+  // `u.email AS user_email, u.name AS user_name`. Prefer those: picking an
+  // accountable owner off a list of raw uuids is not a choice anyone can make.
   const userOptions = useMemo(
-    () => (members?.items ?? []).map((m) => ({ id: m.user_id, label: m.user_id })),
+    () =>
+      (members?.items ?? []).map((m) => ({
+        id: m.user_id,
+        label: m.user_name || m.user_email || m.user_username || m.user_id,
+        sub: m.user_name ? m.user_email : undefined,
+      })),
     [members],
   );
 
@@ -178,7 +186,10 @@ export function ClaimAgentDialog({
               <SelectContent>
                 {userOptions.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.label}
+                    <span>{u.label}</span>
+                    {u.sub ? (
+                      <span className="ml-2 text-[10px] text-muted-foreground">{u.sub}</span>
+                    ) : null}
                   </SelectItem>
                 ))}
               </SelectContent>
