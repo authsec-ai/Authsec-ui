@@ -61,6 +61,9 @@ import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage
 import ConnectorsPage from "./features/connectors/ConnectorsPage";
 import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
+import IdentitiesPage from "./features/discovery/IdentitiesPage";
+import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
+import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -568,27 +571,57 @@ function AppContent() {
                     }
                   />
 
-                  {/* Discovery (prototype — team discovery doc §9) */}
+                  {/* ── Agentic IGA console (prototype) ──────────────────────
+                      A separate product from the authorization console above:
+                      its own shell (IgaLayout) and its own sidebar. Reached via
+                      the product switcher in the bottom-left user menu. */}
                   <Route
-                    path="/discovery/integrations"
+                    path="/iga"
+                    element={<Navigate to="/iga/integrations" replace />}
+                  />
+                  <Route
+                    path="/iga/integrations"
                     element={
                       <ProtectedRoute requireProject>
-                        <AppLayout>
+                        <IgaLayout>
                           <DiscoveryIntegrationsPage />
-                        </AppLayout>
+                        </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
                   <Route
-                    path="/discovery/agents"
+                    path="/iga/integrations/:id"
                     element={
                       <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <DiscoveredAgentsPage />
-                        </AppLayout>
+                        <IgaLayout>
+                          <IntegrationDetailPage />
+                        </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/iga/agents"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <DiscoveredAgentsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/identities"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <IdentitiesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Old flat paths, before IGA became its own console */}
+                  <Route path="/discovery/integrations" element={<Navigate to="/iga/integrations" replace />} />
+                  <Route path="/discovery/agents" element={<Navigate to="/iga/agents" replace />} />
 
                   {/* Redirects for legacy non-context routes */}
                   <Route

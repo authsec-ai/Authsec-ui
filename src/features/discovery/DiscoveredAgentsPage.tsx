@@ -8,13 +8,13 @@
 
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { toast } from "react-hot-toast";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
   ConsoleFilterBar,
   ConsoleRowActions,
   EntityCell,
+  type ConsoleActionItem,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
@@ -30,41 +30,42 @@ import {
   CopyField,
 } from "@/components/console/detail";
 import {
+  ARCHETYPE_LABELS,
+  ORIGIN_LABELS,
   SOURCE_LABELS,
-  useDiscoveredAgentsWithFallback,
+  STATUS_LABELS,
+  useGetAgentCoverageQuery,
+  useListDiscoveredAgentsQuery,
   type DiscoveredAgent,
   type DiscoveredAgentStatus,
 } from "@/app/api/discoveryApi";
+import { ClaimAgentDialog, QuarantineAgentDialog } from "./ClaimAgentDialog";
 
-type Filter = "all" | "new" | "registered" | "quarantined";
+type Filter = "all" | "unregistered" | "registered" | "quarantined" | "ignored";
 
 const FILTERS: ConsoleFilterOption[] = [
   { key: "all", label: "All" },
-  { key: "new", label: "Needs decision" },
+  { key: "unregistered", label: "Needs decision" },
   { key: "registered", label: "Registered" },
   { key: "quarantined", label: "Quarantined" },
+  { key: "ignored", label: "Ignored" },
 ];
 
 const PILL =
   "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium";
 
 const STATUS_STYLE: Record<DiscoveredAgentStatus, string> = {
-  new: "bg-(--color-warning-soft) text-(--color-warning-text)",
+  unregistered: "bg-(--color-warning-soft) text-(--color-warning-text)",
   registered: "bg-(--color-success-soft) text-(--color-success-text)",
   quarantined: "bg-(--color-danger-soft) text-(--color-danger-text)",
-};
-
-const STATUS_LABEL: Record<DiscoveredAgentStatus, string> = {
-  new: "Needs decision",
-  registered: "Registered",
-  quarantined: "Quarantined",
+  ignored: "bg-muted text-muted-foreground",
 };
 
 function StatusPill({ status }: { status: DiscoveredAgentStatus }) {
   return (
     <span className={`${PILL} ${STATUS_STYLE[status]}`}>
       <span className="size-1.5 rounded-full bg-current" />
-      {STATUS_LABEL[status]}
+      {STATUS_LABELS[status]}
     </span>
   );
 }
@@ -75,35 +76,33 @@ function matchedOn(agent: DiscoveredAgent): string[] {
 }
 
 export default function DiscoveredAgentsPage() {
-  const { data, isLoading, usingMock } = useDiscoveredAgentsWithFallback();
-  const [search, setSearch] = useState("");
+  // Status filtering is server-side (indexed on workspace_id, status, origin);
+  // free-text search stays client-side over the returned page.
   const [filter, setFilter] = useState<Filter>("all");
+  const { data, isError, error, refetch } = useListDiscoveredAgentsQuery(
+    filter === "all" ? undefined : { status: filter },
+  );
+  const { data: coverage } = useGetAgentCoverageQuery();
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DiscoveredAgent | null>(null);
+  const [claimTarget, setClaimTarget] = useState<DiscoveredAgent | null>(null);
+  const [quarantineTarget, setQuarantineTarget] = useState<DiscoveredAgent | null>(null);
+
+  const agents = useMemo(() => data?.agents ?? [], [data]);
 
   const items = useMemo(() => {
-    let list = data;
-    if (filter !== "all") list = list.filter((a) => a.status === filter);
+    let list = agents;
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((a) =>
-        [a.display_name ?? "", a.fingerprint, SOURCE_LABELS[a.source]]
+        [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]]
           .join(" ")
           .toLowerCase()
           .includes(q),
       );
     }
     return list;
-  }, [data, search, filter]);
-
-  const pendingCount = useMemo(() => data.filter((a) => a.status === "new").length, [data]);
-
-  const decide = (agent: DiscoveredAgent, decision: "provision" | "quarantine") => {
-    toast.success(
-      decision === "provision"
-        ? `${agent.display_name ?? agent.fingerprint} would be provisioned — no backend yet.`
-        : `${agent.display_name ?? agent.fingerprint} would be quarantined — no backend yet.`,
-    );
-  };
+  }, [agents, search]);
 
   const columns = useMemo<AdaptiveColumn<DiscoveredAgent>[]>(
     () => [
@@ -111,13 +110,18 @@ export default function DiscoveredAgentsPage() {
         id: "agent",
         header: "Sighting",
         alwaysVisible: true,
-        approxWidth: 300,
+        approxWidth: 280,
+        // max-w is required: the table is tableLayout:auto, where `truncate`
+        // alone does not constrain a cell — the column still grows to fit a long
+        // fingerprint and pushes the table past its container.
         cell: ({ row }) => (
-          <EntityCell
-            label={row.original.display_name ?? "Unnamed"}
-            detail={row.original.fingerprint}
-            monoDetail
-          />
+          <div className="max-w-[260px]">
+            <EntityCell
+              label={row.original.display_name || "Unnamed"}
+              detail={row.original.fingerprint}
+              monoDetail
+            />
+          </div>
         ),
       },
       {
@@ -139,10 +143,43 @@ export default function DiscoveredAgentsPage() {
         cell: ({ row }) => <StatusPill status={row.original.status} />,
       },
       {
+        id: "origin",
+        header: "Origin",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => (
+          <span
+            className={
+              row.original.deployment_origin === "manual"
+                ? "text-xs font-medium text-(--color-warning-text)"
+                : "text-xs text-muted-foreground"
+            }
+            title={
+              row.original.deployment_origin === "manual"
+                ? "Run by a person, not a pipeline — permissions are typically whatever that developer's own credentials allow."
+                : undefined
+            }
+          >
+            {ORIGIN_LABELS[row.original.deployment_origin]}
+          </span>
+        ),
+      },
+      {
+        id: "archetype",
+        header: "Authority",
+        priority: 5,
+        approxWidth: 140,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">
+            {ARCHETYPE_LABELS[row.original.archetype]}
+          </span>
+        ),
+      },
+      {
         id: "matched",
         header: "Matched identity",
-        priority: 3,
-        approxWidth: 180,
+        priority: 4,
+        approxWidth: 160,
         cell: ({ row }) =>
           row.original.matched_client_id ? (
             <span className="font-mono text-xs text-muted-foreground">
@@ -155,35 +192,48 @@ export default function DiscoveredAgentsPage() {
       {
         id: "last_seen_at",
         header: "Last seen",
-        priority: 4,
-        approxWidth: 130,
+        priority: 6,
+        approxWidth: 150,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(row.original.last_seen_at), { addSuffix: true })}
-          </span>
+          <div>
+            <div className="text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(row.original.last_seen_at), { addSuffix: true })}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {row.original.sighting_count} sighting
+              {row.original.sighting_count === 1 ? "" : "s"}
+            </div>
+          </div>
         ),
       },
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 60,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            actions={
-              row.original.status === "new"
-                ? [
-                    { label: "Provision", onClick: () => decide(row.original, "provision") },
-                    {
-                      label: "Quarantine",
-                      variant: "destructive" as const,
-                      onClick: () => decide(row.original, "quarantine"),
-                    },
-                  ]
-                : [{ label: "View details", onClick: () => setSelected(row.original) }]
-            }
-          />
-        ),
+        approxWidth: 56,
+        cell: ({ row }) => {
+          const agent = row.original;
+          const actions: ConsoleActionItem[] = [
+            { label: "View details", onSelect: () => setSelected(agent) },
+          ];
+          // status only moves forward: an unregistered agent can be claimed or
+          // quarantined; anything else is already decided.
+          if (agent.status === "unregistered") {
+            actions.unshift(
+              { label: "Claim…", onSelect: () => setClaimTarget(agent) },
+              {
+                label: "Quarantine…",
+                destructive: true,
+                onSelect: () => setQuarantineTarget(agent),
+              },
+            );
+          }
+          return (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ConsoleRowActions items={actions} />
+            </div>
+          );
+        },
       },
     ],
     [],
@@ -194,22 +244,62 @@ export default function DiscoveredAgentsPage() {
       title="Discovered Agents"
       description="Agent sightings from every discovery channel, deduped by fingerprint. Unmatched sightings need a decision: provision or quarantine."
     >
-      {usingMock ? (
-        <div className="rounded-md border border-dashed px-4 py-3 text-xs text-muted-foreground">
-          <strong className="font-medium text-foreground">Prototype data.</strong>{" "}
-          <code>/authsec/discovery/agents</code> is not implemented — these rows are fixtures
-          from <code>discoveryApi.ts</code>. Decisions are not persisted.
+      {isError ? (
+        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
+          <strong className="font-medium">Could not load the inventory.</strong>{" "}
+          {(error as { status?: number })?.status === 403
+            ? "Your role is missing the discovery:read permission."
+            : "The discovery API returned an error."}{" "}
+          <button className="underline" onClick={() => void refetch()}>
+            Retry
+          </button>
         </div>
       ) : null}
 
-      {pendingCount > 0 ? (
-        <div className="rounded-md border px-4 py-3 text-xs text-muted-foreground">
-          <strong className="font-medium text-foreground">
-            {pendingCount} sighting{pendingCount === 1 ? "" : "s"} awaiting a decision.
-          </strong>{" "}
-          An unmatched sighting has no accountable owner until it is provisioned.
+      {coverage ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-md border px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Coverage
+            </div>
+            <div className="text-lg font-semibold">
+              {coverage.coverage_percent.toFixed(0)}%
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {coverage.registered} of {coverage.total} governed
+            </div>
+          </div>
+          <div className="rounded-md border px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Needs a decision
+            </div>
+            <div className="text-lg font-semibold">{coverage.unregistered}</div>
+            <div className="text-[11px] text-muted-foreground">
+              No owner until claimed
+            </div>
+          </div>
+          <div className="rounded-md border px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Manual origin
+            </div>
+            <div className="text-lg font-semibold">
+              {coverage.by_origin?.manual?.total ?? 0}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              Higher risk — no pipeline behind them
+            </div>
+          </div>
+          <div className="rounded-md border px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Quarantined
+            </div>
+            <div className="text-lg font-semibold">{coverage.quarantined}</div>
+            <div className="text-[11px] text-muted-foreground">Blocked from claiming</div>
+          </div>
         </div>
       ) : null}
+
+
 
       <ConsoleFilterBar
         search={search}
@@ -226,44 +316,80 @@ export default function DiscoveredAgentsPage() {
             tableId="discovered-agents"
             columns={columns}
             data={items}
-            loading={isLoading}
-            onRowClick={(agent) => setSelected(agent)}
+            getRowId={(a) => a.id}
+            enableSelection={false}
+            enableExpansion={false}
+            onRowClick={(a) => setSelected(a)}
+            pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
           />
         </CardContent>
       </TableCard>
 
-      <RightDrawer open={selected !== null} onOpenChange={(o) => !o && setSelected(null)}>
+      <RightDrawer
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        ariaTitle="Discovered agent details"
+      >
         {selected ? (
           <>
             <DrawerHeader
-              title={selected.display_name ?? "Unnamed sighting"}
+              title={selected.display_name || "Unnamed sighting"}
               subtitle={SOURCE_LABELS[selected.source]}
               badge={<StatusPill status={selected.status} />}
             />
             <DrawerBody>
-              <DrawerSection title="Identity">
+              <DrawerSection label="Identity">
                 <DetailGrid>
-                  <DetailRow label="Fingerprint">
-                    <CopyField value={selected.fingerprint} />
-                  </DetailRow>
-                  <DetailRow label="Matched client">
-                    {selected.matched_client_id ? (
-                      <CopyField value={selected.matched_client_id} />
-                    ) : (
-                      "Unmatched"
-                    )}
-                  </DetailRow>
-                  <DetailRow label="First seen">
-                    {formatDistanceToNow(new Date(selected.first_seen_at), { addSuffix: true })}
-                  </DetailRow>
-                  <DetailRow label="Last seen">
-                    {formatDistanceToNow(new Date(selected.last_seen_at), { addSuffix: true })}
-                  </DetailRow>
+                  <DetailRow
+                    label="Fingerprint"
+                    value={<CopyField value={selected.fingerprint} />}
+                    full
+                  />
+                  <DetailRow
+                    label="Matched client"
+                    value={
+                      selected.matched_client_id ? (
+                        <CopyField value={selected.matched_client_id} />
+                      ) : (
+                        "Unmatched"
+                      )
+                    }
+                    full
+                  />
+                  <DetailRow
+                    label="Origin"
+                    value={ORIGIN_LABELS[selected.deployment_origin]}
+                  />
+                  <DetailRow
+                    label="Authority source"
+                    value={ARCHETYPE_LABELS[selected.archetype]}
+                  />
+                  <DetailRow label="Sightings" value={String(selected.sighting_count)} />
+                  <DetailRow
+                    label="First seen"
+                    value={formatDistanceToNow(new Date(selected.first_seen_at), {
+                      addSuffix: true,
+                    })}
+                  />
+                  <DetailRow
+                    label="Last seen"
+                    value={formatDistanceToNow(new Date(selected.last_seen_at), {
+                      addSuffix: true,
+                    })}
+                  />
                 </DetailGrid>
               </DrawerSection>
 
+              {selected.status === "quarantined" && selected.quarantine_reason ? (
+                <DrawerSection label="Quarantine reason">
+                  <p className="text-xs text-muted-foreground">
+                    {selected.quarantine_reason}
+                  </p>
+                </DrawerSection>
+              ) : null}
+
               {matchedOn(selected).length > 0 ? (
-                <DrawerSection title="Why this was flagged">
+                <DrawerSection label="Why this was flagged">
                   <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">
                     {matchedOn(selected).map((reason) => (
                       <li key={reason}>{reason}</li>
@@ -272,7 +398,7 @@ export default function DiscoveredAgentsPage() {
                 </DrawerSection>
               ) : null}
 
-              <DrawerSection title="Source metadata">
+              <DrawerSection label="Source metadata">
                 <pre className="overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">
                   {JSON.stringify(selected.metadata, null, 2)}
                 </pre>
@@ -281,6 +407,19 @@ export default function DiscoveredAgentsPage() {
           </>
         ) : null}
       </RightDrawer>
+
+      <ClaimAgentDialog
+        agent={claimTarget}
+        open={claimTarget !== null}
+        onOpenChange={(o) => !o && setClaimTarget(null)}
+        onDone={() => void refetch()}
+      />
+      <QuarantineAgentDialog
+        agent={quarantineTarget}
+        open={quarantineTarget !== null}
+        onOpenChange={(o) => !o && setQuarantineTarget(null)}
+        onDone={() => void refetch()}
+      />
     </ConsolePage>
   );
 }

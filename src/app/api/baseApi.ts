@@ -172,6 +172,8 @@ export const baseApi = createApi({
     // Discovery (prototype — see app/api/discoveryApi.ts)
     "DiscoverySource",
     "DiscoveredAgent",
+    "DiscoveredIdentity",
+    "AgentCoverage",
   ],
   endpoints: () => ({}),
 });

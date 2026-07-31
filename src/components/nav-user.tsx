@@ -1,9 +1,11 @@
 import {
+  ArrowLeftRight,
   BadgeCheck,
   Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Radar,
   Sparkles,
   Building,
   Users,
@@ -12,7 +14,7 @@ import {
   Mic,
 } from "lucide-react";
 import { useAuth } from "@/auth/context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -44,6 +46,8 @@ export function NavUser({
   const { isMobile, state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
+  const location = useLocation();
+  const isIgaConsole = location.pathname.startsWith("/iga");
   const { user: authUser, currentProject, projects, signOut, switchProject } = useAuth();
   const { isAdmin } = useRbacAudience();
 
@@ -189,6 +193,27 @@ export function NavUser({
                 <DropdownMenuSeparator />
               </>
             )}
+
+            {/* Product switcher. Agentic IGA is a separate console with its own
+                sidebar — it is not a section of this one. See root AGENTS.md
+                "Product transition". */}
+            <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-foreground">
+              Switch product
+            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() => navigate(isIgaConsole ? "/dashboard" : "/iga/integrations")}
+                className="flex items-center gap-2"
+              >
+                {isIgaConsole ? (
+                  <ArrowLeftRight className="h-4 w-4" />
+                ) : (
+                  <Radar className="h-4 w-4" />
+                )}
+                <span>{isIgaConsole ? "Back to AuthSec console" : "Agentic IGA"}</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
 
             <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
               <LogOut />

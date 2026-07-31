@@ -1,6 +1,8 @@
 import { baseApi } from "./baseApi";
 
 export interface WorkspaceClientItem {
+  /** mcp_oauth_clients.id — the uuid FKs point at. Not the same as client_id. */
+  id: string;
   client_id: string;
   client_name: string;
   client_kind: "human_app" | "agent" | "m2m" | "cli";
