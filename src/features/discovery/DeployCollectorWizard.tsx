@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -540,15 +540,25 @@ export function DeployCollectorWizard({
                   {token}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Single use, expires in 24 hours. It authenticates the collector once, then
-                  it swaps to its own rotating identity.
+                  <strong className="font-medium text-foreground">
+                    Not a working credential yet.
+                  </strong>{" "}
+                  There is no enrollment endpoint on the backend, so this value is generated
+                  in the browser and authenticates nothing — the install command above will
+                  not bring a collector up. The integration itself is created for real; only
+                  enrollment is outstanding. Intended behaviour: single use, 24-hour expiry,
+                  swapped for the collector's own rotating identity on first heartbeat.
                 </p>
               </div>
 
               {waiting ? (
-                <div className="flex items-center gap-2 rounded-md border px-3 py-2.5 text-xs text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Waiting for the collector to connect… this pane updates on first heartbeat.
+                <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                  <strong className="font-medium text-foreground">
+                    This will not resolve yet.
+                  </strong>{" "}
+                  There is no heartbeat endpoint to wait on, so nothing will report back.
+                  Press Done to save the integration; the collector's first-contact state
+                  lands with the enrollment API.
                 </div>
               ) : null}
             </>
