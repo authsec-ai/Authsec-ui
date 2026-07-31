@@ -1,11 +1,11 @@
 /**
- * DashboardPage — Phase 0.2 rewrite.
+ * DashboardPage — Launchpad layout.
  *
  * Out: generic onboarding chrome (activation banner, setup tour list, SDK
  *      integration tiles, RBAC "Soon" placeholder, recent-activity feed).
- * In:  five hero metric cards (Apps total / healthy / needs attention,
- *      End users, IdPs configured) + a 6-tile quick-start grid that lights
- *      up ✓ as each setup step completes.
+ * In:  a single divided metric strip (Apps total / healthy / needs
+ *      attention, End users, IdPs configured) + a 6-tile quick-start
+ *      launchpad grid that lights up as each setup step completes.
  *
  * Plan: /Users/pc/.claude/plans/honestly-i-am-hell-unified-tide.md §0.2.
  */
@@ -13,6 +13,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowRight,
   CheckCircle2,
   Fingerprint,
   FolderSync,
@@ -32,42 +33,9 @@ import { useListApplicationRolesQuery } from "@/app/api/accessApi";
 import { resolveWorkspaceId } from "@/utils/workspace";
 import { cn } from "@/lib/utils";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { MetricStrip } from "@/components/console/MetricStrip";
 
 /* ─────────────────────────────── tile primitives ─────────────────────────── */
-
-interface MetricCardProps {
-  label: string;
-  value: number | string;
-  hint?: string;
-  tone?: "neutral" | "success" | "warning";
-  onClick?: () => void;
-}
-
-function MetricCard({ label, value, hint, tone = "neutral", onClick }: MetricCardProps) {
-  const toneClass =
-    tone === "success"
-      ? "border-transparent bg-(--color-success-soft)"
-      : tone === "warning"
-        ? "border-transparent bg-(--color-warning-soft)"
-        : "border-(--color-border-subtle) bg-(--color-surface-raised)";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full flex-col gap-1 rounded-lg border px-4 py-3 text-left shadow-(--shadow-xs) transition hover:shadow-(--shadow-sm) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
-        toneClass,
-        !onClick && "cursor-default hover:shadow-(--shadow-xs)",
-      )}
-    >
-      <span className="text-xs font-medium uppercase tracking-wide text-(--color-text-muted)">
-        {label}
-      </span>
-      <span className="text-2xl font-semibold text-(--color-text)">{value}</span>
-      {hint ? <span className="text-xs text-(--color-text-muted)">{hint}</span> : null}
-    </button>
-  );
-}
 
 interface QuickStartTileProps {
   icon: LucideIcon;
@@ -84,16 +52,14 @@ function QuickStartTile({ icon: Icon, label, description, to, done }: QuickStart
       type="button"
       onClick={() => navigate(to)}
       className={cn(
-        "group flex flex-col gap-2 rounded-lg border p-4 text-left shadow-(--shadow-xs) transition hover:shadow-(--shadow-sm) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
-        done
-          ? "border-transparent bg-(--color-success-soft)"
-          : "border-(--color-border-subtle) bg-(--color-surface-raised)",
+        "group flex flex-col gap-3 rounded-lg border border-t-[3px] bg-(--color-surface-raised) p-4 text-left shadow-(--shadow-xs) transition hover:shadow-(--shadow-md) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
+        done ? "border-(--color-border-subtle) border-t-(--color-success)" : "border-(--color-border-subtle) border-t-(--color-primary)",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <span
           className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-md",
+            "inline-flex h-9 w-9 flex-none items-center justify-center rounded-md",
             done
               ? "bg-(--color-success-soft) text-(--color-success-text)"
               : "bg-(--color-primary-soft) text-(--color-primary-text)",
@@ -103,15 +69,29 @@ function QuickStartTile({ icon: Icon, label, description, to, done }: QuickStart
         </span>
         <span className="text-sm font-semibold text-(--color-text)">{label}</span>
       </div>
-      <p className="text-xs leading-5 text-(--color-text-muted)">{description}</p>
-      <span
-        className={cn(
-          "mt-auto text-xs font-medium",
-          done ? "text-(--color-success-text)" : "text-(--color-primary-text)",
-        )}
-      >
-        {done ? "Configured" : "Set up →"}
-      </span>
+      <p className="flex-1 text-xs leading-5 text-(--color-text-muted)">{description}</p>
+      <div className="flex items-center justify-between gap-2 border-t border-(--color-border-subtle) pt-3">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+            done
+              ? "bg-(--color-success-soft) text-(--color-success-text)"
+              : "bg-(--color-surface-subtle) text-(--color-text-muted)",
+          )}
+        >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              done ? "bg-(--color-success)" : "bg-(--color-text-subtle)",
+            )}
+          />
+          {done ? "Configured" : "Not set up"}
+        </span>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-(--color-primary-text) transition-transform group-hover:translate-x-0.5">
+          {done ? "Review" : "Set up"}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
     </button>
   );
 }
@@ -232,43 +212,35 @@ export function DashboardPage() {
       title="Dashboard"
       description="Real counts across the workspace. Click any tile to jump to the section."
     >
-      {/* Row 1 — hero metrics */}
-      <section
+      {/* Row 1 — metric strip */}
+      <MetricStrip
         aria-label="Hero metrics"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-      >
-        <MetricCard
-          label="Applications"
-          value={total}
-          hint="Total MCP applications"
-          onClick={() => navigate("/applications")}
-        />
-        <MetricCard
-          label="Healthy"
-          value={healthy}
-          hint="state = ready"
-          tone={total > 0 && healthy === total ? "success" : "neutral"}
-          onClick={() => navigate("/applications")}
-        />
-        <MetricCard
-          label="Needs attention"
-          value={attention}
-          hint="setup / scan / failed"
-          tone={attention > 0 ? "warning" : "neutral"}
-          onClick={() => navigate("/applications")}
-        />
-        <MetricCard
-          label="End users"
-          value={totalEndUsers}
-          onClick={() => navigate("/end-users")}
-        />
-        <MetricCard
-          label="Identity providers"
-          value={idpsConfigured}
-          hint="configured"
-          onClick={() => navigate("/identity-providers")}
-        />
-      </section>
+        items={[
+          { key: "apps", label: "applications", value: total, tone: "primary", onClick: () => navigate("/applications") },
+          {
+            key: "healthy",
+            label: "healthy",
+            value: healthy,
+            tone: total > 0 && healthy === total ? "success" : "neutral",
+            onClick: () => navigate("/applications"),
+          },
+          {
+            key: "attention",
+            label: "need a decision",
+            value: attention,
+            tone: attention > 0 ? "warning" : "neutral",
+            onClick: () => navigate("/applications"),
+          },
+          { key: "end-users", label: "end users", value: totalEndUsers, tone: "primary", onClick: () => navigate("/end-users") },
+          {
+            key: "idps",
+            label: "identity providers",
+            value: idpsConfigured,
+            tone: "neutral",
+            onClick: () => navigate("/identity-providers"),
+          },
+        ]}
+      />
 
       {/* Row 2 — quick-start tiles */}
       <section aria-label="Quick start">

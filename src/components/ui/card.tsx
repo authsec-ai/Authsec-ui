@@ -50,13 +50,14 @@ type CardProps = React.ComponentPropsWithoutRef<"div"> & {
 };
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant = "default", ...props }, ref) => {
+  ({ className, variant = "default", onClick, ...props }, ref) => {
     return (
       <div
         ref={ref}
         data-slot="card"
         data-variant={variant}
-        className={cn(cardVariants({ variant }), className)}
+        onClick={onClick}
+        className={cn(cardVariants({ variant }), onClick && "cursor-pointer", className)}
         {...props}
       />
     );

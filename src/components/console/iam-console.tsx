@@ -21,6 +21,42 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { FilterCard } from "@/theme/components/cards";
+import { useDensity, type TableDensity } from "@/contexts/DensityContext";
+
+const DENSITY_OPTIONS: TableDensity[] = ["comfortable", "compact"];
+
+/** Segmented Comfortable/Compact control — drives every table's row padding app-wide. */
+export function DensityToggle({ className }: { className?: string }) {
+  const { density, setDensity } = useDensity();
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-md border border-(--color-border-strong) bg-(--color-surface-subtle) p-0.5",
+        className,
+      )}
+    >
+      {DENSITY_OPTIONS.map((option) => {
+        const active = density === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={active}
+            onClick={() => setDensity(option)}
+            className={cn(
+              "h-7 rounded px-2.5 text-xs font-medium capitalize transition-colors",
+              active
+                ? "bg-(--color-surface-raised) text-(--color-text) shadow-(--shadow-xs)"
+                : "text-(--color-text-muted) hover:text-(--color-text)",
+            )}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export interface ConsoleFilterOption {
   key: string;

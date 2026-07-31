@@ -9,16 +9,20 @@ import {
 } from "@/components/ui/sidebar";
 
 /**
- * Quiet active-nav treatment (Console Refresh): neutral fill (via
- * `--sidebar-accent`), a primary-colored icon, and a small trailing accent
- * dot. The dot is suppressed in the collapsed icon-only rail.
+ * Active-nav treatment (Console Refresh "bar" variant — the design's
+ * default/recommended one): soft primary tint + primary-colored icon +
+ * semibold label. The left accent bar itself is rendered via `::before` in
+ * admin-shell.css (targeting `[data-sidebar="menu-button"][data-active="true"]`)
+ * since a pseudo-element bar is awkward to express as utility classes.
+ * The tint/text overrides also apply on hover so an active item doesn't
+ * flash back to the neutral hover fill.
  */
-const QUIET_ACTIVE_NAV =
-  "data-[active=true]:[&>svg]:text-(--color-primary) " +
-  "data-[active=true]:after:ml-auto data-[active=true]:after:size-1.5 " +
-  "data-[active=true]:after:shrink-0 data-[active=true]:after:rounded-full " +
-  "data-[active=true]:after:bg-(--color-primary) data-[active=true]:after:content-[''] " +
-  "group-data-[collapsible=icon]:data-[active=true]:after:hidden";
+const ACTIVE_NAV =
+  "relative " +
+  "data-[active=true]:bg-(--color-primary-soft) data-[active=true]:hover:bg-(--color-primary-soft) " +
+  "data-[active=true]:text-(--color-primary-text) data-[active=true]:hover:text-(--color-primary-text) " +
+  "data-[active=true]:font-semibold " +
+  "data-[active=true]:[&>svg]:text-(--color-primary)";
 
 export function NavMain({
   items,
@@ -45,7 +49,7 @@ export function NavMain({
               tooltip={item.title}
               isActive={item.isActive}
               onClick={item.onClick}
-              className={QUIET_ACTIVE_NAV}
+              className={ACTIVE_NAV}
             >
               {item.icon && <item.icon />}
               <span>{item.title}</span>

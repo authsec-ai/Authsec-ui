@@ -30,9 +30,12 @@ import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-tab
 import {
   ConsoleFilterBar,
   ConsoleRowActions,
+  DensityToggle,
   EntityCell,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { MetricStrip } from "@/components/console/MetricStrip";
+import { rowAccentClassName } from "@/components/console/table-tone";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
@@ -806,6 +809,12 @@ export default function ServiceAccountsPage() {
     [data],
   );
 
+  const metrics = useMemo(() => {
+    const list = data ?? [];
+    const active = list.filter((sa) => sa.status === "active").length;
+    return { total: list.length, active, disabled: list.length - active };
+  }, [data]);
+
   const columns = useMemo<AdaptiveColumn<WorkspaceServiceAccount>[]>(
     () => [
       {
@@ -900,6 +909,15 @@ export default function ServiceAccountsPage() {
         </>
       }
     >
+      <MetricStrip
+        aria-label="Service account health"
+        items={[
+          { key: "total", label: "accounts", value: metrics.total, tone: "primary" },
+          { key: "active", label: "healthy", value: metrics.active, tone: "success" },
+          { key: "disabled", label: "disabled", value: metrics.disabled, tone: metrics.disabled > 0 ? "warning" : "neutral" },
+        ]}
+      />
+
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
@@ -907,6 +925,7 @@ export default function ServiceAccountsPage() {
         filters={filtersWithCounts}
         activeFilter={activeFilter}
         onFilterChange={(v) => setActiveFilter(v as FilterKey)}
+        trailing={<DensityToggle />}
       />
 
       <TableCard>
@@ -947,6 +966,7 @@ export default function ServiceAccountsPage() {
               enableExpansion={false}
               getRowId={(sa) => sa.id}
               onRowClick={(sa) => setSelectedSA(sa)}
+              rowClassName={(sa) => rowAccentClassName(sa.status === "active" ? "success" : "neutral")}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}

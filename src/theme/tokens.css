@@ -312,7 +312,7 @@
   --component-table-row-hover: #e7ecf3; /* clearly visible cool-gray row hover */
   --component-table-row-selected: var(--color-primary-soft);
   --component-table-cell-padding-inline: var(--space-5);
-  --component-table-cell-padding-block: 0.8125rem; /* roomier rows (13px) */
+  --component-table-cell-padding-block: var(--space-4); /* comfortable density (16px) */
   --component-table-radius: var(--radius-lg);
   --component-table-header-height: 2.5rem; /* compact header */
   --component-table-row-height: auto;
@@ -515,7 +515,7 @@
   --chart-3: var(--color-chart-3);
   --chart-4: var(--color-chart-4);
   --chart-5: var(--color-chart-5);
-  --sidebar: var(--color-surface-base);
+  --sidebar: var(--color-sidebar-surface);
   --sidebar-foreground: var(--color-text-primary);
   --sidebar-primary: var(--color-primary);
   --sidebar-primary-foreground: var(--color-text-on-dark);
@@ -550,7 +550,7 @@
   --chart-3: var(--color-chart-3);
   --chart-4: var(--color-chart-4);
   --chart-5: var(--color-chart-5);
-  --sidebar: var(--color-surface-base);
+  --sidebar: var(--color-sidebar-surface);
   --sidebar-foreground: var(--color-text-primary);
   --sidebar-primary: var(--color-primary);
   --sidebar-primary-foreground: var(--color-text-on-dark);
