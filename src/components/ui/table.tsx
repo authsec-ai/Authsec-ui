@@ -64,12 +64,14 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   );
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+function TableRow({ className, onClick, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       data-slot="table-row"
+      onClick={onClick}
       className={cn(
         "border-b border-[var(--component-table-border)] transition-colors hover:bg-[var(--component-table-row-hover)] data-[state=selected]:bg-[var(--component-table-row-selected)]",
+        onClick && "cursor-pointer",
         className
       )}
       {...props}

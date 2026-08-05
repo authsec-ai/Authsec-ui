@@ -10,12 +10,11 @@ import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 //   PopoverTrigger,
 // } from "@/components/ui/popover";
 import { Breadcrumb } from "./Breadcrumb";
-// Hidden for now: search bar / command palette (⌘K disabled)
-// import {
-//   CommandPalette,
-//   CommandSearchButton,
-//   useCommandPalette,
-// } from "./CommandPalette";
+import {
+  CommandPalette,
+  CommandSearchButton,
+  useCommandPalette,
+} from "./CommandPalette";
 import { useResponsiveLayout } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -29,8 +28,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
   const { open: sidebarOpen } = useSidebar();
   const [showAutoCollapseIndicator, setShowAutoCollapseIndicator] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  // Hidden for now: search bar / command palette (⌘K disabled)
-  // const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
 
   const shouldShowIndicator = shouldAutoCollapseSidebar && !sidebarOpen;
 
@@ -89,8 +87,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Hidden for now: search bar / ⌘K command palette */}
-          {/* <CommandSearchButton onClick={() => setPaletteOpen(true)} /> */}
+          <CommandSearchButton onClick={() => setPaletteOpen(true)} />
 
           {/* Hidden for now: notifications */}
           {/* <Popover>
@@ -135,8 +132,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
         </div>
       </div>
 
-      {/* Hidden for now: search bar / ⌘K command palette */}
-      {/* <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} /> */}
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </header>
   );
 }

@@ -130,6 +130,17 @@
     letter-spacing: var(--letter-spacing-normal);
     color: var(--color-text-secondary);
   }
+
+  /* Tailwind's preflight resets buttons to `cursor: default` (matching native
+     browser behavior) instead of the `cursor: pointer` browsers give <a>.
+     Every clickable control in this app — sidebar nav items, dashboard tiles,
+     dialog/menu triggers — is a <button>, so without this every "card" in the
+     app reads as inert on hover. Mirrors the design prototype's global
+     `button { cursor: pointer }` rule. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

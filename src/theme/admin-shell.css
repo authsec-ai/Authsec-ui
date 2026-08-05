@@ -11,7 +11,7 @@
     --admin-page-surface: var(--console-surface-page);
     --admin-stage-surface: var(--console-surface-stage);
     --admin-control-rail: var(--console-surface-rail);
-    --admin-table-row-zebra: #fbfcfd;
+    --admin-table-row-zebra: var(--console-surface-stage);
     --admin-table-row-base: var(--console-surface-panel);
     --admin-table-row-hover: var(--console-hover-fill);
     --admin-table-row-hover-outline: var(--console-hover-outline);
@@ -63,6 +63,30 @@
     --component-card-variant-filter-shadow: var(--shadow-none);
     --component-card-variant-table-shadow: var(--shadow-xs);
     --component-card-variant-pagination-shadow: var(--shadow-none);
+  }
+
+  /* Sidebar active-nav accent bar (Console Refresh "bar" variant). Inset
+     from the button's own left edge (rather than the design's negative
+     offset) since SidebarGroup/SidebarContent already reserve edge padding —
+     this keeps the bar visible without being clipped by the button's
+     overflow-hidden. */
+  [data-ui-scope="admin-shell"] [data-sidebar="menu-button"][data-active="true"]::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 0 999px 999px 0;
+    background: var(--color-primary);
+  }
+
+  /* Density toggle: "comfortable" is the tokens.css default; "compact" tightens
+     table row rhythm for operators who want more rows on screen. */
+  [data-ui-scope="admin-shell"][data-density="compact"] {
+    --component-table-cell-padding-block: 0.5rem;
+    --component-table-header-height: 2.25rem;
   }
 
   .dark [data-ui-scope="admin-shell"] {
@@ -447,22 +471,6 @@
       background-color 140ms ease,
       box-shadow 140ms ease,
       border-color 140ms ease;
-  }
-
-  [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-body"] > [data-slot="table-row"][data-row-parity="odd"]:not([data-state="selected"]) {
-    background: var(--admin-table-row-zebra);
-  }
-
-  [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-body"] > [data-slot="table-row"][data-row-parity="even"]:not([data-state="selected"]) {
-    background: var(--admin-table-row-base);
-  }
-
-  [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-body"] > [data-slot="table-row"]:not([data-row-parity]):not([data-state="selected"]):not(:has(> [data-slot="table-cell"][colspan])):nth-child(odd) {
-    background: var(--admin-table-row-zebra);
-  }
-
-  [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-body"] > [data-slot="table-row"]:not([data-row-parity]):not([data-state="selected"]):not(:has(> [data-slot="table-cell"][colspan])):nth-child(even) {
-    background: var(--admin-table-row-base);
   }
 
   [data-ui-scope="admin-shell"] [data-slot="card"][data-variant="table"] [data-slot="table-body"] [data-slot="table-row"][data-clickable="true"]:hover,

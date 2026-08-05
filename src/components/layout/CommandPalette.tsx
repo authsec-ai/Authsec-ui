@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  Bot,
+  Cable,
   ClipboardList,
   Fingerprint,
-  GlobeLock,
+  FolderSync,
   KeyRound,
-  Layers,
   LayoutDashboard,
+  Layers,
   Link2,
+  PlugZap,
   Search,
+  Server,
+  Shield,
+  ShieldCheck,
   UserCog,
   Users,
   type LucideIcon,
@@ -31,25 +37,36 @@ interface PaletteDestination {
   keywords?: string;
 }
 
-// Mirrors the AppSidebar IA so ⌘K routes to every primary destination.
+// Mirrors the AppSidebar IA exactly (see AppSidebar.tsx NAV_* arrays) so ⌘K
+// routes to every service/section the sidebar advertises — same URLs, same
+// icons, same grouping. Deliberately excludes routes the sidebar itself no
+// longer links to (/external-services, /trust-delegation — see AppSidebar's
+// header comment on why those were dropped from the IA).
 const DESTINATIONS: PaletteDestination[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, group: "General" },
-  { title: "Users", url: "/end-users", icon: Users, group: "Workspace", keywords: "end users people" },
-  { title: "Applications", url: "/applications", icon: Layers, group: "Workspace", keywords: "apps clients mcp" },
-  { title: "Roles", url: "/admin/access/roles", icon: UserCog, group: "Access control", keywords: "rbac" },
-  { title: "Scopes", url: "/admin/access/scopes", icon: KeyRound, group: "Access control", keywords: "permissions" },
-  { title: "Assignments", url: "/admin/access/assignments", icon: Link2, group: "Access control" },
-  { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList, group: "Monitor" },
-  { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint, group: "Configure", keywords: "auth methods oauth saml" },
-  { title: "Trust Delegation", url: "/trust-delegation", icon: GlobeLock, group: "Configure" },
-  { title: "Secrets", url: "/external-services", icon: KeyRound, group: "Configure", keywords: "external services" },
-  { title: "Team", url: "/settings/team", icon: Users, group: "Settings" },
+  { title: "Users", url: "/end-users", icon: Users, group: "Workspace", keywords: "end users identities people" },
+  { title: "Applications", url: "/applications", icon: Layers, group: "Workspace", keywords: "apps mcp servers" },
+  { title: "Service Accounts", url: "/service-accounts", icon: Server, group: "Workspace", keywords: "machine m2m" },
+  { title: "Agents", url: "/agents", icon: Bot, group: "Workspace", keywords: "ai agents bots" },
+  { title: "Clients", url: "/clients", icon: PlugZap, group: "Workspace", keywords: "oauth clients" },
+  { title: "Roles", url: "/access/roles", icon: UserCog, group: "Authz", keywords: "rbac permissions" },
+  { title: "Scopes", url: "/access/scopes", icon: KeyRound, group: "Authz", keywords: "permissions" },
+  { title: "Assignments", url: "/access/assignments", icon: Link2, group: "Authz", keywords: "role bindings" },
+  { title: "Auth Logs", url: "/logs/auth", icon: ShieldCheck, group: "Monitor", keywords: "sign-in authentication" },
+  { title: "Audit Logs", url: "/logs/audit", icon: ClipboardList, group: "Monitor", keywords: "audit trail" },
+  { title: "M2M Logs", url: "/logs/m2m", icon: PlugZap, group: "Monitor", keywords: "machine to machine" },
+  { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint, group: "Configure", keywords: "sso saml oidc idp" },
+  { title: "SCIM Connections", url: "/scim-connections", icon: Shield, group: "Configure", keywords: "scim provisioning" },
+  { title: "Directory Sync", url: "/directory-sync", icon: FolderSync, group: "Configure", keywords: "active directory entra ldap" },
+  { title: "Connectors", url: "/connectors", icon: Cable, group: "Configure", keywords: "integrations secrets" },
+  { title: "Team", url: "/settings/team", icon: Users, group: "Settings", keywords: "members" },
+  { title: "Trusted Issuers", url: "/settings/trusted-issuers", icon: ShieldCheck, group: "Settings", keywords: "oidc issuers" },
 ];
 
 const GROUP_ORDER = [
   "General",
   "Workspace",
-  "Access control",
+  "Authz",
   "Monitor",
   "Configure",
   "Settings",

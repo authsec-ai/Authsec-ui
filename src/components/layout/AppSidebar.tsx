@@ -240,12 +240,11 @@ export function AppSidebar({
     <Sidebar
       collapsible="icon"
       className={cn(
-        "border-r border-[var(--app-shell-border)] bg-[var(--app-shell-surface)] [&_[data-slot=sidebar-inner]]:bg-[var(--app-shell-surface)]",
+        "border-r border-[var(--app-shell-border)] bg-[var(--sidebar-surface)] [&_[data-slot=sidebar-inner]]:bg-[var(--sidebar-surface)]",
         className,
       )}
       style={
         {
-          "--sidebar-surface": "var(--app-shell-surface)",
           "--sidebar-border": "var(--app-shell-border)",
           ...style,
         } as React.CSSProperties

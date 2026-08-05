@@ -7,6 +7,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { ResponsiveSidebarController } from "./ResponsiveSidebarController";
 import { VoiceAgentWatcher } from "@/features/voice-auth/VoiceAgentWatcher";
 import { useWizard } from "@/contexts/WizardContext";
+import { useDensity } from "@/contexts/DensityContext";
 import "../../theme/admin-shell.css";
 
 interface AppLayoutProps {
@@ -17,6 +18,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(520);
   const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion, isAwaitingPlatformAction } = useWizard();
+  const { density } = useDensity();
 
   const handleRightSidebarToggle = () => {
     setIsRightSidebarOpen(!isRightSidebarOpen);
@@ -55,16 +57,18 @@ export function AppLayout({ children }: AppLayoutProps) {
         style={
           {
             "--sidebar-width": "calc(var(--spacing) * 72)",
+            "--sidebar-width-icon": "4.5rem",
             "--header-height": "calc(var(--spacing) * 16)",
             "--app-shell-surface": "var(--background)",
             "--app-shell-border": "var(--border)",
-            "--sidebar-surface": "var(--app-shell-surface)",
+            "--sidebar-surface": "var(--sidebar)",
             "--sidebar-border": "var(--app-shell-border)",
           } as React.CSSProperties
         }
       >
         <div
           data-ui-scope="admin-shell"
+          data-density={density}
           className="h-screen w-screen flex overflow-hidden bg-background"
         >
           {/* Left Sidebar */}

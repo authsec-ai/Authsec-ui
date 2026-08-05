@@ -16,6 +16,7 @@ import { useSessionInit } from "./hooks/useSessionInit";
 import { RbacAudienceProvider } from "./contexts/RbacAudienceContext";
 import { GuidedTourProvider, GuidedTourOverlay } from "./features/guided-tour";
 import { WizardProvider } from "./contexts/WizardContext";
+import { DensityProvider } from "./contexts/DensityContext";
 import React from "react";
 
 import { DashboardPage } from "./features/dashboard/DashboardPage";
@@ -171,6 +172,7 @@ function AppContent() {
     <AuthProvider>
       <RbacAudienceProvider>
         <Router>
+          <DensityProvider>
           <WizardProvider>
             <GuidedTourProvider>
               <div className="min-h-screen bg-background text-foreground">
@@ -1320,6 +1322,7 @@ function AppContent() {
               </div>
             </GuidedTourProvider>
           </WizardProvider>
+          </DensityProvider>
         </Router>
       </RbacAudienceProvider>
     </AuthProvider>
