@@ -40,7 +40,7 @@ pipeline {
             steps {
                 sh """
                     echo "Building PUBLIC image: ${DOCKER_IMAGE}"
-                    docker build -t ${DOCKER_IMAGE} .
+                    DOCKER_BUILDKIT=1 docker build -t ${DOCKER_IMAGE} .
                 """
             }
         }
