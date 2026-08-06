@@ -110,7 +110,7 @@ export const externalServiceApi = baseApi.injectEndpoints({
 
     // GET /exsvc/services/{id}/credentials - fetch service credentials (requires MFA)
     getExternalServiceCredentials: builder.query<Record<string, any>, string>({
-      query: (id) => ({ url: `/exsvc/services/${id}/credentials`, method: "GET" }),
+      query: (id) => ({ url: `/authsec/exsvc/services/${id}/credentials`, method: "GET" }),
       providesTags: (_res, _err, id) => [{ type: "ExternalService", id: `${id}-credentials` }],
     }),
 
