@@ -574,17 +574,30 @@ export function generateClusterRole(config: CollectorConfig, name = "authsec-dis
   return `apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: ${name}\nrules:\n${rules}`;
 }
 
-export function helmInstallCommand(displayName: string, token: string): string {
-  const release = displayName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+export function helmInstallCommand(opts: {
+  displayName: string;
+  workspaceId: string;
+  sourceId: string;
+  clusterName: string;
+}): string {
+  const release =
+    opts.displayName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") ||
+    "authsec-discovery";
+  // Installed from a git checkout rather than a chart repo: charts.authsec.ai
+  // does not resolve yet. Swap the first two lines for `helm repo add` once it does.
   return [
-    "helm repo add authsec https://charts.authsec.ai && \\",
-    "helm repo update && \\",
-    `helm install ${release || "authsec-discovery"} authsec/discovery-collector \\`,
+    "git clone https://github.com/authsec-ai/discovery-agent.git && \\",
+    "cd discovery-agent && \\",
+    `helm install ${release} ./charts/authsec-discovery-agent \\`,
     "  --namespace authsec-system --create-namespace \\",
-    `  --set enrollmentToken=${token} \\`,
-    "  --set controlPlane=https://app.authsec.ai",
+    "  --set controlPlane.url=https://app.authsec.ai \\",
+    `  --set workspace.id=${opts.workspaceId} \\`,
+    `  --set discovery.sourceId=${opts.sourceId} \\`,
+    `  --set cluster.name=${opts.clusterName} \\`,
+    "  --set resync.enabled=true",
   ].join("\n");
 }
+
 
 const MOCK_COLLECTOR: CollectorStatus = {
   state: "connected",

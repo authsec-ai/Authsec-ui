@@ -2,9 +2,9 @@
  * Deploy Kubernetes collector — PROTOTYPE, five steps.
  *
  * The control plane does not deploy anything. It generates scan config, the
- * minimum RBAC for that config, and a one-time enrollment token; an operator
- * applies it with Helm; the collector dials out. So the wizard ends in a
- * copy-paste command and a wait, not a "Deploy" action.
+ * minimum RBAC for that config, and the integration id the collector reports
+ * under; an operator applies it with Helm and the collector dials out. So the
+ * wizard ends in a copy-paste command, not a "Deploy" action.
  *
  * Scan config is fetched by the collector on heartbeat, so changing it later
  * never requires a redeploy.
@@ -13,6 +13,8 @@
 import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Check, Copy } from "lucide-react";
+
+import { resolveWorkspaceId } from "@/utils/workspace";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,13 +140,18 @@ export function DeployCollectorWizard({
   const [stage, setStage] = useState("production");
   const [apiServer, setApiServer] = useState("");
   const [config, setConfig] = useState<CollectorConfig>(DEFAULT_COLLECTOR_CONFIG);
-  const [waiting, setWaiting] = useState(false);
+  // The integration is created on entering the Install step, not at the end: its
+  // id goes into the helm command, so it has to exist before the command can be
+  // shown. "Done" then only closes the dialog.
+  const [sourceId, setSourceId] = useState<string | null>(null);
 
-  const token = useMemo(
-    () => `ent_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open],
-  );
+  const workspaceId = useMemo(() => {
+    try {
+      return resolveWorkspaceId() ?? "";
+    } catch {
+      return "";
+    }
+  }, []);
 
   const set = <K extends keyof CollectorConfig>(key: K, value: CollectorConfig[K]) =>
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -155,7 +162,24 @@ export function DeployCollectorWizard({
   ) => setConfig((prev) => ({ ...prev, detection: { ...prev.detection, [key]: value } }));
 
   const rbac = useMemo(() => generateClusterRole(config), [config]);
-  const helm = useMemo(() => helmInstallCommand(displayName, token), [displayName, token]);
+  // cluster.name is part of the agent fingerprint, so it must be stable and
+  // unique per cluster. Derived from the integration name for exactly that reason.
+  const clusterName = useMemo(
+    () =>
+      displayName.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") ||
+      "unnamed-cluster",
+    [displayName],
+  );
+  const helm = useMemo(
+    () =>
+      helmInstallCommand({
+        displayName,
+        workspaceId,
+        sourceId: sourceId ?? "<create the integration first>",
+        clusterName,
+      }),
+    [displayName, workspaceId, sourceId, clusterName],
+  );
 
   const detectionRuleCount =
     config.detection.labelSelectors.length +
@@ -178,12 +202,13 @@ export function DeployCollectorWizard({
     setStage("production");
     setApiServer("");
     setConfig(DEFAULT_COLLECTOR_CONFIG);
-    setWaiting(false);
+    setSourceId(null);
   };
 
-  const finish = async () => {
+  /** Creates the discovery_sources row and captures its id for the install command. */
+  const createIntegration = async () => {
     try {
-      await createSource({
+      const created = await createSource({
         kind: "k8s_webhook",
         display_name: displayName.trim(),
         enabled: true,
@@ -205,12 +230,9 @@ export function DeployCollectorWizard({
           },
         },
       }).unwrap();
-      toast.success(
-        `${displayName.trim()} registered. It will report sightings once the collector connects.`,
-      );
+      setSourceId(created.id);
       onCreated();
-      reset();
-      onOpenChange(false);
+      setStep(STEPS.length - 1);
     } catch (err) {
       const status = (err as { status?: number })?.status;
       toast.error(
@@ -534,33 +556,12 @@ export function DeployCollectorWizard({
               <CodeBlock label="RBAC" code={rbac} />
               <CodeBlock label="Install" code={helm} />
 
-              <div className="space-y-1.5">
-                <Label>Enrollment token</Label>
-                <div className="rounded-md bg-muted px-3 py-2 font-mono text-[11px]">
-                  {token}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  <strong className="font-medium text-foreground">
-                    Not a working credential yet.
-                  </strong>{" "}
-                  There is no enrollment endpoint on the backend, so this value is generated
-                  in the browser and authenticates nothing — the install command above will
-                  not bring a collector up. The integration itself is created for real; only
-                  enrollment is outstanding. Intended behaviour: single use, 24-hour expiry,
-                  swapped for the collector's own rotating identity on first heartbeat.
-                </p>
-              </div>
-
-              {waiting ? (
-                <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-                  <strong className="font-medium text-foreground">
-                    This will not resolve yet.
-                  </strong>{" "}
-                  There is no heartbeat endpoint to wait on, so nothing will report back.
-                  Press Done to save the integration; the collector's first-contact state
-                  lands with the enrollment API.
-                </div>
-              ) : null}
+              <p className="text-xs text-muted-foreground">
+                The command carries this integration&apos;s id, so sightings from this
+                cluster attach to it rather than arriving unattached. No credential is
+                needed: the sightings endpoint is currently unauthenticated and the
+                workspace is asserted by the collector.
+              </p>
             </>
           ) : null}
         </div>
@@ -575,24 +576,30 @@ export function DeployCollectorWizard({
           {step < STEPS.length - 1 ? (
             <Button
               className="text-[length:var(--text-sm)] text-white"
-              disabled={!stepValid}
-              onClick={() => setStep(step + 1)}
+              disabled={!stepValid || saving}
+              onClick={() => {
+                // Entering Install creates the integration, because its id is part
+                // of the command rendered there.
+                if (step === STEPS.length - 2) void createIntegration();
+                else setStep(step + 1);
+              }}
             >
-              Continue
+              {step === STEPS.length - 2
+                ? saving
+                  ? "Creating…"
+                  : "Create integration"
+                : "Continue"}
             </Button>
           ) : (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setWaiting(true)} disabled={waiting}>
-                I&apos;ve run the install
-              </Button>
-              <Button
-                className="text-[length:var(--text-sm)] text-white"
-                disabled={saving}
-                onClick={() => void finish()}
-              >
-                {saving ? "Saving…" : "Done"}
-              </Button>
-            </div>
+            <Button
+              className="text-[length:var(--text-sm)] text-white"
+              onClick={() => {
+                reset();
+                onOpenChange(false);
+              }}
+            >
+              Done
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
