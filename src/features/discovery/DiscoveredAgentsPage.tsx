@@ -42,6 +42,7 @@ import {
   type DiscoveredAgentStatus,
 } from "@/app/api/discoveryApi";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
+import { GitHubEvidenceSection } from "./GitHubEvidenceSection";
 import {
   ClaimAgentDialog,
   ClassifyAgentDialog,
@@ -431,13 +432,22 @@ export default function DiscoveredAgentsPage() {
                   />
                   <DetailRow
                     label="Origin"
-                    value={ORIGIN_LABELS[selected.deployment_origin]}
+                    value={
+                      evidenceModeOf(selected) === "declared" &&
+                      selected.deployment_origin === "unknown"
+                        ? "Not established — a declaration does not say how it was deployed"
+                        : ORIGIN_LABELS[selected.deployment_origin]
+                    }
+                    full
                   />
                   <DetailRow
                     label="Authority source"
                     value={ARCHETYPE_LABELS[selected.archetype]}
                   />
-                  <DetailRow label="Sightings" value={String(selected.sighting_count)} />
+                  <DetailRow
+                    label={evidenceModeOf(selected) === "declared" ? "Scans" : "Sightings"}
+                    value={String(selected.sighting_count)}
+                  />
                   <DetailRow
                     label="First seen"
                     value={formatDistanceToNow(new Date(selected.first_seen_at), {
@@ -445,13 +455,19 @@ export default function DiscoveredAgentsPage() {
                     })}
                   />
                   <DetailRow
-                    label="Last seen"
+                    label={
+                      evidenceModeOf(selected) === "declared"
+                        ? "Last confirmed present"
+                        : "Last seen running"
+                    }
                     value={formatDistanceToNow(new Date(selected.last_seen_at), {
                       addSuffix: true,
                     })}
                   />
                 </DetailGrid>
               </DrawerSection>
+
+              <GitHubEvidenceSection agent={selected} />
 
               {selected.status === "quarantined" && selected.quarantine_reason ? (
                 <DrawerSection label="Quarantine reason">
