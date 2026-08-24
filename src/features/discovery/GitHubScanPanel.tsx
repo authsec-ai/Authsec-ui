@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  useListSourceRepositoriesQuery,
   useScanGitHubSourceMutation,
   type GitHubScanResult,
 } from "@/app/api/discoveryApi";
@@ -69,6 +70,13 @@ function Counter({
 export function GitHubScanPanel({ sourceId }: { sourceId: string }) {
   const [scan, { isLoading }] = useScanGitHubSourceMutation();
   const [result, setResult] = useState<GitHubScanResult | null>(null);
+  // Shares the repository query with the selection panel (RTK dedupes it), so
+  // this panel can tell whether anything is actually in scope. A source created
+  // from a connector starts with an EMPTY selection, which makes this the state
+  // of the very first visit rather than an edge case.
+  const { data: repoData } = useListSourceRepositoriesQuery(sourceId);
+  const nothingSelected =
+    repoData != null && !repoData.repos.some((r) => r.selected);
 
   const run = async () => {
     try {
@@ -104,11 +112,19 @@ export function GitHubScanPanel({ sourceId }: { sourceId: string }) {
               clones a repository, and never stores source code or secret values.
             </p>
           </div>
-          <Button size="sm" onClick={run} disabled={isLoading}>
+          <Button size="sm" onClick={run} disabled={isLoading || nothingSelected}>
             <Play className="mr-1.5 size-3.5" />
             {isLoading ? "Scanning…" : "Run scan"}
           </Button>
         </div>
+
+        {nothingSelected && (
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            No repositories are selected yet, so there is nothing to scan. Choose
+            repositories above and save the selection first — a scan with an empty
+            scope would report success having looked at nothing.
+          </p>
+        )}
 
         {result && (
           <div className="space-y-4 border-t pt-4">
