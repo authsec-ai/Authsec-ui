@@ -122,11 +122,15 @@ export function ClaimAgentDialog({
   };
 
   const submit = async () => {
-    if (!agent || !clientId || !ownerId) return;
+    // Only the owner is required. Leaving the identity blank is the normal path:
+    // most discovered agents are workloads that never authenticate to AuthSec, so
+    // the backend mints a governed identity from the sighting rather than making
+    // someone pick a credential-holder for a workload that holds no credential.
+    if (!agent || !ownerId) return;
     try {
       await claim({
         id: agent.id,
-        matched_client_id: clientId,
+        ...(clientId ? { matched_client_id: clientId } : {}),
         owner_user_id: ownerId,
         archetype,
       }).unwrap();
@@ -165,10 +169,12 @@ export function ClaimAgentDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="claim-client">Governed identity</Label>
+            <Label htmlFor="claim-client">
+              Governed identity <span className="text-muted-foreground">(optional)</span>
+            </Label>
             <Select value={clientId} onValueChange={setClientId}>
               <SelectTrigger id="claim-client">
-                <SelectValue placeholder="Select an agent OAuth client…" />
+                <SelectValue placeholder="Create one automatically (recommended)" />
               </SelectTrigger>
               <SelectContent>
                 {clientOptions.map((c) => (
@@ -181,10 +187,10 @@ export function ClaimAgentDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              {clientOptions.length === 0
-                ? "No agent-kind OAuth clients in this workspace yet — register one first."
-                : "Every token and action this agent takes will trace to this identity."}
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {clientId
+                ? "Every token and action this agent takes will trace to this identity."
+                : "Leave blank and a governed identity is created for this agent, named after the workload. Pick one only to bind this sighting to an identity that already exists."}
             </p>
           </div>
 
@@ -241,7 +247,7 @@ export function ClaimAgentDialog({
           </Button>
           <Button
             className="text-[length:var(--text-sm)] text-white"
-            disabled={!clientId || !ownerId || saving}
+            disabled={!ownerId || saving}
             onClick={() => void submit()}
           >
             {saving ? "Claiming…" : "Claim agent"}

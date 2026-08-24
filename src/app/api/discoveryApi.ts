@@ -413,11 +413,22 @@ export const discoveryApi = baseApi.injectEndpoints({
     }),
 
     // ── The two governance decisions ──────────────────────────────────────
-    // Claim needs BOTH an identity and an owner: a DB CHECK forbids a
-    // registered agent without them, so a partial claim cannot be persisted.
+    // Claim needs an OWNER. The identity is optional: omit it and the backend
+    // mints a governed identity from the sighting, named after the workload.
+    //
+    // A DB CHECK still forbids a registered agent without both, but satisfying
+    // that is the platform's job — most discovered agents are workloads that
+    // never authenticate to AuthSec (no SVID, no client secret), so asking an
+    // operator to pick a credential-holder for them blocked the claim on
+    // information they did not have.
     claimAgent: builder.mutation<
       DiscoveredAgent,
-      { id: string; matched_client_id: string; owner_user_id: string; archetype?: Exclude<AgentArchetype, ""> }
+      {
+        id: string;
+        matched_client_id?: string;
+        owner_user_id: string;
+        archetype?: Exclude<AgentArchetype, "">;
+      }
     >({
       query: ({ id, ...body }) => ({
         url: `/authsec/discovery/agents/${id}/claim`,

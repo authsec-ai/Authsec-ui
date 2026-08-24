@@ -66,17 +66,17 @@ interface MapRolesRequest {
 export const rolesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // Roles CRUD
+    //
+    // NOTE ON THE PATH: the workspace role list lives at /authsec/uflow/admin/roles
+    // (routes.go -> authsec > /uflow > /admin > GET /roles -> ListRolesAdmin).
+    // /authsec/roles does not exist and returns 404 -- which showed up as an empty
+    // Role dropdown in the agent Provision dialog rather than as an error.
+    //
+    // The handler returns a BARE ARRAY of role summaries ({id, name, description,
+    // permissions_count, users_assigned, ...}) and takes no filter params, so the
+    // query string is not forwarded.
     getRoles: builder.query<Role[], RoleFilters>({
-      query: (params = {}) => {
-        const searchParams = new URLSearchParams();
-        if (params.search) searchParams.append('search', params.search);
-        if (params.status) searchParams.append('status', params.status);
-        if (params.role_type) searchParams.append('role_type', params.role_type);
-        if (params.limit) searchParams.append('limit', params.limit.toString());
-        if (params.offset) searchParams.append('offset', params.offset.toString());
-        
-        return `/authsec/roles?${searchParams.toString()}`;
-      },
+      query: () => `/authsec/uflow/admin/roles`,
       providesTags: ['Role'],
     }),
 
