@@ -4,7 +4,9 @@
  * Types mirror `models/discovery.go` exactly. Response envelopes are
  * `{sources: […]}` and `{agents: […], total: n}`.
  *
- * Live: sources CRUD, agents list/get/update/delete, claim, quarantine, coverage.
+ * Live: sources CRUD, agents list/get/update/delete, claim, quarantine,
+ * coverage, and the GitHub channel (source-from-connector, repository
+ * selection, scan).
  * Still mocked: Identities — the backend has no identity endpoint, so that page
  * keeps its fixtures and says so.
  *
@@ -42,6 +44,8 @@ export interface DiscoverySource {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** How many agents this integration has produced. Computed server-side. */
+  agent_count: number;
 }
 
 /** Moves forward only; never returns to unregistered. */
@@ -81,6 +85,10 @@ export interface DiscoveredAgent {
   first_seen_at: string;
   last_seen_at: string;
   sighting_count: number;
+  /** Present once the backend distinguishes declared from observed evidence. */
+  evidence_mode?: EvidenceMode;
+  /** "we saw it RUN at this time" — absent forever on declared findings. */
+  last_observed_running_at?: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -105,6 +113,77 @@ export interface AgentCoverage {
   by_origin: Record<string, CoverageBucket>;
   by_source: Record<string, number>;
   generated_at: string;
+}
+
+// ── GitHub discovery ────────────────────────────────────────────────────────
+// GitHub arrives as a `repo_scan` source built from an existing GitHub App
+// connector (registered under Connectors → GitHub). The App's private key never
+// passes through this API — the connector holds a Vault reference.
+
+/**
+ * Whether a finding was seen RUNNING or only WRITTEN DOWN.
+ *
+ * The inventory's original contract was "a sighting means it is running", which
+ * a repository declaration cannot support: a workflow file might run tonight,
+ * or be dead code from two years ago. Until the backend carries an explicit
+ * column, derive it from the source — see `evidenceModeOf`.
+ */
+export type EvidenceMode = "observed" | "declared" | "inferred";
+
+export const EVIDENCE_LABELS: Record<EvidenceMode, string> = {
+  observed: "Observed running",
+  declared: "Declared in code",
+  inferred: "Inferred",
+};
+
+/**
+ * Source → evidence mode. Runtime channels observe; repository scans only ever
+ * read a declaration. Prefer an explicit `evidence_mode` from the server once it
+ * exists, so this mapping can retire without touching call sites.
+ */
+export function evidenceModeOf(
+  agent: Pick<DiscoveredAgent, "source"> & { evidence_mode?: EvidenceMode },
+): EvidenceMode {
+  if (agent.evidence_mode) return agent.evidence_mode;
+  return agent.source === "repo_scan" ? "declared" : "observed";
+}
+
+/** One repository the installation exposes, with its current selection state. */
+export interface GitHubRepoChoice {
+  native_id: string;
+  full_name: string;
+  default_branch: string;
+  selected: boolean;
+}
+
+/** `all` means everything the INSTALLATION exposes — not the whole org. */
+export interface RepoSelection {
+  mode: "all" | "selected";
+  /** owner/name entries; used when mode is "selected". */
+  include?: string[];
+}
+
+/**
+ * Scan outcome. Four per-repository outcomes are tracked separately on purpose:
+ * choosing not to scan something (`excluded`) is not the same as being unable
+ * to (`failed`), and neither is the same as seeing only part of it
+ * (`truncated`). Collapsing them would report partial coverage as clean.
+ */
+export interface GitHubScanResult {
+  source_id: string;
+  selection_mode: string;
+  repos_scanned: number;
+  repos_failed: number;
+  repos_excluded: number;
+  excluded_repositories?: string[];
+  repos_truncated: number;
+  files_fetched: number;
+  sightings_new: number;
+  sightings_bumped: number;
+  /** False whenever any selected repository failed or truncated. */
+  complete_for_selected_scope: boolean;
+  warnings?: string[];
+  scanned_at: string;
 }
 
 export const STATUS_LABELS: Record<DiscoveredAgentStatus, string> = {
@@ -278,6 +357,82 @@ export const discoveryApi = baseApi.injectEndpoints({
       query: () => ({ url: "/authsec/discovery/coverage", method: "GET" }),
       providesTags: ["AgentCoverage"],
     }),
+
+    // ── GitHub discovery ──────────────────────────────────────────────────
+    // Builds on a GitHub App connector; see connectorsApi for registration.
+
+    /** Turn an existing GitHub App connector into a discovery source. */
+    createSourceFromConnector: builder.mutation<
+      DiscoverySource,
+      { connector_id: string; display_name?: string }
+    >({
+      query: (body) => ({
+        url: "/authsec/discovery/sources/from-connector",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (res: { data?: DiscoverySource } | DiscoverySource) =>
+        ("data" in (res as object) ? (res as { data: DiscoverySource }).data : res) as DiscoverySource,
+      invalidatesTags: ["DiscoverySource"],
+    }),
+
+    /**
+     * What the installation exposes. Repositories the customer did not grant
+     * are absent, and their absence is NOT evidence that they hold no agents —
+     * the server returns that disclaimer in `meta.note` and the UI must show it.
+     */
+    listSourceRepositories: builder.query<
+      { repos: GitHubRepoChoice[]; note: string; asOf?: string },
+      string
+    >({
+      query: (id) => ({
+        url: `/authsec/discovery/sources/${id}/repositories`,
+        method: "GET",
+      }),
+      transformResponse: (res: {
+        data?: GitHubRepoChoice[];
+        meta?: { note?: string; as_of?: string };
+      }) => ({
+        repos: res.data ?? [],
+        note: res.meta?.note ?? "",
+        asOf: res.meta?.as_of,
+      }),
+      providesTags: (_r, _e, id) => [{ type: "DiscoverySource", id }],
+    }),
+
+    /** Record which repositories this source will scan. */
+    setSourceRepositories: builder.mutation<
+      RepoSelection,
+      { id: string } & RepoSelection
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/authsec/discovery/sources/${id}/repositories`,
+        method: "PUT",
+        body,
+      }),
+      transformResponse: (res: { data?: RepoSelection } | RepoSelection) =>
+        ("data" in (res as object) ? (res as { data: RepoSelection }).data : res) as RepoSelection,
+      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoverySource", id }],
+    }),
+
+    /** Run a scan now. Findings land in the agent inventory as unregistered. */
+    scanGitHubSource: builder.mutation<GitHubScanResult, string>({
+      query: (id) => ({
+        url: `/authsec/discovery/sources/${id}/scan`,
+        method: "POST",
+      }),
+      transformResponse: (res: { data: GitHubScanResult }) => res.data,
+      // A scan writes to the inventory and moves coverage. It also updates the
+      // source's own row (last_sync_at, last_status, agent_count) — and that row
+      // is held under the id-scoped tag, which the bare "DiscoverySource" tag
+      // does not reach, so name both.
+      invalidatesTags: (_r, _e, id) => [
+        { type: "DiscoverySource" as const, id },
+        "DiscoverySource",
+        "DiscoveredAgent",
+        "AgentCoverage",
+      ],
+    }),
   }),
   overrideExisting: false,
 });
@@ -294,6 +449,10 @@ export const {
   useClaimAgentMutation,
   useQuarantineAgentMutation,
   useGetAgentCoverageQuery,
+  useCreateSourceFromConnectorMutation,
+  useListSourceRepositoriesQuery,
+  useSetSourceRepositoriesMutation,
+  useScanGitHubSourceMutation,
 } = discoveryApi;
 // ── Identities ──────────────────────────────────────────────────────────────
 // Generic schema. There is no identity table in the team's discovery doc, so

@@ -41,6 +41,7 @@ import {
   type DiscoverySource,
 } from "@/app/api/discoveryApi";
 import { AddIntegrationDialog } from "./AddIntegrationDialog";
+import { ConnectGitHubDialog } from "./ConnectGitHubDialog";
 import { DeployCollectorWizard } from "./DeployCollectorWizard";
 import {
   DropdownMenu,
@@ -73,6 +74,17 @@ function StatusPill({ source }: { source: DiscoverySource }) {
   // last_status is free text from the connector, not an enum — map what we know
   // and fall through to showing the raw value rather than inventing a state.
   const raw = source.last_status?.trim() ?? "";
+  // A source that has reported is live, whatever the connector wrote in
+  // last_status. Without this an integration that is demonstrably working shows
+  // "Never run" forever, because most connectors never set the field.
+  if (raw === "" && source.last_sync_at) {
+    return (
+      <span className={`${PILL} bg-(--color-success-soft) text-(--color-success-text)`}>
+        <span className="size-1.5 rounded-full bg-current" />
+        Reporting
+      </span>
+    );
+  }
   const known: Record<string, { cls: string; label: string }> = {
     "": { cls: "bg-muted text-muted-foreground", label: "Never run" },
     ok: { cls: "bg-(--color-success-soft) text-(--color-success-text)", label: "Healthy" },
@@ -100,6 +112,7 @@ export default function DiscoveryIntegrationsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
+  const [githubOpen, setGithubOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscoverySource | null>(null);
   const [updateSource] = useUpdateDiscoverySourceMutation();
@@ -196,6 +209,18 @@ export default function DiscoveryIntegrationsPage() {
         ),
       },
       {
+        id: "agent_count",
+        header: "Agents",
+        priority: 2,
+        approxWidth: 90,
+        cell: ({ row }) =>
+          row.original.agent_count > 0 ? (
+            <span className="text-xs font-medium">{row.original.agent_count}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">None yet</span>
+          ),
+      },
+      {
         id: "last_error",
         header: "Detail",
         priority: 4,
@@ -259,8 +284,11 @@ export default function DiscoveryIntegrationsPage() {
             <DropdownMenuItem onSelect={() => setWizardOpen(true)}>
               Kubernetes — deploy collector
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setGithubOpen(true)}>
+              GitHub — scan repositories
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setAddOpen(true)}>
-              Cloud, VM or repository — connect credential
+              Cloud or VM — connect credential
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -306,6 +334,17 @@ export default function DiscoveryIntegrationsPage() {
         open={wizardOpen}
         onOpenChange={setWizardOpen}
         onCreated={() => void refetch()}
+      />
+
+      <ConnectGitHubDialog
+        open={githubOpen}
+        onOpenChange={setGithubOpen}
+        onCreated={(sourceId) => {
+          void refetch();
+          // Land the admin on repository selection: the source exists but is
+          // scanning nothing until a scope is chosen.
+          navigate(`/iga/integrations/${sourceId}`);
+        }}
       />
 
       <AddIntegrationDialog

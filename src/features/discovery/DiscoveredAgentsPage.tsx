@@ -31,6 +31,8 @@ import {
 } from "@/components/console/detail";
 import {
   ARCHETYPE_LABELS,
+  EVIDENCE_LABELS,
+  evidenceModeOf,
   ORIGIN_LABELS,
   SOURCE_LABELS,
   STATUS_LABELS,
@@ -40,6 +42,7 @@ import {
   type DiscoveredAgentStatus,
 } from "@/app/api/discoveryApi";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
+import { GitHubEvidenceSection } from "./GitHubEvidenceSection";
 import {
   ClaimAgentDialog,
   ClassifyAgentDialog,
@@ -58,6 +61,34 @@ const FILTERS: ConsoleFilterOption[] = [
 
 const PILL =
   "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium";
+
+/**
+ * Observed vs declared.
+ *
+ * The inventory began as a list of things seen RUNNING, and a repository scan
+ * cannot support that claim — a workflow file is a statement of intent that may
+ * never have executed. Without this badge a declared finding reads as a live
+ * process, which is the one misstatement this page must not make.
+ */
+function EvidencePill({ agent }: { agent: DiscoveredAgent }) {
+  const mode = evidenceModeOf(agent);
+  const style: Record<string, string> = {
+    observed: "bg-(--color-success-soft) text-(--color-success-text)",
+    declared: "bg-(--color-info-soft) text-(--color-info-text)",
+    inferred: "bg-muted text-muted-foreground",
+  };
+  const title: Record<string, string> = {
+    observed: "Seen running in a live environment.",
+    declared:
+      "Found written down in code — a CI/CD workflow, manifest or infrastructure file. It may or may not have ever run.",
+    inferred: "Deduced from indirect signal; the weakest form of evidence.",
+  };
+  return (
+    <span className={`${PILL} ${style[mode]}`} title={title[mode]}>
+      {EVIDENCE_LABELS[mode]}
+    </span>
+  );
+}
 
 const STATUS_STYLE: Record<DiscoveredAgentStatus, string> = {
   unregistered: "bg-(--color-warning-soft) text-(--color-warning-text)",
@@ -150,6 +181,13 @@ export default function DiscoveredAgentsPage() {
         ),
       },
       {
+        id: "evidence",
+        header: "Evidence",
+        priority: 2,
+        approxWidth: 150,
+        cell: ({ row }) => <EvidencePill agent={row.original} />,
+      },
+      {
         id: "status",
         header: "Status",
         priority: 1,
@@ -214,17 +252,30 @@ export default function DiscoveredAgentsPage() {
         header: "Last seen",
         priority: 6,
         approxWidth: 150,
-        cell: ({ row }) => (
-          <div>
-            <div className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(row.original.last_seen_at), { addSuffix: true })}
+        cell: ({ row }) => {
+          // For a declared finding this timestamp means "the file was still
+          // there", not "the agent was still running". Label it as such rather
+          // than letting the column header imply liveness.
+          const declared = evidenceModeOf(row.original) === "declared";
+          return (
+            <div>
+              <div className="text-xs text-muted-foreground">
+                {formatDistanceToNow(new Date(row.original.last_seen_at), {
+                  addSuffix: true,
+                })}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {declared
+                  ? `still declared · ${row.original.sighting_count} scan${
+                      row.original.sighting_count === 1 ? "" : "s"
+                    }`
+                  : `${row.original.sighting_count} sighting${
+                      row.original.sighting_count === 1 ? "" : "s"
+                    }`}
+              </div>
             </div>
-            <div className="text-[11px] text-muted-foreground">
-              {row.original.sighting_count} sighting
-              {row.original.sighting_count === 1 ? "" : "s"}
-            </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         id: "actions",
@@ -381,13 +432,22 @@ export default function DiscoveredAgentsPage() {
                   />
                   <DetailRow
                     label="Origin"
-                    value={ORIGIN_LABELS[selected.deployment_origin]}
+                    value={
+                      evidenceModeOf(selected) === "declared" &&
+                      selected.deployment_origin === "unknown"
+                        ? "Not established — a declaration does not say how it was deployed"
+                        : ORIGIN_LABELS[selected.deployment_origin]
+                    }
+                    full
                   />
                   <DetailRow
                     label="Authority source"
                     value={ARCHETYPE_LABELS[selected.archetype]}
                   />
-                  <DetailRow label="Sightings" value={String(selected.sighting_count)} />
+                  <DetailRow
+                    label={evidenceModeOf(selected) === "declared" ? "Scans" : "Sightings"}
+                    value={String(selected.sighting_count)}
+                  />
                   <DetailRow
                     label="First seen"
                     value={formatDistanceToNow(new Date(selected.first_seen_at), {
@@ -395,13 +455,19 @@ export default function DiscoveredAgentsPage() {
                     })}
                   />
                   <DetailRow
-                    label="Last seen"
+                    label={
+                      evidenceModeOf(selected) === "declared"
+                        ? "Last confirmed present"
+                        : "Last seen running"
+                    }
                     value={formatDistanceToNow(new Date(selected.last_seen_at), {
                       addSuffix: true,
                     })}
                   />
                 </DetailGrid>
               </DrawerSection>
+
+              <GitHubEvidenceSection agent={selected} />
 
               {selected.status === "quarantined" && selected.quarantine_reason ? (
                 <DrawerSection label="Quarantine reason">
