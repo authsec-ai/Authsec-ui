@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,7 @@ export function AddConnectorDialog({
   const [ghShowRegister, setGhShowRegister] = useState(false);
   const [ghAppId, setGhAppId] = useState("");
   const [ghPrivateKey, setGhPrivateKey] = useState("");
+  const [ghKeyFileName, setGhKeyFileName] = useState("");
   const [ghInstallationId, setGhInstallationId] = useState("");
   const [ghOrgName, setGhOrgName] = useState("");
 
@@ -144,6 +145,7 @@ export function AddConnectorDialog({
       toast.success("GitHub App registered for this workspace.");
       setGhShowRegister(false);
       setGhPrivateKey("");
+      setGhKeyFileName("");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Couldn't register the GitHub App.");
@@ -318,11 +320,54 @@ export function AddConnectorDialog({
                       <textarea
                         value={ghPrivateKey}
                         onChange={(e) => setGhPrivateKey(e.target.value)}
-                        placeholder="-----BEGIN RSA PRIVATE KEY-----"
+                        placeholder="-----BEGIN RSA PRIVATE KEY----- (or upload the .pem below)"
                         rows={3}
                         className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[11px]"
                         spellCheck={false}
                       />
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Reads the .pem in the browser and fills the field above.
+                            The file itself is never uploaded anywhere — it goes out
+                            in the same request body a paste would produce — which
+                            keeps the handling identical while removing a
+                            copy-paste step people get wrong (a truncated key, or a
+                            missing BEGIN/END line, fails much later and unhelpfully
+                            at token-minting time). */}
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted/50">
+                          <Upload className="size-3.5" />
+                          Upload .pem
+                          <input
+                            type="file"
+                            accept=".pem,.key,application/x-pem-file,text/plain"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const text = String(reader.result ?? "").trim();
+                                if (!text.includes("PRIVATE KEY")) {
+                                  toast.error(
+                                    "That file does not look like a PEM private key — no BEGIN PRIVATE KEY line.",
+                                  );
+                                  return;
+                                }
+                                setGhPrivateKey(text);
+                                setGhKeyFileName(file.name);
+                              };
+                              reader.onerror = () => toast.error("Could not read that file.");
+                              reader.readAsText(file);
+                              // Reset so re-picking the same file fires onChange again.
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {ghKeyFileName && (
+                          <span className="text-[11px] text-muted-foreground">
+                            loaded {ghKeyFileName}
+                          </span>
+                        )}
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"

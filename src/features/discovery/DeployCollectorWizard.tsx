@@ -1,13 +1,14 @@
 /**
- * Deploy Kubernetes collector — PROTOTYPE, five steps.
+ * Deploy Kubernetes agent — five steps.
  *
- * The control plane does not deploy anything. It generates scan config, the
- * minimum RBAC for that config, and the integration id the collector reports
- * under; an operator applies it with Helm and the collector dials out. So the
- * wizard ends in a copy-paste command, not a "Deploy" action.
+ * The control plane does not deploy anything. It records the integration and
+ * generates the `helm install` command for the `authsec-iga-agent` chart; an
+ * operator applies it and the agent dials out, self-registering by
+ * `cluster.name`. So the wizard ends in a copy-paste command, not a "Deploy"
+ * action.
  *
- * Scan config is fetched by the collector on heartbeat, so changing it later
- * never requires a redeploy.
+ * The component is the `iga-agent` everywhere in the backend, the chart, and the
+ * docs — "agent", not "collector" — so the copy follows suit.
  */
 
 import { useMemo, useState } from "react";
@@ -47,6 +48,15 @@ import {
 } from "@/app/api/discoveryApi";
 
 const STEPS = ["Cluster", "Scope", "Detection", "Schedule", "Install"] as const;
+
+// The chart this console has been tested against. Chart + appVersion move
+// together per iga-agent release; pin both so a fresh install lands on a known
+// image rather than whatever "latest" happens to be.
+const CHART_VERSION = "0.3.0";
+// This deployment publishes no fixed Helm repo URL, so the chart reference is a
+// value the operator fills in — a local checkout path or an OCI/HTTP ref. We do
+// NOT hardcode a repo that may not resolve; the placeholder shows the shape.
+const DEFAULT_CHART_REF = "./charts/authsec-iga-agent";
 
 const RESYNC_OPTIONS = [
   { value: "5", label: "Every 5 minutes" },
@@ -139,11 +149,18 @@ export function DeployCollectorWizard({
   const [displayName, setDisplayName] = useState("");
   const [stage, setStage] = useState("production");
   const [apiServer, setApiServer] = useState("");
+  // Control-plane URL the agent reports sightings to. Defaults to where the
+  // console is served, which is where the ingest endpoints live.
+  const [controlPlaneUrl, setControlPlaneUrl] = useState(
+    typeof window !== "undefined" ? window.location.origin : "",
+  );
+  // The chart reference is operator-supplied — see DEFAULT_CHART_REF.
+  const [chartRef, setChartRef] = useState(DEFAULT_CHART_REF);
   const [config, setConfig] = useState<CollectorConfig>(DEFAULT_COLLECTOR_CONFIG);
-  // The integration is created on entering the Install step, not at the end: its
-  // id goes into the helm command, so it has to exist before the command can be
-  // shown. "Done" then only closes the dialog.
-  const [sourceId, setSourceId] = useState<string | null>(null);
+  // The integration row is created on entering the Install step so the console
+  // tracks this cluster. The agent then self-registers by cluster.name — nothing
+  // binds the install to this row's id — so "Done" only closes the dialog.
+  const [created, setCreated] = useState(false);
 
   const workspaceId = useMemo(() => {
     try {
@@ -173,12 +190,13 @@ export function DeployCollectorWizard({
   const helm = useMemo(
     () =>
       helmInstallCommand({
-        displayName,
-        workspaceId,
-        sourceId: sourceId ?? "<create the integration first>",
+        controlPlaneUrl: controlPlaneUrl.trim() || "https://<control-plane>",
+        workspaceId: workspaceId || "<workspace-id>",
         clusterName,
+        chartRef: chartRef.trim() || DEFAULT_CHART_REF,
+        chartVersion: CHART_VERSION,
       }),
-    [displayName, workspaceId, sourceId, clusterName],
+    [controlPlaneUrl, workspaceId, clusterName, chartRef],
   );
 
   const detectionRuleCount =
@@ -201,14 +219,16 @@ export function DeployCollectorWizard({
     setDisplayName("");
     setStage("production");
     setApiServer("");
+    setControlPlaneUrl(typeof window !== "undefined" ? window.location.origin : "");
+    setChartRef(DEFAULT_CHART_REF);
     setConfig(DEFAULT_COLLECTOR_CONFIG);
-    setSourceId(null);
+    setCreated(false);
   };
 
-  /** Creates the discovery_sources row and captures its id for the install command. */
+  /** Records this cluster as an integration so the console tracks it. */
   const createIntegration = async () => {
     try {
-      const created = await createSource({
+      await createSource({
         kind: "k8s_webhook",
         display_name: displayName.trim(),
         enabled: true,
@@ -230,7 +250,7 @@ export function DeployCollectorWizard({
           },
         },
       }).unwrap();
-      setSourceId(created.id);
+      setCreated(true);
       onCreated();
       setStep(STEPS.length - 1);
     } catch (err) {
@@ -298,6 +318,15 @@ export function DeployCollectorWizard({
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="prod-eks-us-east"
                 />
+                <p className="rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
+                  <strong className="font-medium">Must be stable and unique per cluster.</strong>{" "}
+                  <span className="text-foreground/80">
+                    It becomes <span className="font-mono">cluster.name</span> — part of every
+                    agent&apos;s fingerprint <em>and</em> its self-registration key
+                    (<span className="font-mono">k8s:{clusterName}</span>). A typo, or reusing a
+                    name across two clusters, silently merges their inventories into one.
+                  </span>
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cl-stage">Deployment stage</Label>
@@ -327,6 +356,20 @@ export function DeployCollectorWizard({
                 />
                 <p className="text-xs text-muted-foreground">
                   Used only to correlate findings to a known cluster. Not connected to.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cl-cp">Control plane URL</Label>
+                <Input
+                  id="cl-cp"
+                  value={controlPlaneUrl}
+                  onChange={(e) => setControlPlaneUrl(e.target.value)}
+                  placeholder="https://app.authsec.ai"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Where the agent reports sightings and self-registers. Defaults to this
+                  console&apos;s origin.
                 </p>
               </div>
             </>
@@ -539,28 +582,53 @@ export function DeployCollectorWizard({
           {/* 5 — Install */}
           {step === 4 ? (
             <>
+              {created ? (
+                <div className="rounded-md border-l-2 border-l-(--color-success-text) bg-(--color-success-soft) px-3 py-2 text-xs text-(--color-success-text)">
+                  Integration recorded. Run the command below; the cluster appears here once the
+                  agent&apos;s first heartbeat lands.
+                </div>
+              ) : null}
               <div className="rounded-md border px-3 py-2.5 text-xs">
                 <div className="font-medium text-foreground">
-                  What this ServiceAccount can do
+                  What this agent can do
                 </div>
                 <p className="mt-1 text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {config.kinds.length} kind{config.kinds.length === 1 ? "" : "s"}
-                  </span>{" "}
-                  with <span className="font-mono">get, list, watch</span> only. It cannot
-                  read Secrets or ConfigMap values, cannot exec into pods, cannot read logs,
-                  and has no create, update or delete verb anywhere.
+                  Discovery is <span className="font-medium text-foreground">report-only</span>:
+                  it registers as a <span className="font-mono">ValidatingWebhookConfiguration</span>{" "}
+                  with <span className="font-mono">failurePolicy: Ignore</span>, so the API server
+                  pushes workloads to it and it needs almost no cluster read permission. It never
+                  modifies a workload and can never block a pod from starting. Enabling periodic
+                  resync (opt-in) adds a read-only <span className="font-mono">list</span> on
+                  workloads to catch agents that predate the install; the chart renders that RBAC
+                  only when you turn it on.
                 </p>
               </div>
 
-              <CodeBlock label="RBAC" code={rbac} />
+              <div className="space-y-2">
+                <Label htmlFor="in-chart">Chart reference</Label>
+                <Input
+                  id="in-chart"
+                  value={chartRef}
+                  onChange={(e) => setChartRef(e.target.value)}
+                  placeholder="./charts/authsec-iga-agent"
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  A local checkout path, or an OCI/HTTP chart reference your organisation
+                  publishes. The release name is fixed to{" "}
+                  <span className="font-mono">authsec-iga-agent</span> so Helm renders resources
+                  unprefixed — do not change it.
+                </p>
+              </div>
+
+              <CodeBlock label="Resync RBAC (only if you enable periodic resync)" code={rbac} />
               <CodeBlock label="Install" code={helm} />
 
               <p className="text-xs text-muted-foreground">
-                The command carries this integration&apos;s id, so sightings from this
-                cluster attach to it rather than arriving unattached. No credential is
-                needed: the sightings endpoint is currently unauthenticated and the
-                workspace is asserted by the collector.
+                No credential is needed: the sightings endpoint is unauthenticated by design and
+                the agent asserts <span className="font-mono">workspace.id</span> on every
+                sighting. It self-registers by <span className="font-mono">cluster.name</span>, so
+                this cluster appears in the console once the agent&apos;s first heartbeat lands.
               </p>
             </>
           ) : null}

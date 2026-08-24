@@ -1,50 +1,36 @@
 /**
- * Discovery → Integration detail (Kubernetes collector).
+ * Discovery → Integration detail (Kubernetes agent).
  *
- * PROTOTYPE. The panel that matters here is Permissions: what the generated
- * RBAC asked for versus what the collector can actually read. A platform team
- * routinely trims a ClusterRole before applying it, and if we don't surface that
- * we would report coverage we do not have.
+ * Live: the connector row the `iga-agent` self-registers and heartbeats into.
+ * `connected` is derived by the backend at read time — we render it, we do not
+ * recompute it from a timestamp. Runtime counters (namespaces visible, workloads
+ * scanned/matched) come out of the agent's `runtime` snapshot and are shown only
+ * when present — never fabricated.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowLeft, ArrowUpCircle } from "lucide-react";
+import { ArrowLeft, ShieldCheck, ShieldAlert, KeyRound } from "lucide-react";
+
+import { ActuationTokenDialog } from "../governance/ActuationTokenDialog";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { GitHubRepositoryPanel } from "./GitHubRepositoryPanel";
 import { GitHubScanPanel } from "./GitHubScanPanel";
-import { TableCard } from "@/theme/components/cards";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   SOURCE_LABELS,
   generateClusterRole,
-  useCollectorConfig,
-  useCollectorStatus,
+  collectorConfigFromSource,
+  connectorStatusFromSource,
   useListDiscoveredAgentsQuery,
   useGetDiscoverySourceQuery,
-  type CollectorState,
-  type PermissionGrant,
 } from "@/app/api/discoveryApi";
 
 const PILL =
   "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium";
-
-const STATE_STYLE: Record<CollectorState, string> = {
-  connected: "bg-(--color-success-soft) text-(--color-success-text)",
-  awaiting_enrollment: "bg-(--color-warning-soft) text-(--color-warning-text)",
-  degraded: "bg-(--color-warning-soft) text-(--color-warning-text)",
-  disconnected: "bg-(--color-danger-soft) text-(--color-danger-text)",
-};
-
-const STATE_LABEL: Record<CollectorState, string> = {
-  connected: "Connected",
-  awaiting_enrollment: "Awaiting enrollment",
-  degraded: "Degraded",
-  disconnected: "Disconnected",
-};
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -58,28 +44,6 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-/** Requested vs granted, per rule. */
-function permissionVerdict(p: PermissionGrant): {
-  label: string;
-  tone: "ok" | "partial" | "missing";
-  detail: string;
-} {
-  if (p.clusterWideRequested && p.clusterWideGranted) {
-    return { label: "Full", tone: "ok", detail: "All namespaces" };
-  }
-  if (p.clusterWideRequested && p.grantedNamespaces.length > 0) {
-    return {
-      label: "Partial",
-      tone: "partial",
-      detail: `${p.grantedNamespaces.length} namespace${p.grantedNamespaces.length === 1 ? "" : "s"}: ${p.grantedNamespaces.join(", ")}`,
-    };
-  }
-  if (p.clusterWideRequested && p.grantedNamespaces.length === 0) {
-    return { label: "Denied", tone: "missing", detail: "No namespace readable" };
-  }
-  return { label: "Full", tone: "ok", detail: p.grantedNamespaces.join(", ") || "As requested" };
-}
-
 export default function IntegrationDetailPage() {
   const { id = "" } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -87,21 +51,19 @@ export default function IntegrationDetailPage() {
     skip: !id,
   });
   const { data: agentsData } = useListDiscoveredAgentsQuery();
-  // Collector telemetry has no endpoint yet — heartbeat, version and the
-  // requested-vs-effective RBAC report are still local fixtures.
-  const { data: status } = useCollectorStatus(id);
-  const { data: config } = useCollectorConfig(id);
+  const [tokenOpen, setTokenOpen] = useState(false);
 
   const foundHere = useMemo(
     () => (agentsData?.agents ?? []).filter((a) => a.discovery_source_id === id),
     [agentsData, id],
   );
-  const rbac = useMemo(() => generateClusterRole(config), [config]);
 
-  const missingNamespaces = useMemo(() => {
-    if (!status) return [];
-    return status.namespacesConfigured.filter((ns) => !status.namespacesVisible.includes(ns));
-  }, [status]);
+  const status = useMemo(
+    () => (source ? connectorStatusFromSource(source) : null),
+    [source],
+  );
+  const config = useMemo(() => collectorConfigFromSource(source), [source]);
+  const rbac = useMemo(() => generateClusterRole(config), [config]);
 
   if (sourceLoading) {
     return <ConsolePage title="Integration" description="Loading…">{null}</ConsolePage>;
@@ -118,7 +80,7 @@ export default function IntegrationDetailPage() {
   }
 
   const isK8s = source.kind === "k8s_webhook";
-  // `repo_scan` is the GitHub channel: no in-cluster collector, an explicit
+  // `repo_scan` is the GitHub channel: no in-cluster agent, an explicit
   // repository scope, and a scan the admin triggers.
   const isGitHub = source.kind === "repo_scan";
 
@@ -153,25 +115,25 @@ export default function IntegrationDetailPage() {
       ) : !isK8s || !status ? (
         <div className="rounded-md border border-dashed px-4 py-3 text-xs text-muted-foreground">
           {isK8s
-            ? "No collector telemetry yet. The integration is registered; heartbeat, version and effective-permission reporting need the collector's own endpoint, which does not exist yet."
-            : "This channel has no in-cluster collector. Only Kubernetes channels deploy an agent; the rest poll a provider API with a stored credential reference."}
+            ? "This integration has not been contacted by an agent yet. It will show live status once the iga-agent's first heartbeat lands."
+            : "This channel has no in-cluster agent. Only Kubernetes channels deploy an agent; the rest poll a provider API with a stored credential reference."}
         </div>
       ) : (
         <>
-          {/* Collector state */}
+          {/* Connector state — `connected` is derived by the backend, not by us. */}
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`${PILL} ${STATE_STYLE[status.state]}`}>
+            <span
+              className={`${PILL} ${
+                status.connected
+                  ? "bg-(--color-success-soft) text-(--color-success-text)"
+                  : "bg-(--color-danger-soft) text-(--color-danger-text)"
+              }`}
+            >
               <span className="size-1.5 rounded-full bg-current" />
-              {STATE_LABEL[status.state]}
+              {status.connected ? "Connected" : "Disconnected"}
             </span>
             <span className="text-xs text-muted-foreground">
-              collector v{status.version ?? "—"}
-              {status.version && status.version !== status.latestVersion ? (
-                <span className="ml-2 inline-flex items-center gap-1 text-(--color-warning-text)">
-                  <ArrowUpCircle className="size-3.5" />
-                  v{status.latestVersion} available
-                </span>
-              ) : null}
+              agent v{status.agentVersion || "—"}
             </span>
             <span className="text-xs text-muted-foreground">
               last heartbeat{" "}
@@ -179,99 +141,81 @@ export default function IntegrationDetailPage() {
                 ? formatDistanceToNow(new Date(status.lastHeartbeatAt), { addSuffix: true })
                 : "never"}
             </span>
+            {!status.selfRegistered ? (
+              <span className="text-xs text-muted-foreground">
+                (created by hand — not self-registered by an agent)
+              </span>
+            ) : null}
+          </div>
+
+          {/* Actuation posture: whether quarantine decisions actually enforce here. */}
+          <div
+            className={`rounded-md border-l-2 px-4 py-3 text-xs ${
+              status.actuationEnabledAt
+                ? "border-l-(--color-success-text) bg-(--color-success-soft)"
+                : "border-l-(--color-warning-text) bg-(--color-warning-soft)"
+            }`}
+          >
+            {status.actuationEnabledAt ? (
+              <span className="inline-flex items-center gap-1.5 text-(--color-success-text)">
+                <ShieldCheck className="size-3.5" />
+                <span>
+                  <strong className="font-medium">Enforcement is live.</strong>{" "}
+                  <span className="text-foreground/80">
+                    Actuation was enabled{" "}
+                    {formatDistanceToNow(new Date(status.actuationEnabledAt), { addSuffix: true })}.
+                    Quarantine decisions become NetworkPolicies in this cluster.
+                  </span>
+                </span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-(--color-warning-text)">
+                <ShieldAlert className="size-3.5" />
+                <span>
+                  <strong className="font-medium">Quarantine is advisory here.</strong>{" "}
+                  <span className="text-foreground/80">
+                    Actuation is not enabled on this connector, so quarantine decisions are
+                    recorded but nothing in that cluster enforces them — a quarantined agent keeps
+                    full network access. Mint an actuation token and install the agent with the
+                    actuation role to change that.
+                  </span>
+                </span>
+              </span>
+            )}
+            <div className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setTokenOpen(true)}
+              >
+                <KeyRound className="size-3.5" />
+                {status.actuationEnabledAt ? "Re-mint actuation token" : "Mint actuation token"}
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Workloads scanned"
-              value={String(status.workloadsScanned)}
-              hint="In visible namespaces"
+              value={status.workloadsScanned != null ? String(status.workloadsScanned) : "—"}
+              hint={status.workloadsScanned == null ? "Not reported yet" : "In visible namespaces"}
             />
             <Stat
               label="Agents matched"
-              value={String(status.workloadsMatched)}
+              value={status.workloadsMatched != null ? String(status.workloadsMatched) : "—"}
               hint={`${foundHere.length} in inventory`}
             />
             <Stat
               label="Namespaces visible"
-              value={`${status.namespacesVisible.length} of ${status.namespacesConfigured.length}`}
-              hint={missingNamespaces.length > 0 ? "Coverage is incomplete" : "Full coverage"}
+              value={status.namespacesVisible != null ? String(status.namespacesVisible) : "—"}
+              hint={status.namespacesVisible == null ? "Not reported yet" : undefined}
             />
             <Stat
-              label="Resync"
-              value={config.watchEnabled ? "Watch + periodic" : "Periodic only"}
-              hint={`Every ${config.resyncMinutes} min`}
+              label="Instance"
+              value={source.cluster_name || "—"}
+              hint={source.instance_id || undefined}
             />
-          </div>
-
-          {/* The panel that matters */}
-          <div>
-            <h2 className="mb-1 mt-2 text-sm font-semibold">Permissions</h2>
-            <p className="mb-3 text-xs text-muted-foreground">
-              What the generated RBAC asked for, against what the collector can actually read.
-              A trimmed ClusterRole is normal — but it means coverage is partial, and that is
-              reported rather than assumed.
-            </p>
-            <TableCard>
-              <CardContent variant="flush">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                        <th className="px-4 py-2.5 font-semibold">Resource</th>
-                        <th className="px-4 py-2.5 font-semibold">Verbs</th>
-                        <th className="px-4 py-2.5 font-semibold">Requested</th>
-                        <th className="px-4 py-2.5 font-semibold">Effective</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {status.permissions.map((p) => {
-                        const v = permissionVerdict(p);
-                        return (
-                          <tr key={p.resource} className="border-b last:border-0">
-                            <td className="px-4 py-2.5 font-mono">{p.resource}</td>
-                            <td className="px-4 py-2.5 font-mono text-muted-foreground">
-                              {p.verbs.join(", ")}
-                            </td>
-                            <td className="px-4 py-2.5 text-muted-foreground">
-                              {p.clusterWideRequested ? "All namespaces" : p.requestedNamespaces.join(", ")}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <span
-                                className={`${PILL} ${
-                                  v.tone === "ok"
-                                    ? "bg-(--color-success-soft) text-(--color-success-text)"
-                                    : v.tone === "partial"
-                                      ? "bg-(--color-warning-soft) text-(--color-warning-text)"
-                                      : "bg-(--color-danger-soft) text-(--color-danger-text)"
-                                }`}
-                              >
-                                {v.label}
-                              </span>
-                              <div className="mt-1 max-w-[280px] truncate text-[11px] text-muted-foreground" title={v.detail}>
-                                {v.detail}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </TableCard>
-
-            {missingNamespaces.length > 0 ? (
-              <div className="mt-3 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-4 py-3 text-xs">
-                <strong className="font-medium">
-                  {missingNamespaces.length} configured namespace
-                  {missingNamespaces.length === 1 ? "" : "s"} not readable:
-                </strong>{" "}
-                <span className="font-mono">{missingNamespaces.join(", ")}</span>. Anything
-                running there is invisible to this channel. This is reported as partial
-                coverage, never as zero agents.
-              </div>
-            ) : null}
           </div>
 
           {/* Config + RBAC */}
@@ -308,27 +252,21 @@ export default function IntegrationDetailPage() {
                       {config.detection.reportLowConfidence ? "Reported" : "Suppressed"}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">Heartbeat</dt>
-                    <dd className="text-right font-mono">{config.heartbeatSeconds}s</dd>
-                  </div>
                 </dl>
                 <p className="rounded-md border border-dashed px-3 py-2 text-[11px] text-muted-foreground">
-                  Config is fetched on heartbeat. Editing it applies within{" "}
-                  {config.heartbeatSeconds}s — no redeploy, no Helm upgrade.
+                  Detection vocabulary is refreshed from the control plane in place, so keeping the
+                  agent current on new frameworks needs no redeploy.
                 </p>
-                <Button variant="outline" size="sm" className="text-xs">
-                  Edit scan configuration
-                </Button>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="space-y-2 px-4 py-4">
-                <h3 className="text-sm font-semibold">Generated RBAC</h3>
+                <h3 className="text-sm font-semibold">Resync RBAC</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Read-only by construction: no Secrets, no <span className="font-mono">pods/exec</span>,
-                  no <span className="font-mono">pods/log</span>, and no write verb anywhere.
+                  Discovery via admission needs no cluster read at all. This read-only role is
+                  rendered by the chart only when periodic resync is enabled — no Secrets, no{" "}
+                  <span className="font-mono">pods/exec</span>, and no write verb anywhere.
                 </p>
                 <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">
                   {rbac}
@@ -338,6 +276,13 @@ export default function IntegrationDetailPage() {
           </div>
         </>
       )}
+
+      <ActuationTokenDialog
+        connectorId={source.id}
+        connectorName={source.display_name}
+        open={tokenOpen}
+        onOpenChange={setTokenOpen}
+      />
     </ConsolePage>
   );
 }

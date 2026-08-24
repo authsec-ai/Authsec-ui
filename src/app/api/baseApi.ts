@@ -174,6 +174,16 @@ export const baseApi = createApi({
     "DiscoveredAgent",
     "DiscoveredIdentity",
     "AgentCoverage",
+    // Governance + provisioning (see app/api/governanceApi.ts)
+    "Provenance",
+    "SoDRule",
+    "SoDViolation",
+    "CertificationCampaign",
+    "CertificationItem",
+    "ProvisioningInstruction",
+    "BirthrightPolicy",
+    "StaleBirthright",
+    "OrphanedAgent",
   ],
   endpoints: () => ({}),
 });

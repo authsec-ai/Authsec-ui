@@ -41,6 +41,23 @@ export interface DiscoverySource {
   /** Free text from the connector; "" when never run. Not an enum. */
   last_status: string;
   last_error: string;
+  // ── Agent self-registration + heartbeat (the iga-agent identifies itself) ──
+  /** Registration key, "k8s:<cluster.name>". */
+  instance_id: string;
+  cluster_name: string;
+  /** "" unless the chart was installed with cluster.readUID=true. */
+  cluster_uid: string;
+  agent_version: string;
+  last_heartbeat_at?: string;
+  /** false = the row was created by hand in the console, not by an agent. */
+  self_registered: boolean;
+  /** Last runtime snapshot the agent reported. Opaque json blob. */
+  runtime: unknown;
+  /** null = actuation is not enabled here; quarantine is advisory in this cluster. */
+  actuation_enabled_at?: string;
+  /** DERIVED at read time (heartbeat within ~5 min), not stored. Read it; don't recompute. */
+  connected: boolean;
+  seconds_since_heartbeat?: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -54,6 +71,13 @@ export type DiscoveredAgentStatus =
   | "registered"
   | "quarantined"
   | "ignored";
+
+/**
+ * The OBSERVED axis, independent of `status` (the DECIDED axis). Moves both ways:
+ * running ⇄ stopped → gone, or unknown. An agent can be registered + gone, or
+ * unregistered + running — never collapse the two into one column.
+ */
+export type RuntimeStatus = "running" | "stopped" | "gone" | "unknown";
 
 /** A manually run agent is the higher-risk, harder-to-attribute case. */
 export type DeploymentOrigin = "manual" | "automated" | "unknown";
@@ -82,6 +106,26 @@ export interface DiscoveredAgent {
   quarantined_by?: string;
   quarantined_at?: string;
   quarantine_reason: string;
+  // ── The OBSERVED axis — what was seen, not what a human decided. ──
+  runtime_status: RuntimeStatus;
+  runtime_reason: string;
+  runtime_observed_at?: string;
+  terminated_at?: string;
+  /** Attributed principal, "" when the channel could not attribute it. */
+  terminated_by: string;
+  // ── Decision vs enforcement. quarantined_at is when someone DECIDED;
+  //    quarantine_enforced_at is when a NetworkPolicy actually LANDED. First set
+  //    without the second = quarantined on paper, running with full access. ──
+  quarantine_enforced_at?: string;
+  quarantine_enforcement_error: string;
+  // ── Release. quarantined_at/by/reason SURVIVE a release as history, so the
+  //    presence of quarantined_at does NOT mean currently quarantined. Read
+  //    `status`; quarantine_released_at is what marks it historical. ──
+  quarantine_released_at?: string;
+  quarantine_released_by?: string;
+  // ── Identity verification — what the pods ACTUALLY run as. ──
+  observed_service_account: string;
+  identity_verified_at?: string;
   first_seen_at: string;
   last_seen_at: string;
   sighting_count: number;
@@ -92,6 +136,27 @@ export interface DiscoveredAgent {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+/** GET /authsec/discovery/agents/:id/events → { events, total } */
+export interface DiscoveredAgentEvent {
+  id: string;
+  workspace_id: string;
+  discovered_agent_id?: string;
+  discovery_source_id?: string;
+  source: string;
+  fingerprint: string;
+  event: "observed" | "deleted" | "pod_terminated" | "absent" | "reappeared";
+  runtime_status: string;
+  reason: string;
+  /** "" when the channel could not attribute it (e.g. an `absent` resync sweep). */
+  actor: string;
+  /** admission | resync | … */
+  channel: string;
+  cluster_name: string;
+  metadata: unknown;
+  observed_at: string;
+  created_at: string;
 }
 
 /** Headline governance KPI: registered ÷ total, segmented by origin. */
@@ -112,6 +177,10 @@ export interface AgentCoverage {
   unowned_agents: number;
   by_origin: Record<string, CoverageBucket>;
   by_source: Record<string, number>;
+  /** Counts keyed by RuntimeStatus. */
+  by_runtime_status: Record<string, number>;
+  /** The ACTIONABLE count: unregistered AND still live. Use this as the KPI. */
+  live_unregistered: number;
   generated_at: string;
 }
 
@@ -193,6 +262,13 @@ export const STATUS_LABELS: Record<DiscoveredAgentStatus, string> = {
   ignored: "Ignored",
 };
 
+export const RUNTIME_STATUS_LABELS: Record<RuntimeStatus, string> = {
+  running: "Running",
+  stopped: "Stopped",
+  gone: "Gone",
+  unknown: "Unknown",
+};
+
 export const ORIGIN_LABELS: Record<DeploymentOrigin, string> = {
   manual: "Manual",
   automated: "Automated",
@@ -237,6 +313,12 @@ export interface AgentFilters {
   archetype?: Exclude<AgentArchetype, "">;
   /** Registered agents with no owner — should be impossible, so worth surfacing. */
   unowned?: boolean;
+  /**
+   * Excludes long-gone agents that need no decision. The Discovered Agents queue
+   * defaults this to true so the queue is what still needs a human.
+   */
+  live?: boolean;
+  runtime_status?: RuntimeStatus;
   limit?: number;
   offset?: number;
 }
@@ -295,6 +377,8 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.source ? { source: f.source } : {}),
           ...(f?.archetype ? { archetype: f.archetype } : {}),
           ...(f?.unowned ? { unowned: "true" } : {}),
+          ...(f?.live ? { live: "true" } : {}),
+          ...(f?.runtime_status ? { runtime_status: f.runtime_status } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },
@@ -350,6 +434,45 @@ export const discoveryApi = baseApi.injectEndpoints({
         body: { reason },
       }),
       invalidatesTags: ["DiscoveredAgent", "AgentCoverage"],
+    }),
+
+    // Releasing a quarantine. No request body. Same permission as quarantine on
+    // purpose. The status it returns to is DERIVED by the backend, not chosen —
+    // render what came back rather than predicting it (an agent whose owner was
+    // deleted comes back `unregistered`). A release may commit without being
+    // enforced: quarantine_enforcement_error then carries the leftover-policy
+    // kubectl. Invalidates ProvisioningInstruction because a release queues one.
+    unquarantineAgent: builder.mutation<DiscoveredAgent, { id: string }>({
+      query: ({ id }) => ({
+        url: `/authsec/discovery/agents/${id}/unquarantine`,
+        method: "POST",
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "DiscoveredAgent", id },
+        "DiscoveredAgent",
+        "AgentCoverage",
+        "ProvisioningInstruction",
+      ],
+    }),
+
+    // Deleting the inventory row destroys the audit trail. This is a cleanup tool
+    // for bad data, NOT lifecycle management — deprovision removes access and
+    // keeps the record. Guard the UI behind a typed confirmation.
+    deleteDiscoveredAgent: builder.mutation<void, string>({
+      query: (id) => ({ url: `/authsec/discovery/agents/${id}`, method: "DELETE" }),
+      invalidatesTags: ["DiscoveredAgent", "AgentCoverage"],
+    }),
+
+    // The lifecycle trail — the only place a user sees WHO deleted an agent and
+    // HOW it was noticed. `pod_terminated` is a rollout (routine); `deleted` is
+    // attributed admission; `absent` is a resync sweep with no attributable actor.
+    getAgentEvents: builder.query<{ events: DiscoveredAgentEvent[]; total: number }, string>({
+      query: (id) => ({ url: `/authsec/discovery/agents/${id}/events`, method: "GET" }),
+      transformResponse: (r: { events?: DiscoveredAgentEvent[]; total?: number }) => ({
+        events: r.events ?? [],
+        total: r.total ?? 0,
+      }),
+      providesTags: (_r, _e, id) => [{ type: "DiscoveredAgent", id }],
     }),
 
     // ── Headline KPI ──────────────────────────────────────────────────────
@@ -448,6 +571,9 @@ export const {
   useUpdateDiscoveredAgentMutation,
   useClaimAgentMutation,
   useQuarantineAgentMutation,
+  useUnquarantineAgentMutation,
+  useDeleteDiscoveredAgentMutation,
+  useGetAgentEventsQuery,
   useGetAgentCoverageQuery,
   useCreateSourceFromConnectorMutation,
   useListSourceRepositoriesQuery,
@@ -520,65 +646,10 @@ export const CREDENTIAL_LABELS: Record<CredentialType, string> = {
   unknown: "Unknown",
 };
 
-const MOCK_IDENTITIES: Identity[] = [
-  {
-    id: "id-1", workspace_id: "ws", kind: "service_account",
-    external_id: "system:serviceaccount:agents:refund-reviewer-sa",
-    display_name: "refund-reviewer-sa", source: "k8s_webhook", provider: "Kubernetes",
-    linked_agent_id: "da-1", credential_type: "federated", credential_expires_at: null,
-    last_used_at: new Date(Date.now() - 4 * 60_000).toISOString(), status: "active",
-    first_seen_at: new Date(Date.now() - 32 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 3 * 60_000).toISOString(),
-  },
-  {
-    id: "id-2", workspace_id: "ws", kind: "iam_role",
-    external_id: "arn:aws:iam::123456789012:role/invoice-summariser-exec",
-    display_name: "invoice-summariser-exec", source: "aws", provider: "AWS IAM",
-    linked_agent_id: "da-3", credential_type: "federated", credential_expires_at: null,
-    last_used_at: new Date(Date.now() - 22 * 60_000).toISOString(), status: "active",
-    first_seen_at: new Date(Date.now() - 19 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 22 * 60_000).toISOString(),
-  },
-  {
-    id: "id-3", workspace_id: "ws", kind: "service_principal",
-    external_id: "8f1ca204-7b3e-4d19-93aa-c0e5f2811d67",
-    display_name: "support-triage-mi", source: "azure", provider: "Entra ID",
-    linked_agent_id: "da-4", credential_type: "certificate",
-    credential_expires_at: new Date(Date.now() + 21 * 86_400_000).toISOString(),
-    last_used_at: new Date(Date.now() - 55 * 60_000).toISOString(), status: "active",
-    first_seen_at: new Date(Date.now() - 8 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 55 * 60_000).toISOString(),
-  },
-  {
-    id: "id-4", workspace_id: "ws", kind: "oauth_client",
-    external_id: "c7f1a0e2-3b44-4a91-9d02-8e5c1f77b310",
-    display_name: "reporting-bot-prod", source: "aws", provider: "AuthSec OAuth",
-    linked_agent_id: null, credential_type: "client_secret",
-    credential_expires_at: new Date(Date.now() - 6 * 86_400_000).toISOString(),
-    last_used_at: new Date(Date.now() - 94 * 86_400_000).toISOString(), status: "orphaned",
-    first_seen_at: new Date(Date.now() - 210 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 94 * 86_400_000).toISOString(),
-  },
-  {
-    id: "id-5", workspace_id: "ws", kind: "spiffe_id",
-    external_id: "spiffe://acme.internal/ns/ci/sa/deploy",
-    display_name: "svc:deploy-ci", source: "k8s_webhook", provider: "SPIRE",
-    linked_agent_id: "da-2", credential_type: "federated", credential_expires_at: null,
-    last_used_at: new Date(Date.now() - 2 * 60_000).toISOString(), status: "active",
-    first_seen_at: new Date(Date.now() - 44 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 2 * 60_000).toISOString(),
-  },
-  {
-    id: "id-6", workspace_id: "ws", kind: "api_key",
-    external_id: "sk-proj-…9f2c", display_name: "nightly-embed key",
-    source: "vm_sensor", provider: "OpenAI", linked_agent_id: "da-6",
-    credential_type: "static_key", credential_expires_at: null,
-    last_used_at: new Date(Date.now() - 11 * 3_600_000).toISOString(), status: "unknown",
-    first_seen_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-    last_seen_at: new Date(Date.now() - 11 * 3_600_000).toISOString(),
-  },
-];
-
+// There is deliberately NO mock data here. `/authsec/discovery/identities` was
+// never built — the request 404s — and seeding a governance console with invented
+// identities is exactly the failure mode this whole product exists to prevent. The
+// page renders an explicit "not yet available" empty state instead.
 export const identitiesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listIdentities: builder.query<Identity[], void>({
@@ -590,11 +661,6 @@ export const identitiesApi = baseApi.injectEndpoints({
 });
 
 export const { useListIdentitiesQuery } = identitiesApi;
-
-export function useIdentitiesWithFallback() {
-  const q = useListIdentitiesQuery();
-  return { ...q, data: q.data ?? MOCK_IDENTITIES, usingMock: q.data === undefined };
-}
 
 // ── Kubernetes collector ────────────────────────────────────────────────────
 // The Kubernetes channel is an in-cluster Deployment the customer installs. The
@@ -675,31 +741,51 @@ export const DEFAULT_COLLECTOR_CONFIG: CollectorConfig = {
   memLimit: "512Mi",
 };
 
-/** One RBAC rule the collector asked for, and what it actually got. */
-export interface PermissionGrant {
-  resource: string;
-  verbs: string[];
-  /** Namespaces the config asked to cover; empty = cluster-wide. */
-  requestedNamespaces: string[];
-  /** What SelfSubjectAccessReview reports it can actually read. */
-  grantedNamespaces: string[];
-  clusterWideRequested: boolean;
-  clusterWideGranted: boolean;
+/**
+ * Live connector status, derived from the DiscoverySource row the agent
+ * self-registers and heartbeats into — no separate telemetry endpoint. Read
+ * `connected` from the source (the backend derives it at read time); do not
+ * recompute it from a timestamp. The runtime counters live inside the opaque
+ * `runtime` blob and are absent until the agent reports them — never fabricated.
+ */
+export interface ConnectorStatus {
+  connected: boolean;
+  agentVersion: string;
+  lastHeartbeatAt: string | null;
+  secondsSinceHeartbeat: number | null;
+  selfRegistered: boolean;
+  actuationEnabledAt: string | null;
+  /** From the runtime blob, if the agent reported it. */
+  namespacesVisible: number | null;
+  workloadsScanned: number | null;
+  workloadsMatched: number | null;
 }
 
-export type CollectorState = "awaiting_enrollment" | "connected" | "disconnected" | "degraded";
+/** Shape of the (opaque) runtime blob we read counters out of, all optional. */
+interface RuntimeSnapshot {
+  namespaces_visible?: number;
+  workloads_scanned?: number;
+  workloads_matched?: number;
+}
 
-export interface CollectorStatus {
-  state: CollectorState;
-  version: string | null;
-  latestVersion: string;
-  lastHeartbeatAt: string | null;
-  enrolledAt: string | null;
-  namespacesVisible: string[];
-  namespacesConfigured: string[];
-  workloadsScanned: number;
-  workloadsMatched: number;
-  permissions: PermissionGrant[];
+function readRuntime(runtime: unknown): RuntimeSnapshot {
+  return runtime && typeof runtime === "object" ? (runtime as RuntimeSnapshot) : {};
+}
+
+/** Project a DiscoverySource into the live connector status the detail page renders. */
+export function connectorStatusFromSource(source: DiscoverySource): ConnectorStatus {
+  const rt = readRuntime(source.runtime);
+  return {
+    connected: source.connected,
+    agentVersion: source.agent_version,
+    lastHeartbeatAt: source.last_heartbeat_at ?? null,
+    secondsSinceHeartbeat: source.seconds_since_heartbeat ?? null,
+    selfRegistered: source.self_registered,
+    actuationEnabledAt: source.actuation_enabled_at ?? null,
+    namespacesVisible: rt.namespaces_visible ?? null,
+    workloadsScanned: rt.workloads_scanned ?? null,
+    workloadsMatched: rt.workloads_matched ?? null,
+  };
 }
 
 /** Minimum RBAC for the selected kinds. Read-only, by construction. */
@@ -733,81 +819,76 @@ export function generateClusterRole(config: CollectorConfig, name = "authsec-dis
   return `apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: ${name}\nrules:\n${rules}`;
 }
 
+/**
+ * The install command for the `authsec-iga-agent` Helm chart, generated from
+ * the values the chart actually requires. Read off the chart's own
+ * `values.yaml` and README, not inferred:
+ *
+ *   - The release name MUST be the literal `authsec-iga-agent`. It matches the
+ *     chart name, so Helm renders resources unprefixed (`authsec-iga-agent`)
+ *     rather than `<release>-authsec-iga-agent` — which is what every
+ *     troubleshooting command in the chart's NOTES output and the agent docs
+ *     assumes. It is NEVER derived from a user-supplied display name.
+ *   - `controlPlane.url`, `workspace.id` and `cluster.name` are all required;
+ *     the chart refuses to render without workspace.id / cluster.name, by design.
+ *   - There is NO token and NO `discovery.sourceId`: the sightings endpoint is
+ *     unauthenticated and the agent self-registers by `cluster.name`
+ *     (instance id `k8s:<cluster.name>`), so nothing binds the install to a
+ *     pre-created source row.
+ *   - `chartRef` is caller-supplied because this deployment publishes no fixed
+ *     Helm repo URL we can hardcode. It may be a local path
+ *     (`./charts/authsec-iga-agent`) or an OCI/HTTP chart reference.
+ */
 export function helmInstallCommand(opts: {
-  displayName: string;
+  controlPlaneUrl: string;
   workspaceId: string;
-  sourceId: string;
   clusterName: string;
+  /** Whatever chart reference this deployment publishes. Not a hardcoded guess. */
+  chartRef: string;
+  /** Chart version, e.g. "0.3.0". Optional — omitted means the chart's default. */
+  chartVersion?: string;
 }): string {
-  const release =
-    opts.displayName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "") ||
-    "authsec-discovery";
-  // Installed from a git checkout rather than a chart repo: charts.authsec.ai
-  // does not resolve yet. Swap the first two lines for `helm repo add` once it does.
-  return [
-    "git clone https://github.com/authsec-ai/discovery-agent.git && \\",
-    "cd discovery-agent && \\",
-    `helm install ${release} ./charts/authsec-discovery-agent \\`,
+  const lines = [
+    // The release name is intentionally the literal chart name. Do not templatise it.
+    `helm install authsec-iga-agent ${opts.chartRef} \\`,
     "  --namespace authsec-system --create-namespace \\",
-    "  --set controlPlane.url=https://app.authsec.ai \\",
+    ...(opts.chartVersion ? [`  --version ${opts.chartVersion} \\`] : []),
+    `  --set controlPlane.url=${opts.controlPlaneUrl} \\`,
     `  --set workspace.id=${opts.workspaceId} \\`,
-    `  --set discovery.sourceId=${opts.sourceId} \\`,
-    `  --set cluster.name=${opts.clusterName} \\`,
-    "  --set resync.enabled=true",
-  ].join("\n");
+    // cluster.name is part of every agent fingerprint AND the self-registration
+    // key, so it must be stable and unique per cluster — a typo silently merges
+    // two clusters' inventories.
+    `  --set cluster.name=${opts.clusterName}`,
+  ];
+  return lines.join("\n");
 }
 
 
-const MOCK_COLLECTOR: CollectorStatus = {
-  state: "connected",
-  version: "0.4.2",
-  latestVersion: "0.5.0",
-  lastHeartbeatAt: new Date(Date.now() - 42_000).toISOString(),
-  enrolledAt: new Date(Date.now() - 32 * 86_400_000).toISOString(),
-  namespacesVisible: ["default", "agents", "ml", "payments"],
-  namespacesConfigured: ["default", "agents", "ml", "payments", "platform", "observability"],
-  workloadsScanned: 214,
-  workloadsMatched: 4,
-  permissions: [
-    {
-      resource: "apps/deployments", verbs: ["get", "list", "watch"],
-      requestedNamespaces: [], grantedNamespaces: [],
-      clusterWideRequested: true, clusterWideGranted: true,
+// The scan configuration displayed on the integration detail page. The wizard
+// writes this into source.config; there is no separate config endpoint, so we
+// read it back off the source row (falling back to the defaults for any field
+// the row does not carry).
+export function collectorConfigFromSource(source: DiscoverySource | undefined): CollectorConfig {
+  const cfg = (source?.config ?? {}) as Record<string, unknown>;
+  const detection = (cfg.detection ?? {}) as Partial<DetectionRules>;
+  return {
+    namespaceMode: (cfg.namespace_mode as NamespaceMode) ?? DEFAULT_COLLECTOR_CONFIG.namespaceMode,
+    namespaces: Array.isArray(cfg.namespaces) ? (cfg.namespaces as string[]) : DEFAULT_COLLECTOR_CONFIG.namespaces,
+    kinds: Array.isArray(cfg.kinds) ? (cfg.kinds as WorkloadKind[]) : DEFAULT_COLLECTOR_CONFIG.kinds,
+    detection: {
+      labelSelectors: detection.labelSelectors ?? DEFAULT_COLLECTOR_CONFIG.detection.labelSelectors,
+      imagePatterns: detection.imagePatterns ?? DEFAULT_COLLECTOR_CONFIG.detection.imagePatterns,
+      envPatterns: detection.envPatterns ?? DEFAULT_COLLECTOR_CONFIG.detection.envPatterns,
+      configPaths: detection.configPaths ?? DEFAULT_COLLECTOR_CONFIG.detection.configPaths,
+      reportLowConfidence:
+        detection.reportLowConfidence ?? DEFAULT_COLLECTOR_CONFIG.detection.reportLowConfidence,
     },
-    {
-      resource: "apps/statefulsets", verbs: ["get", "list", "watch"],
-      requestedNamespaces: [], grantedNamespaces: [],
-      clusterWideRequested: true, clusterWideGranted: true,
-    },
-    {
-      resource: "batch/jobs", verbs: ["get", "list", "watch"],
-      requestedNamespaces: [],
-      grantedNamespaces: ["default", "agents", "ml", "payments"],
-      clusterWideRequested: true, clusterWideGranted: false,
-    },
-    {
-      resource: "batch/cronjobs", verbs: ["get", "list", "watch"],
-      requestedNamespaces: [], grantedNamespaces: [],
-      clusterWideRequested: true, clusterWideGranted: false,
-    },
-    {
-      resource: "namespaces", verbs: ["get", "list", "watch"],
-      requestedNamespaces: [], grantedNamespaces: [],
-      clusterWideRequested: true, clusterWideGranted: true,
-    },
-  ],
-};
-
-export function useCollectorStatus(sourceId: string) {
-  // No backend. Only the seeded Kubernetes source has a collector.
-  const status = sourceId === "ds-1" ? MOCK_COLLECTOR : null;
-  return { data: status, usingMock: true };
-}
-
-export function useCollectorConfig(sourceId: string) {
-  const config =
-    sourceId === "ds-1"
-      ? { ...DEFAULT_COLLECTOR_CONFIG, namespaceMode: "exclude" as NamespaceMode, namespaces: ["kube-system"] }
-      : DEFAULT_COLLECTOR_CONFIG;
-  return { data: config, usingMock: true };
+    watchEnabled: (cfg.watch as boolean) ?? DEFAULT_COLLECTOR_CONFIG.watchEnabled,
+    resyncMinutes: (cfg.resync_minutes as number) ?? DEFAULT_COLLECTOR_CONFIG.resyncMinutes,
+    heartbeatSeconds: (cfg.heartbeat_seconds as number) ?? DEFAULT_COLLECTOR_CONFIG.heartbeatSeconds,
+    cpuRequest: DEFAULT_COLLECTOR_CONFIG.cpuRequest,
+    memRequest: DEFAULT_COLLECTOR_CONFIG.memRequest,
+    cpuLimit: DEFAULT_COLLECTOR_CONFIG.cpuLimit,
+    memLimit: DEFAULT_COLLECTOR_CONFIG.memLimit,
+  };
 }

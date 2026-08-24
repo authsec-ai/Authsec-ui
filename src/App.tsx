@@ -64,6 +64,12 @@ import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegration
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import IdentitiesPage from "./features/discovery/IdentitiesPage";
 import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
+import ProvenancePage from "./features/governance/ProvenancePage";
+import CertificationPage from "./features/governance/CertificationPage";
+import CampaignDetailPage from "./features/governance/CampaignDetailPage";
+import SoDPage from "./features/governance/SoDPage";
+import BirthrightsPage from "./features/governance/BirthrightsPage";
+import InstructionsPage from "./features/governance/InstructionsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
@@ -617,6 +623,67 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <IdentitiesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── Governance surfaces ── */}
+                  <Route
+                    path="/iga/provenance"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ProvenancePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/certification"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <CertificationPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/certification/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <CampaignDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/sod"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <SoDPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/birthrights"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <BirthrightsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/enforcement"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <InstructionsPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

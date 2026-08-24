@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -41,8 +42,11 @@ import { resolveWorkspaceId } from "@/utils/workspace";
 import {
   ARCHETYPE_LABELS,
   ORIGIN_LABELS,
+  STATUS_LABELS,
   useClaimAgentMutation,
   useQuarantineAgentMutation,
+  useUnquarantineAgentMutation,
+  useDeleteDiscoveredAgentMutation,
   useUpdateDiscoveredAgentMutation,
   type AgentArchetype,
   type DeploymentOrigin,
@@ -324,6 +328,194 @@ export function QuarantineAgentDialog({
             onClick={() => void submit()}
           >
             {saving ? "Quarantining…" : "Quarantine"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Release a quarantine. No request body. Same permission as quarantine, on
+ * purpose. The resulting status is DERIVED by the backend and returned in the
+ * response — we render what came back rather than predicting it, because an
+ * agent whose owner was deleted correctly comes back `unregistered`, not
+ * `registered`. A release may commit without being enforced (no actuation agent
+ * in the cluster); `quarantine_enforcement_error` then carries the kubectl to
+ * remove the leftover policy, and we surface it.
+ */
+export function UnquarantineAgentDialog({
+  agent,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  agent: DiscoveredAgent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}) {
+  const [unquarantine, { isLoading: saving }] = useUnquarantineAgentMutation();
+
+  const submit = async () => {
+    if (!agent) return;
+    try {
+      const result = await unquarantine({ id: agent.id }).unwrap();
+      const label = agent.display_name || agent.fingerprint;
+      if (result.quarantine_enforcement_error) {
+        // The decision committed, but the leftover NetworkPolicy could not be
+        // removed. Fails CLOSED: the agent is still blocked. Surface it loudly.
+        toast.error(
+          `${label} released, but the block is still in place — no actuation agent could remove the policy. Check the agent detail for the kubectl to run.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`${label} released — now ${STATUS_LABELS[result.status]}.`);
+      }
+      onDone();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not release the quarantine."));
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Release quarantine</DialogTitle>
+          <DialogDescription>
+            Lifts the network block. The agent returns to a status the backend derives — if it
+            still has both an identity and an owner it becomes registered; otherwise it needs a
+            fresh claim decision. The quarantine history is kept as a record.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <Label>Agent</Label>
+            <div className="rounded-md bg-muted px-3 py-2 font-mono text-[11px]">
+              {agent?.display_name || agent?.fingerprint}
+            </div>
+          </div>
+          {agent?.quarantine_reason ? (
+            <p className="text-xs text-muted-foreground">
+              Quarantined for: <span className="text-foreground">{agent.quarantine_reason}</span>
+            </p>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="text-[length:var(--text-sm)] text-white"
+            disabled={saving}
+            onClick={() => void submit()}
+          >
+            {saving ? "Releasing…" : "Release quarantine"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Delete the inventory row. This is a CLEANUP tool for bad data, not lifecycle
+ * management — deleting destroys the audit trail, whereas deprovisioning removes
+ * access and keeps the record. If an agent is genuinely gone, `runtime_status:
+ * "gone"` already says so and the row is the evidence it existed. Guarded by a
+ * typed confirmation because it is almost never what a user wants.
+ */
+export function DeleteAgentDialog({
+  agent,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  agent: DiscoveredAgent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const [remove, { isLoading: saving }] = useDeleteDiscoveredAgentMutation();
+  const CONFIRM_WORD = "DELETE";
+
+  useEffect(() => {
+    if (!open) setConfirm("");
+  }, [open]);
+
+  const submit = async () => {
+    if (!agent || confirm !== CONFIRM_WORD) return;
+    try {
+      await remove(agent.id).unwrap();
+      toast.success(`Inventory row for ${agent.display_name || agent.fingerprint} deleted.`);
+      onDone();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not delete the inventory row."));
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setConfirm("");
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete inventory row</DialogTitle>
+          <DialogDescription>
+            This destroys the audit trail for this agent. It is not the same as deprovisioning —
+            deprovision removes access and keeps the record. Use this only to clean up a bad or
+            duplicate row.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-3 py-2 text-xs text-(--color-danger-text)">
+            <strong className="font-medium">There is no undo.</strong>{" "}
+            <span className="text-foreground/80">
+              If the agent is gone, its runtime status already records that and the row is the
+              evidence it ever existed. Deleting it removes that evidence.
+            </span>
+          </div>
+          <div className="space-y-1">
+            <Label>Agent</Label>
+            <div className="rounded-md bg-muted px-3 py-2 font-mono text-[11px]">
+              {agent?.display_name || agent?.fingerprint}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="del-confirm">
+              Type <span className="font-mono">{CONFIRM_WORD}</span> to confirm
+            </Label>
+            <Input
+              id="del-confirm"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder={CONFIRM_WORD}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={confirm !== CONFIRM_WORD || saving}
+            onClick={() => void submit()}
+          >
+            {saving ? "Deleting…" : "Delete row"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -9,7 +9,17 @@
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Fingerprint, Radar, ScanSearch, type LucideIcon } from "lucide-react";
+import {
+  Fingerprint,
+  Radar,
+  ScanSearch,
+  FileText,
+  ShieldAlert,
+  ClipboardCheck,
+  UserPlus,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -39,6 +49,14 @@ const NAV_DISCOVERY: IgaNavItem[] = [
   { title: "Identities", url: "/iga/identities", icon: Fingerprint },
 ];
 
+const NAV_GOVERNANCE: IgaNavItem[] = [
+  { title: "Provenance", url: "/iga/provenance", icon: FileText },
+  { title: "Access Certification", url: "/iga/certification", icon: ClipboardCheck },
+  { title: "Separation of Duties", url: "/iga/sod", icon: ShieldAlert },
+  { title: "Birthrights & Lifecycle", url: "/iga/birthrights", icon: UserPlus },
+  { title: "Enforcement queue", url: "/iga/enforcement", icon: Zap },
+];
+
 export function IgaSidebar({
   className,
   style,
@@ -49,15 +67,20 @@ export function IgaSidebar({
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
 
-  const items = useMemo(
-    () =>
-      NAV_DISCOVERY.map((item) => ({
+  const decorate = useCallback(
+    (nav: IgaNavItem[]) =>
+      nav.map((item) => ({
         ...item,
-        isActive: location.pathname === item.url,
+        // Match the section root too, so /iga/certification/:id keeps the parent active.
+        isActive:
+          location.pathname === item.url || location.pathname.startsWith(`${item.url}/`),
         onClick: () => handleNavigation(item.url),
       })),
     [location.pathname, handleNavigation],
   );
+
+  const discoveryItems = useMemo(() => decorate(NAV_DISCOVERY), [decorate]);
+  const governanceItems = useMemo(() => decorate(NAV_GOVERNANCE), [decorate]);
 
   return (
     <Sidebar
@@ -99,7 +122,8 @@ export function IgaSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain title="Discovery" items={items} />
+        <NavMain title="Discovery" items={discoveryItems} />
+        <NavMain title="Governance" items={governanceItems} />
       </SidebarContent>
 
       <SidebarFooter>
