@@ -137,8 +137,15 @@ export function ConnectGitHubDialog({
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-medium">{c.name}</span>
+                      {/* org_name and installation_id live on the connector's
+                          CONNECTION, not on the connector row, so neither is
+                          reliably here. Falling through to c.id would print a
+                          raw UUID at a human, which is worse than saying
+                          nothing. */}
                       <span className="block truncate text-xs text-muted-foreground">
-                        {String(c.config?.org_name ?? c.config?.installation_id ?? c.id)}
+                        {typeof c.config?.org_name === "string"
+                          ? c.config.org_name
+                          : "GitHub App connector"}
                       </span>
                     </span>
                     {!c.enabled && (
