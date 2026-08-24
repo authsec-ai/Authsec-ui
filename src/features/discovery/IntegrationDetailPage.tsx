@@ -13,6 +13,8 @@ import { formatDistanceToNow } from "date-fns";
 import { ArrowLeft, ArrowUpCircle } from "lucide-react";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { GitHubRepositoryPanel } from "./GitHubRepositoryPanel";
+import { GitHubScanPanel } from "./GitHubScanPanel";
 import { TableCard } from "@/theme/components/cards";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,6 +118,9 @@ export default function IntegrationDetailPage() {
   }
 
   const isK8s = source.kind === "k8s_webhook";
+  // `repo_scan` is the GitHub channel: no in-cluster collector, an explicit
+  // repository scope, and a scan the admin triggers.
+  const isGitHub = source.kind === "repo_scan";
 
   return (
     <ConsolePage
@@ -127,7 +132,25 @@ export default function IntegrationDetailPage() {
         </Button>
       }
     >
-      {!isK8s || !status ? (
+      {isGitHub ? (
+        <div className="space-y-4">
+          <GitHubRepositoryPanel sourceId={id} />
+          <GitHubScanPanel sourceId={id} />
+          {foundHere.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {foundHere.length} agent{foundHere.length === 1 ? "" : "s"} discovered
+              through this integration.{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2"
+                onClick={() => navigate("/iga/agents")}
+              >
+                Review them
+              </button>
+            </p>
+          )}
+        </div>
+      ) : !isK8s || !status ? (
         <div className="rounded-md border border-dashed px-4 py-3 text-xs text-muted-foreground">
           {isK8s
             ? "No collector telemetry yet. The integration is registered; heartbeat, version and effective-permission reporting need the collector's own endpoint, which does not exist yet."

@@ -45,13 +45,16 @@ import {
   type DiscoverySourceKind,
 } from "@/app/api/discoveryApi";
 
+// `repo_scan` is deliberately absent: GitHub is added through
+// ConnectGitHubDialog, which builds a source from an existing GitHub App
+// connector. Offering it here would ask for a Vault path the GitHub flow does
+// not use, and produce a source that can never scan.
 const KINDS: DiscoverySourceKind[] = [
   "k8s_webhook",
   "aws",
   "azure",
   "gcp",
   "vm_sensor",
-  "repo_scan",
 ];
 
 interface ConfigField {
