@@ -84,6 +84,17 @@ export default function IntegrationDetailPage() {
   // repository scope, and a scan the admin triggers.
   const isGitHub = source.kind === "repo_scan";
 
+  // Mirrors what the scanner reads: config.repositories = { mode, include }.
+  // A source created from a connector starts as mode "selected" with an empty
+  // include, which is precisely the state the wizard hands off in.
+  const repoSel = (source.config?.repositories ?? null) as
+    | { mode?: string; include?: string[] }
+    | null;
+  const noRepositoriesSelected =
+    isGitHub &&
+    (repoSel?.mode ?? "selected") === "selected" &&
+    (repoSel?.include?.length ?? 0) === 0;
+
   return (
     <ConsolePage
       title={source.display_name}
@@ -96,6 +107,18 @@ export default function IntegrationDetailPage() {
     >
       {isGitHub ? (
         <div className="space-y-4">
+          {/* The wizard hands off here with nothing selected yet, so state the
+              next action rather than leaving a bare panel. A source with no
+              scope scans nothing -- the backend refuses such a scan outright.
+              Keyed off the actual selection in config, NOT off agent_count: a
+              correctly-scoped source can legitimately find zero agents, and
+              telling that user to go choose repositories would be wrong. */}
+          {noRepositoriesSelected && (
+            <p className="rounded-md bg-(--color-info-soft) px-3 py-2 text-xs text-(--color-info-text)">
+              Choose the repositories to scan below, save the selection, then run the
+              first scan.
+            </p>
+          )}
           <GitHubRepositoryPanel sourceId={id} />
           <GitHubScanPanel sourceId={id} />
           {foundHere.length > 0 && (

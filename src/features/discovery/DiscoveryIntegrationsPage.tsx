@@ -40,8 +40,7 @@ import {
   useUpdateDiscoverySourceMutation,
   type DiscoverySource,
 } from "@/app/api/discoveryApi";
-import { AddIntegrationDialog } from "./AddIntegrationDialog";
-import { ConnectGitHubDialog } from "./ConnectGitHubDialog";
+import { GitHubSetupWizard } from "./GitHubSetupWizard";
 import { DeployCollectorWizard } from "./DeployCollectorWizard";
 import {
   DropdownMenu,
@@ -111,7 +110,6 @@ export default function DiscoveryIntegrationsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const navigate = useNavigate();
-  const [addOpen, setAddOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscoverySource | null>(null);
@@ -287,9 +285,6 @@ export default function DiscoveryIntegrationsPage() {
             <DropdownMenuItem onSelect={() => setGithubOpen(true)}>
               GitHub — scan repositories
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setAddOpen(true)}>
-              Cloud or VM — connect credential
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       }
@@ -336,7 +331,7 @@ export default function DiscoveryIntegrationsPage() {
         onCreated={() => void refetch()}
       />
 
-      <ConnectGitHubDialog
+      <GitHubSetupWizard
         open={githubOpen}
         onOpenChange={setGithubOpen}
         onCreated={(sourceId) => {
@@ -345,12 +340,6 @@ export default function DiscoveryIntegrationsPage() {
           // scanning nothing until a scope is chosen.
           navigate(`/iga/integrations/${sourceId}`);
         }}
-      />
-
-      <AddIntegrationDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onCreated={() => void refetch()}
       />
 
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>

@@ -374,7 +374,15 @@ export const connectorsApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
-      invalidatesTags: (_r, _e, { connectorId }) => [{ type: "ExternalService", id: connectorId }],
+      // Also LIST: `connected` is derived by the list endpoint's transformResponse
+      // from a parallel connector_status array, so invalidating only this one
+      // connector leaves the LIST cache still reporting connected:false for a
+      // connector that was just successfully bound -- which callers filtering on
+      // that flag then render as unusable.
+      invalidatesTags: (_r, _e, { connectorId }) => [
+        { type: "ExternalService", id: connectorId },
+        { type: "ExternalService", id: "LIST" },
+      ],
     }),
 
     // F5 — set the groups allowed to be the on-behalf-of subject.

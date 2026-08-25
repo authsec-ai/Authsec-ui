@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { Check, ExternalLink, RefreshCw, Upload } from "lucide-react";
+import { Check, ExternalLink, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +22,10 @@ import {
 } from "@/app/api/connectorsApi";
 import {
   useGetProviderAppQuery,
-  useSetGitHubAppMutation,
-  useConnectGitHubAppMutation,
 } from "@/app/api/connectorsApi";
 import { ConnectorBadge } from "./ConnectorBadge";
+import { GitHubAppRegistrationPanel } from "./GitHubAppRegistrationPanel";
+import { GitHubInstallationPanel } from "./GitHubInstallationPanel";
 import { ProviderAppForm } from "./ProviderAppForm";
 import { providerMeta } from "./providerMeta";
 
@@ -48,8 +48,6 @@ export function AddConnectorDialog({
   } = useListConnectorProvidersQuery();
   const [createConnector, { isLoading: creating }] = useCreateConnectorMutation();
   const [startOAuth, { isLoading: connecting }] = useStartConnectorOAuthMutation();
-  const [setGitHubApp, { isLoading: savingApp }] = useSetGitHubAppMutation();
-  const [connectGitHubApp, { isLoading: connectingApp }] = useConnectGitHubAppMutation();
 
   const [step, setStep] = useState<Step>("provider");
   const [providerKey, setProviderKey] = useState<string | null>(null);
@@ -60,11 +58,6 @@ export function AddConnectorDialog({
   const [scopes, setScopes] = useState<string[]>([]);
   // GitHub-App path (F1/D2).
   const [ghShowRegister, setGhShowRegister] = useState(false);
-  const [ghAppId, setGhAppId] = useState("");
-  const [ghPrivateKey, setGhPrivateKey] = useState("");
-  const [ghKeyFileName, setGhKeyFileName] = useState("");
-  const [ghInstallationId, setGhInstallationId] = useState("");
-  const [ghOrgName, setGhOrgName] = useState("");
 
   const selectedProvider = providers?.find((p) => p.key === providerKey) ?? null;
 
@@ -77,10 +70,6 @@ export function AddConnectorDialog({
     setScopes([]);
     setShowAppForm(false);
     setGhShowRegister(false);
-    setGhAppId("");
-    setGhPrivateKey("");
-    setGhInstallationId("");
-    setGhOrgName("");
   };
 
   const close = () => {
@@ -147,43 +136,6 @@ export function AddConnectorDialog({
   // that fails.
   const ghRegisterOpen = ghShowRegister || !ghAppRegistered;
   const supportsOAuth = selectedProvider?.supported_auth_methods.includes("oauth2") ?? false;
-
-  const handleRegisterGitHubApp = async () => {
-    if (!ghAppId.trim() || !ghPrivateKey.trim()) {
-      toast.error("App ID and private key are required.");
-      return;
-    }
-    try {
-      await setGitHubApp({ app_id: ghAppId.trim(), private_key: ghPrivateKey.trim() }).unwrap();
-      toast.success("GitHub App registered for this workspace.");
-      setGhShowRegister(false);
-      setGhPrivateKey("");
-      setGhKeyFileName("");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't register the GitHub App.");
-    }
-  };
-
-  const handleConnectGitHubApp = async () => {
-    if (!connectorId) return;
-    if (!ghInstallationId.trim()) {
-      toast.error("Installation ID is required.");
-      return;
-    }
-    try {
-      await connectGitHubApp({
-        connectorId,
-        installation_id: ghInstallationId.trim(),
-        ...(ghOrgName.trim() ? { org_name: ghOrgName.trim() } : {}),
-      }).unwrap();
-      toast.success("GitHub connected.");
-      close();
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't connect the GitHub App.");
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : close())}>
@@ -316,7 +268,7 @@ export function AddConnectorDialog({
                       {ghAppRegistered && (
                         <Check className="size-3.5 text-(--color-success-text)" />
                       )}
-                      Step 1 · Register this workspace&rsquo;s GitHub App
+                      Step 1 &middot; Register this workspace&rsquo;s GitHub App
                     </span>
                     <span className="text-[11px] text-muted-foreground">
                       {ghAppRegistered
@@ -327,140 +279,25 @@ export function AddConnectorDialog({
                     </span>
                   </button>
                   {ghRegisterOpen && (
-                    <div className="space-y-2 border-t px-3 py-3">
-                      <p className="text-[11px] text-muted-foreground">
-                        One-time per workspace.{" "}
-                        <a
-                          href="https://github.com/settings/apps/new"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2"
-                        >
-                          Create a GitHub App
-                        </a>{" "}
-                        with <span className="font-medium">Contents: Read-only</span>, generate a
-                        private key, then paste both below. The key goes straight to AuthSec&rsquo;s
-                        vault.
-                      </p>
-                      {/* The App ID and the installation ID are different numbers
-                          from different pages, and mixing them up is the single
-                          easiest mistake to make here -- the failure surfaces much
-                          later, as an unhelpful token-minting error. Say plainly
-                          where each one lives. */}
-                      <p className="text-[11px] text-muted-foreground">
-                        The App ID is on the App&rsquo;s own settings page
-                        (github.com/settings/apps/&lt;name&gt;), labelled{" "}
-                        <span className="font-medium">App ID</span>. It is{" "}
-                        <span className="font-medium">not</span> the number in the
-                        installation URL — that one belongs in Step 2.
-                      </p>
-                      <Input
-                        value={ghAppId}
-                        onChange={(e) => setGhAppId(e.target.value)}
-                        placeholder="App ID (e.g. 123456)"
-                        className="h-9 font-mono text-xs"
-                        autoComplete="off"
+                    <div className="border-t px-3 py-3">
+                      <GitHubAppRegistrationPanel
+                        registered={ghAppRegistered}
+                        registeredAppId={ghAppStatus?.github_app_id}
+                        onRegistered={() => setGhShowRegister(false)}
                       />
-                      <textarea
-                        value={ghPrivateKey}
-                        onChange={(e) => setGhPrivateKey(e.target.value)}
-                        placeholder="-----BEGIN RSA PRIVATE KEY----- (or upload the .pem below)"
-                        rows={3}
-                        className="w-full rounded-md border bg-background px-2.5 py-1.5 font-mono text-[11px]"
-                        spellCheck={false}
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Reads the .pem in the browser and fills the field above.
-                            The file itself is never uploaded anywhere — it goes out
-                            in the same request body a paste would produce — which
-                            keeps the handling identical while removing a
-                            copy-paste step people get wrong (a truncated key, or a
-                            missing BEGIN/END line, fails much later and unhelpfully
-                            at token-minting time). */}
-                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted/50">
-                          <Upload className="size-3.5" />
-                          Upload .pem
-                          <input
-                            type="file"
-                            accept=".pem,.key,application/x-pem-file,text/plain"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const reader = new FileReader();
-                              reader.onload = () => {
-                                const text = String(reader.result ?? "").trim();
-                                if (!text.includes("PRIVATE KEY")) {
-                                  toast.error(
-                                    "That file does not look like a PEM private key — no BEGIN PRIVATE KEY line.",
-                                  );
-                                  return;
-                                }
-                                setGhPrivateKey(text);
-                                setGhKeyFileName(file.name);
-                              };
-                              reader.onerror = () => toast.error("Could not read that file.");
-                              reader.readAsText(file);
-                              // Reset so re-picking the same file fires onChange again.
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                        {ghKeyFileName && (
-                          <span className="text-[11px] text-muted-foreground">
-                            loaded {ghKeyFileName}
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void handleRegisterGitHubApp()}
-                        disabled={savingApp || !ghAppId.trim() || !ghPrivateKey.trim()}
-                      >
-                        {savingApp ? "Saving…" : "Save GitHub App"}
-                      </Button>
                     </div>
                   )}
                 </div>
 
                 <div className="space-y-2 rounded-md border px-3 py-3">
-                  <p className="text-[12.5px] font-medium">Step 2 · Install on your org &amp; connect</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Install the App on your organization, choosing which repositories it may read.
-                    After installing you land on{" "}
-                    <span className="font-mono">github.com/settings/installations/</span>
-                    <span className="font-medium">&lt;number&gt;</span> — that trailing number is the
-                    installation ID.
+                  <p className="text-[12.5px] font-medium">
+                    Step 2 &middot; Install on your org &amp; connect
                   </p>
-                  {!ghAppRegistered && (
-                    <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11px] text-(--color-warning-text)">
-                      Finish Step 1 first — connecting needs the App&rsquo;s private key, and without
-                      it this will fail.
-                    </p>
-                  )}
-                  <Input
-                    value={ghOrgName}
-                    onChange={(e) => setGhOrgName(e.target.value)}
-                    placeholder="Organization (e.g. acme-eng)"
-                    className="h-9 text-xs"
-                    autoComplete="off"
+                  <GitHubInstallationPanel
+                    connectorId={connectorId}
+                    appRegistered={ghAppRegistered}
+                    onConnected={close}
                   />
-                  <Input
-                    value={ghInstallationId}
-                    onChange={(e) => setGhInstallationId(e.target.value)}
-                    placeholder="Installation ID (e.g. 45678901)"
-                    className="h-9 font-mono text-xs"
-                    autoComplete="off"
-                  />
-                  <Button
-                    onClick={() => void handleConnectGitHubApp()}
-                    disabled={connectingApp || !ghInstallationId.trim() || !ghAppRegistered}
-                    className="w-full text-[length:var(--text-sm)] text-white"
-                  >
-                    <ExternalLink className="mr-1.5 size-3.5" />
-                    {connectingApp ? "Connecting…" : "Connect GitHub"}
-                  </Button>
                 </div>
               </>
             ) : supportsOAuth ? (
