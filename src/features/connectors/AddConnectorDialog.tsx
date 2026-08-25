@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { ExternalLink, RefreshCw, Upload } from "lucide-react";
+import { Check, ExternalLink, RefreshCw, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
   useStartConnectorOAuthMutation,
 } from "@/app/api/connectorsApi";
 import {
+  useGetProviderAppQuery,
   useSetGitHubAppMutation,
   useConnectGitHubAppMutation,
 } from "@/app/api/connectorsApi";
@@ -133,6 +134,18 @@ export function AddConnectorDialog({
   };
 
   const isGitHub = selectedProvider?.key === "github";
+
+  // Whether this workspace has already registered its GitHub App. Without this
+  // the dialog looked identical before and after registration, so a returning
+  // admin could not tell it was done and a new one could not tell it was still
+  // required.
+  const { data: ghAppStatus } = useGetProviderAppQuery("github", { skip: !isGitHub });
+  const ghAppRegistered = ghAppStatus?.configured === true && !!ghAppStatus.github_app_id;
+  // Expanded when there is work to do, collapsed once there is not. Previously
+  // hardcoded closed, which put the optional-looking step first and the
+  // dependent step second -- so the natural reading order was also the order
+  // that fails.
+  const ghRegisterOpen = ghShowRegister || !ghAppRegistered;
   const supportsOAuth = selectedProvider?.supported_auth_methods.includes("oauth2") ?? false;
 
   const handleRegisterGitHubApp = async () => {
@@ -299,16 +312,47 @@ export function AddConnectorDialog({
                     onClick={() => setGhShowRegister((v) => !v)}
                     className="flex w-full items-center justify-between px-3 py-2.5 text-[12.5px] font-medium"
                   >
-                    <span>Step 1 · Register this workspace's GitHub App</span>
+                    <span className="flex items-center gap-1.5">
+                      {ghAppRegistered && (
+                        <Check className="size-3.5 text-(--color-success-text)" />
+                      )}
+                      Step 1 · Register this workspace&rsquo;s GitHub App
+                    </span>
                     <span className="text-[11px] text-muted-foreground">
-                      {ghShowRegister ? "Hide" : "Set up"}
+                      {ghAppRegistered
+                        ? `App ${ghAppStatus?.github_app_id} · Replace`
+                        : ghRegisterOpen
+                          ? "Hide"
+                          : "Set up"}
                     </span>
                   </button>
-                  {ghShowRegister && (
+                  {ghRegisterOpen && (
                     <div className="space-y-2 border-t px-3 py-3">
                       <p className="text-[11px] text-muted-foreground">
-                        One-time per workspace. Create a GitHub App in your org, then paste its App ID
-                        and a generated private key (PEM). The key is stored in AuthSec's vault.
+                        One-time per workspace.{" "}
+                        <a
+                          href="https://github.com/settings/apps/new"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2"
+                        >
+                          Create a GitHub App
+                        </a>{" "}
+                        with <span className="font-medium">Contents: Read-only</span>, generate a
+                        private key, then paste both below. The key goes straight to AuthSec&rsquo;s
+                        vault.
+                      </p>
+                      {/* The App ID and the installation ID are different numbers
+                          from different pages, and mixing them up is the single
+                          easiest mistake to make here -- the failure surfaces much
+                          later, as an unhelpful token-minting error. Say plainly
+                          where each one lives. */}
+                      <p className="text-[11px] text-muted-foreground">
+                        The App ID is on the App&rsquo;s own settings page
+                        (github.com/settings/apps/&lt;name&gt;), labelled{" "}
+                        <span className="font-medium">App ID</span>. It is{" "}
+                        <span className="font-medium">not</span> the number in the
+                        installation URL — that one belongs in Step 2.
                       </p>
                       <Input
                         value={ghAppId}
@@ -383,9 +427,18 @@ export function AddConnectorDialog({
                 <div className="space-y-2 rounded-md border px-3 py-3">
                   <p className="text-[12.5px] font-medium">Step 2 · Install on your org &amp; connect</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Install the App on the GitHub organization (selecting repos there), then paste the
-                    installation ID from the install URL.
+                    Install the App on your organization, choosing which repositories it may read.
+                    After installing you land on{" "}
+                    <span className="font-mono">github.com/settings/installations/</span>
+                    <span className="font-medium">&lt;number&gt;</span> — that trailing number is the
+                    installation ID.
                   </p>
+                  {!ghAppRegistered && (
+                    <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11px] text-(--color-warning-text)">
+                      Finish Step 1 first — connecting needs the App&rsquo;s private key, and without
+                      it this will fail.
+                    </p>
+                  )}
                   <Input
                     value={ghOrgName}
                     onChange={(e) => setGhOrgName(e.target.value)}
@@ -402,7 +455,7 @@ export function AddConnectorDialog({
                   />
                   <Button
                     onClick={() => void handleConnectGitHubApp()}
-                    disabled={connectingApp || !ghInstallationId.trim()}
+                    disabled={connectingApp || !ghInstallationId.trim() || !ghAppRegistered}
                     className="w-full text-[length:var(--text-sm)] text-white"
                   >
                     <ExternalLink className="mr-1.5 size-3.5" />

@@ -38,6 +38,10 @@ export interface Connector {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Derived server-side by the list endpoint; absent on single-connector reads. */
+  connected?: boolean;
+  connection_method?: string;
+  connection_status?: string;
 }
 
 export type ConnectionBinding = "workspace" | "user";
@@ -154,6 +158,22 @@ export interface SetProviderAppRequest {
   redirect_uri: string;
 }
 
+/**
+ * What GET /providers/:key/app reports. Deliberately carries no secret: the
+ * client secret and GitHub App private key live only in Vault. `configured`
+ * is what lets the console distinguish "not set up yet" from "already done",
+ * which it previously could not do at all.
+ */
+export interface ProviderAppStatus {
+  configured: boolean;
+  provider: string;
+  app_kind?: string;
+  client_id?: string;
+  redirect_uri?: string;
+  github_app_id?: string;
+  created_at?: string;
+}
+
 /** F1: register a workspace's GitHub App (app id + private-key PEM → Vault). */
 export interface SetGitHubAppRequest {
   app_id: string;
@@ -177,7 +197,33 @@ export const connectorsApi = baseApi.injectEndpoints({
 
     listConnectors: builder.query<Connector[], void>({
       query: () => "/authsec/connectors",
-      transformResponse: (res: { connectors: Connector[] }) => res.connectors,
+      // The server also returns a parallel `connector_status` array saying which
+      // connectors actually have a workspace credential bound. Folded onto each
+      // connector so callers can avoid offering one that was created but never
+      // finished setup -- that failure otherwise surfaces much later, at use
+      // time, pointing nowhere near the real cause.
+      transformResponse: (res: {
+        connectors: Connector[];
+        connector_status?: {
+          connector_id: string;
+          connected: boolean;
+          connection_method: string;
+          connection_status: string;
+        }[];
+      }) => {
+        const byId = new Map(
+          (res.connector_status ?? []).map((s) => [s.connector_id, s]),
+        );
+        return res.connectors.map((c) => {
+          const st = byId.get(c.id);
+          return {
+            ...c,
+            connected: st?.connected ?? undefined,
+            connection_method: st?.connection_method || undefined,
+            connection_status: st?.connection_status || undefined,
+          };
+        });
+      },
       providesTags: (result) =>
         result
           ? [
@@ -279,8 +325,18 @@ export const connectorsApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // Write-only by design: there is no GET for a workspace's provider app
-    // (the secret lives in Vault; client_id/redirect are set-and-forget).
+    /**
+     * Non-secret status of this workspace's provider app. The WRITE paths stay
+     * write-only (secrets never come back); this only answers "is it set up,
+     * and which app id".
+     */
+    getProviderApp: builder.query<ProviderAppStatus, string>({
+      query: (providerKey) => `/authsec/connectors/providers/${providerKey}/app`,
+      providesTags: (_r, _e, providerKey) => [
+        { type: "ExternalService", id: `provider-app:${providerKey}` },
+      ],
+    }),
+
     setProviderApp: builder.mutation<
       { status: string; provider: string },
       SetProviderAppRequest
@@ -290,6 +346,9 @@ export const connectorsApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
+      invalidatesTags: (_r, _e, { providerKey }) => [
+        { type: "ExternalService", id: `provider-app:${providerKey}` },
+      ],
     }),
 
     // F1 — register the workspace's GitHub App (write-only; PEM → Vault).
@@ -302,6 +361,7 @@ export const connectorsApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
+      invalidatesTags: [{ type: "ExternalService", id: "provider-app:github" }],
     }),
 
     // F1 — bind a connector to an installed GitHub App on an org.
@@ -370,6 +430,7 @@ export const {
   useDeleteConnectorAssignmentMutation,
   useGetConnectorAuditQuery,
   useSetProviderAppMutation,
+  useGetProviderAppQuery,
   useSetGitHubAppMutation,
   useConnectGitHubAppMutation,
   useSetConnectorSubjectGroupsMutation,

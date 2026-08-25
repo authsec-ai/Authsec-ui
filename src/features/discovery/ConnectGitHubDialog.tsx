@@ -57,6 +57,14 @@ export function ConnectGitHubDialog({
     () => connectors.filter((c) => c.provider_key === "github"),
     [connectors],
   );
+  // A connector with no installation bound cannot read a single repository. It
+  // is listed but not selectable, because silently allowing it produces a source
+  // that fails at scan time with an error pointing at the scan rather than at
+  // the half-finished setup that actually caused it.
+  const usableConnectors = useMemo(
+    () => githubConnectors.filter((c) => c.connected !== false),
+    [githubConnectors],
+  );
 
   const selected = githubConnectors.find((c) => c.id === connectorId);
 
@@ -128,11 +136,14 @@ export function ConnectGitHubDialog({
                   <button
                     key={c.id}
                     type="button"
+                    disabled={c.connected === false}
                     onClick={() => setConnectorId(c.id)}
                     className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                      connectorId === c.id
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/50"
+                      c.connected === false
+                        ? "cursor-not-allowed opacity-60"
+                        : connectorId === c.id
+                          ? "border-primary bg-primary/5"
+                          : "hover:bg-muted/50"
                     }`}
                   >
                     <span className="min-w-0">
@@ -148,11 +159,15 @@ export function ConnectGitHubDialog({
                           : "GitHub App connector"}
                       </span>
                     </span>
-                    {!c.enabled && (
+                    {c.connected === false ? (
+                      <span className="ml-2 shrink-0 text-xs text-(--color-warning-text)">
+                        Setup unfinished
+                      </span>
+                    ) : !c.enabled ? (
                       <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                         Disabled
                       </span>
-                    )}
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -171,6 +186,14 @@ export function ConnectGitHubDialog({
               </p>
             </div>
 
+            {usableConnectors.length < githubConnectors.length && (
+              <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
+                Greyed-out connectors have no GitHub installation bound yet, so they
+                cannot read any repository. Finish their setup under Connectors, or
+                delete them.
+              </p>
+            )}
+
             <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               Nothing is scanned yet. You choose the repositories on the next
               screen, then run the first scan.
@@ -184,7 +207,7 @@ export function ConnectGitHubDialog({
           </Button>
           <Button
             onClick={submit}
-            disabled={!connectorId || saving || githubConnectors.length === 0}
+            disabled={!connectorId || saving || usableConnectors.length === 0}
           >
             {saving ? "Adding…" : "Add integration"}
           </Button>

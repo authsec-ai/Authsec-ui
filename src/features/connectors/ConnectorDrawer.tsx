@@ -135,6 +135,16 @@ export function ConnectorDrawer({
   const meta = connector ? providerMeta(connector.provider_key) : null;
   const { label: health, connection } = deriveConnectionHealth(connections);
 
+  // A GitHub App connector authenticates as an installed org bot, not via a
+  // human OAuth login. The generic Connect/Reconnect button below starts an
+  // OAuth authorize flow, which for this provider can only ever fail with
+  // "OAuth app not configured" -- and the workspace OAuth-app panel underneath
+  // configures something this connector never uses. Both are hidden here so the
+  // drawer stops offering a route that cannot work.
+  const isGitHubApp =
+    connector?.provider_key === "github" &&
+    (connection?.auth_method === "github_app" || !connection);
+
   const handleClose = () => {
     setTab("overview");
     setConfirmDeleteOpen(false);
@@ -383,19 +393,38 @@ export function ConnectorDrawer({
                         </p>
                       )}
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 w-full"
-                        onClick={() => void handleReconnect()}
-                        disabled={reconnecting}
-                      >
-                        <ExternalLink className="mr-1.5 size-3.5" />
-                        {reconnecting ? "Redirecting…" : connection ? "Reconnect" : "Connect"}
-                      </Button>
+                      {isGitHubApp ? (
+                        connection ? (
+                          <p className="mt-3 text-[11.5px] text-muted-foreground">
+                            Connected as an installed GitHub App. To point this connector at a
+                            different installation, or after rotating the App&rsquo;s private key,
+                            re-run setup from{" "}
+                            <span className="font-medium">Connectors → Add connector → GitHub</span>.
+                          </p>
+                        ) : (
+                          <p className="mt-3 rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11.5px] text-(--color-warning-text)">
+                            Setup was never finished for this connector — it has no installation
+                            bound, so it cannot read anything. Complete it from{" "}
+                            <span className="font-medium">Connectors → Add connector → GitHub</span>,
+                            or delete this connector and start again.
+                          </p>
+                        )
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3 w-full"
+                          onClick={() => void handleReconnect()}
+                          disabled={reconnecting}
+                        >
+                          <ExternalLink className="mr-1.5 size-3.5" />
+                          {reconnecting ? "Redirecting…" : connection ? "Reconnect" : "Connect"}
+                        </Button>
+                      )}
                     </div>
                   </DrawerSection>
 
+                  {!isGitHubApp && (
                   <DrawerSection
                     label="Workspace OAuth app"
                     action={
@@ -424,6 +453,7 @@ export function ConnectorDrawer({
                       </p>
                     )}
                   </DrawerSection>
+                  )}
 
                   <DrawerSection label="Details">
                     <DetailGrid>
