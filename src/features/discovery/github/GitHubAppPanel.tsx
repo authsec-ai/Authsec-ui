@@ -17,6 +17,9 @@ import { Building2, Check, Loader2, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +31,7 @@ import {
 import {
   useDeleteGitHubAppMutation,
   useDescribeGitHubAppQuery,
+  useListDiscoverySourcesQuery,
   useSetGitHubAppMutation,
 } from "@/app/api/discoveryApi";
 import { GitHubAppManifestButton } from "./GitHubAppManifestButton";
@@ -49,12 +53,40 @@ export function GitHubAppPanel({
   const [error, setError] = useState("");
   // Manual entry is the fallback, not the default -- see the manifest button.
   const [showManual, setShowManual] = useState(false);
+  // Offered in the registered state too: an App's owner is fixed at creation, so
+  // moving from a personal App to an organisation's App means creating another.
+  const [showCreate, setShowCreate] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+
+  // Who will OWN the App. This is not a preference: GitHub decides the owner
+  // from the URL the manifest is POSTed to, and a private App can only be
+  // installed on the account that owns it. An App created under a personal
+  // account can therefore never scan an organisation — the organisation list
+  // stays empty forever, with nothing on screen explaining why.
+  const [owner, setOwner] = useState<"org" | "personal">("org");
+  const [orgSlug, setOrgSlug] = useState("");
+  // GitHub calls this "public". Off means the App installs only on its owner,
+  // which is the right default. On is what lets one App cover several
+  // organisations, which is what the "Install on another organisation" action
+  // in the next step needs in order to do anything.
+  const [allowOtherAccounts, setAllowOtherAccounts] = useState(false);
+
+  const orgSlugValid = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(orgSlug.trim());
 
   // What GitHub says the stored App actually is. Turns a blind form into a
   // confirmed one: a wrong App ID is visible here, at the moment of entry,
   // instead of surfacing later as an opaque token-minting failure.
   const { data: appInfo } = useDescribeGitHubAppQuery(undefined, { skip: !registered });
+
+  // How many organisations are bound to the CURRENT App. The server refuses to
+  // swap the App while any exist; knowing that here means the operator is
+  // stopped before creating an App on GitHub we would then decline to store,
+  // which would leave them an orphan App to clean up by hand.
+  const { data: sources } = useListDiscoverySourcesQuery({ kind: "repo_scan" }, {
+    skip: !registered,
+  });
+  const boundOrganisations = (sources ?? []).map((src) => src.display_name);
+  const appChangeBlocked = registered && boundOrganisations.length > 0;
 
   const submit = async () => {
     if (!appId.trim() || !privateKey.trim()) {
@@ -70,6 +102,7 @@ export function GitHubAppPanel({
       setPrivateKey("");
       setKeyFileName("");
       setShowManual(false);
+      setShowCreate(false);
       onChanged?.();
     } catch (err) {
       // Inline, not a toast: this is a field-level failure and the operator
@@ -96,7 +129,7 @@ export function GitHubAppPanel({
 
   return (
     <div className="space-y-3">
-      {registered ? (
+      {registered && (
         <div className="rounded-md bg-(--color-success-soft) px-2.5 py-2 text-[11.5px] text-(--color-success-text)">
           <p className="flex items-center gap-1.5 font-medium">
             <Check className="size-3.5 shrink-0" />
@@ -119,19 +152,132 @@ export function GitHubAppPanel({
             </p>
           )}
         </div>
-      ) : (
-        <div className="space-y-2 rounded-md border px-3 py-3">
-          <p className="text-[12px] font-medium">Create the App automatically</p>
-          <p className="text-[11px] text-muted-foreground">
-            GitHub shows you a pre-filled confirmation screen with the right permissions
-            already set — read-only access to repository contents, no webhook. Approving it
-            sends the App&rsquo;s credentials straight here. Nothing to copy.
-          </p>
-          <GitHubAppManifestButton />
-          <p className="text-[11px] text-muted-foreground">
-            You&rsquo;ll be able to choose whether to create it under your personal account or
-            an organisation on GitHub&rsquo;s screen.
-          </p>
+      )}
+
+      {(!registered || showCreate) && (
+        <div className="space-y-3 rounded-md border px-3 py-3">
+          <div>
+            <p className="text-[12px] font-medium">Create the App automatically</p>
+            <p className="text-[11px] text-muted-foreground">
+              GitHub shows you a pre-filled confirmation screen with the right permissions
+              already set — read-only access to repository contents, no webhook. Approving
+              it sends the App&rsquo;s credentials straight here. Nothing to copy.
+            </p>
+          </div>
+
+          {/* The choice that decides whether organisations can be scanned at
+              all. It has to be made HERE, before the App exists, because GitHub
+              takes the owner from the URL this form posts to and an App's owner
+              cannot be changed afterwards. */}
+          <div className="space-y-2">
+            <p className="text-[11.5px] font-medium">Who should own the App?</p>
+            <RadioGroup
+              value={owner}
+              onValueChange={(v) => setOwner(v as "org" | "personal")}
+              className="gap-1.5"
+            >
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="org" id="owner-org" className="mt-0.5" />
+                <Label htmlFor="owner-org" className="cursor-pointer text-[11.5px] font-normal">
+                  A GitHub organisation
+                  <span className="block text-[11px] text-muted-foreground">
+                    Choose this to scan an organisation&rsquo;s repositories. You need owner
+                    rights on it.
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="personal" id="owner-personal" className="mt-0.5" />
+                <Label
+                  htmlFor="owner-personal"
+                  className="cursor-pointer text-[11.5px] font-normal"
+                >
+                  My personal account
+                  <span className="block text-[11px] text-muted-foreground">
+                    Only your own repositories. No organisation can be scanned by an App
+                    owned personally.
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {owner === "org" && (
+            <div className="space-y-1">
+              <Input
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value)}
+                placeholder="organisation name, e.g. acme-corp"
+                className="h-9 text-xs"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {/* The slug, not the display name. github.com/orgs/<this>. We
+                  cannot look it up for them: there is no App yet, so there is
+                  nothing to authenticate a lookup with. A wrong slug fails on
+                  GitHub's own page, which at least fails visibly and early. */}
+              <p className="text-[11px] text-muted-foreground">
+                As it appears in the URL — <span className="font-mono">github.com/orgs/</span>
+                <span className="font-medium">&lt;this&gt;</span>.
+              </p>
+            </div>
+          )}
+
+          <label className="flex cursor-pointer items-start gap-2">
+            <Checkbox
+              checked={allowOtherAccounts}
+              onCheckedChange={(v) => setAllowOtherAccounts(v === true)}
+              className="mt-0.5"
+            />
+            <span className="text-[11px]">
+              Allow installing this App on other organisations too
+              {/* Worth stating both ways round. Left off, "Install on another
+                  organisation" in the next step cannot work and looks broken.
+                  Turned on, the App becomes public on GitHub, and anyone who
+                  finds it could install it on an account they control -- which
+                  would put their installation in this workspace's list. */}
+              <span className="block text-muted-foreground">
+                Needed to cover more than one account with a single App. It also makes the
+                App public on GitHub, so anyone who finds it could install it on their own
+                organisation and have it appear in your list. Leave off if one account is
+                enough.
+              </span>
+            </span>
+          </label>
+
+          <GitHubAppManifestButton
+            orgSlug={owner === "org" ? orgSlug : null}
+            allowOtherAccounts={allowOtherAccounts}
+            disabled={(owner === "org" && !orgSlugValid) || appChangeBlocked}
+          />
+          {owner === "org" && orgSlug.trim() !== "" && !orgSlugValid && (
+            <p className="text-[11px] text-(--color-danger-text)">
+              That does not look like a GitHub organisation name — letters, numbers and
+              hyphens only.
+            </p>
+          )}
+          {owner === "org" && orgSlug.trim() === "" && (
+            <p className="text-[11px] text-muted-foreground">
+              Enter the organisation name to continue.
+            </p>
+          )}
+          {appChangeBlocked ? (
+            /* Blocked HERE rather than after the round trip. Refusing on the way
+               back would mean they had already created the App on GitHub and now
+               have an orphan to delete by hand. */
+            <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11px] text-(--color-warning-text)">
+              Remove {boundOrganisations.join(", ")} first. Each was installed on App{" "}
+              {registeredAppId ?? "the current App"} and cannot be read by a different one,
+              so replacing the App now would break them.
+            </p>
+          ) : (
+            registered && (
+              <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11px] text-(--color-warning-text)">
+                This replaces the App registered above. Nothing is using it yet, so nothing
+                breaks.
+              </p>
+            )
+          )}
         </div>
       )}
 
@@ -142,13 +288,22 @@ export function GitHubAppPanel({
       )}
 
       <div className="flex flex-wrap items-center gap-3">
+        {registered && !showCreate && (
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="text-[11px] text-muted-foreground underline underline-offset-2"
+          >
+            Create a new App for an organisation
+          </button>
+        )}
         {!showManual && (
           <button
             type="button"
             onClick={() => setShowManual(true)}
             className="text-[11px] text-muted-foreground underline underline-offset-2"
           >
-            {registered ? "Replace with a different App" : "Or register an existing App by hand"}
+            {registered ? "Register a different App by hand" : "Or register an existing App by hand"}
           </button>
         )}
         {registered && (

@@ -100,6 +100,19 @@ export function GitHubOrganisationPanel({
             account or organisation whose repositories you want scanned, choosing which
             repositories it may read. Then come back and refresh.
           </p>
+          {/* The answer to "why is there no organisation in this list". A GitHub
+              App installs only on accounts it is allowed to, and a private App
+              owned by a personal account is allowed exactly one: that account.
+              Without this the list is simply empty and the operator has no way
+              to find out that the owner chosen two steps ago is the reason. */}
+          {appInfo && appInfo.owner_type === "User" && !appInfo.public && (
+            <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-[11px] text-(--color-warning-text)">
+              This App is owned by the personal account{" "}
+              <span className="font-medium">{appInfo.owner}</span> and is private, so GitHub
+              only allows installing it there — no organisation can appear in this list. To
+              scan an organisation, go back and create an App owned by that organisation.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {appInfo?.install_url && (
               <Button asChild size="sm" className="text-[length:var(--text-sm)] text-white">

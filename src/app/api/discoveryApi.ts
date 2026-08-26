@@ -330,6 +330,16 @@ export interface GitHubAppInfo {
   slug: string;
   owner: string;
   permissions: Record<string, string>;
+  /**
+   * "User" or "Organization", and GitHub's "any account may install" flag.
+   *
+   * Together they decide where this App can be installed at all: a private App
+   * installs ONLY on the account that owns it. A private, personally-owned App
+   * can therefore never reach an organisation, which is the one explanation an
+   * empty organisation list cannot give on its own.
+   */
+  owner_type: string;
+  public: boolean;
   /** Canonical install page, derived from the slug — lets the UI offer a button. */
   install_url: string;
 }
