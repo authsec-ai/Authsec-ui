@@ -93,12 +93,22 @@ This app's authenticated routes can't be previewed without the backend stack
 running. **Do not start the dev server to verify a UI change** — it'll just
 sit at the login wall. Verify with `npx tsc --noEmit` and `npx eslint <file>`.
 
+When an operator supplies a valid token, `/dev/bypass` may be used for an
+authenticated local check. There is no `stage.authsec.dev`. Production UI is
+`https://app.authsec.ai`; its API and OAuth issuer are both
+`https://prod.api.authsec.ai`.
 
+## Production deployment
 
-but in a case that you have been given the token then proceed to /dev/bypass and 
-enter that token and then you can locally test it. there is no stage.authsec.dev
-refer to the actual backend and how the production stack is running and setup everything accordingly
-by doing some digging
+The only active release path is the K3s procedure in
+[`../.claude/specs/SPEC-deployment-k3s.md`](../.claude/specs/SPEC-deployment-k3s.md).
+
+- Production Deployment/container: `authsec-prod/prod-ui` / `prod-ui`.
+- Build the local working tree as an immutable `linux/amd64` image.
+- Set both `VITE_API_URL` and `VITE_OAUTH_BASE_URL` to
+  `https://prod.api.authsec.ai` at build time.
+- Deploy only after the matching backend is healthy.
+- Pushing `authsec-staging` does not deploy the cluster.
 
 ---
 
