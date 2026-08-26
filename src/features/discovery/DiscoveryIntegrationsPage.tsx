@@ -165,6 +165,13 @@ export default function DiscoveryIntegrationsPage() {
 
   const allSources = useMemo(() => data ?? [], [data]);
 
+  // Whether deleting this one takes the workspace's GitHub App with it. Mirrors
+  // the server's condition (last repo_scan source in the workspace) so the
+  // dialog cannot promise something different from what happens.
+  const isLastGitHubOrg =
+    deleteTarget?.kind === "repo_scan" &&
+    allSources.filter((s) => s.kind === "repo_scan").length === 1;
+
   const items = useMemo(() => {
     let list = allSources;
     if (statusFilter === "enabled") list = list.filter((s) => s.enabled);
@@ -398,26 +405,39 @@ export default function DiscoveryIntegrationsPage() {
                 <p>
                   {deleteTarget?.kind === "repo_scan" ? (
                     <>
-                      Stops scanning <strong>{deleteTarget?.display_name}</strong>. Anything
-                      it already found stays in the inventory — findings do not disappear
-                      with the integration that produced them.
+                      Stops scanning <strong>{deleteTarget?.display_name}</strong> and
+                      removes the agents it found from the inventory.
                     </>
                   ) : (
                     <>
-                      Removes <strong>{deleteTarget?.display_name}</strong> and stops it
-                      feeding the inventory. Agents it already discovered stay there —
-                      they do not disappear with the integration that found them.
+                      Removes <strong>{deleteTarget?.display_name}</strong> and the agents it
+                      reported from the inventory.
                     </>
                   )}
                 </p>
+                <p className="text-muted-foreground">
+                  Agents found by another integration are not affected. If this
+                  organisation is added again, a scan re-finds whatever is still there.
+                </p>
 
                 {deleteTarget?.kind === "repo_scan" && (
-                  <p className="text-muted-foreground">
-                    Your workspace keeps its GitHub App, so you can add this organisation
-                    back without setting the App up again. The App also stays installed on
-                    GitHub — it will still be offered when adding an organisation until you
-                    uninstall it there.
-                  </p>
+                  <>
+                    {isLastGitHubOrg && (
+                      <p className="text-muted-foreground">
+                        This is your last GitHub organisation, so the workspace&rsquo;s
+                        GitHub App and its private key are removed too. Adding GitHub again
+                        means setting the App up once more.
+                      </p>
+                    )}
+                    {/* The one thing deleting here cannot do. Left unsaid, the App
+                        still being listed on github.com -- and the organisation
+                        still being offered in the picker -- reads as the delete
+                        having silently failed. */}
+                    <p className="text-muted-foreground">
+                      The App is not deleted from GitHub. Remove it in your GitHub account
+                      or organisation settings if you want it gone there too.
+                    </p>
+                  </>
                 )}
 
                 {deleteTarget?.kind === "k8s_webhook" && (
