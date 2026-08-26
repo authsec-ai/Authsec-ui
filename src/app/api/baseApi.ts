@@ -174,6 +174,11 @@ export const baseApi = createApi({
     "DiscoveredAgent",
     "DiscoveredIdentity",
     "AgentCoverage",
+    // The workspace GitHub App, and where it is installed. The installation
+    // list is read live from GitHub, so it also changes when a source is
+    // deleted here (freeing an organisation to be added again).
+    "GitHubApp",
+    "GitHubInstallation",
     // Governance + provisioning (see app/api/governanceApi.ts)
     "Provenance",
     "SoDRule",

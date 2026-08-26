@@ -5,7 +5,7 @@
  *   Dashboard
  *   Workspace : End Users, Applications, Clients
  *   Authz     : Roles, Scopes, Assignments
- *   Configure : Identity Providers, SCIM Connections, Directory Sync, Connectors
+ *   Configure : Identity Providers, SCIM Connections, Directory Sync
  *   Monitor   : Audit Logs
  *   Settings  : Team
  *
@@ -13,9 +13,15 @@
  * broken / out of scope; their routes still exist in App.tsx so direct links
  * resolve, but the rail no longer advertises them. See plan phase 0.1.
  *
- * "Secrets" (/external-services) was replaced by "Connectors" (/connectors)
- * — the old page was mock data with no real API behind it. Its route/files
- * are left in place in case anything still links to it directly.
+ * "Secrets" (/external-services) was replaced by "Connectors" (/connectors),
+ * and Connectors has since been removed from the rail as well.
+ *
+ * Connectors is the outbound ACTION broker, and its only shipped consumer today
+ * is an agent calling a provider through the broker -- there is nothing an
+ * operator does on that screen yet. It was also being mistaken for GitHub
+ * discovery setup, which now owns its own flow under the IGA console and shares
+ * none of its records. SPEC-connectors R2 plans a spec-compliant admin surface,
+ * so the files stay; only the rail entry and the route are gone.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,7 +30,6 @@ import { toast } from "react-hot-toast";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import {
   Bot,
-  Cable,
   ClipboardList,
   Fingerprint,
   FolderSync,
@@ -112,7 +117,6 @@ const NAV_CONFIGURE: NavItem[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint },
   { title: "SCIM Connections", url: "/scim-connections", icon: Shield },
   { title: "Directory Sync", url: "/directory-sync", icon: FolderSync },
-  { title: "Connectors", url: "/connectors", icon: Cable },
 ];
 
 const NAV_SETTINGS: NavItem[] = [

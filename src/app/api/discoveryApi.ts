@@ -323,6 +323,34 @@ export interface AgentFilters {
   offset?: number;
 }
 
+/** What GitHub says the workspace's registered App is. */
+export interface GitHubAppInfo {
+  app_id: string;
+  name: string;
+  slug: string;
+  owner: string;
+  permissions: Record<string, string>;
+  /** Canonical install page, derived from the slug — lets the UI offer a button. */
+  install_url: string;
+}
+
+/**
+ * One place this App is installed, as GitHub reports it.
+ *
+ * `already_added` is ours, not GitHub's: it says whether this workspace has
+ * already turned this installation into a discovery source. Without it an
+ * organisation that is already connected is indistinguishable from a new one.
+ */
+export interface GitHubInstallation {
+  installation_id: string;
+  account: string;
+  account_type: string;
+  /** "all" or "selected" — how much of the account the App was granted. */
+  repository_selection: string;
+  already_added: boolean;
+  source_id?: string;
+}
+
 export const discoveryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // ── Sources ───────────────────────────────────────────────────────────
@@ -363,7 +391,10 @@ export const discoveryApi = baseApi.injectEndpoints({
 
     deleteDiscoverySource: builder.mutation<void, string>({
       query: (id) => ({ url: `/authsec/discovery/sources/${id}`, method: "DELETE" }),
-      invalidatesTags: ["DiscoverySource", "DiscoveredAgent"],
+      // Deleting a repo_scan source also deletes the integration binding it
+      // owns, which frees the organisation to be added again — so the
+      // installation list's already_added annotations are now stale too.
+      invalidatesTags: ["DiscoverySource", "DiscoveredAgent", "GitHubInstallation"],
     }),
 
     // ── Inventory ─────────────────────────────────────────────────────────
@@ -493,21 +524,96 @@ export const discoveryApi = baseApi.injectEndpoints({
     }),
 
     // ── GitHub discovery ──────────────────────────────────────────────────
-    // Builds on a GitHub App connector; see connectorsApi for registration.
+    // Discovery owns its GitHub surface end to end. Nothing here calls the
+    // connectors API: per SPEC-connectors, Agentic IGA must not depend on that
+    // framework. The App private KEY is stored once per workspace and shared
+    // with the connector broker on purpose — one key, one place — but that is a
+    // backend detail and no connector row is involved.
 
-    /** Turn an existing GitHub App connector into a discovery source. */
-    createSourceFromConnector: builder.mutation<
-      DiscoverySource,
-      { connector_id: string; display_name?: string }
-    >({
+    /** Is a GitHub App registered for this workspace, and which one. */
+    getGitHubApp: builder.query<{ configured: boolean; app_id?: string }, void>({
+      query: () => ({ url: "/authsec/discovery/github/app", method: "GET" }),
+      providesTags: ["GitHubApp"],
+    }),
+
+    /**
+     * What GitHub says the stored App actually is.
+     *
+     * Turns a blind registration into a confirmed one: a wrong App id is
+     * visible here, at the moment of entry, instead of surfacing much later as
+     * an opaque token-minting failure.
+     */
+    describeGitHubApp: builder.query<GitHubAppInfo, void>({
+      query: () => ({ url: "/authsec/discovery/github/app/describe", method: "GET" }),
+      transformResponse: (res: { data: GitHubAppInfo }) => res.data,
+      providesTags: ["GitHubApp"],
+    }),
+
+    /** Register an existing App by hand — the fallback to the manifest flow. */
+    setGitHubApp: builder.mutation<void, { app_id: string; private_key: string }>({
+      query: (body) => ({ url: "/authsec/discovery/github/app", method: "POST", body }),
+      invalidatesTags: ["GitHubApp", "GitHubInstallation"],
+    }),
+
+    /** Remove the workspace App. Refused (409) while any organisation uses it. */
+    deleteGitHubApp: builder.mutation<void, void>({
+      query: () => ({ url: "/authsec/discovery/github/app", method: "DELETE" }),
+      invalidatesTags: ["GitHubApp", "GitHubInstallation"],
+    }),
+
+    /** Exchange GitHub's single-use manifest code for the App id and key. */
+    convertGitHubAppManifest: builder.mutation<GitHubAppInfo, { code: string }>({
       query: (body) => ({
-        url: "/authsec/discovery/sources/from-connector",
+        url: "/authsec/discovery/github/app/manifest/convert",
         method: "POST",
         body,
       }),
-      transformResponse: (res: { data?: DiscoverySource } | DiscoverySource) =>
-        ("data" in (res as object) ? (res as { data: DiscoverySource }).data : res) as DiscoverySource,
-      invalidatesTags: ["DiscoverySource"],
+      transformResponse: (res: { data: GitHubAppInfo }) => res.data,
+      invalidatesTags: ["GitHubApp", "GitHubInstallation"],
+    }),
+
+    /**
+     * Where this workspace's App is installed.
+     *
+     * Read live from GitHub, never from our tables, and annotated with
+     * `already_added` so a connected organisation cannot be presented as new.
+     * The live read is why an organisation can appear here with nothing on our
+     * side at all — the App stays installed on GitHub until someone uninstalls
+     * it there, which is not something deleting anything here can undo.
+     */
+    listGitHubInstallations: builder.query<
+      { installations: GitHubInstallation[]; note: string },
+      void
+    >({
+      query: () => ({ url: "/authsec/discovery/github/installations", method: "GET" }),
+      transformResponse: (res: {
+        data?: GitHubInstallation[];
+        meta?: { note?: string };
+      }) => ({ installations: res.data ?? [], note: res.meta?.note ?? "" }),
+      providesTags: ["GitHubInstallation"],
+    }),
+
+    /**
+     * Add one organisation: creates the verified integration binding AND the
+     * discovery source in a single call.
+     *
+     * One call rather than three because the intermediate states help nobody —
+     * a UI that failed between them would leave a pending integration with no
+     * source, which reads as broken and cannot be cleared from the console.
+     */
+    addGitHubOrganisation: builder.mutation<
+      { source: DiscoverySource; already_existed?: boolean },
+      { installation_id: string }
+    >({
+      query: (body) => ({
+        url: "/authsec/discovery/github/organisations",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (res: {
+        data: { source: DiscoverySource; already_existed?: boolean };
+      }) => res.data,
+      invalidatesTags: ["DiscoverySource", "GitHubInstallation"],
     }),
 
     /**
@@ -586,7 +692,13 @@ export const {
   useDeleteDiscoveredAgentMutation,
   useGetAgentEventsQuery,
   useGetAgentCoverageQuery,
-  useCreateSourceFromConnectorMutation,
+  useGetGitHubAppQuery,
+  useDescribeGitHubAppQuery,
+  useSetGitHubAppMutation,
+  useDeleteGitHubAppMutation,
+  useConvertGitHubAppManifestMutation,
+  useListGitHubInstallationsQuery,
+  useAddGitHubOrganisationMutation,
   useListSourceRepositoriesQuery,
   useSetSourceRepositoriesMutation,
   useScanGitHubSourceMutation,

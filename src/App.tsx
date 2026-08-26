@@ -59,7 +59,6 @@ import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage
 import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
 import AgentsPage from "./features/agents/AgentsPage";
 import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
-import ConnectorsPage from "./features/connectors/ConnectorsPage";
 import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import IdentitiesPage from "./features/discovery/IdentitiesPage";
@@ -563,17 +562,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <ServiceAccountsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/connectors"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ConnectorsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

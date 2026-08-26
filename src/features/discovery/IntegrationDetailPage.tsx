@@ -85,7 +85,7 @@ export default function IntegrationDetailPage() {
   const isGitHub = source.kind === "repo_scan";
 
   // Mirrors what the scanner reads: config.repositories = { mode, include }.
-  // A source created from a connector starts as mode "selected" with an empty
+  // A newly added organisation starts as mode "selected" with an empty
   // include, which is precisely the state the wizard hands off in.
   const repoSel = (source.config?.repositories ?? null) as
     | { mode?: string; include?: string[] }

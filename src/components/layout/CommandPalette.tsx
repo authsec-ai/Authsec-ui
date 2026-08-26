@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
-  Cable,
   ClipboardList,
   Fingerprint,
   FolderSync,
@@ -58,7 +57,6 @@ const DESTINATIONS: PaletteDestination[] = [
   { title: "Identity Providers", url: "/identity-providers", icon: Fingerprint, group: "Configure", keywords: "sso saml oidc idp" },
   { title: "SCIM Connections", url: "/scim-connections", icon: Shield, group: "Configure", keywords: "scim provisioning" },
   { title: "Directory Sync", url: "/directory-sync", icon: FolderSync, group: "Configure", keywords: "active directory entra ldap" },
-  { title: "Connectors", url: "/connectors", icon: Cable, group: "Configure", keywords: "integrations secrets" },
   { title: "Team", url: "/settings/team", icon: Users, group: "Settings", keywords: "members" },
   { title: "Trusted Issuers", url: "/settings/trusted-issuers", icon: ShieldCheck, group: "Settings", keywords: "oidc issuers" },
 ];

@@ -38,10 +38,10 @@ import {
   useDeleteDiscoverySourceMutation,
   useListDiscoverySourcesQuery,
   useUpdateDiscoverySourceMutation,
+  useConvertGitHubAppManifestMutation,
   type DiscoverySource,
 } from "@/app/api/discoveryApi";
 import { GitHubSetupWizard } from "./GitHubSetupWizard";
-import { useConvertGitHubAppManifestMutation } from "@/app/api/connectorsApi";
 import { DeployCollectorWizard } from "./DeployCollectorWizard";
 import {
   DropdownMenu,
@@ -131,6 +131,10 @@ export default function DiscoveryIntegrationsPage() {
         const info = await convertManifest({ code }).unwrap();
         if (cancelled) return;
         toast.success(`GitHub App "${info.name}" created`);
+        // Reopen the GitHub wizard. It skips the App step on its own now that
+        // an App exists, so the operator lands on the organisation step -- the
+        // one they were heading for -- rather than back at the step they have
+        // just finished.
         setGithubOpen(true);
       } catch (err) {
         if (cancelled) return;
@@ -382,10 +386,13 @@ export default function DiscoveryIntegrationsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete integration</DialogTitle>
-            {/* Kind-aware, because the two channels behave differently on delete
-                and a single generic sentence was wrong for both. GitHub is
-                scan-on-demand and keeps its connector; Kubernetes has an agent
-                running in a cluster that this does not touch. */}
+            {/* Kind-aware, because the two channels behave differently on
+                delete and a single generic sentence was wrong for both. Each
+                also names the thing this does NOT remove: for GitHub the App is
+                still installed on github.com, which is why the organisation
+                keeps appearing when adding one; for Kubernetes the collector is
+                still running in the cluster. Both were previously left to be
+                discovered, and both read as the delete having failed. */}
             <DialogDescription asChild>
               <div className="space-y-2">
                 <p>
@@ -406,8 +413,10 @@ export default function DiscoveryIntegrationsPage() {
 
                 {deleteTarget?.kind === "repo_scan" && (
                   <p className="text-muted-foreground">
-                    The GitHub connection itself is not removed, so you can add this back
-                    later without setting the App up again.
+                    Your workspace keeps its GitHub App, so you can add this organisation
+                    back without setting the App up again. The App also stays installed on
+                    GitHub — it will still be offered when adding an organisation until you
+                    uninstall it there.
                   </p>
                 )}
 
