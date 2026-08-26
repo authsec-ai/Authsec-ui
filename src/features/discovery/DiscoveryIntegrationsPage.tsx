@@ -382,11 +382,42 @@ export default function DiscoveryIntegrationsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete integration</DialogTitle>
-            <DialogDescription>
-              Removes <strong>{deleteTarget?.display_name}</strong> and stops it producing
-              sightings. Agents it already discovered stay in the inventory — the FK is{" "}
-              <code>ON DELETE SET NULL</code>, so they outlive their source rather than
-              disappearing with it.
+            {/* Kind-aware, because the two channels behave differently on delete
+                and a single generic sentence was wrong for both. GitHub is
+                scan-on-demand and keeps its connector; Kubernetes has an agent
+                running in a cluster that this does not touch. */}
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  {deleteTarget?.kind === "repo_scan" ? (
+                    <>
+                      Stops scanning <strong>{deleteTarget?.display_name}</strong>. Anything
+                      it already found stays in the inventory — findings do not disappear
+                      with the integration that produced them.
+                    </>
+                  ) : (
+                    <>
+                      Removes <strong>{deleteTarget?.display_name}</strong> and stops it
+                      feeding the inventory. Agents it already discovered stay there —
+                      they do not disappear with the integration that found them.
+                    </>
+                  )}
+                </p>
+
+                {deleteTarget?.kind === "repo_scan" && (
+                  <p className="text-muted-foreground">
+                    The GitHub connection itself is not removed, so you can add this back
+                    later without setting the App up again.
+                  </p>
+                )}
+
+                {deleteTarget?.kind === "k8s_webhook" && (
+                  <p className="text-muted-foreground">
+                    The agent running in your cluster is not uninstalled by this — it will
+                    keep trying to report until you remove it there.
+                  </p>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
