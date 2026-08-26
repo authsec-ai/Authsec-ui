@@ -64,6 +64,29 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
     return q ? repos.filter((r) => r.full_name.toLowerCase().includes(q)) : repos;
   }, [repos, query]);
 
+  // Select/clear act on what is CURRENTLY VISIBLE, not on the whole list.
+  //
+  // That is the useful behaviour and the safe one: with a filter typed, "all"
+  // plainly means the matches in front of you, and clearing cannot silently
+  // discard ticks you cannot see. Selecting stays additive for the same reason —
+  // filtering to one team's repositories, selecting them, then filtering to
+  // another must add rather than replace.
+  const selectVisible = () => {
+    setChosen((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((r) => next.add(r.full_name));
+      return next;
+    });
+  };
+
+  const clearVisible = () => {
+    setChosen((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((r) => next.delete(r.full_name));
+      return next;
+    });
+  };
+
   const toggle = (fullName: string) => {
     setChosen((prev) => {
       const next = new Set(prev);
@@ -131,6 +154,10 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
   }
 
   const selectedCount = mode === "all" ? repos.length : chosen.size;
+  const allVisibleSelected =
+    filtered.length > 0 && filtered.every((r) => chosen.has(r.full_name));
+  const noVisibleSelected = filtered.every((r) => !chosen.has(r.full_name));
+  const allSelected = repos.length > 0 && chosen.size === repos.length;
 
   return (
     <Card>
@@ -186,6 +213,50 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
                   placeholder="Filter repositories"
                   className="h-8 pl-8 text-xs"
                 />
+              </div>
+            )}
+
+            {/* Ticking 72 boxes by hand is the reason this is here. Hidden in
+                "Everything granted" mode, where the ticks are not editable at
+                all and a select-all control would do nothing. */}
+            {mode === "selected" && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <button
+                  type="button"
+                  onClick={selectVisible}
+                  disabled={allVisibleSelected}
+                  className="font-medium text-(--color-primary) underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+                >
+                  {query.trim()
+                    ? `Select all ${filtered.length} matching`
+                    : `Select all ${repos.length}`}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearVisible}
+                  disabled={noVisibleSelected}
+                  className="text-muted-foreground underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+                >
+                  {query.trim() ? "Clear matching" : "Clear all"}
+                </button>
+                {/* Selecting every repository the installation grants TODAY is
+                    not the same promise as "everything granted", which also
+                    covers repositories added later. Worth pointing at, since the
+                    two look identical the moment after you click. */}
+                {allSelected && (
+                  <span className="text-muted-foreground">
+                    All {repos.length} ticked — to keep including repositories added
+                    later, use{" "}
+                    <button
+                      type="button"
+                      onClick={() => setMode("all")}
+                      className="underline underline-offset-2"
+                    >
+                      Everything granted
+                    </button>{" "}
+                    instead.
+                  </span>
+                )}
               </div>
             )}
 
