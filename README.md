@@ -100,7 +100,7 @@ Set `VITE_API_URL` to point to your backend instance. For the local backend repo
 For the dev hosted environment, the intended contract is:
 
 - App host: `https://dev.authsec.dev`
-- API and OAuth issuer host: `https://dev.api.authsec.dev`
+- API and OAuth issuer host: `https://prod.api.authsec.ai`
 
 The UI should not expect OAuth discovery or introspection from the app host.
 
