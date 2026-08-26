@@ -94,9 +94,8 @@ running. **Do not start the dev server to verify a UI change** — it'll just
 sit at the login wall. Verify with `npx tsc --noEmit` and `npx eslint <file>`.
 
 When an operator supplies a valid token, `/dev/bypass` may be used for an
-authenticated local check. There is no `stage.authsec.dev`. Production UI is
-`https://app.authsec.ai`; its API and OAuth issuer are both
-`https://prod.api.authsec.ai`.
+authenticated local check. Use `https://app.authsec.ai` for the production UI;
+its API and OAuth issuer are both `https://prod.api.authsec.ai`.
 
 ## Production deployment
 

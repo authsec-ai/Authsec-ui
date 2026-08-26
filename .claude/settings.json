@@ -1,9 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -l \"scim\\\\|directory-sync\\\\|directory_sync\\\\|billing\\\\|identityProvider\" /Users/pc/Desktop/authnull/Authsec-ui/src/app/api/*)",
-      "Bash(find /Users/pc/Desktop/authnull/Authsec-ui -type f \\\\\\( -name \"*.tsx\" -o -name \"*.ts\" -o -name \"*.jsx\" -o -name \"*.js\" \\\\\\) -exec grep -l \"billing\" {} \\\\;)",
-      "Bash(npx vite:*)"
+      "Read(//Users/pc/Desktop/authnull/**)"
+    ],
+    "deny": [
+      "Bash(git push*)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "/Users/pc/Desktop/authnull"
     ]
   },
   "hooks": {
@@ -13,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"\nimport sys, json\ntry:\n    d = json.load(sys.stdin)\nexcept Exception:\n    sys.exit(0)\ncmd = d.get('tool_input', {}).get('command', '') or d.get('command', '')\nblocked = any(x in cmd for x in ['npm run dev', 'npx vite', 'vite dev', 'yarn dev', 'pnpm dev'])\nif blocked:\n    print('\\nBLOCKED: Do not start the UI dev server.\\nAuthenticated routes require the backend stack.\\nVerify TypeScript with: npx tsc --noEmit\\n', file=sys.stderr)\n    sys.exit(2)\n\""
+            "command": "python3 -c \"\nimport sys, json\ntry:\n    d = json.load(sys.stdin)\nexcept Exception:\n    sys.exit(0)\ncmd = d.get('tool_input', {}).get('command', '') or d.get('command', '')\nblocked = any(x in cmd for x in ['npm run dev', 'npx vite', 'vite dev', 'yarn dev', 'pnpm dev'])\nif blocked:\n    print('\\nBLOCKED: Do not start the UI dev server.\\nAuthenticated routes require the backend stack.\\nVerify with: npm run type-check and npm run build -- --mode production\\n', file=sys.stderr)\n    sys.exit(2)\n\""
           }
         ]
       }
