@@ -13,20 +13,27 @@
 
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { Check, Upload } from "lucide-react";
+import { Building2, Check, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSetGitHubAppMutation } from "@/app/api/connectorsApi";
+import {
+  useDescribeGitHubAppQuery,
+  useSetGitHubAppMutation,
+} from "@/app/api/connectorsApi";
+import { GitHubAppManifestButton } from "./GitHubAppManifestButton";
 
 export function GitHubAppRegistrationPanel({
   registered,
   registeredAppId,
+  orgSlug,
   onRegistered,
 }: {
   /** From useGetProviderAppQuery("github") — drives the done state. */
   registered: boolean;
   registeredAppId?: string;
+  /** Create the App under this org instead of the personal account. */
+  orgSlug?: string | null;
   onRegistered?: () => void;
 }) {
   const [setGitHubApp, { isLoading: saving }] = useSetGitHubAppMutation();
@@ -34,6 +41,8 @@ export function GitHubAppRegistrationPanel({
   const [privateKey, setPrivateKey] = useState("");
   const [keyFileName, setKeyFileName] = useState("");
   const [error, setError] = useState("");
+  // Manual entry is the fallback, not the default -- see the manifest button.
+  const [showManual, setShowManual] = useState(false);
 
   const submit = async () => {
     if (!appId.trim() || !privateKey.trim()) {
@@ -59,15 +68,68 @@ export function GitHubAppRegistrationPanel({
     }
   };
 
+  // What GitHub says the stored App actually is. Turns a blind form into a
+  // confirmed one: a wrong App ID is visible here, at the moment of entry,
+  // instead of surfacing later as an opaque token-minting failure.
+  const { data: appInfo } = useDescribeGitHubAppQuery(undefined, { skip: !registered });
+
   return (
-    <div className="space-y-2">
-      {registered && (
-        <p className="flex items-center gap-1.5 rounded-md bg-(--color-success-soft) px-2.5 py-1.5 text-[11.5px] text-(--color-success-text)">
-          <Check className="size-3.5 shrink-0" />
-          App {registeredAppId} is registered for this workspace. Saving again replaces it.
-        </p>
+    <div className="space-y-3">
+      {registered ? (
+        <div className="rounded-md bg-(--color-success-soft) px-2.5 py-2 text-[11.5px] text-(--color-success-text)">
+          <p className="flex items-center gap-1.5 font-medium">
+            <Check className="size-3.5 shrink-0" />
+            {appInfo?.name ?? `App ${registeredAppId}`} is registered
+          </p>
+          {appInfo && (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="inline-flex items-center gap-1">
+                <Building2 className="size-3" />
+                {appInfo.owner}
+              </span>
+              <span>·</span>
+              <span>App {appInfo.app_id}</span>
+              <span>·</span>
+              <span>
+                {Object.entries(appInfo.permissions)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(", ")}
+              </span>
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-md border px-3 py-3">
+          <p className="text-[12px] font-medium">Create the App automatically</p>
+          <p className="text-[11px] text-muted-foreground">
+            GitHub shows you a pre-filled confirmation screen with the right permissions
+            already set — read-only access to repository contents, no webhook. Approving it
+            sends the App&rsquo;s credentials straight here. Nothing to copy.
+          </p>
+          <GitHubAppManifestButton orgSlug={orgSlug} />
+          {orgSlug ? (
+            <p className="text-[11px] text-muted-foreground">
+              Creates the App under <span className="font-medium">{orgSlug}</span>. You need
+              owner rights on that organisation.
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Creates the App under your personal account.
+            </p>
+          )}
+        </div>
       )}
 
+      {!showManual ? (
+        <button
+          type="button"
+          onClick={() => setShowManual(true)}
+          className="text-[11px] text-muted-foreground underline underline-offset-2"
+        >
+          {registered ? "Replace with a different App" : "Or register an existing App by hand"}
+        </button>
+      ) : (
+      <div className="space-y-2 rounded-md border px-3 py-3">
       <p className="text-[11px] text-muted-foreground">
         One-time per workspace.{" "}
         <a
@@ -165,6 +227,8 @@ export function GitHubAppRegistrationPanel({
       >
         {saving ? "Saving…" : registered ? "Replace GitHub App" : "Save GitHub App"}
       </Button>
+      </div>
+      )}
     </div>
   );
 }

@@ -6,8 +6,8 @@
  * "Connectors" is the existing outbound action broker and is already taken.
  */
 
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -41,6 +41,7 @@ import {
   type DiscoverySource,
 } from "@/app/api/discoveryApi";
 import { GitHubSetupWizard } from "./GitHubSetupWizard";
+import { useConvertGitHubAppManifestMutation } from "@/app/api/connectorsApi";
 import { DeployCollectorWizard } from "./DeployCollectorWizard";
 import {
   DropdownMenu,
@@ -111,10 +112,45 @@ export default function DiscoveryIntegrationsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const navigate = useNavigate();
   const [githubOpen, setGithubOpen] = useState(false);
+  const [convertManifest] = useConvertGitHubAppManifestMutation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscoverySource | null>(null);
   const [updateSource] = useUpdateDiscoverySourceMutation();
   const [deleteSource, { isLoading: deleting }] = useDeleteDiscoverySourceMutation();
+
+  // GitHub's App-manifest flow returns the operator here with ?code=<single-use>.
+  // Exchange it immediately for the App id + private key, then strip the code
+  // from the URL so a refresh cannot replay a code that is already spent.
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (!code) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const info = await convertManifest({ code }).unwrap();
+        if (cancelled) return;
+        toast.success(`GitHub App "${info.name}" created`);
+        setGithubOpen(true);
+      } catch (err) {
+        if (cancelled) return;
+        toast.error(
+          (err as { data?: { error?: string } })?.data?.error ??
+            "Could not finish creating the GitHub App.",
+        );
+      } finally {
+        if (!cancelled) {
+          const next = new URLSearchParams(searchParams);
+          next.delete("code");
+          next.delete("state");
+          setSearchParams(next, { replace: true });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, convertManifest, setSearchParams]);
 
   const permissionError = (err: unknown, fallback: string) =>
     toast.error(

@@ -174,6 +174,25 @@ export interface ProviderAppStatus {
   created_at?: string;
 }
 
+/** What GitHub says this App is. Non-secret; the private key is never returned. */
+export interface GitHubAppInfo {
+  app_id: string;
+  name: string;
+  slug: string;
+  owner: string;
+  permissions: Record<string, string>;
+  /** Canonical install page, derived from the slug — lets the UI offer a button. */
+  install_url: string;
+}
+
+/** One place this App is installed. Replaces asking a human for an id. */
+export interface GitHubInstallation {
+  installation_id: string;
+  account: string;
+  account_type: string;
+  repository_selection: string;
+}
+
 /** F1: register a workspace's GitHub App (app id + private-key PEM → Vault). */
 export interface SetGitHubAppRequest {
   app_id: string;
@@ -337,6 +356,39 @@ export const connectorsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** Confirms what the stored App actually is, straight from GitHub. */
+    describeGitHubApp: builder.query<GitHubAppInfo, void>({
+      query: () => "/authsec/connectors/providers/github/app/describe",
+      transformResponse: (r: { data: GitHubAppInfo }) => r.data,
+      providesTags: [{ type: "ExternalService", id: "github-app-info" }],
+    }),
+
+    /**
+     * Everywhere the App is installed. This is what lets the console show a list
+     * to click instead of asking someone to copy an installation id out of a URL
+     * -- the step that is easiest to get wrong and fails most opaquely.
+     */
+    listGitHubInstallations: builder.query<GitHubInstallation[], void>({
+      query: () => "/authsec/connectors/providers/github/installations",
+      transformResponse: (r: { data: GitHubInstallation[] }) => r.data ?? [],
+      providesTags: [{ type: "ExternalService", id: "github-installations" }],
+    }),
+
+    /** Completes GitHub's manifest flow: code in, App id + key stored. */
+    convertGitHubAppManifest: builder.mutation<GitHubAppInfo, { code: string }>({
+      query: (body) => ({
+        url: "/authsec/connectors/providers/github/app-manifest/convert",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (r: { data: GitHubAppInfo }) => r.data,
+      invalidatesTags: [
+        { type: "ExternalService", id: "provider-app:github" },
+        { type: "ExternalService", id: "github-app-info" },
+        { type: "ExternalService", id: "github-installations" },
+      ],
+    }),
+
     setProviderApp: builder.mutation<
       { status: string; provider: string },
       SetProviderAppRequest
@@ -361,7 +413,11 @@ export const connectorsApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
-      invalidatesTags: [{ type: "ExternalService", id: "provider-app:github" }],
+      invalidatesTags: [
+        { type: "ExternalService", id: "provider-app:github" },
+        { type: "ExternalService", id: "github-app-info" },
+        { type: "ExternalService", id: "github-installations" },
+      ],
     }),
 
     // F1 — bind a connector to an installed GitHub App on an org.
@@ -439,6 +495,9 @@ export const {
   useGetConnectorAuditQuery,
   useSetProviderAppMutation,
   useGetProviderAppQuery,
+  useDescribeGitHubAppQuery,
+  useListGitHubInstallationsQuery,
+  useConvertGitHubAppManifestMutation,
   useSetGitHubAppMutation,
   useConnectGitHubAppMutation,
   useSetConnectorSubjectGroupsMutation,
