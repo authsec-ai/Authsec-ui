@@ -286,6 +286,17 @@ export interface ScanRun {
   branches_scanned: number;
   branches_skipped: number;
   files_fetched: number;
+  /**
+   * Files that could not be read inside repositories that opened fine.
+   *
+   * Separate from repos_failed on purpose. A real organisation scan reported
+   * "0 failed" beside a hundred and thirty warnings naming unreadable files:
+   * both true, and together a lie, because every failure was at file level and
+   * repos_failed only counts repositories that would not open. Showing one
+   * without the other teaches an operator to distrust the number or ignore the
+   * warnings, and the gap in coverage stops being legible either way.
+   */
+  files_failed: number;
   sightings_new: number;
   sightings_bumped: number;
 

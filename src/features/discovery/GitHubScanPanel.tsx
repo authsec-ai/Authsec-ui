@@ -430,12 +430,16 @@ function RunReport({ run }: { run: ScanRun }) {
           tone="muted"
           hint="Your choice"
         />
+        {/* Repository-level. A file-level count lives in the summary row below:
+            a repository can open fine and still have unreadable files in it, and
+            collapsing the two is what let "0 failed" sit beside a wall of
+            warnings. */}
         <Counter
           icon={XCircle}
-          label="Failed"
+          label="Repos failed"
           value={run.repos_failed}
           tone={run.repos_failed > 0 ? "danger" : "muted"}
-          hint={run.repos_failed > 0 ? "Needs attention" : undefined}
+          hint={run.repos_failed > 0 ? "Would not open" : undefined}
         />
         <Counter
           icon={Scissors}
@@ -481,6 +485,12 @@ function RunReport({ run }: { run: ScanRun }) {
           <span className="font-semibold tabular-nums">{run.files_fetched}</span>{" "}
           <span className="text-muted-foreground">files read</span>
         </span>
+        {run.files_failed > 0 && (
+          <span className="text-(--color-warning-text)">
+            <span className="font-semibold tabular-nums">{run.files_failed}</span>{" "}
+            files could not be read
+          </span>
+        )}
         <span className="text-muted-foreground">
           {terminal && run.finished_at
             ? `finished ${formatDistanceToNow(new Date(run.finished_at), { addSuffix: true })}`
