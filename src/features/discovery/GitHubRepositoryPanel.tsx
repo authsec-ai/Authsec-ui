@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  useGetDiscoverySourceQuery,
   useListSourceRepositoriesQuery,
   useSetSourceRepositoriesMutation,
 } from "@/app/api/discoveryApi";
@@ -38,10 +39,21 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
     refetch,
   } = useListSourceRepositoriesQuery(sourceId);
   const [saveSelection, { isLoading: saving }] = useSetSourceRepositoriesMutation();
+  // The branch plan lives on the source config, not in the repository listing —
+  // that endpoint answers "what does the installation expose", which is a
+  // different question. Without reading it back, a source saved as "all
+  // branches" would show the box unticked on the next visit and silently revert
+  // to default-branch-only on the next save.
+  const { data: source } = useGetDiscoverySourceQuery(sourceId);
 
   const [mode, setMode] = useState<Mode>("selected");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  // Ref coverage. Default-branch-only is what every source did before this
+  // existed, and stays the default: "all branches" multiplies API cost by the
+  // branch count, so it is opted into, never inherited.
+  const [branchMode, setBranchMode] = useState<"default" | "all">("default");
+  const [maxBranches, setMaxBranches] = useState(20);
   // Only seed local state from the server once per load, so a re-fetch mid-edit
   // does not silently discard the admin's uncommitted choices.
   const [seeded, setSeeded] = useState(false);
@@ -58,6 +70,15 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
     setMode(preselected.length > 0 && preselected.length === repos.length ? "all" : "selected");
     setSeeded(true);
   }, [data, repos, seeded]);
+
+  const [branchSeeded, setBranchSeeded] = useState(false);
+  useEffect(() => {
+    if (branchSeeded || !source) return;
+    const b = (source.config?.branches ?? {}) as { mode?: string; max_per_repo?: number };
+    if (b.mode === "all") setBranchMode("all");
+    if (b.max_per_repo && b.max_per_repo > 0) setMaxBranches(b.max_per_repo);
+    setBranchSeeded(true);
+  }, [source, branchSeeded]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -100,6 +121,8 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
     try {
       await saveSelection({
         id: sourceId,
+        branch_mode: branchMode,
+        ...(branchMode === "all" ? { max_branches_per_repo: maxBranches } : {}),
         mode,
         include: mode === "selected" ? [...chosen] : undefined,
       }).unwrap();
@@ -292,6 +315,55 @@ export function GitHubRepositoryPanel({ sourceId }: { sourceId: string }) {
             </div>
           </>
         )}
+
+        {/* Ref coverage. Separate from repository selection because it is a
+            different axis and a much bigger cost multiplier: WHICH repositories
+            vs HOW MUCH of each. */}
+        <div className="space-y-2 rounded-md border px-3 py-2.5">
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={branchMode === "all"}
+              onChange={(e) => setBranchMode(e.target.checked ? "all" : "default")}
+              className="mt-0.5 size-3.5 accent-(--color-primary)"
+            />
+            <span className="text-xs">
+              Also scan branches other than the default
+              <span className="block text-[11px] text-muted-foreground">
+                Finds agents declared on a feature branch that never reached the default
+                branch. Costs roughly one extra read per branch, so a large organisation
+                gets much slower.
+              </span>
+            </span>
+          </label>
+
+          {branchMode === "all" && (
+            <div className="flex flex-wrap items-center gap-2 pl-5.5">
+              <span className="text-[11px] text-muted-foreground">
+                At most
+              </span>
+              <Input
+                type="number"
+                min={1}
+                max={200}
+                value={maxBranches}
+                onChange={(e) => setMaxBranches(Math.max(1, Number(e.target.value) || 1))}
+                className="h-7 w-20 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                branches per repository.
+              </span>
+              {/* The cap is not a silent truncation. Branches past it are
+                  counted and force the run incomplete, which is the difference
+                  between a bounded scan and one that quietly claims to have
+                  looked everywhere. */}
+              <span className="w-full text-[11px] text-muted-foreground">
+                A repository with more than this is reported as incomplete rather than
+                trimmed without saying so.
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">

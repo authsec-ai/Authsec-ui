@@ -15,6 +15,7 @@
 
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { GitBranch } from "lucide-react";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
@@ -159,6 +160,24 @@ const RUNTIME_SORT: Record<RuntimeStatus, number> = {
   gone: 3,
 };
 
+/**
+ * The ref a GitHub finding came from, or null for the default branch.
+ *
+ * Fingerprints are `gh:<repo>:<path>` on the default branch and
+ * `gh:<repo>@<ref>:<path>` elsewhere — the default deliberately keeps the older
+ * ref-free form so findings recorded before branch scanning are not orphaned.
+ * Parsed rather than carried as a field because the server does not send one.
+ */
+function branchOfFingerprint(fingerprint: string): string | null {
+  if (!fingerprint.startsWith("gh:")) return null;
+  const at = fingerprint.indexOf("@");
+  if (at === -1) return null;
+  const colon = fingerprint.indexOf(":", at);
+  if (colon === -1) return null;
+  const ref = fingerprint.slice(at + 1, colon);
+  return ref || null;
+}
+
 export default function DiscoveredAgentsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   // The queue defaults to live agents only: a long-gone agent needs no decision,
@@ -215,15 +234,28 @@ export default function DiscoveredAgentsPage() {
         header: "Sighting",
         alwaysVisible: true,
         approxWidth: 280,
-        cell: ({ row }) => (
-          <div className="max-w-[260px]">
-            <EntityCell
-              label={row.original.display_name || "Unnamed"}
-              detail={row.original.fingerprint}
-              monoDetail
-            />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const branch = branchOfFingerprint(row.original.fingerprint);
+          return (
+            <div className="max-w-[260px]">
+              <EntityCell
+                label={row.original.display_name || "Unnamed"}
+                detail={row.original.fingerprint}
+                monoDetail
+              />
+              {/* Findings on a non-default ref carry it in the fingerprint. Two
+                  rows for the same file on different branches are NOT a
+                  duplicate — they are two different declarations — but they read
+                  as one until the branch is on screen. */}
+              {branch && (
+                <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                  <GitBranch className="size-2.5" />
+                  {branch}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "source",

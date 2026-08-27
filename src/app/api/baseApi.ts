@@ -179,6 +179,9 @@ export const baseApi = createApi({
     // deleted here (freeing an organisation to be added again).
     "GitHubApp",
     "GitHubInstallation",
+    // Scan runs, tagged by BOTH run id and source id: the poller holds one run,
+    // the history holds a source's list, and finishing a run changes both.
+    "ScanRun",
     // Governance + provisioning (see app/api/governanceApi.ts)
     "Provenance",
     "SoDRule",

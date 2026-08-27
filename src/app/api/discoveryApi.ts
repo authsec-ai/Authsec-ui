@@ -230,6 +230,16 @@ export interface RepoSelection {
   mode: "all" | "selected";
   /** owner/name entries; used when mode is "selected". */
   include?: string[];
+  /**
+   * How far past the default branch to look. Omitted means "default", so a
+   * caller that knows nothing about branches keeps its previous behaviour.
+   */
+  branch_mode?: "default" | "all";
+  /**
+   * Cap on refs per repository when branch_mode is "all". Branches beyond it
+   * are counted and force the run incomplete — never dropped in silence.
+   */
+  max_branches_per_repo?: number;
 }
 
 /**
@@ -238,21 +248,75 @@ export interface RepoSelection {
  * to (`failed`), and neither is the same as seeing only part of it
  * (`truncated`). Collapsing them would report partial coverage as clean.
  */
-export interface GitHubScanResult {
+/** Terminal statuses are the ones polling stops on. */
+export type ScanRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export const SCAN_RUN_TERMINAL: ScanRunStatus[] = ["succeeded", "failed", "cancelled"];
+
+export function isScanRunTerminal(status?: string): boolean {
+  return SCAN_RUN_TERMINAL.includes(status as ScanRunStatus);
+}
+
+/**
+ * One scan, from queued to finished.
+ *
+ * This replaced a synchronous result body. The scan used to run inside the HTTP
+ * request, so an organisation-wide scan outlived the proxy timeout and died
+ * half-finished, and the outcome existed only in that response — a refresh lost
+ * it for good. A run is a durable row: it is the queue, the live progress, the
+ * report, and the resume cursor.
+ *
+ * Counters advance WHILE running, so every number here is a partial truth until
+ * `status` is terminal. Nothing may be presented as a result before then.
+ */
+export interface ScanRun {
+  id: string;
   source_id: string;
+  status: ScanRunStatus;
   selection_mode: string;
+  /** "default" | "all" — how far beyond the default branch this run reached. */
+  branch_mode: string;
+  max_branches: number;
+
+  repos_selected: number;
   repos_scanned: number;
   repos_failed: number;
   repos_excluded: number;
-  excluded_repositories?: string[];
   repos_truncated: number;
+  branches_scanned: number;
+  branches_skipped: number;
   files_fetched: number;
   sightings_new: number;
   sightings_bumped: number;
-  /** False whenever any selected repository failed or truncated. */
+
+  /**
+   * Every selected repository was fully inspected. Only ever true on a finished
+   * run — the server reserves it with a CHECK constraint.
+   */
   complete_for_selected_scope: boolean;
+  /**
+   * Something was denied, truncated or failed at ANY point in this run's life,
+   * including an earlier attempt that was later resumed. Monotonic: once set it
+   * never clears.
+   *
+   * It exists because `complete` cannot be written mid-run, so a scan that hit a
+   * 403, got interrupted, then resumed cleanly would otherwise finish claiming
+   * coverage it never had. A run can be complete AND degraded, and that
+   * combination must never render as an all-clear.
+   */
+  degraded: boolean;
+
+  excluded_repositories?: string[];
   warnings?: string[];
-  scanned_at: string;
+  error?: string;
+
+  attempts: number;
+  max_attempts: number;
+  requested_by: string;
+  queued_at: string;
+  started_at?: string;
+  finished_at?: string;
+  heartbeat_at?: string;
 }
 
 export const STATUS_LABELS: Record<DiscoveredAgentStatus, string> = {
@@ -666,21 +730,62 @@ export const discoveryApi = baseApi.injectEndpoints({
     }),
 
     /** Run a scan now. Findings land in the agent inventory as unregistered. */
-    scanGitHubSource: builder.mutation<GitHubScanResult, string>({
+    /**
+     * Queue a scan. Returns 202 and the run — it does NOT return a result.
+     *
+     * A 409 means one is already queued or running and carries that run in its
+     * body; the caller should attach to it rather than surfacing an error, which
+     * is what makes a double-click harmless.
+     */
+    scanGitHubSource: builder.mutation<ScanRun, string>({
       query: (id) => ({
         url: `/authsec/discovery/sources/${id}/scan`,
         method: "POST",
       }),
-      transformResponse: (res: { data: GitHubScanResult }) => res.data,
+      transformResponse: (res: { data: ScanRun }) => res.data,
       // A scan writes to the inventory and moves coverage. It also updates the
       // source's own row (last_sync_at, last_status, agent_count) — and that row
       // is held under the id-scoped tag, which the bare "DiscoverySource" tag
       // does not reach, so name both.
-      invalidatesTags: (_r, _e, id) => [
-        { type: "DiscoverySource" as const, id },
-        "DiscoverySource",
-        "DiscoveredAgent",
-        "AgentCoverage",
+      // Queuing changes nothing yet. The inventory and coverage move when the
+      // run FINISHES, so those tags are invalidated by the poller on the
+      // terminal transition, not here — invalidating now would refetch an
+      // inventory that has not changed and show a stale one as fresh.
+      invalidatesTags: (_r, _e, id) => [{ type: "ScanRun" as const, id }],
+    }),
+
+    /** Poll one run. */
+    getScanRun: builder.query<ScanRun, string>({
+      query: (runId) => ({ url: `/authsec/discovery/scan-runs/${runId}`, method: "GET" }),
+      transformResponse: (res: { data: ScanRun }) => res.data,
+      providesTags: (_r, _e, runId) => [{ type: "ScanRun", id: runId }],
+    }),
+
+    /**
+     * A source's scan history, newest first.
+     *
+     * This is what makes a finished scan survive a refresh, and the only way to
+     * answer "what did the last scan actually see?" after the fact.
+     */
+    listScanRuns: builder.query<ScanRun[], string>({
+      query: (sourceId) => ({
+        url: `/authsec/discovery/sources/${sourceId}/scan-runs`,
+        method: "GET",
+      }),
+      transformResponse: (res: { data?: ScanRun[] }) => res.data ?? [],
+      providesTags: (_r, _e, sourceId) => [{ type: "ScanRun", id: sourceId }],
+    }),
+
+    /** Stop a running scan. For an organisation-wide scan that is overrunning. */
+    cancelScanRun: builder.mutation<ScanRun, { runId: string; sourceId: string }>({
+      query: ({ runId }) => ({
+        url: `/authsec/discovery/scan-runs/${runId}/cancel`,
+        method: "POST",
+      }),
+      transformResponse: (res: { data: ScanRun }) => res.data,
+      invalidatesTags: (_r, _e, { runId, sourceId }) => [
+        { type: "ScanRun" as const, id: runId },
+        { type: "ScanRun" as const, id: sourceId },
       ],
     }),
   }),
@@ -712,6 +817,9 @@ export const {
   useListSourceRepositoriesQuery,
   useSetSourceRepositoriesMutation,
   useScanGitHubSourceMutation,
+  useGetScanRunQuery,
+  useListScanRunsQuery,
+  useCancelScanRunMutation,
 } = discoveryApi;
 // ── Identities ──────────────────────────────────────────────────────────────
 // Generic schema. There is no identity table in the team's discovery doc, so
