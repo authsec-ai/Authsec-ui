@@ -436,6 +436,101 @@ export interface GitHubInstallation {
   source_id?: string;
 }
 
+/* ── Detection rules (the rule catalogue) ──────────────────────────────────── */
+
+/**
+ * A rule as the scanner will actually apply it — built-ins with this
+ * workspace's overlay already folded in.
+ */
+export interface DescribedRule {
+  id: string;
+  version: string;
+  /** The PARSER. Selected by name from a fixed registry; config never adds one. */
+  extractor: string;
+  path_globs: string[];
+  evidence_mode: string;
+  sensitive_keys?: string[];
+  built_in: boolean;
+}
+
+export interface EffectiveVocabulary {
+  framework_tokens: string[];
+  action_markers: string[];
+  secret_suffixes: string[];
+}
+
+/** Add/remove pairs. The overlay stores deltas, never a copy — see below. */
+export interface StringDelta {
+  add?: string[];
+  remove?: string[];
+}
+
+export interface RuleOverlayEntry {
+  enabled?: boolean;
+  path_globs?: StringDelta;
+  sensitive_keys?: StringDelta;
+}
+
+export interface CustomRule {
+  id: string;
+  extractor: string;
+  path_globs: string[];
+  evidence_mode?: string;
+  sensitive_keys?: string[];
+}
+
+/**
+ * This workspace's changes to the shipped detection patterns.
+ *
+ * DELTAS, not a snapshot. A workspace that adds one action marker keeps
+ * receiving every marker shipped in later releases; storing the full list would
+ * freeze it on that day's vocabulary and it would quietly stop benefiting as the
+ * catalogue improves.
+ */
+export interface RuleCatalogOverlay {
+  vocabularies?: {
+    framework_tokens?: StringDelta;
+    action_markers?: StringDelta;
+    secret_suffixes?: StringDelta;
+  };
+  rules?: Record<string, RuleOverlayEntry>;
+  custom_rules?: CustomRule[];
+}
+
+export interface RuleCatalog {
+  /** Effective version: built-in version combined with the overlay hash. */
+  version: string;
+  builtin_version: string;
+  customised: boolean;
+  rules: DescribedRule[];
+  vocabularies: EffectiveVocabulary;
+  overlay: RuleCatalogOverlay;
+  available_extractors: string[];
+  staleness: {
+    unavailable?: boolean;
+    findings_from_older_rulesets?: number;
+    findings_from_this_ruleset?: number;
+    /**
+     * Existing findings were produced by a different ruleset. Raw file bodies
+     * are discarded after parse, so a changed rule cannot be re-applied to
+     * stored evidence — re-deriving means re-reading the repositories.
+     */
+    rescan_required?: boolean;
+  };
+  note: string;
+}
+
+/** One path tested against the catalogue. */
+export interface PathMatch {
+  path: string;
+  matched: boolean;
+  rule_id?: string;
+  extractor?: string;
+  evidence_mode?: string;
+  /** Why it did not match — answers "why is my file not picked up?". */
+  reason?: string;
+}
+
 export const discoveryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // ── Sources ───────────────────────────────────────────────────────────
@@ -799,6 +894,58 @@ export const discoveryApi = baseApi.injectEndpoints({
         { type: "ScanRun" as const, id: sourceId },
       ],
     }),
+    /* ── Detection rules ───────────────────────────────────────────────────── */
+
+    /** The effective catalogue, the overlay, and what could be changed. */
+    getRuleCatalog: builder.query<RuleCatalog, void>({
+      query: () => ({ url: "/authsec/discovery/rule-catalog", method: "GET" }),
+      transformResponse: (res: { data: RuleCatalog; meta?: { note?: string } }) => ({
+        ...res.data,
+        note: res.meta?.note ?? "",
+      }),
+      providesTags: ["RuleCatalog"],
+    }),
+
+    /**
+     * Replace the overlay.
+     *
+     * Invalidates the agent inventory too: changing what a scan looks for makes
+     * every existing finding the product of a different ruleset, and the
+     * staleness figures on this screen move the moment it is saved.
+     */
+    setRuleCatalog: builder.mutation<{ version: string }, RuleCatalogOverlay>({
+      query: (body) => ({ url: "/authsec/discovery/rule-catalog", method: "PUT", body }),
+      transformResponse: (res: { data: { version: string } }) => res.data,
+      invalidatesTags: ["RuleCatalog", "DiscoveredAgent", "AgentCoverage"],
+    }),
+
+    /** Drop the overlay and go back to the shipped catalogue. */
+    resetRuleCatalog: builder.mutation<{ version: string }, void>({
+      query: () => ({ url: "/authsec/discovery/rule-catalog", method: "DELETE" }),
+      transformResponse: (res: { data: { version: string } }) => res.data,
+      invalidatesTags: ["RuleCatalog", "DiscoveredAgent", "AgentCoverage"],
+    }),
+
+    /**
+     * Which rule would claim these paths.
+     *
+     * Pass a draft overlay to try a change BEFORE saving it — a glob that is
+     * subtly wrong costs a whole scan to discover otherwise, and a scan is the
+     * expensive part.
+     */
+    testRuleCatalog: builder.mutation<
+      { results: PathMatch[]; matched: number; not_matched: number; draft: boolean },
+      { paths: string[]; overlay?: RuleCatalogOverlay }
+    >({
+      query: (body) => ({
+        url: "/authsec/discovery/rule-catalog/test",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (res: {
+        data: { results: PathMatch[]; matched: number; not_matched: number; draft: boolean };
+      }) => res.data,
+    }),
   }),
   overrideExisting: false,
 });
@@ -831,6 +978,10 @@ export const {
   useGetScanRunQuery,
   useListScanRunsQuery,
   useCancelScanRunMutation,
+  useGetRuleCatalogQuery,
+  useSetRuleCatalogMutation,
+  useResetRuleCatalogMutation,
+  useTestRuleCatalogMutation,
 } = discoveryApi;
 // ── Identities ──────────────────────────────────────────────────────────────
 // Generic schema. There is no identity table in the team's discovery doc, so

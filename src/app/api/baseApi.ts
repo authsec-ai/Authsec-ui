@@ -182,6 +182,9 @@ export const baseApi = createApi({
     // Scan runs, tagged by BOTH run id and source id: the poller holds one run,
     // the history holds a source's list, and finishing a run changes both.
     "ScanRun",
+    // The workspace's detection-rule overlay. Saving one changes what every
+    // later scan looks for, so it also moves the staleness figures.
+    "RuleCatalog",
     // Governance + provisioning (see app/api/governanceApi.ts)
     "Provenance",
     "SoDRule",

@@ -11,6 +11,7 @@ import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Fingerprint,
+  SlidersHorizontal,
   Radar,
   ScanSearch,
   FileText,
@@ -47,6 +48,9 @@ const NAV_DISCOVERY: IgaNavItem[] = [
   { title: "Integrations", url: "/iga/integrations", icon: Radar },
   { title: "Discovered Agents", url: "/iga/agents", icon: ScanSearch },
   { title: "Identities", url: "/iga/identities", icon: Fingerprint },
+  // Sits under Discovery, not Settings: it defines what a scan looks for, so it
+  // belongs beside the scanning it governs rather than in a config drawer.
+  { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },
 ];
 
 const NAV_GOVERNANCE: IgaNavItem[] = [

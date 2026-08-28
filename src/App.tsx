@@ -62,6 +62,7 @@ import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage
 import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import IdentitiesPage from "./features/discovery/IdentitiesPage";
+import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
 import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
 import ProvenancePage from "./features/governance/ProvenancePage";
 import CertificationPage from "./features/governance/CertificationPage";
@@ -601,6 +602,16 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <DiscoveredAgentsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/detection-rules"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RuleCatalogPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
