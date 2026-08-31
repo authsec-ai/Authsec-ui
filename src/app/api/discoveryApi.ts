@@ -199,6 +199,46 @@ export interface AgentCoverage {
  */
 export type EvidenceMode = "observed" | "declared" | "inferred";
 
+/**
+ * The rule catalogue's evidence modes, in descending semantic strength.
+ *
+ * Distinct from EVIDENCE_LABELS below, which is the coarse observed/declared/
+ * inferred axis. This is what a RULE concluded, and it is the ceiling on what
+ * the finding can mean: only platform_declared may auto-confirm, everything
+ * weaker produces a candidate for a human. Rules are configurable now, so a
+ * custom rule picks one of these — and a finding that says only "declared in
+ * code" hides the difference between a platform declaring an agent and a
+ * dependency merely being present in a lockfile.
+ */
+export const EVIDENCE_MODE_LABELS: Record<string, { label: string; help: string }> = {
+  platform_declared: {
+    label: "Platform declared",
+    help: "The platform itself names this as an agent. The only evidence strong enough to confirm without review.",
+  },
+  deployment_declared: {
+    label: "Deployment declared",
+    help: "Something that deploys or runs it declares it — a workflow, a manifest, a container definition.",
+  },
+  invocation_declared: {
+    label: "Invocation declared",
+    help: "Code that calls it. It is referenced as something to be run, not merely available.",
+  },
+  tool_configuration: {
+    label: "Tool configuration",
+    help: "Configured tools or MCP servers. Shows capability wired up, not that it was used.",
+  },
+  framework_dependency: {
+    label: "Framework dependency",
+    help: "An agent framework is a dependency. Proves the capability exists — not that anything uses it.",
+  },
+  secret_reference: {
+    label: "Secret reference",
+    help: "A credential name suggesting agent use. The weakest signal here; the name is the finding, never the value.",
+  },
+  identity_grant: { label: "Identity grant", help: "An identity or permission granted to it." },
+  audit_event: { label: "Audit event", help: "An audit record of it acting." },
+};
+
 export const EVIDENCE_LABELS: Record<EvidenceMode, string> = {
   observed: "Observed running",
   declared: "Declared in code",

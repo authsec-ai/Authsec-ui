@@ -14,7 +14,11 @@
 import { ExternalLink } from "lucide-react";
 
 import { DrawerSection, DetailGrid, DetailRow, CopyField } from "@/components/console/detail";
-import type { DiscoveredAgent } from "@/app/api/discoveryApi";
+import {
+  EVIDENCE_MODE_LABELS,
+  useGetRuleCatalogQuery,
+  type DiscoveredAgent,
+} from "@/app/api/discoveryApi";
 
 /** Narrow an unknown metadata value to a non-empty string. */
 function str(meta: Record<string, unknown>, key: string): string | null {
@@ -46,6 +50,9 @@ function Tags({ values }: { values: string[] }) {
 
 export function GitHubEvidenceSection({ agent }: { agent: DiscoveredAgent }) {
   const meta = (agent.metadata ?? {}) as Record<string, unknown>;
+  // Cached across the drawer by RTK, so this costs one request per session
+  // rather than one per agent opened.
+  const { data: catalog } = useGetRuleCatalogQuery();
 
   const repository = str(meta, "repository");
   const filePath =
@@ -69,6 +76,18 @@ export function GitHubEvidenceSection({ agent }: { agent: DiscoveredAgent }) {
 
   const ruleID = str(meta, "rule_id");
   const ruleVersion = str(meta, "rule_version");
+  // Which ruleset produced this finding. Detection patterns are configurable,
+  // so the inventory can hold findings from several — and because file bodies
+  // are discarded after parsing, a changed rule cannot be replayed over stored
+  // evidence. Comparing this against the ruleset in force is the only way to
+  // tell a current finding from one that predates a rule change.
+  const catalogVersion = str(meta, "catalog_version");
+  const evidenceMode = str(meta, "evidence_mode");
+  // Non-default refs matter: a declaration on a feature branch is PROPOSED, not
+  // in effect, and reviewing it as though it were live is a different mistake
+  // from missing it.
+  const branch = str(meta, "branch");
+  const onDefaultBranch = meta["is_default_branch"] !== false;
   const strength = str(meta, "signal_strength");
   const needsCorroboration = meta["requires_corroboration"] === true;
   const elevatedTrigger = str(meta, "elevated_trigger");
@@ -149,6 +168,13 @@ export function GitHubEvidenceSection({ agent }: { agent: DiscoveredAgent }) {
             <DetailRow label="Code owner" value={<Tags values={owners} />} full />
           )}
         </DetailGrid>
+        {branch && !onDefaultBranch && (
+          <p className="mt-2 rounded-md bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
+            Found on branch <code className="font-mono">{branch}</code>, not the default
+            branch. This is a <strong>proposed</strong> declaration — it is not what runs
+            today unless the branch is merged.
+          </p>
+        )}
       </DrawerSection>
 
       {(runtimes.length > 0 ||
@@ -198,6 +224,44 @@ export function GitHubEvidenceSection({ agent }: { agent: DiscoveredAgent }) {
                 <span className="font-mono text-xs">
                   {ruleID}
                   {ruleVersion ? ` · v${ruleVersion}` : ""}
+                </span>
+              }
+              full
+            />
+          )}
+          {evidenceMode && (
+            <DetailRow
+              label="Evidence"
+              value={
+                <span className="text-xs">
+                  <span className="font-medium">
+                    {EVIDENCE_MODE_LABELS[evidenceMode]?.label ?? evidenceMode}
+                  </span>
+                  {EVIDENCE_MODE_LABELS[evidenceMode] && (
+                    <span className="block text-muted-foreground">
+                      {EVIDENCE_MODE_LABELS[evidenceMode].help}
+                    </span>
+                  )}
+                </span>
+              }
+              full
+            />
+          )}
+          {catalogVersion && (
+            <DetailRow
+              label="Ruleset"
+              value={
+                <span className="text-xs">
+                  <span className="font-mono">{catalogVersion}</span>
+                  {catalog && catalog.version !== catalogVersion && (
+                    /* The finding predates the current rules. Not wrong —
+                       just not comparable with anything found since, and not
+                       fixable in place. */
+                    <span className="ml-1.5 rounded bg-(--color-warning-soft) px-1.5 py-0.5 text-[11px] text-(--color-warning-text)">
+                      older than the rules in force ({catalog.version}) — rescan to
+                      re-derive
+                    </span>
+                  )}
                 </span>
               }
               full

@@ -161,21 +161,20 @@ const RUNTIME_SORT: Record<RuntimeStatus, number> = {
 };
 
 /**
- * The ref a GitHub finding came from, or null for the default branch.
+ * The non-default ref a finding came from, or null when it is on the default
+ * branch (or did not come from a repository scan).
  *
- * Fingerprints are `gh:<repo>:<path>` on the default branch and
- * `gh:<repo>@<ref>:<path>` elsewhere — the default deliberately keeps the older
- * ref-free form so findings recorded before branch scanning are not orphaned.
- * Parsed rather than carried as a field because the server does not send one.
+ * Read from the scan's own metadata rather than parsed back out of the
+ * fingerprint. Both carry it, but the fingerprint's ref-qualified form exists
+ * for identity, not display — and findings recorded before branch scanning
+ * deliberately kept the older ref-free key, so parsing would quietly disagree
+ * with the record for exactly the rows that matter.
  */
-function branchOfFingerprint(fingerprint: string): string | null {
-  if (!fingerprint.startsWith("gh:")) return null;
-  const at = fingerprint.indexOf("@");
-  if (at === -1) return null;
-  const colon = fingerprint.indexOf(":", at);
-  if (colon === -1) return null;
-  const ref = fingerprint.slice(at + 1, colon);
-  return ref || null;
+function nonDefaultBranch(agent: DiscoveredAgent): string | null {
+  const meta = (agent.metadata ?? {}) as Record<string, unknown>;
+  if (meta["is_default_branch"] !== false) return null;
+  const b = meta["branch"];
+  return typeof b === "string" && b !== "" ? b : null;
 }
 
 export default function DiscoveredAgentsPage() {
@@ -235,7 +234,7 @@ export default function DiscoveredAgentsPage() {
         alwaysVisible: true,
         approxWidth: 280,
         cell: ({ row }) => {
-          const branch = branchOfFingerprint(row.original.fingerprint);
+          const branch = nonDefaultBranch(row.original);
           return (
             <div className="max-w-[260px]">
               <EntityCell
@@ -243,10 +242,11 @@ export default function DiscoveredAgentsPage() {
                 detail={row.original.fingerprint}
                 monoDetail
               />
-              {/* Findings on a non-default ref carry it in the fingerprint. Two
-                  rows for the same file on different branches are NOT a
+              {/* Two rows for the same file on different branches are NOT a
                   duplicate — they are two different declarations — but they read
-                  as one until the branch is on screen. */}
+                  as one until the branch is on screen. Only non-default refs are
+                  marked: a declaration on a feature branch is proposed, not what
+                  runs today. */}
               {branch && (
                 <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
                   <GitBranch className="size-2.5" />
