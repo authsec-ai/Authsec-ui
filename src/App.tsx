@@ -64,6 +64,7 @@ import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import IdentitiesPage from "./features/discovery/IdentitiesPage";
 import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
 import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
+import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
 import ProvenancePage from "./features/governance/ProvenancePage";
 import CertificationPage from "./features/governance/CertificationPage";
 import CampaignDetailPage from "./features/governance/CampaignDetailPage";
@@ -595,6 +596,29 @@ function AppContent() {
                         </IgaLayout>
                       </ProtectedRoute>
                     }
+                  />
+                  {/* Google Authentication's OAuth popup landing page — see
+                      controllers/platform/cloud_gcp_oauth_controller.go's
+                      GoogleOAuthCallback, which redirects here with
+                      ?session_id=... (never a token) after Google's own
+                      redirect. No layout chrome: this page only relays a
+                      message to its opener window and closes itself.
+                      Deliberately UNAUTHENTICATED, matching every other
+                      OAuth/OIDC bounce-back route above (/oidc/auth/callback,
+                      etc.) — the browser arrives here having just navigated
+                      through Google's own origin, and a popup in that state
+                      cannot be relied on to carry this app's first-party
+                      session reliably in every browser. Wrapping this in
+                      ProtectedRoute was the actual bug behind "Continue with
+                      Google opens /admin/login": ProtectedRoute correctly
+                      redirects to login whenever isAuthenticated reads false,
+                      which it can after this exact kind of cross-origin
+                      round trip, and this page reads no session-scoped data
+                      (only session_id/error query params, never a token) so
+                      it never needed the guard at all. */}
+                  <Route
+                    path="/discovery/cloud/gcp/google-oauth/callback"
+                    element={<GoogleOAuthCallbackPage />}
                   />
                   <Route
                     path="/iga/agents"

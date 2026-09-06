@@ -4,6 +4,37 @@
  * PROTOTYPE built to the team's discovery doc (§9.1–9.3). Lists the configured
  * discovery channels (`discovery_sources`). Named "Integrations" because
  * "Connectors" is the existing outbound action broker and is already taken.
+ *
+ * "Add integration" has three entries — Kubernetes, GitHub, Cloud. Kubernetes
+ * and GitHub add a `discovery_sources` row; Cloud opens the same
+ * CloudProviderPicker → GCPOnboardingWizard/AWSOnboardingWizard flow that
+ * used to live behind a standalone "/iga/cloud" page.
+ *
+ * ONE table, not two. Per the current platform direction there is no
+ * separate Cloud landing page and no second table for cloud accounts —
+ * AWS/GCP connectors are rows in this SAME table, alongside `discovery_sources`
+ * rows, filling the exact same seven columns (Integration, Cadence, Status,
+ * Last sync, Enabled, Agents, Detail) via `IntegrationRow`, a small
+ * discriminated union over the two backend shapes. Nothing about how a
+ * `discovery_sources` row renders or behaves changed — every branch below
+ * that touches `row.source` is copied verbatim from before this merge.
+ *
+ * Where the two shapes genuinely don't line up, the cloud side is mapped to
+ * the closest honest equivalent rather than forcing a fake match:
+ *  - Cadence: cloud has no schedule ("scan now" is manual) → "On demand".
+ *  - Last sync: no `discovery_sources`-style sync event exists for cloud;
+ *    the closest analog is the last completed scan, else the last proven
+ *    connection, else "Never".
+ *  - Enabled: cloud has three states (active/error/revoked), not a
+ *    reversible boolean — the switch reflects "not revoked" but is read-only;
+ *    revoking is one-way and lives in the row menu with a confirm dialog,
+ *    exactly like a source's own "Delete…".
+ *  - Agents: no agent classification is wired to cloud connectors yet
+ *    (AWS discovers IAM identities, which are candidates, not agents; GCP
+ *    has no discovery endpoints at all) — shown as "—", never a fabricated
+ *    or mislabeled count.
+ *  - Detail: `CloudConnector.last_error` is a direct analog of
+ *    `DiscoverySource.last_error` — same meaning, shown the same way.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -41,8 +72,25 @@ import {
   useConvertGitHubAppManifestMutation,
   type DiscoverySource,
 } from "@/app/api/discoveryApi";
+import {
+  useListAwsConnectorsQuery,
+  useListGcpConnectorsQuery,
+  useVerifyAwsConnectorMutation,
+  useScanAwsConnectorMutation,
+  useRevokeAwsConnectorMutation,
+  type CloudConnector,
+  type CloudConnectorStatus,
+  type AWSConnectorAttrs,
+  type CloudOnboardingApiError,
+} from "@/app/api/cloudDiscoveryApi";
 import { GitHubSetupWizard } from "./GitHubSetupWizard";
 import { DeployCollectorWizard } from "./DeployCollectorWizard";
+import { cloudProviderMeta } from "./cloud/cloudProviderMeta";
+import { CloudProviderPicker } from "./cloud/CloudProviderPicker";
+import { GCPOnboardingWizard } from "./cloud/gcp/GCPOnboardingWizard";
+import { AWSOnboardingWizard } from "./cloud/aws/AWSOnboardingWizard";
+import { AWSConnectorDrawer } from "./cloud/aws/AWSConnectorDrawer";
+import { awsErrorCopy } from "./cloud/aws/awsErrorCopy";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,18 +154,78 @@ function StatusPill({ source }: { source: DiscoverySource }) {
   );
 }
 
+// Cloud's analog of StatusPill — same PILL class, same dot, computed from
+// CloudConnector.status (active/error/revoked) instead of a source's
+// enabled/last_status pair. Kept as a separate function rather than
+// generalizing StatusPill itself: the two backends' status vocabularies
+// don't actually mean the same thing (see the file header), and forcing
+// them through one function would be the fake match this file avoids.
+const CLOUD_STATUS_STYLE: Record<CloudConnectorStatus, { cls: string; label: string }> = {
+  active: { cls: "bg-(--color-success-soft) text-(--color-success-text)", label: "Active" },
+  error: { cls: "bg-(--color-danger-soft) text-(--color-danger-text)", label: "Error" },
+  revoked: { cls: "bg-muted text-muted-foreground", label: "Revoked" },
+};
+
+function CloudStatusPill({ connector }: { connector: CloudConnector }) {
+  const s = CLOUD_STATUS_STYLE[connector.status];
+  return (
+    <span className={`${PILL} ${s.cls}`}>
+      <span className="size-1.5 rounded-full bg-current" />
+      {s.label}
+    </span>
+  );
+}
+
+function cloudDisplayName(connector: CloudConnector): string | undefined {
+  return connector.provider === "aws" ? (connector.attrs as AWSConnectorAttrs)?.display_name : undefined;
+}
+
+/** Integration-column label/detail for a cloud row, mirroring
+ * `{label: display_name, detail: SOURCE_LABELS[kind]}` for a source: the
+ * bold text identifies the specific account, the muted text says what kind
+ * of thing it is. */
+function cloudIntegrationText(connector: CloudConnector): { label: string; detail: string } {
+  const meta = cloudProviderMeta(connector.provider);
+  return {
+    label: cloudDisplayName(connector) ?? connector.scope_id,
+    detail: `${meta.label} ${connector.scope_kind}`,
+  };
+}
+
+/** The closest honest analog of "last sync" for a connector that has no
+ * sync concept: the last completed scan, else the last proven connection,
+ * else never. See the file header for why this isn't `last_sync_at`. */
+function cloudLastSync(connector: CloudConnector): string | null {
+  return connector.coverage?.finished_at ?? connector.verified_at ?? null;
+}
+
+type IntegrationRow =
+  | { rowKind: "source"; source: DiscoverySource }
+  | { rowKind: "cloud"; connector: CloudConnector };
+
 export default function DiscoveryIntegrationsPage() {
-  const { data, isError, error, refetch } = useListDiscoverySourcesQuery();
+  const { data, isError: sourcesError, error: sourcesErrorObj, refetch } = useListDiscoverySourcesQuery();
+  const aws = useListAwsConnectorsQuery();
+  const gcp = useListGcpConnectorsQuery();
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const navigate = useNavigate();
   const [githubOpen, setGithubOpen] = useState(false);
+  const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
+  const [gcpWizardOpen, setGcpWizardOpen] = useState(false);
+  const [awsWizardOpen, setAwsWizardOpen] = useState(false);
+  const [selectedAwsConnectorId, setSelectedAwsConnectorId] = useState<string | null>(null);
   const [convertManifest] = useConvertGitHubAppManifestMutation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscoverySource | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<CloudConnector | null>(null);
   const [updateSource] = useUpdateDiscoverySourceMutation();
   const [deleteSource, { isLoading: deleting }] = useDeleteDiscoverySourceMutation();
+  const [verifyAws] = useVerifyAwsConnectorMutation();
+  const [scanAws] = useScanAwsConnectorMutation();
+  const [revokeAws, { isLoading: revoking }] = useRevokeAwsConnectorMutation();
 
   // GitHub's App-manifest flow returns the operator here with ?code=<single-use>.
   // Exchange it immediately for the App id + private key, then strip the code
@@ -163,7 +271,30 @@ export default function DiscoveryIntegrationsPage() {
         : fallback,
     );
 
+  const runAwsRowAction = async (
+    action: () => Promise<unknown>,
+    successMessage: string,
+    failFallback: string,
+  ) => {
+    try {
+      await action();
+      toast.success(successMessage);
+    } catch (err) {
+      const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
+      const copy = awsErrorCopy(apiErr, failFallback);
+      toast.error(`${copy.title}. ${copy.body}`);
+    }
+  };
+
   const allSources = useMemo(() => data ?? [], [data]);
+
+  const isError = sourcesError || aws.isError || gcp.isError;
+  const firstError = sourcesErrorObj ?? aws.error ?? gcp.error;
+  const retryAll = () => {
+    void refetch();
+    void aws.refetch();
+    void gcp.refetch();
+  };
 
   // Whether deleting this one takes the workspace's GitHub App with it. Mirrors
   // the server's condition (last repo_scan source in the workspace) so the
@@ -172,37 +303,69 @@ export default function DiscoveryIntegrationsPage() {
     deleteTarget?.kind === "repo_scan" &&
     allSources.filter((s) => s.kind === "repo_scan").length === 1;
 
+  const allRows = useMemo<IntegrationRow[]>(
+    () => [
+      ...allSources.map((source): IntegrationRow => ({ rowKind: "source", source })),
+      ...(aws.data ?? []).map((connector): IntegrationRow => ({ rowKind: "cloud", connector })),
+      ...(gcp.data ?? []).map((connector): IntegrationRow => ({ rowKind: "cloud", connector })),
+    ],
+    [allSources, aws.data, gcp.data],
+  );
+
   const items = useMemo(() => {
-    let list = allSources;
-    if (statusFilter === "enabled") list = list.filter((s) => s.enabled);
-    if (statusFilter === "disabled") list = list.filter((s) => !s.enabled);
+    let list = allRows;
+    if (statusFilter === "enabled") {
+      list = list.filter((r) =>
+        r.rowKind === "source" ? r.source.enabled : r.connector.status !== "revoked",
+      );
+    }
+    if (statusFilter === "disabled") {
+      list = list.filter((r) =>
+        r.rowKind === "source" ? !r.source.enabled : r.connector.status === "revoked",
+      );
+    }
     if (statusFilter === "attention") {
-      list = list.filter(
-        (s) => s.enabled && (s.last_status === "failed" || s.last_status === "degraded"),
+      list = list.filter((r) =>
+        r.rowKind === "source"
+          ? r.source.enabled && (r.source.last_status === "failed" || r.source.last_status === "degraded")
+          : r.connector.status === "error",
       );
     }
     const q = search.trim().toLowerCase();
     if (q) {
-      list = list.filter((s) =>
-        [s.display_name, SOURCE_LABELS[s.kind], s.kind].join(" ").toLowerCase().includes(q),
-      );
+      list = list.filter((r) => {
+        if (r.rowKind === "source") {
+          return [r.source.display_name, SOURCE_LABELS[r.source.kind], r.source.kind]
+            .join(" ")
+            .toLowerCase()
+            .includes(q);
+        }
+        const { label, detail } = cloudIntegrationText(r.connector);
+        return [label, detail, r.connector.scope_id].join(" ").toLowerCase().includes(q);
+      });
     }
     return list;
-  }, [allSources, search, statusFilter]);
+  }, [allRows, search, statusFilter]);
 
-  const columns = useMemo<AdaptiveColumn<DiscoverySource>[]>(
+  const columns = useMemo<AdaptiveColumn<IntegrationRow>[]>(
     () => [
       {
         id: "name",
         header: "Integration",
         alwaysVisible: true,
         approxWidth: 260,
-        cell: ({ row }) => (
-          <EntityCell
-            label={row.original.display_name}
-            detail={SOURCE_LABELS[row.original.kind]}
-          />
-        ),
+        cell: ({ row }) => {
+          if (row.original.rowKind === "source") {
+            return (
+              <EntityCell
+                label={row.original.source.display_name}
+                detail={SOURCE_LABELS[row.original.source.kind]}
+              />
+            );
+          }
+          const { label, detail } = cloudIntegrationText(row.original.connector);
+          return <EntityCell label={label} detail={detail} />;
+        },
       },
       {
         id: "cadence",
@@ -211,7 +374,7 @@ export default function DiscoveryIntegrationsPage() {
         approxWidth: 160,
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">
-            {SOURCE_CADENCE[row.original.kind]}
+            {row.original.rowKind === "source" ? SOURCE_CADENCE[row.original.source.kind] : "On demand"}
           </span>
         ),
       },
@@ -220,20 +383,29 @@ export default function DiscoveryIntegrationsPage() {
         header: "Status",
         priority: 1,
         approxWidth: 120,
-        cell: ({ row }) => <StatusPill source={row.original} />,
+        cell: ({ row }) =>
+          row.original.rowKind === "source" ? (
+            <StatusPill source={row.original.source} />
+          ) : (
+            <CloudStatusPill connector={row.original.connector} />
+          ),
       },
       {
         id: "last_sync_at",
         header: "Last sync",
         priority: 3,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {row.original.last_sync_at
-              ? formatDistanceToNow(new Date(row.original.last_sync_at), { addSuffix: true })
-              : "Never"}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const iso =
+            row.original.rowKind === "source"
+              ? row.original.source.last_sync_at
+              : cloudLastSync(row.original.connector);
+          return (
+            <span className="text-xs text-muted-foreground">
+              {iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "Never"}
+            </span>
+          );
+        },
       },
       {
         id: "enabled",
@@ -242,14 +414,22 @@ export default function DiscoveryIntegrationsPage() {
         approxWidth: 100,
         cell: ({ row }) => (
           <div onClick={(e) => e.stopPropagation()}>
-            <Switch
-              checked={row.original.enabled}
-              onCheckedChange={(v) =>
-                void updateSource({ id: row.original.id, enabled: v })
-                  .unwrap()
-                  .catch((e) => permissionError(e, "Could not update the integration."))
-              }
-            />
+            {row.original.rowKind === "source" ? (
+              <Switch
+                checked={row.original.source.enabled}
+                onCheckedChange={(v) =>
+                  void updateSource({ id: row.original.source.id, enabled: v })
+                    .unwrap()
+                    .catch((e) => permissionError(e, "Could not update the integration."))
+                }
+              />
+            ) : (
+              // Cloud has no reversible enabled/disabled flag — active/error
+              // are both "still onboarded", revoked is a one-way action.
+              // Read-only here on purpose; "Revoke…" in the row menu is the
+              // real lever, with the confirmation a one-way action deserves.
+              <Switch checked={row.original.connector.status !== "revoked"} disabled />
+            )}
           </div>
         ),
       },
@@ -258,29 +438,37 @@ export default function DiscoveryIntegrationsPage() {
         header: "Agents",
         priority: 2,
         approxWidth: 90,
-        cell: ({ row }) =>
-          row.original.agent_count > 0 ? (
-            <span className="text-xs font-medium">{row.original.agent_count}</span>
+        cell: ({ row }) => {
+          if (row.original.rowKind === "cloud") {
+            // No agent classification is wired to cloud connectors yet (see
+            // file header) — "—" states that plainly rather than showing 0,
+            // which would read as "checked, found none".
+            return <span className="text-xs text-muted-foreground">—</span>;
+          }
+          const count = row.original.source.agent_count;
+          return count > 0 ? (
+            <span className="text-xs font-medium">{count}</span>
           ) : (
             <span className="text-xs text-muted-foreground">None yet</span>
-          ),
+          );
+        },
       },
       {
         id: "last_error",
         header: "Detail",
         priority: 4,
         approxWidth: 240,
-        cell: ({ row }) =>
-          row.original.last_error ? (
-            <span
-              className="block max-w-[220px] truncate text-xs text-muted-foreground"
-              title={row.original.last_error}
-            >
-              {row.original.last_error}
+        cell: ({ row }) => {
+          const err =
+            row.original.rowKind === "source" ? row.original.source.last_error : row.original.connector.last_error;
+          return err ? (
+            <span className="block max-w-[220px] truncate text-xs text-muted-foreground" title={err}>
+              {err}
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
-          ),
+          );
+        },
       },
       {
         id: "actions",
@@ -288,19 +476,65 @@ export default function DiscoveryIntegrationsPage() {
         alwaysVisible: true,
         approxWidth: 56,
         cell: ({ row }) => {
+          if (row.original.rowKind === "source") {
+            const source = row.original.source;
+            const actions: ConsoleActionItem[] = [
+              { label: "View details", onSelect: () => navigate(`/iga/integrations/${source.id}`) },
+              {
+                label: source.enabled ? "Disable" : "Enable",
+                onSelect: () =>
+                  void updateSource({ id: source.id, enabled: !source.enabled })
+                    .unwrap()
+                    .catch((e) => permissionError(e, "Could not update the integration.")),
+              },
+              {
+                label: "Delete…",
+                destructive: true,
+                onSelect: () => setDeleteTarget(source),
+              },
+            ];
+            return (
+              <div onClick={(e) => e.stopPropagation()}>
+                <ConsoleRowActions items={actions} />
+              </div>
+            );
+          }
+
+          const connector = row.original.connector;
+          // GCP has no connector detail/verify/scan surface at all today —
+          // nothing here to act on yet.
+          if (connector.provider !== "aws") return null;
+          const revoked = connector.status === "revoked";
           const actions: ConsoleActionItem[] = [
-            { label: "View details", onSelect: () => navigate(`/iga/integrations/${row.original.id}`) },
+            // Kept enabled even when revoked: everything this connector
+            // already discovered stays for audit, and that history is
+            // exactly what "View details" shows.
+            { label: "View details", onSelect: () => setSelectedAwsConnectorId(connector.id) },
             {
-              label: row.original.enabled ? "Disable" : "Enable",
+              label: "Verify connection",
+              disabled: revoked,
               onSelect: () =>
-                void updateSource({ id: row.original.id, enabled: !row.original.enabled })
-                  .unwrap()
-                  .catch((e) => permissionError(e, "Could not update the integration.")),
+                void runAwsRowAction(
+                  () => verifyAws(connector.id).unwrap(),
+                  "Connection verified.",
+                  "Could not verify the connection.",
+                ),
             },
             {
-              label: "Delete…",
+              label: "Scan now",
+              disabled: revoked,
+              onSelect: () =>
+                void runAwsRowAction(
+                  () => scanAws(connector.id).unwrap(),
+                  "Scan started — it runs in the background.",
+                  "Could not start the scan.",
+                ),
+            },
+            {
+              label: "Revoke…",
               destructive: true,
-              onSelect: () => setDeleteTarget(row.original),
+              disabled: revoked,
+              onSelect: () => setRevokeTarget(connector),
             },
           ];
           return (
@@ -311,7 +545,7 @@ export default function DiscoveryIntegrationsPage() {
         },
       },
     ],
-    // updateSource/navigate are stable; permissionError closes over nothing mutable
+    // updateSource/verifyAws/scanAws/navigate are stable; permissionError/runAwsRowAction close over nothing mutable
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -319,19 +553,16 @@ export default function DiscoveryIntegrationsPage() {
   return (
     <ConsolePage
       title="Integrations"
-      description="Discovery channels that feed the agent inventory. Each environment gets an event-driven listener and a periodic scan; both write to the same inventory."
+      description="Discovery channels that feed the agent inventory — Kubernetes and GitHub scan on a schedule, cloud accounts are scanned on demand once connected."
       actions={
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button className="text-[length:var(--text-sm)] text-white">Add integration</Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setWizardOpen(true)}>
-              Kubernetes — deploy collector
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setGithubOpen(true)}>
-              GitHub — scan repositories
-            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setWizardOpen(true)}>Kubernetes</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setGithubOpen(true)}>GitHub</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setCloudPickerOpen(true)}>Cloud</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       }
@@ -339,10 +570,10 @@ export default function DiscoveryIntegrationsPage() {
       {isError ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
           <strong className="font-medium">Could not load integrations.</strong>{" "}
-          {(error as { status?: number })?.status === 403
+          {(firstError as { status?: number })?.status === 403
             ? "Your role is missing the discovery:read permission."
             : "The discovery API returned an error."}{" "}
-          <button className="underline" onClick={() => void refetch()}>
+          <button className="underline" onClick={retryAll}>
             Retry
           </button>
         </div>
@@ -363,8 +594,14 @@ export default function DiscoveryIntegrationsPage() {
             tableId="discovery-integrations"
             columns={columns}
             data={items}
-            getRowId={(s) => s.id}
-            onRowClick={(s) => navigate(`/iga/integrations/${s.id}`)}
+            getRowId={(r) => (r.rowKind === "source" ? `source:${r.source.id}` : `cloud:${r.connector.id}`)}
+            onRowClick={(r) => {
+              if (r.rowKind === "source") {
+                navigate(`/iga/integrations/${r.source.id}`);
+                return;
+              }
+              if (r.connector.provider === "aws") setSelectedAwsConnectorId(r.connector.id);
+            }}
             enableSelection={false}
             enableExpansion={false}
             pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
@@ -387,6 +624,41 @@ export default function DiscoveryIntegrationsPage() {
           // scanning nothing until a scope is chosen.
           navigate(`/iga/integrations/${sourceId}`);
         }}
+      />
+
+      <CloudProviderPicker
+        open={cloudPickerOpen}
+        onOpenChange={setCloudPickerOpen}
+        onContinue={(provider) => {
+          if (provider === "gcp") {
+            setGcpWizardOpen(true);
+            return;
+          }
+          if (provider === "aws") {
+            setAwsWizardOpen(true);
+            return;
+          }
+          const meta = cloudProviderMeta(provider);
+          toast(`${meta.label} onboarding is coming in a later build stage.`);
+        }}
+      />
+
+      <GCPOnboardingWizard
+        open={gcpWizardOpen}
+        onOpenChange={setGcpWizardOpen}
+        onCreated={() => void gcp.refetch()}
+      />
+
+      <AWSOnboardingWizard
+        open={awsWizardOpen}
+        onOpenChange={setAwsWizardOpen}
+        onCreated={() => void aws.refetch()}
+      />
+
+      <AWSConnectorDrawer
+        connectorId={selectedAwsConnectorId}
+        onClose={() => setSelectedAwsConnectorId(null)}
+        onRevoked={() => void aws.refetch()}
       />
 
       <Dialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
@@ -469,6 +741,56 @@ export default function DiscoveryIntegrationsPage() {
               }}
             >
               {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revokeTarget !== null} onOpenChange={(o) => !o && setRevokeTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revoke this AWS connection?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This purges the stored ExternalId for{" "}
+                  <strong>{revokeTarget ? cloudIntegrationText(revokeTarget).label : ""}</strong> so
+                  AuthSec can no longer assume the role.
+                </p>
+                <p className="text-muted-foreground">
+                  Everything already discovered — identities, access keys, permissions — is kept,
+                  unchanged, for audit; it is not deleted. The IAM role itself still exists in the
+                  AWS account until the CloudFormation stack is deleted there. Re-onboarding the
+                  same account later reactivates this same connector rather than creating a
+                  duplicate.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={revoking}
+              onClick={() => {
+                if (!revokeTarget) return;
+                void revokeAws(revokeTarget.id)
+                  .unwrap()
+                  .then(() => {
+                    toast.success("AWS connector revoked. Everything already discovered is kept, for audit.");
+                    setRevokeTarget(null);
+                    void aws.refetch();
+                  })
+                  .catch((err) => {
+                    const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
+                    const copy = awsErrorCopy(apiErr, "Could not revoke the connector.");
+                    toast.error(`${copy.title}. ${copy.body}`);
+                  });
+              }}
+            >
+              {revoking ? "Revoking…" : "Revoke"}
             </Button>
           </DialogFooter>
         </DialogContent>
