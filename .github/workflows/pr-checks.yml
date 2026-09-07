@@ -1,5 +1,19 @@
 name: PR Checks
 
+# Both gates RATCHET against the merge base instead of asserting a clean tree.
+#
+# They used to do neither job. The type gate ran `npx tsc --noEmit`, which picks
+# up the root tsconfig -- that file is `{"files": [], "references": [...]}`, so it
+# compiles nothing and passed unconditionally; two real type errors reached a
+# green PR. The lint gate ran the whole tree at --max-warnings 0 against 939
+# pre-existing problems, so it failed every PR including ones that changed
+# nothing. A gate that never fails and a gate that always fails carry the same
+# information: none, and people learn to click through both.
+#
+# Ratcheting fixes both without blocking on a 939-problem cleanup: existing debt
+# is tolerated, new debt is refused, and the numbers can only go down. When they
+# reach zero, swap these back for plain assertions.
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -11,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The ratchet checks out the base to measure it, so it needs history.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -21,14 +38,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: tsc --noEmit
-        run: npx tsc --noEmit
+      - name: No new type errors
+        run: ./scripts/ci-ratchet.sh typecheck "origin/${{ github.base_ref }}"
 
   lint:
     name: ESLint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -39,8 +58,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: eslint
-        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+      - name: No new lint problems
+        run: ./scripts/ci-ratchet.sh lint "origin/${{ github.base_ref }}"
 
   merge-gate:
     name: Merge Gate
@@ -51,12 +70,12 @@ jobs:
       - name: Type check must pass
         if: needs.typecheck.result != 'success'
         run: |
-          echo "TypeScript type check failed — merge blocked"
+          echo "TypeScript introduced new errors — merge blocked"
           exit 1
       - name: Lint must pass
         if: needs.lint.result != 'success'
         run: |
-          echo "ESLint failed — merge blocked"
+          echo "ESLint introduced new problems — merge blocked"
           exit 1
       - name: All checks passed
         run: echo "All required checks passed"
