@@ -195,6 +195,14 @@ export const baseApi = createApi({
     "BirthrightPolicy",
     "StaleBirthright",
     "OrphanedAgent",
+    // Cloud Discovery — cloud_connector rows (see app/api/cloudDiscoveryApi.ts).
+    // Onboarding only today; AWS also writes discovery evidence under this tag
+    // family once a scan runs.
+    "CloudConnector",
+    // AWS IAM discovery evidence — cloud_identity and cloud_secret rows,
+    // written by the scan a CloudConnector's own tag does not cover.
+    "CloudIdentity",
+    "CloudSecret",
   ],
   endpoints: () => ({}),
 });
