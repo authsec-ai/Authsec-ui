@@ -288,8 +288,28 @@ export default function DiscoveryIntegrationsPage() {
 
   const allSources = useMemo(() => data ?? [], [data]);
 
-  const isError = sourcesError || aws.isError || gcp.isError;
-  const firstError = sourcesErrorObj ?? aws.error ?? gcp.error;
+  // A cloud provider whose backend is not deployed yet answers 404 on its list
+  // route, and that is not an error the operator can act on: it means "this
+  // console build is ahead of this deployment", not "your integrations failed
+  // to load". Folding it into the page-level banner would put a permanent red
+  // "Could not load integrations" over a page whose Kubernetes and GitHub rows
+  // loaded perfectly -- and would train people to ignore the banner that exists
+  // to report the real thing. GCP onboarding lands with authsec-ai/authsec#51;
+  // until it is deployed, this page simply lists no GCP connectors.
+  //
+  // Deliberately narrow: only 404 is absorbed. A 403 still surfaces (the role
+  // is missing discovery:read), and so does a 500 -- those are real and the
+  // operator can act on both.
+  const notDeployed = (e: unknown) => (e as { status?: number } | undefined)?.status === 404;
+  const awsUnavailable = aws.isError && notDeployed(aws.error);
+  const gcpUnavailable = gcp.isError && notDeployed(gcp.error);
+
+  const isError =
+    sourcesError || (aws.isError && !awsUnavailable) || (gcp.isError && !gcpUnavailable);
+  const firstError =
+    sourcesErrorObj ??
+    (awsUnavailable ? undefined : aws.error) ??
+    (gcpUnavailable ? undefined : gcp.error);
   const retryAll = () => {
     void refetch();
     void aws.refetch();
@@ -412,13 +432,19 @@ export default function DiscoveryIntegrationsPage() {
         header: "Enabled",
         priority: 5,
         approxWidth: 100,
-        cell: ({ row }) => (
+        cell: ({ row }) => {
+          // Bound to a const before the callback: narrowing `row.original` by
+          // rowKind does not survive into a nested closure, because TypeScript
+          // cannot prove the property has not changed by the time the callback
+          // runs. A const it cannot reassign carries the narrowed type in.
+          const item = row.original;
+          return (
           <div onClick={(e) => e.stopPropagation()}>
-            {row.original.rowKind === "source" ? (
+            {item.rowKind === "source" ? (
               <Switch
-                checked={row.original.source.enabled}
+                checked={item.source.enabled}
                 onCheckedChange={(v) =>
-                  void updateSource({ id: row.original.source.id, enabled: v })
+                  void updateSource({ id: item.source.id, enabled: v })
                     .unwrap()
                     .catch((e) => permissionError(e, "Could not update the integration."))
                 }
@@ -428,10 +454,11 @@ export default function DiscoveryIntegrationsPage() {
               // are both "still onboarded", revoked is a one-way action.
               // Read-only here on purpose; "Revoke…" in the row menu is the
               // real lever, with the confirmation a one-way action deserves.
-              <Switch checked={row.original.connector.status !== "revoked"} disabled />
+              <Switch checked={item.connector.status !== "revoked"} disabled />
             )}
           </div>
-        ),
+          );
+        },
       },
       {
         id: "agent_count",

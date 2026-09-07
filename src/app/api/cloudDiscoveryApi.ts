@@ -324,12 +324,6 @@ export interface GoogleOAuthStatus {
   available: boolean;
 }
 
-export interface StartGoogleOAuthRequest {
-  scope_kind: GCPScopeKind;
-  scope_id: string;
-  reader_project_id: string;
-}
-
 export interface StartGoogleOAuthResponse {
   authorize_url: string;
   state: string;
@@ -519,8 +513,12 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     }),
 
     // Returns the Google consent URL to open in a popup — never a token.
-    startGoogleOAuth: builder.mutation<StartGoogleOAuthResponse, StartGoogleOAuthRequest>({
-      query: (body) => ({ url: "/authsec/discovery/gcp/google-oauth/start", method: "POST", body }),
+    //
+    // Takes NO argument, matching the backend: the human signs in with Google
+    // before any project is known, so there is no scope to send yet. The
+    // project arrives later, from listGoogleProjects, once the session exists.
+    startGoogleOAuth: builder.mutation<StartGoogleOAuthResponse, void>({
+      query: () => ({ url: "/authsec/discovery/gcp/google-oauth/start", method: "POST" }),
     }),
 
     // The project picker's data source, scoped to the session's Google

@@ -53,7 +53,7 @@
  * one, and this component does not attempt to redisplay what was typed.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, Copy, Terminal } from "lucide-react";
 
 import { GoogleProjectPicker } from "./GoogleProjectPicker";
@@ -83,6 +83,7 @@ import {
 import {
   useLazyGetGcpOnboardingPackageQuery,
   useCreateGcpConnectorMutation,
+  useGetGoogleOAuthStatusQuery,
   useStartGoogleOAuthMutation,
   useLazyListGoogleProjectsQuery,
   usePreflightGoogleOAuthMutation,
@@ -474,6 +475,26 @@ export function GCPOnboardingWizard({
   // sub-sequence (sign in -> pick project -> preflight -> connect) those two
   // don't.
   const [startGoogleOAuth, { isLoading: startingGoogleOAuth }] = useStartGoogleOAuthMutation();
+
+  // Whether this DEPLOYMENT can do Google sign-in at all — it needs an OAuth
+  // client and a session store, and neither is guaranteed outside SaaS.
+  //
+  // Asked up front rather than discovered on click. Defaulting to the Google
+  // card and only failing after the human has committed to it teaches them the
+  // product is broken; the honest thing is to present the choice they actually
+  // have. `skip` until the dialog opens so a closed wizard costs no request,
+  // and treat an unreachable probe as available so a transient blip narrows
+  // nobody's options — the start call still reports the truth if it is wrong.
+  const { data: googleOAuthStatus } = useGetGoogleOAuthStatusQuery(undefined, { skip: !open });
+  const googleOAuthAvailable = googleOAuthStatus?.available !== false;
+
+  // Move off the Google card as soon as the deployment says it cannot serve it.
+  // The default stays "google_oauth" so the recommended path is preselected on
+  // every normal deployment; this only corrects a selection the human could not
+  // have completed. Guarded on `open` so it cannot fight a later choice.
+  useEffect(() => {
+    if (open && !googleOAuthAvailable) setAuthMethod("wif");
+  }, [open, googleOAuthAvailable]);
   const [listGoogleProjects, googleProjectsResult] = useLazyListGoogleProjectsQuery();
   const [preflightGoogleOAuth, { isLoading: preflightingGoogle }] = usePreflightGoogleOAuthMutation();
   const [provisionGoogleOAuth, { isLoading: provisioningGoogle }] = useProvisionGoogleOAuthMutation();
@@ -778,23 +799,33 @@ export function GCPOnboardingWizard({
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  disabled={!googleOAuthAvailable}
                   onClick={() => setAuthMethod("google_oauth")}
                   className={cn(
                     "flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
-                    authMethod === "google_oauth"
-                      ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
-                      : "border-border hover:border-[var(--color-border-strong)]",
+                    !googleOAuthAvailable
+                      ? "cursor-not-allowed border-border opacity-60"
+                      : authMethod === "google_oauth"
+                        ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
+                        : "border-border hover:border-[var(--color-border-strong)]",
                   )}
                 >
                   <span className="text-sm font-medium text-foreground">
                     ⭐ Google Authentication
                   </span>
-                  <span className="rounded bg-(--color-success-soft) px-1.5 py-0.5 text-[10px] font-medium text-(--color-success-text)">
-                    Recommended
-                  </span>
+                  {googleOAuthAvailable ? (
+                    <span className="rounded bg-(--color-success-soft) px-1.5 py-0.5 text-[10px] font-medium text-(--color-success-text)">
+                      Recommended
+                    </span>
+                  ) : (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Not available here
+                    </span>
+                  )}
                   <span className="text-[11px] text-muted-foreground">
-                    Sign in with Google once — AuthSec configures Workload Identity Federation
-                    for you automatically. No script, no key file.
+                    {googleOAuthAvailable
+                      ? "Sign in with Google once — AuthSec configures Workload Identity Federation for you automatically. No script, no key file."
+                      : "This deployment has no Google OAuth client configured, so sign-in cannot complete. Use Workload Identity Federation, or ask your administrator to configure it."}
                   </span>
                 </button>
                 <button
