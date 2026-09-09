@@ -32,7 +32,24 @@ export type CloudConnectorStatus = "active" | "error" | "revoked";
 
 export type CloudScopeKind = "account" | "project" | "folder" | "org" | "subscription";
 
-export type CloudCoverageState = "reached" | "denied" | "throttled" | "not_configured";
+/** `unknown` is the state every surface starts in, before anything has scanned
+ * it — GCP onboarding pre-creates the full surface list rather than leaving
+ * coverage empty. It must never render as zero or as "clean": a surface nobody
+ * has looked at and a surface that was scanned and found empty are different
+ * answers.
+ *
+ * `constrained` is a read refused BY DESIGN — a VPC Service Controls perimeter
+ * or an organization policy. Distinct from `denied`, which is a missing grant:
+ * the remedy for one is a role, for the other a policy change by whoever owns
+ * it, so telling the customer the wrong one wastes their time. */
+export type CloudCoverageState =
+  | "reached"
+  | "denied"
+  | "throttled"
+  | "not_configured"
+  | "unknown"
+  | "constrained"
+  | "stale";
 
 export interface CloudCoverageSurface {
   state: CloudCoverageState;
@@ -82,6 +99,97 @@ export interface GCPConnectorAttrs {
    * actor who triggered it, never a Google account identity. */
   provisioned_via?: "google_oauth";
   provisioned_by?: string;
+
+  // ── What the live permission probe found (refreshed on every verify) ──────
+
+  /** Which of the three onboarding routes created this connector. Derived and
+   * stored at onboarding, not inferred here: they differ in what they could
+   * configure, and therefore in what a shortfall means. */
+  onboarding_path?: "oauth_default" | "manual_wif" | "manual_key";
+
+  /** Per-surface result of the last probe. Absent means never probed — which
+   * is NOT the same as "reaches nothing". */
+  capability_profile?: Record<string, GCPSurfaceCapability>;
+
+  /** Every permission the reader was proved to hold, across all surfaces. */
+  probed_permissions?: string[];
+
+  /** Must be empty. Anything here means the reader holds a permission that can
+   * change customer state — a finding, not a configuration detail. */
+  write_permissions_held?: string[];
+
+  /** Per-API enablement, keyed by API host name. "unknown" is a real value:
+   * a reader without serviceusage.services.list cannot tell, and showing that
+   * as "off" would be inventing a fact. */
+  api_enablement?: Record<string, "enabled" | "not_enabled" | "unknown">;
+
+  /** Whether this onboarding route could ENABLE a missing API or only report
+   * it. Manual federation holds no credential that can write. */
+  api_enablement_repaired?: boolean;
+
+  /** Whether the reader can walk the tree below the top scope, and by which
+   * route. Load-bearing for an org or folder connector. */
+  scope_enumeration?: GCPScopeEnumeration;
+
+  /** Permanent boundaries on this connector, not transient failures. */
+  capability_limits?: GCPCapabilityLimit[];
+
+  /** A stable hand-bumped label for the granted role set, e.g.
+   * "gcp-reader-p1-v2". Distinct from role_set_status (confidence) and
+   * setup_script_version (the script): this is the one that answers "which
+   * roles does this connector actually hold". */
+  role_set_version?: string;
+
+  probed_at?: string;
+
+  /** Whether discovery can scan this connector, derived from everything above.
+   * Read this rather than re-deriving it, or the console and the scheduler
+   * will eventually disagree about the same connector. */
+  discovery_readiness?: "ready" | "partial" | "blocked";
+
+  /** What pushed readiness below "ready". Empty when ready. Without these the
+   * verdict is an assertion with no argument, and nobody can act on it. */
+  discovery_readiness_reasons?: string[];
+
+  /** Customer-declared context no GCP API reports, captured at onboarding. */
+  hints?: GCPOnboardingHints;
+}
+
+/** One surface's probe result.
+ *
+ * `can` and `unknown` are separate on purpose. `can: false` means the probe ran
+ * and the reader provably lacks a permission; `unknown: true` means the probe
+ * could not answer at all. Rendering the second as the first would turn "we
+ * could not check" into "there is nothing there". */
+export interface GCPSurfaceCapability {
+  can: boolean;
+  missing?: string[];
+  unknown?: boolean;
+  /** Short sanitized code, e.g. "permission_check_denied",
+   * "vpc_service_controls". Never a provider message. */
+  reason?: string;
+}
+
+export interface GCPScopeEnumeration {
+  via: "none" | "rm_list" | "cai_search" | "both";
+  rm_list: boolean;
+  cai_search: boolean;
+  /** Neither route could be CHECKED. `via` reads "none", but that means "we do
+   * not know", not "there is no way in". */
+  unknown?: boolean;
+}
+
+export type GCPCapabilityLimit =
+  | "oauth_project_scope_only"
+  | "keyed_credential"
+  | "quota_project_unusable";
+
+export interface GCPOnboardingHints {
+  environment?: string;
+  environment_labels?: string[];
+  naming_convention?: string;
+  owning_team?: string;
+  owner_contact?: string;
 }
 
 export interface CloudConnector {
@@ -255,7 +363,8 @@ export interface GCPOnboardingPackage {
   setup_script: string;
   setup_script_version: string;
   wif_instructions: string;
-  json_key_instructions: string;
+  /** A stable label for the granted role set, e.g. "gcp-reader-p1-v2". */
+  role_set_version?: string;
 }
 
 interface GCPOnboardingEnvelope {
@@ -283,7 +392,7 @@ export interface GCPCreateConnectorRequest {
 export interface CloudOnboardingApiError {
   error: string;
   hint?: string;
-  fault?: "customer_account" | "gcp" | "aws" | "authsec";
+  fault?: "customer_account" | "constrained" | "gcp" | "aws" | "authsec";
   /** Client-side only: the request timed out before any backend verdict
    * arrived (RTK Query TIMEOUT_ERROR carries no response body). Never sent
    * by the backend — set by the caller so error copy can say so honestly. */
@@ -505,6 +614,49 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }],
     }),
 
+    getGcpConnector: builder.query<CloudConnector, string>({
+      query: (id) => ({ url: `/authsec/discovery/gcp/connectors/${id}`, method: "GET" }),
+      transformResponse: (r: { data: CloudConnector }) => r.data,
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector", id }],
+    }),
+
+    /** Re-prove the connection AND refresh what the reader can reach.
+     *
+     * This is not only a health check. The backend re-runs the full per-surface
+     * permission probe here, so verifying is how a role granted out of band
+     * gets picked up — there is no separate probe endpoint and nothing for the
+     * customer to re-run. The returned connector carries the refreshed
+     * capability profile, readiness and role-set version.
+     *
+     * A failure records the reason on the row and leaves the last known-good
+     * verified_at alone, so the response is still worth rendering. */
+    verifyGcpConnector: builder.mutation<CloudConnector, string>({
+      query: (id) => ({ url: `/authsec/discovery/gcp/connectors/${id}/verify`, method: "POST" }),
+      transformResponse: (r: ConnectorEnvelope) => r.data,
+      invalidatesTags: (_r, _e, id) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "GCP_LIST" },
+      ],
+    }),
+
+    /** Disconnect a GCP connector.
+     *
+     * DELETE by URL, but a SOFT revoke underneath: the row is marked revoked
+     * and kept for audit, and **nothing in the customer's Google Cloud is
+     * deleted**. The reader service account, the pool and the provider all
+     * remain until the customer removes them, which is the step that actually
+     * ends AuthSec's access. Any confirmation shown before calling this has to
+     * say so, or the customer will believe access is gone when it is not.
+     *
+     * Deliberately different from the AWS equivalent, which hard-deletes. */
+    revokeGcpConnector: builder.mutation<{ success: boolean; message: string }, string>({
+      query: (id) => ({ url: `/authsec/discovery/gcp/connectors/${id}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "GCP_LIST" },
+      ],
+    }),
+
     // Lets the wizard hide/disable the "Google Authentication" card cleanly
     // when this deployment has no Redis/OAuth client configured, instead of
     // starting a flow that would fail at the callback.
@@ -580,6 +732,9 @@ export const {
   useListAwsSecretsQuery,
   useLazyGetGcpOnboardingPackageQuery,
   useCreateGcpConnectorMutation,
+  useGetGcpConnectorQuery,
+  useVerifyGcpConnectorMutation,
+  useRevokeGcpConnectorMutation,
   useGetGoogleOAuthStatusQuery,
   useStartGoogleOAuthMutation,
   useLazyListGoogleProjectsQuery,
