@@ -687,7 +687,17 @@ export default function DiscoveryIntegrationsPage() {
                 navigate(`/iga/integrations/${r.source.id}`);
                 return;
               }
-              if (r.connector.provider === "aws") setSelectedAwsConnectorId(r.connector.id);
+              // Every connector row opens its own detail panel. Listing only
+              // AWS here left a GCP row looking clickable — same cursor, same
+              // hover, same row-actions menu offering "View details" — while
+              // clicking it did nothing at all.
+              if (r.connector.provider === "aws") {
+                setSelectedAwsConnectorId(r.connector.id);
+                return;
+              }
+              if (r.connector.provider === "gcp") {
+                setSelectedGcpConnectorId(r.connector.id);
+              }
             }}
             enableSelection={false}
             enableExpansion={false}
@@ -733,7 +743,7 @@ export default function DiscoveryIntegrationsPage() {
       <GCPConnectorDrawer
         connectorId={selectedGcpConnectorId}
         open={selectedGcpConnectorId !== null}
-        onOpenChange={(o) => !o && setSelectedGcpConnectorId(null)}
+        onClose={() => setSelectedGcpConnectorId(null)}
       />
 
       <GCPOnboardingWizard
