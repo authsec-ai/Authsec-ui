@@ -58,11 +58,38 @@ import { awsErrorCopy } from "./awsErrorCopy";
 const STATUS_TONE: Record<string, StatusTone> = { active: "success", error: "danger", revoked: "muted" };
 const STATUS_LABEL: Record<string, string> = { active: "Active", error: "Error", revoked: "Revoked" };
 
+// Total by construction: Record<CloudCoverageState, …> forces every state to
+// have a tone, so widening the shared union cannot leave a surface rendering
+// with an undefined tone.
+//
+// The last three are states GCP onboarding introduced and the AWS scanner does
+// not write today. They are here because the type is shared, and because
+// "unknown" is the one a reader is most likely to meet first if AWS ever
+// pre-creates a coverage skeleton the way GCP now does — it must read as
+// "nobody has looked yet", never as a clean result.
 const COVERAGE_TONE: Record<CloudCoverageState, StatusTone> = {
   reached: "success",
   denied: "danger",
   throttled: "warning",
   not_configured: "muted",
+  unknown: "muted",
+  constrained: "warning",
+  stale: "muted",
+};
+
+// Also total, and for a sharper reason than the tones. This used to be a
+// ternary chain ending in "Not configured", so any state it did not name
+// rendered as a definite configuration fact — "unknown" in particular would
+// have claimed the surface was switched off when the truth is that nobody has
+// looked at it yet. A Record forces every state to be named deliberately.
+const COVERAGE_LABEL: Record<CloudCoverageState, string> = {
+  reached: "Reached",
+  denied: "Denied",
+  throttled: "Throttled",
+  not_configured: "Not configured",
+  unknown: "Not checked",
+  constrained: "Blocked by policy",
+  stale: "Stale",
 };
 
 // The AWS surfaces ticket [1] writes into `cloud_connector.coverage.surfaces`
@@ -92,9 +119,7 @@ function CoverageRow({ surfaceKey, state, count }: { surfaceKey: string; state: 
         <span className="text-[11px] text-muted-foreground">
           {state === "reached" ? count : `≥ ${count}`}
         </span>
-        <StatusBadge tone={COVERAGE_TONE[state]}>
-          {state === "reached" ? "Reached" : state === "denied" ? "Denied" : state === "throttled" ? "Throttled" : "Not configured"}
-        </StatusBadge>
+        <StatusBadge tone={COVERAGE_TONE[state]}>{COVERAGE_LABEL[state]}</StatusBadge>
       </div>
     </div>
   );
