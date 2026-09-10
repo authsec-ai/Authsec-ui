@@ -6,13 +6,33 @@
  * working backend, not the older planning docs — see the investigation
  * report for the specific discrepancies that were corrected).
  *
- * Live today: AWS onboarding + full discovery (scan, identities, secrets,
- * assume-edges, permissions, resources — verified directly against
- * `controllers/platform/cloud_aws_controller.go`). GCP onboarding only — GCP
- * has no scan/identities/secrets/permissions/resources endpoints yet. Do not
- * add GCP discovery endpoints here until the backend ships them; a page
- * reading from a GCP discovery endpoint that doesn't exist is exactly the
- * "invented API" mistake the investigation flagged.
+ * Live today: AWS onboarding plus all seven AWS discovery surfaces — scan,
+ * identities, secrets, assume-edges, permissions, resources, workloads and
+ * usage, each verified directly against
+ * `controllers/platform/cloud_aws_controller.go` and the routes registered in
+ * `routes/routes.go`. (An earlier version of this header claimed assume-edges,
+ * permissions and resources were wired when no endpoint for them existed here;
+ * they are wired now, and the claim is true as written.)
+ *
+ * GCP onboarding only — GCP has no scan/identities/secrets/permissions/
+ * resources endpoints yet. Do not add GCP discovery endpoints here until the
+ * backend ships them; a page reading from a GCP discovery endpoint that
+ * doesn't exist is exactly the "invented API" mistake the investigation
+ * flagged.
+ *
+ * PAGINATION IS NOT UNIFORM, and this is the single most load-bearing fact
+ * about these endpoints. Only `/aws/identities` accepts limit/offset and
+ * reports a `total`. Secrets, assume-edges, permissions, resources, workloads
+ * and usage each end in an unbounded `.Find(&out)` server-side and report
+ * `meta.count = len(rows)` — the number of rows in THIS response, which is
+ * always all of them. Every one of those hooks is marked below. Do not pass a
+ * limit to them expecting it to be honoured, and do not read `count` as a
+ * total-behind-a-page.
+ *
+ * SCOPE IS NOT UNIFORM EITHER. `connector_id` is accepted only by
+ * `/aws/identities` and `/aws/resources`. The other five take `identity_id`
+ * only and otherwise return every row in the workspace, across every
+ * connected AWS account.
  *
  * `DiscoverySourceKind` in discoveryApi.ts already has "aws"/"gcp" stub
  * values — those belong to the unrelated `discovery_sources` (agent
@@ -342,6 +362,261 @@ interface CloudSecretListEnvelope {
   meta?: { as_of?: string; count?: number; ordering?: string; note?: string };
 }
 
+// ── AWS trust, permissions and resources (ticket [2] evidence) ──────────────
+
+/** Who may assume an identity. `identity` and `external_account` both mean the
+ * role can be assumed from outside AuthSec's own view, which is the finding. */
+export type CloudAssumeSubjectKind =
+  | "cloud_service"
+  | "identity"
+  | "k8s_service_account"
+  | "ci_pipeline"
+  | "external_account";
+
+export type CloudAssumeMechanism =
+  | "sts_assume_role"
+  | "oidc_federation"
+  | "eks_pod_identity";
+
+/** `models.CloudAssumeEdge`. `subject` is the provider's own string, stored
+ * verbatim — a service principal, a principal ARN, an account id/root ARN/"*",
+ * or an OIDC subject claim. Never parse it into parts for display. */
+export interface CloudAssumeEdge {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  identity_id: string;
+  subject_kind: CloudAssumeSubjectKind;
+  subject: string;
+  /** OIDC issuer host, no scheme. Null for an sts_assume_role edge. */
+  issuer?: string | null;
+  mechanism: CloudAssumeMechanism;
+  /** `system:serviceaccount:<ns>:<sa>` — the exact string the Kubernetes
+   * connector records for the same pod. Set only for k8s_service_account. */
+  k8s_ref?: string | null;
+  attrs: Record<string, unknown>;
+  last_seen_generation: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  row_updated_at: string;
+}
+
+interface CloudAssumeEdgeListEnvelope {
+  data: CloudAssumeEdge[];
+  meta?: { as_of?: string; count?: number; note?: string };
+}
+
+/** `account_wide` and `prefix` mean `resource_id` is deliberately null, not
+ * missing. Never expand a broad scope into the children it might cover —
+ * scope_kind IS the record of the breadth. */
+export type CloudPermissionScopeKind = "resource" | "prefix" | "account_wide";
+export type CloudPermissionEffect = "allow" | "deny";
+export type CloudSensitivity = "low" | "med" | "high";
+
+/** `models.CloudPermission`. A policy STATEMENT, not computed effective
+ * access: `derivation` is always "granted" for AWS today. */
+export interface CloudPermission {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  identity_id: string;
+  /** Null on a wildcard or prefix grant. Never set to fill in a resource that
+   * was not independently named by the statement. */
+  resource_id?: string | null;
+  plane: "cloud" | "api";
+  effect: CloudPermissionEffect;
+  /** Always null for AWS — the column exists for Azure's RBAC role
+   * assignments, which have a role name; an IAM statement does not. */
+  role_name?: string | null;
+  actions: string[];
+  scope_kind: CloudPermissionScopeKind;
+  derivation: "granted" | "effective";
+  sensitivity: CloudSensitivity;
+  /** Always null as written today. "Granted vs. actually used" must be read
+   * from cloud_usage at SERVICE grain instead — see CloudUsage. */
+  last_exercised_at?: string | null;
+  /** Where the grant came from: a managed policy ARN, or `inline:<name>` for
+   * one defined on the identity directly, suffixed with the statement's
+   * position so two statements in one document do not collide. */
+  native_id: string;
+  last_seen_generation: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  row_updated_at: string;
+}
+
+interface CloudPermissionListEnvelope {
+  data: CloudPermission[];
+  meta?: { as_of?: string; count?: number; note?: string };
+}
+
+/** `models.CloudResource`. A row exists ONLY because a permission statement
+ * named it. This is not an inventory of everything in the account, and an
+ * empty list does not mean the account is empty. */
+export interface CloudResource {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  /** Typed by service, e.g. "s3_bucket", "dynamodb_table". Free text
+   * server-side, so always render through a map with a raw fallback. */
+  kind: string;
+  native_id: string;
+  name: string;
+  sensitivity: CloudSensitivity;
+  last_seen_generation: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  row_updated_at: string;
+}
+
+interface CloudResourceListEnvelope {
+  data: CloudResource[];
+  meta?: { as_of?: string; count?: number; note?: string };
+}
+
+// ── AWS workloads and activity (PR #52 surfaces) ────────────────────────────
+
+/** `models.CloudWorkload`'s runtime kinds, copied from the Go constants.
+ *
+ * Note `lambda_function` and `ecs_task_definition` — NOT the `lambda` /
+ * `ecs_task` spellings that appear in some planning docs. Two of the five
+ * differ, and keying a label map on the doc's strings renders every Lambda and
+ * ECS row as a raw enum. */
+export type CloudRuntimeKind =
+  | "lambda_function"
+  | "ecs_task_definition"
+  | "ec2_instance"
+  | "bedrock_agent"
+  | "bedrock_agentcore_runtime";
+
+/** `models.AWSWorkloadAttrs`. Never holds a secret value: `env_var_names` are
+ * Lambda environment variable NAMES only — AWS returns values with the
+ * function and offers no names-only call, so the values are dropped at parse
+ * time server-side and never reach this shape. */
+export interface AWSWorkloadAttrs {
+  /** ECS's executionRoleArn, or a Lambda's role as the service reports it. For
+   * ECS this is deliberately NOT the identity: the task role is what the
+   * application acts as, and attributing container permissions to the
+   * execution role would report permissions the container never had. */
+  execution_role_arn?: string;
+  /** EC2 only — EC2 names an instance profile, a thin wrapper holding exactly
+   * one role. */
+  instance_profile_arn?: string;
+  env_var_names?: string[];
+  /** The Bedrock agent's model id. */
+  foundation_model?: string;
+  /** The provider's own lifecycle string, verbatim. */
+  status?: string;
+  /** A role this workload names that the scan could not find in inventory, so
+   * an unattributed row still says which role it was looking for. */
+  unresolved_role_arn?: string;
+}
+
+/** Compute that RUNS AS a cloud identity. Not an identity, and not an agent —
+ * whether a workload constitutes an agent is a later judgement this table
+ * deliberately does not make. */
+export interface CloudWorkload {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  /** Null when the workload could not be attributed to a role this scan
+   * discovered. Null is a FINDING — compute nobody can tie to an identity —
+   * not a broken row. */
+  identity_id?: string | null;
+  runtime_kind: CloudRuntimeKind;
+  native_id: string;
+  name: string;
+  /** Every service in this table is regional, and one name can be two
+   * workloads in two regions. */
+  region: string;
+  attrs: AWSWorkloadAttrs | Record<string, unknown>;
+  last_seen_generation: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  row_updated_at: string;
+}
+
+interface CloudWorkloadListEnvelope {
+  data: CloudWorkload[];
+  meta?: {
+    as_of?: string;
+    count?: number;
+    /** Server-computed tally per runtime kind, so the console does not have to
+     * derive it. */
+    by_runtime_kind?: Record<string, number>;
+    /** Server-computed count of rows with a null identity_id. */
+    unattributed?: number;
+    note?: string;
+  };
+}
+
+/** Whether an identity actually exercised a service, as opposed to merely
+ * being permitted to. */
+export interface CloudUsage {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  identity_id: string;
+  /** The AWS namespace as AWS reports it: "s3", "dynamodb". */
+  service: string;
+  /** Null means AWS reports the service was NEVER accessed in its tracking
+   * window. That is the most actionable row in the table, not missing data — a
+   * service that could not be read produces no row at all. */
+  last_used_at?: string | null;
+  source: "service_last_accessed" | "cloudtrail";
+  /** When AWS produced the report, which can be materially older than the scan
+   * that stored it. Show it: a three-week-old report is a different claim. */
+  generated_at?: string | null;
+  attrs: Record<string, unknown>;
+  last_seen_generation: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  row_updated_at: string;
+}
+
+interface CloudUsageListEnvelope {
+  data: CloudUsage[];
+  meta?: {
+    as_of?: string;
+    count?: number;
+    /** Server-computed count of rows with a null last_used_at. */
+    never_accessed?: number;
+    note?: string;
+  };
+}
+
+/** A list plus the `meta` counts the server computed for it.
+ *
+ * Returned instead of a bare array wherever `meta` carries a number the
+ * console must not re-derive — `unattributed` and `never_accessed` are the
+ * server's own tallies over the full set, and recomputing them client-side
+ * would silently produce a different answer the moment the response is ever
+ * paginated. */
+export interface CloudListWithMeta<TRow, TMeta> {
+  rows: TRow[];
+  meta: TMeta;
+}
+
+export interface CloudWorkloadMeta {
+  count: number;
+  unattributed: number;
+  by_runtime_kind: Record<string, number>;
+}
+
+export interface CloudUsageMeta {
+  count: number;
+  never_accessed: number;
+}
+
+/** An identity page plus its server-reported total, for server-side
+ * pagination. Only `/aws/identities` can honestly provide this. */
+export interface CloudIdentityPage {
+  rows: CloudIdentity[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ── GCP onboarding (the only GCP surface that exists) ───────────────────────
 
 export type GCPScopeKind = "org" | "folder" | "project";
@@ -555,13 +830,23 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // Starts the IAM identity + permission scan. 202 — runs in the
     // background; the connector's own `coverage` is the durable, pollable
     // report of what it found, not this response.
+    // One POST writes seven tables (see the endpoint's own `meta.writes`), so
+    // it must invalidate all seven tag families. Listing only identities and
+    // secrets left every inventory view showing pre-scan data after a rescan
+    // until the page was reloaded by hand.
     scanAwsConnector: builder.mutation<ScanTriggerEnvelope, string>({
       query: (id) => ({ url: `/authsec/discovery/aws/connectors/${id}/scan`, method: "POST" }),
       invalidatesTags: (_result, _error, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
         { type: "CloudIdentity", id },
+        { type: "CloudIdentity", id: "ALL" },
         { type: "CloudSecret", id: "ALL" },
+        { type: "CloudAssumeEdge", id: "ALL" },
+        { type: "CloudPermission", id: "ALL" },
+        { type: "CloudResource", id: "ALL" },
+        { type: "CloudWorkload", id: "ALL" },
+        { type: "CloudUsage", id: "ALL" },
       ],
     }),
 
@@ -594,6 +879,151 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       }),
       transformResponse: (r: CloudSecretListEnvelope) => r.data ?? [],
       providesTags: [{ type: "CloudSecret" as const, id: "ALL" }],
+    }),
+
+    /* ─────────────── The paginated identity inventory ─────────────────────
+     *
+     * A SECOND identity endpoint, deliberately additive rather than a change
+     * to `listAwsIdentities` above. The two differ only in what they return:
+     * this one keeps `meta.total/limit/offset` so a table can page
+     * server-side, the other flattens to a bare array.
+     *
+     * Kept separate because `listAwsIdentities` is consumed by
+     * AWSConnectorDrawer, and changing its return type to an envelope would
+     * have been a breaking change to a working screen for no benefit to it —
+     * the drawer renders a short list and never pages.
+     */
+    listAwsIdentityPage: builder.query<
+      CloudIdentityPage,
+      { connector_id?: string; kind?: CloudIdentityKind; limit?: number; offset?: number }
+    >({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/identities",
+        method: "GET",
+        params,
+      }),
+      transformResponse: (r: CloudIdentityListEnvelope, _meta, arg): CloudIdentityPage => ({
+        rows: r.data ?? [],
+        // `total` is the count BEFORE limit/offset — the only honest total
+        // any AWS discovery endpoint reports. Falling back to the page length
+        // keeps the table usable if a deployment predates the meta block,
+        // at the cost of the pager thinking there is one page.
+        total: r.meta?.total ?? (r.data ?? []).length,
+        limit: r.meta?.limit ?? arg.limit ?? 100,
+        offset: r.meta?.offset ?? arg.offset ?? 0,
+      }),
+      providesTags: (result, _error, arg) => [
+        ...(result?.rows ?? []).map((i) => ({ type: "CloudIdentity" as const, id: i.id })),
+        { type: "CloudIdentity" as const, id: arg.connector_id ?? "ALL" },
+        { type: "CloudIdentity" as const, id: "ALL" },
+      ],
+    }),
+
+    /* ───────────────── The remaining five surfaces ────────────────────────
+     *
+     * UNPAGINATED, every one of them. The server has no limit/offset on these
+     * routes and returns the whole set; `meta.count` is this response's own
+     * length. Filter by `identity_id` wherever a view is about one identity —
+     * for permissions that is not an optimisation but a requirement, since
+     * the grain is one row per policy statement per identity and an
+     * account-wide fetch is unbounded in the worst way.
+     */
+
+    // Who may assume an identity, and how. Scoped to one identity in practice:
+    // this is the "who can become this role" question on a detail panel.
+    listAwsAssumeEdges: builder.query<CloudAssumeEdge[], { identity_id?: string } | void>({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/assume-edges",
+        method: "GET",
+        params: params ?? undefined,
+      }),
+      transformResponse: (r: CloudAssumeEdgeListEnvelope) => r.data ?? [],
+      providesTags: (result) => [
+        ...(result ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
+        { type: "CloudAssumeEdge" as const, id: "ALL" },
+      ],
+    }),
+
+    // Granted policy statements. ALWAYS pass identity_id — see the block
+    // comment above on why an unscoped call is not safe here.
+    listAwsPermissions: builder.query<CloudPermission[], { identity_id?: string } | void>({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/permissions",
+        method: "GET",
+        params: params ?? undefined,
+      }),
+      transformResponse: (r: CloudPermissionListEnvelope) => r.data ?? [],
+      providesTags: (result) => [
+        ...(result ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
+        { type: "CloudPermission" as const, id: "ALL" },
+      ],
+    }),
+
+    // Resources named by a policy statement. Filters by connector_id, NOT
+    // identity_id — so resolving a statement's resource_id is a client-side
+    // join against this list, keyed by resource id.
+    listAwsResources: builder.query<CloudResource[], { connector_id?: string } | void>({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/resources",
+        method: "GET",
+        params: params ?? undefined,
+      }),
+      transformResponse: (r: CloudResourceListEnvelope) => r.data ?? [],
+      providesTags: (result) => [
+        ...(result ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
+        { type: "CloudResource" as const, id: "ALL" },
+      ],
+    }),
+
+    // The compute that runs as a discovered identity.
+    //
+    // Returns rows AND meta, because `meta.unattributed` is the server's own
+    // tally over the full set and is the headline finding on the compute page.
+    listAwsWorkloads: builder.query<
+      CloudListWithMeta<CloudWorkload, CloudWorkloadMeta>,
+      { identity_id?: string } | void
+    >({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/workloads",
+        method: "GET",
+        params: params ?? undefined,
+      }),
+      transformResponse: (r: CloudWorkloadListEnvelope) => ({
+        rows: r.data ?? [],
+        meta: {
+          count: r.meta?.count ?? (r.data ?? []).length,
+          unattributed: r.meta?.unattributed ?? 0,
+          by_runtime_kind: r.meta?.by_runtime_kind ?? {},
+        },
+      }),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((w) => ({ type: "CloudWorkload" as const, id: w.id })),
+        { type: "CloudWorkload" as const, id: "ALL" },
+      ],
+    }),
+
+    // Per-service last-used dates. `meta.never_accessed` is the actionable
+    // count and, like `unattributed` above, is the server's own.
+    listAwsUsage: builder.query<
+      CloudListWithMeta<CloudUsage, CloudUsageMeta>,
+      { identity_id?: string } | void
+    >({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/usage",
+        method: "GET",
+        params: params ?? undefined,
+      }),
+      transformResponse: (r: CloudUsageListEnvelope) => ({
+        rows: r.data ?? [],
+        meta: {
+          count: r.meta?.count ?? (r.data ?? []).length,
+          never_accessed: r.meta?.never_accessed ?? 0,
+        },
+      }),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
+        { type: "CloudUsage" as const, id: "ALL" },
+      ],
     }),
 
     getGcpOnboardingPackage: builder.query<
@@ -729,7 +1159,13 @@ export const {
   useRevokeAwsConnectorMutation,
   useScanAwsConnectorMutation,
   useListAwsIdentitiesQuery,
+  useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
+  useListAwsAssumeEdgesQuery,
+  useListAwsPermissionsQuery,
+  useListAwsResourcesQuery,
+  useListAwsWorkloadsQuery,
+  useListAwsUsageQuery,
   useLazyGetGcpOnboardingPackageQuery,
   useCreateGcpConnectorMutation,
   useGetGcpConnectorQuery,

@@ -203,6 +203,16 @@ export const baseApi = createApi({
     // written by the scan a CloudConnector's own tag does not cover.
     "CloudIdentity",
     "CloudSecret",
+    // The remaining AWS discovery surfaces, written by the permission and
+    // workload scanners that run chained after the IAM scan. Separate tags
+    // rather than reusing CloudIdentity: they are produced by different
+    // scanners and a future per-surface refresh must be able to invalidate
+    // one without discarding the identity inventory.
+    "CloudAssumeEdge",
+    "CloudPermission",
+    "CloudResource",
+    "CloudWorkload",
+    "CloudUsage",
   ],
   endpoints: () => ({}),
 });

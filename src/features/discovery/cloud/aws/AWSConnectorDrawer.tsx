@@ -13,9 +13,21 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
-import { KeyRound, RefreshCw, ScanLine, ShieldCheck, Trash2, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Boxes,
+  Info,
+  KeyRound,
+  RefreshCw,
+  ScanLine,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +66,7 @@ import {
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
 import { awsErrorCopy } from "./awsErrorCopy";
+import { stackPredatesCompute, TEMPLATE_VERSION_WITH_COMPUTE } from "./awsInventoryLabels";
 
 const STATUS_TONE: Record<string, StatusTone> = { active: "success", error: "danger", revoked: "muted" };
 const STATUS_LABEL: Record<string, string> = { active: "Active", error: "Error", revoked: "Revoked" };
@@ -224,6 +237,12 @@ export function AWSConnectorDrawer({
   // a floor, not a total — never let that read as "found nothing".
   const iamIncomplete = ["iam_roles", "iam_users"].some((k) => surfaces[k] && surfaces[k].state !== "reached");
   const keysIncomplete = surfaces["iam_access_keys"] && surfaces["iam_access_keys"].state !== "reached";
+  // A stack older than 2026-09-08 grants no compute reads at all. Because the
+  // workload scanner writes no coverage of its own, that shortfall is
+  // invisible in the report above — it surfaces only as compute never
+  // appearing, which is why it has to be said here.
+  const staleStack = stackPredatesCompute(attrs?.template_version);
+  const scanned = (connector?.scan_generation ?? 0) > 0;
 
   return (
     <>
@@ -261,12 +280,42 @@ export function AWSConnectorDrawer({
                     </div>
                   ) : null}
 
+                  {staleStack ? (
+                    <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-[11.5px] leading-relaxed text-(--color-warning-text)">
+                      <AlertTriangle className="mt-px size-3.5 flex-none" aria-hidden />
+                      <div>
+                        <strong className="font-medium">This stack predates compute discovery.</strong>{" "}
+                        The deployed template is {attrs?.template_version}; version{" "}
+                        {TEMPLATE_VERSION_WITH_COMPUTE} added the Lambda, ECS and EC2 reads. Until
+                        this account's CloudFormation stack is updated in AWS, compute will stay
+                        empty for it — an absence caused by a missing permission, not by an account
+                        without compute. Everything else on this connector is unaffected.
+                      </div>
+                    </div>
+                  ) : null}
+
                   <DrawerSection label="Connection">
                     <DetailGrid>
                       <CopyField label="Role ARN" value={attrs?.role_arn ?? ""} />
                       <DetailRow label="Partition" value={attrs?.partition ?? "—"} />
                       <DetailRow label="Regions" value={attrs?.regions?.join(", ") ?? "—"} />
-                      <DetailRow label="Template version" value={attrs?.template_version ?? "—"} />
+                      <DetailRow
+                        label="Template version"
+                        value={
+                          attrs?.template_version ? (
+                            <span className="flex items-center gap-1.5">
+                              {attrs.template_version}
+                              {staleStack ? (
+                                <StatusBadge tone="warning" dot={false}>
+                                  Outdated
+                                </StatusBadge>
+                              ) : null}
+                            </span>
+                          ) : (
+                            "—"
+                          )
+                        }
+                      />
                       <DetailRow
                         label="Last verified"
                         value={connector.verified_at ? relativeOrUnknown(connector.verified_at) : "Never proven"}
@@ -298,9 +347,56 @@ export function AWSConnectorDrawer({
                             a floor, not a total.
                           </p>
                         ) : null}
+                        {/* The report above covers the IAM phase and nothing
+                            else. The scan chains a permission pass and then a
+                            compute/activity pass after it, in the same
+                            background run, and neither writes into this blob —
+                            so "complete" here does not mean those finished.
+                            Without saying so, a reader watching this reach
+                            complete and then finding no permissions would
+                            reasonably conclude the account has none. */}
+                        <p className="flex items-start gap-1.5 pt-1 text-[11px] text-muted-foreground">
+                          <Info className="mt-px size-3.5 flex-none" aria-hidden />
+                          Covers the IAM phase only. Permissions, compute and service activity are
+                          read afterwards in the same background run and report no status of their
+                          own — see the inventory for what they found.
+                        </p>
                       </div>
                     )}
                   </DrawerSection>
+
+                  {/* The connector answers "is this connection healthy". What
+                      it discovered lives in the inventory, which needs table
+                      width this 560px panel does not have. Link out rather
+                      than duplicate it here. */}
+                  {scanned ? (
+                    <DrawerSection label="Discovered in this account">
+                      <div className="grid gap-1.5">
+                        <Button asChild variant="outline" size="sm" className="justify-between">
+                          <Link to={`/iga/cloud/aws/identities?account=${connector.id}`}>
+                            <span className="flex items-center gap-1.5">
+                              <Users className="size-3.5" />
+                              Identities, permissions and activity
+                            </span>
+                            <ArrowRight className="size-3.5" />
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" size="sm" className="justify-between">
+                          <Link to="/iga/cloud/aws/compute">
+                            <span className="flex items-center gap-1.5">
+                              <Boxes className="size-3.5" />
+                              Compute running as these identities
+                            </span>
+                            <ArrowRight className="size-3.5" />
+                          </Link>
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Compute is listed across every connected account — that endpoint filters by
+                        identity, not by account.
+                      </p>
+                    </DrawerSection>
+                  ) : null}
                 </TabsContent>
 
                 <TabsContent value="identities" className="space-y-4">

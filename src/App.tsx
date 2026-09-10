@@ -65,6 +65,8 @@ import IdentitiesPage from "./features/discovery/IdentitiesPage";
 import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
 import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
+import AWSIdentitiesPage from "./features/discovery/cloud/aws/AWSIdentitiesPage";
+import AWSComputePage from "./features/discovery/cloud/aws/AWSComputePage";
 import ProvenancePage from "./features/governance/ProvenancePage";
 import CertificationPage from "./features/governance/CertificationPage";
 import CampaignDetailPage from "./features/governance/CampaignDetailPage";
@@ -646,6 +648,44 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <IdentitiesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── AWS cloud discovery inventory ───────────────────────
+                      The CONTENTS of a connected AWS account, as opposed to
+                      the connection itself — which stays where it is, as a row
+                      in the Integrations table with its own drawer.
+
+                      Separate routes rather than more tabs on
+                      AWSConnectorDrawer: that panel is 560px and answers "is
+                      this connection healthy", while these need table width,
+                      search, paging and a shareable URL. The split follows the
+                      backend's own boundary between the connector endpoints
+                      and the seven list endpoints under
+                      /authsec/discovery/aws/*.
+
+                      Deliberately NOT folded into /iga/identities above: that
+                      page covers every identity channel (SPIFFE, OAuth
+                      clients, service accounts), and filling it with AWS-only
+                      rows would make its name wrong the moment GCP discovery
+                      ships. */}
+                  <Route
+                    path="/iga/cloud/aws/identities"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AWSIdentitiesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/cloud/aws/compute"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AWSComputePage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

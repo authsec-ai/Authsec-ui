@@ -10,7 +10,9 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  Boxes,
   Fingerprint,
+  KeyRound,
   SlidersHorizontal,
   Radar,
   ScanSearch,
@@ -48,6 +50,17 @@ const NAV_DISCOVERY: IgaNavItem[] = [
   { title: "Integrations", url: "/iga/integrations", icon: Radar },
   { title: "Discovered Agents", url: "/iga/agents", icon: ScanSearch },
   { title: "Identities", url: "/iga/identities", icon: Fingerprint },
+  // The AWS cloud inventory. Named for the cloud they come from because AWS
+  // results do NOT land in the shared discovered_agents table the two items
+  // above read from — they have their own route family and their own cloud_*
+  // tables, so a reader looking for an IAM role on "Discovered Agents" would
+  // never find it.
+  //
+  // "Compute", not "Workloads": the terminology map in AGENTS.md reserves
+  // "Workload" for Kubernetes/SPIFFE pod identities, and these rows are Lambda
+  // functions, ECS task definitions, EC2 instances and Bedrock agents.
+  { title: "AWS Identities", url: "/iga/cloud/aws/identities", icon: KeyRound },
+  { title: "AWS Compute", url: "/iga/cloud/aws/compute", icon: Boxes },
   // Sits under Discovery, not Settings: it defines what a scan looks for, so it
   // belongs beside the scanning it governs rather than in a config drawer.
   { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },

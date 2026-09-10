@@ -96,6 +96,16 @@ const AWS_REGIONS: { value: string; label: string }[] = [
 const SURFACE_LABEL: Record<string, string> = {
   onboarding: "Onboarding",
   iam: "IAM identities & policies",
+  // The compute surface (lambda:ListFunctions, ecs:ListTaskDefinitions,
+  // ecs:DescribeTaskDefinition, ec2:DescribeInstances, iam:GetInstanceProfile)
+  // arrived with template version 2026-09-08. Without this entry the raw
+  // string "workloads" rendered on a screen a security reviewer reads before
+  // granting the role — the fallback below meant nothing disappeared, but a
+  // bare enum on a permissions review is its own kind of unclear.
+  //
+  // Labelled "Compute" for the same reason as the inventory pages: AGENTS.md
+  // reserves "Workload" for Kubernetes/SPIFFE identities.
+  workloads: "Compute (Lambda, ECS, EC2)",
   "bedrock-agents": "Bedrock Agents",
   "bedrock-agentcore": "Bedrock AgentCore",
   eks: "EKS / Kubernetes identity",
