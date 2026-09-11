@@ -13,6 +13,19 @@ import {
 export interface RightDrawerProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Panel width in pixels. Now actually applied — see the `style` on
+   * SheetContent below for why it previously was not.
+   *
+   * The default is 384 rather than a rounder number because 384px
+   * (`sm:max-w-sm`) is what EVERY drawer in this app has really been
+   * rendering at, whatever it asked for. Keeping it as the default means
+   * fixing the cap does not silently re-lay-out the four screens that never
+   * specified a width (Discovered Agents, Certification, Provenance, Service
+   * Accounts) — they render exactly as before. Only callers that explicitly
+   * pass a width see a change, which is what passing one was always meant to
+   * do.
+   */
   width?: number;
   pinnable?: boolean;
   /** Accessible label for screen readers. Drawer content usually has its own
@@ -34,7 +47,7 @@ export interface RightDrawerProps {
 export function RightDrawer({
   open,
   onClose,
-  width = 520,
+  width = 384,
   pinnable = false,
   ariaTitle = "Detail panel",
   ariaDescription = "Side panel with additional details.",
@@ -47,7 +60,24 @@ export function RightDrawer({
       <SheetContent
         side="right"
         hideClose
-        style={{ width }}
+        /**
+         * `maxWidth` is the load-bearing half of this.
+         *
+         * SheetContent's own side="right" classes include `sm:max-w-sm` —
+         * max-width: 24rem, i.e. 384px. An inline `width` does not defeat a
+         * max-width, so every drawer in this app rendered at 384px no matter
+         * what it passed: 560 here, 640 there, all clamped, silently. The
+         * visible symptom was a footer whose actions ran off the right edge
+         * and were cut off by `overflow-hidden` — the Revoke button on the AWS
+         * connector drawer sat outside the panel entirely and could not be
+         * clicked.
+         *
+         * An inline max-width beats the utility class, so setting it here is
+         * what lets `width` mean anything. 100vw rather than `none` so a 640px
+         * panel on a narrow phone still fits the screen instead of forcing the
+         * page to scroll sideways.
+         */
+        style={{ width, maxWidth: "100vw" }}
         className={cn(
           "flex flex-col gap-0 p-0 overflow-hidden",
           // When pinned: no overlay interaction closes it; handled via onInteractOutside

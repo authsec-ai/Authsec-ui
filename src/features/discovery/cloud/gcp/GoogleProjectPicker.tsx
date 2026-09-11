@@ -70,7 +70,12 @@ export function GoogleProjectPicker({
               onClick={() => onSelect(p.project_id)}
               className={cn(
                 "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-xs transition-colors",
-                selected ? "bg-blue-50/60" : "hover:bg-muted",
+                // Token, not bg-blue-50: that is a near-white fill, so in dark
+                // mode the selected row rendered light text on a light wash.
+                // Matches the active-pill treatment in ConsoleFilterBar.
+                selected
+                  ? "bg-(--color-primary-soft) text-(--color-primary-text)"
+                  : "hover:bg-muted",
               )}
             >
               <span className="flex flex-col">

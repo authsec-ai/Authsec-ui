@@ -69,8 +69,12 @@ export function CloudProviderPicker({
                 className={cn(
                   "flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors",
                   !meta.available && "cursor-not-allowed opacity-60",
+                  // Token fill, not bg-blue-50/40: that is a near-white blue,
+                  // so in dark mode the selected provider card was a pale wash
+                  // under light text. Every other surface in this card already
+                  // uses tokens.
                   meta.available && isSelected
-                    ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
+                    ? "border-[var(--component-button-primary-bg)] bg-(--color-primary-soft)"
                     : "border-border",
                   meta.available && !isSelected && "hover:border-[var(--color-border-strong)]",
                 )}

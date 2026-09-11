@@ -503,10 +503,15 @@ export function AWSConnectorDrawer({
                 <RefreshCw className={cn("mr-1.5 size-3.5", scanStarting && "animate-spin")} />
                 {connector.coverage?.status === "running" ? "Scanning…" : "Scan now"}
               </Button>
-              <div className="flex-1" />
+              {/* `ml-auto` rather than a `flex-1` spacer div: the footer wraps
+                  now, and a flex-1 spacer would claim a whole second row to
+                  itself before Revoke ever got there. `auto` margin pushes
+                  Revoke right while the row fits, and collapses harmlessly
+                  once it wraps. */}
               <Button
                 variant="outline"
-                className="text-(--color-danger-text)"
+                size="sm"
+                className="ml-auto text-(--color-danger-text)"
                 onClick={() => setConfirmRevokeOpen(true)}
                 disabled={connector.status === "revoked"}
               >

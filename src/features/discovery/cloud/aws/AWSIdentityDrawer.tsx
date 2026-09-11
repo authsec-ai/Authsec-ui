@@ -144,7 +144,9 @@ export function AWSIdentityDrawer({
               )}
               Candidate identity — not classified as an agent
             </span>
-            <div className="flex-1" />
+            {/* Same reason as the connector drawer: an auto margin survives a
+                wrapping footer, a flex-1 spacer would eat a row. */}
+            <div className="ml-auto" />
             {showPager ? (
               <DrawerPrevNext
                 onPrev={onPrev}

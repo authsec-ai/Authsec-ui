@@ -131,6 +131,64 @@ const LIMIT_COPY: Record<GCPCapabilityLimit, { label: string; body: string }> =
     },
   };
 
+/** Readiness, as a word a reader recognises.
+ *
+ * The raw values are lowercase enum strings ("ready", "partial", "blocked").
+ * Rendering them verbatim in a StatusBadge put an internal identifier beside
+ * badges that everywhere else read "Active" / "Error" / "Revoked". */
+const READINESS_LABEL: Record<string, string> = {
+  ready: "Ready to scan",
+  partial: "Partially ready",
+  blocked: "Blocked",
+};
+
+/** Which of the three onboarding routes created this connector.
+ *
+ * They differ in what they could configure, and therefore in what a shortfall
+ * means — so the value is worth showing, but not as the raw
+ * "oauth_default" / "manual_wif" / "manual_key". */
+const ONBOARDING_PATH_LABEL: Record<string, string> = {
+  oauth_default: "Google Authentication",
+  manual_wif: "Workload Identity Federation (manual)",
+  manual_key: "Service-account key (manual)",
+};
+
+/** How the reader can walk the resource tree below the top scope. */
+const ENUMERATION_VIA_LABEL: Record<string, string> = {
+  rm_list: "Yes — by listing through Resource Manager",
+  cai_search: "Yes — by searching Cloud Asset Inventory",
+  both: "Yes — through Resource Manager and Cloud Asset Inventory",
+};
+
+/** Why readiness fell short of "ready".
+ *
+ * These codes are the ARGUMENT for the readiness verdict — the API's own
+ * comment says that without them "the verdict is an assertion with no argument,
+ * and nobody can act on it". Rendering them as raw codes in a <code> tag meant
+ * nobody could act on them either. Unknown codes fall through to the code
+ * itself, the same way PROBE_REASON handles it below. */
+const READINESS_REASON: Record<string, string> = {
+  oauth_project_scope_only:
+    "Onboarded through Google Authentication, which can only ever see one project — organization and folder bindings are out of reach for this connector.",
+  keyed_credential:
+    "Authenticates with a downloaded service-account key rather than federation, so the credential cannot be rotated by AuthSec.",
+  quota_project_unusable:
+    "The reader cannot use the quota project Cloud Asset calls bill against, so those reads will fail however complete its other permissions are.",
+  missing_permissions: "The reader is missing one or more required read permissions.",
+  api_not_enabled: "An API a first-phase surface depends on is not enabled on the reader project.",
+  vpc_service_controls: "A VPC Service Controls perimeter refuses some reads by design.",
+  org_policy_constraint: "An organization policy refuses some reads by design.",
+  scope_enumeration_unavailable:
+    "Neither listing route is available, so the resources below this scope cannot be walked.",
+  scope_enumeration_unknown:
+    "Neither listing route could be checked, so whether the tree below this scope is reachable is unknown.",
+  never_probed: "This connector has not been probed yet — verify it to find out what the reader can reach.",
+};
+
+function readinessReason(code: string): string {
+  return READINESS_REASON[code] ?? code;
+}
+
 /** Whether the reader can walk below the top scope, in words.
  *
  * "None" and "unknown" are kept apart deliberately: one says no route is
@@ -141,7 +199,7 @@ function enumerationLabel(attrs: GCPConnectorAttrs): string {
   if (!e) return "Not checked";
   if (e.unknown) return "Unknown — could not check";
   if (e.via === "none") return "No — neither listing route is available";
-  return e.via;
+  return ENUMERATION_VIA_LABEL[e.via] ?? e.via;
 }
 
 function relative(iso?: string | null): string {
@@ -256,14 +314,13 @@ export function GCPConnectorDrawer({
                         READINESS_TONE[attrs.discovery_readiness] ?? "muted"
                       }
                     >
-                      {attrs.discovery_readiness}
+                      {READINESS_LABEL[attrs.discovery_readiness] ??
+                        attrs.discovery_readiness}
                     </StatusBadge>
                     {attrs.discovery_readiness_reasons?.length ? (
                       <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                         {attrs.discovery_readiness_reasons.map((r) => (
-                          <li key={r}>
-                            <code>{r}</code>
-                          </li>
+                          <li key={r}>{readinessReason(r)}</li>
                         ))}
                       </ul>
                     ) : (
@@ -416,7 +473,12 @@ export function GCPConnectorDrawer({
                 <DetailGrid>
                   <DetailRow
                     label="Onboarded via"
-                    value={attrs.onboarding_path ?? "—"}
+                    value={
+                      attrs.onboarding_path
+                        ? ONBOARDING_PATH_LABEL[attrs.onboarding_path] ??
+                          attrs.onboarding_path
+                        : "—"
+                    }
                   />
                   <DetailRow
                     label="Reader project"
@@ -488,9 +550,14 @@ export function GCPConnectorDrawer({
                 )}
                 {verifying ? "Verifying…" : "Verify connection"}
               </Button>
+              {/* Pushed away from Verify with an auto margin. These two sat
+                  flush against each other, which puts a one-way destructive
+                  action a few pixels from the routine one an operator clicks
+                  most often. `ml-auto` rather than a flex-1 spacer so it still
+                  behaves if the footer wraps at a narrow width. */}
               <Button
                 variant="destructive"
-                className="text-white"
+                className="ml-auto text-white"
                 disabled={revoking || revoked}
                 onClick={() => setConfirmRevoke(true)}
               >
