@@ -75,6 +75,8 @@ import {
 import {
   useListAwsConnectorsQuery,
   useListGcpConnectorsQuery,
+  useVerifyGcpConnectorMutation,
+  useRevokeGcpConnectorMutation,
   useVerifyAwsConnectorMutation,
   useScanAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
@@ -88,6 +90,8 @@ import { DeployCollectorWizard } from "./DeployCollectorWizard";
 import { cloudProviderMeta } from "./cloud/cloudProviderMeta";
 import { CloudProviderPicker } from "./cloud/CloudProviderPicker";
 import { GCPOnboardingWizard } from "./cloud/gcp/GCPOnboardingWizard";
+import { gcpErrorCopy } from "./cloud/gcp/gcpErrorCopy";
+import { GCPConnectorDrawer } from "./cloud/gcp/GCPConnectorDrawer";
 import { AWSOnboardingWizard } from "./cloud/aws/AWSOnboardingWizard";
 import { AWSConnectorDrawer } from "./cloud/aws/AWSConnectorDrawer";
 import { awsErrorCopy } from "./cloud/aws/awsErrorCopy";
@@ -214,6 +218,7 @@ export default function DiscoveryIntegrationsPage() {
   const [githubOpen, setGithubOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
   const [gcpWizardOpen, setGcpWizardOpen] = useState(false);
+  const [selectedGcpConnectorId, setSelectedGcpConnectorId] = useState<string | null>(null);
   const [awsWizardOpen, setAwsWizardOpen] = useState(false);
   const [selectedAwsConnectorId, setSelectedAwsConnectorId] = useState<string | null>(null);
   const [convertManifest] = useConvertGitHubAppManifestMutation();
@@ -224,6 +229,8 @@ export default function DiscoveryIntegrationsPage() {
   const [updateSource] = useUpdateDiscoverySourceMutation();
   const [deleteSource, { isLoading: deleting }] = useDeleteDiscoverySourceMutation();
   const [verifyAws] = useVerifyAwsConnectorMutation();
+  const [verifyGcp] = useVerifyGcpConnectorMutation();
+  const [revokeGcp, { isLoading: revokingGcp }] = useRevokeGcpConnectorMutation();
   const [scanAws] = useScanAwsConnectorMutation();
   const [revokeAws, { isLoading: revoking }] = useRevokeAwsConnectorMutation();
 
@@ -282,6 +289,21 @@ export default function DiscoveryIntegrationsPage() {
     } catch (err) {
       const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
       const copy = awsErrorCopy(apiErr, failFallback);
+      toast.error(`${copy.title}. ${copy.body}`);
+    }
+  };
+
+  const runGcpRowAction = async (
+    action: () => Promise<unknown>,
+    successMessage: string,
+    failFallback: string,
+  ) => {
+    try {
+      await action();
+      toast.success(successMessage);
+    } catch (err) {
+      const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
+      const copy = gcpErrorCopy(apiErr, failFallback);
       toast.error(`${copy.title}. ${copy.body}`);
     }
   };
@@ -528,8 +550,46 @@ export default function DiscoveryIntegrationsPage() {
           }
 
           const connector = row.original.connector;
-          // GCP has no connector detail/verify/scan surface at all today —
-          // nothing here to act on yet.
+
+          if (connector.provider === "gcp") {
+            const gcpRevoked = connector.status === "revoked";
+            const gcpActions: ConsoleActionItem[] = [
+              {
+                // Enabled even when revoked: what the connector was proved to
+                // reach, and why it stopped, is exactly what someone looks at
+                // after revoking.
+                label: "View details",
+                onSelect: () => setSelectedGcpConnectorId(connector.id),
+              },
+              {
+                // Re-verifying does more than check health: the backend
+                // re-runs the full permission probe, so this is also how a
+                // role granted out of band gets picked up. There is no
+                // separate probe action, and nothing for the customer to
+                // re-run on their side.
+                label: "Verify connection",
+                disabled: gcpRevoked,
+                onSelect: () =>
+                  void runGcpRowAction(
+                    () => verifyGcp(connector.id).unwrap(),
+                    "Connection verified and permissions re-checked.",
+                    "Could not verify the connection.",
+                  ),
+              },
+              {
+                label: "Revoke…",
+                destructive: true,
+                disabled: gcpRevoked,
+                onSelect: () => setRevokeTarget(connector),
+              },
+            ];
+            return (
+              <div onClick={(e) => e.stopPropagation()}>
+                <ConsoleRowActions items={gcpActions} />
+              </div>
+            );
+          }
+
           if (connector.provider !== "aws") return null;
           const revoked = connector.status === "revoked";
           const actions: ConsoleActionItem[] = [
@@ -627,7 +687,17 @@ export default function DiscoveryIntegrationsPage() {
                 navigate(`/iga/integrations/${r.source.id}`);
                 return;
               }
-              if (r.connector.provider === "aws") setSelectedAwsConnectorId(r.connector.id);
+              // Every connector row opens its own detail panel. Listing only
+              // AWS here left a GCP row looking clickable — same cursor, same
+              // hover, same row-actions menu offering "View details" — while
+              // clicking it did nothing at all.
+              if (r.connector.provider === "aws") {
+                setSelectedAwsConnectorId(r.connector.id);
+                return;
+              }
+              if (r.connector.provider === "gcp") {
+                setSelectedGcpConnectorId(r.connector.id);
+              }
             }}
             enableSelection={false}
             enableExpansion={false}
@@ -668,6 +738,12 @@ export default function DiscoveryIntegrationsPage() {
           const meta = cloudProviderMeta(provider);
           toast(`${meta.label} onboarding is coming in a later build stage.`);
         }}
+      />
+
+      <GCPConnectorDrawer
+        connectorId={selectedGcpConnectorId}
+        open={selectedGcpConnectorId !== null}
+        onClose={() => setSelectedGcpConnectorId(null)}
       />
 
       <GCPOnboardingWizard
@@ -776,22 +852,51 @@ export default function DiscoveryIntegrationsPage() {
       <Dialog open={revokeTarget !== null} onOpenChange={(o) => !o && setRevokeTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke this AWS connection?</DialogTitle>
+            <DialogTitle>
+              {revokeTarget?.provider === "gcp"
+                ? "Revoke this Google Cloud connection?"
+                : "Revoke this AWS connection?"}
+            </DialogTitle>
             <DialogDescription asChild>
-              <div className="space-y-2">
-                <p>
-                  This purges the stored ExternalId for{" "}
-                  <strong>{revokeTarget ? cloudIntegrationText(revokeTarget).label : ""}</strong> so
-                  AuthSec can no longer assume the role.
-                </p>
-                <p className="text-muted-foreground">
-                  Everything already discovered — identities, access keys, permissions — is kept,
-                  unchanged, for audit; it is not deleted. The IAM role itself still exists in the
-                  AWS account until the CloudFormation stack is deleted there. Re-onboarding the
-                  same account later reactivates this same connector rather than creating a
-                  duplicate.
-                </p>
-              </div>
+              {revokeTarget?.provider === "gcp" ? (
+                <div className="space-y-2">
+                  <p>
+                    This marks{" "}
+                    <strong>{revokeTarget ? cloudIntegrationText(revokeTarget).label : ""}</strong>{" "}
+                    revoked in AuthSec, so nothing here will read from it again.
+                  </p>
+                  {/* Said plainly and first, because it is the part people get
+                      wrong: revoking here does NOT cut access on Google's
+                      side. Someone who believes it does will stop at this
+                      dialog and leave the reader in place. */}
+                  <p className="text-muted-foreground">
+                    <strong>AuthSec deletes nothing in your Google Cloud.</strong> The{" "}
+                    <code>authsec-reader</code> service account, the workload identity pool and its
+                    provider all remain in your project. Removing them there is the step that
+                    actually ends AuthSec&apos;s access.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Everything already discovered is kept, unchanged, for audit. Re-onboarding the
+                    same scope later reactivates this same connector rather than creating a
+                    duplicate.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p>
+                    This purges the stored ExternalId for{" "}
+                    <strong>{revokeTarget ? cloudIntegrationText(revokeTarget).label : ""}</strong>{" "}
+                    so AuthSec can no longer assume the role.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Everything already discovered — identities, access keys, permissions — is kept,
+                    unchanged, for audit; it is not deleted. The IAM role itself still exists in the
+                    AWS account until the CloudFormation stack is deleted there. Re-onboarding the
+                    same account later reactivates this same connector rather than creating a
+                    duplicate.
+                  </p>
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -800,24 +905,32 @@ export default function DiscoveryIntegrationsPage() {
             </Button>
             <Button
               variant="destructive"
-              disabled={revoking}
+              disabled={revoking || revokingGcp}
               onClick={() => {
                 if (!revokeTarget) return;
-                void revokeAws(revokeTarget.id)
+                const isGcp = revokeTarget.provider === "gcp";
+                const run = isGcp ? revokeGcp(revokeTarget.id) : revokeAws(revokeTarget.id);
+                void run
                   .unwrap()
                   .then(() => {
-                    toast.success("AWS connector revoked. Everything already discovered is kept, for audit.");
+                    toast.success(
+                      isGcp
+                        ? "Connector revoked. Remove the reader service account and pool in Google Cloud to fully end access."
+                        : "AWS connector revoked. Everything already discovered is kept, for audit.",
+                    );
                     setRevokeTarget(null);
-                    void aws.refetch();
+                    void (isGcp ? gcp.refetch() : aws.refetch());
                   })
                   .catch((err) => {
                     const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
-                    const copy = awsErrorCopy(apiErr, "Could not revoke the connector.");
+                    const copy = isGcp
+                      ? gcpErrorCopy(apiErr, "Could not revoke the connector.")
+                      : awsErrorCopy(apiErr, "Could not revoke the connector.");
                     toast.error(`${copy.title}. ${copy.body}`);
                   });
               }}
             >
-              {revoking ? "Revoking…" : "Revoke"}
+              {revoking || revokingGcp ? "Revoking…" : "Revoke"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -135,8 +135,23 @@ export function DrawerEmpty({
   );
 }
 
+/**
+ * Sticky action bar at the bottom of a drawer.
+ *
+ * `flex-wrap` is not cosmetic. Every `Button` carries `shrink-0` and
+ * `whitespace-nowrap` in its base classes, and the drawer clips with
+ * `overflow-hidden` — so without wrapping, a footer whose buttons are wider
+ * than the panel pushes the last one outside the panel, where it is invisible
+ * and unclickable rather than merely cramped. That is exactly what happened to
+ * the AWS connector drawer's Revoke button.
+ *
+ * Wrapping only engages when the row would otherwise overflow, so footers that
+ * already fit are unchanged.
+ */
 export function DrawerFooter({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2 border-t bg-muted/40 px-6 py-3.5">{children}</div>
+    <div className="flex flex-wrap items-center gap-2 gap-y-2 border-t bg-muted/40 px-6 py-3.5">
+      {children}
+    </div>
   );
 }

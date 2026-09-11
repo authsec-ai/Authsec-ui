@@ -806,7 +806,7 @@ export function GCPOnboardingWizard({
                     !googleOAuthAvailable
                       ? "cursor-not-allowed border-border opacity-60"
                       : authMethod === "google_oauth"
-                        ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
+                        ? "border-[var(--component-button-primary-bg)] bg-(--color-primary-soft)"
                         : "border-border hover:border-[var(--color-border-strong)]",
                   )}
                 >
@@ -834,7 +834,7 @@ export function GCPOnboardingWizard({
                   className={cn(
                     "flex flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-colors",
                     authMethod === "wif"
-                      ? "border-[var(--component-button-primary-bg)] bg-blue-50/40"
+                      ? "border-[var(--component-button-primary-bg)] bg-(--color-primary-soft)"
                       : "border-border hover:border-[var(--color-border-strong)]",
                   )}
                 >
