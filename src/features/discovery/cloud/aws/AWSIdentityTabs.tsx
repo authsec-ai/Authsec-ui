@@ -3,8 +3,13 @@
  *
  * Each one wraps exactly one endpoint, always filtered by `identity_id`. That
  * filter is not an optimisation for permissions — the grain is one row per
- * policy statement per identity and none of these routes paginate, so an
- * unscoped permissions read is unbounded in the worst way.
+ * policy statement per identity, so an unscoped read is unbounded in the worst
+ * way.
+ *
+ * Every read here asks for the server's maximum page (500) and renders a
+ * TruncationLine when even that fell short, EXCEPT the Keys tab, which is the
+ * one list that provably cannot truncate: AWS caps an IAM user at two access
+ * keys. Omitting the limit would cap every tab at 100 rows silently.
  *
  * Every tab is `skip`-gated by its parent on the active tab, so opening the
  * drawer costs one request, not five.
@@ -21,9 +26,10 @@ import {
   Timer,
 } from "lucide-react";
 
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { DetailGrid, DetailRow, DrawerEmpty } from "@/components/console/detail";
 import {
+  AWS_DISCOVERY_MAX_LIMIT,
   useListAwsAssumeEdgesQuery,
   useListAwsConnectorsQuery,
   useListAwsPermissionsQuery,
@@ -53,7 +59,8 @@ import {
   USAGE_SOURCE_LABEL,
   usageServiceLabel,
 } from "./awsInventoryLabels";
-import { InventoryNotice, PhaseUnobservableNotice } from "./AWSInventoryNotices";
+import { InventoryNotice, PhaseUnobservableNotice, TruncationLine } from "./AWSInventoryNotices";
+import { truncationOf } from "./awsInventoryState";
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
 
@@ -114,19 +121,28 @@ function policySourceLabel(source: string): { label: string; kind: string } {
 }
 
 export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
-  const { data: permissions, isLoading } = useListAwsPermissionsQuery({
+  const { data: permissionPage, isLoading } = useListAwsPermissionsQuery({
     identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const permissions = permissionPage?.rows;
 
   // Resources filter by connector_id, never identity_id, so a statement's
   // named resource has to be resolved client-side. Scoped to this identity's
   // own connector so the fetch is as small as the API allows.
-  const { data: resources } = useListAwsResourcesQuery({ connector_id: identity.connector_id });
+  const { data: resourcePage } = useListAwsResourcesQuery({
+    connector_id: identity.connector_id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
 
   const resourceById = useMemo(
-    () => new Map((resources ?? []).map((r) => [r.id, r])),
-    [resources],
+    () => new Map((resourcePage?.rows ?? []).map((r) => [r.id, r])),
+    [resourcePage],
   );
+
+  // Whether the resource list itself is short. Load-bearing below: an
+  // unresolved resource_id means something quite different depending on it.
+  const resourcesTruncated = resourcePage ? truncationOf(resourcePage).truncated : false;
 
   const grouped = useMemo(() => {
     const map = new Map<string, CloudPermission[]>();
@@ -186,14 +202,14 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
               return (
                 <div key={p.id} className="space-y-2 rounded-md border px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <StatusBadge tone={EFFECT_TONE[p.effect]}>{EFFECT_LABEL[p.effect]}</StatusBadge>
-                    <StatusBadge tone={SCOPE_KIND_TONE[p.scope_kind]} dot={false}>
+                    <CloudPill tone={EFFECT_TONE[p.effect]}>{EFFECT_LABEL[p.effect]}</CloudPill>
+                    <CloudPill tone={SCOPE_KIND_TONE[p.scope_kind]} dot={false}>
                       {SCOPE_KIND_LABEL[p.scope_kind]}
-                    </StatusBadge>
+                    </CloudPill>
                     {p.sensitivity !== "low" ? (
-                      <StatusBadge tone={SENSITIVITY_TONE[p.sensitivity]} dot={false}>
+                      <CloudPill tone={SENSITIVITY_TONE[p.sensitivity]} dot={false}>
                         {SENSITIVITY_LABEL[p.sensitivity]} sensitivity
-                      </StatusBadge>
+                      </CloudPill>
                     ) : null}
                   </div>
 
@@ -206,6 +222,15 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
                         <span className="font-mono text-foreground">
                           {resource.name || resource.native_id}
                         </span>
+                      </p>
+                    ) : resourcesTruncated ? (
+                      // Two branches, because the same blank resolves to two
+                      // opposite claims. Only the second is a finding; saying
+                      // it while the resource list is short would dress a
+                      // loading artifact up as evidence about the account.
+                      <p className="text-[11px] text-muted-foreground">
+                        On one named resource — the resource list was truncated, so its name
+                        did not load.
                       </p>
                     ) : (
                       <p className="text-[11px] text-muted-foreground">
@@ -225,6 +250,10 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
           </section>
         );
       })}
+
+      {permissionPage ? (
+        <TruncationLine truncation={truncationOf(permissionPage)} noun="policy statements" />
+      ) : null}
     </div>
   );
 }
@@ -232,7 +261,11 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Trust ─────────────────────────────────── */
 
 export function TrustTab({ identity }: { identity: CloudIdentity }) {
-  const { data: edges, isLoading } = useListAwsAssumeEdgesQuery({ identity_id: identity.id });
+  const { data: edgePage, isLoading } = useListAwsAssumeEdgesQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+  const edges = edgePage?.rows;
 
   const external = useMemo(
     () =>
@@ -279,9 +312,9 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
         {edges.map((e) => (
           <div key={e.id} className="space-y-1.5 rounded-md border px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-1.5">
-              <StatusBadge tone={ASSUME_SUBJECT_TONE[e.subject_kind]} dot={false}>
+              <CloudPill tone={ASSUME_SUBJECT_TONE[e.subject_kind]} dot={false}>
                 {ASSUME_SUBJECT_LABEL[e.subject_kind]}
-              </StatusBadge>
+              </CloudPill>
               <span className="font-mono text-[10.5px] text-muted-foreground">
                 {ASSUME_MECHANISM_LABEL[e.mechanism]}
               </span>
@@ -300,6 +333,10 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
           </div>
         ))}
       </div>
+
+      {edgePage ? (
+        <TruncationLine truncation={truncationOf(edgePage)} noun="trust relationships" />
+      ) : null}
     </div>
   );
 }
@@ -307,7 +344,10 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
 /* ────────────────────────────── Compute ────────────────────────────────── */
 
 export function ComputeTab({ identity }: { identity: CloudIdentity }) {
-  const { data, isLoading } = useListAwsWorkloadsQuery({ identity_id: identity.id });
+  const { data, isLoading } = useListAwsWorkloadsQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const rows = data?.rows ?? [];
 
   // An empty compute list has two very different explanations, and the tab
@@ -408,6 +448,8 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
           );
         })}
       </div>
+
+      {data ? <TruncationLine truncation={truncationOf(data)} noun="compute resources" /> : null}
     </div>
   );
 }
@@ -415,11 +457,19 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Usage ─────────────────────────────────── */
 
 export function UsageTab({ identity }: { identity: CloudIdentity }) {
-  const { data, isLoading } = useListAwsUsageQuery({ identity_id: identity.id });
+  const { data, isLoading } = useListAwsUsageQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   // Memoised for the same reason as the identities page: `?? []` is a fresh
   // array each render and would re-run the generatedAt reduction every time.
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  const neverAccessed = data?.meta.never_accessed ?? 0;
+
+  // Derived from `rows`, not from meta. This line used to read
+  // `meta.never_accessed` (a server tally) against `rows.length` (a page
+  // length) and could print "312 of 100". Both numbers now come from one
+  // source, so they cannot disagree.
+  const neverAccessed = useMemo(() => rows.filter((r) => !r.last_used_at).length, [rows]);
 
   // Every row shares one report, so the oldest generated_at is the age of the
   // whole answer. A three-week-old report is a materially different claim from
@@ -480,13 +530,15 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
                 {relativeOrUnknown(u.last_used_at)}
               </span>
             ) : (
-              <StatusBadge tone="warning" dot={false}>
+              <CloudPill tone="warning" dot={false}>
                 Never accessed
-              </StatusBadge>
+              </CloudPill>
             )}
           </div>
         ))}
       </div>
+
+      {data ? <TruncationLine truncation={truncationOf(data)} noun="services" /> : null}
     </div>
   );
 }
@@ -494,7 +546,13 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
 /* ──────────────────────────────── Keys ────────────────────────────────── */
 
 export function KeysTab({ identity }: { identity: CloudIdentity }) {
-  const { data: secrets, isLoading } = useListAwsSecretsQuery({ identity_id: identity.id });
+  // No TruncationLine: AWS caps an IAM user at two access keys, so a 500-row
+  // page provably cannot truncate this one.
+  const { data: secretPage, isLoading } = useListAwsSecretsQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+  const secrets = secretPage?.rows;
 
   if (isLoading) return <TabLoading />;
 
@@ -527,9 +585,9 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
                   <span title={absolute(s.last_used_at)}>{relativeOrUnknown(s.last_used_at)}</span>
                 </p>
               </div>
-              <StatusBadge tone={s.status === "active" ? "success" : "muted"}>
+              <CloudPill tone={s.status === "active" ? "success" : "muted"}>
                 {s.status === "active" ? "Active" : "Inactive"}
-              </StatusBadge>
+              </CloudPill>
             </div>
           ))}
         </div>

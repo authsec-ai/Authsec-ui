@@ -17,12 +17,13 @@
  * how a role granted out of band gets picked up.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
-import { RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { RefreshCw, ScanLine, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 import {
   DrawerHeader,
@@ -47,7 +49,9 @@ import {
 import {
   useGetGcpConnectorQuery,
   useVerifyGcpConnectorMutation,
+  useScanGcpConnectorMutation,
   useRevokeGcpConnectorMutation,
+  type CloudCoverageState,
   type GCPCapabilityLimit,
   type GCPConnectorAttrs,
   type GCPSurfaceCapability,
@@ -75,6 +79,14 @@ const READINESS_TONE: Record<string, StatusTone> = {
 /** Human labels for the probe's surface keys. A raw key like
  * "allow_bindings" is meaningful to whoever wrote the scanner and to nobody
  * else. */
+/** The credential the connector holds. Federation is the default and the one
+ * with no standing secret; a key is the fallback, and saying "JSON key" plainly
+ * is how an operator notices they are carrying one. */
+const AUTH_METHOD_LABEL: Record<string, string> = {
+  wif: "Workload Identity Federation",
+  json_key: "Service-account JSON key",
+};
+
 const SURFACE_LABEL: Record<string, string> = {
   identities: "Service accounts",
   keys: "Service-account keys",
@@ -89,6 +101,45 @@ const SURFACE_LABEL: Record<string, string> = {
   logs: "Audit logs",
   audit_configs: "Audit configuration",
   apis: "API enablement",
+};
+
+/* ─────────────────── Coverage: what a SCAN reached ───────────────────────
+ *
+ * Distinct from the capability profile above it, and the distinction is the
+ * whole reason both are shown. The profile answers "what may this reader
+ * read", proved by a permission probe at verify time. Coverage answers "what
+ * did the last scan actually read". A reader can be permitted everything and
+ * still have scanned nothing.
+ *
+ * Declared locally rather than shared with the AWS drawer: the two providers
+ * name different surfaces, and the label maps are the place that difference
+ * belongs. The STATES are shared (`CloudCoverageState`), so the vocabulary a
+ * reader learns on one provider carries to the other.
+ */
+
+const COVERAGE_TONE: Record<CloudCoverageState, StatusTone> = {
+  reached: "success",
+  denied: "danger",
+  throttled: "warning",
+  not_configured: "muted",
+  unknown: "muted",
+  constrained: "warning",
+  stale: "muted",
+};
+
+// A total Record, not a ternary chain, so a state nobody thought about cannot
+// fall through to wording that asserts something. "unknown" is the one that
+// matters most here: GCP writes a skeleton of all thirteen surfaces at
+// ONBOARDING, so a freshly connected scope has thirteen surfaces sitting at
+// unknown. That must read as "nobody has looked", never as a clean result.
+const COVERAGE_LABEL: Record<CloudCoverageState, string> = {
+  reached: "Reached",
+  denied: "Denied",
+  throttled: "Throttled",
+  not_configured: "Not configured",
+  unknown: "Not checked",
+  constrained: "Blocked by policy",
+  stale: "Stale",
 };
 
 /** Why a probe could not answer, in words. These are the backend's sanitized
@@ -134,7 +185,7 @@ const LIMIT_COPY: Record<GCPCapabilityLimit, { label: string; body: string }> =
 /** Readiness, as a word a reader recognises.
  *
  * The raw values are lowercase enum strings ("ready", "partial", "blocked").
- * Rendering them verbatim in a StatusBadge put an internal identifier beside
+ * Rendering them verbatim in a pill put an internal identifier beside
  * badges that everywhere else read "Active" / "Error" / "Revoked". */
 const READINESS_LABEL: Record<string, string> = {
   ready: "Ready to scan",
@@ -225,13 +276,25 @@ export function GCPConnectorDrawer({
    * click on the page behind it. */
   onClose: () => void;
 }) {
+  // Mirrors the AWS drawer: poll only while a scan is actually running, and
+  // hold the flag in state so the connector's own transient status cannot
+  // flip polling off between two frames of the same scan.
+  const [autoPoll, setAutoPoll] = useState(false);
+
   const { data: connector, isLoading } = useGetGcpConnectorQuery(
     connectorId ?? "",
     {
       skip: !connectorId,
+      pollingInterval: autoPoll ? 4000 : 0,
     },
   );
+
+  useEffect(() => {
+    setAutoPoll(connector?.coverage?.status === "running");
+  }, [connector?.coverage?.status]);
+
   const [verify, { isLoading: verifying }] = useVerifyGcpConnectorMutation();
+  const [scan, { isLoading: scanStarting }] = useScanGcpConnectorMutation();
   const [revoke, { isLoading: revoking }] = useRevokeGcpConnectorMutation();
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
@@ -268,6 +331,15 @@ export function GCPConnectorDrawer({
 
   const profile = attrs.capability_profile ?? {};
   const surfaceKeys = Object.keys(profile);
+
+  const coverageSurfaces = connector?.coverage?.surfaces ?? {};
+  const coverageKeys = Object.keys(coverageSurfaces);
+  // Every surface still at `unknown`. On a connector that has never been
+  // scanned that is ALL of them, and the section says so in one sentence
+  // rather than making a reader infer it from thirteen identical rows.
+  const allUnchecked =
+    coverageKeys.length > 0 &&
+    coverageKeys.every((k) => coverageSurfaces[k]?.state === "unknown");
   const enablement = attrs.api_enablement ?? {};
   const disabledApis = Object.entries(enablement)
     .filter(([, state]) => state === "not_enabled")
@@ -296,9 +368,9 @@ export function GCPConnectorDrawer({
               title={attrs.display_name || connector.scope_id}
               subtitle={`${connector.scope_kind} · ${connector.scope_id}`}
               badge={
-                <StatusBadge tone={STATUS_TONE[connector.status] ?? "muted"}>
+                <CloudPill tone={STATUS_TONE[connector.status] ?? "muted"}>
                   {STATUS_LABEL[connector.status] ?? connector.status}
-                </StatusBadge>
+                </CloudPill>
               }
             />
 
@@ -309,14 +381,14 @@ export function GCPConnectorDrawer({
               <DrawerSection label="Discovery readiness">
                 {attrs.discovery_readiness ? (
                   <div className="space-y-2">
-                    <StatusBadge
+                    <CloudPill
                       tone={
                         READINESS_TONE[attrs.discovery_readiness] ?? "muted"
                       }
                     >
                       {READINESS_LABEL[attrs.discovery_readiness] ??
                         attrs.discovery_readiness}
-                    </StatusBadge>
+                    </CloudPill>
                     {attrs.discovery_readiness_reasons?.length ? (
                       <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                         {attrs.discovery_readiness_reasons.map((r) => (
@@ -335,6 +407,89 @@ export function GCPConnectorDrawer({
                     Not assessed yet. Verify this connector to run the
                     permission probe.
                   </p>
+                )}
+              </DrawerSection>
+
+              {/* Coverage sits directly under readiness because the two are
+                the before and after of the same question, and a reader who
+                sees only one of them draws the wrong conclusion from it: a
+                "Ready" verdict says nothing about whether a scan has run, and
+                a scan's silence says nothing about whether it was allowed to
+                look. */}
+              <DrawerSection label="Scan coverage">
+                {coverageKeys.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No coverage recorded. Nothing has scanned this scope yet.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 pb-1">
+                      <span className="text-[11px] text-muted-foreground">
+                        {connector.scan_generation === 0
+                          ? "Not scanned yet"
+                          : `Scan generation ${connector.scan_generation}`}
+                      </span>
+                      {connector.coverage?.status ? (
+                        <CloudPill
+                          tone={
+                            connector.coverage.status === "complete"
+                              ? "success"
+                              : connector.coverage.status === "running"
+                                ? "info"
+                                : "warning"
+                          }
+                        >
+                          {connector.coverage.status === "complete"
+                            ? "Complete"
+                            : connector.coverage.status === "running"
+                              ? "Running"
+                              : connector.coverage.status === "partial"
+                                ? "Partial"
+                                : "Failed"}
+                        </CloudPill>
+                      ) : null}
+                    </div>
+
+                    {coverageKeys.map((key) => {
+                      const s = coverageSurfaces[key];
+                      const state = (s?.state ?? "unknown") as CloudCoverageState;
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                        >
+                          <span className="min-w-0 truncate text-[12.5px] text-foreground">
+                            {SURFACE_LABEL[key] ?? key}
+                          </span>
+                          <div className="flex flex-none items-center gap-2">
+                            {/* A count is only a count when the surface was
+                              reached. Anywhere else it is a floor, and
+                              printing it bare would understate the scope. */}
+                            <span className="text-[11px] text-muted-foreground">
+                              {state === "reached" ? s.count : `≥ ${s?.count ?? 0}`}
+                            </span>
+                            <CloudPill tone={COVERAGE_TONE[state]}>
+                              {COVERAGE_LABEL[state]}
+                            </CloudPill>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {allUnchecked ? (
+                      <p className="pt-1 text-[11px] text-muted-foreground">
+                        Every surface is listed the moment a scope is connected, so this
+                        is the full set AuthSec would look at — not a result. Nothing here
+                        has been read yet.
+                      </p>
+                    ) : (
+                      <p className="pt-1 text-[11px] text-muted-foreground">
+                        Today a GCP scan reads service accounts and their keys. The
+                        remaining surfaces stay &ldquo;Not checked&rdquo; because no scan
+                        looks at them yet — which is different from finding them empty.
+                      </p>
+                    )}
+                  </div>
                 )}
               </DrawerSection>
 
@@ -448,6 +603,35 @@ export function GCPConnectorDrawer({
                 )}
               </DrawerSection>
 
+              {/* The raw evidence behind every verdict above. Collapsed by
+                default because it is long and nobody reads it casually — but
+                without it "Ready to scan" is an assertion with no argument,
+                and the one question it answers ("does the reader really hold
+                X?") is exactly the one asked when a scan behaves oddly. */}
+              {attrs.probed_permissions?.length ? (
+                <DrawerSection label="Permissions proved">
+                  <details className="group">
+                    <summary className="cursor-pointer text-sm text-muted-foreground marker:text-muted-foreground">
+                      {attrs.probed_permissions.length} permission
+                      {attrs.probed_permissions.length === 1 ? "" : "s"} confirmed held
+                      {attrs.probed_at ? ` · probed ${relative(attrs.probed_at)}` : ""}
+                    </summary>
+                    <ul className="mt-2 space-y-1">
+                      {attrs.probed_permissions.map((p) => (
+                        <li key={p}>
+                          <code className="text-[11.5px] text-muted-foreground">{p}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <p className="pt-2 text-[11px] text-muted-foreground">
+                    Proved by a live permission check, not read from the roles granted —
+                    a custom role can carry a permission, and a deny policy can remove one
+                    the role appears to give.
+                  </p>
+                </DrawerSection>
+              ) : null}
+
               <DrawerSection label="Scope">
                 <DetailGrid>
                   <DetailRow
@@ -477,6 +661,20 @@ export function GCPConnectorDrawer({
                       attrs.onboarding_path
                         ? ONBOARDING_PATH_LABEL[attrs.onboarding_path] ??
                           attrs.onboarding_path
+                        : "—"
+                    }
+                  />
+                  {/* Distinct from "Onboarded via" above it, which records the
+                    ROUTE that created this connector. This is the credential
+                    it actually holds, and the two can differ: the Google
+                    Authentication route provisions an ordinary WIF connector.
+                    A keyed credential is also the one that carries a standing
+                    secret, so it is worth being able to see at a glance. */}
+                  <DetailRow
+                    label="Authentication"
+                    value={
+                      attrs.auth_method
+                        ? AUTH_METHOD_LABEL[attrs.auth_method] ?? attrs.auth_method
                         : "—"
                     }
                   />
@@ -550,6 +748,43 @@ export function GCPConnectorDrawer({
                 )}
                 {verifying ? "Verifying…" : "Verify connection"}
               </Button>
+
+              {/* Discovery readiness gates this, not just revocation. The
+                  backend answers 409 with a `reasons` list when readiness is
+                  `blocked`, so offering the button in that state would spend a
+                  round trip to be told something the drawer already displays
+                  two sections above. `partial` stays enabled: a partial
+                  connector can still read something, and finding out what is
+                  the point of scanning. */}
+              <Button
+                variant="outline"
+                disabled={
+                  scanStarting ||
+                  revoked ||
+                  attrs.discovery_readiness === "blocked" ||
+                  connector.coverage?.status === "running"
+                }
+                onClick={() =>
+                  void runAction(
+                    () => scan(connector.id).unwrap(),
+                    "Scan started — it runs in the background.",
+                    "Could not start the scan.",
+                  )
+                }
+              >
+                <ScanLine
+                  className={cn(
+                    "mr-2 h-4 w-4",
+                    connector.coverage?.status === "running" && "animate-pulse",
+                  )}
+                />
+                {connector.coverage?.status === "running"
+                  ? "Scanning…"
+                  : scanStarting
+                    ? "Starting…"
+                    : "Scan now"}
+              </Button>
+
               {/* Pushed away from Verify with an auto margin. These two sat
                   flush against each other, which puts a one-way destructive
                   action a few pixels from the routine one an operator clicks
@@ -665,7 +900,7 @@ function SurfaceRow({
           </p>
         ) : null}
       </div>
-      <StatusBadge tone={tone}>{text}</StatusBadge>
+      <CloudPill tone={tone}>{text}</CloudPill>
     </div>
   );
 }

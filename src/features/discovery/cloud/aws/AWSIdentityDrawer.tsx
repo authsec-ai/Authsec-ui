@@ -18,7 +18,7 @@
 import { useEffect, useState } from "react";
 import { Bot, User } from "lucide-react";
 
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 import { DrawerPrevNext } from "@/components/primitives/DrawerPrevNext";
@@ -82,9 +82,9 @@ export function AWSIdentityDrawer({
             subtitle={IDENTITY_KIND_LABEL[identity.kind]}
             badge={
               identity.enabled ? (
-                <StatusBadge tone="success">Enabled</StatusBadge>
+                <CloudPill tone="success">Enabled</CloudPill>
               ) : (
-                <StatusBadge tone="muted">Disabled</StatusBadge>
+                <CloudPill tone="muted">Disabled</CloudPill>
               )
             }
           />

@@ -14,30 +14,37 @@
  * permissions and resources were wired when no endpoint for them existed here;
  * they are wired now, and the claim is true as written.)
  *
- * GCP onboarding only — GCP has no scan/identities/secrets/permissions/
- * resources endpoints yet. Do not add GCP discovery endpoints here until the
- * backend ships them; a page reading from a GCP discovery endpoint that
- * doesn't exist is exactly the "invented API" mistake the investigation
+ * GCP: onboarding, plus `POST /gcp/connectors/:id/scan`. There are still no
+ * GCP identity/secret/permission/resource LIST endpoints, so a GCP scan
+ * produces a coverage report and nothing to browse. Do not add GCP discovery
+ * list endpoints here until the backend ships them; a page reading from an
+ * endpoint that doesn't exist is the "invented API" mistake the investigation
  * flagged.
  *
- * PAGINATION IS NOT UNIFORM, and this is the single most load-bearing fact
- * about these endpoints. Only `/aws/identities` accepts limit/offset and
- * reports a `total`. Secrets, assume-edges, permissions, resources, workloads
- * and usage each end in an unbounded `.Find(&out)` server-side and report
- * `meta.count = len(rows)` — the number of rows in THIS response, which is
- * always all of them. Every one of those hooks is marked below. Do not pass a
- * limit to them expecting it to be honoured, and do not read `count` as a
- * total-behind-a-page.
+ * PAGINATION IS UNIFORM, and this is the single most load-bearing fact about
+ * these endpoints. All seven accept `limit`/`offset`/`connector_id` and report
+ * `meta.total` — the count BEFORE limit/offset — alongside the `limit` and
+ * `offset` actually applied. They share one server-side clamp:
+ * `limit <= 0 || limit > 500` becomes 100.
  *
- * SCOPE IS NOT UNIFORM EITHER. `connector_id` is accepted only by
- * `/aws/identities` and `/aws/resources`. The other five take `identity_id`
- * only and otherwise return every row in the workspace, across every
- * connected AWS account.
+ * SO: NO LIMIT MEANS 100 ROWS, NOT EVERY ROW. This is how the console came to
+ * show 100 of 1,089 usage rows as though it were the whole set — no error, no
+ * empty state, just a confident wrong number. Every hook below takes a
+ * required argument for that reason: omitting one has to be a visible
+ * decision. `meta.count` is gone; if you are reading it, you are reading
+ * `undefined`.
+ *
+ * `meta.unattributed`, `meta.never_accessed` and `meta.by_runtime_kind` are
+ * still sent, but the server now counts them over the CURRENT PAGE. They are
+ * not surfaced by these hooks — derive such counts from `rows`, where the
+ * scope is visible at the point of use.
  *
  * `DiscoverySourceKind` in discoveryApi.ts already has "aws"/"gcp" stub
  * values — those belong to the unrelated `discovery_sources` (agent
  * inventory channel) model and must not be reused here.
  */
+
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 
 import { baseApi } from "./baseApi";
 
@@ -334,9 +341,86 @@ export interface CloudIdentity {
   row_updated_at: string;
 }
 
-interface CloudIdentityListEnvelope {
-  data: CloudIdentity[];
-  meta?: { as_of?: string; total?: number; limit?: number; offset?: number; note?: string };
+/* ─────────────────── The shared list contract ────────────────────────────
+ *
+ * Every AWS discovery list endpoint answers the same shape, and shares one
+ * server-side clamp. Both facts are expressed here once rather than per
+ * endpoint, because the previous per-endpoint copies drifted: five of them
+ * still declared `meta.count` months after the server stopped sending it.
+ */
+
+/** The server's clamp, verbatim from `clampLimit` in
+ * `repository/cloud_identity_repository.go`: `limit <= 0 || limit > 500`
+ * becomes 100. Asking for more than this silently gets 100 back, which looks
+ * like a much smaller account. */
+export const AWS_DISCOVERY_MAX_LIMIT = 500;
+
+/** What the server applies when no limit is sent. Named so a call site that
+ * forgets a limit is a visible decision rather than an invisible cap. */
+export const AWS_DISCOVERY_DEFAULT_LIMIT = 100;
+
+/** Paging and scope, accepted by every AWS discovery list endpoint.
+ *
+ * `connector_id` is on ALL of them now. The older per-endpoint asymmetry —
+ * where five endpoints took only `identity_id` and the console made up the
+ * difference with client-side joins — is gone. */
+export interface CloudPageArgs {
+  connector_id?: string;
+  /** Always pass one. Omitting it means 100 rows, not every row. */
+  limit?: number;
+  offset?: number;
+}
+
+interface CloudListMeta {
+  as_of?: string;
+  /** The count BEFORE limit/offset — the only honest total. */
+  total?: number;
+  limit?: number;
+  offset?: number;
+  ordering?: string;
+  note?: string;
+}
+
+interface CloudListEnvelope<TRow, TMeta = CloudListMeta> {
+  data: TRow[];
+  meta?: TMeta;
+}
+
+/** One page of a list, plus enough context to say honestly how much of the
+ * whole it represents. */
+export interface CloudPage<TRow> {
+  rows: TRow[];
+  /** Count before limit/offset. When the server omits it — a deployment
+   * predating the paging contract — this is `offset + rows.length`, an honest
+   * FLOOR rather than a claim. Check `totalKnown` before calling it a total. */
+  total: number;
+  /** False when the server reported no total. Without this a missing
+   * `meta.total` would make `total === rows.length`, suppress every truncation
+   * notice, and reproduce the silent-truncation bug with a reassuring absence
+   * of warnings. */
+  totalKnown: boolean;
+  limit: number;
+  offset: number;
+}
+
+/** Kept as an alias so existing imports keep working. */
+export type CloudIdentityPage = CloudPage<CloudIdentity>;
+
+function toCloudPage<TRow>(
+  r: CloudListEnvelope<TRow, CloudListMeta>,
+  arg: CloudPageArgs,
+): CloudPage<TRow> {
+  const rows = r.data ?? [];
+  const offset = r.meta?.offset ?? arg.offset ?? 0;
+  return {
+    rows,
+    // offset + length, not length: at offset 200 a 100-row page is a floor of
+    // 300, not of 100.
+    total: r.meta?.total ?? offset + rows.length,
+    totalKnown: r.meta?.total !== undefined,
+    limit: r.meta?.limit ?? arg.limit ?? AWS_DISCOVERY_DEFAULT_LIMIT,
+    offset,
+  };
 }
 
 export type CloudSecretStatus = "active" | "inactive";
@@ -357,10 +441,6 @@ export interface CloudSecret {
   attrs: Record<string, unknown>;
 }
 
-interface CloudSecretListEnvelope {
-  data: CloudSecret[];
-  meta?: { as_of?: string; count?: number; ordering?: string; note?: string };
-}
 
 // ── AWS trust, permissions and resources (ticket [2] evidence) ──────────────
 
@@ -401,10 +481,6 @@ export interface CloudAssumeEdge {
   row_updated_at: string;
 }
 
-interface CloudAssumeEdgeListEnvelope {
-  data: CloudAssumeEdge[];
-  meta?: { as_of?: string; count?: number; note?: string };
-}
 
 /** `account_wide` and `prefix` mean `resource_id` is deliberately null, not
  * missing. Never expand a broad scope into the children it might cover —
@@ -445,10 +521,6 @@ export interface CloudPermission {
   row_updated_at: string;
 }
 
-interface CloudPermissionListEnvelope {
-  data: CloudPermission[];
-  meta?: { as_of?: string; count?: number; note?: string };
-}
 
 /** `models.CloudResource`. A row exists ONLY because a permission statement
  * named it. This is not an inventory of everything in the account, and an
@@ -469,10 +541,6 @@ export interface CloudResource {
   row_updated_at: string;
 }
 
-interface CloudResourceListEnvelope {
-  data: CloudResource[];
-  meta?: { as_of?: string; count?: number; note?: string };
-}
 
 // ── AWS workloads and activity (PR #52 surfaces) ────────────────────────────
 
@@ -536,19 +604,6 @@ export interface CloudWorkload {
   row_updated_at: string;
 }
 
-interface CloudWorkloadListEnvelope {
-  data: CloudWorkload[];
-  meta?: {
-    as_of?: string;
-    count?: number;
-    /** Server-computed tally per runtime kind, so the console does not have to
-     * derive it. */
-    by_runtime_kind?: Record<string, number>;
-    /** Server-computed count of rows with a null identity_id. */
-    unattributed?: number;
-    note?: string;
-  };
-}
 
 /** Whether an identity actually exercised a service, as opposed to merely
  * being permitted to. */
@@ -574,47 +629,44 @@ export interface CloudUsage {
   row_updated_at: string;
 }
 
-interface CloudUsageListEnvelope {
-  data: CloudUsage[];
-  meta?: {
-    as_of?: string;
-    count?: number;
-    /** Server-computed count of rows with a null last_used_at. */
-    never_accessed?: number;
-    note?: string;
-  };
-}
-
-/** A list plus the `meta` counts the server computed for it.
+/* `CloudListWithMeta`, `CloudWorkloadMeta` and `CloudUsageMeta` used to live
+ * here. They existed because `unattributed`, `never_accessed` and
+ * `by_runtime_kind` were the server's tallies over the FULL set, and
+ * recomputing them client-side "would silently produce a different answer the
+ * moment the response is ever paginated."
  *
- * Returned instead of a bare array wherever `meta` carries a number the
- * console must not re-derive — `unattributed` and `never_accessed` are the
- * server's own tallies over the full set, and recomputing them client-side
- * would silently produce a different answer the moment the response is ever
- * paginated. */
-export interface CloudListWithMeta<TRow, TMeta> {
-  rows: TRow[];
-  meta: TMeta;
-}
+ * That moment arrived. The server now counts all three over the current page
+ * only — byte-for-byte what a client-side count over `rows` produces — so they
+ * carry no information the console lacks, while keeping a field named
+ * `unattributed` that still reads as authoritative. Derive them from `rows`
+ * instead, next to the filter that uses them, where the scope is visible. */
 
-export interface CloudWorkloadMeta {
-  count: number;
-  unattributed: number;
-  by_runtime_kind: Record<string, number>;
-}
+/** Hard stop for the accumulating usage read: 4 requests at the 500 clamp.
+ *
+ * The live lab holds ~1,100 usage rows, so this leaves headroom without
+ * letting one large workspace turn a page load into forty requests. */
+const USAGE_ACCUMULATE_CAP = 2000;
 
-export interface CloudUsageMeta {
-  count: number;
-  never_accessed: number;
-}
-
-/** An identity page plus its server-reported total, for server-side
- * pagination. Only `/aws/identities` can honestly provide this. */
-export interface CloudIdentityPage {
-  rows: CloudIdentity[];
+/** Every usage row the accumulating read could reach, plus an honest account
+ * of what it could not.
+ *
+ * Worth knowing about the ordering: the server sorts usage
+ * `last_used_at ASC NULLS FIRST`, so every NEVER-ACCESSED row — the actionable
+ * finding — lands on the first page. When `truncated` is true the never-used
+ * counts are therefore still exact; it is the DENOMINATOR that is incomplete.
+ * Callers should drop the "of N" rather than show a wrong total. */
+export interface CloudUsageAll {
+  rows: CloudUsage[];
+  /** `meta.total` from the first page: the whole-set count, however much of
+   * it was actually accumulated. */
   total: number;
-  limit: number;
-  offset: number;
+  totalKnown: boolean;
+  /** Fewer rows in hand than the server says exist — the cap stopped the walk,
+   * or a page failed part-way through. */
+  truncated: boolean;
+  pagesFetched: number;
+  /** Set when a page AFTER the first failed. `rows` still holds what arrived. */
+  partialError?: FetchBaseQueryError;
 }
 
 // ── GCP onboarding (the only GCP surface that exists) ───────────────────────
@@ -668,6 +720,11 @@ export interface CloudOnboardingApiError {
   error: string;
   hint?: string;
   fault?: "customer_account" | "constrained" | "gcp" | "aws" | "authsec";
+  /** Sent by `POST /gcp/connectors/:id/scan` when it refuses a connector whose
+   * discovery readiness is `blocked`. These are the specific shortfalls, and
+   * they are the only actionable part of that response — a 409 that says
+   * "not ready" without them leaves the operator with nowhere to go. */
+  reasons?: string[];
   /** Client-side only: the request timed out before any backend verdict
    * arrived (RTK Query TIMEOUT_ERROR carries no response body). Never sent
    * by the backend — set by the caller so error copy can say so honestly. */
@@ -850,68 +907,35 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // Candidate identities, not agents — see CloudIdentity's own comment.
-    listAwsIdentities: builder.query<
-      CloudIdentity[],
-      { connector_id?: string; kind?: CloudIdentityKind } | void
-    >({
-      query: (params) => ({
-        url: "/authsec/discovery/aws/identities",
-        method: "GET",
-        params: params ?? undefined,
-      }),
-      transformResponse: (r: CloudIdentityListEnvelope) => r.data ?? [],
-      providesTags: (result, _error, arg) => [
-        ...(result ?? []).map((i) => ({ type: "CloudIdentity" as const, id: i.id })),
-        { type: "CloudIdentity" as const, id: arg?.connector_id ?? "ALL" },
-      ],
-    }),
-
-    // Metadata only — key id, dates, status, never a value. The backend has
-    // no connector_id filter on this endpoint (only identity_id), so a
-    // connector's secrets are the ones whose identity_id is one of that
-    // connector's own identities — the drawer does that join client-side.
-    listAwsSecrets: builder.query<CloudSecret[], { identity_id?: string } | void>({
-      query: (params) => ({
-        url: "/authsec/discovery/aws/secrets",
-        method: "GET",
-        params: params ?? undefined,
-      }),
-      transformResponse: (r: CloudSecretListEnvelope) => r.data ?? [],
-      providesTags: [{ type: "CloudSecret" as const, id: "ALL" }],
-    }),
-
-    /* ─────────────── The paginated identity inventory ─────────────────────
+    /* ──────────────────── The seven AWS discovery reads ───────────────────
      *
-     * A SECOND identity endpoint, deliberately additive rather than a change
-     * to `listAwsIdentities` above. The two differ only in what they return:
-     * this one keeps `meta.total/limit/offset` so a table can page
-     * server-side, the other flattens to a bare array.
+     * PAGINATED, every one of them, since the backend's pagination-and-scoping
+     * change. Each accepts `connector_id`, `limit` and `offset`; each answers
+     * `meta.total` (the count before limit/offset) plus the `limit`/`offset`
+     * it actually applied. `meta.count` no longer exists.
      *
-     * Kept separate because `listAwsIdentities` is consumed by
-     * AWSConnectorDrawer, and changing its return type to an envelope would
-     * have been a breaking change to a working screen for no benefit to it —
-     * the drawer renders a short list and never pages.
+     * The clamp is shared and unforgiving: NO LIMIT MEANS 100 ROWS, not every
+     * row. Every hook below therefore takes a required argument — passing
+     * nothing used to mean "the whole set" and would now silently mean "the
+     * first hundred", which is the same wrong answer with more confidence.
+     *
+     * `meta.unattributed`, `meta.never_accessed` and `meta.by_runtime_kind`
+     * are still sent but are now counted over the current PAGE. They are
+     * deliberately not surfaced here — a page-scoped count reached through a
+     * field named `unattributed` is a trap. Derive them from `rows`.
      */
+
+    // Candidate identities, not agents — see CloudIdentity's own comment.
     listAwsIdentityPage: builder.query<
       CloudIdentityPage,
-      { connector_id?: string; kind?: CloudIdentityKind; limit?: number; offset?: number }
+      CloudPageArgs & { kind?: CloudIdentityKind }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/identities",
         method: "GET",
         params,
       }),
-      transformResponse: (r: CloudIdentityListEnvelope, _meta, arg): CloudIdentityPage => ({
-        rows: r.data ?? [],
-        // `total` is the count BEFORE limit/offset — the only honest total
-        // any AWS discovery endpoint reports. Falling back to the page length
-        // keeps the table usable if a deployment predates the meta block,
-        // at the cost of the pager thinking there is one page.
-        total: r.meta?.total ?? (r.data ?? []).length,
-        limit: r.meta?.limit ?? arg.limit ?? 100,
-        offset: r.meta?.offset ?? arg.offset ?? 0,
-      }),
+      transformResponse: (r: CloudListEnvelope<CloudIdentity>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result, _error, arg) => [
         ...(result?.rows ?? []).map((i) => ({ type: "CloudIdentity" as const, id: i.id })),
         { type: "CloudIdentity" as const, id: arg.connector_id ?? "ALL" },
@@ -919,42 +943,61 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       ],
     }),
 
-    /* ───────────────── The remaining five surfaces ────────────────────────
-     *
-     * UNPAGINATED, every one of them. The server has no limit/offset on these
-     * routes and returns the whole set; `meta.count` is this response's own
-     * length. Filter by `identity_id` wherever a view is about one identity —
-     * for permissions that is not an optimisation but a requirement, since
-     * the grain is one row per policy statement per identity and an
-     * account-wide fetch is unbounded in the worst way.
-     */
+    // Metadata only — key id, dates, status, never a value.
+    //
+    // `connector_id` is server-side now. The drawer used to fetch every secret
+    // in the workspace and filter it against a set of the connector's identity
+    // ids; that join is gone, and with it the double truncation it caused.
+    listAwsSecrets: builder.query<CloudPage<CloudSecret>, CloudPageArgs & { identity_id?: string }>({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/secrets",
+        method: "GET",
+        params,
+      }),
+      transformResponse: (r: CloudListEnvelope<CloudSecret>, _meta, arg) => toCloudPage(r, arg),
+      // Arg-aware, unlike the static tag this used to carry: now that the
+      // endpoint is scoped, a connector-specific response tagged only "ALL"
+      // would be served back for a different connector's query.
+      providesTags: (result, _error, arg) => [
+        ...(result?.rows ?? []).map((s) => ({ type: "CloudSecret" as const, id: s.id })),
+        { type: "CloudSecret" as const, id: arg.connector_id ?? arg.identity_id ?? "ALL" },
+        { type: "CloudSecret" as const, id: "ALL" },
+      ],
+    }),
 
     // Who may assume an identity, and how. Scoped to one identity in practice:
     // this is the "who can become this role" question on a detail panel.
-    listAwsAssumeEdges: builder.query<CloudAssumeEdge[], { identity_id?: string } | void>({
+    listAwsAssumeEdges: builder.query<
+      CloudPage<CloudAssumeEdge>,
+      CloudPageArgs & { identity_id?: string }
+    >({
       query: (params) => ({
         url: "/authsec/discovery/aws/assume-edges",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudAssumeEdgeListEnvelope) => r.data ?? [],
+      transformResponse: (r: CloudListEnvelope<CloudAssumeEdge>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
+        ...(result?.rows ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
         { type: "CloudAssumeEdge" as const, id: "ALL" },
       ],
     }),
 
-    // Granted policy statements. ALWAYS pass identity_id — see the block
-    // comment above on why an unscoped call is not safe here.
-    listAwsPermissions: builder.query<CloudPermission[], { identity_id?: string } | void>({
+    // Granted policy statements. ALWAYS pass identity_id: the grain is one row
+    // per policy statement per identity, so an account-wide fetch is unbounded
+    // in the worst way.
+    listAwsPermissions: builder.query<
+      CloudPage<CloudPermission>,
+      CloudPageArgs & { identity_id?: string }
+    >({
       query: (params) => ({
         url: "/authsec/discovery/aws/permissions",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudPermissionListEnvelope) => r.data ?? [],
+      transformResponse: (r: CloudListEnvelope<CloudPermission>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
+        ...(result?.rows ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
         { type: "CloudPermission" as const, id: "ALL" },
       ],
     }),
@@ -962,64 +1005,123 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // Resources named by a policy statement. Filters by connector_id, NOT
     // identity_id — so resolving a statement's resource_id is a client-side
     // join against this list, keyed by resource id.
-    listAwsResources: builder.query<CloudResource[], { connector_id?: string } | void>({
+    listAwsResources: builder.query<CloudPage<CloudResource>, CloudPageArgs>({
       query: (params) => ({
         url: "/authsec/discovery/aws/resources",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudResourceListEnvelope) => r.data ?? [],
+      transformResponse: (r: CloudListEnvelope<CloudResource>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
+        ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
         { type: "CloudResource" as const, id: "ALL" },
       ],
     }),
 
     // The compute that runs as a discovered identity.
-    //
-    // Returns rows AND meta, because `meta.unattributed` is the server's own
-    // tally over the full set and is the headline finding on the compute page.
     listAwsWorkloads: builder.query<
-      CloudListWithMeta<CloudWorkload, CloudWorkloadMeta>,
-      { identity_id?: string } | void
+      CloudPage<CloudWorkload>,
+      CloudPageArgs & { identity_id?: string }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/workloads",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudWorkloadListEnvelope) => ({
-        rows: r.data ?? [],
-        meta: {
-          count: r.meta?.count ?? (r.data ?? []).length,
-          unattributed: r.meta?.unattributed ?? 0,
-          by_runtime_kind: r.meta?.by_runtime_kind ?? {},
-        },
-      }),
+      transformResponse: (r: CloudListEnvelope<CloudWorkload>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
         ...(result?.rows ?? []).map((w) => ({ type: "CloudWorkload" as const, id: w.id })),
         { type: "CloudWorkload" as const, id: "ALL" },
       ],
     }),
 
-    // Per-service last-used dates. `meta.never_accessed` is the actionable
-    // count and, like `unattributed` above, is the server's own.
-    listAwsUsage: builder.query<
-      CloudListWithMeta<CloudUsage, CloudUsageMeta>,
-      { identity_id?: string } | void
-    >({
+    // Per-service last-used dates, one page at a time. For the whole set, use
+    // `listAwsUsageAll` below — do not call this in a loop from a component.
+    listAwsUsage: builder.query<CloudPage<CloudUsage>, CloudPageArgs & { identity_id?: string }>({
       query: (params) => ({
         url: "/authsec/discovery/aws/usage",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudUsageListEnvelope) => ({
-        rows: r.data ?? [],
-        meta: {
-          count: r.meta?.count ?? (r.data ?? []).length,
-          never_accessed: r.meta?.never_accessed ?? 0,
-        },
-      }),
+      transformResponse: (r: CloudListEnvelope<CloudUsage>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
+        { type: "CloudUsage" as const, id: "ALL" },
+      ],
+    }),
+
+    /* ──────────── Usage, accumulated across pages ─────────────────────────
+     *
+     * The identities inventory needs EVERY usage row to answer "which
+     * identities have unused access" — it builds a lookup map keyed by
+     * identity, and half a map is not a smaller answer, it is a wrong one.
+     * The server caps a single response at 500, so this walks the pages.
+     *
+     * Written as a `queryFn` rather than the `merge`/`forceRefetch` infinite
+     * -query pattern on purpose: that pattern reports `isLoading` only for the
+     * first page, so the map would render as complete while later pages were
+     * still in flight — reintroducing exactly the bug this fixes, one layer
+     * down. A `queryFn` gives one loading flag spanning the whole walk, one
+     * error, and ordinary tag invalidation, so a rescan refreshes it for free.
+     */
+    listAwsUsageAll: builder.query<CloudUsageAll, { connector_id?: string; identity_id?: string }>({
+      async queryFn(arg, _api, _extra, fetchWithBQ) {
+        // Keyed by id because paging by offset over a non-unique sort key can
+        // return the same row twice. See CloudUsageAll's note.
+        const byId = new Map<string, CloudUsage>();
+        let total = 0;
+        let totalKnown = false;
+        let offset = 0;
+        let pagesFetched = 0;
+        let partialError: FetchBaseQueryError | undefined;
+
+        for (;;) {
+          const res = await fetchWithBQ({
+            url: "/authsec/discovery/aws/usage",
+            method: "GET",
+            params: { ...arg, limit: AWS_DISCOVERY_MAX_LIMIT, offset },
+          });
+
+          if (res.error) {
+            // Nothing arrived at all: a real failure with nothing to show.
+            if (pagesFetched === 0) return { error: res.error };
+            // Some pages did arrive. Three good pages are not thrown away over
+            // one failed fourth — keep them and mark the result incomplete.
+            partialError = res.error;
+            break;
+          }
+
+          const env = res.data as CloudListEnvelope<CloudUsage>;
+          const page = env.data ?? [];
+          pagesFetched += 1;
+          if (pagesFetched === 1) {
+            totalKnown = env.meta?.total !== undefined;
+            total = env.meta?.total ?? page.length;
+          }
+          for (const u of page) byId.set(u.id, u);
+
+          // page.length, NOT the requested limit: a server honouring a smaller
+          // limit than asked would otherwise make this skip rows.
+          offset += page.length;
+
+          if (page.length === 0) break; // nothing more to read
+          if (page.length < AWS_DISCOVERY_MAX_LIMIT) break; // server ran out
+          if (byId.size >= total) break; // we have it all
+          if (byId.size >= USAGE_ACCUMULATE_CAP) break; // hard stop
+        }
+
+        const rows = [...byId.values()];
+        return {
+          data: {
+            rows,
+            total,
+            totalKnown,
+            truncated: rows.length < total,
+            pagesFetched,
+            partialError,
+          },
+        };
+      },
       providesTags: (result) => [
         ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
         { type: "CloudUsage" as const, id: "ALL" },
@@ -1079,6 +1181,28 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
      * say so, or the customer will believe access is gone when it is not.
      *
      * Deliberately different from the AWS equivalent, which hard-deletes. */
+    /* Start GCP service-account and key discovery.
+     *
+     * 202 and a background goroutine, exactly like the AWS scan: watch
+     * `coverage.status` on the connector to follow it. There are no GCP
+     * inventory list endpoints yet, so what this produces today is a coverage
+     * report — which is still the answer to "can this connector actually read
+     * anything", and previously could not be asked from the console at all.
+     *
+     * 409 when the connector is revoked, or when discovery readiness is
+     * `blocked`; that second case carries `reasons[]`, which is the part the
+     * operator can act on. See gcpErrorCopy.scanErrorCopy. */
+    scanGcpConnector: builder.mutation<ScanTriggerEnvelope, string>({
+      query: (id) => ({
+        url: `/authsec/discovery/gcp/connectors/${id}/scan`,
+        method: "POST",
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "GCP_LIST" },
+      ],
+    }),
+
     revokeGcpConnector: builder.mutation<{ success: boolean; message: string }, string>({
       query: (id) => ({ url: `/authsec/discovery/gcp/connectors/${id}`, method: "DELETE" }),
       invalidatesTags: (_r, _e, id) => [
@@ -1158,7 +1282,6 @@ export const {
   useVerifyAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
   useScanAwsConnectorMutation,
-  useListAwsIdentitiesQuery,
   useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
   useListAwsAssumeEdgesQuery,
@@ -1166,10 +1289,12 @@ export const {
   useListAwsResourcesQuery,
   useListAwsWorkloadsQuery,
   useListAwsUsageQuery,
+  useListAwsUsageAllQuery,
   useLazyGetGcpOnboardingPackageQuery,
   useCreateGcpConnectorMutation,
   useGetGcpConnectorQuery,
   useVerifyGcpConnectorMutation,
+  useScanGcpConnectorMutation,
   useRevokeGcpConnectorMutation,
   useGetGoogleOAuthStatusQuery,
   useStartGoogleOAuthMutation,

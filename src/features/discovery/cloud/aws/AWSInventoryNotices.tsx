@@ -38,7 +38,7 @@ import { AlertTriangle, ExternalLink, Info, Radar, ScanLine } from "lucide-react
 import { Button } from "@/components/ui/button";
 import type { AWSConnectorAttrs, CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { stackPredatesCompute, TEMPLATE_VERSION_WITH_COMPUTE } from "./awsInventoryLabels";
-import type { InventoryEmptyReason, InventorySurface } from "./awsInventoryState";
+import type { InventoryEmptyReason, InventorySurface, Truncation } from "./awsInventoryState";
 
 /* ──────────────────────────── inline notices ────────────────────────────── */
 
@@ -68,6 +68,68 @@ export function InventoryNotice({
       {icon ? <span className="mt-px flex-none [&_svg]:size-3.5">{icon}</span> : null}
       <div className="min-w-0">{children}</div>
     </div>
+  );
+}
+
+/* ──────────────────────────── truncated lists ───────────────────────────── */
+
+/**
+ * THE RULE: every `useListAws*Query` call site renders one of the two
+ * components below, or carries a comment saying why it provably cannot
+ * truncate. That is checkable by grep in review, which is the point — the
+ * console previously showed 100 of 1,089 usage rows as a complete answer, and
+ * no reviewer could have spotted it from the diff.
+ *
+ * Two shapes because two contexts: a page has room for a banner beside its
+ * metric strip; a 560px drawer does not, and a banner there would push the
+ * data the reader came for below the fold.
+ */
+
+function truncationSentence(t: Truncation, noun: string): string {
+  // "at least" when the server reported no total — an older deployment. Saying
+  // "100 of 100" there would be the original bug wearing a reassuring label.
+  return t.totalKnown
+    ? `Showing ${t.shown} of ${t.total} ${noun}.`
+    : `Showing ${t.shown} ${noun} — at least that many exist.`;
+}
+
+/** Page-level: a full notice, for placing beside a metric strip. */
+export function TruncationNotice({
+  truncation,
+  noun,
+  narrowBy,
+}: {
+  truncation: Truncation;
+  /** Lower-case plural, e.g. "identities", "compute resources". */
+  noun: string;
+  /** What the reader can actually do about it. Name only genuinely
+   * server-side filters — pointing someone at a control that filters the
+   * loaded page is worse than saying nothing. */
+  narrowBy?: ReactNode;
+}) {
+  if (!truncation.truncated) return null;
+  return (
+    <InventoryNotice tone="warning" icon={<AlertTriangle />}>
+      <span className="font-medium">{truncationSentence(truncation, noun)}</span>{" "}
+      Counts and filters below describe the rows that loaded, not the whole account.
+      {narrowBy ? <> {narrowBy}</> : null}
+    </InventoryNotice>
+  );
+}
+
+/** Drawer-level: one muted line, no border, no icon. */
+export function TruncationLine({
+  truncation,
+  noun,
+}: {
+  truncation: Truncation;
+  noun: string;
+}) {
+  if (!truncation.truncated) return null;
+  return (
+    <p className="pt-1 text-[11px] text-(--color-warning-text)">
+      {truncationSentence(truncation, noun)} This tab shows what loaded, not the whole set.
+    </p>
   );
 }
 

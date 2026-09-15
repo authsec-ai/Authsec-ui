@@ -47,7 +47,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { CopyField } from "@/components/console/detail";
 
@@ -137,9 +137,9 @@ function PermissionRow({ perm }: { perm: AWSPermission }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-[12.5px] font-medium text-foreground">{surfaceLabel(perm.surface)}</span>
         {perm.possibly_redundant_with_baseline ? (
-          <StatusBadge tone="muted" dot={false}>
+          <CloudPill tone="muted" dot={false}>
             May overlap baseline
-          </StatusBadge>
+          </CloudPill>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-1">
