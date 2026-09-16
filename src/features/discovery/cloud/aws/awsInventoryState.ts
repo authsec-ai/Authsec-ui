@@ -29,8 +29,38 @@
  * observable state of zero rows. Telling them apart is the whole job.
  */
 
-import type { AWSConnectorAttrs, CloudConnector } from "@/app/api/cloudDiscoveryApi";
+import type { AWSConnectorAttrs, CloudConnector, CloudPage } from "@/app/api/cloudDiscoveryApi";
 import { stackPredatesCompute } from "./awsInventoryLabels";
+
+/* ─────────────────────── Is this list the whole list? ────────────────────
+ *
+ * Separate from the empty-state question above, and just as load-bearing. The
+ * AWS discovery endpoints cap every response at 500 rows and default to 100,
+ * so ANY list can be a prefix of the truth. A console that renders a prefix
+ * without saying so reports a smaller account than the customer has — the one
+ * failure mode worse than showing nothing.
+ */
+
+export interface Truncation {
+  truncated: boolean;
+  /** Rows actually in hand. */
+  shown: number;
+  /** What the server says exists. A floor when `totalKnown` is false. */
+  total: number;
+  totalKnown: boolean;
+}
+
+/** Derived in one place so no page hand-rolls the comparison. Note it uses
+ * `offset + rows.length`, not `rows.length`: on page three of a list, having
+ * 100 rows of 250 is not truncation at 100, it is position 200 of 250. */
+export function truncationOf(page: Pick<CloudPage<unknown>, "rows" | "total" | "offset" | "totalKnown">): Truncation {
+  return {
+    truncated: page.offset + page.rows.length < page.total,
+    shown: page.rows.length,
+    total: page.total,
+    totalKnown: page.totalKnown,
+  };
+}
 
 export type InventorySurface = "identities" | "permissions" | "compute" | "usage";
 

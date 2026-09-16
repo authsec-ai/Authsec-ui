@@ -261,6 +261,16 @@ export function stackPredatesCompute(templateVersion: string | undefined): boole
   return templateVersion < TEMPLATE_VERSION_WITH_COMPUTE;
 }
 
+/** Any headline number derived from a possibly-truncated list has to say so.
+ *
+ * The number itself stays honest — it really is the count of what loaded — but
+ * the LABEL is what stops a reader treating it as the account total. Relabel
+ * rather than hide: a metric that vanishes when data is partial is worse than
+ * one that qualifies itself. */
+export function metricLabel(base: string, truncated: boolean, shown: number): string {
+  return truncated ? `${base} (of ${shown} loaded)` : base;
+}
+
 /* ───────────────────────────── accounts ────────────────────────────────── */
 
 /** Sentinel for "no account filter".
