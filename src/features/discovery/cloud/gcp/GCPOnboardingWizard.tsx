@@ -690,10 +690,10 @@ export function GCPOnboardingWizard({
                 <span
                   className={
                     i === step
-                      ? "flex size-5 items-center justify-center rounded-full bg-(--color-primary) text-[10px] font-semibold text-white"
+                      ? "flex size-5 items-center justify-center rounded-full bg-(--color-primary) text-[11px] font-semibold text-white"
                       : done
-                        ? "flex size-5 items-center justify-center rounded-full bg-(--color-success-soft) text-[10px] font-semibold text-(--color-success-text)"
-                        : "flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                        ? "flex size-5 items-center justify-center rounded-full bg-(--color-success-soft) text-[11px] font-semibold text-(--color-success-text)"
+                        : "flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
                   }
                 >
                   {done ? "✓" : i + 1}
@@ -814,11 +814,11 @@ export function GCPOnboardingWizard({
                     ⭐ Google Authentication
                   </span>
                   {googleOAuthAvailable ? (
-                    <span className="rounded bg-(--color-success-soft) px-1.5 py-0.5 text-[10px] font-medium text-(--color-success-text)">
+                    <span className="rounded bg-(--color-success-soft) px-1.5 py-0.5 text-[11px] font-medium text-(--color-success-text)">
                       Recommended
                     </span>
                   ) : (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                       Not available here
                     </span>
                   )}
@@ -841,7 +841,7 @@ export function GCPOnboardingWizard({
                   <span className="text-sm font-medium text-foreground">
                     Workload Identity Federation
                   </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                     Manual / Advanced
                   </span>
                   <span className="text-[11px] text-muted-foreground">

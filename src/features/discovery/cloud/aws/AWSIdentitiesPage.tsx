@@ -4,14 +4,16 @@
  * The candidate IAM identity inventory: every role and user the AWS scan
  * found, with the "granted but never exercised" signal beside it.
  *
- * Why a page and not more tabs on AWSConnectorDrawer: the connector drawer is
+ * Why a full route and not a tab on AWSConnectorDrawer: the connector drawer is
  * 560px and answers "is this connection healthy". This answers "what is in the
  * account", needs table width, search, paging and a deep link, and is where a
  * reader spends time. The drawer keeps the connection view; this owns contents.
  *
- * Follows the console table standard exactly (AGENTS.md → "Console page
- * standard"): ConsolePage → MetricStrip → ConsoleFilterBar → TableCard/flush →
- * AdaptiveTable → RightDrawer. Nothing here hand-rolls a page header.
+ * Rendered as the Identities tab of CloudInventoryLayout, which owns the page
+ * header and the tab strip — so this file begins at the body. Everything below
+ * still follows the console table standard (AGENTS.md → "Console page
+ * standard"): MetricStrip → ConsoleFilterBar → TableCard/flush → AdaptiveTable
+ * → RightDrawer. Nothing here hand-rolls a page header.
  *
  * ── How much data this page loads, and why ──────────────────────────────────
  *
@@ -34,7 +36,6 @@ import { useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Info } from "lucide-react";
 
-import { ConsolePage } from "@/components/console/ConsolePage";
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
   ConsoleFilterBar,
@@ -267,7 +268,7 @@ export default function AWSIdentitiesPage() {
               detail={i.native_id}
               monoDetail
               badge={
-                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {i.kind === "iam_role" ? "Role" : "User"}
                 </span>
               }
@@ -376,10 +377,9 @@ export default function AWSIdentitiesPage() {
   const loading = identitiesQuery.isLoading || connectorsQuery.isLoading;
 
   return (
-    <ConsolePage
-      title="AWS Identities"
-      description="IAM roles and users discovered in your connected AWS accounts, with what each one is permitted to do and what it has actually used."
-    >
+    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
+    <div className="space-y-4">
       {identitiesQuery.isError ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
           <strong className="font-medium">Could not load the identity inventory.</strong>{" "}
@@ -498,6 +498,6 @@ export default function AWSIdentitiesPage() {
         index={selectedIndex >= 0 ? selectedIndex : 0}
         total={filtered.length}
       />
-    </ConsolePage>
+    </div>
   );
 }

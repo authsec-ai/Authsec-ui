@@ -63,7 +63,7 @@ export function InventoryNotice({
 }) {
   return (
     <div
-      className={`flex items-start gap-2 rounded-md border-l-2 px-3 py-2.5 text-[11.5px] leading-relaxed ${NOTICE_CLASS[tone]}`}
+      className={`flex items-start gap-2 rounded-md border-l-2 px-3 py-2.5 text-xs leading-relaxed ${NOTICE_CLASS[tone]}`}
     >
       {icon ? <span className="mt-px flex-none [&_svg]:size-3.5">{icon}</span> : null}
       <div className="min-w-0">{children}</div>
@@ -197,6 +197,7 @@ const SURFACE_NOUN: Record<InventorySurface, string> = {
   permissions: "permission statements",
   compute: "compute",
   usage: "service activity",
+  resources: "resources named by a permission statement",
 };
 
 const SURFACE_PHRASE: Record<InventorySurface, string> = {
@@ -204,6 +205,7 @@ const SURFACE_PHRASE: Record<InventorySurface, string> = {
   permissions: "Permission extraction",
   compute: "Compute discovery",
   usage: "Service activity",
+  resources: "Resource extraction",
 };
 
 /**
@@ -327,6 +329,30 @@ export function ComputeCaveat() {
       Compute that <span className="font-medium text-foreground">runs as</span> an identity — a
       Lambda function, ECS task definition, EC2 instance or Bedrock agent. Whether any of it is an
       agent is a separate judgement this inventory does not make.
+    </p>
+  );
+}
+
+/**
+ * The caveat every resource list carries.
+ *
+ * `cloud_resource` is not an inventory of the account. The migration that
+ * created it is explicit: a row exists ONLY because a permission statement
+ * named that exact ARN, and a wildcard never produces one — `Resource: "*"`
+ * and `arn:aws:s3:::bucket/*` describe a SCOPE, so they are recorded as the
+ * permission's `scope_kind` instead. Inventing a resource row per wildcard
+ * would manufacture a thing that was never independently observed.
+ *
+ * So a short list here is not a small account, and an empty one is not an
+ * empty account — both mean "no discovered statement named a specific ARN".
+ * Saying that plainly is the whole job of this line.
+ */
+export function ResourceScopeCaveat() {
+  return (
+    <p className="text-[11px] text-muted-foreground">
+      Resources appear here only because a discovered permission statement{" "}
+      <span className="font-medium text-foreground">named them</span>. A wildcard or prefix grant
+      names no single resource, so this is not an inventory of everything in the account.
     </p>
   );
 }

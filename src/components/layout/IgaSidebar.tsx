@@ -10,9 +10,8 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Boxes,
+  Cloud,
   Fingerprint,
-  KeyRound,
   SlidersHorizontal,
   Radar,
   ScanSearch,
@@ -50,17 +49,18 @@ const NAV_DISCOVERY: IgaNavItem[] = [
   { title: "Integrations", url: "/iga/integrations", icon: Radar },
   { title: "Discovered Agents", url: "/iga/agents", icon: ScanSearch },
   { title: "Identities", url: "/iga/identities", icon: Fingerprint },
-  // The AWS cloud inventory. Named for the cloud they come from because AWS
-  // results do NOT land in the shared discovered_agents table the two items
-  // above read from — they have their own route family and their own cloud_*
-  // tables, so a reader looking for an IAM role on "Discovered Agents" would
-  // never find it.
+  // The cloud inventory — Identities, Compute and Resources as three tabs of
+  // one shell, not three sidebar items.
   //
-  // "Compute", not "Workloads": the terminology map in AGENTS.md reserves
-  // "Workload" for Kubernetes/SPIFFE pod identities, and these rows are Lambda
-  // functions, ECS task definitions, EC2 instances and Bedrock agents.
-  { title: "AWS Identities", url: "/iga/cloud/aws/identities", icon: KeyRound },
-  { title: "AWS Compute", url: "/iga/cloud/aws/compute", icon: Boxes },
+  // Separate from "Discovered Agents" and "Identities" above because cloud
+  // results do NOT land in the shared discovered_agents table those two read
+  // from: they have their own route family and their own cloud_* tables, so a
+  // reader looking for an IAM role on "Discovered Agents" would never find it.
+  //
+  // One entry rather than one per provider per data type: the GCP build
+  // workflow has GCP inheriting these same provider-filterable views, so three
+  // items here would have become six, then nine.
+  { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud },
   // Sits under Discovery, not Settings: it defines what a scan looks for, so it
   // belongs beside the scanning it governs rather than in a config drawer.
   { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },

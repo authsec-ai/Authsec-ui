@@ -8,10 +8,15 @@
  * "Add integration" has three entries — Kubernetes, GitHub, Cloud. Kubernetes
  * and GitHub add a `discovery_sources` row; Cloud opens the same
  * CloudProviderPicker → GCPOnboardingWizard/AWSOnboardingWizard flow that
- * used to live behind a standalone "/iga/cloud" page.
+ * used to live behind a standalone cloud ONBOARDING page.
+ *
+ * Not to be confused with "/iga/cloud", which exists today and is a different
+ * thing: the Cloud Inventory shell (Identities / Compute / Resources tabs) —
+ * the CONTENTS of a connected account. This page owns the CONNECTIONS.
  *
  * ONE table, not two. Per the current platform direction there is no
- * separate Cloud landing page and no second table for cloud accounts —
+ * separate Cloud CONNECTIONS landing page and no second table for cloud
+ * accounts —
  * AWS/GCP connectors are rows in this SAME table, alongside `discovery_sources`
  * rows, filling the exact same seven columns (Integration, Cadence, Status,
  * Last sync, Enabled, Agents, Detail) via `IntegrationRow`, a small

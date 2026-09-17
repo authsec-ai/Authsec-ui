@@ -88,7 +88,7 @@ export function CloudProviderPicker({
                 <p className="text-[11px] text-muted-foreground">{meta.tagline}</p>
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                    "rounded px-1.5 py-0.5 text-[11px] font-medium",
                     meta.available
                       ? "bg-(--color-success-soft) text-(--color-success-text)"
                       : "bg-muted text-muted-foreground",

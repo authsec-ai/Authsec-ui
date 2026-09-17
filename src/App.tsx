@@ -67,6 +67,8 @@ import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
 import AWSIdentitiesPage from "./features/discovery/cloud/aws/AWSIdentitiesPage";
 import AWSComputePage from "./features/discovery/cloud/aws/AWSComputePage";
+import AWSResourcesPage from "./features/discovery/cloud/aws/AWSResourcesPage";
+import CloudInventoryLayout from "./features/discovery/cloud/CloudInventoryLayout";
 import ProvenancePage from "./features/governance/ProvenancePage";
 import CertificationPage from "./features/governance/CertificationPage";
 import CampaignDetailPage from "./features/governance/CampaignDetailPage";
@@ -130,6 +132,20 @@ function LegacyTrustDelegationPolicyDetailRedirect() {
 function LegacyTrustDelegationPolicyEditRedirect() {
   const { policyId = "" } = useParams();
   return <Navigate to={`/trust-delegation/${policyId}/edit`} replace />;
+}
+
+/**
+ * Redirect that keeps the query string.
+ *
+ * A bare `<Navigate to="/iga/cloud/identities" />` drops `?account=`, so a
+ * bookmarked or shared single-account link would land on the all-accounts view
+ * with nothing to say it had widened. Silently showing MORE than the link asked
+ * for is the wrong direction for a security console to fail in, and it would
+ * defeat the same carry-over rule `CARRIED_TAB_PARAMS` exists to enforce.
+ */
+function CloudInventoryRedirect({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: to, search }} replace />;
 }
 
 function LegacyClientOnboardRedirect() {
@@ -652,43 +668,71 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  {/* ── AWS cloud discovery inventory ───────────────────────
-                      The CONTENTS of a connected AWS account, as opposed to
+                  {/* ── Cloud inventory ─────────────────────────────────────
+                      The CONTENTS of a connected cloud account, as opposed to
                       the connection itself — which stays where it is, as a row
                       in the Integrations table with its own drawer.
 
-                      Separate routes rather than more tabs on
-                      AWSConnectorDrawer: that panel is 560px and answers "is
-                      this connection healthy", while these need table width,
-                      search, paging and a shareable URL. The split follows the
-                      backend's own boundary between the connector endpoints
-                      and the seven list endpoints under
-                      /authsec/discovery/aws/*.
+                      ONE shell with three tabs, not three sidebar items. The
+                      GCP build workflow's console row reads "Built for AWS,
+                      provider-filterable", and AS-215: "the AWS console views
+                      read provider-neutral tables, so GCP inherits them once
+                      the endpoints exist… Every other view reuses without
+                      change." A second provider therefore filters into these
+                      same three tabs rather than adding "GCP Identities"
+                      beside "AWS Identities" — which is why these paths carry
+                      no provider segment.
+
+                      Still real routes, not drawer tabs: AWSConnectorDrawer is
+                      560px and answers "is this connection healthy", while
+                      these need table width, search, paging and a shareable
+                      URL. The split follows the backend's own boundary between
+                      the connector endpoints and the seven list endpoints
+                      under /authsec/discovery/aws/*.
 
                       Deliberately NOT folded into /iga/identities above: that
                       page covers every identity channel (SPIFFE, OAuth
-                      clients, service accounts), and filling it with AWS-only
-                      rows would make its name wrong the moment GCP discovery
-                      ships. */}
+                      clients, service accounts), and filling it with cloud
+                      rows would make its name wrong. */}
                   <Route
-                    path="/iga/cloud/aws/identities"
+                    path="/iga/cloud"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <AWSIdentitiesPage />
+                          <CloudInventoryLayout />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
+                  >
+                    <Route
+                      index
+                      element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
+                    />
+                    <Route path="identities" element={<AWSIdentitiesPage />} />
+                    <Route path="compute" element={<AWSComputePage />} />
+                    <Route path="resources" element={<AWSResourcesPage />} />
+                    <Route
+                      path="*"
+                      element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
+                    />
+                  </Route>
+
+                  {/* The pre-consolidation paths, kept as redirects rather than
+                      left to 404: AWSConnectorDrawer linked at them and they
+                      may be bookmarked. Declared as top-level siblings so they
+                      never mount the inventory shell just to leave it — and
+                      their static segments outrank the splat child above. */}
+                  <Route
+                    path="/iga/cloud/aws/identities"
+                    element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
                   />
                   <Route
                     path="/iga/cloud/aws/compute"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <AWSComputePage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
+                    element={<CloudInventoryRedirect to="/iga/cloud/compute" />}
+                  />
+                  <Route
+                    path="/iga/cloud/aws/resources"
+                    element={<CloudInventoryRedirect to="/iga/cloud/resources" />}
                   />
                   {/* ── Governance surfaces ── */}
                   <Route

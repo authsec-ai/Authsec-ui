@@ -78,7 +78,7 @@ export function truncationOf(
   };
 }
 
-export type InventorySurface = "identities" | "permissions" | "compute" | "usage";
+export type InventorySurface = "identities" | "permissions" | "compute" | "usage" | "resources";
 
 export type InventoryEmptyReason =
   | { kind: "no_connectors" }

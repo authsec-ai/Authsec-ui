@@ -135,7 +135,7 @@ function PermissionRow({ perm }: { perm: AWSPermission }) {
   return (
     <div className="space-y-1.5 rounded-md border p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[12.5px] font-medium text-foreground">{surfaceLabel(perm.surface)}</span>
+        <span className="text-xs font-medium text-foreground">{surfaceLabel(perm.surface)}</span>
         {perm.possibly_redundant_with_baseline ? (
           <CloudPill tone="muted" dot={false}>
             May overlap baseline
@@ -144,12 +144,12 @@ function PermissionRow({ perm }: { perm: AWSPermission }) {
       </div>
       <div className="flex flex-wrap gap-1">
         {perm.actions.map((a) => (
-          <span key={a} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
+          <span key={a} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
             {a}
           </span>
         ))}
       </div>
-      <p className="text-[11.5px] text-muted-foreground">{perm.why}</p>
+      <p className="text-xs text-muted-foreground">{perm.why}</p>
     </div>
   );
 }
@@ -292,10 +292,10 @@ export function AWSOnboardingWizard({
               <span
                 className={
                   i === step
-                    ? "flex size-5 items-center justify-center rounded-full bg-(--color-primary) text-[10px] font-semibold text-white"
+                    ? "flex size-5 items-center justify-center rounded-full bg-(--color-primary) text-[11px] font-semibold text-white"
                     : i < step
-                      ? "flex size-5 items-center justify-center rounded-full bg-(--color-success-soft) text-[10px] font-semibold text-(--color-success-text)"
-                      : "flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                      ? "flex size-5 items-center justify-center rounded-full bg-(--color-success-soft) text-[11px] font-semibold text-(--color-success-text)"
+                      : "flex size-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
                 }
               >
                 {i < step ? "✓" : i + 1}
@@ -361,12 +361,12 @@ export function AWSOnboardingWizard({
                   </p>
 
                   <Disclosure label="View permissions this role grants">
-                    <div className="rounded-md border p-2.5 text-[12.5px]">
+                    <div className="rounded-md border p-2.5 text-xs">
                       <span className="font-medium text-foreground">Baseline: </span>
                       <span className="font-mono text-[11px] text-muted-foreground">
                         {pkg.baseline_managed_policy}
                       </span>
-                      <p className="mt-1 text-[11.5px] text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         AWS-managed, read-only metadata access. Does not include reading secret
                         values, parameter values, or decryption keys.
                       </p>
@@ -382,7 +382,7 @@ export function AWSOnboardingWizard({
                         <div key={perm.surface} className="space-y-1 rounded-md border border-dashed p-2.5">
                           <div className="flex items-center gap-1.5">
                             <ShieldOff className="size-3.5 text-muted-foreground" />
-                            <span className="text-[12.5px] font-medium text-foreground">
+                            <span className="text-xs font-medium text-foreground">
                               {surfaceLabel(perm.surface)}
                             </span>
                           </div>
@@ -390,13 +390,13 @@ export function AWSOnboardingWizard({
                             {perm.actions.map((a) => (
                               <span
                                 key={a}
-                                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
+                                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
                               >
                                 {a}
                               </span>
                             ))}
                           </div>
-                          <p className="text-[11.5px] text-muted-foreground">{perm.why}</p>
+                          <p className="text-xs text-muted-foreground">{perm.why}</p>
                         </div>
                       ))}
                     </div>
