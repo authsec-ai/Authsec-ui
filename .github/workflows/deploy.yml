@@ -25,6 +25,13 @@ on:
         description: 'Type DEPLOY to confirm'
         required: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 env:
   REGISTRY: docker-repo-public.authnull.com
   IMAGE: ui
@@ -57,7 +64,22 @@ jobs:
       # you fix some; never raise it.
       - name: TypeScript (must not add errors)
         run: |
-          COUNT=$(npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -cE "error TS" || true)
+          STATUS=0
+          npx tsc -p tsconfig.app.json --noEmit > typecheck.log 2>&1 || STATUS=$?
+          COUNT=$(grep -cE "error TS" typecheck.log || true)
+          if [ "$STATUS" -ne 0 ] && [ "$COUNT" -eq 0 ]; then
+            cat typecheck.log
+            exit 1
+          fi
+          node <<'JS'
+          const ts = require("typescript");
+          const config = ts.readConfigFile("tsconfig.app.json", ts.sys.readFile);
+          if (config.error) { console.error(config.error); process.exit(1); }
+          const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, ".");
+          const program = ts.createProgram(parsed.fileNames, parsed.options);
+          const errors = [...parsed.errors, ...program.getSyntacticDiagnostics()];
+          if (errors.length) { console.error(errors); process.exit(1); }
+          JS
           echo "TypeScript errors: $COUNT (ceiling 198)"
           # A PARSE error reports as 1 and hides every other diagnostic, so a
           # suspiciously low count is a warning sign, not a win.
@@ -82,8 +104,13 @@ jobs:
           # made the first version of this step read 0 every time — a ratchet
           # that can never fail is worse than no ratchet, because it looks like
           # coverage.
-          COUNT=$(npx eslint "src/features/discovery/**/*.{ts,tsx}" "src/app/api/*.ts" -f json 2>/dev/null \
-            | python3 -c "import json,sys; print(sum(f['errorCount'] for f in json.load(sys.stdin)))")
+          STATUS=0
+          npx eslint "src/features/discovery/**/*.{ts,tsx}" "src/app/api/*.ts" -f json > eslint-report.json || STATUS=$?
+          if [ "$STATUS" -gt 1 ]; then
+            echo "ESLint could not complete."
+            exit "$STATUS"
+          fi
+          COUNT=$(python3 -c "import json; print(sum(f['errorCount'] for f in json.load(open('eslint-report.json'))))")
           echo "ESLint errors: $COUNT (ceiling 17)"
           if [ "$COUNT" -gt 17 ]; then
             echo "This change ADDS ESLint errors. Ceiling is 17."
@@ -155,10 +182,12 @@ jobs:
       # schema and runs no migrations. Adding a ceremonial dump would teach
       # people the step is ceremonial.
       - name: Point the deployment at this commit
+        id: rollout
         run: |
           kubectl set image -n "$NAMESPACE" \
             "deploy/$DEPLOYMENT" \
             "$CONTAINER=$REGISTRY/$IMAGE:${{ needs.build.outputs.sha }}"
+          echo "image_updated=true" >> "$GITHUB_OUTPUT"
           kubectl annotate -n "$NAMESPACE" "deploy/$DEPLOYMENT" \
             kubernetes.io/change-cause="deploy ${{ needs.build.outputs.sha }} by ${{ github.actor }}" \
             --overwrite
@@ -168,7 +197,7 @@ jobs:
         run: SERVICE=ui API="$APP" ./scripts/check-deployed-version.sh "${{ needs.build.outputs.sha }}"
 
       - name: Roll back if verification failed
-        if: failure()
+        if: failure() && steps.rollout.outputs.image_updated == 'true'
         run: |
           echo "Verification failed — rolling back."
           kubectl rollout undo -n "$NAMESPACE" "deploy/$DEPLOYMENT"
