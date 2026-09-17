@@ -213,6 +213,7 @@ export const baseApi = createApi({
     "CloudResource",
     "CloudWorkload",
     "CloudUsage",
+    "CloudScanRun",
   ],
   endpoints: () => ({}),
 });

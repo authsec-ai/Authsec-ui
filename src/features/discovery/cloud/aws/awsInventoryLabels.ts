@@ -42,6 +42,11 @@ import type {
 export const IDENTITY_KIND_LABEL: Record<CloudIdentityKind, string> = {
   iam_role: "IAM role",
   iam_user: "IAM user",
+  // Named for what it is. Rendering a GCP service account as "User" loses the
+  // machine/human distinction, and that distinction is load-bearing: a human
+  // and a service account are governed differently and reviewed by different
+  // people.
+  gcp_service_account: "GCP service account",
 };
 
 /* ──────────────────────────── compute ───────────────────────────────────── */

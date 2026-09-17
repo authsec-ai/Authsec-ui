@@ -302,12 +302,68 @@ export interface AWSCreateConnectorRequest {
 interface ScanTriggerEnvelope {
   success: boolean;
   message: string;
-  meta?: { as_of?: string; poll?: string; note?: string; writes?: string[] };
+  /** `run_id` is the handle for the scan that was QUEUED. The POST does not
+   * perform the scan; watch the run to learn when it finished. */
+  meta?: {
+    as_of?: string;
+    run_id?: string;
+    status?: CloudScanRunStatus;
+    poll?: string;
+    note?: string;
+    writes?: string[];
+  };
+}
+
+/** A scan attempt's lifecycle.
+ *
+ * `published` is the ONLY state in which the inventory reflects the pass.
+ * `failed` and `abandoned` are finished too, but the inventory still shows the
+ * previous one — which is why "not running any more" is not a refresh signal. */
+export type CloudScanRunStatus =
+  | "queued"
+  | "running"
+  | "published"
+  | "failed"
+  | "abandoned";
+
+export interface CloudScanRun {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  generation: number;
+  status: CloudScanRunStatus;
+  trigger: string;
+  attempts: number;
+  last_error: string;
+  requested_at: string;
+  started_at?: string | null;
+  published_at?: string | null;
+}
+
+interface CloudScanRunEnvelope {
+  success: boolean;
+  data: CloudScanRun;
+  meta?: { as_of?: string; terminal?: boolean; note?: string };
 }
 
 // ── AWS IAM identity discovery (ticket [1]/[2] evidence) ────────────────────
 
-export type CloudIdentityKind = "iam_role" | "iam_user";
+/** Every identity kind the discovery tables can hold.
+ *
+ * `gcp_service_account` is here because the backend already writes it and the
+ * union did not admit it: a GCP row fell through the AWS label map and rendered
+ * as "User", losing the machine/human distinction before the graph is built
+ * from these rows. The union is the provider-neutral set on purpose — the
+ * inventory is one table across providers, and pretending otherwise is what
+ * produced "38 identities" from 31 AWS roles, 4 AWS users and 3 GCP service
+ * accounts. */
+export type CloudIdentityKind = "iam_role" | "iam_user" | "gcp_service_account";
+
+/** Which provider an identity kind belongs to. Used to keep provider-mixed
+ * totals out of a panel that describes one provider. */
+export function providerOfKind(kind: CloudIdentityKind): "aws" | "gcp" {
+  return kind === "gcp_service_account" ? "gcp" : "aws";
+}
 
 /** `models.AWSIdentityAttrs`'s wire shape — `CloudIdentity.attrs` for AWS. */
 export interface AWSIdentityAttrs {
@@ -1001,18 +1057,51 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // until the page was reloaded by hand.
     scanAwsConnector: builder.mutation<ScanTriggerEnvelope, string>({
       query: (id) => ({ url: `/authsec/discovery/aws/connectors/${id}/scan`, method: "POST" }),
+      // ONLY the connector and the run list.
+      //
+      // This used to invalidate every inventory tag, which refetched all of
+      // them the instant the 202 came back -- before the scan had started. The
+      // customer saw a spinner, then the SAME stale rows, and nothing refreshed
+      // again when the scan actually finished. Inventory invalidation now
+      // belongs to `getAwsScanRun` at the moment the run reaches `published`.
       invalidatesTags: (_result, _error, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
-        { type: "CloudIdentity", id },
-        { type: "CloudIdentity", id: "ALL" },
-        { type: "CloudSecret", id: "ALL" },
-        { type: "CloudAssumeEdge", id: "ALL" },
-        { type: "CloudPermission", id: "ALL" },
-        { type: "CloudResource", id: "ALL" },
-        { type: "CloudWorkload", id: "ALL" },
-        { type: "CloudUsage", id: "ALL" },
+        { type: "CloudScanRun", id: "ALL" },
       ],
+    }),
+
+    /** One scan attempt.
+     *
+     * The console polls this rather than the connector's coverage, because
+     * coverage is written AFTER publication and so lags the run — and because
+     * the IAM stage used to commit a coverage status early, which made
+     * "coverage stopped saying running" fire long before collection finished.
+     *
+     * `providesTags` carries every inventory tag: when this query transitions
+     * to `published`, invalidating CloudScanRun refetches the inventories with
+     * it. That is the completion-driven refresh, and it is why the mutation
+     * above no longer invalidates them itself. */
+    getAwsScanRun: builder.query<CloudScanRun, string>({
+      query: (runId) => ({
+        url: `/authsec/discovery/aws/scan-runs/${runId}`,
+        method: "GET",
+      }),
+      transformResponse: (r: CloudScanRunEnvelope) => r.data,
+      providesTags: (result) =>
+        result?.status === "published"
+          ? [
+              { type: "CloudScanRun" as const, id: result.id },
+              { type: "CloudScanRun" as const, id: "ALL" },
+              { type: "CloudIdentity" as const, id: "ALL" },
+              { type: "CloudSecret" as const, id: "ALL" },
+              { type: "CloudAssumeEdge" as const, id: "ALL" },
+              { type: "CloudPermission" as const, id: "ALL" },
+              { type: "CloudResource" as const, id: "ALL" },
+              { type: "CloudWorkload" as const, id: "ALL" },
+              { type: "CloudUsage" as const, id: "ALL" },
+            ]
+          : [{ type: "CloudScanRun" as const, id: result?.id ?? "ALL" }],
     }),
 
     /* ──────────────────── The seven AWS discovery reads ───────────────────
@@ -1344,6 +1433,7 @@ export const {
   useVerifyAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
   useScanAwsConnectorMutation,
+  useGetAwsScanRunQuery,
   useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
   useListAwsAssumeEdgesQuery,

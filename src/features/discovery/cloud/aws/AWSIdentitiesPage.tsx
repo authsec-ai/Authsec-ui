@@ -207,6 +207,11 @@ export default function AWSIdentitiesPage() {
   const metrics = useMemo<MetricStripItemDef[]>(() => {
     const roles = rows.filter((i) => i.kind === "iam_role").length;
     const users = rows.filter((i) => i.kind === "iam_user").length;
+    // The inventory table is shared across providers, so a GCP service account
+    // sits in it beside the AWS rows. Counting them into one "Identities" total
+    // beside a breakdown of "IAM roles" and "IAM users" made 38 = 31 + 4 with
+    // three rows unaccounted for, under a heading describing AWS.
+    const gcpServiceAccounts = rows.filter((i) => i.kind === "gcp_service_account").length;
     let withUnused = 0;
     for (const i of rows) {
       const usage = usageByIdentity.get(i.id);
@@ -215,6 +220,8 @@ export default function AWSIdentitiesPage() {
     return [
       {
         key: "total",
+        // Deliberately "Identities", not "AWS identities": the number counts
+        // every provider's rows, and the tiles beside it break that down.
         label: metricLabel("Identities", truncated, rows.length),
         value: total,
         tone: "primary",
@@ -235,6 +242,16 @@ export default function AWSIdentitiesPage() {
         value: users,
         onClick: () => setParam("kind", "iam_user"),
       },
+      ...(gcpServiceAccounts > 0
+        ? [
+            {
+              key: "gcp",
+              label: metricLabel("GCP service accounts", truncated, rows.length),
+              value: gcpServiceAccounts,
+              onClick: () => setParam("kind", "gcp_service_account"),
+            } as MetricStripItemDef,
+          ]
+        : []),
       {
         key: "unused",
         // Qualified on the ACTIVITY read, not the identity read: this tile can

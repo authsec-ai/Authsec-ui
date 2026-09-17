@@ -59,6 +59,7 @@ import {
   useGetAwsConnectorQuery,
   useVerifyAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
+  useGetAwsScanRunQuery,
   useScanAwsConnectorMutation,
   useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
@@ -166,9 +167,36 @@ export function AWSConnectorDrawer({
     pollingInterval: autoPoll ? 4000 : 0,
   });
 
+  // The run this drawer is watching, if the operator started one here.
+  const [watchedRunId, setWatchedRunId] = useState<string | null>(null);
+
+  // Poll the RUN, not the connector's coverage.
+  //
+  // Coverage is written after publication, so it lags the run — and the IAM
+  // stage used to commit a coverage status before permissions and workloads had
+  // started, which made "coverage stopped saying running" fire while most of
+  // the account was still unread. A customer following that signal saw
+  // intermediate results and believed the scan was done.
+  const scanRunQuery = useGetAwsScanRunQuery(watchedRunId ?? "", {
+    skip: !watchedRunId,
+    pollingInterval: watchedRunId ? 3000 : 0,
+  });
+  const scanRun = scanRunQuery.data;
+
   useEffect(() => {
-    setAutoPoll(connector?.coverage?.status === "running");
-  }, [connector?.coverage?.status]);
+    // Stop polling once the run reaches a terminal state. `published` is the
+    // one that means the inventory now reflects this pass; the RTK tag on that
+    // transition is what refreshes the inventory views.
+    if (scanRun && scanRun.status !== "queued" && scanRun.status !== "running") {
+      setWatchedRunId(null);
+    }
+  }, [scanRun]);
+
+  useEffect(() => {
+    // Coverage still drives the connector poll, because a scan started
+    // elsewhere (another operator, a schedule) has no run id here.
+    setAutoPoll(connector?.coverage?.status === "running" || Boolean(watchedRunId));
+  }, [connector?.coverage?.status, watchedRunId]);
 
   const { data: identityPage, isLoading: identitiesLoading } = useListAwsIdentityPageQuery(
     { connector_id: connectorId ?? undefined, limit: AWS_DISCOVERY_MAX_LIMIT },
@@ -220,12 +248,23 @@ export function AWSConnectorDrawer({
       "Could not verify the connection.",
     );
 
-  const handleScan = () =>
-    void runOrToast(
-      () => scanConnector(connector!.id).unwrap(),
-      "Scan started — it runs in the background.",
-      "Could not start the scan.",
-    );
+  const handleScan = async () => {
+    if (!connector) return;
+    try {
+      const res = await scanConnector(connector.id).unwrap();
+      const runId = res.meta?.run_id;
+      if (runId) setWatchedRunId(runId);
+      // "Queued", not "started": the POST enqueues and a worker picks it up.
+      // Saying "started" is what made the previous 202 read as completion.
+      toast.success("Scan queued — this drawer will update when it finishes.");
+    } catch (err) {
+      const copy = awsErrorCopy(
+        (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
+        "Could not start the scan.",
+      );
+      toast.error(`${copy.title}. ${copy.body}`);
+    }
+  };
 
   const handleRevoke = async () => {
     if (!connector) return;
