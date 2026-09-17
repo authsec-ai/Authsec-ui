@@ -42,6 +42,7 @@ import { stackPredatesCompute } from "./awsInventoryLabels";
  */
 
 export interface Truncation {
+  /** Known, or presumed, not to be the whole set. */
   truncated: boolean;
   /** Rows actually in hand. */
   shown: number;
@@ -50,12 +51,27 @@ export interface Truncation {
   totalKnown: boolean;
 }
 
-/** Derived in one place so no page hand-rolls the comparison. Note it uses
- * `offset + rows.length`, not `rows.length`: on page three of a list, having
- * 100 rows of 250 is not truncation at 100, it is position 200 of 250. */
-export function truncationOf(page: Pick<CloudPage<unknown>, "rows" | "total" | "offset" | "totalKnown">): Truncation {
+/** Derived in one place so no page hand-rolls the comparison.
+ *
+ * With a server total the comparison uses `offset + rows.length`, not
+ * `rows.length`: on page three, having 100 rows of 250 is not truncation at
+ * 100, it is position 200 of 250.
+ *
+ * WITHOUT a server total the comparison cannot be made at all. `total` is then
+ * only the rows in hand, so `offset + rows < total` is always false and every
+ * warning is suppressed — a 2,500-row account with no pagination metadata
+ * rendered 500 rows and called itself complete. A full page is therefore
+ * PRESUMED truncated: missing evidence has to bias toward "there may be more",
+ * because the alternative is an absent meta block quietly asserting the
+ * opposite. */
+export function truncationOf(
+  page: Pick<CloudPage<unknown>, "rows" | "total" | "offset" | "totalKnown" | "limit">,
+): Truncation {
+  const truncated = page.totalKnown
+    ? page.offset + page.rows.length < page.total
+    : page.rows.length >= page.limit;
   return {
-    truncated: page.offset + page.rows.length < page.total,
+    truncated,
     shown: page.rows.length,
     total: page.total,
     totalKnown: page.totalKnown,

@@ -83,10 +83,10 @@ function TabLoading() {
 
 /** A failed request, said plainly.
  *
- * Every tab below used to fall through from `isLoading` straight to its empty
- * state, so a 403 or a network failure rendered as "No trust relationships
- * recorded" — an assertion about the account made from no data at all. An
- * error must never be able to wear an empty state's words. */
+ * Each tab otherwise falls from `isLoading` straight to its empty state, so a
+ * 403 or a dropped connection renders as "No trust relationships recorded" — an
+ * assertion about the account made from no data at all. An error must never be
+ * able to wear an empty state's words. */
 function TabError({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
     <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
@@ -96,28 +96,6 @@ function TabError({ what, onRetry }: { what: string; onRetry: () => void }) {
         Retry
       </button>
     </div>
-  );
-}
-
-/** Says what a page left out. `totalKnown` separates "N of M" from "there is
- * more and we cannot say how much", which are different admissions. */
-function TruncationNotice({
-  shown,
-  total,
-  totalKnown,
-  noun,
-}: {
-  shown: number;
-  total: number;
-  totalKnown: boolean;
-  noun: string;
-}) {
-  return (
-    <InventoryNotice tone="warning" icon={<Info />}>
-      {totalKnown
-        ? `Showing ${shown} of ${total} ${noun}. The rest are not displayed.`
-        : `Showing ${shown} ${noun}. This deployment did not report a total, so there may be more.`}
-    </InventoryNotice>
   );
 }
 
@@ -163,7 +141,10 @@ function policySourceLabel(source: string): { label: string; kind: string } {
 }
 
 export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
-  const permissionQuery = useListAwsPermissionsQuery({ identity_id: identity.id, limit: 500 });
+  const permissionQuery = useListAwsPermissionsQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const { data: permissionPage, isLoading, isError } = permissionQuery;
   const permissions = permissionPage?.rows;
 
@@ -172,11 +153,10 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
   // own connector so the fetch is as small as the API allows.
   const { data: resourcePage } = useListAwsResourcesQuery({
     connector_id: identity.connector_id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
   });
 
   const resourceById = useMemo(
-    () => new Map((resourcePage?.rows ?? []).map((r) => [r.id, r])),
-    [resourcePage],
     () => new Map((resourcePage?.rows ?? []).map((r) => [r.id, r])),
     [resourcePage],
   );
@@ -226,20 +206,6 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
         that is the record of its breadth, not a missing value.
       </InventoryNotice>
 
-      {permissionPage?.truncated ? (
-        <InventoryNotice tone="warning" icon={<Info />}>
-          Showing {permissionPage.rows.length} of {permissionPage.total} statements. This identity
-          has more than one page; the rest are not displayed.
-        </InventoryNotice>
-      ) : null}
-
-      {resourcePage?.truncated ? (
-        <InventoryNotice tone="warning" icon={<Info />}>
-          The resource lookup is truncated at {resourcePage.rows.length} of {resourcePage.total}, so
-          some statements below may show a resource id instead of its name.
-        </InventoryNotice>
-      ) : null}
-
       {grouped.map(([source, statements]) => {
         const { label, kind } = policySourceLabel(source);
         return (
@@ -265,17 +231,17 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
                     {p.sensitivity !== "low" ? (
                       <CloudPill tone={SENSITIVITY_TONE[p.sensitivity]} dot={false}>
                         {SENSITIVITY_LABEL[p.sensitivity]} sensitivity
-                      </StatusBadge>
+                      </CloudPill>
                     ) : null}
                     {p.derivation === "boundary" ? (
-                      <StatusBadge tone="muted" dot={false}>
+                      <CloudPill tone="muted" dot={false}>
                         Permissions boundary
-                      </StatusBadge>
+                      </CloudPill>
                     ) : null}
                     {p.constraint_state !== "unconstrained" ? (
-                      <StatusBadge tone={CONSTRAINT_TONE[p.constraint_state]} dot={false}>
+                      <CloudPill tone={CONSTRAINT_TONE[p.constraint_state]} dot={false}>
                         {CONSTRAINT_LABEL[p.constraint_state]}
-                      </StatusBadge>
+                      </CloudPill>
                     ) : null}
                   </div>
 
@@ -300,9 +266,7 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
                   {p.not_resources?.length ? (
                     <p className="text-[11px] text-muted-foreground">
                       On every resource except{" "}
-                      <span className="font-mono text-foreground">
-                        {p.not_resources.join(", ")}
-                      </span>
+                      <span className="font-mono text-foreground">{p.not_resources.join(", ")}</span>
                     </p>
                   ) : null}
 
@@ -371,7 +335,10 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Trust ─────────────────────────────────── */
 
 export function TrustTab({ identity }: { identity: CloudIdentity }) {
-  const edgeQuery = useListAwsAssumeEdgesQuery({ identity_id: identity.id, limit: 500 });
+  const edgeQuery = useListAwsAssumeEdgesQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const { data: edgePage, isLoading, isError } = edgeQuery;
   const edges = edgePage?.rows;
 
@@ -405,14 +372,6 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
 
   return (
     <div className="space-y-4">
-      {edgePage?.truncated ? (
-        <TruncationNotice
-          shown={edgePage.rows.length}
-          total={edgePage.total}
-          totalKnown={edgePage.totalKnown}
-          noun="trust relationships"
-        />
-      ) : null}
       {external > 0 ? (
         <InventoryNotice tone="warning" icon={<Info />}>
           <strong className="font-medium">
@@ -461,7 +420,10 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
 /* ────────────────────────────── Compute ────────────────────────────────── */
 
 export function ComputeTab({ identity }: { identity: CloudIdentity }) {
-  const workloadQuery = useListAwsWorkloadsQuery({ identity_id: identity.id, limit: 500 });
+  const workloadQuery = useListAwsWorkloadsQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const { data, isLoading, isError } = workloadQuery;
   const rows = data?.rows ?? [];
 
@@ -511,14 +473,6 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
 
   return (
     <div className="space-y-4">
-      {data?.truncated ? (
-        <TruncationNotice
-          shown={rows.length}
-          total={data.total}
-          totalKnown={data.totalKnown}
-          noun="workloads"
-        />
-      ) : null}
       <p className="text-[11px] text-muted-foreground">
         Compute that runs as this identity. Whether any of it is an agent is a separate judgement.
       </p>
@@ -581,14 +535,20 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Usage ─────────────────────────────────── */
 
 export function UsageTab({ identity }: { identity: CloudIdentity }) {
-  const usageQuery = useListAwsUsageQuery({ identity_id: identity.id, limit: 500 });
+  const usageQuery = useListAwsUsageQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const { data, isLoading, isError } = usageQuery;
   // Memoised for the same reason as the identities page: `?? []` is a fresh
   // array each render and would re-run the generatedAt reduction every time.
   const rows = useMemo(() => data?.rows ?? [], [data]);
-  // Page-scoped, like every server tally on these endpoints. Labelled as such
-  // wherever it is shown rather than passed off as an account-wide count.
-  const neverAccessed = data?.pageMeta.never_accessed ?? 0;
+
+  // Derived from `rows`, not from meta. This line used to read
+  // `meta.never_accessed` (a server tally) against `rows.length` (a page
+  // length) and could print "312 of 100". Both numbers now come from one
+  // source, so they cannot disagree.
+  const neverAccessed = useMemo(() => rows.filter((r) => !r.last_used_at).length, [rows]);
 
   // Every row shares one report, so the oldest generated_at is the age of the
   // whole answer. A three-week-old report is a materially different claim from
@@ -616,14 +576,6 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
 
   return (
     <div className="space-y-4">
-      {data?.truncated ? (
-        <TruncationNotice
-          shown={rows.length}
-          total={data.total}
-          totalKnown={data.totalKnown}
-          noun="service activity rows"
-        />
-      ) : null}
       {neverAccessed > 0 ? (
         <InventoryNotice tone="warning" icon={<Info />}>
           <strong className="font-medium">
@@ -674,7 +626,12 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
 /* ──────────────────────────────── Keys ────────────────────────────────── */
 
 export function KeysTab({ identity }: { identity: CloudIdentity }) {
-  const secretQuery = useListAwsSecretsQuery({ identity_id: identity.id, limit: 500 });
+  // No TruncationLine: AWS caps an IAM user at two access keys, so a 500-row
+  // page provably cannot truncate this one.
+  const secretQuery = useListAwsSecretsQuery({
+    identity_id: identity.id,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
   const { data: secretPage, isLoading, isError } = secretQuery;
   const secrets = secretPage?.rows;
 
@@ -683,14 +640,6 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
 
   return (
     <div className="space-y-4">
-      {secretPage?.truncated ? (
-        <TruncationNotice
-          shown={secretPage.rows.length}
-          total={secretPage.total}
-          totalKnown={secretPage.totalKnown}
-          noun="access keys"
-        />
-      ) : null}
       <p className="text-[11px] text-muted-foreground">
         Key identifiers and dates only — no secret value is ever read or stored. Oldest first: for a
         credential with no expiry, age is the finding.

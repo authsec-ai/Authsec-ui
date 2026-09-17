@@ -441,10 +441,6 @@ export interface CloudSecret {
   attrs: Record<string, unknown>;
 }
 
-interface CloudSecretListEnvelope {
-  data: CloudSecret[];
-  meta?: { as_of?: string; total?: number; limit?: number; offset?: number; ordering?: string; note?: string };
-}
 
 // ── AWS trust, permissions and resources (ticket [2] evidence) ──────────────
 
@@ -485,10 +481,6 @@ export interface CloudAssumeEdge {
   row_updated_at: string;
 }
 
-interface CloudAssumeEdgeListEnvelope {
-  data: CloudAssumeEdge[];
-  meta?: { as_of?: string; total?: number; limit?: number; offset?: number; note?: string };
-}
 
 /** `account_wide` and `prefix` mean `resource_id` is deliberately null, not
  * missing. Never expand a broad scope into the children it might cover —
@@ -499,6 +491,23 @@ export type CloudSensitivity = "low" | "med" | "high";
 
 /** `models.CloudPermission`. A policy STATEMENT, not computed effective
  * access: `derivation` is always "granted" for AWS today. */
+/** How far a permission row may be trusted as a statement of access.
+ *
+ * - `unconstrained` — nothing narrows it; safe to render as plain access.
+ * - `conditional`   — carries a Condition we stored and did not evaluate.
+ * - `negated`       — written with NotAction/NotResource; its true extent
+ *                     depends on what else exists in the account.
+ * - `bounded`       — the identity has a permissions boundary capping it.
+ * - `unknown`       — collected before constraints were recorded, or the
+ *                     identity's detail read failed. Nobody looked.
+ */
+export type CloudConstraintState =
+  | "unconstrained"
+  | "conditional"
+  | "negated"
+  | "bounded"
+  | "unknown";
+
 export interface CloudPermission {
   id: string;
   workspace_id: string;
@@ -513,9 +522,9 @@ export interface CloudPermission {
    * assignments, which have a role name; an IAM statement does not. */
   role_name?: string | null;
   actions: string[];
-  /** The statement's NotAction element: "every action EXCEPT these". A row
-   * with `not_actions` and an empty `actions` is not an empty grant — it is a
-   * very broad one. */
+  /** The statement's NotAction element: "every action EXCEPT these". A row with
+   * `not_actions` and an empty `actions` is not an empty grant — it is a very
+   * broad one. */
   not_actions?: string[] | null;
   /** The statement's NotResource element, verbatim. Never widened to "*". */
   not_resources?: string[] | null;
@@ -543,10 +552,6 @@ export interface CloudPermission {
   row_updated_at: string;
 }
 
-interface CloudPermissionListEnvelope {
-  data: CloudPermission[];
-  meta?: { as_of?: string; total?: number; limit?: number; offset?: number; note?: string };
-}
 
 /** `models.CloudResource`. A row exists ONLY because a permission statement
  * named it. This is not an inventory of everything in the account, and an
@@ -567,10 +572,6 @@ export interface CloudResource {
   row_updated_at: string;
 }
 
-interface CloudResourceListEnvelope {
-  data: CloudResource[];
-  meta?: { as_of?: string; total?: number; limit?: number; offset?: number; note?: string };
-}
 
 // ── AWS workloads and activity (PR #52 surfaces) ────────────────────────────
 
@@ -634,21 +635,6 @@ export interface CloudWorkload {
   row_updated_at: string;
 }
 
-interface CloudWorkloadListEnvelope {
-  data: CloudWorkload[];
-  meta?: {
-    as_of?: string;
-    total?: number;
-    limit?: number;
-    offset?: number;
-    /** Tally per runtime kind, counted over THIS PAGE ONLY — the server says
-     * so in its own note. Never present it as an account-wide figure. */
-    by_runtime_kind?: Record<string, number>;
-    /** Count of rows with a null identity_id, over THIS PAGE ONLY. */
-    unattributed?: number;
-    note?: string;
-  };
-}
 
 /** Whether an identity actually exercised a service, as opposed to merely
  * being permitted to. */
@@ -674,126 +660,113 @@ export interface CloudUsage {
   row_updated_at: string;
 }
 
-interface CloudUsageListEnvelope {
-  data: CloudUsage[];
-  meta?: {
-    as_of?: string;
-    total?: number;
-    limit?: number;
-    offset?: number;
-    /** Count of rows with a null last_used_at, over THIS PAGE ONLY. */
-    never_accessed?: number;
-    note?: string;
-  };
-}
+/* `CloudListWithMeta`, `CloudWorkloadMeta` and `CloudUsageMeta` used to live
+ * here. They existed because `unattributed`, `never_accessed` and
+ * `by_runtime_kind` were the server's tallies over the FULL set, and
+ * recomputing them client-side "would silently produce a different answer the
+ * moment the response is ever paginated."
+ *
+ * That moment arrived. The server now counts all three over the current page
+ * only — byte-for-byte what a client-side count over `rows` produces — so they
+ * carry no information the console lacks, while keeping a field named
+ * `unattributed` that still reads as authoritative. Derive them from `rows`
+ * instead, next to the filter that uses them, where the scope is visible. */
 
-/** A list plus the `meta` counts the server computed for it.
+/** Hard stop for the accumulating usage read: 4 requests at the 500 clamp.
  *
- * Returned instead of a bare array wherever `meta` carries a number the
- * console must not re-derive — `unattributed` and `never_accessed` are the
- * server's own tallies over the full set, and recomputing them client-side
- * would silently produce a different answer the moment the response is ever
- * paginated. */
-/** How far a permission row may be trusted as a statement of access.
+ * The live lab holds ~1,100 usage rows, so this leaves headroom without
+ * letting one large workspace turn a page load into forty requests. */
+const USAGE_ACCUMULATE_CAP = 2000;
+
+/** One page fetch: the envelope, or the error that stopped it. */
+export type UsagePageFetch = (
+  offset: number,
+) => Promise<{ envelope: CloudListEnvelope<CloudUsage> } | { error: FetchBaseQueryError }>;
+
+/** Walks /aws/usage to the end, or to the cap, and says which happened.
  *
- * - `unconstrained` — nothing narrows it; safe to render as plain access.
- * - `conditional`   — carries a Condition we stored and did not evaluate.
- * - `negated`       — written with NotAction/NotResource; its true extent
- *                     depends on what else exists in the account.
- * - `bounded`       — the identity has a permissions boundary capping it.
- * - `unknown`       — collected before constraints were recorded, or the
- *                     identity's detail read failed. We did not look.
+ * Extracted from the endpoint so its stopping rules can be tested against a
+ * source of known size. They are the whole point of the function:
+ *
+ *   - A total the SERVER reported may end the walk. A total inferred from the
+ *     first page may not — it equals the rows already in hand, so the walk
+ *     stopped after one request and reported `truncated: false`. A 2,500-row
+ *     account came back as 500 complete rows.
+ *   - Without a reported total, only a short page proves exhaustion.
+ *   - Stopping at the cap is incompleteness, and is reported as such.
+ *   - Rows are keyed by id: offset paging over a non-unique sort key can
+ *     return one row twice. De-duplicating hides that repeat; it cannot
+ *     recover a row the repeat displaced, which is why the server-side
+ *     ordering also carries a unique tie-breaker.
  */
-export type CloudConstraintState =
-  | "unconstrained"
-  | "conditional"
-  | "negated"
-  | "bounded"
-  | "unknown";
+export async function accumulateUsagePages(
+  fetchPage: UsagePageFetch,
+): Promise<{ data: CloudUsageAll } | { error: FetchBaseQueryError }> {
+  const byId = new Map<string, CloudUsage>();
+  let total = 0;
+  let totalKnown = false;
+  let offset = 0;
+  let pagesFetched = 0;
+  let hitCap = false;
+  let partialError: FetchBaseQueryError | undefined;
 
-/** A server-side page, plus the honest total behind it.
- *
- * Every AWS inventory endpoint pages, defaulting to 100 rows. A view that
- * renders `rows` without consulting `total` is showing part of an account and
- * saying nothing about it. */
-export interface CloudPage<TRow> {
-  rows: TRow[];
-  /** Count BEFORE limit/offset — meaningful only when `totalKnown`. */
-  total: number;
-  /** Whether the server actually reported a total.
-   *
-   * False means this response carried no pagination metadata, so `total` is a
-   * floor derived from the rows in hand, not a count. A view must not print it
-   * as "of N". */
-  totalKnown: boolean;
-  limit: number;
-  offset: number;
-  /** True when this response is known, or presumed, not to be the whole set.
-   *
-   * With no metadata a FULL page is presumed truncated. Missing evidence has to
-   * bias toward "there may be more": the alternative is an absent meta block
-   * silently asserting completeness, which is the failure this whole type
-   * exists to stop. */
-  truncated: boolean;
-}
+  for (;;) {
+    const res = await fetchPage(offset);
+    if ("error" in res) {
+      // Nothing arrived at all: a real failure with nothing to show.
+      if (pagesFetched === 0) return { error: res.error };
+      // Some pages did arrive. Three good pages are not thrown away over one
+      // failed fourth -- keep them and mark the result incomplete.
+      partialError = res.error;
+      break;
+    }
 
-/** A page, plus tallies the server computed over THAT PAGE. `pageMeta` is
- * named to make the scope impossible to misread: it is never account-wide. */
-export interface CloudPageWithMeta<TRow, TMeta> extends CloudPage<TRow> {
-  pageMeta: TMeta;
-}
+    const page = res.envelope.data ?? [];
+    pagesFetched += 1;
+    if (pagesFetched === 1) {
+      totalKnown = res.envelope.meta?.total !== undefined;
+      total = res.envelope.meta?.total ?? 0;
+    }
+    for (const u of page) byId.set(u.id, u);
 
-export interface CloudListWithMeta<TRow, TMeta> {
-  rows: TRow[];
-  meta: TMeta;
-}
+    // page.length, NOT the requested limit: a server honouring a smaller limit
+    // than asked would otherwise make this skip rows.
+    offset += page.length;
 
-/** Page-scoped tallies. Named so a reader cannot mistake them for totals. */
-export interface CloudWorkloadMeta {
-  /** Rows in THIS page, not in the account. */
-  count: number;
-  /** Null-identity rows in THIS page. */
-  unattributed: number;
-  /** Runtime tally over THIS page. */
-  by_runtime_kind: Record<string, number>;
-}
+    if (page.length === 0) break;
+    if (page.length < AWS_DISCOVERY_MAX_LIMIT) break;
+    if (totalKnown && byId.size >= total) break;
+    if (byId.size >= USAGE_ACCUMULATE_CAP) {
+      hitCap = true;
+      break;
+    }
+  }
 
-export interface CloudUsageMeta {
-  /** Rows in THIS page, not in the account. */
-  count: number;
-  /** Never-accessed rows in THIS page. */
-  never_accessed: number;
-}
-
-/** Builds the page shape from an envelope's meta.
- *
- * When the server reports a total, the answer is exact. When it does not — an
- * older deployment, or an endpoint that never gained the meta block — the
- * result says so through `totalKnown: false`, and a full page is presumed
- * truncated rather than declared complete. */
-function toPage<T>(
-  rows: T[],
-  meta: { total?: number; limit?: number; offset?: number } | undefined,
-  arg: { limit?: number; offset?: number } | undefined,
-): CloudPage<T> {
-  const limit = meta?.limit ?? arg?.limit ?? 100;
-  const offset = meta?.offset ?? arg?.offset ?? 0;
-  const totalKnown = typeof meta?.total === "number";
-  const total = totalKnown ? (meta as { total: number }).total : offset + rows.length;
+  const rows = [...byId.values()];
   return {
-    rows,
-    total,
-    totalKnown,
-    limit,
-    offset,
-    truncated: totalKnown ? offset + rows.length < total : rows.length >= limit,
+    data: {
+      rows,
+      total: totalKnown ? total : rows.length,
+      totalKnown,
+      truncated: totalKnown ? rows.length < total : hitCap || partialError !== undefined,
+      pagesFetched,
+      partialError,
+    },
   };
 }
 
-/** An identity page plus its server-reported total, for server-side
- * pagination. Only `/aws/identities` can honestly provide this. */
-export interface CloudIdentityPage {
-  rows: CloudIdentity[];
+/** Every usage row the accumulating read could reach, plus an honest account
+ * of what it could not.
+ *
+ * Worth knowing about the ordering: the server sorts usage
+ * `last_used_at ASC NULLS FIRST`, so every NEVER-ACCESSED row — the actionable
+ * finding — lands on the first page. When `truncated` is true the never-used
+ * counts are therefore still exact; it is the DENOMINATOR that is incomplete.
+ * Callers should drop the "of N" rather than show a wrong total. */
+export interface CloudUsageAll {
+  rows: CloudUsage[];
+  /** `meta.total` from the first page: the whole-set count, however much of
+   * it was actually accumulated. */
   total: number;
   totalKnown: boolean;
   /** Fewer rows in hand than the server says exist — the cap stopped the walk,
@@ -1080,42 +1053,12 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
 
     // Metadata only — key id, dates, status, never a value.
     //
-    // The endpoint filters by `connector_id` as well as `identity_id`. It used
-    // to be described here as identity-only, which sent the connector drawer
-    // down a client-side join of two first pages: any key whose identity fell
-    // outside either page simply vanished from the account view.
-    listAwsSecrets: builder.query<
-      CloudPage<CloudSecret>,
-      { identity_id?: string; connector_id?: string; limit?: number; offset?: number } | void
-    >({
+    // `connector_id` is server-side now. The drawer used to fetch every secret
+    // in the workspace and filter it against a set of the connector's identity
+    // ids; that join is gone, and with it the double truncation it caused.
+    listAwsSecrets: builder.query<CloudPage<CloudSecret>, CloudPageArgs & { identity_id?: string }>({
       query: (params) => ({
         url: "/authsec/discovery/aws/secrets",
-        method: "GET",
-        params: params ?? undefined,
-      }),
-      transformResponse: (r: CloudSecretListEnvelope, _m, arg) =>
-        toPage(r.data ?? [], r.meta, arg ?? undefined),
-      providesTags: [{ type: "CloudSecret" as const, id: "ALL" }],
-    }),
-
-    /* ─────────────── The paginated identity inventory ─────────────────────
-     *
-     * A SECOND identity endpoint, deliberately additive rather than a change
-     * to `listAwsIdentities` above. The two differ only in what they return:
-     * this one keeps `meta.total/limit/offset` so a table can page
-     * server-side, the other flattens to a bare array.
-     *
-     * Kept separate because `listAwsIdentities` is consumed by
-     * AWSConnectorDrawer, and changing its return type to an envelope would
-     * have been a breaking change to a working screen for no benefit to it —
-     * the drawer renders a short list and never pages.
-     */
-    listAwsIdentityPage: builder.query<
-      CloudIdentityPage,
-      { connector_id?: string; kind?: CloudIdentityKind; limit?: number; offset?: number }
-    >({
-      query: (params) => ({
-        url: "/authsec/discovery/aws/identities",
         method: "GET",
         params,
       }),
@@ -1134,37 +1077,34 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // this is the "who can become this role" question on a detail panel.
     listAwsAssumeEdges: builder.query<
       CloudPage<CloudAssumeEdge>,
-      { identity_id?: string; limit?: number; offset?: number } | void
+      CloudPageArgs & { identity_id?: string }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/assume-edges",
         method: "GET",
         params,
       }),
-      transformResponse: (r: CloudAssumeEdgeListEnvelope, _m, arg) =>
-        toPage(r.data ?? [], r.meta, arg ?? undefined),
+      transformResponse: (r: CloudListEnvelope<CloudAssumeEdge>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result?.rows ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
         ...(result?.rows ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
         { type: "CloudAssumeEdge" as const, id: "ALL" },
       ],
     }),
 
-    // Granted policy statements. ALWAYS pass identity_id — see the block
-    // comment above on why an unscoped call is not safe here.
+    // Granted policy statements. ALWAYS pass identity_id: the grain is one row
+    // per policy statement per identity, so an account-wide fetch is unbounded
+    // in the worst way.
     listAwsPermissions: builder.query<
       CloudPage<CloudPermission>,
-      { identity_id?: string; limit?: number; offset?: number } | void
+      CloudPageArgs & { identity_id?: string }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/permissions",
         method: "GET",
         params,
       }),
-      transformResponse: (r: CloudPermissionListEnvelope, _m, arg) =>
-        toPage(r.data ?? [], r.meta, arg ?? undefined),
+      transformResponse: (r: CloudListEnvelope<CloudPermission>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result?.rows ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
         ...(result?.rows ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
         { type: "CloudPermission" as const, id: "ALL" },
       ],
@@ -1173,22 +1113,14 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // Resources named by a policy statement. Filters by connector_id, NOT
     // identity_id — so resolving a statement's resource_id is a client-side
     // join against this list, keyed by resource id.
-    listAwsResources: builder.query<
-      CloudPage<CloudResource>,
-      { connector_id?: string; limit?: number; offset?: number } | void
-    >({
+    listAwsResources: builder.query<CloudPage<CloudResource>, CloudPageArgs>({
       query: (params) => ({
         url: "/authsec/discovery/aws/resources",
         method: "GET",
-        // The resource list is a lookup table for resolving a statement's
-        // resource_id, so a truncated page silently blanks resource names.
-        // Ask for the server maximum rather than the 100 default.
-        params: { limit: 500, ...(params ?? {}) },
+        params,
       }),
-      transformResponse: (r: CloudResourceListEnvelope, _m, arg) =>
-        toPage(r.data ?? [], r.meta, { limit: 500, ...(arg ?? {}) }),
+      transformResponse: (r: CloudListEnvelope<CloudResource>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
-        ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
         ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
         { type: "CloudResource" as const, id: "ALL" },
       ],
@@ -1196,53 +1128,61 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
 
     // The compute that runs as a discovered identity.
     listAwsWorkloads: builder.query<
-      CloudPageWithMeta<CloudWorkload, CloudWorkloadMeta>,
-      { identity_id?: string; limit?: number; offset?: number } | void
+      CloudPage<CloudWorkload>,
+      CloudPageArgs & { identity_id?: string }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/workloads",
         method: "GET",
         params,
       }),
-      transformResponse: (r: CloudWorkloadListEnvelope, _m, arg) => {
-        const page = toPage(r.data ?? [], r.meta, arg ?? undefined);
-        return {
-          ...page,
-          // Page-scoped, and named so at the type level. The server counts
-          // these over the rows it returned, not over the account.
-          pageMeta: {
-            count: page.rows.length,
-            unattributed: r.meta?.unattributed ?? 0,
-            by_runtime_kind: r.meta?.by_runtime_kind ?? {},
-          },
-        };
-      },
+      transformResponse: (r: CloudListEnvelope<CloudWorkload>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
         ...(result?.rows ?? []).map((w) => ({ type: "CloudWorkload" as const, id: w.id })),
         { type: "CloudWorkload" as const, id: "ALL" },
       ],
     }),
 
-    // Per-service last-used dates. `meta.never_accessed` is the actionable
-    // count and, like `unattributed` above, is the server's own.
-    listAwsUsage: builder.query<
-      CloudPageWithMeta<CloudUsage, CloudUsageMeta>,
-      { identity_id?: string; limit?: number; offset?: number } | void
-    >({
+    // Per-service last-used dates, one page at a time. For the whole set, use
+    // `listAwsUsageAll` below — do not call this in a loop from a component.
+    listAwsUsage: builder.query<CloudPage<CloudUsage>, CloudPageArgs & { identity_id?: string }>({
       query: (params) => ({
         url: "/authsec/discovery/aws/usage",
         method: "GET",
-        params: params ?? undefined,
+        params,
       }),
-      transformResponse: (r: CloudUsageListEnvelope, _m, arg) => {
-        const page = toPage(r.data ?? [], r.meta, arg ?? undefined);
-        return {
-          ...page,
-          pageMeta: {
-            count: page.rows.length,
-            never_accessed: r.meta?.never_accessed ?? 0,
-          },
-        };
+      transformResponse: (r: CloudListEnvelope<CloudUsage>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
+        { type: "CloudUsage" as const, id: "ALL" },
+      ],
+    }),
+
+    /* ──────────── Usage, accumulated across pages ─────────────────────────
+     *
+     * The identities inventory needs EVERY usage row to answer "which
+     * identities have unused access" — it builds a lookup map keyed by
+     * identity, and half a map is not a smaller answer, it is a wrong one.
+     * The server caps a single response at 500, so this walks the pages.
+     *
+     * Written as a `queryFn` rather than the `merge`/`forceRefetch` infinite
+     * -query pattern on purpose: that pattern reports `isLoading` only for the
+     * first page, so the map would render as complete while later pages were
+     * still in flight — reintroducing exactly the bug this fixes, one layer
+     * down. A `queryFn` gives one loading flag spanning the whole walk, one
+     * error, and ordinary tag invalidation, so a rescan refreshes it for free.
+     */
+    listAwsUsageAll: builder.query<CloudUsageAll, { connector_id?: string; identity_id?: string }>({
+      async queryFn(arg, _api, _extra, fetchWithBQ) {
+        return accumulateUsagePages(async (offset) => {
+          const res = await fetchWithBQ({
+            url: "/authsec/discovery/aws/usage",
+            method: "GET",
+            params: { ...arg, limit: AWS_DISCOVERY_MAX_LIMIT, offset },
+          });
+          if (res.error) return { error: res.error };
+          return { envelope: res.data as CloudListEnvelope<CloudUsage> };
+        });
       },
       providesTags: (result) => [
         ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),

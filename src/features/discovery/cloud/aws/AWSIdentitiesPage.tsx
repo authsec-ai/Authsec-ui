@@ -118,16 +118,19 @@ export default function AWSIdentitiesPage() {
    * there is no grouped-count endpoint and no `never_accessed=true` filter to
    * ask for instead.
    *
-   * `/aws/usage` IS NOW PAGED, and it gained no per-identity grouped count to
-   * go with it — the case this comment was written to flag. Until that
-   * endpoint can answer "never-used count per identity" directly, the column
-   * asks for the server maximum and the table declares itself incomplete when
-   * even that is not the whole set. A truncated read would otherwise report
-   * the first page's answer for every row, and "never used" is precisely the
-   * claim that must not be guessed.
+   * This used to be one unpaginated read. `/aws/usage` now caps at 500 rows
+   * and DEFAULTS TO 100, so the same call silently produced a map covering a
+   * twelfth of the rows — every identity beyond it rendered "Not reported" and
+   * the "With unused access" tile read near-zero. `listAwsUsageAll` walks the
+   * pages instead, up to a hard cap, and reports when it hit that cap so the
+   * column can drop its denominator rather than print a wrong one.
+   *
+   * Scoped to the selected account when there is one: on a single-account view
+   * this is usually a single request.
    */
-  const usageQuery = useListAwsUsageQuery({ limit: SERVER_MAX_LIMIT, offset: 0 });
-  const usageTruncated = usageQuery.data?.truncated ?? false;
+  const usageQuery = useListAwsUsageAllQuery({
+    connector_id: account === ALL_ACCOUNTS ? undefined : account,
+  });
 
   const usageByIdentity = useMemo(() => {
     const map = new Map<string, { total: number; never: number }>();
@@ -302,17 +305,6 @@ export default function AWSIdentitiesPage() {
           if (!usage) {
             return <span className="text-xs text-muted-foreground">Not reported</span>;
           }
-          // The activity read was capped, so this identity's rows may be only
-          // part of its activity. "Never used" is the claim most damaged by a
-          // partial read -- it is the one a reviewer acts on -- so it is not
-          // made at all here.
-          if (usageTruncated) {
-            return (
-              <span className="text-xs text-muted-foreground" title="Activity read was truncated">
-                Partial activity
-              </span>
-            );
-          }
           if (usage.never === 0) {
             // "All N used" claims completeness, so it can only be said when
             // the activity read reached everything.
@@ -322,14 +314,20 @@ export default function AWSIdentitiesPage() {
               </span>
             );
           }
-          // The denominator is dropped when the read was capped. `never` is
-          // still exact — never-accessed rows sort first, so they are always in
-          // hand — but `total` is a floor, and "3 of 7" would state a total we
-          // do not have.
+          // When the read was capped, BOTH numbers are floors.
+          //
+          // This used to drop only the denominator, on the reasoning that
+          // never-accessed rows sort first and are therefore always in hand.
+          // That fails in the two cases that matter: when an identity's
+          // never-accessed rows alone exceed the cap, and when a later page
+          // fails after earlier ones succeeded. An identity with 2,500 such
+          // rows loaded 2,000 and rendered "2000 never used" — a precise
+          // figure, and wrong. "At least" is the only honest form until
+          // completeness is established.
           return (
             <CloudPill tone="warning" dot={false}>
               {usageIncomplete
-                ? `${usage.never} never used`
+                ? `At least ${usage.never} never used`
                 : `${usage.never} of ${usage.total} never used`}
             </CloudPill>
           );
@@ -363,7 +361,7 @@ export default function AWSIdentitiesPage() {
         ),
       },
     ],
-    [connectorById, usageByIdentity, usageQuery.isLoading, usageTruncated],
+    [connectorById, usageByIdentity, usageQuery.isLoading, usageIncomplete],
   );
 
   const liveConnectors = useMemo(

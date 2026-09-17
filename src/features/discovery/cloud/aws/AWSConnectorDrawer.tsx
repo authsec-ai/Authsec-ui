@@ -173,18 +173,18 @@ export function AWSConnectorDrawer({
     { connector_id: connectorId ?? undefined, limit: AWS_DISCOVERY_MAX_LIMIT },
     { skip: !connectorId },
   );
-  // Scoped server-side. The previous version fetched every secret in the
-  // workspace and intersected it with this connector's identities client-side,
-  // so a key survived only if BOTH first pages happened to contain its row --
-  // an access key could disappear from the account view with nothing said.
-  const {
-    data: secretPage,
-    isLoading: secretsLoading,
-    isError: secretsError,
-  } = useListAwsSecretsQuery(
-    { connector_id: connectorId ?? undefined, limit: 500 },
+  const identities = identityPage?.rows;
+
+  // Scoped server-side. This used to fetch every secret in the workspace and
+  // filter it against a Set of this connector's identity ids — a join that
+  // existed only because the endpoint had no connector_id filter. It does now,
+  // so the join is gone: it truncated twice over (once on each list) and could
+  // show an empty Secrets tab for a connector that has keys.
+  const secretQuery = useListAwsSecretsQuery(
+    { connector_id: connectorId ?? undefined, limit: AWS_DISCOVERY_MAX_LIMIT },
     { skip: !connectorId || tab !== "secrets" },
   );
+  const { data: secretPage, isLoading: secretsLoading, isError: secretsError } = secretQuery;
   const connectorSecrets = useMemo(() => secretPage?.rows ?? [], [secretPage]);
 
   const [verifyConnector, { isLoading: verifying }] = useVerifyAwsConnectorMutation();
@@ -474,12 +474,18 @@ export function AWSConnectorDrawer({
                   {secretsLoading ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
                   ) : secretsError ? (
-                    // Never "No access keys found" on a failed request: that
-                    // sentence is a claim about the account, and a failure is
-                    // a claim about the request.
-                    <p className="text-sm text-(--color-danger-text)">
-                      Could not load access keys. This is a failed request, not an empty account.
-                    </p>
+                    // A failed request must never borrow the empty state's
+                    // words: "No access keys found" is a claim about the
+                    // account, and this is a claim about the request. The five
+                    // identity tabs already draw that line; the drawer lost it
+                    // in a merge and this restores it.
+                    <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-3 py-2.5 text-[11.5px]">
+                      <strong className="font-medium">Could not load access keys.</strong> This is a
+                      failed request, not an account without keys.{" "}
+                      <button className="underline" onClick={() => void secretQuery.refetch()}>
+                        Retry
+                      </button>
+                    </div>
                   ) : !connectorSecrets.length ? (
                     <DrawerEmpty
                       icon={<KeyRound />}
@@ -487,13 +493,6 @@ export function AWSConnectorDrawer({
                     />
                   ) : (
                     <div className="space-y-1.5">
-                      {secretPage?.truncated ? (
-                        <p className="text-[11px] text-(--color-warning-text)">
-                          Showing {connectorSecrets.length}
-                          {secretPage.totalKnown ? ` of ${secretPage.total}` : ""} access keys — this
-                          list is not complete.
-                        </p>
-                      ) : null}
                       {connectorSecrets.map((secret) => (
                         <div key={secret.id} className="flex items-center justify-between rounded-md border px-3 py-2">
                           <div className="min-w-0">
