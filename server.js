@@ -30,6 +30,41 @@ app.get("/config.js", (req, res) => {
   console.log(`[${new Date().toISOString()}] Config served:`, config);
 });
 
+// Which commit is actually serving.
+//
+// The same contract as the backend's /authsec/uflow/version, deliberately: one
+// verification script checks both, and a shape that differs between the two
+// services is a shape somebody will read wrong at 2am.
+//
+// This answers a question that had no answer. The deployment references a
+// floating `ui:production` tag, so the tag identifies no commit AND a rollout
+// to it is a no-op -- Kubernetes sees no diff and keeps the cached image. You
+// could build, push, "deploy", and still be serving the old bundle.
+//
+// Unauthenticated on purpose: a commit SHA is already public in the repo, and a
+// deploy check that needs a token is a deploy check nobody runs. Build identity
+// only -- no configuration, no environment, nothing about the host.
+const BUILD_STARTED_AT = new Date().toISOString();
+app.get("/version", (req, res) => {
+  const commit = process.env.GIT_COMMIT || "unknown";
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.json({
+    commit,
+    short_commit: commit.slice(0, 12),
+    branch: process.env.GIT_BRANCH || "unknown",
+    built_at: process.env.BUILT_AT || "unknown",
+    // started_at is when this PROCESS began, which is a different fact from
+    // built_at: a pod restarted an hour ago may be running a month-old bundle,
+    // and only one of those two times reveals it.
+    started_at: BUILD_STARTED_AT,
+    uptime_seconds: Math.round(process.uptime()),
+    // False when the image was built without build args. A caller comparing
+    // commits must not treat "unknown" as a mismatch with everything — it
+    // means nobody can say what is running, which is a different problem.
+    injected: commit !== "unknown",
+  });
+});
+
 // Serve static files from the React app's dist directory
 app.use(express.static(path.join(__dirname, "dist")));
 

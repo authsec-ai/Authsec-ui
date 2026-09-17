@@ -1,0 +1,175 @@
+name: Deploy
+
+# Build, push, deploy and VERIFY the console.
+#
+# The same contract as the backend's deploy workflow, and the same two rules,
+# because the console failed the same way: `ui:production` is a floating tag, so
+# it identifies no commit AND a rollout to it is a no-op -- Kubernetes sees no
+# diff and keeps the cached image. Build, push, "deploy", and keep serving the
+# old bundle with nothing on screen to say so.
+#
+# Backend first, console second, is deliberate. The console talks to the API; a
+# console shipping ahead of the endpoints it calls shows a customer errors that
+# are not their problem. This workflow does not enforce the ordering across
+# repositories -- that is what the release procedure in SPEC-deployment-k3s.md
+# is for -- but it does refuse to finish until the console it deployed says it
+# is the commit asked for.
+
+on:
+  push:
+    branches:
+      - authsec-staging
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to confirm'
+        required: true
+
+env:
+  REGISTRY: docker-repo-public.authnull.com
+  IMAGE: ui
+  NAMESPACE: authsec-prod
+  DEPLOYMENT: prod-ui
+  CONTAINER: prod-ui
+  APP: https://app.authsec.ai
+  API_URL: https://prod.api.authsec.ai
+
+jobs:
+  verify-source:
+    name: Typecheck, lint, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+
+      # -p tsconfig.app.json, NOT a bare `tsc --noEmit`.
+      #
+      # The root tsconfig.json is a solution file with "files": [], so a bare
+      # run type-checks NOTHING and exits 0 on a broken tree. That is not
+      # hypothetical -- it is how this project accumulated its existing
+      # diagnostics unnoticed.
+      #
+      # The threshold is a ratchet, not a pass: the project carries known
+      # errors, and the rule is that a change must not ADD any. Lower it when
+      # you fix some; never raise it.
+      - name: TypeScript (must not add errors)
+        run: |
+          COUNT=$(npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -cE "error TS" || true)
+          echo "TypeScript errors: $COUNT (ceiling 198)"
+          # A PARSE error reports as 1 and hides every other diagnostic, so a
+          # suspiciously low count is a warning sign, not a win.
+          if [ "$COUNT" -le 2 ] && [ "$COUNT" -gt 0 ]; then
+            echo "Suspiciously low count — likely a parse error masking the rest:"
+            npx tsc -p tsconfig.app.json --noEmit 2>&1 | head -5
+            exit 1
+          fi
+          if [ "$COUNT" -gt 198 ]; then
+            echo "This change ADDS TypeScript errors. Ceiling is 198."
+            exit 1
+          fi
+
+      # A ratchet, like the TypeScript step above and for the same reason: this
+      # area carries 17 known errors, and a gate that demands they be fixed
+      # before anything can deploy is a gate somebody deletes in week one. The
+      # rule is that a change must not ADD any. Lower the ceiling when you fix
+      # some; never raise it.
+      - name: ESLint (must not add errors)
+        run: |
+          # -f json and sum errorCount. Grepping the human formatter is what
+          # made the first version of this step read 0 every time — a ratchet
+          # that can never fail is worse than no ratchet, because it looks like
+          # coverage.
+          COUNT=$(npx eslint "src/features/discovery/**/*.{ts,tsx}" "src/app/api/*.ts" -f json 2>/dev/null \
+            | python3 -c "import json,sys; print(sum(f['errorCount'] for f in json.load(sys.stdin)))")
+          echo "ESLint errors: $COUNT (ceiling 17)"
+          if [ "$COUNT" -gt 17 ]; then
+            echo "This change ADDS ESLint errors. Ceiling is 17."
+            npx eslint "src/features/discovery/**/*.{ts,tsx}" "src/app/api/*.ts" || true
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Production build
+        run: npm run build
+
+  build:
+    name: Build and push image
+    needs: verify-source
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.confirm == 'DEPLOY'
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: meta
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:production
+          build-args: |
+            GIT_COMMIT=${{ steps.meta.outputs.sha }}
+            GIT_BRANCH=${{ github.ref_name }}
+            BUILT_AT=${{ steps.meta.outputs.built_at }}
+            VITE_API_URL=${{ env.API_URL }}
+            VITE_OAUTH_BASE_URL=${{ env.API_URL }}
+
+  deploy:
+    name: Deploy and verify
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up cluster access
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "$KUBECONFIG_B64" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+
+      # No database backup step here, unlike the backend: the console owns no
+      # schema and runs no migrations. Adding a ceremonial dump would teach
+      # people the step is ceremonial.
+      - name: Point the deployment at this commit
+        run: |
+          kubectl set image -n "$NAMESPACE" \
+            "deploy/$DEPLOYMENT" \
+            "$CONTAINER=$REGISTRY/$IMAGE:${{ needs.build.outputs.sha }}"
+          kubectl annotate -n "$NAMESPACE" "deploy/$DEPLOYMENT" \
+            kubernetes.io/change-cause="deploy ${{ needs.build.outputs.sha }} by ${{ github.actor }}" \
+            --overwrite
+          kubectl rollout status -n "$NAMESPACE" "deploy/$DEPLOYMENT" --timeout=5m
+
+      - name: Verify the running commit
+        run: SERVICE=ui API="$APP" ./scripts/check-deployed-version.sh "${{ needs.build.outputs.sha }}"
+
+      - name: Roll back if verification failed
+        if: failure()
+        run: |
+          echo "Verification failed — rolling back."
+          kubectl rollout undo -n "$NAMESPACE" "deploy/$DEPLOYMENT"
+          kubectl rollout status -n "$NAMESPACE" "deploy/$DEPLOYMENT" --timeout=5m

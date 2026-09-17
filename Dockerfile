@@ -19,6 +19,19 @@ RUN npm run build
 # Stage 2: Set up the runtime environment
 FROM node:20-alpine
 WORKDIR /app
+
+# Build identity, served at /version.
+#
+# ENV rather than ARG in this stage because server.js reads them at RUNTIME.
+# A build that omits them reports "unknown", which is correct for a local
+# `docker build` and distinguishable from a stale deploy — rather than quietly
+# claiming to be some commit.
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG BUILT_AT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV BUILT_AT=${BUILT_AT}
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js .
 COPY --from=builder /app/server.json ./package.json
