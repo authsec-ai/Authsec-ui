@@ -10,9 +10,8 @@
  *
  * Attributed compute has a natural home: the Compute tab of an identity's own
  * drawer. Unattributed compute has none — there is no identity to hang it off,
- * which is exactly why it deserves top billing. `GET /aws/workloads` returns
- * `meta.unattributed` as a first-class count for the same reason, and burying
- * those rows inside per-identity views would hide the only rows nobody owns.
+ * which is exactly why it deserves top billing. Burying those rows inside
+ * per-identity views would hide the only rows nobody owns.
  *
  * ── Terminology ─────────────────────────────────────────────────────────────
  *
@@ -24,11 +23,17 @@
  *
  * ── Scope limits this page is honest about ──────────────────────────────────
  *
- * `GET /aws/workloads` takes `identity_id` only. It has no `connector_id`
- * filter and no pagination, so this page always receives every workload in the
- * workspace across every connected account, and every filter below is
- * client-side over that full set. With more than one account connected the
- * page says so rather than implying an account scope it cannot apply.
+ * `GET /aws/workloads` is paginated and caps a response at 500 rows. This page
+ * asks for that maximum in one request and filters client-side, rather than
+ * paging server-side, because none of its filters — search, attribution,
+ * runtime — exist as server parameters; paging would quietly reduce all three
+ * to one page of rows. Past 500 workloads the page says it is showing part of
+ * the set rather than implying it is showing all of it.
+ *
+ * It also has no account scope: the endpoint accepts `connector_id`, but this
+ * page deliberately shows every connected account at once so unattributed
+ * compute cannot hide behind an account filter. With more than one account
+ * connected the page says so.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -47,13 +52,14 @@ import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { toast } from "react-hot-toast";
 import {
   useListAwsConnectorsQuery,
   useListAwsIdentityPageQuery,
   useListAwsWorkloadsQuery,
   useScanAwsConnectorMutation,
+  AWS_DISCOVERY_MAX_LIMIT,
   type AWSWorkloadAttrs,
   type CloudIdentity,
   type CloudRuntimeKind,
@@ -62,6 +68,7 @@ import {
 
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
+  metricLabel,
   RUNTIME_KIND_LABEL,
   RUNTIME_KIND_SHORT,
   RUNTIME_KINDS,
@@ -70,9 +77,10 @@ import {
   ComputeCaveat,
   InventoryEmptyState,
   StaleStackNotice,
+  TruncationNotice,
   WorkspaceScopeCaveat,
 } from "./AWSInventoryNotices";
-import { inventoryEmptyReason } from "./awsInventoryState";
+import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
 import { awsErrorCopy } from "./awsErrorCopy";
 
 /** Identities are fetched only to resolve `identity_id` to a readable name.
@@ -150,13 +158,17 @@ export default function AWSComputePage() {
   const workloadTotal = workloadsQuery.data?.total ?? rows.length;
   const workloadsTruncated = workloadsQuery.data?.truncated ?? false;
 
-  const identitiesQuery = useListAwsIdentityPageQuery({ limit: IDENTITY_LOOKUP_LIMIT, offset: 0 });
+  const identitiesQuery = useListAwsIdentityPageQuery({
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+    offset: 0,
+  });
   const identityById = useMemo(
     () => new Map((identitiesQuery.data?.rows ?? []).map((i) => [i.id, i])),
     [identitiesQuery.data],
   );
-  const identityLookupTruncated =
-    (identitiesQuery.data?.total ?? 0) > (identitiesQuery.data?.rows.length ?? 0);
+  const identityLookupTruncated = identitiesQuery.data
+    ? truncationOf(identitiesQuery.data).truncated
+    : false;
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
 
@@ -211,11 +223,15 @@ export default function AWSComputePage() {
     const total = workloadTotal;
     const unattributedCount = rows.filter((w) => !w.identity_id).length;
     const regions = new Set(rows.map((w) => w.region).filter(Boolean)).size;
+    const t = workloadTruncation;
     return [
       {
         key: "total",
-        label: "Compute resources",
-        value: total,
+        // The whole-set total when it is known, because that is the honest
+        // answer to "how much compute is there". The three tiles below it
+        // describe only what loaded, so they carry the qualifier instead.
+        label: metricLabel("Compute resources", t.truncated, loaded),
+        value: t.totalKnown ? t.total : loaded,
         tone: "primary",
         onClick: clearFilters,
       },
@@ -236,14 +252,19 @@ export default function AWSComputePage() {
         tone: unattributed > 0 ? "warning" : "neutral",
         onClick: () => setParam("attribution", "unattributed"),
       },
-      { key: "regions", label: regions === 1 ? "Region" : "Regions", value: regions },
+      {
+        key: "regions",
+        label: metricLabel(regions === 1 ? "Region" : "Regions", t.truncated, loaded),
+        value: regions,
+      },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, workloadTotal, params]);
 
-  /** Runtime pills carry the server's own per-kind counts, and a kind with no
-   * rows is offered but shown as 0 rather than hidden — an absent Bedrock
-   * filter would read as "AuthSec does not look for Bedrock agents". */
+  /** Per-kind counts over the loaded rows. A kind with no rows is offered but
+   * shown as 0 rather than hidden — an absent Bedrock filter would read as
+   * "AuthSec does not look for Bedrock agents", which is a different and much
+   * more damaging claim than "none found". */
   const runtimeFilters = useMemo<ConsoleFilterOption[]>(
     () => [
       { key: "all", label: "All runtimes" },
@@ -256,6 +277,7 @@ export default function AWSComputePage() {
         count: rows.filter((w) => w.runtime_kind === k).length,
       })),
     ],
+    [rows],
     [rows],
   );
 
@@ -300,9 +322,9 @@ export default function AWSComputePage() {
           if (!w.identity_id) {
             return (
               <div className="min-w-0">
-                <StatusBadge tone="warning" dot={false}>
+                <CloudPill tone="warning" dot={false}>
                   Unattributed
-                </StatusBadge>
+                </CloudPill>
                 {attrs?.unresolved_role_arn ? (
                   <p
                     className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground"
@@ -404,6 +426,7 @@ export default function AWSComputePage() {
   const emptyReason = inventoryEmptyReason(connectors, "compute");
   const loading = workloadsQuery.isLoading || connectorsQuery.isLoading;
   const unattributed = rows.filter((w) => !w.identity_id).length;
+  const unattributed = rows.filter((w) => !w.identity_id).length;
 
   return (
     <ConsolePage
@@ -425,6 +448,12 @@ export default function AWSComputePage() {
       ) : null}
 
       {rows.length > 0 ? <MetricStrip items={metrics} /> : null}
+
+      <TruncationNotice
+        truncation={workloadTruncation}
+        noun="compute resources"
+        narrowBy="Search and the filters below apply to the rows that loaded."
+      />
 
       <StaleStackNotice connectors={connectors} />
       <WorkspaceScopeCaveat accountCount={connectors.length} />

@@ -39,7 +39,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 import {
   DrawerHeader,
@@ -58,8 +59,9 @@ import {
   useVerifyAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
   useScanAwsConnectorMutation,
-  useListAwsIdentitiesQuery,
+  useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
+  AWS_DISCOVERY_MAX_LIMIT,
   type AWSConnectorAttrs,
   type AWSIdentityAttrs,
   type CloudCoverageState,
@@ -67,6 +69,8 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import { awsErrorCopy } from "./awsErrorCopy";
 import { stackPredatesCompute, TEMPLATE_VERSION_WITH_COMPUTE } from "./awsInventoryLabels";
+import { TruncationLine } from "./AWSInventoryNotices";
+import { truncationOf } from "./awsInventoryState";
 
 const STATUS_TONE: Record<string, StatusTone> = { active: "success", error: "danger", revoked: "muted" };
 const STATUS_LABEL: Record<string, string> = { active: "Active", error: "Error", revoked: "Revoked" };
@@ -132,7 +136,7 @@ function CoverageRow({ surfaceKey, state, count }: { surfaceKey: string; state: 
         <span className="text-[11px] text-muted-foreground">
           {state === "reached" ? count : `≥ ${count}`}
         </span>
-        <StatusBadge tone={COVERAGE_TONE[state]}>{COVERAGE_LABEL[state]}</StatusBadge>
+        <CloudPill tone={COVERAGE_TONE[state]}>{COVERAGE_LABEL[state]}</CloudPill>
       </div>
     </div>
   );
@@ -165,8 +169,8 @@ export function AWSConnectorDrawer({
     setAutoPoll(connector?.coverage?.status === "running");
   }, [connector?.coverage?.status]);
 
-  const { data: identities, isLoading: identitiesLoading } = useListAwsIdentitiesQuery(
-    { connector_id: connectorId ?? undefined },
+  const { data: identityPage, isLoading: identitiesLoading } = useListAwsIdentityPageQuery(
+    { connector_id: connectorId ?? undefined, limit: AWS_DISCOVERY_MAX_LIMIT },
     { skip: !connectorId },
   );
   // Scoped server-side. The previous version fetched every secret in the
@@ -264,7 +268,7 @@ export function AWSConnectorDrawer({
             <DrawerHeader
               title={<span className="font-mono">{connector.scope_id}</span>}
               subtitle={attrs?.display_name ? attrs.display_name : "AWS account"}
-              badge={<StatusBadge tone={STATUS_TONE[connector.status]}>{STATUS_LABEL[connector.status]}</StatusBadge>}
+              badge={<CloudPill tone={STATUS_TONE[connector.status]}>{STATUS_LABEL[connector.status]}</CloudPill>}
             />
 
             <Tabs value={tab} onValueChange={setTab} className="flex flex-1 flex-col gap-0 overflow-hidden">
@@ -310,9 +314,9 @@ export function AWSConnectorDrawer({
                             <span className="flex items-center gap-1.5">
                               {attrs.template_version}
                               {staleStack ? (
-                                <StatusBadge tone="warning" dot={false}>
+                                <CloudPill tone="warning" dot={false}>
                                   Outdated
-                                </StatusBadge>
+                                </CloudPill>
                               ) : null}
                             </span>
                           ) : (
@@ -450,6 +454,9 @@ export function AWSConnectorDrawer({
                           </div>
                         );
                       })}
+                      {identityPage ? (
+                        <TruncationLine truncation={truncationOf(identityPage)} noun="identities" />
+                      ) : null}
                     </div>
                   )}
                 </TabsContent>
@@ -496,11 +503,14 @@ export function AWSConnectorDrawer({
                               {relativeOrUnknown(secret.last_used_at)}
                             </p>
                           </div>
-                          <StatusBadge tone={secret.status === "active" ? "success" : "muted"}>
+                          <CloudPill tone={secret.status === "active" ? "success" : "muted"}>
                             {secret.status === "active" ? "Active" : "Inactive"}
-                          </StatusBadge>
+                          </CloudPill>
                         </div>
                       ))}
+                      {secretPage ? (
+                        <TruncationLine truncation={truncationOf(secretPage)} noun="access keys" />
+                      ) : null}
                     </div>
                   )}
                 </TabsContent>

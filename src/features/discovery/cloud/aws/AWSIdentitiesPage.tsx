@@ -15,16 +15,18 @@
  *
  * ── How much data this page loads, and why ──────────────────────────────────
  *
- * `GET /aws/identities` is the ONE AWS discovery endpoint that paginates. It
- * takes limit/offset and reports a true `total`. So the honest options were
- * server-side paging with no working search (the endpoint has no search
- * parameter), or one request at the server's own maximum with search and
- * paging done client-side over what came back.
+ * Every AWS discovery endpoint paginates, capping a response at 500 rows. So
+ * the honest options were server-side paging with no working search (the
+ * endpoint has no search parameter), or one request at the server's own
+ * maximum with search and paging done client-side over what came back.
  *
- * This takes the second. `limit` is the server's clamp of 500; `meta.total` is
- * the real count, so when an account holds more than that the page SAYS so and
- * points at the two filters that are genuinely server-side (account and kind),
- * rather than quietly searching a subset and calling it the answer.
+ * This takes the second. `meta.total` is the real count, so when an account
+ * holds more than one request returns the page SAYS so and points at the two
+ * filters that are genuinely server-side (account and kind), rather than
+ * quietly searching a subset and calling it the answer.
+ *
+ * The activity column is a second, independent read — see `usageQuery` below.
+ * It truncates on its own terms and carries its own notice.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -43,31 +45,29 @@ import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CloudPill } from "../CloudPill";
 import {
   useListAwsConnectorsQuery,
   useListAwsIdentityPageQuery,
-  useListAwsUsageQuery,
+  useListAwsUsageAllQuery,
   useScanAwsConnectorMutation,
+  AWS_DISCOVERY_MAX_LIMIT,
   type CloudIdentity,
   type CloudIdentityKind,
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
-import { ALL_ACCOUNTS } from "./awsInventoryLabels";
+import { ALL_ACCOUNTS, metricLabel } from "./awsInventoryLabels";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
   CandidateIdentityCaveat,
   InventoryEmptyState,
   InventoryNotice,
+  TruncationNotice,
 } from "./AWSInventoryNotices";
-import { inventoryEmptyReason } from "./awsInventoryState";
+import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
 import { awsErrorCopy } from "./awsErrorCopy";
-
-/** The server's own clamp (`limit <= 0 || limit > 500 → 100`). Asking for more
- * silently gets 100 back, which would look like a much smaller account. */
-const SERVER_MAX_LIMIT = 500;
 
 const KIND_FILTERS: ConsoleFilterOption[] = [
   { key: "all", label: "All" },
@@ -106,14 +106,14 @@ export default function AWSIdentitiesPage() {
   const identitiesQuery = useListAwsIdentityPageQuery({
     connector_id: account === ALL_ACCOUNTS ? undefined : account,
     kind: kind === "all" ? undefined : kind,
-    limit: SERVER_MAX_LIMIT,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
     offset: 0,
   });
 
   /**
    * Per-identity activity, for the "granted but never used" column.
    *
-   * One unfiltered read, grouped client-side. The alternative — one
+   * Read across pages, grouped client-side. The alternative — one
    * `?identity_id=` call per row — is an N+1 this table cannot afford, and
    * there is no grouped-count endpoint and no `never_accessed=true` filter to
    * ask for instead.
@@ -139,6 +139,14 @@ export default function AWSIdentitiesPage() {
     }
     return map;
   }, [usageQuery.data]);
+
+  /** True when the activity read could not reach every row — the cap bit, or a
+   * page failed part-way. The never-used COUNTS stay exact even then, because
+   * the server sorts `last_used_at ASC NULLS FIRST` and never-accessed rows
+   * land on the first page; it is the per-identity totals that go short. */
+  const usageIncomplete = Boolean(
+    usageQuery.data?.truncated || usageQuery.data?.partialError,
+  );
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
 
@@ -203,7 +211,7 @@ export default function AWSIdentitiesPage() {
     return [
       {
         key: "total",
-        label: total === rows.length ? "Identities" : `Identities (showing ${rows.length})`,
+        label: metricLabel("Identities", truncated, rows.length),
         value: total,
         tone: "primary",
         onClick: () => {
@@ -211,11 +219,24 @@ export default function AWSIdentitiesPage() {
           setUnusedOnly(false);
         },
       },
-      { key: "roles", label: "IAM roles", value: roles, onClick: () => setParam("kind", "iam_role") },
-      { key: "users", label: "IAM users", value: users, onClick: () => setParam("kind", "iam_user") },
+      {
+        key: "roles",
+        label: metricLabel("IAM roles", truncated, rows.length),
+        value: roles,
+        onClick: () => setParam("kind", "iam_role"),
+      },
+      {
+        key: "users",
+        label: metricLabel("IAM users", truncated, rows.length),
+        value: users,
+        onClick: () => setParam("kind", "iam_user"),
+      },
       {
         key: "unused",
-        label: "With unused access",
+        // Qualified on the ACTIVITY read, not the identity read: this tile can
+        // undercount because usage was incomplete even when every identity
+        // loaded, and those are different failures with the same symptom.
+        label: metricLabel("With unused access", usageIncomplete, rows.length),
         value: withUnused,
         tone: withUnused > 0 ? "warning" : "neutral",
         onClick: () => setUnusedOnly(true),
@@ -224,7 +245,7 @@ export default function AWSIdentitiesPage() {
     // setParam closes over `params`; rebuilding the strip when it changes is
     // correct and cheap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, total, usageByIdentity, params]);
+  }, [rows, total, truncated, usageByIdentity, usageIncomplete, params]);
 
   const columns = useMemo<AdaptiveColumn<CloudIdentity>[]>(
     () => [
@@ -293,16 +314,24 @@ export default function AWSIdentitiesPage() {
             );
           }
           if (usage.never === 0) {
+            // "All N used" claims completeness, so it can only be said when
+            // the activity read reached everything.
             return (
               <span className="text-xs text-muted-foreground">
-                All {usage.total} used
+                {usageIncomplete ? "None reported unused" : `All ${usage.total} used`}
               </span>
             );
           }
+          // The denominator is dropped when the read was capped. `never` is
+          // still exact — never-accessed rows sort first, so they are always in
+          // hand — but `total` is a floor, and "3 of 7" would state a total we
+          // do not have.
           return (
-            <StatusBadge tone="warning" dot={false}>
-              {usage.never} of {usage.total} never used
-            </StatusBadge>
+            <CloudPill tone="warning" dot={false}>
+              {usageIncomplete
+                ? `${usage.never} never used`
+                : `${usage.never} of ${usage.total} never used`}
+            </CloudPill>
           );
         },
       },
@@ -367,14 +396,24 @@ export default function AWSIdentitiesPage() {
 
       {rows.length > 0 ? <MetricStrip items={metrics} /> : null}
 
-      {truncated ? (
+      {identitiesQuery.data ? (
+        <TruncationNotice
+          truncation={truncationOf(identitiesQuery.data)}
+          noun="identities"
+          narrowBy="Narrow by account or by role/user first — both of those filter server-side."
+        />
+      ) : null}
+
+      {/* A separate notice from the one above: the identity list and the
+          activity read truncate independently, and conflating them would tell
+          the reader to narrow a filter that does not affect the shortfall. */}
+      {usageIncomplete ? (
         <InventoryNotice tone="warning" icon={<AlertTriangle />}>
-          <strong className="font-medium">
-            Showing the first {rows.length} of {total} identities.
-          </strong>{" "}
-          This account holds more than one request can return, so search and the unused-access
-          filter below apply to the loaded rows only. Narrow by account or by role/user first — both
-          of those filter server-side.
+          <strong className="font-medium">Service activity is partial.</strong>{" "}
+          {usageQuery.data?.partialError
+            ? "Reading activity failed part-way through, so some identities show fewer services than they have."
+            : "This workspace holds more activity rows than one read collects, so per-identity service totals are a floor."}{" "}
+          Never-used counts are still exact — those rows are read first.
         </InventoryNotice>
       ) : null}
 

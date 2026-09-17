@@ -29,6 +29,17 @@ export function gcpErrorCopy(
     };
   }
 
+  // A blocked connector refused a scan, and the backend named the shortfalls.
+  // Checked before `fault` because the reasons are more specific than any
+  // fault-class wording, and dropping them would turn an actionable refusal
+  // into "not ready" with no next step.
+  if (apiErr.reasons?.length) {
+    return {
+      title: "This connector is not ready to scan",
+      body: `${apiErr.hint ?? "Fix the following, then re-run Verify:"} ${apiErr.reasons.join("; ")}.`,
+    };
+  }
+
   switch (apiErr.fault) {
     // The distinction this whole class exists for: a perimeter or an
     // organization policy refused the read BY DESIGN. The reader may hold
