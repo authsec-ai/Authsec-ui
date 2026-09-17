@@ -46,6 +46,8 @@ import {
   ASSUME_MECHANISM_LABEL,
   ASSUME_SUBJECT_LABEL,
   ASSUME_SUBJECT_TONE,
+  CONSTRAINT_LABEL,
+  CONSTRAINT_TONE,
   EFFECT_LABEL,
   EFFECT_TONE,
   resourceKindLabel,
@@ -77,6 +79,24 @@ function absolute(iso: string | null | undefined): string | undefined {
 
 function TabLoading() {
   return <p className="text-sm text-muted-foreground">Loading…</p>;
+}
+
+/** A failed request, said plainly.
+ *
+ * Each tab otherwise falls from `isLoading` straight to its empty state, so a
+ * 403 or a dropped connection renders as "No trust relationships recorded" — an
+ * assertion about the account made from no data at all. An error must never be
+ * able to wear an empty state's words. */
+function TabError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
+      <strong className="font-medium">Could not load {what}.</strong> Nothing below is a statement
+      about this identity — the request failed.{" "}
+      <button className="underline" onClick={onRetry}>
+        Retry
+      </button>
+    </div>
+  );
 }
 
 /** A row of small mono chips. Used for IAM action strings, which routinely
@@ -121,10 +141,11 @@ function policySourceLabel(source: string): { label: string; kind: string } {
 }
 
 export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
-  const { data: permissionPage, isLoading } = useListAwsPermissionsQuery({
+  const permissionQuery = useListAwsPermissionsQuery({
     identity_id: identity.id,
     limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const { data: permissionPage, isLoading, isError } = permissionQuery;
   const permissions = permissionPage?.rows;
 
   // Resources filter by connector_id, never identity_id, so a statement's
@@ -162,6 +183,7 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
   }, [permissions]);
 
   if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="permissions" onRetry={() => void permissionQuery.refetch()} />;
 
   if (!permissions?.length) {
     return (
@@ -211,9 +233,61 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
                         {SENSITIVITY_LABEL[p.sensitivity]} sensitivity
                       </CloudPill>
                     ) : null}
+                    {p.derivation === "boundary" ? (
+                      <CloudPill tone="muted" dot={false}>
+                        Permissions boundary
+                      </CloudPill>
+                    ) : null}
+                    {p.constraint_state !== "unconstrained" ? (
+                      <CloudPill tone={CONSTRAINT_TONE[p.constraint_state]} dot={false}>
+                        {CONSTRAINT_LABEL[p.constraint_state]}
+                      </CloudPill>
+                    ) : null}
                   </div>
 
-                  <ActionChips actions={p.actions} />
+                  {p.derivation === "boundary" ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      This statement is a <span className="font-medium">ceiling</span>, not a grant.
+                      It caps what the policies above can allow; it gives this identity nothing.
+                    </p>
+                  ) : null}
+
+                  {p.not_actions?.length ? (
+                    <div className="space-y-1">
+                      <p className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                        Every action except
+                      </p>
+                      <ActionChips actions={p.not_actions} />
+                    </div>
+                  ) : null}
+
+                  {p.actions.length ? <ActionChips actions={p.actions} /> : null}
+
+                  {p.not_resources?.length ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      On every resource except{" "}
+                      <span className="font-mono text-foreground">{p.not_resources.join(", ")}</span>
+                    </p>
+                  ) : null}
+
+                  {p.condition ? (
+                    <div className="space-y-1">
+                      <p className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                        Only when — condition recorded, not evaluated
+                      </p>
+                      <pre className="overflow-x-auto rounded bg-muted px-2 py-1.5 font-mono text-[10.5px] text-foreground">
+                        {p.condition}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {p.constraint_state === "unknown" ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Collected before constraints were recorded, or this identity&rsquo;s detail
+                      could not be read. Whether anything narrows this statement is unknown — rescan
+                      to find out.
+                    </p>
+                  ) : null}
 
                   {p.scope_kind === "resource" ? (
                     resource ? (
@@ -261,10 +335,11 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Trust ─────────────────────────────────── */
 
 export function TrustTab({ identity }: { identity: CloudIdentity }) {
-  const { data: edgePage, isLoading } = useListAwsAssumeEdgesQuery({
+  const edgeQuery = useListAwsAssumeEdgesQuery({
     identity_id: identity.id,
     limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const { data: edgePage, isLoading, isError } = edgeQuery;
   const edges = edgePage?.rows;
 
   const external = useMemo(
@@ -276,6 +351,7 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
   );
 
   if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="trust relationships" onRetry={() => void edgeQuery.refetch()} />;
 
   if (!edges?.length) {
     return (
@@ -344,10 +420,11 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
 /* ────────────────────────────── Compute ────────────────────────────────── */
 
 export function ComputeTab({ identity }: { identity: CloudIdentity }) {
-  const { data, isLoading } = useListAwsWorkloadsQuery({
+  const workloadQuery = useListAwsWorkloadsQuery({
     identity_id: identity.id,
     limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const { data, isLoading, isError } = workloadQuery;
   const rows = data?.rows ?? [];
 
   // An empty compute list has two very different explanations, and the tab
@@ -363,6 +440,7 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
   );
 
   if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="compute" onRetry={() => void workloadQuery.refetch()} />;
 
   if (!rows.length) {
     return (
@@ -457,10 +535,11 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
 /* ─────────────────────────────── Usage ─────────────────────────────────── */
 
 export function UsageTab({ identity }: { identity: CloudIdentity }) {
-  const { data, isLoading } = useListAwsUsageQuery({
+  const usageQuery = useListAwsUsageQuery({
     identity_id: identity.id,
     limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const { data, isLoading, isError } = usageQuery;
   // Memoised for the same reason as the identities page: `?? []` is a fresh
   // array each render and would re-run the generatedAt reduction every time.
   const rows = useMemo(() => data?.rows ?? [], [data]);
@@ -480,6 +559,7 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
   }, [rows]);
 
   if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="activity" onRetry={() => void usageQuery.refetch()} />;
 
   if (!rows.length) {
     return (
@@ -548,13 +628,15 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
 export function KeysTab({ identity }: { identity: CloudIdentity }) {
   // No TruncationLine: AWS caps an IAM user at two access keys, so a 500-row
   // page provably cannot truncate this one.
-  const { data: secretPage, isLoading } = useListAwsSecretsQuery({
+  const secretQuery = useListAwsSecretsQuery({
     identity_id: identity.id,
     limit: AWS_DISCOVERY_MAX_LIMIT,
   });
+  const { data: secretPage, isLoading, isError } = secretQuery;
   const secrets = secretPage?.rows;
 
   if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="access keys" onRetry={() => void secretQuery.refetch()} />;
 
   return (
     <div className="space-y-4">

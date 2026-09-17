@@ -181,10 +181,11 @@ export function AWSConnectorDrawer({
   // existed only because the endpoint had no connector_id filter. It does now,
   // so the join is gone: it truncated twice over (once on each list) and could
   // show an empty Secrets tab for a connector that has keys.
-  const { data: secretPage, isLoading: secretsLoading } = useListAwsSecretsQuery(
+  const secretQuery = useListAwsSecretsQuery(
     { connector_id: connectorId ?? undefined, limit: AWS_DISCOVERY_MAX_LIMIT },
     { skip: !connectorId || tab !== "secrets" },
   );
+  const { data: secretPage, isLoading: secretsLoading, isError: secretsError } = secretQuery;
   const connectorSecrets = useMemo(() => secretPage?.rows ?? [], [secretPage]);
 
   const [verifyConnector, { isLoading: verifying }] = useVerifyAwsConnectorMutation();
@@ -489,6 +490,19 @@ export function AWSConnectorDrawer({
                   ) : null}
                   {secretsLoading ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : secretsError ? (
+                    // A failed request must never borrow the empty state's
+                    // words: "No access keys found" is a claim about the
+                    // account, and this is a claim about the request. The five
+                    // identity tabs already draw that line; the drawer lost it
+                    // in a merge and this restores it.
+                    <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-3 py-2.5 text-[11.5px]">
+                      <strong className="font-medium">Could not load access keys.</strong> This is a
+                      failed request, not an account without keys.{" "}
+                      <button className="underline" onClick={() => void secretQuery.refetch()}>
+                        Retry
+                      </button>
+                    </div>
                   ) : !connectorSecrets.length ? (
                     <DrawerEmpty
                       icon={<KeyRound />}

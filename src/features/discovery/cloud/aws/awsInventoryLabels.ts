@@ -27,6 +27,7 @@ import type {
   CloudAssumeSubjectKind,
   CloudConnector,
   CloudConnectorStatus,
+  CloudConstraintState,
   CloudCoverageState,
   CloudIdentityKind,
   CloudPermissionEffect,
@@ -116,6 +117,31 @@ export const SCOPE_KIND_TONE: Record<CloudPermissionScopeKind, StatusTone> = {
   resource: "muted",
   prefix: "info",
   account_wide: "warning",
+};
+
+/** How far a permission row may be trusted as a statement of access.
+ *
+ * `unconstrained` deliberately has no badge: a badge on the common case trains
+ * people to ignore badges. The other four all mean "do not read this row as
+ * simple access", so each gets one.
+ *
+ * `unknown` is not neutral. It means nobody looked — the row predates
+ * constraint collection, or the identity's detail read failed — and it is worse
+ * than `bounded`, because a bounded row at least knows what it does not know. */
+export const CONSTRAINT_LABEL: Record<CloudConstraintState, string> = {
+  unconstrained: "Unconstrained",
+  conditional: "Conditional",
+  negated: "Negated",
+  bounded: "Capped by boundary",
+  unknown: "Constraints unknown",
+};
+
+export const CONSTRAINT_TONE: Record<CloudConstraintState, StatusTone> = {
+  unconstrained: "muted",
+  conditional: "info",
+  negated: "warning",
+  bounded: "info",
+  unknown: "warning",
 };
 
 export const EFFECT_LABEL: Record<CloudPermissionEffect, string> = {

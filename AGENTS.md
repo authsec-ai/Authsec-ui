@@ -91,7 +91,18 @@ removed on 2026-06-08.)
 
 This app's authenticated routes can't be previewed without the backend stack
 running. **Do not start the dev server to verify a UI change** — it'll just
-sit at the login wall. Verify with `npx tsc --noEmit` and `npx eslint <file>`.
+sit at the login wall. Verify with `npx tsc -p tsconfig.app.json --noEmit` and
+`npx eslint <file>`.
+
+> **Use `-p tsconfig.app.json`.** The root `tsconfig.json` is a solution file
+> with `"files": []`, so a bare `npx tsc --noEmit` type-checks **nothing** and
+> exits 0 on a broken tree. That is not a hypothetical: the project carries 198
+> pre-existing errors that a bare run reports as clean. A passing `vite build`
+> is not a substitute either — esbuild strips types without checking them.
+>
+> To prove a change adds no errors, compare counts rather than eyeballing the
+> list: `npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -c "error TS"` before
+> and after. Note `wc -l` over-counts — a multi-line diagnostic is one error.
 
 When an operator supplies a valid token, `/dev/bypass` may be used for an
 authenticated local check. Use `https://app.authsec.ai` for the production UI;
@@ -192,7 +203,8 @@ AWS IAM / GCP IAM / Okta / Auth0 docs before shipping.
 check, and commit in one place. Do not skip it.
 
 Quick reminder of what `/ship` enforces:
-1. `npx tsc --noEmit` — must exit 0
+1. `npx tsc -p tsconfig.app.json --noEmit` — the error count must not rise
+   (a bare `npx tsc --noEmit` checks nothing; see the verification note above)
 2. SDK check — state explicitly whether a machine caller needs this (yes/no + one sentence why)
 3. Docs check — state explicitly whether `/docs` is needed (yes/no + one sentence why)
 4. Commit — stage only touched files; no `Co-Authored-By` lines; message describes the why

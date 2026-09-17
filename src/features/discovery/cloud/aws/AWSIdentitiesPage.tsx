@@ -315,14 +315,20 @@ export default function AWSIdentitiesPage() {
               </span>
             );
           }
-          // The denominator is dropped when the read was capped. `never` is
-          // still exact — never-accessed rows sort first, so they are always in
-          // hand — but `total` is a floor, and "3 of 7" would state a total we
-          // do not have.
+          // When the read was capped, BOTH numbers are floors.
+          //
+          // This used to drop only the denominator, on the reasoning that
+          // never-accessed rows sort first and are therefore always in hand.
+          // That fails in the two cases that matter: when an identity's
+          // never-accessed rows alone exceed the cap, and when a later page
+          // fails after earlier ones succeeded. An identity with 2,500 such
+          // rows loaded 2,000 and rendered "2000 never used" — a precise
+          // figure, and wrong. "At least" is the only honest form until
+          // completeness is established.
           return (
             <CloudPill tone="warning" dot={false}>
               {usageIncomplete
-                ? `${usage.never} never used`
+                ? `At least ${usage.never} never used`
                 : `${usage.never} of ${usage.total} never used`}
             </CloudPill>
           );

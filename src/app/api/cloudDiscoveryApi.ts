@@ -491,6 +491,23 @@ export type CloudSensitivity = "low" | "med" | "high";
 
 /** `models.CloudPermission`. A policy STATEMENT, not computed effective
  * access: `derivation` is always "granted" for AWS today. */
+/** How far a permission row may be trusted as a statement of access.
+ *
+ * - `unconstrained` — nothing narrows it; safe to render as plain access.
+ * - `conditional`   — carries a Condition we stored and did not evaluate.
+ * - `negated`       — written with NotAction/NotResource; its true extent
+ *                     depends on what else exists in the account.
+ * - `bounded`       — the identity has a permissions boundary capping it.
+ * - `unknown`       — collected before constraints were recorded, or the
+ *                     identity's detail read failed. Nobody looked.
+ */
+export type CloudConstraintState =
+  | "unconstrained"
+  | "conditional"
+  | "negated"
+  | "bounded"
+  | "unknown";
+
 export interface CloudPermission {
   id: string;
   workspace_id: string;
@@ -505,8 +522,22 @@ export interface CloudPermission {
    * assignments, which have a role name; an IAM statement does not. */
   role_name?: string | null;
   actions: string[];
+  /** The statement's NotAction element: "every action EXCEPT these". A row with
+   * `not_actions` and an empty `actions` is not an empty grant — it is a very
+   * broad one. */
+  not_actions?: string[] | null;
+  /** The statement's NotResource element, verbatim. Never widened to "*". */
+  not_resources?: string[] | null;
+  /** The statement's Condition block as AWS returned it, or null when
+   * unconditional. Stored, never evaluated — see `constraint_state`. */
+  condition?: string | null;
+  /** How far this row may be trusted as a statement of access. Only
+   * "unconstrained" may be rendered as plain access. */
+  constraint_state: CloudConstraintState;
   scope_kind: CloudPermissionScopeKind;
-  derivation: "granted" | "effective";
+  /** "boundary" is a permissions-boundary statement: a CEILING, never a grant.
+   * It must never be counted or displayed as access the identity was given. */
+  derivation: "granted" | "effective" | "boundary";
   sensitivity: CloudSensitivity;
   /** Always null as written today. "Granted vs. actually used" must be read
    * from cloud_usage at SERVICE grain instead — see CloudUsage. */
@@ -646,6 +677,83 @@ export interface CloudUsage {
  * The live lab holds ~1,100 usage rows, so this leaves headroom without
  * letting one large workspace turn a page load into forty requests. */
 const USAGE_ACCUMULATE_CAP = 2000;
+
+/** One page fetch: the envelope, or the error that stopped it. */
+export type UsagePageFetch = (
+  offset: number,
+) => Promise<{ envelope: CloudListEnvelope<CloudUsage> } | { error: FetchBaseQueryError }>;
+
+/** Walks /aws/usage to the end, or to the cap, and says which happened.
+ *
+ * Extracted from the endpoint so its stopping rules can be tested against a
+ * source of known size. They are the whole point of the function:
+ *
+ *   - A total the SERVER reported may end the walk. A total inferred from the
+ *     first page may not — it equals the rows already in hand, so the walk
+ *     stopped after one request and reported `truncated: false`. A 2,500-row
+ *     account came back as 500 complete rows.
+ *   - Without a reported total, only a short page proves exhaustion.
+ *   - Stopping at the cap is incompleteness, and is reported as such.
+ *   - Rows are keyed by id: offset paging over a non-unique sort key can
+ *     return one row twice. De-duplicating hides that repeat; it cannot
+ *     recover a row the repeat displaced, which is why the server-side
+ *     ordering also carries a unique tie-breaker.
+ */
+export async function accumulateUsagePages(
+  fetchPage: UsagePageFetch,
+): Promise<{ data: CloudUsageAll } | { error: FetchBaseQueryError }> {
+  const byId = new Map<string, CloudUsage>();
+  let total = 0;
+  let totalKnown = false;
+  let offset = 0;
+  let pagesFetched = 0;
+  let hitCap = false;
+  let partialError: FetchBaseQueryError | undefined;
+
+  for (;;) {
+    const res = await fetchPage(offset);
+    if ("error" in res) {
+      // Nothing arrived at all: a real failure with nothing to show.
+      if (pagesFetched === 0) return { error: res.error };
+      // Some pages did arrive. Three good pages are not thrown away over one
+      // failed fourth -- keep them and mark the result incomplete.
+      partialError = res.error;
+      break;
+    }
+
+    const page = res.envelope.data ?? [];
+    pagesFetched += 1;
+    if (pagesFetched === 1) {
+      totalKnown = res.envelope.meta?.total !== undefined;
+      total = res.envelope.meta?.total ?? 0;
+    }
+    for (const u of page) byId.set(u.id, u);
+
+    // page.length, NOT the requested limit: a server honouring a smaller limit
+    // than asked would otherwise make this skip rows.
+    offset += page.length;
+
+    if (page.length === 0) break;
+    if (page.length < AWS_DISCOVERY_MAX_LIMIT) break;
+    if (totalKnown && byId.size >= total) break;
+    if (byId.size >= USAGE_ACCUMULATE_CAP) {
+      hitCap = true;
+      break;
+    }
+  }
+
+  const rows = [...byId.values()];
+  return {
+    data: {
+      rows,
+      total: totalKnown ? total : rows.length,
+      totalKnown,
+      truncated: totalKnown ? rows.length < total : hitCap || partialError !== undefined,
+      pagesFetched,
+      partialError,
+    },
+  };
+}
 
 /** Every usage row the accumulating read could reach, plus an honest account
  * of what it could not.
@@ -1066,61 +1174,15 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
      */
     listAwsUsageAll: builder.query<CloudUsageAll, { connector_id?: string; identity_id?: string }>({
       async queryFn(arg, _api, _extra, fetchWithBQ) {
-        // Keyed by id because paging by offset over a non-unique sort key can
-        // return the same row twice. See CloudUsageAll's note.
-        const byId = new Map<string, CloudUsage>();
-        let total = 0;
-        let totalKnown = false;
-        let offset = 0;
-        let pagesFetched = 0;
-        let partialError: FetchBaseQueryError | undefined;
-
-        for (;;) {
+        return accumulateUsagePages(async (offset) => {
           const res = await fetchWithBQ({
             url: "/authsec/discovery/aws/usage",
             method: "GET",
             params: { ...arg, limit: AWS_DISCOVERY_MAX_LIMIT, offset },
           });
-
-          if (res.error) {
-            // Nothing arrived at all: a real failure with nothing to show.
-            if (pagesFetched === 0) return { error: res.error };
-            // Some pages did arrive. Three good pages are not thrown away over
-            // one failed fourth — keep them and mark the result incomplete.
-            partialError = res.error;
-            break;
-          }
-
-          const env = res.data as CloudListEnvelope<CloudUsage>;
-          const page = env.data ?? [];
-          pagesFetched += 1;
-          if (pagesFetched === 1) {
-            totalKnown = env.meta?.total !== undefined;
-            total = env.meta?.total ?? page.length;
-          }
-          for (const u of page) byId.set(u.id, u);
-
-          // page.length, NOT the requested limit: a server honouring a smaller
-          // limit than asked would otherwise make this skip rows.
-          offset += page.length;
-
-          if (page.length === 0) break; // nothing more to read
-          if (page.length < AWS_DISCOVERY_MAX_LIMIT) break; // server ran out
-          if (byId.size >= total) break; // we have it all
-          if (byId.size >= USAGE_ACCUMULATE_CAP) break; // hard stop
-        }
-
-        const rows = [...byId.values()];
-        return {
-          data: {
-            rows,
-            total,
-            totalKnown,
-            truncated: rows.length < total,
-            pagesFetched,
-            partialError,
-          },
-        };
+          if (res.error) return { error: res.error };
+          return { envelope: res.data as CloudListEnvelope<CloudUsage> };
+        });
       },
       providesTags: (result) => [
         ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
