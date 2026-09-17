@@ -118,14 +118,16 @@ export default function AWSIdentitiesPage() {
    * there is no grouped-count endpoint and no `never_accessed=true` filter to
    * ask for instead.
    *
-   * THIS DEPENDS ON `/aws/usage` BEING UNPAGINATED, which it is today (no
-   * limit/offset server-side, `meta.count` is the response's own length). If
-   * that endpoint ever gains paging without also gaining a per-identity
-   * grouped count, this column would start reporting the first page's answer
-   * for every row — so it must be revisited together with that change, not
-   * after it.
+   * `/aws/usage` IS NOW PAGED, and it gained no per-identity grouped count to
+   * go with it — the case this comment was written to flag. Until that
+   * endpoint can answer "never-used count per identity" directly, the column
+   * asks for the server maximum and the table declares itself incomplete when
+   * even that is not the whole set. A truncated read would otherwise report
+   * the first page's answer for every row, and "never used" is precisely the
+   * claim that must not be guessed.
    */
-  const usageQuery = useListAwsUsageQuery();
+  const usageQuery = useListAwsUsageQuery({ limit: SERVER_MAX_LIMIT, offset: 0 });
+  const usageTruncated = usageQuery.data?.truncated ?? false;
 
   const usageByIdentity = useMemo(() => {
     const map = new Map<string, { total: number; never: number }>();
@@ -279,6 +281,17 @@ export default function AWSIdentitiesPage() {
           if (!usage) {
             return <span className="text-xs text-muted-foreground">Not reported</span>;
           }
+          // The activity read was capped, so this identity's rows may be only
+          // part of its activity. "Never used" is the claim most damaged by a
+          // partial read -- it is the one a reviewer acts on -- so it is not
+          // made at all here.
+          if (usageTruncated) {
+            return (
+              <span className="text-xs text-muted-foreground" title="Activity read was truncated">
+                Partial activity
+              </span>
+            );
+          }
           if (usage.never === 0) {
             return (
               <span className="text-xs text-muted-foreground">
@@ -321,7 +334,7 @@ export default function AWSIdentitiesPage() {
         ),
       },
     ],
-    [connectorById, usageByIdentity, usageQuery.isLoading],
+    [connectorById, usageByIdentity, usageQuery.isLoading, usageTruncated],
   );
 
   const liveConnectors = useMemo(

@@ -169,15 +169,19 @@ export function AWSConnectorDrawer({
     { connector_id: connectorId ?? undefined },
     { skip: !connectorId },
   );
-  const { data: secretsAll, isLoading: secretsLoading } = useListAwsSecretsQuery(undefined, {
-    skip: !connectorId || tab !== "secrets",
-  });
-
-  const identityIds = useMemo(() => new Set((identities ?? []).map((i) => i.id)), [identities]);
-  const connectorSecrets = useMemo(
-    () => (secretsAll ?? []).filter((s) => identityIds.has(s.identity_id)),
-    [secretsAll, identityIds],
+  // Scoped server-side. The previous version fetched every secret in the
+  // workspace and intersected it with this connector's identities client-side,
+  // so a key survived only if BOTH first pages happened to contain its row --
+  // an access key could disappear from the account view with nothing said.
+  const {
+    data: secretPage,
+    isLoading: secretsLoading,
+    isError: secretsError,
+  } = useListAwsSecretsQuery(
+    { connector_id: connectorId ?? undefined, limit: 500 },
+    { skip: !connectorId || tab !== "secrets" },
   );
+  const connectorSecrets = useMemo(() => secretPage?.rows ?? [], [secretPage]);
 
   const [verifyConnector, { isLoading: verifying }] = useVerifyAwsConnectorMutation();
   const [scanConnector, { isLoading: scanStarting }] = useScanAwsConnectorMutation();
@@ -462,6 +466,13 @@ export function AWSConnectorDrawer({
                   ) : null}
                   {secretsLoading ? (
                     <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : secretsError ? (
+                    // Never "No access keys found" on a failed request: that
+                    // sentence is a claim about the account, and a failure is
+                    // a claim about the request.
+                    <p className="text-sm text-(--color-danger-text)">
+                      Could not load access keys. This is a failed request, not an empty account.
+                    </p>
                   ) : !connectorSecrets.length ? (
                     <DrawerEmpty
                       icon={<KeyRound />}
@@ -469,6 +480,13 @@ export function AWSConnectorDrawer({
                     />
                   ) : (
                     <div className="space-y-1.5">
+                      {secretPage?.truncated ? (
+                        <p className="text-[11px] text-(--color-warning-text)">
+                          Showing {connectorSecrets.length}
+                          {secretPage.totalKnown ? ` of ${secretPage.total}` : ""} access keys — this
+                          list is not complete.
+                        </p>
+                      ) : null}
                       {connectorSecrets.map((secret) => (
                         <div key={secret.id} className="flex items-center justify-between rounded-md border px-3 py-2">
                           <div className="min-w-0">

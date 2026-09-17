@@ -80,6 +80,11 @@ import { awsErrorCopy } from "./awsErrorCopy";
  * says so rather than rendering a blank cell as if the row were unattributed. */
 const IDENTITY_LOOKUP_LIMIT = 500;
 
+/** The server maximum. Every filter, count and search on this page runs
+ * client-side over the loaded rows, so a smaller page would silently narrow
+ * all of them; the endpoint defaults to 100. */
+const WORKLOAD_PAGE_LIMIT = 500;
+
 type AttributionFilter = "all" | "attributed" | "unattributed";
 
 const ATTRIBUTION_FILTERS: ConsoleFilterOption[] = [
@@ -131,13 +136,19 @@ export default function AWSComputePage() {
   const connectorsQuery = useListAwsConnectorsQuery();
   const connectors = useMemo(() => connectorsQuery.data ?? [], [connectorsQuery.data]);
 
-  const workloadsQuery = useListAwsWorkloadsQuery();
+  // The server maximum, because every filter, count and search on this page
+  // runs client-side over `rows`. The endpoint's own default is 100.
+  const workloadsQuery = useListAwsWorkloadsQuery({ limit: WORKLOAD_PAGE_LIMIT, offset: 0 });
   const rows = useMemo(() => workloadsQuery.data?.rows ?? [], [workloadsQuery.data]);
 
-  // `unattributed` and `by_runtime_kind` are the server's own tallies over the
-  // full set. Read them rather than recomputing: if this endpoint is ever
-  // paginated, a client-side count would quietly start disagreeing.
-  const meta = workloadsQuery.data?.meta;
+  // The tallies the server returns are counted over the rows it sent, not over
+  // the account -- its own response note says so. The page comment here used to
+  // say the opposite and warned that a client-side count "would quietly start
+  // disagreeing if this endpoint is ever paginated". It was paginated, so both
+  // halves are now read for what they are: `total` is the only account-wide
+  // number, and anything derived from `rows` describes the loaded page.
+  const workloadTotal = workloadsQuery.data?.total ?? rows.length;
+  const workloadsTruncated = workloadsQuery.data?.truncated ?? false;
 
   const identitiesQuery = useListAwsIdentityPageQuery({ limit: IDENTITY_LOOKUP_LIMIT, offset: 0 });
   const identityById = useMemo(
@@ -194,8 +205,11 @@ export default function AWSComputePage() {
   }, [selectedIdentityId, identityById]);
 
   const metrics = useMemo<MetricStripItemDef[]>(() => {
-    const total = meta?.count ?? rows.length;
-    const unattributed = meta?.unattributed ?? 0;
+    // `total` is account-wide and honest even when the page is truncated.
+    // Everything else here is derived from the loaded rows, and the notice
+    // under the table says so when they are not the whole set.
+    const total = workloadTotal;
+    const unattributedCount = rows.filter((w) => !w.identity_id).length;
     const regions = new Set(rows.map((w) => w.region).filter(Boolean)).size;
     return [
       {
@@ -208,21 +222,24 @@ export default function AWSComputePage() {
       {
         key: "attributed",
         label: "Run as a known identity",
-        value: total - unattributed,
+        // Both halves come from the loaded rows. Subtracting a page-scoped
+        // count from the account-wide total would invent attributed workloads
+        // we have not seen.
+        value: rows.length - unattributedCount,
         tone: "success",
         onClick: () => setParam("attribution", "attributed"),
       },
       {
         key: "unattributed",
         label: "Unattributed",
-        value: unattributed,
+        value: unattributedCount,
         tone: unattributed > 0 ? "warning" : "neutral",
         onClick: () => setParam("attribution", "unattributed"),
       },
       { key: "regions", label: regions === 1 ? "Region" : "Regions", value: regions },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, meta, params]);
+  }, [rows, workloadTotal, params]);
 
   /** Runtime pills carry the server's own per-kind counts, and a kind with no
    * rows is offered but shown as 0 rather than hidden — an absent Bedrock
@@ -233,10 +250,13 @@ export default function AWSComputePage() {
       ...RUNTIME_KINDS.map((k) => ({
         key: k,
         label: RUNTIME_KIND_SHORT[k],
-        count: meta?.by_runtime_kind?.[k] ?? 0,
+        // Counted over the loaded rows: the server's own tally is page-scoped
+        // too, so recomputing here at least keeps the pills consistent with the
+        // table they filter.
+        count: rows.filter((w) => w.runtime_kind === k).length,
       })),
     ],
-    [meta],
+    [rows],
   );
 
   const columns = useMemo<AdaptiveColumn<CloudWorkload>[]>(
@@ -383,7 +403,7 @@ export default function AWSComputePage() {
 
   const emptyReason = inventoryEmptyReason(connectors, "compute");
   const loading = workloadsQuery.isLoading || connectorsQuery.isLoading;
-  const unattributed = meta?.unattributed ?? 0;
+  const unattributed = rows.filter((w) => !w.identity_id).length;
 
   return (
     <ConsolePage
@@ -513,6 +533,13 @@ export default function AWSComputePage() {
           )}
         </CardContent>
       </TableCard>
+
+      {workloadsTruncated ? (
+        <p className="text-[11px] text-muted-foreground">
+          Showing {rows.length} of {workloadTotal} workloads. Counts, filters and search on this
+          page describe the loaded {rows.length}, not the whole account.
+        </p>
+      ) : null}
 
       {identityLookupTruncated ? (
         <p className="text-[11px] text-muted-foreground">
