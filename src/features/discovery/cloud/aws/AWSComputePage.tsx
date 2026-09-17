@@ -6,12 +6,17 @@
  * runtimes — and, prominently, the compute it could NOT attribute to any role
  * it discovered.
  *
- * ── Why this is a page and not only a tab ───────────────────────────────────
+ * ── Why this is a top-level view, not only an identity's tab ────────────────
  *
  * Attributed compute has a natural home: the Compute tab of an identity's own
  * drawer. Unattributed compute has none — there is no identity to hang it off,
  * which is exactly why it deserves top billing. Burying those rows inside
  * per-identity views would hide the only rows nobody owns.
+ *
+ * Rendered as the Compute tab of CloudInventoryLayout, which owns the page
+ * header and the tab strip — so this file begins at the body. That shell is
+ * one level ABOVE any single identity or account, which is what keeps
+ * unattributed rows visible.
  *
  * ── Terminology ─────────────────────────────────────────────────────────────
  *
@@ -41,7 +46,6 @@ import { useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Boxes, CircleSlash } from "lucide-react";
 
-import { ConsolePage } from "@/components/console/ConsolePage";
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
   ConsoleFilterBar,
@@ -281,7 +285,7 @@ export default function AWSComputePage() {
               detail={w.native_id}
               monoDetail
               badge={
-                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {RUNTIME_KIND_SHORT[w.runtime_kind]}
                 </span>
               }
@@ -310,13 +314,13 @@ export default function AWSComputePage() {
                 </CloudPill>
                 {attrs?.unresolved_role_arn ? (
                   <p
-                    className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground"
+                    className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground"
                     title={attrs.unresolved_role_arn}
                   >
                     names {attrs.unresolved_role_arn}
                   </p>
                 ) : (
-                  <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
                     no execution role reported
                   </p>
                 )}
@@ -411,10 +415,9 @@ export default function AWSComputePage() {
   const unattributed = rows.filter((w) => !w.identity_id).length;
 
   return (
-    <ConsolePage
-      title="AWS Compute"
-      description="Lambda functions, ECS task definitions, EC2 instances and Bedrock agents discovered in your AWS accounts, and the identity each one runs as."
-    >
+    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
+    <div className="space-y-4">
       {workloadsQuery.isError ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
           <strong className="font-medium">Could not load compute.</strong>{" "}
@@ -441,7 +444,7 @@ export default function AWSComputePage() {
       <WorkspaceScopeCaveat accountCount={connectors.length} />
 
       {unattributed > 0 ? (
-        <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-[11.5px] leading-relaxed text-(--color-warning-text)">
+        <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-xs leading-relaxed text-(--color-warning-text)">
           <CircleSlash className="mt-px size-3.5 flex-none" aria-hidden />
           <div>
             <strong className="font-medium">
@@ -554,6 +557,6 @@ export default function AWSComputePage() {
       ) : null}
 
       <AWSIdentityDrawer identity={selected} onClose={() => setSelectedIdentityId(null)} />
-    </ConsolePage>
+    </div>
   );
 }

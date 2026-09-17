@@ -10,9 +10,10 @@
  * seven list endpoints.
  *
  * Shape follows AWSConnectorDrawer (RightDrawer + Tabs + the shared detail.tsx
- * blocks), widened to 640px because permission statements carry an `actions[]`
- * array that needs the room. Each tab is `skip`-gated on being the active tab,
- * so opening this costs one request rather than six.
+ * blocks), at 560px rather than the 480px the other cloud drawers use — this
+ * is the only one with six tabs, and they do not fit a narrower strip. Each
+ * tab is `skip`-gated on being the active tab, so opening this costs one
+ * request rather than six.
  */
 
 import { useEffect, useState } from "react";
@@ -71,7 +72,14 @@ export function AWSIdentityDrawer({
     <RightDrawer
       open={open}
       onClose={onClose}
-      width={640}
+      // 560: the narrowest width that fits all six tabs on one row.
+      //
+      // Six `text-sm` triggers at `px-3` come to ~490px, plus TabsList padding
+      // and the strip's own `px-6`, so ~540px is the floor — 480 pushed the
+      // last tabs out of view and 640 was wider than the panel's content
+      // needs. The `overflow-x-auto` on the strip below stays as a safety net
+      // so a longer label can never make a tab unreachable again.
+      width={560}
       ariaTitle={identity ? `AWS identity ${identity.name || identity.native_id}` : "AWS identity"}
       ariaDescription="Trust relationships, granted permissions, attributed compute, service activity and access keys for one AWS IAM identity."
     >
@@ -94,7 +102,10 @@ export function AWSIdentityDrawer({
             onValueChange={(v) => setTab(v as IdentityTab)}
             className="flex flex-1 flex-col gap-0 overflow-hidden"
           >
-            <div className="border-b px-6 pt-3">
+            {/* `overflow-x-auto` as a safety net. TabsList is `w-fit` with no scroll
+                of its own, so if a label ever grows past the 560px the width
+                above allows, the tabs scroll instead of becoming unreachable. */}
+            <div className="overflow-x-auto border-b px-6 pt-3">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="permissions">Permissions</TabsTrigger>

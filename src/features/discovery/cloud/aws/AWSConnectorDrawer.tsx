@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Boxes,
+  Database,
   Info,
   KeyRound,
   RefreshCw,
@@ -131,7 +132,7 @@ function relativeOrUnknown(iso: string | null | undefined): string {
 function CoverageRow({ surfaceKey, state, count }: { surfaceKey: string; state: CloudCoverageState; count: number }) {
   return (
     <div className="flex items-center justify-between rounded-md border px-3 py-2">
-      <span className="text-[12.5px] text-foreground">{COVERAGE_SURFACE_LABEL[surfaceKey] ?? surfaceKey}</span>
+      <span className="text-xs text-foreground">{COVERAGE_SURFACE_LABEL[surfaceKey] ?? surfaceKey}</span>
       <div className="flex items-center gap-2">
         <span className="text-[11px] text-muted-foreground">
           {state === "reached" ? count : `≥ ${count}`}
@@ -256,7 +257,13 @@ export function AWSConnectorDrawer({
       <RightDrawer
         open={open}
         onClose={handleClose}
-        width={560}
+        // 480, matching AWSResourceDrawer. This asked for 560 back when
+        // RightDrawer silently clamped every panel to 384px, so the number was
+        // never really exercised; once the clamp was fixed it started rendering
+        // at its full width and read as oversized for what it holds — coverage
+        // rows, a few detail pairs and three footer buttons, none of which need
+        // 560. The footer wraps, so the narrower panel degrades gracefully.
+        width={480}
         ariaTitle={connector ? `AWS account ${connector.scope_id}` : "AWS connector"}
         ariaDescription="AWS connector overview, discovered identities, secrets, and actions."
       >
@@ -282,13 +289,13 @@ export function AWSConnectorDrawer({
               <DrawerBody>
                 <TabsContent value="overview" className="space-y-6">
                   {connector.status === "error" && connector.last_error ? (
-                    <div className="rounded-md bg-(--color-danger-soft) px-3 py-2.5 text-[11.5px] text-(--color-danger-text)">
+                    <div className="rounded-md bg-(--color-danger-soft) px-3 py-2.5 text-xs text-(--color-danger-text)">
                       {connector.last_error}
                     </div>
                   ) : null}
 
                   {staleStack ? (
-                    <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-[11.5px] leading-relaxed text-(--color-warning-text)">
+                    <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-xs leading-relaxed text-(--color-warning-text)">
                       <AlertTriangle className="mt-px size-3.5 flex-none" aria-hidden />
                       <div>
                         <strong className="font-medium">This stack predates compute discovery.</strong>{" "}
@@ -380,7 +387,7 @@ export function AWSConnectorDrawer({
                     <DrawerSection label="Discovered in this account">
                       <div className="grid gap-1.5">
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to={`/iga/cloud/aws/identities?account=${connector.id}`}>
+                          <Link to={`/iga/cloud/identities?account=${connector.id}`}>
                             <span className="flex items-center gap-1.5">
                               <Users className="size-3.5" />
                               Identities, permissions and activity
@@ -389,7 +396,16 @@ export function AWSConnectorDrawer({
                           </Link>
                         </Button>
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to="/iga/cloud/aws/compute">
+                          <Link to={`/iga/cloud/resources?account=${connector.id}`}>
+                            <span className="flex items-center gap-1.5">
+                              <Database className="size-3.5" />
+                              Resources these permissions name
+                            </span>
+                            <ArrowRight className="size-3.5" />
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" size="sm" className="justify-between">
+                          <Link to="/iga/cloud/compute">
                             <span className="flex items-center gap-1.5">
                               <Boxes className="size-3.5" />
                               Compute running as these identities
@@ -399,8 +415,9 @@ export function AWSConnectorDrawer({
                         </Button>
                       </div>
                       <p className="mt-2 text-[11px] text-muted-foreground">
-                        Compute is listed across every connected account — that endpoint filters by
-                        identity, not by account.
+                        Compute is listed across every connected account: that view deliberately
+                        shows every account at once, so compute nobody can attribute cannot hide
+                        behind an account filter.
                       </p>
                     </DrawerSection>
                   ) : null}
@@ -412,7 +429,7 @@ export function AWSConnectorDrawer({
                     to an AI agent.
                   </p>
                   {iamIncomplete ? (
-                    <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-[11.5px] text-(--color-warning-text)">
+                    <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
                       The IAM surface was not fully reached on the last scan — this list may be
                       incomplete, not empty.
                     </p>
@@ -436,14 +453,14 @@ export function AWSConnectorDrawer({
                         return (
                           <div key={identity.id} className="rounded-md border px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[12.5px] font-medium text-foreground">
+                              <span className="truncate text-xs font-medium text-foreground">
                                 {identity.name || identity.native_id}
                               </span>
-                              <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                              <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                                 {IDENTITY_KIND_LABEL[identity.kind] ?? identity.kind}
                               </span>
                             </div>
-                            <p className="truncate font-mono text-[10.5px] text-muted-foreground" title={identity.native_id}>
+                            <p className="truncate font-mono text-[11px] text-muted-foreground" title={identity.native_id}>
                               {identity.native_id}
                             </p>
                             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -465,7 +482,7 @@ export function AWSConnectorDrawer({
                     Key identifiers and dates only — no secret value is ever read or stored.
                   </p>
                   {keysIncomplete ? (
-                    <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-[11.5px] text-(--color-warning-text)">
+                    <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
                       Access keys were not fully reached on the last scan — this list may be
                       incomplete, not empty.
                     </p>
@@ -482,7 +499,7 @@ export function AWSConnectorDrawer({
                       {connectorSecrets.map((secret) => (
                         <div key={secret.id} className="flex items-center justify-between rounded-md border px-3 py-2">
                           <div className="min-w-0">
-                            <p className="truncate font-mono text-[11.5px] text-foreground">{secret.native_id}</p>
+                            <p className="truncate font-mono text-xs text-foreground">{secret.native_id}</p>
                             <p className="text-[11px] text-muted-foreground">
                               Created {relativeOrUnknown(secret.created_at)} · last used{" "}
                               {relativeOrUnknown(secret.last_used_at)}
@@ -505,7 +522,7 @@ export function AWSConnectorDrawer({
             <DrawerFooter>
               <Button variant="outline" size="sm" onClick={handleVerify} disabled={verifying || connector.status === "revoked"}>
                 <ShieldCheck className={cn("mr-1.5 size-3.5", verifying && "animate-pulse")} />
-                {verifying ? "Verifying…" : "Verify connection"}
+                {verifying ? "Verifying…" : "Verify"}
               </Button>
               <Button
                 variant="outline"
@@ -516,15 +533,16 @@ export function AWSConnectorDrawer({
                 <RefreshCw className={cn("mr-1.5 size-3.5", scanStarting && "animate-spin")} />
                 {connector.coverage?.status === "running" ? "Scanning…" : "Scan now"}
               </Button>
-              {/* `ml-auto` rather than a `flex-1` spacer div: the footer wraps
-                  now, and a flex-1 spacer would claim a whole second row to
-                  itself before Revoke ever got there. `auto` margin pushes
-                  Revoke right while the row fits, and collapses harmlessly
-                  once it wraps. */}
+              {/* No `ml-auto`. Pushing Revoke to the far edge of a wrapping
+                  footer left a wide gap mid-row and dropped the button onto a
+                  line of its own, which read as a rendering fault rather than a
+                  deliberate split. All three actions now sit together in one
+                  group; Revoke stays distinguishable by its danger colour, not
+                  by its position. */}
               <Button
                 variant="outline"
                 size="sm"
-                className="ml-auto text-(--color-danger-text)"
+                className="text-(--color-danger-text)"
                 onClick={() => setConfirmRevokeOpen(true)}
                 disabled={connector.status === "revoked"}
               >

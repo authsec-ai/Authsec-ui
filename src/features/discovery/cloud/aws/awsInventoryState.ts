@@ -62,7 +62,7 @@ export function truncationOf(page: Pick<CloudPage<unknown>, "rows" | "total" | "
   };
 }
 
-export type InventorySurface = "identities" | "permissions" | "compute" | "usage";
+export type InventorySurface = "identities" | "permissions" | "compute" | "usage" | "resources";
 
 export type InventoryEmptyReason =
   | { kind: "no_connectors" }

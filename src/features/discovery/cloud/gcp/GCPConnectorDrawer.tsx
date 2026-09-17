@@ -353,7 +353,10 @@ export function GCPConnectorDrawer({
       <RightDrawer
         open={open}
         onClose={handleClose}
-        width={560}
+        // 480, same as the AWS connector drawer and AWSResourceDrawer: these
+        // are the same kind of panel and must not open at different widths
+        // depending on which provider's row the reader clicked.
+        width={480}
         ariaTitle="Google Cloud connector"
         ariaDescription="Inspect what this connector was proved able to read, and verify or revoke it."
       >
@@ -458,7 +461,7 @@ export function GCPConnectorDrawer({
                           key={key}
                           className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
                         >
-                          <span className="min-w-0 truncate text-[12.5px] text-foreground">
+                          <span className="min-w-0 truncate text-xs text-foreground">
                             {SURFACE_LABEL[key] ?? key}
                           </span>
                           <div className="flex flex-none items-center gap-2">
@@ -619,7 +622,7 @@ export function GCPConnectorDrawer({
                     <ul className="mt-2 space-y-1">
                       {attrs.probed_permissions.map((p) => (
                         <li key={p}>
-                          <code className="text-[11.5px] text-muted-foreground">{p}</code>
+                          <code className="text-xs text-muted-foreground">{p}</code>
                         </li>
                       ))}
                     </ul>

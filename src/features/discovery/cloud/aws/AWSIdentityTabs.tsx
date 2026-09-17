@@ -88,7 +88,7 @@ function ActionChips({ actions }: { actions: string[] }) {
       {actions.map((a) => (
         <span
           key={a}
-          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
         >
           {a}
         </span>
@@ -189,10 +189,10 @@ export function PermissionsTab({ identity }: { identity: CloudIdentity }) {
         return (
           <section key={source} className="space-y-1.5">
             <div className="flex items-baseline justify-between gap-2">
-              <p className="min-w-0 truncate text-[12.5px] font-medium text-foreground" title={source}>
+              <p className="min-w-0 truncate text-xs font-medium text-foreground" title={source}>
                 {label}
               </p>
-              <span className="flex-none text-[10.5px] uppercase tracking-wide text-muted-foreground">
+              <span className="flex-none text-[11px] uppercase tracking-wide text-muted-foreground">
                 {kind} · {statements.length}
               </span>
             </div>
@@ -315,11 +315,11 @@ export function TrustTab({ identity }: { identity: CloudIdentity }) {
               <CloudPill tone={ASSUME_SUBJECT_TONE[e.subject_kind]} dot={false}>
                 {ASSUME_SUBJECT_LABEL[e.subject_kind]}
               </CloudPill>
-              <span className="font-mono text-[10.5px] text-muted-foreground">
+              <span className="font-mono text-[11px] text-muted-foreground">
                 {ASSUME_MECHANISM_LABEL[e.mechanism]}
               </span>
             </div>
-            <p className="break-all font-mono text-[11.5px] text-foreground">{e.subject}</p>
+            <p className="break-all font-mono text-xs text-foreground">{e.subject}</p>
             {e.issuer ? (
               <p className="text-[11px] text-muted-foreground">
                 Issuer <span className="font-mono">{e.issuer}</span>
@@ -405,14 +405,14 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
           return (
             <div key={w.id} className="space-y-1.5 rounded-md border px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-[12.5px] font-medium text-foreground" title={w.name}>
+                <span className="truncate text-xs font-medium text-foreground" title={w.name}>
                   {w.name || w.native_id}
                 </span>
-                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[10.5px] text-muted-foreground">
+                <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {RUNTIME_KIND_LABEL[w.runtime_kind]}
                 </span>
               </div>
-              <p className="truncate font-mono text-[10.5px] text-muted-foreground" title={w.native_id}>
+              <p className="truncate font-mono text-[11px] text-muted-foreground" title={w.native_id}>
                 {w.native_id}
               </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
@@ -428,18 +428,18 @@ export function ComputeTab({ identity }: { identity: CloudIdentity }) {
                   it unlabelled would read as a second set of permissions this
                   identity holds. */}
               {attrs?.execution_role_arn && w.runtime_kind === "ecs_task_definition" ? (
-                <p className="break-all text-[10.5px] text-muted-foreground">
+                <p className="break-all text-[11px] text-muted-foreground">
                   ECS execution role (pulls images; not this identity's access):{" "}
                   <span className="font-mono">{attrs.execution_role_arn}</span>
                 </p>
               ) : null}
               {attrs?.instance_profile_arn ? (
-                <p className="break-all text-[10.5px] text-muted-foreground">
+                <p className="break-all text-[11px] text-muted-foreground">
                   Instance profile <span className="font-mono">{attrs.instance_profile_arn}</span>
                 </p>
               ) : null}
               {attrs?.env_var_names?.length ? (
-                <p className="text-[10.5px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   {attrs.env_var_names.length} environment variable
                   {attrs.env_var_names.length === 1 ? "" : "s"} set — names only, never values
                 </p>
@@ -516,8 +516,8 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
         {rows.map((u) => (
           <div key={u.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
             <div className="min-w-0">
-              <p className="truncate text-[12.5px] text-foreground">{usageServiceLabel(u.service)}</p>
-              <p className="text-[10.5px] text-muted-foreground">
+              <p className="truncate text-xs text-foreground">{usageServiceLabel(u.service)}</p>
+              <p className="text-[11px] text-muted-foreground">
                 {USAGE_SOURCE_LABEL[u.source]}
                 {u.service !== usageServiceLabel(u.service) ? ` · ${u.service}` : ""}
               </p>
@@ -578,7 +578,7 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
           {secrets.map((s) => (
             <div key={s.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
               <div className="min-w-0">
-                <p className="truncate font-mono text-[11.5px] text-foreground">{s.native_id}</p>
+                <p className="truncate font-mono text-xs text-foreground">{s.native_id}</p>
                 <p className="text-[11px] text-muted-foreground">
                   Created <span title={absolute(s.created_at)}>{relativeOrUnknown(s.created_at)}</span>{" "}
                   · last used{" "}
@@ -656,7 +656,7 @@ export function OverviewTab({ identity }: { identity: CloudIdentity }) {
             {tags.map(([k, v]) => (
               <span
                 key={k}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
               >
                 {k}
                 {v ? `=${v}` : ""}

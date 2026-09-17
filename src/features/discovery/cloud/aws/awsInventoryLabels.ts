@@ -181,6 +181,11 @@ const RESOURCE_KIND_LABEL: Record<string, string> = {
   sns_topic: "SNS topic",
   lambda_function: "Lambda function",
   iam_role: "IAM role",
+  // `rds_instance` has its own case in ClassifyResourceScope; `iam_policy`
+  // falls out of the generic `service + "_" + rtype` branch and was observed in
+  // a real scan rendering as the raw string. Both belong here so neither does.
+  iam_policy: "IAM policy",
+  rds_instance: "RDS instance",
   bedrock_model: "Bedrock model",
   bedrock_agent: "Bedrock agent",
 };
