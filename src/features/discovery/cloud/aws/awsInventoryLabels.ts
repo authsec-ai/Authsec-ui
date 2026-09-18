@@ -59,6 +59,7 @@ export const RUNTIME_KIND_LABEL: Record<CloudRuntimeKind, string> = {
   ec2_instance: "EC2 instance",
   bedrock_agent: "Bedrock agent",
   bedrock_agentcore_runtime: "Bedrock AgentCore runtime",
+  bedrock_agentcore_gateway: "Bedrock AgentCore gateway",
 };
 
 /** Short form for a table cell where the row already carries the name. */
@@ -68,16 +69,18 @@ export const RUNTIME_KIND_SHORT: Record<CloudRuntimeKind, string> = {
   ec2_instance: "EC2",
   bedrock_agent: "Bedrock agent",
   bedrock_agentcore_runtime: "AgentCore",
+  bedrock_agentcore_gateway: "AgentCore gateway",
 };
 
-/** Ordered for a filter list: the two Bedrock kinds last, since they are the
- * rarest and the two most likely to be genuinely absent. */
+/** Ordered for a filter list: the three Bedrock kinds last, since they are the
+ * rarest and the most likely to be genuinely absent. */
 export const RUNTIME_KINDS: CloudRuntimeKind[] = [
   "lambda_function",
   "ecs_task_definition",
   "ec2_instance",
   "bedrock_agent",
   "bedrock_agentcore_runtime",
+  "bedrock_agentcore_gateway",
 ];
 
 /* ─────────────────────────── trust edges ────────────────────────────────── */

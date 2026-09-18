@@ -78,7 +78,17 @@ export function truncationOf(
   };
 }
 
-export type InventorySurface = "identities" | "permissions" | "compute" | "usage" | "resources";
+export type InventorySurface =
+  | "identities"
+  | "permissions"
+  | "compute"
+  | "usage"
+  | "resources"
+  // AgentCore workload identities. Its own surface rather than borrowing
+  // "compute": the stale-stack branch below is compute-only and would tell an
+  // operator their CloudFormation template lacks the Lambda, ECS and EC2 reads
+  // — permissions that have nothing to do with bedrock-agentcore.
+  | "workload_identities";
 
 export type InventoryEmptyReason =
   | { kind: "no_connectors" }

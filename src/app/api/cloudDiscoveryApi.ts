@@ -609,6 +609,57 @@ export interface CloudPermission {
 }
 
 
+/**
+ * `models.CloudObservation`. One fact a scan read from a surface that has no
+ * inventory table of its own — a CloudTrail event, a credential-report row, a
+ * resource policy, an AgentCore workload identity.
+ *
+ * EVERY SUBJECT COLUMN IS OPTIONAL, and all four may be null at once. That is
+ * not a defect: evidence whose subject was reconciled away keeps
+ * `subject_native_id` so it still says what it was evidence FOR, and some
+ * surfaces (AgentCore workload identities) have no inventory row to point at in
+ * the first place.
+ *
+ * `sanitized_facts` is what AWS said AFTER redaction — never a raw response and
+ * never a secret value. Its shape varies by `source_api`, so read it through
+ * the typed accessors in `awsObservationFacts.ts` rather than indexing it here.
+ */
+export interface CloudObservation {
+  id: string;
+  workspace_id: string;
+  connector_id: string;
+  /** The run that first recorded this. Durable: a run may not be pruned while
+   * observations reference it. */
+  scan_run_id: string;
+  generation: number;
+
+  identity_id?: string | null;
+  permission_id?: string | null;
+  resource_id?: string | null;
+  workload_id?: string | null;
+
+  /** The ARN or provider id, captured at write time so the row stays legible
+   * after its subject row is gone. */
+  subject_native_id: string;
+
+  /** The AWS API that produced this, e.g. `cloudtrail:LookupEvents`. Also the
+   * filter this endpoint accepts. */
+  source_api: string;
+  surface: string;
+  surface_state: string;
+
+  observed_at: string;
+  ingested_at: string;
+  sanitized_facts: Record<string, unknown>;
+  content_hash: string;
+
+  /** An unchanged re-read does not duplicate the row — it bumps these instead,
+   * so "which run last saw this" survives content dedupe. */
+  last_confirmed_run_id?: string | null;
+  last_confirmed_at?: string | null;
+  confirmation_count: number;
+}
+
 /** `models.CloudResource`. A row exists ONLY because a permission statement
  * named it. This is not an inventory of everything in the account, and an
  * empty list does not mean the account is empty. */
@@ -642,7 +693,12 @@ export type CloudRuntimeKind =
   | "ecs_task_definition"
   | "ec2_instance"
   | "bedrock_agent"
-  | "bedrock_agentcore_runtime";
+  | "bedrock_agentcore_runtime"
+  // A gateway is how an AgentCore agent reaches its tools. Written to
+  // cloud_workload through the same path as Lambda and ECS, so it arrives on
+  // /aws/workloads like any other runtime — it was simply missing from this
+  // union, which left the Compute table's runtime column blank for those rows.
+  | "bedrock_agentcore_gateway";
 
 /** `models.AWSWorkloadAttrs`. Never holds a secret value: `env_var_names` are
  * Lambda environment variable NAMES only — AWS returns values with the
@@ -1100,6 +1156,11 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
               { type: "CloudResource" as const, id: "ALL" },
               { type: "CloudWorkload" as const, id: "ALL" },
               { type: "CloudUsage" as const, id: "ALL" },
+              // The evidence surfaces are written by the same run, so a
+              // published scan has to refresh them too — otherwise a new
+              // CloudTrail event or a changed resource policy stays invisible
+              // until a reload.
+              { type: "CloudObservation" as const, id: "ALL" },
             ]
           : [{ type: "CloudScanRun" as const, id: result?.id ?? "ALL" }],
     }),
@@ -1212,6 +1273,57 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       providesTags: (result) => [
         ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
         { type: "CloudResource" as const, id: "ALL" },
+      ],
+    }),
+
+    /* ──────────── Observations: the evidence behind a surface ──────────────
+     *
+     * One row per fact a scan read, from surfaces that have no inventory table
+     * of their own: CloudTrail events, the IAM credential report, S3 and KMS
+     * resource policies, and AgentCore workload identities.
+     *
+     * Filter by SUBJECT (identity/permission/resource/workload) or by
+     * `source_api`, or by both. There is deliberately no `connector_id`
+     * filter server-side, so an account-wide read of one surface is
+     * `source_api` alone.
+     *
+     * A row whose subject columns are ALL null is not an error — it is
+     * evidence with no inventory row to attach to, which is exactly what an
+     * AgentCore workload identity is. The endpoint's own `meta.note` says so.
+     */
+    listAwsObservations: builder.query<
+      CloudPage<CloudObservation>,
+      CloudPageArgs & {
+        identity_id?: string;
+        permission_id?: string;
+        resource_id?: string;
+        workload_id?: string;
+        source_api?: string;
+      }
+    >({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/observations",
+        method: "GET",
+        params,
+      }),
+      transformResponse: (r: CloudListEnvelope<CloudObservation>, _meta, arg) => toCloudPage(r, arg),
+      // Arg-aware for the reason listAwsSecrets is: this endpoint is called
+      // with several different filter combinations from different screens, and
+      // a per-identity response tagged only "ALL" would be served back for an
+      // account-wide query of a different surface.
+      providesTags: (result, _error, arg) => [
+        ...(result?.rows ?? []).map((o) => ({ type: "CloudObservation" as const, id: o.id })),
+        {
+          type: "CloudObservation" as const,
+          id:
+            arg.identity_id ??
+            arg.resource_id ??
+            arg.workload_id ??
+            arg.permission_id ??
+            arg.source_api ??
+            "ALL",
+        },
+        { type: "CloudObservation" as const, id: "ALL" },
       ],
     }),
 
@@ -1439,6 +1551,7 @@ export const {
   useListAwsAssumeEdgesQuery,
   useListAwsPermissionsQuery,
   useListAwsResourcesQuery,
+  useListAwsObservationsQuery,
   useListAwsWorkloadsQuery,
   useListAwsUsageQuery,
   useListAwsUsageAllQuery,

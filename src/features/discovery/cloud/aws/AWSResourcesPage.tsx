@@ -56,6 +56,7 @@ import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { CloudPill } from "../CloudPill";
 import {
   useListAwsConnectorsQuery,
+  useListAwsObservationsQuery,
   useListAwsResourcesQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
@@ -79,6 +80,11 @@ import {
 } from "./AWSInventoryNotices";
 import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
 import { awsErrorCopy } from "./awsErrorCopy";
+import {
+  resourcePolicyFacts,
+  SOURCE_KMS_KEY_POLICY,
+  SOURCE_S3_BUCKET_POLICY,
+} from "./awsObservationFacts";
 
 const ALL_KINDS = "all";
 
@@ -115,6 +121,65 @@ export default function AWSResourcesPage() {
     limit: AWS_DISCOVERY_MAX_LIMIT,
     offset: 0,
   });
+
+  /**
+   * Resource-policy denies, for the Policy column.
+   *
+   * Two queries because `/aws/observations` has no `connector_id` filter — the
+   * only account-wide handle is `source_api`, and a bucket policy and a key
+   * policy are two different source APIs. Both are capped like every other read
+   * on this page.
+   *
+   * The result is a Set of resource ids known to carry a deny, plus a Set of
+   * ids whose policy was READ AT ALL. The second is what keeps the column
+   * honest: a resource missing from it renders unknown, not "no deny".
+   */
+  const s3PolicyQuery = useListAwsObservationsQuery({
+    source_api: SOURCE_S3_BUCKET_POLICY,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+  const kmsPolicyQuery = useListAwsObservationsQuery({
+    source_api: SOURCE_KMS_KEY_POLICY,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+
+  const { denyIds, readIds } = useMemo(() => {
+    const deny = new Set<string>();
+    const read = new Set<string>();
+    // Only the NEWEST observation per (resource, source API) describes the
+    // policy as it stands. `content_hash` is part of the dedupe key, so an
+    // edited policy writes a new row and the old one survives — observations
+    // are durable evidence, not reconciled inventory. Taking every row would
+    // keep flagging a deny that has since been removed.
+    //
+    // Each query returns `observed_at DESC`, so the first row seen for a key is
+    // the current one and later rows for that key are history.
+    const seen = new Set<string>();
+    for (const o of [
+      ...(s3PolicyQuery.data?.rows ?? []),
+      ...(kmsPolicyQuery.data?.rows ?? []),
+    ]) {
+      if (!o.resource_id) continue;
+      const key = `${o.resource_id}|${o.source_api}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      read.add(o.resource_id);
+      if (resourcePolicyFacts(o).hasDeny === true) deny.add(o.resource_id);
+    }
+    return { denyIds: deny, readIds: read };
+  }, [s3PolicyQuery.data, kmsPolicyQuery.data]);
+
+  /** These two reads resolve independently of the resource list, so the column
+   * must be able to say "not yet" and "failed" rather than answering from an
+   * empty result set. */
+  const policyReadPending = s3PolicyQuery.isLoading || kmsPolicyQuery.isLoading;
+  const policyReadFailed = s3PolicyQuery.isError || kmsPolicyQuery.isError;
+
+  /** True when either policy read fell short, so the column's blanks may be
+   * truncation rather than genuine absence. */
+  const policyReadIncomplete =
+    (s3PolicyQuery.data ? truncationOf(s3PolicyQuery.data).truncated : false) ||
+    (kmsPolicyQuery.data ? truncationOf(kmsPolicyQuery.data).truncated : false);
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
 
@@ -261,10 +326,65 @@ export default function AWSResourcesPage() {
         },
       },
       {
+        // The resource's OWN policy. A deny here blocks access that every
+        // identity-side grant would otherwise allow, so it belongs in the list
+        // rather than only behind a row click — a bucket silently blocking an
+        // identity is the finding, and it is invisible until you look.
+        id: "policy",
+        header: "Policy",
+        priority: 3,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const id = row.original.id;
+
+          // Four states, kept apart deliberately. The policy reads are separate
+          // queries from the resource list and resolve later, so collapsing
+          // "still loading" or "the read failed" into "no policy was read"
+          // would assert a fact about the account from the console's own
+          // request timing.
+          if (policyReadPending) {
+            return <span className="text-xs text-muted-foreground">…</span>;
+          }
+          if (policyReadFailed) {
+            return (
+              <span
+                className="text-xs text-muted-foreground"
+                title="The resource-policy read failed, so whether this resource denies access is unknown."
+              >
+                Unavailable
+              </span>
+            );
+          }
+          if (denyIds.has(id)) {
+            return (
+              <CloudPill tone="danger" dot={false}>
+                Deny
+              </CloudPill>
+            );
+          }
+          // Read and clean.
+          if (readIds.has(id)) return <span className="text-xs text-muted-foreground">None</span>;
+          // Read succeeded but named no policy for this resource. Still unknown,
+          // never "no deny".
+          return (
+            <span
+              className="text-xs text-muted-foreground"
+              title={
+                policyReadIncomplete
+                  ? "The resource-policy read was truncated, so this resource's policy may simply not have loaded."
+                  : "No resource policy was read for this resource."
+              }
+            >
+              —
+            </span>
+          );
+        },
+      },
+      {
         id: "last_seen",
         accessorKey: "last_seen_at",
         header: "Last seen",
-        priority: 3,
+        priority: 4,
         approxWidth: 130,
         cell: ({ row }) => (
           <span
@@ -278,7 +398,7 @@ export default function AWSResourcesPage() {
       {
         id: "account",
         header: "Account",
-        priority: 4,
+        priority: 5,
         approxWidth: 150,
         cell: ({ row }) => {
           const connector = connectorById.get(row.original.connector_id);
@@ -293,7 +413,7 @@ export default function AWSResourcesPage() {
         id: "first_seen",
         accessorKey: "first_seen_at",
         header: "First seen",
-        priority: 5,
+        priority: 6,
         approxWidth: 130,
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">
@@ -302,7 +422,7 @@ export default function AWSResourcesPage() {
         ),
       },
     ],
-    [connectorById],
+    [connectorById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
   );
 
   const liveConnectors = useMemo(

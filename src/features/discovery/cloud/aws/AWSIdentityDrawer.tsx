@@ -10,8 +10,8 @@
  * seven list endpoints.
  *
  * Shape follows AWSConnectorDrawer (RightDrawer + Tabs + the shared detail.tsx
- * blocks), at 560px rather than the 480px the other cloud drawers use — this
- * is the only one with six tabs, and they do not fit a narrower strip. Each
+ * blocks), at 640px rather than the 480px the other cloud drawers use — this
+ * is the only one with seven tabs, and they do not fit a narrower strip. Each
  * tab is `skip`-gated on being the active tab, so opening this costs one
  * request rather than six.
  */
@@ -28,6 +28,7 @@ import type { CloudIdentity } from "@/app/api/cloudDiscoveryApi";
 import { IDENTITY_KIND_LABEL } from "./awsInventoryLabels";
 import {
   ComputeTab,
+  EventsTab,
   KeysTab,
   OverviewTab,
   PermissionsTab,
@@ -35,7 +36,14 @@ import {
   UsageTab,
 } from "./AWSIdentityTabs";
 
-type IdentityTab = "overview" | "permissions" | "trust" | "compute" | "usage" | "keys";
+type IdentityTab =
+  | "overview"
+  | "permissions"
+  | "trust"
+  | "compute"
+  | "usage"
+  | "keys"
+  | "events";
 
 export function AWSIdentityDrawer({
   identity,
@@ -72,16 +80,17 @@ export function AWSIdentityDrawer({
     <RightDrawer
       open={open}
       onClose={onClose}
-      // 560: the narrowest width that fits all six tabs on one row.
+      // 640: the narrowest width that fits all SEVEN tabs on one row.
       //
-      // Six `text-sm` triggers at `px-3` come to ~490px, plus TabsList padding
-      // and the strip's own `px-6`, so ~540px is the floor — 480 pushed the
-      // last tabs out of view and 640 was wider than the panel's content
-      // needs. The `overflow-x-auto` on the strip below stays as a safety net
-      // so a longer label can never make a tab unreachable again.
-      width={560}
+      // Was 560, measured for six `text-sm` triggers at `px-3` (~490px of
+      // triggers plus TabsList padding and the strip's `px-6`). Adding Events
+      // pushed that past the panel, which left Keys off-screen behind the
+      // strip's own scroll — the exact failure the measured width existed to
+      // prevent. The `overflow-x-auto` below stays as a safety net for a longer
+      // label, not as the normal way to reach a tab.
+      width={640}
       ariaTitle={identity ? `AWS identity ${identity.name || identity.native_id}` : "AWS identity"}
-      ariaDescription="Trust relationships, granted permissions, attributed compute, service activity and access keys for one AWS IAM identity."
+      ariaDescription="Trust relationships, granted permissions, attributed compute, service activity, recent API events and access keys for one AWS IAM identity."
     >
       {!identity ? null : (
         <>
@@ -103,7 +112,7 @@ export function AWSIdentityDrawer({
             className="flex flex-1 flex-col gap-0 overflow-hidden"
           >
             {/* `overflow-x-auto` as a safety net. TabsList is `w-fit` with no scroll
-                of its own, so if a label ever grows past the 560px the width
+                of its own, so if a label ever grows past the 640px the width
                 above allows, the tabs scroll instead of becoming unreachable. */}
             <div className="overflow-x-auto border-b px-6 pt-3">
               <TabsList>
@@ -112,6 +121,10 @@ export function AWSIdentityDrawer({
                 <TabsTrigger value="trust">Trust</TabsTrigger>
                 <TabsTrigger value="compute">Compute</TabsTrigger>
                 <TabsTrigger value="usage">Activity</TabsTrigger>
+                {/* Separate from Activity on purpose: that tab is Access
+                    Advisor, per service and successes only. This is CloudTrail,
+                    per call and including denials. */}
+                <TabsTrigger value="events">Events</TabsTrigger>
                 <TabsTrigger value="keys">Keys</TabsTrigger>
               </TabsList>
             </div>
@@ -139,6 +152,9 @@ export function AWSIdentityDrawer({
               </TabsContent>
               <TabsContent value="usage">
                 {tab === "usage" ? <UsageTab identity={identity} /> : null}
+              </TabsContent>
+              <TabsContent value="events">
+                {tab === "events" ? <EventsTab identity={identity} /> : null}
               </TabsContent>
               <TabsContent value="keys">
                 {tab === "keys" ? <KeysTab identity={identity} /> : null}

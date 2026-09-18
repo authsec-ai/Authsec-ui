@@ -30,6 +30,20 @@
  * identity's reach, it removes it — those identities get their own section
  * rather than a pill inside the reach list, where the heading would assert the
  * opposite of what the row means.
+ *
+ * ── Two different denies, and why they are shown apart ──────────────────────
+ *
+ * The "explicitly denied" section below is IDENTITY-side: a statement attached
+ * to a role or user that names this resource with effect Deny.
+ *
+ * The "Resource policy" row in the facts grid is RESOURCE-side: the bucket's or
+ * key's own policy, read from `s3:GetBucketPolicy` / `kms:GetKeyPolicy` and
+ * carried as an observation. It can block an identity that has every
+ * identity-side Allow and appears nowhere in the lists below — which is exactly
+ * why its absence used to make this console overstate access.
+ *
+ * Its three states are deliberate: deny, no deny, and NOT READ. A resource
+ * whose policy was never read renders as unknown, never as "no deny".
  */
 
 import { useMemo } from "react";
@@ -51,6 +65,7 @@ import {
 } from "@/components/console/detail";
 import {
   useListAwsIdentityPageQuery,
+  useListAwsObservationsQuery,
   useListAwsPermissionsQuery,
   AWS_DISCOVERY_MAX_LIMIT,
   type CloudConnector,
@@ -69,6 +84,7 @@ import {
 } from "./awsInventoryLabels";
 import { InventoryNotice, TruncationLine } from "./AWSInventoryNotices";
 import { truncationOf } from "./awsInventoryState";
+import { isResourcePolicy, resourcePolicyFacts } from "./awsObservationFacts";
 
 /** One identity's claim on this resource. `identity` is null when the identity
  * read truncated before reaching it — the statement is still real, only the
@@ -184,6 +200,41 @@ export function AWSResourceDrawer({
     { skip: !open },
   );
 
+  // The resource's own policy. Filtered by resource_id only, with no
+  // `source_api`, so one query covers both the S3 bucket-policy read and the
+  // KMS key-policy read rather than firing one per service.
+  const policyQuery = useListAwsObservationsQuery(
+    { resource_id: resource?.id, limit: AWS_DISCOVERY_MAX_LIMIT },
+    { skip: !open },
+  );
+
+  /** `true` deny, `false` no deny, `undefined` NOT READ.
+   *
+   * The third state is load-bearing: a resource whose policy was never read
+   * must not render as "no deny", because that is the overstatement this
+   * surface exists to remove. Absence of evidence is shown as absence. */
+  const policyHasDeny = useMemo<boolean | undefined>(() => {
+    // `currentData`, NOT `data`. RTK Query keeps `data` at the last successful
+    // result across an arg change, and this drawer stays mounted while the
+    // pager steps between resources. Reading `data` would render the PREVIOUS
+    // resource's policy against the new one's ARN until the refetch landed —
+    // showing "Contains an explicit Deny" on a resource that has none, which is
+    // the precise false claim this surface exists to prevent. `currentData` is
+    // undefined while the new arg is in flight, which renders as "Not read".
+    const policies = (policyQuery.currentData?.rows ?? []).filter(isResourcePolicy);
+    if (!policies.length) return undefined;
+
+    // Only the NEWEST observation per source API describes the policy as it
+    // stands. `content_hash` is part of the dedupe key, so an edited policy
+    // writes a new row and the previous one survives — observations are
+    // durable evidence, not a reconciled inventory. Reading `.some()` across
+    // every row would keep reporting a deny that was removed months ago.
+    // Rows arrive `observed_at DESC`, so the first seen per source is current.
+    const newest = new Map<string, (typeof policies)[number]>();
+    for (const o of policies) if (!newest.has(o.source_api)) newest.set(o.source_api, o);
+    return [...newest.values()].some((o) => resourcePolicyFacts(o).hasDeny === true);
+  }, [policyQuery.currentData]);
+
   const identityById = useMemo(
     () => new Map((identitiesQuery.data?.rows ?? []).map((i) => [i.id, i])),
     [identitiesQuery.data],
@@ -259,13 +310,22 @@ export function AWSResourceDrawer({
             title={resource.name || resource.native_id}
             subtitle={resourceKindLabel(resource.kind)}
             badge={
-              // Same idiom as PermissionsTab: a "low" badge says nothing, so it
-              // is not rendered at all.
-              resource.sensitivity !== "low" ? (
-                <CloudPill tone={SENSITIVITY_TONE[resource.sensitivity]} dot={false}>
-                  {SENSITIVITY_LABEL[resource.sensitivity]} sensitivity
-                </CloudPill>
-              ) : null
+              // Two independent badges. A resource-policy deny is the more
+              // urgent of the two, so it leads.
+              <span className="flex flex-wrap items-center gap-1.5">
+                {policyHasDeny === true ? (
+                  <CloudPill tone="danger" dot={false}>
+                    Policy denies
+                  </CloudPill>
+                ) : null}
+                {/* Same idiom as PermissionsTab: a "low" badge says nothing, so
+                    it is not rendered at all. */}
+                {resource.sensitivity !== "low" ? (
+                  <CloudPill tone={SENSITIVITY_TONE[resource.sensitivity]} dot={false}>
+                    {SENSITIVITY_LABEL[resource.sensitivity]} sensitivity
+                  </CloudPill>
+                ) : null}
+              </span>
             }
           />
 
@@ -275,6 +335,24 @@ export function AWSResourceDrawer({
                 <CopyField label="ARN" value={resource.native_id} />
                 <DetailRow label="Type" value={resourceKindLabel(resource.kind)} />
                 <DetailRow label="Sensitivity" value={SENSITIVITY_LABEL[resource.sensitivity]} />
+                {/* The resource's OWN policy, not the identity-side statements
+                    below. An explicit Deny here blocks access no identity-side
+                    Allow can restore, which is why it sits in the facts grid
+                    rather than in the reach list. */}
+                <DetailRow
+                  label="Resource policy"
+                  value={
+                    policyHasDeny === undefined ? (
+                      <span className="text-muted-foreground">Not read</span>
+                    ) : policyHasDeny ? (
+                      <CloudPill tone="danger" dot={false}>
+                        Contains an explicit Deny
+                      </CloudPill>
+                    ) : (
+                      "No explicit Deny"
+                    )
+                  }
+                />
                 <DetailRow label="Account" value={connector ? accountLabel(connector) : "—"} />
                 <DetailRow label="First seen" value={relativeWithTitle(resource.first_seen_at)} />
                 <DetailRow label="Last seen" value={relativeWithTitle(resource.last_seen_at)} />
