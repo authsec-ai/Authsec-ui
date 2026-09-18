@@ -151,9 +151,12 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE }}:production
+          # ONLY the SHA tag. :production is moved by the deploy job AFTER
+          # verification, so it names the last build proven to work rather than
+          # the last build attempted. Tagging it here broke rollback (undo
+          # restores the previous spec's tag, which this push had overwritten)
+          # and let any pod restart pull untested code.
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.sha }}
           build-args: |
             GIT_COMMIT=${{ steps.meta.outputs.sha }}
             GIT_BRANCH=${{ github.ref_name }}
@@ -188,6 +191,27 @@ jobs:
       # No database backup step here, unlike the backend: the console owns no
       # schema and runs no migrations. Adding a ceremonial dump would teach
       # people the step is ceremonial.
+      # Rollback needs a target a later push cannot move. The Deployment spec
+      # holds a TAG, and `kubectl rollout undo` restores that tag -- so if the
+      # tag has since been repointed, "rollback" lands on the new image and
+      # reports success having changed nothing. A digest cannot be repointed.
+      - name: Record the running image digest
+        id: current
+        run: |
+          sel="$(kubectl get deploy -n "$NAMESPACE" "$DEPLOYMENT" -o json \
+            | jq -r '.spec.selector.matchLabels | to_entries
+                     | map("\(.key)=\(.value)") | join(",")')"
+          digest="$(kubectl get pods -n "$NAMESPACE" -l "$sel" -o json \
+            | jq -r --arg c "$CONTAINER" '[.items[].status.containerStatuses[]?
+                     | select(.name == $c) | .imageID]
+                     | map(select(. != null and . != "")) | first // ""')"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          if [ -n "$digest" ]; then
+            echo "Currently running: $digest"
+          else
+            echo "::warning::No running pod found -- rollback will be unavailable."
+          fi
+
       - name: Point the deployment at this commit
         id: rollout
         run: |
@@ -200,12 +224,60 @@ jobs:
             --overwrite
           kubectl rollout status -n "$NAMESPACE" "deploy/$DEPLOYMENT" --timeout=5m
 
+      # Polls rather than asking once -- see the header of the script.
       - name: Verify the running commit
+        id: verify
         run: SERVICE=ui API="$APP" ./scripts/check-deployed-version.sh "${{ needs.build.outputs.sha }}"
 
-      - name: Roll back if verification failed
-        if: failure() && steps.rollout.outputs.image_updated == 'true'
+      # Only now does :production move, so a pod restarting for any reason
+      # comes back on code that answered its own version endpoint correctly.
+      - name: Promote :production to the verified image
+        # A registry hiccup here must not tear down a deploy that just proved
+        # itself. The tag lagging is cosmetic; rolling back working code is not.
+        continue-on-error: true
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
-          echo "Verification failed — rolling back."
-          kubectl rollout undo -n "$NAMESPACE" "deploy/$DEPLOYMENT"
+          printf '%s' "$REGISTRY_PASSWORD" \
+            | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+          docker buildx imagetools create \
+            --tag "$REGISTRY/$IMAGE:production" \
+            "$REGISTRY/$IMAGE:${{ needs.build.outputs.sha }}"
+          echo ":production now points at ${{ needs.build.outputs.sha }}"
+
+      - name: Roll back if verification failed
+        # `failure()` is required for this to run at all -- without a status
+        # function GitHub implicitly ANDs the condition with success(). The
+        # outcome check narrows it to VERIFY having failed, so a later step
+        # breaking cannot roll back a proven-good deploy.
+        if: failure() && steps.verify.outcome == 'failure' && steps.rollout.outputs.image_updated == 'true'
+        run: |
+          digest='${{ steps.current.outputs.digest }}'
+          if [ -z "$digest" ]; then
+            echo "::error::Verification failed and no previous digest was recorded."
+            echo "The new image is still live. Roll back by hand:"
+            echo "  kubectl rollout undo -n $NAMESPACE deploy/$DEPLOYMENT"
+            exit 1
+          fi
+          echo "Verification failed — rolling back to $digest"
+          # By digest, not `rollout undo`: undo restores the previous spec's
+          # TAG, and a tag can have been repointed since. This cannot.
+          kubectl set image -n "$NAMESPACE" "deploy/$DEPLOYMENT" "$CONTAINER=$digest"
+          kubectl annotate -n "$NAMESPACE" "deploy/$DEPLOYMENT" \
+            kubernetes.io/change-cause="rollback from ${{ needs.build.outputs.sha }} (verification failed)" \
+            --overwrite
           kubectl rollout status -n "$NAMESPACE" "deploy/$DEPLOYMENT" --timeout=5m
+
+          # Prove the rollback rather than trusting it.
+          now="$(kubectl get pods -n "$NAMESPACE" \
+            -l "$(kubectl get deploy -n "$NAMESPACE" "$DEPLOYMENT" -o json \
+                  | jq -r '.spec.selector.matchLabels | to_entries
+                           | map("\(.key)=\(.value)") | join(",")')" -o json \
+            | jq -r --arg c "$CONTAINER" '[.items[].status.containerStatuses[]?
+                     | select(.name == $c) | .imageID] | first // ""')"
+          if [ "$now" != "$digest" ]; then
+            echo "::error::Rollback did not land. Running $now, expected $digest."
+            exit 1
+          fi
+          echo "Rollback confirmed."
