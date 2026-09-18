@@ -213,6 +213,12 @@ export const baseApi = createApi({
     "CloudResource",
     "CloudWorkload",
     "CloudUsage",
+    // Evidence from surfaces with no inventory table of their own — CloudTrail
+    // events, the IAM credential report, S3/KMS resource policies, AgentCore
+    // workload identities. Its own tag because it is written by a different
+    // collector pass and a reader may want it refreshed without discarding the
+    // identity inventory.
+    "CloudObservation",
     "CloudScanRun",
   ],
   endpoints: () => ({}),

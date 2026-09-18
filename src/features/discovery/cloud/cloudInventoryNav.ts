@@ -53,7 +53,7 @@ export const CLOUD_INVENTORY_TABS: CloudInventoryTab[] = [
     key: "compute",
     label: "Compute",
     description:
-      "Lambda functions, ECS task definitions, EC2 instances and Bedrock agents discovered in your AWS accounts, and the identity each one runs as.",
+      "Lambda functions, ECS task definitions, EC2 instances, Bedrock agents and AgentCore gateways discovered in your AWS accounts, and the identity each one runs as.",
     scopedByAccount: false,
   },
   {

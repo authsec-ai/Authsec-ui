@@ -198,6 +198,7 @@ const SURFACE_NOUN: Record<InventorySurface, string> = {
   compute: "compute",
   usage: "service activity",
   resources: "resources named by a permission statement",
+  workload_identities: "AgentCore workload identities",
 };
 
 const SURFACE_PHRASE: Record<InventorySurface, string> = {
@@ -206,6 +207,7 @@ const SURFACE_PHRASE: Record<InventorySurface, string> = {
   compute: "Compute discovery",
   usage: "Service activity",
   resources: "Resource extraction",
+  workload_identities: "AgentCore workload identity discovery",
 };
 
 /**

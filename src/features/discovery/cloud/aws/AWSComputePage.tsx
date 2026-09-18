@@ -2,9 +2,14 @@
  * Discovery → AWS Compute
  *
  * The compute AuthSec found running as a discovered identity — Lambda
- * functions, ECS task definitions, EC2 instances, Bedrock agents and AgentCore
- * runtimes — and, prominently, the compute it could NOT attribute to any role
- * it discovered.
+ * functions, ECS task definitions, EC2 instances, Bedrock agents, AgentCore
+ * runtimes and AgentCore gateways — and, prominently, the compute it could NOT
+ * attribute to any role it discovered.
+ *
+ * Carries a second view, `?view=workload-identities`: AgentCore's own
+ * principals. They are compute-adjacent but are evidence rows with no subject
+ * of any kind, so they cannot share this page's table — see
+ * AWSWorkloadIdentitiesView for why they have nowhere else to live.
  *
  * ── Why this is a top-level view, not only an identity's tab ────────────────
  *
@@ -71,6 +76,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
+import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
 import {
   metricLabel,
   RUNTIME_KIND_LABEL,
@@ -99,8 +105,20 @@ function relativeOrUnknown(iso: string | null | undefined): string {
   return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "Unknown";
 }
 
+/** The two things this page shows. `compute` is the default and carries no
+ * param, so the plain URL stays clean and shareable. */
+type ComputeView = "compute" | "workload-identities";
+
+const VIEWS: { key: ComputeView; label: string }[] = [
+  { key: "compute", label: "Compute" },
+  { key: "workload-identities", label: "Workload identities" },
+];
+
 export default function AWSComputePage() {
   const [params, setParams] = useSearchParams();
+
+  const view: ComputeView =
+    params.get("view") === "workload-identities" ? "workload-identities" : "compute";
 
   const attribution = (() => {
     const raw = params.get("attribution");
@@ -143,7 +161,14 @@ export default function AWSComputePage() {
   // — runs client-side, because the endpoint has no search parameter. Paging
   // server-side would silently reduce all three to one page of rows, which is
   // the same class of lie as the truncation this replaced.
-  const workloadsQuery = useListAwsWorkloadsQuery({ limit: AWS_DISCOVERY_MAX_LIMIT, offset: 0 });
+  // Skip-gated on the active view: the workload-identities view renders none of
+  // this, and landing straight on `?view=workload-identities` would otherwise
+  // fire two 500-row reads for a table that is not on screen.
+  const computeActive = view === "compute";
+  const workloadsQuery = useListAwsWorkloadsQuery(
+    { limit: AWS_DISCOVERY_MAX_LIMIT, offset: 0 },
+    { skip: !computeActive },
+  );
   const rows = useMemo(() => workloadsQuery.data?.rows ?? [], [workloadsQuery.data]);
 
   // Derived from `rows`, not from `meta`. The server does still send
@@ -155,10 +180,13 @@ export default function AWSComputePage() {
     ? truncationOf(workloadsQuery.data)
     : { truncated: false, shown: 0, total: 0, totalKnown: false };
 
-  const identitiesQuery = useListAwsIdentityPageQuery({
-    limit: AWS_DISCOVERY_MAX_LIMIT,
-    offset: 0,
-  });
+  const identitiesQuery = useListAwsIdentityPageQuery(
+    {
+      limit: AWS_DISCOVERY_MAX_LIMIT,
+      offset: 0,
+    },
+    { skip: !computeActive },
+  );
   const identityById = useMemo(
     () => new Map((identitiesQuery.data?.rows ?? []).map((i) => [i.id, i])),
     [identitiesQuery.data],
@@ -418,6 +446,35 @@ export default function AWSComputePage() {
     // The page header and tab strip belong to CloudInventoryLayout; this is the
     // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
     <div className="space-y-4">
+      {/* A local view switch, not a fourth Cloud Inventory tab. AgentCore
+          workload identities are compute-adjacent — AgentCore's own principals
+          — but they are evidence rows with no subject, so they cannot share
+          this page's table. Styled as pills rather than a second `.tabbar`,
+          which would sit directly under the real one and read as a duplicate. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {VIEWS.map((v) => {
+          const active = view === v.key;
+          return (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setParam("view", v.key === "compute" ? null : v.key)}
+              className={
+                active
+                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-(--color-primary-soft) px-2.5 text-[11px] font-semibold text-(--color-primary-text)"
+                  : "inline-flex h-7 items-center gap-1.5 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-[11px] font-medium text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
+              }
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {view === "workload-identities" ? <AWSWorkloadIdentitiesView /> : null}
+
+      {view === "workload-identities" ? null : (
+      <>
       {workloadsQuery.isError ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
           <strong className="font-medium">Could not load compute.</strong>{" "}
@@ -557,6 +614,8 @@ export default function AWSComputePage() {
       ) : null}
 
       <AWSIdentityDrawer identity={selected} onClose={() => setSelectedIdentityId(null)} />
+      </>
+      )}
     </div>
   );
 }

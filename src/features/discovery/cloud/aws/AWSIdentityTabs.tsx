@@ -1,5 +1,5 @@
 /**
- * The five identity-scoped tabs of AWSIdentityDrawer.
+ * The identity-scoped tabs of AWSIdentityDrawer.
  *
  * Each one wraps exactly one endpoint, always filtered by `identity_id`. That
  * filter is not an optimisation for permissions — the grain is one row per
@@ -22,6 +22,7 @@ import {
   Info,
   KeyRound,
   Network,
+  ScrollText,
   ShieldQuestion,
   Timer,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import {
   AWS_DISCOVERY_MAX_LIMIT,
   useListAwsAssumeEdgesQuery,
   useListAwsConnectorsQuery,
+  useListAwsObservationsQuery,
   useListAwsPermissionsQuery,
   useListAwsResourcesQuery,
   useListAwsSecretsQuery,
@@ -63,6 +65,12 @@ import {
 } from "./awsInventoryLabels";
 import { InventoryNotice, PhaseUnobservableNotice, TruncationLine } from "./AWSInventoryNotices";
 import { truncationOf } from "./awsInventoryState";
+import {
+  cloudTrailFacts,
+  credentialReportFacts,
+  SOURCE_CLOUDTRAIL_EVENTS,
+  SOURCE_CREDENTIAL_REPORT,
+} from "./awsObservationFacts";
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
 
@@ -623,6 +631,121 @@ export function UsageTab({ identity }: { identity: CloudIdentity }) {
   );
 }
 
+/* ─────────────────────────────── Events ───────────────────────────────── */
+
+/**
+ * CloudTrail management events for this identity.
+ *
+ * DELIBERATELY NOT PART OF THE ACTIVITY TAB, and the distinction is the whole
+ * reason this tab exists. Activity is IAM Access Advisor: one row per SERVICE,
+ * reporting whether the identity ever reached it. It cannot report a denial at
+ * all, and it cannot name an action.
+ *
+ * CloudTrail is per API CALL, and it includes the calls AWS refused. "This role
+ * was denied s3:PutObject an hour ago" is a fact Access Advisor structurally
+ * cannot produce, so the two must not share a scroll area where a reader would
+ * take one for a longer version of the other.
+ *
+ * Best-effort attribution: the collector matches an event to an identity where
+ * it confidently can, so this list is what was matched, not every event in the
+ * account.
+ */
+export function EventsTab({ identity }: { identity: CloudIdentity }) {
+  const eventsQuery = useListAwsObservationsQuery({
+    identity_id: identity.id,
+    source_api: SOURCE_CLOUDTRAIL_EVENTS,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+  const { data, isLoading, isError } = eventsQuery;
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+
+  const deniedCount = useMemo(
+    () => rows.filter((o) => cloudTrailFacts(o).denied === true).length,
+    [rows],
+  );
+
+  if (isLoading) return <TabLoading />;
+  if (isError) return <TabError what="API events" onRetry={() => void eventsQuery.refetch()} />;
+
+  if (!rows.length) {
+    return (
+      <div className="space-y-3">
+        <PhaseUnobservableNotice surface="CloudTrail events" />
+        <DrawerEmpty
+          icon={<ScrollText />}
+          title="No API events recorded"
+          description="No CloudTrail event was matched to this identity. CloudTrail is read over a recent window and events are attributed only where the match is confident, so this is not the same as 'this identity did nothing'."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {deniedCount > 0 ? (
+        <InventoryNotice tone="warning" icon={<Info />}>
+          <strong className="font-medium">
+            {deniedCount} of {rows.length} recorded calls were denied.
+          </strong>{" "}
+          A denial means this identity attempted something its permissions do not allow — the one
+          signal service-activity data cannot report at all.
+        </InventoryNotice>
+      ) : null}
+
+      <p className="text-[11px] text-muted-foreground">
+        One row per API call, from CloudTrail — including calls AWS refused. Distinct from Activity,
+        which reports per service and only for calls that succeeded.
+      </p>
+
+      <div className="space-y-1.5">
+        {rows.map((o) => {
+          const f = cloudTrailFacts(o);
+          return (
+            <div key={o.id} className="space-y-1.5 rounded-md border px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-xs text-foreground">
+                    {f.eventSource && f.eventName
+                      ? `${f.eventSource}:${f.eventName}`
+                      : f.eventName || o.subject_native_id}
+                  </p>
+                  {f.username ? (
+                    <p className="truncate text-[11px] text-muted-foreground">as {f.username}</p>
+                  ) : null}
+                </div>
+                <span
+                  className="flex-none text-[11px] text-muted-foreground"
+                  title={absolute(o.observed_at)}
+                >
+                  {relativeOrUnknown(o.observed_at)}
+                </span>
+              </div>
+
+              {/* Only `denied === true` earns a pill. `undefined` means the
+                  collector recorded no verdict, which must not render as
+                  "Allowed" — that would be a claim the data does not make. */}
+              {f.denied === true ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <CloudPill tone="danger" dot={false}>
+                    Denied
+                  </CloudPill>
+                  {f.errorCode ? (
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {f.errorCode}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {data ? <TruncationLine truncation={truncationOf(data)} noun="API events" /> : null}
+    </div>
+  );
+}
+
 /* ──────────────────────────────── Keys ────────────────────────────────── */
 
 export function KeysTab({ identity }: { identity: CloudIdentity }) {
@@ -635,6 +758,16 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
   const { data: secretPage, isLoading, isError } = secretQuery;
   const secrets = secretPage?.rows;
 
+  // The IAM credential report, which answers things the key inventory cannot:
+  // MFA, console password, and how long ago each key was ROTATED.
+  const reportQuery = useListAwsObservationsQuery({
+    identity_id: identity.id,
+    source_api: SOURCE_CREDENTIAL_REPORT,
+    limit: 1,
+  });
+  const report = reportQuery.data?.rows?.[0];
+  const facts = report ? credentialReportFacts(report) : undefined;
+
   if (isLoading) return <TabLoading />;
   if (isError) return <TabError what="access keys" onRetry={() => void secretQuery.refetch()} />;
 
@@ -644,6 +777,73 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
         Key identifiers and dates only — no secret value is ever read or stored. Oldest first: for a
         credential with no expiry, age is the finding.
       </p>
+
+      {/* Rendered only when the report was actually read. An absent report is
+          silence, not a finding — showing "MFA: no" because nothing loaded
+          would invent a security claim. */}
+      {facts ? (
+        <section className="rounded-md border px-3 py-2.5">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Credential report
+          </p>
+
+          <DetailGrid>
+            <DetailRow
+              label="MFA"
+              value={
+                facts.mfaActive === undefined ? (
+                  "Not reported"
+                ) : facts.mfaActive ? (
+                  "Active"
+                ) : (
+                  <CloudPill tone="warning" dot={false}>
+                    Not active
+                  </CloudPill>
+                )
+              }
+            />
+            <DetailRow
+              label="Console password"
+              value={
+                facts.passwordEnabled === undefined
+                  ? "Not reported"
+                  : facts.passwordEnabled
+                    ? `Enabled · last used ${relativeOrUnknown(facts.passwordLastUsed)}`
+                    : "Not enabled"
+              }
+            />
+          </DetailGrid>
+
+          {facts.keys.length ? (
+            <div className="mt-3 space-y-1.5">
+              {facts.keys.map((k) => (
+                <div key={k.ordinal} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="text-xs text-foreground">Access key {k.ordinal}</span>
+                  {k.active === false ? (
+                    <CloudPill tone="muted" dot={false}>
+                      Inactive
+                    </CloudPill>
+                  ) : null}
+                  {/* Rotation age and last-used age side by side, because they
+                      are different findings: a key used yesterday and rotated
+                      four years ago is the one worth acting on. */}
+                  <span className="text-[11px] text-muted-foreground">
+                    rotated{" "}
+                    <span title={absolute(k.rotatedAt)}>{relativeOrUnknown(k.rotatedAt)}</span> ·
+                    last used{" "}
+                    <span title={absolute(k.lastUsed)}>{relativeOrUnknown(k.lastUsed)}</span>
+                  </span>
+                </div>
+              ))}
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Numbered as the credential report numbers them. AWS's report carries no key id, so
+                these cannot be matched to the keys listed below — pairing them by position would
+                be a guess.
+              </p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {!secrets?.length ? (
         <DrawerEmpty
