@@ -173,10 +173,17 @@ jobs:
         env:
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
         run: |
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "::error::KUBECONFIG_B64 is not set. Mint it with authsec/scripts/make-deployer-kubeconfig.sh"
+            exit 1
+          fi
           mkdir -p "$HOME/.kube"
           echo "$KUBECONFIG_B64" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
-          kubectl version --client
+          # `kubectl version --client` passes with NO kubeconfig at all, so it
+          # proves nothing -- an empty secret sails through and the job dies
+          # later, somewhere that looks unrelated. Reach the API instead.
+          kubectl auth can-i patch deployments -n "$NAMESPACE"
 
       # No database backup step here, unlike the backend: the console owns no
       # schema and runs no migrations. Adding a ceremonial dump would teach
