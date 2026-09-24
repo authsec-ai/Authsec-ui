@@ -49,6 +49,7 @@ import { awsErrorCopy } from "./awsErrorCopy";
 const SESSION_STORAGE_KEY = "authsec.aws.quickCreate.session";
 const POLL_MS = 3000;
 const SLOW_AFTER_MS = 15 * 60 * 1000;
+const REGION_WAIT_MS = 90 * 1000;
 
 // The stored launch belongs to one signed-in user in one workspace. Keyed by
 // both, so signing out and in as someone else in the same tab never resumes
@@ -90,7 +91,17 @@ function Banner({
     danger: "border-l-(--color-danger-text) bg-(--color-danger-soft) text-foreground",
     success: "border-l-(--color-success-text) bg-(--color-success-soft) text-(--color-success-text)",
   }[tone];
-  return <div className={`rounded-md border-l-2 px-3 py-2.5 text-xs ${cls}`}>{children}</div>;
+  // Announced to screen readers as it changes (Waiting → Verifying → Connected
+  // or Failed); a failure interrupts, everything else waits its turn.
+  return (
+    <div
+      role={tone === "danger" ? "alert" : "status"}
+      aria-live={tone === "danger" ? "assertive" : "polite"}
+      className={`rounded-md border-l-2 px-3 py-2.5 text-xs ${cls}`}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function AWSQuickCreateFlow({
@@ -167,11 +178,22 @@ export function AWSQuickCreateFlow({
   const [manualConnected, setManualConnected] = useState<{ id: string; account: string } | null>(null);
   const [createConnector, { isLoading: connecting }] = useCreateAwsConnectorMutation();
 
+  // Per-Region results normally land seconds after "connected". If they never
+  // do (a probe failed server-side), stop waiting after REGION_WAIT_MS rather
+  // than polling for as long as the dialog stays open.
+  const [regionWaitOver, setRegionWaitOver] = useState(false);
+  const connectedWithoutRegions = session?.status === "connected" && !session.region_status;
+  useEffect(() => {
+    if (!connectedWithoutRegions) return;
+    const t = window.setTimeout(() => setRegionWaitOver(true), REGION_WAIT_MS);
+    return () => window.clearTimeout(t);
+  }, [connectedWithoutRegions]);
+
   const settled =
     sessionGone ||
     Boolean(manualConnected) ||
     session?.status === "failed" ||
-    (session?.status === "connected" && Boolean(session.region_status));
+    (session?.status === "connected" && (Boolean(session.region_status) || regionWaitOver));
   useEffect(() => {
     setPollMs(settled ? 0 : POLL_MS);
   }, [settled]);
@@ -340,7 +362,11 @@ export function AWSQuickCreateFlow({
         {session?.status === "connected" ? (
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-foreground">AWS Region(s)</p>
-            {regionRows.length === 0 ? (
+            {regionRows.length === 0 && regionWaitOver ? (
+              <p className="text-xs text-muted-foreground">
+                The per-Region check didn't finish. The account is connected; the first scan checks each Region.
+              </p>
+            ) : regionRows.length === 0 ? (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Checking each Region…
@@ -450,7 +476,7 @@ export function AWSQuickCreateFlow({
           </ol>
         ) : null}
 
-        {popupBlocked && session ? (
+        {popupBlocked && session?.quick_create_url ? (
           <Banner tone="warning">
             Your browser blocked the new tab.{" "}
             <a className="underline" href={session.quick_create_url} target="_blank" rel="noopener noreferrer">
@@ -472,25 +498,32 @@ export function AWSQuickCreateFlow({
 
         {session && !failed && !sessionGone ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href={session.quick_create_url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-1 size-3.5" />
-                Reopen the launch page
-              </a>
-            </Button>
+            {/* The link and ExternalId come back only to the user who started
+                the launch; for anyone else they are empty, and an empty href
+                would just reopen AuthSec. */}
+            {session.quick_create_url ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={session.quick_create_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1 size-3.5" />
+                  Reopen the launch page
+                </a>
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" asChild>
               <a href={cloudFormationConsoleUrl(session.deployment_region)} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-1 size-3.5" />
                 CloudFormation stacks
               </a>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowPaste((v) => !v)}>
-              Paste Role ARN instead
-            </Button>
+            {session.external_id ? (
+              <Button variant="outline" size="sm" onClick={() => setShowPaste((v) => !v)}>
+                Paste Role ARN instead
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
-        {showPaste && session && !failed && !sessionGone ? (
+        {showPaste && session?.external_id && !failed && !sessionGone ? (
           <div className="space-y-2 rounded-md border p-2.5">
             <Label htmlFor="aws-qc-role-arn">Role ARN from the stack's Outputs tab</Label>
             <Input
@@ -531,8 +564,19 @@ export function AWSQuickCreateFlow({
         ) : null}
 
         <div className="flex justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={onUseManual}>
-            Use manual setup
+          {/* Manual setup mints a different ExternalId, so a stack launched
+              here cannot be finished there. Leaving is therefore explicit:
+              this launch is cancelled first (use "Paste Role ARN instead" to
+              finish it by hand). */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              startOver();
+              onUseManual();
+            }}
+          >
+            {terminal || sessionGone ? "Use manual setup" : "Cancel this launch and use manual setup"}
           </Button>
           <Button variant="outline" size="sm" onClick={startOver}>
             <RotateCcw className="mr-1 size-3.5" />
