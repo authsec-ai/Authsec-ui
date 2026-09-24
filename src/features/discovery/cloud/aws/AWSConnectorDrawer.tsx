@@ -70,7 +70,11 @@ import {
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
 import { awsErrorCopy } from "./awsErrorCopy";
-import { stackPredatesCompute, TEMPLATE_VERSION_WITH_COMPUTE } from "./awsInventoryLabels";
+import {
+  coverageSurfaceLabel,
+  stackPredatesCompute,
+  TEMPLATE_VERSION_WITH_COMPUTE,
+} from "./awsInventoryLabels";
 import { TruncationLine } from "./AWSInventoryNotices";
 import { truncationOf } from "./awsInventoryState";
 
@@ -94,6 +98,16 @@ const COVERAGE_TONE: Record<CloudCoverageState, StatusTone> = {
   unknown: "muted",
   constrained: "warning",
   stale: "muted",
+  // Warning, alongside throttled: the read fell short of the whole surface,
+  // which is a result the operator has to act on, not a clean one.
+  partial: "warning",
+  // Muted, alongside not_configured: an unselected region is a deliberate
+  // scope choice, not a failure, and colouring it as one would make the
+  // default onboarding posture look broken.
+  not_selected: "muted",
+  // No collector writes this yet; listed because the union tracks
+  // models.SurfaceStates, not the subset seen so far.
+  unsupported: "muted",
 };
 
 // Also total, and for a sharper reason than the tones. This used to be a
@@ -109,16 +123,11 @@ const COVERAGE_LABEL: Record<CloudCoverageState, string> = {
   unknown: "Not checked",
   constrained: "Blocked by policy",
   stale: "Stale",
-};
-
-// The AWS surfaces ticket [1] writes into `cloud_connector.coverage.surfaces`
-// (models.SurfaceIAMRoles etc., cloud_discovery.go) — in a form a reader
-// recognizes without knowing the internal key.
-const COVERAGE_SURFACE_LABEL: Record<string, string> = {
-  iam_roles: "IAM roles",
-  iam_users: "IAM users",
-  iam_access_keys: "Access keys",
-  iam_policies: "Policies (managed & inline)",
+  // "Partly read", not "Partial": the latter says nothing about WHAT is
+  // partial, and the count beside it is already prefixed "≥" for this state.
+  partial: "Partly read",
+  not_selected: "Not selected",
+  unsupported: "Not supported",
 };
 
 const IDENTITY_KIND_LABEL: Record<string, string> = { iam_role: "IAM role", iam_user: "IAM user" };
@@ -133,7 +142,7 @@ function relativeOrUnknown(iso: string | null | undefined): string {
 function CoverageRow({ surfaceKey, state, count }: { surfaceKey: string; state: CloudCoverageState; count: number }) {
   return (
     <div className="flex items-center justify-between rounded-md border px-3 py-2">
-      <span className="text-xs text-foreground">{COVERAGE_SURFACE_LABEL[surfaceKey] ?? surfaceKey}</span>
+      <span className="text-xs text-foreground">{coverageSurfaceLabel(surfaceKey)}</span>
       <div className="flex items-center gap-2">
         <span className="text-[11px] text-muted-foreground">
           {state === "reached" ? count : `≥ ${count}`}
@@ -393,7 +402,19 @@ export function AWSConnectorDrawer({
                     ) : (
                       <div className="space-y-1.5">
                         {surfaceEntries.map(([key, s]) => (
-                          <CoverageRow key={key} surfaceKey={key} state={s.state} count={s.count} />
+                          // `?? "unknown"` because the Record's totality is a
+                          // COMPILE-time guarantee and this value arrives over
+                          // the wire: a backend that adds a state this build
+                          // has never heard of would otherwise index the maps
+                          // with it and render an empty pill. "Not checked" is
+                          // the safe landing — it claims nothing. The GCP
+                          // drawer already guards its equivalent this way.
+                          <CoverageRow
+                            key={key}
+                            surfaceKey={key}
+                            state={(s?.state ?? "unknown") as CloudCoverageState}
+                            count={s?.count ?? 0}
+                          />
                         ))}
                         {connector.coverage.status === "partial" ? (
                           <p className="text-[11px] text-(--color-warning-text)">
@@ -401,19 +422,23 @@ export function AWSConnectorDrawer({
                             a floor, not a total.
                           </p>
                         ) : null}
-                        {/* The report above covers the IAM phase and nothing
-                            else. The scan chains a permission pass and then a
-                            compute/activity pass after it, in the same
-                            background run, and neither writes into this blob —
-                            so "complete" here does not mean those finished.
-                            Without saying so, a reader watching this reach
-                            complete and then finding no permissions would
-                            reasonably conclude the account has none. */}
+                        {/* This used to read "Covers the IAM phase only", which
+                            AWSIAMScanner.FinalizeCoverage made false: it merges
+                            oidc_providers, eks_pod_identity, policy_documents,
+                            resource_policies, iam_credential_report, activity
+                            and a <surface>:<region> entry per compute surface
+                            into this same blob before it is published. The
+                            surfaces listed above are all three phases.
+
+                            What remains true is narrower and worth keeping: the
+                            report is stamped at PUBLISH, so a scan still in
+                            flight shows the previous run's answer rather than a
+                            partial one. */}
                         <p className="flex items-start gap-1.5 pt-1 text-[11px] text-muted-foreground">
                           <Info className="mt-px size-3.5 flex-none" aria-hidden />
-                          Covers the IAM phase only. Permissions, compute and service activity are
-                          read afterwards in the same background run and report no status of their
-                          own — see the inventory for what they found.
+                          Covers every phase of the last completed scan — identities, permissions,
+                          compute and service activity. It is written when that scan publishes, so
+                          while a new scan is running these are still the previous run's results.
                         </p>
                       </div>
                     )}

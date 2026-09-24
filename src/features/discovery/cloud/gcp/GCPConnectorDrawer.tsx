@@ -125,6 +125,14 @@ const COVERAGE_TONE: Record<CloudCoverageState, StatusTone> = {
   unknown: "muted",
   constrained: "warning",
   stale: "muted",
+  // Added with the shared union, which is what keeps this Record total. The
+  // GCP scanner does not write either state today; they are here so that if it
+  // ever does, the surface renders a word rather than an empty pill — the same
+  // reason `constrained` and `stale` were already listed on the AWS side
+  // before AWS wrote them.
+  partial: "warning",
+  not_selected: "muted",
+  unsupported: "muted",
 };
 
 // A total Record, not a ternary chain, so a state nobody thought about cannot
@@ -140,6 +148,9 @@ const COVERAGE_LABEL: Record<CloudCoverageState, string> = {
   unknown: "Not checked",
   constrained: "Blocked by policy",
   stale: "Stale",
+  partial: "Partly read",
+  not_selected: "Not selected",
+  unsupported: "Not supported",
 };
 
 /** Why a probe could not answer, in words. These are the backend's sanitized

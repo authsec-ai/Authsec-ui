@@ -76,7 +76,30 @@ export type CloudCoverageState =
   | "not_configured"
   | "unknown"
   | "constrained"
-  | "stale";
+  | "stale"
+  // Both of these are written by the backend today and were missing here, so
+  // every surface carrying one fell out of the total Records below and
+  // rendered as a pill with no text at all.
+  //
+  // `partial` — the surface WAS reached, but not exhaustively: a half-read set
+  // of roles, or an activity pass that stopped at its per-scan identity cap.
+  // It blocks reconciliation exactly as a denial does, so it must never read
+  // as a clean result; it is not a denial, so it must not read as one either.
+  //
+  // `not_selected` — the surface was deliberately out of the scan's scope,
+  // e.g. a region the operator did not choose. "Nobody looked, and nobody was
+  // meant to" is a third answer, distinct from both a clean read and a failed
+  // one, and with the one-region onboarding default it is the most common
+  // state on the screen.
+  | "partial"
+  | "not_selected"
+  // `unsupported` — a surface AuthSec has built no collector for. No collector
+  // writes it today, but it is in `models.SurfaceStates`, whose own comment
+  // says that list exists "for validation and for the console's total Record".
+  // This union IS that Record's key, so it tracks the list rather than the
+  // subset currently observed in the wild — the same reason `stale` and
+  // `not_configured` are here and equally unwritten.
+  | "unsupported";
 
 export interface CloudCoverageSurface {
   state: CloudCoverageState;
@@ -373,6 +396,15 @@ export interface AWSIdentityAttrs {
   max_session_duration?: number;
   tags?: Record<string, string>;
   has_trust_policy?: boolean;
+  /** The permissions boundary capping this identity, when it has one. Absent
+   * means either no boundary or a read that could not establish one — read it
+   * together with detail_incomplete, never alone. */
+  permissions_boundary_arn?: string;
+  /** True when the last scan could only read this identity in part: a
+   * throttled iam:GetRole leaves tags, last-used and the boundary UNKNOWN
+   * rather than absent. Both fields are `omitempty` server-side, so absent
+   * here means the read was complete, not that the flag is false. */
+  detail_incomplete?: boolean;
 }
 
 /** A candidate identity — an IAM role or user. NOT an agent: nothing here
@@ -673,6 +705,24 @@ export interface CloudResource {
   native_id: string;
   name: string;
   sensitivity: CloudSensitivity;
+  /** The account segment of the resource's OWN ARN, which is not necessarily
+   * the account that discovered it. Empty for ARN shapes that carry no account
+   * — S3 bucket and object ARNs are the common case — so an empty string means
+   * "the ARN does not say", never "the connector's account". */
+  resource_account: string;
+  /** True when the resource's ARN names an account other than the scanning
+   * connector's. The backend computes it; before this field reached the
+   * console the Account column rendered the CONNECTOR's account for every row,
+   * so a cross-account resource was displayed as local. */
+  is_external: boolean;
+  /** Populated only for `s3_object` — the key within the bucket. */
+  object_key: string;
+  /** Where `sensitivity` came from: a rule keyed on the ARN's service, provider
+   * metadata, a customer classification, or unknown. Without it the console
+   * shows a verdict with nothing to inspect. */
+  sensitivity_source: string;
+  /** The reason behind `sensitivity`, in words. */
+  sensitivity_reason: string;
   last_seen_generation: number;
   first_seen_at: string;
   last_seen_at: string;
