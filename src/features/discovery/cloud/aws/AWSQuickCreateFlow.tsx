@@ -41,6 +41,7 @@ import {
   type AWSOnboardingSession,
   type AWSQuickCreateApiError,
 } from "./awsQuickCreateApi";
+import { SessionManager } from "@/utils/sessionManager";
 import { AWS_OPT_IN_REGION_LABELS, AWS_REGIONS, awsRegionLabel } from "./awsRegions";
 import { previousStackHint, quickCreateErrorCopy, regionProbeCopy } from "./awsQuickCreateCopy";
 import { awsErrorCopy } from "./awsErrorCopy";
@@ -49,17 +50,24 @@ const SESSION_STORAGE_KEY = "authsec.aws.quickCreate.session";
 const POLL_MS = 3000;
 const SLOW_AFTER_MS = 15 * 60 * 1000;
 
+// The stored launch belongs to one signed-in user in one workspace. Keyed by
+// both, so signing out and in as someone else in the same tab never resumes
+// the previous user's launch.
+function storageKey(): string {
+  const s = SessionManager.getSession();
+  return `${SESSION_STORAGE_KEY}:${s?.workspace_id ?? "-"}:${s?.user_id ?? "-"}`;
+}
 function readStoredSession(): string | null {
   try {
-    return window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return window.sessionStorage.getItem(storageKey());
   } catch {
     return null;
   }
 }
 function storeSession(id: string | null) {
   try {
-    if (id) window.sessionStorage.setItem(SESSION_STORAGE_KEY, id);
-    else window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    if (id) window.sessionStorage.setItem(storageKey(), id);
+    else window.sessionStorage.removeItem(storageKey());
   } catch {
     // Storage blocked: resuming after a refresh is a convenience, not a need.
   }
@@ -145,13 +153,39 @@ export function AWSQuickCreateFlow({
   });
   const session: AWSOnboardingSession | undefined = sessionQuery.data;
   const terminal = isTerminalSession(session);
-  const sessionGone =
-    Boolean(sessionId) && sessionQuery.isError && (sessionQuery.error as { status?: unknown })?.status === 404;
+  const errorStatus = sessionQuery.isError ? (sessionQuery.error as { status?: unknown })?.status : undefined;
+  // 404: expired or unknown. 401/403: not this user's or workspace's any more.
+  // Either way the session is over for this screen.
+  const sessionGone = Boolean(sessionId) && (errorStatus === 404 || errorStatus === 403 || errorStatus === 401);
+  // Anything else (network, 5xx) may clear up: keep polling, but say so.
+  const sessionUnreadable = Boolean(sessionId) && sessionQuery.isError && !sessionGone;
+
+  // Fallback: paste the Role ARN, reusing this session's ExternalId.
+  const [showPaste, setShowPaste] = useState(false);
+  const [roleArn, setRoleArn] = useState("");
+  const [pasteError, setPasteError] = useState<CloudOnboardingApiError | null>(null);
+  const [manualConnected, setManualConnected] = useState<{ id: string; account: string } | null>(null);
+  const [createConnector, { isLoading: connecting }] = useCreateAwsConnectorMutation();
+
   const settled =
-    sessionGone || session?.status === "failed" || (session?.status === "connected" && Boolean(session.region_status));
+    sessionGone ||
+    Boolean(manualConnected) ||
+    session?.status === "failed" ||
+    (session?.status === "connected" && Boolean(session.region_status));
   useEffect(() => {
     setPollMs(settled ? 0 : POLL_MS);
   }, [settled]);
+
+  // A finished launch is not resumed the next time the wizard opens: clear it
+  // when this screen goes away (dialog closed by any means, not only Done).
+  const finishedRef = useRef(false);
+  finishedRef.current = settled || terminal;
+  useEffect(
+    () => () => {
+      if (finishedRef.current) storeSession(null);
+    },
+    [],
+  );
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -159,7 +193,10 @@ export function AWSQuickCreateFlow({
     const t = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(t);
   }, [sessionId, terminal]);
-  const slow = Boolean(sessionId) && !terminal && now - launchedAt > SLOW_AFTER_MS;
+  // Measured from when the session was created, so a refresh does not restart
+  // the 15-minute clock.
+  const startedAt = session?.created_at ? Date.parse(session.created_at) || launchedAt : launchedAt;
+  const slow = Boolean(sessionId) && !terminal && !manualConnected && now - startedAt > SLOW_AFTER_MS;
 
   const connectedNotified = useRef(false);
   useEffect(() => {
@@ -169,14 +206,11 @@ export function AWSQuickCreateFlow({
     }
   }, [session?.status, onConnected]);
 
-  // Fallback: paste the Role ARN, reusing this session's ExternalId.
-  const [showPaste, setShowPaste] = useState(false);
-  const [roleArn, setRoleArn] = useState("");
-  const [pasteError, setPasteError] = useState<CloudOnboardingApiError | null>(null);
-  const [manualConnected, setManualConnected] = useState<{ id: string; account: string } | null>(null);
-  const [createConnector, { isLoading: connecting }] = useCreateAwsConnectorMutation();
-
+  const launchingRef = useRef(false);
   const launch = async () => {
+    // Guards a double click between the click and the button disabling.
+    if (launchingRef.current) return;
+    launchingRef.current = true;
     setStartError(null);
     setPopupBlocked(false);
     // Opened synchronously inside the click so a popup blocker lets it
@@ -199,6 +233,8 @@ export function AWSQuickCreateFlow({
       tab?.close();
       const data = (err as { data?: AWSQuickCreateApiError })?.data;
       setStartError(data ?? { error: "Could not start automatic setup." });
+    } finally {
+      launchingRef.current = false;
     }
   };
 
@@ -208,7 +244,11 @@ export function AWSQuickCreateFlow({
     setStartError(null);
     setPopupBlocked(false);
     setShowPaste(false);
+    setRoleArn("");
+    setPasteError(null);
     setManualConnected(null);
+    setScanStarted(false);
+    setScanError(null);
     connectedNotified.current = false;
   };
 
@@ -222,7 +262,12 @@ export function AWSQuickCreateFlow({
         regions: session.regions,
       }).unwrap();
       setManualConnected({ id: c.id, account: c.scope_id });
-      onConnected();
+      // Once only: if the stack's own callback also lands later, the effect
+      // above must not refresh the list a second time.
+      if (!connectedNotified.current) {
+        connectedNotified.current = true;
+        onConnected();
+      }
     } catch (err) {
       const raw = err as { data?: CloudOnboardingApiError; status?: unknown };
       setPasteError(
@@ -236,6 +281,7 @@ export function AWSQuickCreateFlow({
   // ── Step 3: connected ─────────────────────────────────────────────────────
   const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
   const [scanStarted, setScanStarted] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const connectorId = session?.status === "connected" ? session.connector_id : manualConnected?.id;
   const done = () => {
     storeSession(null);
@@ -289,9 +335,11 @@ export function AWSQuickCreateFlow({
           </Banner>
         ) : null}
 
-        {session ? (
+        {/* Per-Region results exist only for a connection the stack reported;
+            a pasted Role ARN has none, so the section would spin forever. */}
+        {session?.status === "connected" ? (
           <div className="space-y-1.5">
-            <Label>AWS Region(s)</Label>
+            <p className="text-sm font-medium text-foreground">AWS Region(s)</p>
             {regionRows.length === 0 ? (
               <p className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -326,18 +374,25 @@ export function AWSQuickCreateFlow({
               connectors list.
             </p>
           ) : (
-            <Button
-              variant="outline"
-              className="w-full"
-              disabled={scanning}
-              onClick={() =>
-                void scanConnector(connectorId)
-                  .unwrap()
-                  .then(() => setScanStarted(true))
-              }
-            >
-              {scanning ? "Starting scan…" : "Scan now — discover IAM identities"}
-            </Button>
+            <div className="space-y-1.5">
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={scanning}
+                onClick={() => {
+                  setScanError(null);
+                  void scanConnector(connectorId)
+                    .unwrap()
+                    .then(() => setScanStarted(true))
+                    .catch((err: { data?: CloudOnboardingApiError }) =>
+                      setScanError(err?.data?.error ?? "Could not start the scan. Start it from the connectors list."),
+                    );
+                }}
+              >
+                {scanning ? "Starting scan…" : "Scan now — discover IAM identities"}
+              </Button>
+              {scanError ? <p className="text-xs text-(--color-danger-text)">{scanError}</p> : null}
+            </div>
           )
         ) : null}
 
@@ -358,6 +413,11 @@ export function AWSQuickCreateFlow({
           <Banner tone="warning">
             This setup session has ended. Check the connectors list — if the account isn't there, start
             again.
+          </Banner>
+        ) : sessionUnreadable && !session ? (
+          <Banner tone="danger">
+            <strong className="font-medium">Couldn't reach AuthSec to check this setup.</strong> Retrying — if
+            it keeps failing, start again or check the connectors list.
           </Banner>
         ) : failed ? (
           <Banner tone="danger">
@@ -430,7 +490,7 @@ export function AWSQuickCreateFlow({
           </div>
         ) : null}
 
-        {showPaste && session && !failed ? (
+        {showPaste && session && !failed && !sessionGone ? (
           <div className="space-y-2 rounded-md border p-2.5">
             <Label htmlFor="aws-qc-role-arn">Role ARN from the stack's Outputs tab</Label>
             <Input
@@ -488,7 +548,7 @@ export function AWSQuickCreateFlow({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="aws-qc-regions">AWS Region(s)</Label>
+        <Label>AWS Region(s)</Label>
         <SearchableSelect
           multiple
           options={regionOptions}
@@ -542,6 +602,12 @@ export function AWSQuickCreateFlow({
       {startCopy ? (
         <Banner tone="danger">
           <strong className="font-medium">{startCopy.title}.</strong> {startCopy.body}
+        </Banner>
+      ) : null}
+
+      {!deploymentRegion ? (
+        <Banner tone="warning">
+          This deployment has no AWS Region set up for automatic setup yet. Use manual setup instead.
         </Banner>
       ) : null}
 

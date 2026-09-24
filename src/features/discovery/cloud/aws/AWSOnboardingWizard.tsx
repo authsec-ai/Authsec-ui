@@ -527,7 +527,16 @@ export function AWSOnboardingWizard({
         <DialogFooter className="sm:justify-between">
           <Button
             variant="outline"
-            onClick={() => (step === 0 ? onOpenChange(false) : setStep(step - 1))}
+            onClick={() => {
+              if (step === 0) {
+                // Cancel resets like any other close, so the next open starts
+                // on Launch in AWS again rather than staying in manual mode.
+                reset();
+                onOpenChange(false);
+              } else {
+                setStep(step - 1);
+              }
+            }}
             disabled={step === 2}
           >
             {step === 0 ? "Cancel" : "Back"}
