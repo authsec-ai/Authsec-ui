@@ -6,6 +6,7 @@
  * |---------------------------------|--------------------------------------------------|
  * | Open, from a closed panel       | push, marked `opened-here`                       |
  * | Open another claim while open   | replace (Back does not step through claims)      |
+ * | Open while the graph inspector shows a card (`within`) | replace: the inspector was already open |
  * | Close or Escape                 | back one entry if marked, else replace without it |
  * | Browser Back while open         | the browser pops the entry; the panel closes     |
  * | Direct link with `evidence=`    | none; Close replaces rather than leaving the page |
@@ -25,9 +26,22 @@ const MARK = "opened-here";
 /** Where focus returns when the panel closes. Module-level: one panel at a time. */
 let opener: HTMLElement | null = null;
 
+/**
+ * `preventScroll`: the opener may sit inside the graph canvas, whose
+ * container is overflow-hidden — a plain focus() scrolls that box to reveal
+ * it and slides the whole drawing out of view.
+ */
 export function restoreEvidenceFocus() {
   const target = opener && document.contains(opener) ? opener : document.querySelector<HTMLElement>("[data-iga-page] h1");
-  if (target) { if (target.tagName === "H1") target.tabIndex = -1; target.focus(); }
+  if (target) { if (target.tagName === "H1") target.tabIndex = -1; target.focus({ preventScroll: true }); }
+}
+
+/** History state without the "pushed by the panel" mark: the entry is no longer the panel's own. */
+export function withoutMark<T extends Record<string, unknown> | null | undefined>(state: T): T {
+  if (!state || !("panel" in state)) return state;
+  const rest = { ...(state as Record<string, unknown>) };
+  delete rest.panel;
+  return rest as T;
 }
 
 export function useEvidence() {
@@ -38,18 +52,26 @@ export function useEvidence() {
   const claims = raw ? (raw.split(",").filter(Boolean) as GraphRef[]) : [];
   const state = useMemo(() => (location.state as Record<string, unknown> | null) ?? {}, [location.state]);
 
+  /**
+   * `drop`: view parameters the new selection replaces (the graph's `node=`).
+   * `within`: parameters whose presence means the panel is already open — the
+   * graph inspector showing a card — so this replaces instead of pushing.
+   */
   const open = useCallback(
-    (refs: GraphRef | GraphRef[]) => {
+    (refs: GraphRef | GraphRef[], opts: { drop?: string[]; within?: string[] } = {}) => {
       const list = Array.isArray(refs) ? refs : [refs];
       if (!list.length) return;
+      const current = new URLSearchParams(location.search);
       const next = new URLSearchParams(location.search);
+      for (const d of opts.drop ?? []) next.delete(d);
       next.set(PARAM, list.join(","));
-      const alreadyOpen = new URLSearchParams(location.search).has(PARAM);
+      const evidenceOpen = current.has(PARAM);
+      const alreadyOpen = evidenceOpen || (opts.within ?? []).some((p) => current.has(p));
       if (!alreadyOpen) opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       navigate(
         { pathname: location.pathname, search: `?${next.toString()}` },
         alreadyOpen
-          ? { replace: true, state }
+          ? { replace: true, state: evidenceOpen ? state : withoutMark(state) }
           : { state: { ...state, panel: MARK } },
       );
     },

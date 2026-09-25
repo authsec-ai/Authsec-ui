@@ -28,6 +28,12 @@
 [data-cr] .sh-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--color-text); margin: 0 0 6px; }
 [data-cr] .page-desc,
 [data-cr] .sh-desc { font-size: 14px; color: var(--color-text-muted); margin: 0; max-width: 560px; line-height: 1.6; }
+/* One object's page (ConsolePage variant="object"): a compact header, so the
+   tabs and a full-height workspace below them start high on the screen. */
+[data-cr] .console-page--object { max-width: var(--console-object-max-width, 1600px); padding: 16px 24px 16px; }
+[data-cr] .console-page--object .section-header { margin-bottom: 12px; align-items: center; }
+[data-cr] .console-page--object .sh-title { font-size: 20px; margin: 0 0 2px; }
+[data-cr] .console-page--object .sh-desc { font-size: 13px; line-height: 1.5; max-width: none; }
 [data-cr] .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-subtle); margin: 0 0 6px; }
 
 /* ---------- buttons ---------- */

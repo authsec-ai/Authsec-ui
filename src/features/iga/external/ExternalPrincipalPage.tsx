@@ -29,7 +29,7 @@ import { classifyGraphError } from "../shared/graphErrors";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
-import { accountLabel, agoText, dayText } from "../shared/labels";
+import { accountWithId, agoText, dayText } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
@@ -66,7 +66,7 @@ function Overview({ p }: { p: ExternalPrincipalDetail }) {
           <DrawerSection label="What a trust policy names">
             <DetailGrid>
               <DetailRow label="Mechanism" value={p.mechanism} />
-              <DetailRow label="Account" value={p.account ? `${accountLabel(p.account)} (${p.account.id})` : "Unknown account"} />
+              <DetailRow label="Account" value={accountWithId(p.account) ?? "Not applicable to this kind of principal"} />
               {p.issuer ? <DetailRow full label="Issuer" value={p.issuer} mono /> : null}
               <CopyField label="Principal" value={p.subject} />
             </DetailGrid>
@@ -206,7 +206,14 @@ export default function ExternalPrincipalPage() {
         p
           ? {
               name: p.name,
-              description: `External principal · ${p.account ? accountLabel(p.account) : "Unknown account"} · ${p.resolution ? p.resolution.state.replace(/_/g, " ") : "unresolved"}`,
+              description: [
+                "External principal",
+                p.mechanism.replace(/_/g, " "),
+                accountWithId(p.account),
+                p.resolution ? p.resolution.state.replace(/_/g, " ") : "unresolved",
+              ]
+                .filter(Boolean)
+                .join(" · "),
               publishedAt: detail.currentData?.meta.published_at,
             }
           : undefined

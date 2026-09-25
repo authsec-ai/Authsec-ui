@@ -12,7 +12,9 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
-import { RESOURCE_KIND_LABEL, accountLabel } from "../shared/labels";
+import { StatusBadge } from "@/components/console/status";
+
+import { RESOURCE_KIND_LABEL, accountWithId } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
@@ -42,7 +44,7 @@ export default function ResourcePage() {
   const tabs: ObjectTabDef[] = [
     { key: "overview", label: "Overview", path: "" },
     { key: "access", label: "Access", path: "/access" },
-    { key: "graph", label: "Graph", path: "/graph", gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
@@ -82,11 +84,12 @@ export default function ResourcePage() {
               description: [
                 RESOURCE_KIND_LABEL[r.kind],
                 r.service,
-                accountLabel(r.account),
+                accountWithId(r.account),
                 r.region ?? "Region not stated",
               ]
                 .filter(Boolean)
                 .join(" · "),
+              status: r.lifecycle === "retired" ? <StatusBadge tone="neutral">Not in the latest scan</StatusBadge> : undefined,
               publishedAt: meta?.published_at,
             }
           : undefined

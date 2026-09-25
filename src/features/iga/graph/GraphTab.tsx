@@ -4,11 +4,17 @@
  * never reach the main bundle. Renders on the object it opened on and
  * expands only on request — it is not an estate-wide canvas.
  *
+ * A workspace, top to bottom: one toolbar (Canvas / Paths, Fit graph,
+ * Focus start, Arrange, Legend, and the declared-access notice), a status
+ * line only when something needs saying, then the canvas with the inspector
+ * beside it — or over it as a drawer when the workspace is too narrow for
+ * both. It fills the height the page has left.
+ *
  * Owns: the initial `/graph` read and its revision pin, `target=` path
- * search, the graph model (`model.ts`), the one-time ELK layout
- * (`layout.ts`), and the Canvas/Paths presentations. The page shell
- * (`IgaPage`) already mounts the live region, the Evidence panel and the
- * revision banner; this only calls into them.
+ * search, the graph model (`model.ts`), progressive disclosure, layout
+ * (`layout.ts`: ELK on first view and Arrange, `placeNewNodes` after), the
+ * inspector, and the Canvas/Paths presentations. The page shell (`IgaPage`)
+ * mounts the live region and the revision banner.
  *
  * The Graph tab stays MOUNTED through a page-level Refresh — the object page
  * renders it even while `rev` is null (other tabs wait for the pin) — so
@@ -18,6 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { LayoutGrid, LocateFixed, Maximize2 } from "lucide-react";
 
 import {
   igaGraphApi,
@@ -31,26 +38,23 @@ import {
   type GraphRef,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
-import { CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { TableCard } from "@/theme/components/cards";
 
 import { viaLink } from "../shared/links";
-import { useEvidence } from "../evidence/useEvidence";
+import { useEvidence, withoutMark } from "../evidence/useEvidence";
 import { announce } from "../shared/announce";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { classifyGraphError } from "../shared/graphErrors";
-import { accountLabel } from "../shared/labels";
 import { graphSessionGeneration, useGraphRevision, useTrackRevision } from "../shared/revision";
-import { GraphCanvas } from "./GraphCanvas";
-import { KIND_LABEL } from "./graphLabels";
+import { GraphCanvas, type CanvasApi } from "./GraphCanvas";
+import { GraphInspector, type InspectorActions, type InspectorSubject } from "./GraphInspector";
 import { Legend } from "./Legend";
-import { computeInitialLayout, terminateLayoutWorker, type LayoutEdgeInput, type LayoutNodeInput } from "./layout";
+import { computeLayout, placeNewNodes, rectsOverlap, terminateLayoutWorker, type Position, type Size } from "./layout";
 import {
   buildVisual,
   boundVisual,
+  discloseVisual,
   displayedModel,
   rememberGraphModel,
   canLoadMoreOf,
@@ -63,8 +67,10 @@ import {
   visibleNodeRefs,
   type ModelState,
 } from "./model";
+import { describeNode, nodeSize, type NodeDescription } from "./nodeView";
 import { PathsList } from "./PathsList";
-import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualNode } from "./types";
+import { useWorkspaceSize } from "./useWorkspaceSize";
+import { anchorOf, frontierKey, type FrontierKey, type GraphSelection } from "./types";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -77,78 +83,10 @@ function useMediaQuery(query: string): boolean {
   return match;
 }
 
-function NodeSummary({
-  visual,
-  truncated,
-  onOpen,
-  onFocusHere,
-  canOpen,
-  canFocusHere,
-}: {
-  visual: VisualNode;
-  truncated: boolean;
-  onOpen: () => void;
-  onFocusHere: () => void;
-  canOpen: boolean;
-  canFocusHere: boolean;
-}) {
-  const grouped = visual.members.length > 1;
-  const first = visual.members[0];
-  // "N statements declare this" is a completeness claim: suppressed the
-  // moment that might not be the whole answer (review item 17).
-  const maybeIncomplete = truncated || visual.frontier.length > 0;
-  return (
-    <aside
-      aria-label="Selected"
-      className="w-full shrink-0 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) p-3 @[900px]:w-64"
-    >
-      {grouped ? (
-        <>
-          <p className="text-sm font-semibold text-(--color-text)">{visual.kind === "workload" ? "Shared execution identity" : first.label}</p>
-          <p className="mt-0.5 text-xs text-(--color-text-muted)">
-            {visual.kind === "workload" ? `${visual.members.length} workloads loaded` : maybeIncomplete
-              ? `${visual.members.length} statement(s) loaded declaring this`
-              : `${visual.members.length} statements declare this`}
-          </p>
-          <ul className="mt-2 space-y-1 text-xs text-(--color-text-muted)">
-            {visual.members.map((m) => (
-              <li key={m.ref} className="flex items-center justify-between gap-2">
-                <span>{visual.kind === "workload" ? m.label : m.policy ?? "Policy"}</span>
-                <StatusBadge tone={(m.state ?? "current") === "current" ? "neutral" : "warning"}>
-                  {m.state ?? "current"}
-                </StatusBadge>
-              </li>
-            ))}
-          </ul>
-          {visual.kind === "workload" ? <Button variant="outline" size="sm" className="mt-2" onClick={onOpen}>Show workloads</Button> : null}
-        </>
-      ) : (
-        <>
-          <p className="text-sm font-semibold text-(--color-text)">{first.label}</p>
-          <p className="mt-0.5 text-xs text-(--color-text-muted)">{KIND_LABEL[visual.kind]}</p>
-          <p className="mt-0.5 text-xs text-(--color-text-muted)">{accountLabel(first.account ?? null)}</p>
-          {first.state && first.state !== "current" ? (
-            <StatusBadge tone={first.state === "stale" ? "warning" : "neutral"} className="mt-1">
-              {first.state}
-            </StatusBadge>
-          ) : null}
-          {canOpen ? (
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={onOpen}>
-                Open
-              </Button>
-              {canFocusHere ? (
-                <Button size="sm" variant="outline" onClick={onFocusHere}>
-                  Focus here
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </>
-      )}
-    </aside>
-  );
-}
+/** The inspector beside the canvas needs this much room left for the canvas. */
+const CANVAS_MIN = 560;
+const INSPECTOR_MIN = 360;
+const INSPECTOR_MAX = 420;
 
 type GraphTabProps = { ws: string; root: GraphRef; rootName: string };
 export default function GraphTab(props: GraphTabProps) {
@@ -338,47 +276,6 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     };
   }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
 
-  /* --------------------------------- layout --------------------------------- */
-
-  const [fitViewToken, setFitViewToken] = useState(0);
-
-  useEffect(() => {
-    if (model.laidOut) return;
-    const visible = visibleNodeRefs(model);
-    if (visible.size === 0) return;
-    let cancelled = false;
-    const nodes: LayoutNodeInput[] = [...visible].map((ref) => {
-      const n = model.nodes.get(ref)!;
-      return { id: ref, kind: n.kind, upperBand: n.kind === "external_principal" };
-    });
-    const edges: LayoutEdgeInput[] = [];
-    for (const [claim, owners] of model.edgeOwners) {
-      if (owners.size === 0) continue;
-      const e = model.edges.get(claim);
-      if (e && visible.has(e.from) && visible.has(e.to)) edges.push({ id: claim, kind: e.kind, from: e.from, to: e.to });
-    }
-    void computeInitialLayout(nodes, edges).then((positions) => {
-      if (cancelled) return;
-      dispatchModel({ type: "positions", positions });
-      dispatchModel({ type: "laid-out" });
-      setFitViewToken((t) => t + 1);
-      if (pendingAnnounceRef.current) {
-        announce(pendingAnnounceRef.current);
-        pendingAnnounceRef.current = null;
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Re-runs exactly when `laidOut` goes false (reset/root/relayout) and the
-    // node count actually changed — never on every ingest (§2.14.15).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model.laidOut, model.nodes.size, dispatchModel]);
-
-  const handleTidyLayout = useCallback(() => {
-    pendingAnnounceRef.current = null;
-    dispatchModel({ type: "relayout" });
-  }, [dispatchModel]);
 
   /* -------------------------------- expansion -------------------------------- */
 
@@ -502,9 +399,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     if (ingestedPathKeyRef.current === key) return;
     ingestedPathKeyRef.current = key;
     if (data.outcome === "found") {
-      // Anchored at `root`: a path-only node has no expansion of its own to
-      // place it, and would otherwise render at {0,0} (review item 6).
-      dispatchModel({ type: "path", owner: `path:${root}|${targetRef}`, anchor: root, nodes: data.nodes, edges: data.edges });
+      // Path-only nodes are placed beside the path's own nodes when drawn
+      // (`placeNewNodes`), never at {0,0} (review item 6).
+      dispatchModel({ type: "path", owner: `path:${root}|${targetRef}`, nodes: data.nodes, edges: data.edges });
       announce(
         data.more_paths
           ? "Showing the declared path to the selected object. More paths exist beyond the limit."
@@ -529,75 +426,294 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     return { nodeRefs, claims };
   }, [pathQuery.currentData]);
 
-  /* -------------------------------- derived model ---------------------------- */
+  /* ------------------------------- derived view ------------------------------ */
+
+  const nodeParam = params.get("node");
+  const selectedClaims = evidence.claims;
+  const selectedClaimsKey = selectedClaims.join(",");
+  const tracedPath = model.tracedPath;
+
+  // Drawn as themselves, never folded into a group: the requested and the
+  // traced path's objects.
+  const pathRefs = useMemo(() => {
+    const set = new Set<GraphRef>(highlighted?.nodeRefs ?? []);
+    for (const claim of tracedPath ?? []) {
+      const e = model.edges.get(claim);
+      if (e) {
+        set.add(e.from);
+        set.add(e.to);
+      }
+    }
+    return set;
+  }, [highlighted, tracedPath, model.edges]);
+  // Never hidden by progressive disclosure: those, plus what is selected.
+  const keep = useMemo(() => {
+    const set = new Set(pathRefs);
+    if (nodeParam) set.add(nodeParam as GraphRef);
+    for (const claim of selectedClaimsKey ? (selectedClaimsKey.split(",") as GraphRef[]) : []) {
+      const e = model.edges.get(claim);
+      if (e) {
+        set.add(e.from);
+        set.add(e.to);
+      }
+    }
+    return set;
+  }, [pathRefs, nodeParam, selectedClaimsKey, model.edges]);
 
   const revealedWorkloads = model.revealedWorkloads;
-  const visual = useMemo(() => {
-    const ungrouped = new Set(revealedWorkloads);
-    for (const ref of highlighted?.nodeRefs ?? []) ungrouped.add(ref);
-    return boundVisual(buildVisual(model, ungrouped), root, highlighted?.nodeRefs);
-  }, [model, revealedWorkloads, root, highlighted]);
-  const drawn = useMemo(() => displayedModel(model, visual), [model, visual]);
-  const positionsForVisual = useMemo(() => resolveVisualPositions(visual.nodes, model.positions), [visual.nodes, model.positions]);
-  const rawPathsResult = useMemo(() => enumerateRawPaths(drawn, root, direction), [drawn, root, direction]);
-  const frontierMap = useMemo(() => frontierByNode(model), [model]);
+  // Keyed on the fields the view is built from — not the whole model, which
+  // also changes on every pan (the saved viewport).
+  const { nodes: mNodes, edges: mEdges, nodeOwners, edgeOwners, frontierEntries, expanded: mExpanded, cursors: mCursors, loading: mLoading, failed: mFailed } = model;
+  const grouped = useMemo(() => {
+    const ungrouped = new Set([...revealedWorkloads, ...pathRefs]);
+    return buildVisual(modelRef.current, ungrouped);
+    // modelRef.current is the model of this render; its view fields are the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mNodes, mEdges, nodeOwners, edgeOwners, frontierEntries, model.root, revealedWorkloads, pathRefs]);
+  // A folded branch says whether its parent still has relationships of that
+  // kind the server has not sent: not loaded yet, or loaded with pages left.
+  const hasUnloaded = useCallback(
+    (f: GraphFrontier) => {
+      const key = frontierKey(f);
+      return !mExpanded.has(key) || typeof mCursors.get(key) === "string";
+    },
+    [mExpanded, mCursors],
+  );
+  // The canvas: bounded, with large loaded branches folded.
+  const visual = useMemo(
+    () => boundVisual(discloseVisual(grouped, root, model.revealedBranches, keep, hasUnloaded), root, keep),
+    [grouped, root, model.revealedBranches, keep, hasUnloaded],
+  );
+  // Paths lists everything loaded (bounded, never folded).
+  const listed = useMemo(() => boundVisual(grouped, root, keep), [grouped, root, keep]);
+  const frontierMap = useMemo(
+    () => frontierByNode(modelRef.current),
+    // frontierByNode reads only the frontier entries.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [frontierEntries],
+  );
 
+  const rootAccountId = model.nodes.get(root)?.account?.id ?? null;
+  const rootId = visual.nodes.find((n) => n.members.some((m) => m.ref === root))?.id ?? null;
+  const { descriptions, sizes } = useMemo(() => {
+    const descriptions = new Map<string, NodeDescription>();
+    const sizes = new Map<string, Size>();
+    for (const v of visual.nodes) {
+      const d = describeNode(v, rootAccountId);
+      descriptions.set(v.id, d);
+      sizes.set(v.id, nodeSize(d));
+    }
+    return { descriptions, sizes };
+  }, [visual.nodes, rootAccountId]);
+
+  const traced = useMemo(() => new Set(tracedPath ?? []), [tracedPath]);
   const highlightedNodeIds = useMemo(() => {
-    if (!highlighted) return undefined;
+    if (!highlighted && !traced.size) return undefined;
     const set = new Set<string>();
-    for (const vn of visual.nodes) if (vn.members.some((m) => highlighted.nodeRefs.has(m.ref))) set.add(vn.id);
+    for (const vn of visual.nodes) if (vn.members.some((m) => highlighted?.nodeRefs.has(m.ref) || pathRefs.has(m.ref))) set.add(vn.id);
     return set;
-  }, [highlighted, visual.nodes]);
+  }, [highlighted, traced, pathRefs, visual.nodes]);
   const highlightedEdgeIds = useMemo(() => {
-    if (!highlighted) return undefined;
+    if (!highlighted && !traced.size) return undefined;
     const set = new Set<string>();
-    for (const ve of visual.edges) if (ve.members.some((m) => highlighted.claims.has(m.claim))) set.add(ve.id);
+    for (const ve of visual.edges) if (ve.members.some((m) => highlighted?.claims.has(m.claim) || traced.has(m.claim))) set.add(ve.id);
     return set;
-  }, [highlighted, visual.edges]);
+  }, [highlighted, traced, visual.edges]);
+
+  /* ------------------------------ layout & placement ------------------------- */
+
+  // What is drawn now, and what was drawn last render: a node shown again
+  // keeps its old place only if nothing drawn meanwhile has taken it.
+  const stored = useMemo(() => resolveVisualPositions(visual.nodes, model.positions), [visual.nodes, model.positions]);
+  // Sizes as last drawn: a card shown again, or one that grew in place (a
+  // group gaining a member, a new Load row), keeps its place only if it
+  // still fits there; otherwise it alone is placed again.
+  const lastDrawnRef = useRef<Map<string, number>>(new Map());
+  const placement = useMemo(() => {
+    if (!model.laidOut) return stored;
+    const drawn = visual.nodes.map((v) => ({ id: v.id, size: sizes.get(v.id)! }));
+    const usable = new Map(stored);
+    const last = lastDrawnRef.current;
+    if (last.size) {
+      const settled = (id: string) => last.get(id) === sizes.get(id)?.height;
+      for (const n of drawn) {
+        if (settled(n.id) || !usable.has(n.id)) continue;
+        const p = usable.get(n.id)!;
+        if (drawn.some((o) => o.id !== n.id && settled(o.id) && usable.has(o.id) && rectsOverlap(p, n.size, usable.get(o.id)!, o.size))) usable.delete(n.id);
+      }
+    }
+    const added = placeNewNodes(drawn, visual.edges, usable);
+    const out = new Map<string, Position>();
+    for (const n of drawn) {
+      const p = added.get(n.id) ?? usable.get(n.id);
+      if (p) out.set(n.id, p);
+    }
+    return out;
+  }, [model.laidOut, visual.nodes, visual.edges, sizes, stored]);
+  useEffect(() => {
+    lastDrawnRef.current = new Map(visual.nodes.map((v) => [v.id, sizes.get(v.id)?.height ?? 0]));
+  }, [visual.nodes, sizes]);
+  useEffect(() => {
+    if (!model.laidOut) return;
+    const fresh = new Map<string, Position>();
+    for (const [id, p] of placement) {
+      const s = model.positions.get(id);
+      if (!s || s.x !== p.x || s.y !== p.y) fresh.set(id, p);
+    }
+    if (fresh.size) dispatchModel({ type: "positions", positions: fresh });
+  }, [placement, model.laidOut, model.positions, dispatchModel]);
+
+  // ELK: the first view of this graph, and Arrange. A result for a layout
+  // that has since been superseded — a newer Arrange, another root,
+  // workspace or publication — is dropped.
+  const [revealToken, setRevealToken] = useState(0);
+  const layoutRun = useRef(0);
+  const layoutSig = model.laidOut || !rootReadyForLayout(model, currentKey)
+    ? ""
+    : visual.nodes.map((v) => `${v.id}:${sizes.get(v.id)?.height}`).join("|");
+  useEffect(() => {
+    if (!layoutSig) return;
+    const run = ++layoutRun.current;
+    const key = currentKey;
+    const layer: "first" | "last" | undefined = refType(root) === "workload" ? "first" : refType(root) === "resource" ? "last" : undefined;
+    const nodes = visual.nodes.map((v) => ({ id: v.id, size: sizes.get(v.id)!, layer: v.id === rootId ? layer : undefined }));
+    const edges = visual.edges.map((e) => ({ id: e.id, from: e.from, to: e.to }));
+    void computeLayout(nodes, edges).then((positions) => {
+      if (!mounted.current || run !== layoutRun.current || currentKeyRef.current !== key) return;
+      dispatchModel({ type: "arranged", positions });
+      setRevealToken((t) => t + 1);
+      if (pendingAnnounceRef.current) {
+        announce(pendingAnnounceRef.current);
+        pendingAnnounceRef.current = null;
+      }
+    });
+    // The signature is the drawn set and its sizes; nothing else re-runs ELK.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutSig]);
+
+  const arrange = useCallback(() => {
+    pendingAnnounceRef.current = "Graph arranged";
+    dispatchModel({ type: "relayout" });
+  }, [dispatchModel]);
 
   /* -------------------------------- selection -------------------------------- */
 
-  const nodeParam = params.get("node");
-  // URL state is authoritative, including Browser Back. Evidence selects its
-  // edge without a competing second navigation to update node=.
-  const selectedClaim = evidence.claims[0];
-  const evidenceEdge = selectedClaim ? visual.edges.find((e) => e.members.some((m) => m.claim === selectedClaim)) : undefined;
-  const selection: GraphSelection | null = evidenceEdge ? { kind: "edge", id: evidenceEdge.id } : nodeParam ? { kind: "node", id: nodeParam } : null;
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const canvasApi = useRef<CanvasApi | null>(null);
+  const pendingView = useRef<GraphSelection | null>(null);
+  const onApi = useCallback((api: CanvasApi | null) => {
+    canvasApi.current = api;
+    if (api && pendingView.current) {
+      const sel = pendingView.current;
+      pendingView.current = null;
+      requestAnimationFrame(() => api.bringIntoView(sel));
+    }
+  }, []);
+
+  // Where focus goes back to when the inspector closes: the card, line or
+  // list item the selection was made from.
+  const originRef = useRef<HTMLElement | null>(null);
+  const noteOrigin = () => {
+    const active = document.activeElement;
+    originRef.current = active instanceof HTMLElement && workspaceRef.current?.contains(active) ? active : null;
+  };
+  const focusOrigin = (fallback: string | null) => {
+    requestAnimationFrame(() => {
+      const el =
+        originRef.current && document.contains(originRef.current)
+          ? originRef.current
+          : fallback
+            ? workspaceRef.current?.querySelector<HTMLElement>(fallback)
+            : null;
+      el?.focus({ preventScroll: true });
+    });
+  };
+
+  const evidenceEdge = selectedClaims.length
+    ? visual.edges.find((e) => selectedClaims.every((c) => e.members.some((m) => m.claim === c))) ??
+      visual.edges.find((e) => e.members.some((m) => m.claim === selectedClaims[0]))
+    : undefined;
+  const nodeVisual = nodeParam
+    ? visual.nodes.find((v) => v.id === nodeParam) ?? visual.nodes.find((v) => v.members.some((m) => m.ref === nodeParam))
+    : undefined;
+  const selectionKind = evidenceEdge ? "edge" : nodeVisual ? "node" : null;
+  const selectionId = evidenceEdge?.id ?? nodeVisual?.id ?? null;
+  const selection = useMemo<GraphSelection | null>(
+    () => (selectionKind && selectionId ? { kind: selectionKind, id: selectionId } : null),
+    [selectionKind, selectionId],
+  );
+  const subject: InspectorSubject | null = selectedClaims.length
+    ? { kind: "evidence", claims: selectedClaims, edge: evidenceEdge, fromNode: evidenceEdge ? undefined : nodeVisual }
+    : nodeVisual
+      ? { kind: "node", visual: nodeVisual }
+      : null;
 
   const selectNode = useCallback(
     (id: string) => {
+      noteOrigin();
       const next = new URLSearchParams(params);
       next.set("node", id);
-      setParams(next, { replace: true, state: location.state });
+      next.delete("evidence");
+      setParams(next, { replace: true, state: withoutMark(location.state as Record<string, unknown> | null) });
       const vn = visual.nodes.find((v) => v.id === id);
-      if (vn) announce(`Selected ${vn.members[0].label}`);
+      if (vn) announce(`Selected ${descriptions.get(vn.id)?.title ?? vn.members[0].label}`);
     },
-    [params, setParams, location.state, visual.nodes],
+    [params, setParams, location.state, visual.nodes, descriptions],
   );
 
-  const clearSelection = useCallback(() => {
-    if (!params.has("node")) return;
-    const next = new URLSearchParams(params);
-    next.delete("node");
-    setParams(next, { replace: true, state: location.state });
-  }, [params, setParams, location.state]);
+  const openEvidence = useCallback(
+    (claims: GraphRef[], fromNode = false) => {
+      noteOrigin();
+      // The inspector is one panel: opening evidence while it shows a card
+      // replaces the entry, so Close never walks back to that card.
+      evidence.open(claims, { drop: fromNode ? [] : ["node"], within: ["node"] });
+    },
+    [evidence],
+  );
 
   const selectEdge = useCallback(
     (id: string) => {
-      // Opening the evidence panel is the edge's selection; it is the only
-      // navigation this makes, so nothing here competes with it.
       const ve = visual.edges.find((e) => e.id === id);
-      if (ve) evidence.open(ve.members.map((m) => m.claim));
+      if (!ve) return;
+      // The line into a folded branch stands for every hidden relationship:
+      // select the branch (its inspector lists them) rather than open all
+      // their evidence at once — which would also unfold the branch.
+      const folded = visual.nodes.find((n) => n.overflow && (n.id === ve.to || n.id === ve.from));
+      if (folded) selectNode(folded.id);
+      else openEvidence(ve.members.map((m) => m.claim));
     },
-    [visual.edges, evidence],
+    [visual.edges, visual.nodes, openEvidence, selectNode],
   );
+
+  // One close per history entry: Escape can reach both the drawer and the
+  // canvas, and a second `navigate(-1)` would leave the page.
+  const closedAt = useRef<string | null>(null);
+  const closeInspector = useCallback(() => {
+    if (closedAt.current === location.key) return;
+    closedAt.current = location.key;
+    const fallback = selection ? (selection.kind === "node" ? `[data-node-id="${CSS.escape(selection.id)}"]` : `[data-edge-id="${CSS.escape(selection.id)}"]`) : null;
+    if (evidence.isOpen && !nodeParam) evidence.close();
+    else if (params.has("node") || params.has("evidence")) {
+      const next = new URLSearchParams(params);
+      next.delete("evidence");
+      next.delete("node");
+      setParams(next, { replace: true, state: withoutMark(location.state as Record<string, unknown> | null) });
+    }
+    focusOrigin(fallback);
+  }, [selection, evidence, nodeParam, params, setParams, location.state, location.key]);
 
   const openRef = useCallback(
     (ref: GraphRef) => {
       const group = visual.nodes.find((n) => n.kind === "workload" && n.members.length > 1 && n.members.some((m) => m.ref === ref));
-      if (group) { dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((n) => n.ref)] }); return; }
+      if (group) {
+        dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((n) => n.ref)] });
+        return;
+      }
       const path = objectPath(ref);
-      if (path) { const link = viaLink(path, { ref: root, name: rootName }); navigate(link.to, { state: link.state }); }
+      if (path) {
+        const link = viaLink(path, { ref: root, name: rootName });
+        navigate(link.to, { state: link.state });
+      }
     },
     [navigate, root, rootName, visual.nodes, model.revealedWorkloads, dispatchModel],
   );
@@ -605,24 +721,69 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const focusHere = useCallback(
     (ref: GraphRef) => {
       const path = objectPath(ref);
-      if (path && refType(ref) !== "external_principal") { const link = viaLink(`${path}/graph`, { ref: root, name: rootName }); navigate(link.to, { state: link.state }); }
+      if (path && refType(ref) !== "external_principal") {
+        const link = viaLink(`${path}/graph`, { ref: root, name: rootName });
+        navigate(link.to, { state: link.state });
+      }
     },
     [navigate, root, rootName],
   );
 
-  const stateOf = useCallback((f: GraphFrontier) => expandStateOf(model, frontierKey(f), !!stale || rev == null || model.generationKey !== currentKey), [model, stale, rev, currentKey]);
-  const canLoadMore = useCallback((f: GraphFrontier) => canLoadMoreOf(model, frontierKey(f)), [model]);
+  const generationKey = model.generationKey;
+  const stateOf = useCallback(
+    (f: GraphFrontier) => expandStateOf(modelRef.current, frontierKey(f), !!stale || rev == null || generationKey !== currentKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mExpanded, mLoading, mFailed, stale, rev, generationKey, currentKey],
+  );
+  const canLoadMore = useCallback(
+    (f: GraphFrontier) => canLoadMoreOf(modelRef.current, frontierKey(f)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mCursors],
+  );
 
   /* ------------------------------ paths toggle -------------------------------- */
 
   const asParam = params.get("as");
   const showPaths = asParam === "paths" || (narrow && asParam !== "canvas");
+  const rawPathsResult = useMemo(
+    () => (showPaths ? enumerateRawPaths(displayedModel(modelRef.current, listed), root, direction) : { paths: [], boundByMax: false }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showPaths, listed, root, direction, nodeOwners, edgeOwners],
+  );
   const setAs = (mode: "canvas" | "paths") => {
     const next = new URLSearchParams(params);
-    if (mode === "paths") next.set("as", "paths");
-    else next.set("as", "canvas");
+    next.set("as", mode);
     setParams(next, { replace: true, state: location.state });
   };
+  // Tracing a path from Paths: switch to the canvas, and once the traced
+  // objects are drawn (unfolded if they were in a folded branch), pan to its
+  // first step.
+  const pendingTrace = useRef<GraphRef[] | null>(null);
+  const trace = (claims: GraphRef[]) => {
+    dispatchModel({ type: "trace", claims });
+    pendingTrace.current = claims;
+    setAs("canvas");
+    announce("Showing the path on the canvas");
+  };
+  useEffect(() => {
+    const claims = pendingTrace.current;
+    if (!claims || showPaths) return;
+    // One attempt, in the render that draws the traced objects: an edge the
+    // display limit keeps off the canvas must not pan the view later.
+    pendingTrace.current = null;
+    const edge = visual.edges.find((e) => e.members.some((m) => m.claim === claims[0]));
+    if (!edge) return;
+    if (canvasApi.current) canvasApi.current.bringIntoView({ kind: "edge", id: edge.id });
+    else pendingView.current = { kind: "edge", id: edge.id };
+  }, [visual.edges, showPaths]);
+
+  /* ------------------------------ workspace size ------------------------------ */
+
+  const { width: wsWidth, height: wsHeight } = useWorkspaceSize(workspaceRef);
+  const inline = wsWidth - CANVAS_MIN >= INSPECTOR_MIN;
+  const inspectorWidth = inline
+    ? Math.max(INSPECTOR_MIN, Math.min(INSPECTOR_MAX, Math.round(wsWidth * 0.3)))
+    : Math.min(INSPECTOR_MAX, window.innerWidth - 24);
 
   /* ---------------------------------- render ---------------------------------- */
 
@@ -630,241 +791,239 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // finished loading, show the spinner or the failure — not a stale picture
   // from a previous session (review items 11, 12).
   const rootReady = model.root !== null && model.generationKey === currentKey;
-
-  if ((!rootReady && !model.root) || (rootFailure && ["unauthorized", "forbidden", "not_found", "unavailable"].includes(rootFailure.kind))) {
-    if (rootFailure) {
-      return (
-        <TableCard>
-          <CardContent variant="flush">
-            <GraphStatePanel
-              failure={rootFailure}
-              subject="this graph"
-              onRetry={() => void rootQuery.refetch()}
-              onRefresh={refresh}
-            />
-          </CardContent>
-        </TableCard>
-      );
-    }
-    return (
-      <TableCard>
-        <CardContent>
-          <div
-            className="flex h-64 items-center justify-center"
-            role="status"
-            aria-busy="true"
-            aria-label={`Loading the graph for ${rootName}`}
-          >
-            <div className="size-8 animate-spin rounded-full border-2 border-(--color-border-subtle) border-t-(--color-primary)" />
-          </div>
-        </CardContent>
-      </TableCard>
-    );
-  }
+  const hardFailure = rootFailure && ["unauthorized", "forbidden", "not_found", "unavailable"].includes(rootFailure.kind);
+  const firstLoad = !rootReady && !model.root;
 
   const toggleClass = (active: boolean) =>
     cn(
-      "px-2.5 py-1 text-xs font-medium",
+      "px-2.5 py-1 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
       active ? "bg-(--color-primary) text-white" : "text-(--color-text-muted) hover:bg-(--color-surface-subtle)",
     );
+  const startLabel = refType(root) === "workload" ? "Focus workload" : refType(root) === "resource" ? "Focus resource" : "Focus identity";
+  const canvasControls = !showPaths && rootReady && model.laidOut;
 
-  const selectedVisual = selection?.kind === "node" ? visual.nodes.find((v) => v.id === selection.id) : undefined;
+  const actions: InspectorActions = {
+    onClose: closeInspector,
+    onBackToNode: () => evidence.close(),
+    onOpenObject: openRef,
+    onFocusHere: focusHere,
+    onEvidence: (claims) => openEvidence(claims, true),
+    onShowBranch: (id, select) => {
+      dispatchModel({ type: "reveal-branch", id, shown: true });
+      if (select) selectNode(select);
+    },
+    onHideBranch: (id) => dispatchModel({ type: "reveal-branch", id, shown: false }),
+    onShowWorkloads: (refs) => dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...refs] }),
+    onExpand: handleExpand,
+    onLoadMore: handleLoadMore,
+    onCollapse: handleCollapse,
+    onRefresh: refresh,
+    stateOf,
+    canLoadMore,
+  };
 
-  return (
-    <TableCard>
-      <CardContent variant="flush" className="@container">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-(--color-border-subtle) px-3 py-2">
-          {isIdentity ? (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-(--color-text-muted)">Direction</span>
-              <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
-                <button
-                  type="button"
-                  aria-pressed={direction === "forward"}
-                  onClick={() => setManualDirection("forward")}
-                  className={toggleClass(direction === "forward")}
-                >
-                  Forward
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={direction === "reverse"}
-                  onClick={() => setManualDirection("reverse")}
-                  className={toggleClass(direction === "reverse")}
-                >
-                  Reverse
-                </button>
-              </div>
-            </div>
-          ) : (
-            <span />
-          )}
-          <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
-            <button type="button" aria-pressed={!showPaths} onClick={() => setAs("canvas")} className={toggleClass(!showPaths)}>
-              Canvas
-            </button>
-            <button type="button" aria-pressed={showPaths} onClick={() => setAs("paths")} className={toggleClass(showPaths)}>
-              Paths
-            </button>
-          </div>
-        </div>
+  // Things worth saying, one line each, only when they apply.
+  const notices: { key: string; tone: "muted" | "warning" | "info"; text: string; action?: { label: string; run: () => void } }[] = [];
+  if (!rootReady && model.root)
+    notices.push({ key: "refresh", tone: "info", text: rootFailure ? "Refresh failed. Showing the previous graph." : "Refreshing the graph. Showing the previous answer until the new one arrives.", action: rootFailure ? { label: "Retry", run: () => void rootQuery.refetch() } : undefined });
+  if (replayOutcome.gone.length || replayOutcome.failed.length)
+    notices.push({
+      key: "replay",
+      tone: "muted",
+      text: `${replayOutcome.gone.length ? `Not in the newer scan: ${replayOutcome.gone.join(", ")}. ` : ""}${replayOutcome.failed.length ? `Could not re-expand ${replayOutcome.failed.join(", ")}; expand again to retry.` : ""}`,
+      action: { label: "Dismiss", run: () => setReplayOutcome({ gone: [], failed: [] }) },
+    });
+  if (targetRef) {
+    const outcome = pathQuery.currentData?.data.outcome;
+    if (stale && !sameTargetAsShown) notices.push({ key: "path", tone: "info", text: "A newer scan published — refresh to search for this path." });
+    else if (outcome === "none_exists") notices.push({ key: "path", tone: "muted", text: `No declared path from ${rootName} to ${targetName}.` });
+    else if (outcome === "not_found_within_budget")
+      notices.push({
+        key: "path",
+        tone: "warning",
+        text: "No path found within the search limits — one may still exist. Expanding objects searches further.",
+        action: { label: "Clear", run: () => { const next = new URLSearchParams(params); next.delete("target"); setParams(next, { replace: true, state: location.state }); } },
+      });
+    else if (outcome === "found" && pathQuery.currentData?.data.more_paths) notices.push({ key: "path", tone: "muted", text: "Showing the declared path. More paths exist beyond the search limit." });
+    if (highlighted && !visual.nodes.some((n) => n.members.some((m) => m.ref === targetRef)))
+      notices.push({ key: "target", tone: "warning", text: "A declared path was returned, but its target is beyond the display limit. Open the target to see its own graph." });
+  }
+  if (tracedPath) notices.push({ key: "trace", tone: "muted", text: "Tracing a path from the Paths list.", action: { label: "Clear", run: () => dispatchModel({ type: "trace", claims: null }) } });
+  if (nodeParam && rootReady && !nodeVisual)
+    notices.push({ key: "missing", tone: "muted", text: "The selected object is not in this loaded view. It may be beyond the display limit or absent from the newer scan." });
+  if (revealedWorkloads.size) notices.push({ key: "group", tone: "muted", text: "Workloads sharing an identity are drawn one by one.", action: { label: "Group them", run: () => dispatchModel({ type: "reveal-workloads", refs: [] }) } });
+  if (model.revealedBranches.size) notices.push({ key: "branches", tone: "muted", text: "Every loaded relationship of the branches you opened is drawn.", action: { label: "Fold them again", run: () => { for (const id of model.revealedBranches) dispatchModel({ type: "reveal-branch", id, shown: false }); } } });
+  if (visual.limited)
+    notices.push({ key: "limit", tone: "warning", text: `Display limit: ${visual.nodes.length} objects and ${visual.edges.length} relationships are drawn (maximum 150 / 300). Everything loaded is in Paths; open an object's own graph to narrow it.` });
+  if (model.truncated)
+    notices.push({ key: "truncated", tone: "warning", text: `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls on a card to fetch them.` });
 
-        {replayOutcome.gone.length > 0 || replayOutcome.failed.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-(--color-border-subtle) px-3 py-2 text-xs" role="status">
-            <span className="text-(--color-text-muted)">
-              {replayOutcome.gone.length ? `Not in the newer scan: ${replayOutcome.gone.join(", ")}. ` : ""}
-              {replayOutcome.failed.length
-                ? `Could not re-expand ${replayOutcome.failed.join(", ")}; expand again to retry.`
-                : ""}
-            </span>
-            <button
-              type="button"
-              className="font-medium text-(--color-primary-text) hover:underline"
-              onClick={() => setReplayOutcome({ gone: [], failed: [] })}
-            >
-              Dismiss
-            </button>
-          </div>
-        ) : null}
+  const noRelationships = rootReady && model.laidOut && visual.edges.length === 0 && visual.nodes.length <= 1;
+  const rootFrontier = frontierMap.get(root) ?? [];
 
-        {targetRef ? (
-          pathFailure ? (
-            <div className="p-3">
-              <GraphStatePanel
-                failure={pathFailure}
-                subject="this path"
-                onRetry={() => void pathQuery.refetch()}
-                onRefresh={refresh}
-              />
-            </div>
-          ) : stale && !sameTargetAsShown ? (
-            <p className="px-3 py-2 text-xs text-(--color-info-text)">
-              A newer scan published — refresh to search for this path.
-            </p>
-          ) : pathQuery.currentData?.data.outcome === "none_exists" ? (
-            <div className="p-3">
-              <DecisionBanner
-                tone="neutral"
-                title="No declared path"
-                body={`No declared path from ${rootName} to ${targetName}.`}
-              />
-            </div>
-          ) : pathQuery.currentData?.data.outcome === "not_found_within_budget" ? (
-            <div className="p-3">
-              <DecisionBanner
-                tone="warning"
-                title="No path found within the search limits"
-                body="A budget stopped the search — one may still exist. Expanding nodes on the canvas searches further."
-                actionLabel="Clear and explore"
-                onAction={() => {
-                  const next = new URLSearchParams(params);
-                  next.delete("target");
-                  setParams(next, { replace: true, state: location.state });
-                }}
-              />
-            </div>
-          ) : pathQuery.currentData?.data.outcome === "found" && pathQuery.currentData.data.more_paths ? (
-            <p className="px-3 py-1 text-xs text-(--color-text-muted)">More paths exist beyond the limit.</p>
-          ) : null
-        ) : null}
-
-        {!rootReady ? <div role="status" className="border-b px-3 py-2 text-sm">
-          {rootFailure ? "Refresh failed. Showing the previous graph." : "Refreshing the graph. Showing the previous answer until the new one arrives."}
-          {rootFailure ? <Button variant="outline" size="sm" className="ml-2" onClick={() => void rootQuery.refetch()}>Retry refresh</Button> : null}
-        </div> : null}
-        {nodeParam && !visual.nodes.some((n) => n.members.some((m) => m.ref === nodeParam)) ? <p role="status" className="px-3 py-2 text-xs text-(--color-text-muted)">The selected object is not in this loaded view. It may be outside the display limit or absent from the newer scan.</p> : null}
-        {targetRef && highlighted && !visual.nodes.some((n) => n.members.some((m) => m.ref === targetRef)) ? <p role="status" className="px-3 py-2 text-xs text-(--color-warning-text)">A declared path was returned, but the requested target is beyond the display limit. Open the target to inspect its graph.</p> : null}
-        {revealedWorkloads.size ? <div className="px-3 py-2"><Button variant="outline" size="sm" onClick={() => dispatchModel({ type: "reveal-workloads", refs: [] })}>Group shared workloads</Button></div> : null}
-        {visual.limited ? <div role="status" className="border-b px-3 py-2 text-xs text-(--color-warning-text)">
-          Display limit reached: showing {visual.nodes.length} nodes and {visual.edges.length} edges (maximum 150 / 300). Select an object and choose Focus here to investigate a smaller graph. Other loaded evidence is retained.
-        </div> : null}
-        {model.truncated ? (
-          <div className="flex items-center gap-2 px-3 py-2 text-xs" role="status">
-            <StatusBadge tone="warning">Truncated</StatusBadge>
-            <span className="text-(--color-text-muted)">
-              Showing {visibleNodeRefs(model).size} nodes; more are available at this depth (bound by{" "}
-              {model.truncated.bound_by}). Expand a node to see more.
-            </span>
-          </div>
-        ) : null}
-
+  let body;
+  if (hardFailure || (firstLoad && rootFailure)) {
+    body = (
+      <div className="p-4">
+        <GraphStatePanel failure={rootFailure!} subject="this graph" onRetry={() => void rootQuery.refetch()} onRefresh={refresh} />
+      </div>
+    );
+  } else if (firstLoad) {
+    body = (
+      <div className="flex h-full items-center justify-center" role="status" aria-busy="true" aria-label={`Loading the graph for ${rootName}`}>
+        <div className="size-8 animate-spin rounded-full border-2 border-(--color-border-subtle) border-t-(--color-primary)" />
+      </div>
+    );
+  } else if (showPaths) {
+    body = (
+      <div className="h-full overflow-y-auto">
+        <PathsList
+          rootName={rootName}
+          paths={rawPathsResult.paths}
+          nodesByRef={model.nodes}
+          frontierByNode={frontierMap}
+          truncated={!!model.truncated || listed.limited}
+          boundByMax={rawPathsResult.boundByMax}
+          stateOf={stateOf}
+          canLoadMore={canLoadMore}
+          onExpand={handleExpand}
+          onLoadMore={handleLoadMore}
+          onCollapse={handleCollapse}
+          onRefresh={refresh}
+          onSelectNode={(ref) => {
+            const group = grouped.nodes.find((n) => n.kind === "workload" && n.members.length > 1 && n.members.some((m) => m.ref === ref));
+            if (group) dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((m) => m.ref)] });
+            selectNode(ref);
+          }}
+          onSelectEdge={(claim) => openEvidence([claim])}
+          onTrace={trace}
+          selectedRef={(nodeVisual?.members[0].ref ?? null) as GraphRef | null}
+          selectedClaims={selectedClaims}
+        />
+      </div>
+    );
+  } else {
+    body = (
+      <div className={cn("relative h-full", !rootReady && "opacity-60")} aria-busy={!rootReady || !model.laidOut}>
+        <GraphCanvas
+          visualNodes={visual.nodes}
+          visualEdges={visual.edges}
+          descriptions={descriptions}
+          sizes={sizes}
+          positions={placement}
+          rootId={rootId}
+          selection={selection}
+          highlightedNodeIds={highlightedNodeIds}
+          highlightedEdgeIds={highlightedEdgeIds}
+          onSelectNode={selectNode}
+          onSelectEdge={selectEdge}
+          onOpenNode={openRef}
+          onExpand={handleExpand}
+          onLoadMore={handleLoadMore}
+          onCollapse={handleCollapse}
+          onRefresh={refresh}
+          stateOf={stateOf}
+          canLoadMore={canLoadMore}
+          onClearSelection={closeInspector}
+          revealToken={revealToken}
+          viewport={model.viewport}
+          onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
+          onApi={onApi}
+        />
         {!model.laidOut ? (
-          // Never a partial canvas: the layout is being (re)computed — first
-          // load, Tidy layout, or a refresh — so nothing is drawn yet
-          // (review item 12).
-          <div className="flex h-64 items-center justify-center" role="status" aria-busy="true" aria-label="Updating the graph">
+          <div className="absolute inset-0 flex items-center justify-center bg-(--color-surface-raised)/60" role="status" aria-label="Arranging the graph">
             <div className="size-8 animate-spin rounded-full border-2 border-(--color-border-subtle) border-t-(--color-primary)" />
           </div>
-        ) : (
-          <div aria-busy={!rootReady} className={cn("flex flex-col gap-3 p-3 @[900px]:flex-row", !rootReady && "opacity-60")}>
-            <div className="min-w-0 flex-1">
-              {showPaths ? (
-                <PathsList
-                  root={root}
-                  rootName={rootName}
-                  paths={rawPathsResult.paths}
-                  nodesByRef={model.nodes}
-                  frontierByNode={frontierMap}
-                  truncated={!!model.truncated || visual.limited}
-                  boundByMax={rawPathsResult.boundByMax}
-                  stateOf={stateOf}
-                  canLoadMore={canLoadMore}
-                  onExpand={handleExpand}
-                  onLoadMore={handleLoadMore}
-                  onCollapse={handleCollapse}
-                  onRefresh={refresh}
-                  onSelectNode={(ref) => {
-                    const group = visual.nodes.find((n) => n.kind === "workload" && n.members.some((m) => m.ref === ref));
-                    if (group) dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((m) => m.ref)] });
-                    selectNode(ref);
-                  }}
-                  onSelectEdge={(claim) => evidence.open(claim)}
-                />
-              ) : (
-                <GraphCanvas
-                  visualNodes={visual.nodes}
-                  visualEdges={visual.edges}
-                  positions={positionsForVisual}
-                  selection={selection}
-                  highlightedNodeIds={highlightedNodeIds}
-                  highlightedEdgeIds={highlightedEdgeIds}
-                  onSelectNode={selectNode}
-                  onSelectEdge={selectEdge}
-                  onOpenNode={openRef}
-                  onExpand={handleExpand}
-                  onLoadMore={handleLoadMore}
-                  onCollapse={handleCollapse}
-                  onRefresh={refresh}
-                  stateOf={stateOf}
-                  canLoadMore={canLoadMore}
-                  onClearSelection={clearSelection}
-                  onTidyLayout={handleTidyLayout}
-                  fitViewToken={fitViewToken}
-                  viewport={model.viewport}
-                  onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
-                  rootAccountId={model.nodes.get(root)?.account?.id ?? null}
-                />
-              )}
-            </div>
-            {selectedVisual ? (
-              <NodeSummary
-                visual={selectedVisual}
-                truncated={!!model.truncated || visual.limited}
-                onOpen={() => openRef(selectedVisual.members[0].ref)}
-                onFocusHere={() => focusHere(selectedVisual.members[0].ref)}
-                canOpen={selectedVisual.members.length === 1 && !!objectPath(selectedVisual.members[0].ref)}
-                canFocusHere={
-                  selectedVisual.members.length === 1 &&
-                  refType(selectedVisual.members[0].ref) !== "external_principal" &&
-                  !!objectPath(selectedVisual.members[0].ref)
-                }
-              />
-            ) : null}
+        ) : null}
+        {noRelationships ? (
+          <div role="status" className="absolute inset-x-0 top-6 mx-auto w-fit max-w-md rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-center text-sm shadow-(--shadow-xs)">
+            {rootFrontier.length
+              ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
+              : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
           </div>
-        )}
+        ) : null}
+      </div>
+    );
+  }
 
-        <Legend />
-      </CardContent>
-    </TableCard>
+  return (
+    <div
+      ref={workspaceRef}
+      style={{ height: wsHeight }}
+      className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)"
+    >
+      <div role="toolbar" aria-label="Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
+        <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
+          <button type="button" aria-pressed={!showPaths} onClick={() => setAs("canvas")} className={toggleClass(!showPaths)}>
+            Canvas
+          </button>
+          <button type="button" aria-pressed={showPaths} onClick={() => setAs("paths")} className={toggleClass(showPaths)}>
+            Paths
+          </button>
+        </div>
+        {isIdentity ? (
+          <div className="inline-flex items-center gap-1.5 text-xs">
+            <span className="text-(--color-text-muted)">Direction</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
+              <button type="button" aria-pressed={direction === "forward"} onClick={() => setManualDirection("forward")} className={toggleClass(direction === "forward")}>
+                What it reaches
+              </button>
+              <button type="button" aria-pressed={direction === "reverse"} onClick={() => setManualDirection("reverse")} className={toggleClass(direction === "reverse")}>
+                What reaches it
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <p className="min-w-0 flex-1 truncate text-xs text-(--color-text-muted)" title="Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated.">
+          Declared access · effective access not evaluated
+        </p>
+        <div className="flex items-center gap-1">
+          {canvasControls ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.fitGraph()}>
+                <Maximize2 className="size-3.5" /> Fit graph
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.revealStart()}>
+                <LocateFixed className="size-3.5" /> {startLabel}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={arrange} title="Lay the graph out again from scratch">
+                <LayoutGrid className="size-3.5" /> Arrange
+              </Button>
+            </>
+          ) : null}
+          <Legend />
+        </div>
+      </div>
+
+      {notices.length ? (
+        <ul className="shrink-0 divide-y divide-(--color-border-subtle) border-b border-(--color-border-subtle) text-xs" role="status">
+          {notices.map((n) => (
+            <li key={n.key} className="flex items-center justify-between gap-3 px-3 py-1.5">
+              <span className={n.tone === "warning" ? "text-(--color-warning-text)" : n.tone === "info" ? "text-(--color-info-text)" : "text-(--color-text-muted)"}>{n.text}</span>
+              {n.action ? (
+                <button type="button" onClick={n.action.run} className="shrink-0 font-medium text-(--color-primary-text) hover:underline">
+                  {n.action.label}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">{body}</div>
+        {subject && inline ? (
+          <GraphInspector ws={ws} subject={subject} nodes={model.nodes} rootAccountId={rootAccountId} presentation="inline" width={inspectorWidth} modal={false} actions={actions} />
+        ) : null}
+      </div>
+      {subject && !inline ? (
+        <GraphInspector ws={ws} subject={subject} nodes={model.nodes} rootAccountId={rootAccountId} presentation="drawer" width={inspectorWidth} modal={narrow} actions={actions} />
+      ) : null}
+    </div>
   );
+}
+
+/** The layout may run once this session's root has been ingested. */
+function rootReadyForLayout(model: ModelState, currentKey: string): boolean {
+  return model.root !== null && model.generationKey === currentKey && visibleNodeRefs(model).size > 0;
 }

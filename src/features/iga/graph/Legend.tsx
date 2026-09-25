@@ -1,60 +1,91 @@
 /**
- * Always visible (SPEC-iga-phase2-graph.md §2.14.11 *Controls* — Legend):
- * node kinds, the four edge labels, dashed = stale, the cycle marker, the
- * out-of-scope marker, the truncation chip.
+ * The legend (SPEC-iga-phase2-graph.md §2.14.11 *Controls*): a disclosure in
+ * the graph toolbar, so it never takes canvas room. What must always be in
+ * view — that this is declared access, not evaluated access — is the
+ * toolbar's own status line, not hidden in here.
  */
 
-import { StatusBadge } from "@/components/console/status";
+import { CircleHelp } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import { EDGE_LABEL } from "./graphLabels";
+import { NODE_ICON } from "./icons";
+import type { NodeIcon } from "./nodeView";
 
-const NODE_KINDS: { label: string; swatch: string }[] = [
-  { label: "Workload", swatch: "bg-(--color-surface-raised) border-(--color-border-subtle)" },
-  { label: "Identity (role, user, group)", swatch: "bg-(--color-surface-raised) border-(--color-border-subtle)" },
-  { label: "External principal", swatch: "bg-(--color-surface-subtle) border-dashed border-(--color-border-subtle)" },
-  { label: "Statement", swatch: "bg-(--color-surface-raised) border-(--color-border-subtle)" },
-  { label: "Resource / selector", swatch: "bg-(--color-surface-raised) border-(--color-border-subtle)" },
+const NODE_KINDS: { icon: NodeIcon; label: string }[] = [
+  { icon: "workload", label: "Workload" },
+  { icon: "role", label: "IAM role" },
+  { icon: "user", label: "IAM user" },
+  { icon: "group", label: "IAM group" },
+  { icon: "external", label: "External principal (dashed)" },
+  { icon: "statement", label: "Policy statement" },
+  { icon: "resource", label: "Resource named by a statement" },
+  { icon: "selector", label: "Selector — a pattern, not a resource" },
+  { icon: "more", label: "More loaded relationships, hidden to keep the view readable" },
 ];
 
-const EDGE_WORDS = [
-  EDGE_LABEL.executes_as,
-  EDGE_LABEL.can_assume,
-  EDGE_LABEL.grant,
-  EDGE_LABEL.target,
-  EDGE_LABEL.member_of,
+const LINES: { dash?: string; label: string }[] = [
+  { label: "Current relationship; the arrow points from holder to target" },
+  { dash: "6 4", label: "Stale — not reconfirmed by the latest scan" },
+  { dash: "2 4", label: "Ended — no longer present" },
+];
+
+const MARKS: [string, string][] = [
+  ["×3", "Several independent grants declare the same relationship"],
+  ["!", "A condition or other constraint was recorded and not evaluated"],
+  ["↻", "Closes a cycle of role assumptions"],
+  ["⇄", "Crosses into another account"],
 ];
 
 export function Legend() {
   return (
-    <section
-      aria-label="Legend"
-      className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-(--color-border-subtle) px-3 py-2 text-[11px] text-(--color-text-muted)"
-    >
-      {NODE_KINDS.map((k) => (
-        <span key={k.label} className="flex items-center gap-1.5">
-          <span className={`size-3 rounded border-2 ${k.swatch}`} />
-          {k.label}
-        </span>
-      ))}
-      <span className="flex items-center gap-1.5">
-        <svg width="18" height="10" aria-hidden="true">
-          <line x1="0" y1="5" x2="18" y2="5" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-        {EDGE_WORDS.join(" · ")}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <svg width="18" height="10" aria-hidden="true">
-          <line x1="0" y1="5" x2="18" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
-        </svg>
-        Stale
-      </span>
-      <span>cycle = edge closes a loop</span>
-      <span>cross-account = edge crosses an account boundary</span>
-      <span>dashed border = out of scope / external</span>
-      <span className="flex items-center gap-1.5">
-        <StatusBadge tone="warning">Truncated</StatusBadge>
-        more available — Expand
-      </span>
-    </section>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" aria-label="Legend and help">
+          <CircleHelp className="size-4" /> Legend
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[340px] space-y-4 text-xs">
+        <section aria-label="Objects" className="space-y-1.5">
+          <p className="font-semibold text-(--color-text)">Objects</p>
+          {NODE_KINDS.map((k) => {
+            const Icon = NODE_ICON[k.icon];
+            return (
+              <p key={k.label} className="flex items-center gap-2 text-(--color-text-muted)">
+                <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                {k.label}
+              </p>
+            );
+          })}
+        </section>
+        <section aria-label="Relationships" className="space-y-1.5">
+          <p className="font-semibold text-(--color-text)">Relationships</p>
+          <p className="text-(--color-text-muted)">
+            {[EDGE_LABEL.executes_as, EDGE_LABEL.can_assume, EDGE_LABEL.grant, EDGE_LABEL.target, EDGE_LABEL.member_of].join(" · ")}.
+            Hover, focus or select a line to see its words.
+          </p>
+          {LINES.map((l) => (
+            <p key={l.label} className="flex items-center gap-2 text-(--color-text-muted)">
+              <svg width="22" height="8" aria-hidden="true" className="shrink-0">
+                <line x1="0" y1="4" x2="22" y2="4" stroke="currentColor" strokeWidth="1.5" strokeDasharray={l.dash} />
+              </svg>
+              {l.label}
+            </p>
+          ))}
+          {MARKS.map(([mark, text]) => (
+            <p key={mark} className="flex items-center gap-2 text-(--color-text-muted)">
+              <span className="w-[22px] shrink-0 text-center font-semibold">{mark}</span>
+              {text}
+            </p>
+          ))}
+        </section>
+        <p className="border-t border-(--color-border-subtle) pt-3 text-(--color-text-muted)">
+          Everything here is declared by policy and configuration. Whether a request would succeed has not been
+          evaluated: conditions, boundaries, Deny statements and resource policies are recorded, not applied.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

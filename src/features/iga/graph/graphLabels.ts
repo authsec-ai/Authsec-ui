@@ -1,15 +1,16 @@
 /**
  * Wording and layout vocabulary specific to the graph canvas
- * (SPEC-iga-phase2-graph.md §2.14.11 *Wording*, §2.14.15 *Layout stability*).
+ * (SPEC-iga-phase2-graph.md §2.14.11 *Wording*).
  *
  * Edge labels are ONLY "configured to run as", "may assume", "granted by",
  * "names" — never "can access", never "uses". `member_of` is structural
  * ("member of"), not a claim about access, so it is not one of the four.
  */
 
-import type { GraphEdgeKind, GraphFrontier, GraphNodeKind, RelState } from "@/app/api/igaGraphApi";
+import type { EvidenceLimitation, GraphEdgeKind, GraphFrontier, GraphNodeKind, RelState } from "@/app/api/igaGraphApi";
 
 import { IDENTITY_KIND_LABEL, RESOURCE_KIND_LABEL } from "../shared/labels";
+import type { VisualEdge } from "./types";
 
 export const EDGE_LABEL: Record<GraphEdgeKind, string> = {
   executes_as: "configured to run as",
@@ -19,21 +20,6 @@ export const EDGE_LABEL: Record<GraphEdgeKind, string> = {
   grant: "granted by",
   target: "names",
 };
-
-/** Fixed columns by node kind, left to right (§2.14.15 *Layout stability*, point 1). */
-export const COLUMN_OF: Record<GraphNodeKind, number> = {
-  workload: 0,
-  iam_role: 1,
-  iam_user: 1,
-  iam_group: 1,
-  external_principal: 1,
-  statement: 2,
-  exact: 3,
-  selector: 3,
-  external: 3,
-};
-
-export const COLUMN_COUNT = 4;
 
 const NOUN: Partial<Record<GraphEdgeKind, [string, string]>> = {
   executes_as: ["workload", "workloads"],
@@ -50,31 +36,24 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
 }
 
 /**
- * The expand control's label (§2.14.11 *Controls*, §2.14.15 *Components*):
- * "+3 roles" when the count is exact, "+ more" otherwise. A workload reached
- * in reverse through `executes_as`/`task_execution_role` reads "Used by N
- * workloads" — the count named on the identity node itself (§2.14.11's
- * question "which other workloads share that identity?"). `can_assume` uses
- * the Budgets section's own wording verbatim: "may assume more roles —
- * expand" (with the count only when the server counted it exactly).
+ * The expand control's label (§2.14.11 *Controls*): relationships the server
+ * has NOT sent yet, so every label starts "Load" — never confused with the
+ * loaded ones the canvas folds into "+N more" (`discloseVisual`). The count
+ * appears only when the server counted exactly. A workload reached in
+ * reverse through `executes_as` reads as the workloads that run as it; a
+ * forward `can_assume` as the roles it may assume.
  */
 export function frontierLabel(f: GraphFrontier): string {
-  const isUsedBy =
-    f.direction === "reverse" && (f.edge === "executes_as" || f.edge === "task_execution_role");
-  if (isUsedBy) {
-    if (!f.more.exact) return "Used by workloads — expand";
-    return `Used by ${f.more.count} ${noun(f.edge, f.more.count)}`;
-  }
-  if (f.edge === "can_assume" && f.direction === "forward") {
-    if (!f.more.exact) return "may assume more roles — expand";
-    return `may assume ${f.more.count} more ${noun(f.edge, f.more.count)} — expand`;
-  }
-  if (!f.more.exact) return "+ more";
-  return `+${f.more.count} ${noun(f.edge, f.more.count)}`;
+  const n = f.more.exact && f.more.count != null ? f.more.count : null;
+  const isUsedBy = f.direction === "reverse" && (f.edge === "executes_as" || f.edge === "task_execution_role");
+  if (isUsedBy) return n != null ? `Load ${n} ${noun(f.edge, n)} that run as it` : "Load workloads that run as it";
+  if (f.edge === "can_assume" && f.direction === "forward") return n != null ? `Load ${n} ${noun(f.edge, n)} it may assume` : "Load roles it may assume";
+  if (f.edge === "can_assume") return n != null ? `Load ${n} that may assume it` : "Load what may assume it";
+  return n != null ? `Load ${n} more ${noun(f.edge, n)}` : `Load more ${noun(f.edge, null)}`;
 }
 
 export function frontierAriaLabel(f: GraphFrontier): string {
-  return `Expand: ${frontierLabel(f)}`;
+  return `${frontierLabel(f)} (not loaded yet)`;
 }
 
 /**
@@ -116,3 +95,40 @@ export const KIND_LABEL: Record<GraphNodeKind, string> = {
   selector: RESOURCE_KIND_LABEL.selector,
   external: RESOURCE_KIND_LABEL.external,
 };
+
+/**
+ * Limitations that qualify THIS relationship and so earn a marker on it.
+ * The ones true of every declared relationship (effective access not
+ * evaluated, a named resource not confirmed to exist, the caller's own
+ * sts:AssumeRole not checked) are stated once, in the toolbar and the
+ * inspector, not repeated on every line.
+ */
+const MARKED: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitation["code"]>([
+  "conditions_not_evaluated",
+  "negated_statement",
+  "deny_statements_present",
+  "permissions_boundary_present",
+  "resource_policy_not_projected",
+  "not_principal_unresolved",
+  "surface_stale",
+  "surface_partial",
+  "surface_denied",
+]);
+
+export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
+  const seen = new Set<string>();
+  const out: EvidenceLimitation[] = [];
+  for (const m of e.members)
+    for (const l of m.limitations ?? [])
+      if (MARKED.has(l.code) && !seen.has(l.code)) {
+        seen.add(l.code);
+        out.push(l);
+      }
+  return out;
+}
+
+export function edgeVerb(e: VisualEdge): string {
+  if (e.kind === "grant" && e.members.length === 1 && (e.targetPolicy ?? e.members[0].policy))
+    return `${EDGE_LABEL.grant} ${e.targetPolicy ?? e.members[0].policy}`;
+  return EDGE_LABEL[e.kind];
+}

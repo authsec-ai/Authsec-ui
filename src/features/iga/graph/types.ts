@@ -31,6 +31,23 @@ export function anchorOf(key: FrontierKey): GraphRef {
 /** The owner tag the initial `/graph` read stamps on every node and edge it returns. */
 export const ROOT_OWNER = "root";
 
+/**
+ * Loaded relationships the view keeps out of sight until asked (§2.14.11
+ * *Progressive disclosure*). Presentation only: every member keeps its own
+ * identifiers and evidence, and "Show" puts each back as its own node.
+ */
+export interface OverflowInfo {
+  /** The visual node the hidden branch hangs from. */
+  parent: string;
+  edgeKind: GraphEdgeKind;
+  /** The hidden nodes nearest the parent, each as it would be drawn. */
+  hidden: VisualNode[];
+  /** Nodes reachable only through the hidden ones, hidden with them. */
+  beyond: number;
+  /** The parent also has relationships of this kind the server has not sent yet. */
+  moreNotLoaded: boolean;
+}
+
 /** One drawn node. `members.length > 1` for equivalent statements or workloads sharing one execution identity (§2.14.11 *Grouped edges*). */
 export interface VisualNode {
   id: string;
@@ -38,6 +55,8 @@ export interface VisualNode {
   members: GraphNode[];
   /** Frontier entries outstanding on any member, for the expand control. */
   frontier: GraphFrontier[];
+  /** Set on the one node standing in for a hidden branch. */
+  overflow?: OverflowInfo;
 }
 
 /** One drawn edge. `members.length > 1` for grouped grants (and their shared target). */

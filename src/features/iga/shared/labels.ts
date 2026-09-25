@@ -67,6 +67,16 @@ export function accountLabel(account: GraphAccount | null): string {
   return account.label && account.label !== account.id ? account.label : account.id;
 }
 
+/**
+ * An account with its id: "Payments (429418377036)" when it has a name of its
+ * own, the id alone when its name is the id. Null for no account — the
+ * caller says whether that means unknown or not applicable.
+ */
+export function accountWithId(account: GraphAccount | null | undefined): string | null {
+  if (!account) return null;
+  return account.label && account.label !== account.id ? `${account.label} (${account.id})` : account.id;
+}
+
 export const SURFACE_STATE_LABEL: Record<SurfaceState, string> = {
   reached: "read",
   partial: "partly read",

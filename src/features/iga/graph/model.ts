@@ -6,8 +6,11 @@
  * response per expansion — and this merges them into one picture: every node
  * and edge is reference-counted by the reads that revealed it, so collapsing
  * one expansion removes exactly what it added and nothing a different
- * expansion still needs (§2.14.11 *Collapse*). Positions are assigned
- * separately (`layout.ts`) and stored here alongside the rest.
+ * expansion still needs (§2.14.11 *Collapse*). Positions are keyed by the
+ * DRAWN node (`VisualNode.id`) and assigned outside the reducer — ELK on
+ * first view and on Arrange, `placeNewNodes` for anything that appears later
+ * (`layout.ts`); the reducer only stores them, and a position once stored is
+ * never moved by an expansion, a collapse or a branch being shown.
  */
 
 import { onGraphSessionReset } from "../shared/revision";
@@ -16,6 +19,7 @@ import { useReducer } from "react";
 import type {
   GraphDirection,
   GraphEdge,
+  GraphEdgeKind,
   GraphExpansion,
   GraphFrontier,
   GraphNeighbourhood,
@@ -25,7 +29,7 @@ import type {
 } from "@/app/api/igaGraphApi";
 
 import { dominantRelState } from "./graphLabels";
-import { placeExpansionNodes } from "./layout";
+import type { Position } from "./layout";
 import {
   ROOT_OWNER,
   anchorOf,
@@ -37,10 +41,7 @@ import {
   type VisualNode,
 } from "./types";
 
-export interface Position {
-  x: number;
-  y: number;
-}
+export type { Position };
 
 export interface ModelState {
   root: GraphRef | null;
@@ -57,11 +58,16 @@ export interface ModelState {
   loading: Set<FrontierKey>;
   failed: Set<FrontierKey>;
   truncated: GraphTruncation | null;
+  /** By drawn node id. Kept for nodes not drawn right now, so a branch shown again returns to its place. */
   positions: Map<string, Position>;
   /** Set once, by the layout effect, so a second ELK run is never triggered implicitly. */
   laidOut: boolean;
   viewport?: { x: number; y: number; zoom: number };
   revealedWorkloads: Set<GraphRef>;
+  /** Hidden branches the customer chose to show (`more:<parent>:<edge kind>`). */
+  revealedBranches: Set<string>;
+  /** A declared path from the Paths view, traced on the canvas: its claims. */
+  tracedPath: GraphRef[] | null;
 }
 
 export function initialModelState(): ModelState {
@@ -82,6 +88,8 @@ export function initialModelState(): ModelState {
     positions: new Map(),
     laidOut: false,
     revealedWorkloads: new Set(),
+    revealedBranches: new Set(),
+    tracedPath: null,
   };
 }
 
@@ -95,10 +103,11 @@ type Action =
   | { type: "expand-abort"; key: FrontierKey }
   | { type: "expand-success"; key: FrontierKey; data: GraphExpansion }
   | { type: "collapse"; key: string }
-  | { type: "path"; owner: string; anchor: GraphRef; nodes: GraphNode[]; edges: GraphEdge[] }
+  | { type: "path"; owner: string; nodes: GraphNode[]; edges: GraphEdge[] }
   | { type: "positions"; positions: Map<string, Position> }
-  | { type: "position"; id: string; position: Position }
-  | { type: "laid-out" }
+  | { type: "arranged"; positions: Map<string, Position> }
+  | { type: "reveal-branch"; id: string; shown: boolean }
+  | { type: "trace"; claims: GraphRef[] | null }
   | { type: "relayout" };
 
 function withOwner<K>(map: Map<K, Set<string>>, key: K, owner: string): Map<K, Set<string>> {
@@ -140,6 +149,13 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
   switch (action.type) {
     case "viewport": return { ...state, viewport: action.viewport };
     case "reveal-workloads": return { ...state, revealedWorkloads: new Set(action.refs) };
+    case "reveal-branch": {
+      const revealedBranches = new Set(state.revealedBranches);
+      if (action.shown) revealedBranches.add(action.id);
+      else revealedBranches.delete(action.id);
+      return { ...state, revealedBranches };
+    }
+    case "trace": return { ...state, tracedPath: action.claims };
     case "reset":
       return initialModelState();
 
@@ -189,20 +205,9 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
       const cursors = new Map(next.cursors);
       cursors.set(action.key, action.data.next_cursor);
 
-      // Placement runs HERE, inside the one serial reducer, over nodes/edges
-      // actually visible after this ingest — never in a `.then()` racing a
-      // second in-flight expansion against the same positions snapshot
-      // (review item 7). The anchor is the node this expansion was raised on.
-      const anchor = anchorOf(action.key);
-      const visible = visibleFrom(next.nodeOwners);
-      const touching = [...next.edges.values()]
-        .filter((e) => (e.from === anchor || e.to === anchor) && visible.has(e.from) && visible.has(e.to))
-        .map((e) => ({ from: e.from, to: e.to }));
-      const newNodeIds = action.data.nodes
-        .filter((n) => visible.has(n.ref))
-        .map((n) => ({ id: n.ref, kind: n.kind }));
-      const positions = placeExpansionNodes(anchor, newNodeIds, next.positions, touching);
-
+      // New nodes are placed when they are drawn (`placeNewNodes`), against
+      // the canvas as it is then — never here against a snapshot a second
+      // in-flight expansion could race (review item 7).
       return {
         ...next,
         loading,
@@ -211,7 +216,6 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
         pageCounts,
         cursors,
         truncated: action.data.truncated ?? next.truncated,
-        positions,
       };
     }
 
@@ -262,29 +266,15 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
         }
       }
 
-      // Free the slots a now-invisible node held (§2.14.11 *Collapse*); a
-      // still-visible node's position is never touched.
-      const visible = visibleFrom(nodeOwners);
-      const positions = new Map(state.positions);
-      for (const ref of nodeOwners.keys()) {
-        if (!visible.has(ref)) positions.delete(ref);
-      }
-
-      return { ...state, nodeOwners, edgeOwners, expanded, pageCounts, cursors, loading, failed, positions };
+      // Positions of nodes no longer drawn are kept: they are not obstacles
+      // for later placement, and a node that comes back returns to its place
+      // if that is still free. No still-drawn node moves.
+      return { ...state, nodeOwners, edgeOwners, expanded, pageCounts, cursors, loading, failed };
     }
 
-    case "path": {
-      const next = ingest(state, action.owner, action.nodes, action.edges);
-      const visible = visibleFrom(next.nodeOwners);
-      const touching = [...next.edges.values()]
-        .filter(
-          (e) => (e.from === action.anchor || e.to === action.anchor) && visible.has(e.from) && visible.has(e.to),
-        )
-        .map((e) => ({ from: e.from, to: e.to }));
-      const newNodeIds = action.nodes.filter((n) => visible.has(n.ref)).map((n) => ({ id: n.ref, kind: n.kind }));
-      const positions = placeExpansionNodes(action.anchor, newNodeIds, next.positions, touching);
-      return { ...next, positions };
-    }
+    case "path":
+      // Path-only nodes are placed beside the path's own nodes when drawn.
+      return ingest(state, action.owner, action.nodes, action.edges);
 
     case "positions": {
       const positions = new Map(state.positions);
@@ -292,19 +282,13 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
       return { ...state, positions };
     }
 
-    case "position": {
-      const positions = new Map(state.positions);
-      positions.set(action.id, action.position);
-      return { ...state, positions };
-    }
-
-    case "laid-out":
-      return { ...state, laidOut: true };
+    case "arranged":
+      // ELK's answer for everything drawn: the first view, or Arrange.
+      return { ...state, positions: new Map(action.positions), laidOut: true };
 
     case "relayout":
-      // Tidy layout / a refresh to a new revision: ELK runs again over
-      // everything currently visible (§2.14.15). Existing positions are kept
-      // until the new ones land, so the canvas never blanks mid-recompute.
+      // Arrange / a refresh to a new revision: ELK runs again over what is
+      // drawn (§2.14.15). Existing positions stay until the new ones land.
       return { ...state, laidOut: false };
 
     default:
@@ -369,9 +353,11 @@ function visibleEdgeList(state: ModelState, visible: Set<GraphRef>): GraphEdge[]
 /* -------------------------------- grouping -------------------------------- */
 
 /**
- * Groups statement nodes that share `group_key` and the same granting
- * identity into one visual node, and their grant/target edges into one line
- * each (§2.14.11 *Grouped edges*). The grouping is visual only — every
+ * Groups statement nodes that share `group_key`, the same granting identity
+ * and the same lifecycle state into one visual node, and their grant/target
+ * edges into one line each (§2.14.11 *Grouped edges*). `group_key` already
+ * separates effects, conditions, targets and exclusions (D-37), so matching
+ * action names alone never group. The grouping is visual only — every
  * member statement and grant claim is kept, for the evidence panel.
  */
 export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Set()): { nodes: VisualNode[]; edges: VisualEdge[] } {
@@ -395,7 +381,7 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
     if (!n || n.kind !== "statement" || !n.group_key) continue;
     const sources = [...(sourcesOfStatement.get(ref) ?? [])].sort();
     if (sources.length === 0) continue;
-    const bucketKey = `${sources.join(",")}::${n.group_key}`;
+    const bucketKey = `${sources.join(",")}::${n.group_key}::${n.state ?? "current"}`;
     const list = membersOfBucket.get(bucketKey) ?? [];
     list.push(ref);
     membersOfBucket.set(bucketKey, list);
@@ -409,7 +395,7 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
     if (n?.kind !== "workload" || ref === state.root || ungrouped.has(ref)) continue;
     const touching = edges.filter((e) => e.from === ref || e.to === ref);
     if (touching.length !== 1 || touching[0].kind !== "executes_as" || touching[0].from !== ref) continue;
-    const bucketKey = `workloads:${touching[0].to}:${n.account?.id ?? "unknown"}`;
+    const bucketKey = `workloads:${touching[0].to}:${n.account?.id ?? "unknown"}:${n.state ?? "current"}`;
     const list = membersOfBucket.get(bucketKey) ?? [];
     list.push(ref);
     membersOfBucket.set(bucketKey, list);
@@ -473,25 +459,206 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
   return { nodes: [...nodesById.values()], edges: [...edgesById.values()] };
 }
 
+/* --------------------------- progressive disclosure ------------------------ */
+
+/** Relationships of one kind a node shows before the rest fold into "+N more". */
+export const BRANCH_LIMIT = 6;
+
+/** The id of the node standing in for `parent`'s hidden `kind` relationships. */
+export function overflowId(parent: string, kind: GraphEdgeKind) {
+  return `more:${parent}:${kind}`;
+}
+
 /**
- * Positions are computed per RAW node ref (`layout.ts` never needs to know
- * about grouping). A grouped statement node is drawn at the position of
- * whichever member sits highest (lowest `y`) — the group's anchor.
+ * Keeps the first view readable (§2.14.11 *Progressive disclosure*): a node
+ * with more than `BRANCH_LIMIT` loaded relationships of one kind shows the
+ * first ones, in server order, and one "+N more" node for the rest — plus
+ * whatever was reachable only through them. Presentation only: the hidden
+ * members stay in the overflow node with every identifier and claim, and
+ * the frontier (what the server has NOT sent) stays separate from it.
+ *
+ * Never hidden: the root, anything in `keep` (a selected node, a traced or
+ * requested path) and the branch leading to it, and a branch the customer
+ * chose to show (`revealed`).
  */
-export function resolveVisualPositions(nodes: VisualNode[], raw: Map<string, Position>): Map<string, Position> {
+export function discloseVisual(
+  visual: { nodes: VisualNode[]; edges: VisualEdge[] },
+  root: GraphRef,
+  revealed: Set<string>,
+  keep: Set<GraphRef>,
+  /** The frontier entry still has relationships the server has not sent. */
+  hasUnloaded: (f: GraphFrontier) => boolean = () => true,
+): { nodes: VisualNode[]; edges: VisualEdge[] } {
+  const rootId = visual.nodes.find((n) => n.members.some((m) => m.ref === root))?.id;
+  if (!rootId) return visual;
+  const byId = new Map(visual.nodes.map((n) => [n.id, n]));
+  const adj = new Map<string, { other: string; edge: VisualEdge }[]>();
+  const link = (a: string, b: string, edge: VisualEdge) => {
+    const list = adj.get(a) ?? [];
+    list.push({ other: b, edge });
+    adj.set(a, list);
+  };
+  for (const e of visual.edges) {
+    link(e.from, e.to, e);
+    link(e.to, e.from, e);
+  }
+
+  // Breadth-first from the root, in server (ingestion) order: each node's
+  // parent is whichever node reached it first.
+  const parent = new Map<string, { id: string; edge: VisualEdge }>();
+  const order = [rootId];
+  const seen = new Set(order);
+  for (let i = 0; i < order.length; i++) {
+    for (const { other, edge } of adj.get(order[i]) ?? []) {
+      if (seen.has(other)) continue;
+      seen.add(other);
+      parent.set(other, { id: order[i], edge });
+      order.push(other);
+    }
+  }
+
+  // A subtree holding a kept node is itself kept, so the way to it stays drawn.
+  const holdsKeep = new Set<string>();
+  for (const id of [...order].reverse()) {
+    const n = byId.get(id);
+    if (n && n.members.some((m) => keep.has(m.ref))) holdsKeep.add(id);
+    if (holdsKeep.has(id)) {
+      const p = parent.get(id);
+      if (p) holdsKeep.add(p.id);
+    }
+  }
+
+  const children = new Map<string, Map<GraphEdgeKind, string[]>>();
+  for (const id of order.slice(1)) {
+    const p = parent.get(id)!;
+    const kinds = children.get(p.id) ?? new Map<GraphEdgeKind, string[]>();
+    const list = kinds.get(p.edge.kind) ?? [];
+    list.push(id);
+    kinds.set(p.edge.kind, list);
+    children.set(p.id, kinds);
+  }
+
+  // Candidate folds, parent by parent in breadth-first order.
+  const groups = new Map<string, { parent: string; kind: GraphEdgeKind; ids: string[]; edges: VisualEdge[] }>();
+  for (const id of order) {
+    for (const [kind, ids] of children.get(id) ?? []) {
+      const oid = overflowId(id, kind);
+      if (ids.length <= BRANCH_LIMIT || revealed.has(oid)) continue;
+      let shown = ids.filter((c) => holdsKeep.has(c)).length;
+      const folded: string[] = [];
+      for (const c of ids) {
+        if (holdsKeep.has(c)) continue;
+        if (shown < BRANCH_LIMIT) shown++;
+        else folded.push(c);
+      }
+      // Folding a single node saves nothing: draw it.
+      if (folded.length < 2) continue;
+      groups.set(oid, { parent: id, kind, ids: folded, edges: folded.map((c) => parent.get(c)!.edge) });
+    }
+  }
+  if (groups.size === 0) return visual;
+
+  // What stays reachable from the root without passing a folded node. A fold
+  // whose own parent is no longer reachable (it sits inside another fold) is
+  // dropped — its members are hidden with the outer fold, not given an
+  // orphaned "+N more" card of their own — and reachability is recomputed
+  // until nothing changes.
+  let hidden = new Map<string, string>(); // folded child -> overflow id
+  let reach = new Set<string>();
+  for (;;) {
+    hidden = new Map();
+    for (const [oid, g] of groups) for (const c of g.ids) hidden.set(c, oid);
+    reach = new Set([rootId]);
+    const queue = [rootId];
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const { other } of adj.get(id) ?? []) {
+        if (reach.has(other) || hidden.has(other)) continue;
+        reach.add(other);
+        queue.push(other);
+      }
+    }
+    let changed = false;
+    for (const [oid, g] of groups) {
+      if (!reach.has(g.parent)) {
+        groups.delete(oid);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  if (groups.size === 0) return visual;
+
+  // Everything no longer reachable is hidden with the fold its breadth-first
+  // ancestry passes through; nodes that were never reachable (disconnected
+  // evidence) are left alone.
+  const beyond = new Map<string, number>();
+  const dropped = new Set(hidden.keys());
+  for (const id of order) {
+    if (reach.has(id) || hidden.has(id)) continue;
+    dropped.add(id);
+    let a = parent.get(id)?.id;
+    while (a && !hidden.has(a)) a = parent.get(a)?.id;
+    if (a) beyond.set(hidden.get(a)!, (beyond.get(hidden.get(a)!) ?? 0) + 1);
+  }
+
+  const nodes = visual.nodes.filter((n) => !dropped.has(n.id));
+  const edges = visual.edges.filter((e) => !dropped.has(e.from) && !dropped.has(e.to));
+  for (const [oid, g] of groups) {
+    const members = g.ids.map((c) => byId.get(c)!);
+    const parentNode = byId.get(g.parent)!;
+    nodes.push({
+      id: oid,
+      kind: members[0].kind,
+      members: members.flatMap((m) => m.members),
+      frontier: [],
+      overflow: {
+        parent: g.parent,
+        edgeKind: g.kind,
+        hidden: members,
+        beyond: beyond.get(oid) ?? 0,
+        moreNotLoaded: parentNode.frontier.some(
+          (f) => f.edge === g.kind && f.direction === (g.edges[0].from === g.parent ? "forward" : "reverse") && hasUnloaded(f),
+        ),
+      },
+    });
+    const outward = g.edges[0].from === g.parent;
+    const all = g.edges.flatMap((e) => e.members);
+    edges.push({
+      id: `${oid}=>edge`,
+      kind: g.kind,
+      from: outward ? g.parent : oid,
+      to: outward ? oid : g.parent,
+      members: all,
+      state: dominantRelState(all.map((m) => m.state ?? "current")),
+      crossesAccount: all.some((m) => m.crosses_account),
+      closesCycle: false,
+    });
+  }
+  return { nodes, edges };
+}
+
+/**
+ * Positions are keyed by drawn node. A group drawn for the first time takes
+ * the position one of its members already had, so forming a group never
+ * moves anything; a node with no position is left for `placeNewNodes`.
+ */
+export function resolveVisualPositions(nodes: VisualNode[], stored: Map<string, Position>): Map<string, Position> {
   const out = new Map<string, Position>();
   for (const v of nodes) {
-    const direct = raw.get(v.id);
+    const direct = stored.get(v.id);
     if (direct) {
       out.set(v.id, direct);
       continue;
     }
-    let best: Position | undefined;
+    if (v.overflow) continue;
     for (const m of v.members) {
-      const p = raw.get(m.ref);
-      if (p && (!best || p.y < best.y)) best = p;
+      const p = stored.get(m.ref);
+      if (p) {
+        out.set(v.id, p);
+        break;
+      }
     }
-    if (best) out.set(v.id, best);
   }
   return out;
 }
@@ -507,7 +674,7 @@ export interface RawPathsResult {
   boundByMax: boolean;
 }
 
-/** Per-node frontier entries, for rendering "may assume more roles — expand" etc. in the Paths list. */
+/** Per-node frontier entries: the Load controls in the Paths list and the inspector. */
 export function frontierByNode(state: ModelState): Map<GraphRef, GraphFrontier[]> {
   const out = new Map<GraphRef, GraphFrontier[]>();
   for (const f of state.frontierEntries.values()) {

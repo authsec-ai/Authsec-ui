@@ -13,7 +13,9 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
-import { IDENTITY_KIND_LABEL, accountLabel } from "../shared/labels";
+import { StatusBadge } from "@/components/console/status";
+
+import { IDENTITY_KIND_LABEL, accountWithId } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
@@ -48,7 +50,7 @@ export default function IdentityPage() {
     { key: "overview", label: "Overview", path: "" },
     { key: "used-by", label: i?.kind === "iam_group" ? "Members" : "Used by", path: "/used-by" },
     { key: "permissions", label: "Permissions", path: "/permissions" },
-    { key: "graph", label: "Graph", path: "/graph", gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
@@ -86,9 +88,10 @@ export default function IdentityPage() {
               name: i.name,
               description: [
                 IDENTITY_KIND_LABEL[i.kind],
-                i.account ? `${accountLabel(i.account)} (${i.account.id})` : accountLabel(i.account),
+                accountWithId(i.account) ?? "Account not known",
                 "global",
               ].join(" · "),
+              status: i.lifecycle === "retired" ? <StatusBadge tone="neutral">Not in the latest scan</StatusBadge> : undefined,
               publishedAt: meta?.published_at,
             }
           : undefined

@@ -22,6 +22,7 @@ export function ConsolePage({
   title,
   description,
   actions,
+  variant = "default",
   children,
 }: {
   title: ReactNode;
@@ -29,11 +30,16 @@ export function ConsolePage({
   description?: ReactNode;
   /** Right-aligned header actions (e.g. Docs + a primary Create button). */
   actions?: ReactNode;
+  /**
+   * `object`: one object's page — a compact header over tabs, so a
+   * full-height workspace tab (the identity graph) keeps its room.
+   */
+  variant?: "default" | "object";
   children: ReactNode;
 }) {
   return (
     <div data-cr>
-      <div className="console-page">
+      <div className={variant === "object" ? "console-page console-page--object" : "console-page"}>
         <header className="section-header">
           <div className="min-w-0">
             <h1 className="sh-title">{title}</h1>

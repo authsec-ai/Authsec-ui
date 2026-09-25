@@ -15,7 +15,9 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
-import { RUNTIME_LABEL, accountLabel } from "../shared/labels";
+import { StatusBadge } from "@/components/console/status";
+
+import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountWithId } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
@@ -47,7 +49,7 @@ export default function WorkloadPage() {
     { key: "overview", label: "Overview", path: "" },
     { key: "identities", label: "Identities", path: "/identities" },
     { key: "resources", label: "Resources", path: "/resources" },
-    { key: "graph", label: "Graph", path: "/graph", gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
@@ -90,9 +92,15 @@ export default function WorkloadPage() {
               name: w.name,
               description: [
                 RUNTIME_LABEL[w.runtime_kind],
-                w.account ? `${accountLabel(w.account)} (${w.account.id})` : accountLabel(w.account),
+                accountWithId(w.account) ?? "Account not known",
                 w.region ?? "Region not stated",
               ].join(" · "),
+              status:
+                w.lifecycle === "retired" ? (
+                  <StatusBadge tone="neutral">Not in the latest scan</StatusBadge>
+                ) : w.classification !== "unclassified" ? (
+                  <StatusBadge tone={CLASSIFICATION_TONE[w.classification]}>{CLASSIFICATION_LABEL[w.classification]}</StatusBadge>
+                ) : undefined,
               publishedAt: meta?.published_at,
             }
           : undefined

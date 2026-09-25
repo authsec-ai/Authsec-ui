@@ -1,0 +1,379 @@
+/**
+ * One claim's evidence — "why does the product show this, and what does it
+ * not establish?" (SPEC-iga-phase2-graph.md §2.14.7 *The Evidence panel*,
+ * §5.3 *Evidence*). Shared by the graph inspector and the page evidence
+ * panel, so a claim reads the same wherever it is opened.
+ *
+ * Order: the claim itself and what it does not establish; the labelled
+ * facts (relationship, source and target, policy and statement, actions,
+ * resource, conditions, evidence source, last confirmed); the limitations
+ * that qualify THIS claim, each expandable; the supporting records; the raw
+ * record behind an explicit disclosure. The one limitation true of every
+ * claim — effective access not evaluated — is stated once by the container,
+ * not repeated here.
+ *
+ * Missing is never "none", stale is never ended, and a declared grant is
+ * never presented as access that works.
+ */
+
+import { useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+
+import { igaGraphApi, useGetGraphEvidenceQuery, type Evidence, type EvidenceFact, type EvidenceLimitation, type GraphRef } from "@/app/api/igaGraphApi";
+import { useAppDispatch } from "@/app/hooks";
+import { StatusBadge } from "@/components/console/status";
+import { cn } from "@/lib/utils";
+
+import { classifyGraphError } from "../shared/graphErrors";
+import { REL_STATE_TONE, limitationText } from "../shared/labels";
+import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { GraphStatePanel } from "../shared/components/GraphStatePanel";
+import { Timestamp } from "../shared/components/Timestamp";
+
+/** The graph's own view of the claim, when it was opened from the canvas. */
+export interface ClaimContext {
+  relationship?: string;
+  source?: string;
+  target?: string;
+}
+
+/** Short names for limitation chips; the long text is `limitationText`. */
+const LIMITATION_SHORT: Record<EvidenceLimitation["code"], string> = {
+  effective_access_not_evaluated: "Effective access not evaluated",
+  conditions_not_evaluated: "Conditions not evaluated",
+  negated_statement: "Negated statement",
+  deny_statements_present: "Deny statements recorded",
+  permissions_boundary_present: "Permissions boundary recorded; not evaluated",
+  organizations_not_collected: "Organizations policies not collected",
+  resource_policy_not_projected: "Resource policy not combined",
+  resource_existence_not_verified: "Resource existence not confirmed",
+  selector_may_match_nothing: "Selector may match nothing",
+  account_not_connected: "Account not connected",
+  caller_permission_not_evaluated: "Caller's own permission not checked",
+  not_principal_unresolved: "NotPrincipal not resolved",
+  surface_stale: "Evidence stale",
+  surface_partial: "Relevant coverage partial",
+  surface_denied: "Relevant coverage missing",
+  activity_attempts_not_outcomes: "Activity shows attempts, not outcomes",
+};
+
+const WARN: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitation["code"]>([
+  "conditions_not_evaluated",
+  "negated_statement",
+  "deny_statements_present",
+  "permissions_boundary_present",
+  "not_principal_unresolved",
+  "surface_stale",
+  "surface_partial",
+  "surface_denied",
+  "account_not_connected",
+]);
+
+function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+  return (
+    <div className={cn("min-w-0", wide && "col-span-2")}>
+      <dt className="mb-0.5 text-[11px] font-medium text-(--color-text-muted)">{label}</dt>
+      <dd className="min-w-0 break-words text-[13px] text-(--color-text)">{children}</dd>
+    </div>
+  );
+}
+
+function Disclosure({ summary, children, defaultOpen = false }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  return (
+    <details className="group rounded-md border border-(--color-border-subtle)" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-xs font-medium text-(--color-text) outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
+        {summary}
+      </summary>
+      <div className="space-y-2 border-t border-(--color-border-subtle) px-3 py-2">{children}</div>
+    </details>
+  );
+}
+
+function listOf(v: unknown): string[] {
+  if (typeof v === "string") return [v];
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  return [];
+}
+
+/** Actions, resources and conditions as the statement itself states them. */
+function excerptFacts(facts: EvidenceFact[]) {
+  const ex = facts.find((f) => f.statement_excerpt && typeof f.statement_excerpt === "object")?.statement_excerpt as
+    | Record<string, unknown>
+    | undefined;
+  if (!ex) return null;
+  const actions = listOf(ex.Action);
+  const notActions = listOf(ex.NotAction);
+  const resources = listOf(ex.Resource);
+  const notResources = listOf(ex.NotResource);
+  const effect = typeof ex.Effect === "string" ? ex.Effect : null;
+  const condition = ex.Condition && typeof ex.Condition === "object" ? Object.keys(ex.Condition as object) : [];
+  return { actions, notActions, resources, notResources, effect, condition };
+}
+
+function Codes({ items, max = 6 }: { items: string[]; max?: number }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, max);
+  return (
+    <span className="flex flex-wrap gap-1">
+      {shown.map((a) => (
+        <code key={a} className="max-w-full break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-[11.5px]">
+          {a}
+        </code>
+      ))}
+      {items.length > max ? (
+        <button type="button" onClick={() => setAll((v) => !v)} className="text-[11.5px] font-medium text-(--color-primary-text) hover:underline">
+          {all ? "Show fewer" : `+${items.length - max} more`}
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
+function Limitations({ limitations }: { limitations: EvidenceLimitation[] }) {
+  const seen = new Set<string>();
+  const specific = limitations.filter((l) => {
+    if (l.code === "effective_access_not_evaluated" || seen.has(l.code)) return false;
+    seen.add(l.code);
+    return true;
+  });
+  if (!specific.length) return null;
+  return (
+    <section aria-label="What qualifies this claim" className="space-y-1.5">
+      {specific.map((l) => (
+        <details key={l.code} className="group text-xs">
+          <summary
+            className={cn(
+              "inline-flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 font-medium outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden",
+              WARN.has(l.code) ? "bg-(--color-warning-soft) text-(--color-warning-text)" : "bg-(--color-surface-subtle) text-(--color-text-muted)",
+            )}
+          >
+            <ChevronRight aria-hidden="true" className="size-3 transition-transform group-open:rotate-90" />
+            {LIMITATION_SHORT[l.code] ?? l.code.replace(/_/g, " ")}
+          </summary>
+          <p className="mt-1 pl-5 text-(--color-text-muted)">{limitationText(l)}</p>
+        </details>
+      ))}
+    </section>
+  );
+}
+
+export function EvidenceClaim({
+  ws,
+  claim,
+  context,
+  heading,
+}: {
+  ws: string;
+  claim: GraphRef;
+  context?: ClaimContext;
+  /** "Grant 2 of 3", when several independent claims are shown together. */
+  heading?: string;
+}) {
+  const { rev, epoch, refresh } = useGraphRevision(ws);
+  const [raw, setRaw] = useState(false);
+  const dispatch = useAppDispatch();
+  const args = { ws, rev, key: String(epoch), claim, include: raw ? ("raw" as const) : undefined };
+  const q = useGetGraphEvidenceQuery(args);
+  const failure = classifyGraphError(q.error);
+  useTrackRevision(ws, q.currentData, failure, (r, d) =>
+    dispatch(igaGraphApi.util.upsertQueryData("getGraphEvidence", { ...args, rev: r }, d)),
+  );
+  const e: Evidence | undefined = q.currentData?.data ?? (raw ? q.data?.data : undefined);
+
+  if (!e) {
+    if (failure?.kind === "not_found") {
+      // Say what did not survive; never silently close (§2.14.5, step 4).
+      return (
+        <p className="rounded-md border border-(--color-border-subtle) px-3 py-2 text-sm">
+          This claim is not in the graph at the revision you are viewing. It may have ended in a newer scan; the
+          object's Changes tab records when.
+        </p>
+      );
+    }
+    if (failure) return <GraphStatePanel failure={failure} subject="this evidence" onRetry={() => void q.refetch()} onRefresh={refresh} />;
+    return <div className="h-32 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading evidence" />;
+  }
+
+  const ex = excerptFacts(e.facts);
+  const withPolicy = e.facts.find((f) => f.policy || f.statement);
+  const sources = [...new Set(e.facts.map((f) => f.source_api).filter(Boolean))] as string[];
+  const lifecycle = e.status.lifecycle;
+
+  return (
+    <article className="space-y-4">
+      <header className="space-y-2">
+        {heading ? <p className="text-[11px] font-medium uppercase tracking-wider text-(--color-text-muted)">{heading}</p> : null}
+        <p className="text-sm font-medium leading-snug text-(--color-text)">{e.claim.sentence}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {e.status.basis ? <StatusBadge tone="neutral">{e.status.basis}</StatusBadge> : null}
+          {lifecycle !== "current" ? <StatusBadge tone={REL_STATE_TONE[lifecycle]}>{lifecycle}</StatusBadge> : null}
+          {e.status.collection !== "complete" ? (
+            <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge>
+          ) : null}
+          {ex?.effect ? (
+            // The provider's own effect, as written — not a decision.
+            <StatusBadge tone={ex.effect === "Deny" ? "warning" : "neutral"}>Effect: {ex.effect}</StatusBadge>
+          ) : null}
+        </div>
+        <Limitations limitations={e.limitations} />
+      </header>
+
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+        {context?.relationship ? <Field label="Relationship">{context.relationship}</Field> : null}
+        {context?.source || context?.target ? (
+          <Field label="Source → target">
+            {context.source ?? "—"} → {context.target ?? "—"}
+          </Field>
+        ) : null}
+        {withPolicy ? (
+          <Field label="Policy and statement" wide>
+            {withPolicy.policy?.name ?? "Policy"}
+            {withPolicy.statement
+              ? withPolicy.statement.sid
+                ? ` · Sid ${withPolicy.statement.sid}`
+                : withPolicy.statement.index != null
+                  ? ` · statement ${withPolicy.statement.index + 1}`
+                  : ""
+              : ""}
+            {withPolicy.policy_version ? <span className="text-(--color-text-muted)"> · {withPolicy.policy_version}</span> : null}
+          </Field>
+        ) : null}
+        {ex && (ex.actions.length || ex.notActions.length) ? (
+          <Field label={ex.notActions.length && !ex.actions.length ? "All actions except" : "Actions"} wide>
+            <Codes items={ex.actions.length ? ex.actions : ex.notActions} />
+          </Field>
+        ) : null}
+        {ex && (ex.resources.length || ex.notResources.length) ? (
+          <Field label={ex.notResources.length && !ex.resources.length ? "All resources except" : "Resource reference"} wide>
+            <Codes items={ex.resources.length ? ex.resources : ex.notResources} max={3} />
+          </Field>
+        ) : null}
+        {ex?.condition.length ? (
+          <Field label="Conditions" wide>
+            <span className="text-(--color-warning-text)">Recorded, not evaluated:</span> <Codes items={ex.condition} />
+          </Field>
+        ) : null}
+        <Field label="Evidence source">{sources.length ? sources.join(", ") : "not recorded"}</Field>
+        <Field label="Last confirmed">
+          <Timestamp iso={e.freshness.last_confirmed_at} />
+        </Field>
+        <Field label="First seen">
+          <Timestamp iso={e.freshness.first_seen_at} />
+        </Field>
+        {e.freshness.stale_since ? (
+          <Field label="Stale since">
+            <span className="text-(--color-warning-text)">
+              <Timestamp iso={e.freshness.stale_since} />
+            </span>
+          </Field>
+        ) : null}
+        {lifecycle === "ended" ? (
+          <Field label="Ended">
+            {e.freshness.valid_to ? <Timestamp iso={e.freshness.valid_to} /> : "Ended"}
+            {e.freshness.ended_reason ? ` · ${e.freshness.ended_reason.replace(/_/g, " ")}` : ""}
+          </Field>
+        ) : null}
+      </dl>
+
+      {e.facts.length ? (
+        <Disclosure summary={`Supporting records (${e.facts.length})`}>
+          <p className="text-[11px] text-(--color-text-muted)">
+            Each record is one collection of this fact — not a separate grant.
+          </p>
+          <ol className="space-y-2">
+            {e.facts.map((f, i) => (
+              <li key={i} className="space-y-1 rounded bg-(--color-surface-subtle) px-2.5 py-2 text-xs">
+                <p className="text-(--color-text)">{f.fact}</p>
+                <p className="break-all font-mono text-[11px] text-(--color-text-muted)">
+                  {[f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · ")}
+                </p>
+                {f.last_confirmed_at ? (
+                  <p className="text-(--color-text-muted)">
+                    Collected <Timestamp iso={f.last_confirmed_at} />
+                  </p>
+                ) : null}
+                {f.statement_excerpt ? (
+                  <details>
+                    <summary className="cursor-pointer text-[11px] font-medium text-(--color-primary-text)">Statement as written</summary>
+                    <pre className="mt-1 max-h-60 overflow-auto rounded bg-(--color-surface-raised) p-2 font-mono text-[11px]">
+                      {JSON.stringify(f.statement_excerpt, null, 2)}
+                    </pre>
+                  </details>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </Disclosure>
+      ) : (
+        <p className="text-xs text-(--color-text-muted)">No supporting record was returned for this claim.</p>
+      )}
+
+      <details
+        className="text-xs"
+        onToggle={(ev) => {
+          if ((ev.currentTarget as HTMLDetailsElement).open) setRaw(true);
+        }}
+      >
+        <summary className="cursor-pointer font-medium text-(--color-primary-text)">Raw record</summary>
+        {e.raw != null ? (
+          <pre className="mt-2 max-h-80 overflow-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
+            {JSON.stringify(e.raw, null, 2)}
+          </pre>
+        ) : raw && q.isFetching ? (
+          <p className="mt-2 text-(--color-text-muted)">Loading the stored observation…</p>
+        ) : raw && failure ? (
+          <GraphStatePanel failure={failure} subject="the raw record" onRetry={() => void q.refetch()} onRefresh={refresh} />
+        ) : raw ? (
+          <p className="mt-2 text-(--color-text-muted)">No raw record was returned for this claim.</p>
+        ) : null}
+      </details>
+    </article>
+  );
+}
+
+/**
+ * Several claims behind one line. Independent grants (two policies declaring
+ * the same thing) are each shown in full and said to be independent — never
+ * folded into a count, and never confused with several collection records
+ * of one grant.
+ */
+export function EvidenceClaims({
+  ws,
+  claims,
+  contextOf,
+  grants = false,
+}: {
+  ws: string;
+  claims: GraphRef[];
+  contextOf?: (claim: GraphRef) => ClaimContext | undefined;
+  /** The claims are grants: say "independent grants". */
+  grants?: boolean;
+}) {
+  const [one, many] = grants ? ["Grant", "independent grants"] : ["Relationship", "relationships"];
+  return (
+    <div className="space-y-6">
+      {claims.length > 1 ? (
+        <p className="text-xs text-(--color-text-muted)">
+          {grants
+            ? `${claims.length} ${many} declare this relationship. Each has its own evidence below.`
+            : `This line stands for ${claims.length} ${many}. Each has its own evidence below.`}
+        </p>
+      ) : null}
+      {claims.map((c, i) => (
+        <div key={`${ws}|${c}`} className={cn(i > 0 && "border-t border-(--color-border-subtle) pt-6")}>
+          <EvidenceClaim ws={ws} claim={c} context={contextOf?.(c)} heading={claims.length > 1 ? `${one} ${i + 1} of ${claims.length}` : undefined} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The one statement true of every claim, said once per panel. */
+export function DeclaredAccessNotice({ className }: { className?: string }) {
+  return (
+    <p className={cn("rounded-md bg-(--color-info-soft) px-3 py-2 text-xs text-(--color-info-text)", className)}>
+      Declared access. Whether a request would succeed has not been evaluated.
+    </p>
+  );
+}

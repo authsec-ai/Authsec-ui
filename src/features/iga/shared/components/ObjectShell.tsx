@@ -1,19 +1,22 @@
 /**
- * One object's page: its header, its tabs, and the answers that replace a
- * tab when there is nothing to render (SPEC-iga-phase2-graph.md §2.14.5).
+ * One object's page: its compact header, its tabs, and the answers that
+ * replace a tab when there is nothing to render (SPEC-iga-phase2-graph.md
+ * §2.14.5).
  *
+ * - The global breadcrumb names the object; the header is its name, one
+ *   metadata line, and a status badge only when one applies.
  * - Tabs are routes; a tab whose backend is not deployed is not offered.
- * - "Copy link" adds `from=<published_at>`, so a recipient is told when the
- *   graph has been rescanned since (the link never promises a revision).
+ *   The browser URL is the shareable link — investigation state and the
+ *   revision rules live in it, so there is no separate Copy link control.
+ * - A workspace tab (the graph) fills the page below the tabs and hosts
+ *   evidence in its own inspector; other tabs get the page evidence panel
+ *   beside their content, never beside the tab strip.
  * - A retired object still renders its Overview; its other tabs say they
  *   have no current data rather than rendering empty.
  */
 
 import type { ReactNode } from "react";
-import { Link2 } from "lucide-react";
-import { toast } from "react-hot-toast";
 
-import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
@@ -21,33 +24,15 @@ import type { GraphFailure } from "../graphErrors";
 import type { ActiveTab, TabRoute } from "../links";
 import { dayText } from "../labels";
 import { GraphStatePanel } from "./GraphStatePanel";
-import { IgaPage, type Crumb } from "./IgaPage";
+import { EvidenceLayout, IgaPage } from "./IgaPage";
 import { ObjectTabs, type ObjectTab } from "./ObjectTabs";
 
 export interface ObjectTabDef extends TabRoute {
   label: string;
   /** Path segment after the object's URL; "" for Overview. */
   path: string;
-}
-
-function CopyLink({ publishedAt }: { publishedAt?: string | null }) {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={async () => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("via");
-        if (publishedAt) url.searchParams.set("from", publishedAt);
-        try {
-          await navigator.clipboard.writeText(url.toString());
-          toast.success("Link copied");
-        } catch { toast.error("Could not copy the link. Copy the address from your browser."); }
-      }}
-    >
-      <Link2 className="size-4" /> Copy link
-    </Button>
-  );
+  /** Fills the page below the tabs and hosts evidence in its own inspector. */
+  workspace?: boolean;
 }
 
 export function ObjectShell({
@@ -64,7 +49,7 @@ export function ObjectShell({
   children,
 }: {
   ws: string;
-  listCrumb: Crumb;
+  listCrumb: { label: string; to: string };
   /** What the object is, for headers before it has loaded: "Identity". */
   kindLabel: string;
   /** The object's URL, e.g. `/iga/estate/<id>`. */
@@ -76,7 +61,10 @@ export function ObjectShell({
   onRefresh: () => void;
   object?: {
     name: string;
+    /** Type, account, region: one line of secondary metadata. */
     description?: ReactNode;
+    /** Classification or lifecycle, only when one applies. */
+    status?: ReactNode;
     publishedAt?: string | null;
     actions?: ReactNode;
   };
@@ -86,9 +74,6 @@ export function ObjectShell({
   const shown = tabs.filter((t) => !t.gated || t.available === true);
   const key = activeTab.state === "unknown" ? null : activeTab.key;
   const tab = tabs.find((t) => t.key === key);
-  const crumbs: Crumb[] = object
-    ? [listCrumb, ...(tab && tab.path ? [{ label: object.name, to: base }, { label: tab.label }] : [{ label: object.name }])]
-    : [listCrumb];
 
   const panel = (f: GraphFailure) => (
     <TableCard>
@@ -123,7 +108,9 @@ export function ObjectShell({
           active={activeTab.key}
         />
         {activeTab.state === "ready"
-          ? children
+          ? tab?.workspace
+            ? children
+            : <EvidenceLayout ws={ws}>{children}</EvidenceLayout>
           : activeTab.state === "pending"
             ? skeleton
             : (
@@ -139,18 +126,22 @@ export function ObjectShell({
   return (
     <IgaPage
       ws={ws}
-      title={object?.name ?? kindLabel}
-      description={object?.description}
-      actions={
-        object ? (
-          <>
-            {object.actions}
-            <CopyLink publishedAt={object.publishedAt} />
-          </>
-        ) : undefined
+      title={
+        object?.status ? (
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {object.name}
+            {object.status}
+          </span>
+        ) : (
+          object?.name ?? kindLabel
+        )
       }
-      crumbs={crumbs}
+      description={object?.description}
+      actions={object?.actions}
+      objectPage
+      objectCrumb={object ? { path: base, label: object.name, list: { label: listCrumb.label, href: listCrumb.to } } : undefined}
       publishedAt={object?.publishedAt}
+      pageEvidence={false}
     >
       {body}
     </IgaPage>

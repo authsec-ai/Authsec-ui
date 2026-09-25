@@ -1,104 +1,96 @@
 /**
- * The one custom edge type (SPEC-iga-phase2-graph.md §2.14.15 *Components*:
- * "Grouped-grants edge — a custom edge whose label is a button"). Every edge
- * uses it, grouped or not, because every edge must open evidence on
- * selection (§2.14.11 "every edge opens evidence") — a plain edge's label is
- * just a smaller, unbadged button.
+ * The one custom edge (SPEC-iga-phase2-graph.md §2.14.15 *Components*).
  *
- * Stale is dashed; a cycle-closing edge is marked "cycle"; an edge crossing
- * an account boundary is marked. Wording is exactly the four verbs
- * (`graphLabels.ts` `EDGE_LABEL`) plus the grouped count, never "can access".
+ * A subtle directed connector by default. Its words — the relationship verb
+ * from `EDGE_LABEL`, never "can access" — appear when the edge is selected,
+ * hovered, keyboard-focused or on a highlighted path, so a dense graph is
+ * not buried under repeated labels. What must stay visible stays visible as
+ * a compact marker at the midpoint: several independent grants (×N), a
+ * condition or other constraint that was recorded and not evaluated (!), a
+ * cycle (↻), a crossing into another account (⇄); stale and ended are the
+ * line's own dash. Every explanation is in the inspector.
+ *
+ * Every edge is selectable: the wide invisible stroke takes the pointer, and
+ * the midpoint button — a small dot when there is nothing to mark — is the
+ * keyboard's target and carries the full description as its name.
  */
 
 import { memo } from "react";
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 
 import { limitationText } from "../shared/labels";
-import { EDGE_LABEL, mixedStateText } from "./graphLabels";
+import { edgeVerb, markedLimitations, mixedStateText } from "./graphLabels";
 import type { VisualEdge } from "./types";
 
 export interface GraphEdgeData extends Record<string, unknown> {
   visual: VisualEdge;
   isSelected: boolean;
-  /** `target=<ref>` found this edge on a declared path (§2.14.11 *View in graph*). */
+  /** On a declared path the customer asked about (§2.14.11 *View in graph*). */
   highlighted: boolean;
+  hovered: boolean;
   reducedMotion: boolean;
   onSelect: (id: string) => void;
 }
 
 export type RFGraphEdge = Edge<GraphEdgeData, "graphEdge">;
 
-function GraphEdgeImpl({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-}: EdgeProps<RFGraphEdge>) {
+function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<RFGraphEdge>) {
   if (!data) return null;
   const { visual: e } = data;
-  const grouped = e.members.length > 1;
-
-  const [path, labelX, labelY] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 8,
-  });
+  const grants = e.members.length;
+  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, curvature: 0.3 });
 
   const stale = e.state === "stale";
   const ended = e.state === "ended";
-
-  // A single grant names its statement's policy directly; only a grouped
-  // one names the count instead (review item 16).
-  const label =
-    e.kind === "grant"
-      ? grouped
-        ? `granted by · ${e.members.length} statements`
-        : e.targetPolicy
-          ? `granted by ${e.targetPolicy}`
-          : EDGE_LABEL.grant
-      : EDGE_LABEL[e.kind];
-
-  // stale and ended are never conflated (review item 13).
   const mixed = mixedStateText(e.members.map((m) => m.state ?? "current"));
+  const marked = markedLimitations(e);
+  const showWords = data.isSelected || data.hovered || data.highlighted;
+  const hasMarks = grants > 1 || marked.length > 0 || e.closesCycle || e.crossesAccount;
 
-  const limitationNotes = [
-    ...new Set(e.members.flatMap((m) => (m.limitations ?? []).map((l) => limitationText(l)))),
-  ];
+  const stroke = data.isSelected
+    ? "var(--color-primary)"
+    : data.highlighted
+      ? "var(--color-text)"
+      : ended
+        ? "var(--color-text-subtle)"
+        : stale
+          ? "var(--color-warning-text)"
+          : data.hovered
+            ? "var(--color-text-muted)"
+            : "var(--color-border-strong)";
+
+  const description = [
+    edgeVerb(e),
+    grants > 1 ? (e.kind === "grant" ? `${grants} independent grants` : `${grants} relationships`) : null,
+    e.state !== "current" ? e.state : null,
+    mixed,
+    e.closesCycle ? "closes a cycle" : null,
+    e.crossesAccount ? "crosses into another account" : null,
+    ...marked.map(limitationText),
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <>
       <BaseEdge
         id={id}
         path={path}
+        markerEnd={markerEnd}
+        interactionWidth={18}
         style={{
-          strokeDasharray: stale || ended ? "6 4" : undefined,
-          stroke: data.isSelected
-            ? "var(--color-primary)"
-            : data.highlighted
-              ? "var(--color-success)"
-              : ended
-                ? "var(--color-text-subtle)"
-                : stale
-                  ? "var(--color-warning-text)"
-                  : "var(--color-border-strong)",
-          strokeWidth: data.isSelected || data.highlighted ? 2.5 : 1.5,
-          transition: data.reducedMotion ? undefined : "stroke 150ms, stroke-dasharray 150ms",
+          strokeDasharray: stale ? "6 4" : ended ? "2 4" : undefined,
+          stroke,
+          strokeWidth: data.isSelected || data.highlighted ? 2.25 : 1.25,
+          transition: data.reducedMotion ? undefined : "stroke 150ms",
         }}
       />
       <EdgeLabelRenderer>
         <div
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-          className="pointer-events-auto absolute"
+          className="nodrag nopan pointer-events-auto absolute"
         >
           <button
             type="button"
@@ -107,30 +99,24 @@ function GraphEdgeImpl({
               ev.stopPropagation();
               data.onSelect(id);
             }}
-            aria-label={`${label}${mixed ? `, ${mixed}` : ""}${e.closesCycle ? ", cycle" : ""}${e.crossesAccount ? ", crosses account" : ""}${limitationNotes.length ? `. ${limitationNotes.join(" ")}` : ""}`}
+            aria-label={description}
+            aria-pressed={data.isSelected}
+            title={description}
             className={cn(
-              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-sm",
-              "bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle)",
-              data.isSelected ? "border-(--color-primary) text-(--color-primary-text)" : "border-(--color-border-subtle)",
+              "group flex items-center gap-1 rounded-full text-[11px] font-medium outline-none",
+              "focus-visible:ring-2 focus-visible:ring-(--color-primary)",
+              showWords || hasMarks
+                ? "border bg-(--color-surface-raised) px-1.5 py-px shadow-(--shadow-xs)"
+                : "size-2.5 border border-(--color-border-strong) bg-(--color-surface-raised) hover:size-3 focus-visible:size-3",
+              data.isSelected ? "border-(--color-primary) text-(--color-primary-text)" : "border-(--color-border-subtle) text-(--color-text-muted)",
             )}
           >
-            <span>{label}</span>
-            {grouped ? (
-              <span className="rounded-full bg-(--color-info-soft) px-1.5 text-(--color-info-text)">
-                {e.members.length}
-              </span>
-            ) : null}
-            {e.closesCycle ? <span className="text-(--color-warning-text)">cycle</span> : null}
-            {e.crossesAccount ? <span className="text-(--color-info-text)">cross-account</span> : null}
+            {showWords ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
+            {grants > 1 ? <span className="tabular-nums">×{grants}</span> : null}
+            {marked.length ? <span className="text-(--color-warning-text)" aria-hidden="true">!</span> : null}
+            {e.closesCycle ? <span aria-hidden="true">↻</span> : null}
+            {e.crossesAccount ? <span className="text-(--color-info-text)" aria-hidden="true">⇄</span> : null}
           </button>
-          {mixed ? <p className="mt-0.5 text-center text-[10px] text-(--color-text-muted)">{mixed}</p> : null}
-          {limitationNotes.length ? (
-            // The worked example's fifth point: a coverage gap is a visibility
-            // change, never presented as if the relationship were removed.
-            <p className="mt-0.5 max-w-[220px] text-center text-[10px] text-(--color-warning-text)" title={limitationNotes.join(" ")}>
-              {limitationNotes[0]}
-            </p>
-          ) : null}
         </div>
       </EdgeLabelRenderer>
     </>
@@ -138,4 +124,3 @@ function GraphEdgeImpl({
 }
 
 export const GraphEdgeView = memo(GraphEdgeImpl);
-

@@ -1,6 +1,7 @@
 import { useLocation, Link } from "react-router-dom";
 import { ChevronRight, Home } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useBreadcrumbTailValue } from "./breadcrumbTail";
 
 interface BreadcrumbItem {
   label: string;
@@ -18,6 +19,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function Breadcrumb() {
   const location = useLocation();
+  const tail = useBreadcrumbTailValue();
 
   const getRouteSegments = (pathname: string): BreadcrumbItem[] => {
     const all = pathname.split("/").filter(Boolean);
@@ -130,6 +132,17 @@ export function Breadcrumb() {
   };
 
   const breadcrumbs = getRouteSegments(location.pathname);
+  // An object page names itself: its list becomes a link and the object's
+  // own name follows it. The active tab is not repeated — the tabs say it.
+  if (tail && (location.pathname === tail.path || location.pathname.startsWith(`${tail.path}/`))) {
+    const last = breadcrumbs[breadcrumbs.length - 1];
+    if (last && last !== breadcrumbs[0]) {
+      breadcrumbs[breadcrumbs.length - 1] = tail.list
+        ? { label: tail.list.label, href: tail.list.href }
+        : { ...last, href: tail.path.slice(0, tail.path.lastIndexOf("/")), current: false };
+    }
+    breadcrumbs.push({ label: tail.label, current: true });
+  }
 
   const isDashboard = location.pathname === "/" || location.pathname === "/dashboard";
 
