@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
 import { setupListeners } from "@reduxjs/toolkit/query";
 
 // Import API slices
@@ -27,7 +27,8 @@ import { deviceApi } from "./api/deviceApi"; // Device management (TOTP/CIBA)
 import uiSlice from "./slices/uiSlice";
 
 // Import auth slices from new location
-import authSlice from "../auth/slices/authSlice";
+import authSlice, { logout } from "../auth/slices/authSlice";
+import { resetGraphRevisions } from "../features/iga/shared/revision";
 import adminWebAuthnSlice from "../auth/slices/adminWebAuthnSlice";
 import oidcWebAuthnSlice from "../auth/slices/oidcWebAuthnSlice";
 
@@ -40,6 +41,29 @@ import oidcWebAuthnSlice from "../auth/slices/oidcWebAuthnSlice";
  * - Authentication state
  * - Development tools in dev mode
  */
+// Ending or switching a session resets the RTK Query cache and the identity graph's pinned
+// revisions. The backend takes the workspace from the token, so a cached
+// response carries no workspace of its own: without this, the next session on
+// the same origin could be served the previous workspace's data
+// (SPEC-iga-phase2-graph.md §2.14.14, cache isolation). A session ends by
+// signing out, or by `checkSession` finding it expired, which clears the
+// session without dispatching `logout`.
+function sessionIdentity(state: unknown): string {
+  const auth = (state as { auth: { isAuthenticated: boolean; jwtPayload?: { workspace_id?: string; user_id?: string; sub?: string }; user?: { id?: string } } }).auth;
+  if (!auth.isAuthenticated) return "signed-out";
+  return `${auth.jwtPayload?.workspace_id ?? ""}|${auth.jwtPayload?.user_id ?? auth.user?.id ?? auth.jwtPayload?.sub ?? ""}`;
+}
+const sessionListener = createListenerMiddleware();
+sessionListener.startListening({
+  predicate: (action, current, previous) =>
+    logout.match(action) ||
+    sessionIdentity(current) !== sessionIdentity(previous),
+  effect: (_action, api) => {
+    api.dispatch(baseApi.util.resetApiState());
+    resetGraphRevisions();
+  },
+});
+
 export const store = configureStore({
   reducer: {
     // RTK Query API slices - baseApi with injected endpoints
@@ -65,14 +89,16 @@ export const store = configureStore({
           "persist/REHYDRATE",
         ],
       },
-    }).concat(
-      // Add RTK Query middleware
-      baseApi.middleware, // Contains authApi, webauthnApi, and externalServiceApi endpoints
-      // Segregated authentication middleware
-      userAuthApi.middleware,
-      oidcApi.middleware,
-      deviceApi.middleware,
-    ),
+    })
+      .prepend(sessionListener.middleware)
+      .concat(
+        // Add RTK Query middleware
+        baseApi.middleware, // Contains authApi, webauthnApi, and externalServiceApi endpoints
+        // Segregated authentication middleware
+        userAuthApi.middleware,
+        oidcApi.middleware,
+        deviceApi.middleware,
+      ),
   devTools: process.env.NODE_ENV !== "production",
 });
 

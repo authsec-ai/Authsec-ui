@@ -220,6 +220,10 @@ export const baseApi = createApi({
     // identity inventory.
     "CloudObservation",
     "CloudScanRun",
+    // The AWS identity graph read API (igaGraphApi). One tag: every graph read
+    // is pinned to a published revision, so a refresh re-requests everything
+    // at the new revision rather than invalidating objects one by one.
+    "IgaGraph",
   ],
   endpoints: () => ({}),
 });

@@ -276,6 +276,22 @@ export default function DiscoveryIntegrationsPage() {
     };
   }, [searchParams, convertManifest, setSearchParams]);
 
+  // `?connector=<id>` opens that AWS account's drawer: the identity graph's
+  // pipeline and coverage notices link here ("View details", "Change
+  // regions"). Closing the drawer drops the parameter.
+  const linkedConnector = searchParams.get("connector");
+  useEffect(() => {
+    if (linkedConnector) setSelectedAwsConnectorId(linkedConnector);
+  }, [linkedConnector]);
+  const closeAwsDrawer = () => {
+    setSelectedAwsConnectorId(null);
+    if (searchParams.has("connector")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("connector");
+      setSearchParams(next, { replace: true });
+    }
+  };
+
   const permissionError = (err: unknown, fallback: string) =>
     toast.error(
       (err as { status?: number })?.status === 403
@@ -765,7 +781,7 @@ export default function DiscoveryIntegrationsPage() {
 
       <AWSConnectorDrawer
         connectorId={selectedAwsConnectorId}
-        onClose={() => setSelectedAwsConnectorId(null)}
+        onClose={closeAwsDrawer}
         onRevoked={() => void aws.refetch()}
       />
 

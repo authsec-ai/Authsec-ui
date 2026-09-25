@@ -14,11 +14,17 @@ interface BreadcrumbItem {
  * Automatically generates breadcrumbs based on current route
  * and provides navigation context for users
  */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function Breadcrumb() {
   const location = useLocation();
 
   const getRouteSegments = (pathname: string): BreadcrumbItem[] => {
-    const segments = pathname.split("/").filter(Boolean);
+    const all = pathname.split("/").filter(Boolean);
+    // An IGA object page names itself in its own breadcrumb, by the object's
+    // name; the header stops at its list rather than showing a raw id.
+    const objectAt = all[0] === "iga" ? all.findIndex((s) => UUID.test(s)) : -1;
+    const segments = objectAt > 0 ? all.slice(0, objectAt) : all;
     const breadcrumbs: BreadcrumbItem[] = [
       { label: "Dashboard", href: "/", current: pathname === "/" },
     ];
@@ -65,6 +71,15 @@ export function Breadcrumb() {
           label = "Permissions";
           break;
      
+        case "iga":
+          label = "IGA";
+          break;
+        case "external-principals":
+          label = "External principals";
+          break;
+        case "estate":
+          label = "Agents & workloads";
+          break;
         case "agents":
           label = "Agents Identities";
           break;
