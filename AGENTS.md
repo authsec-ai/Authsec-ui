@@ -1,8 +1,22 @@
 # Authsec-ui — Working Notes for AI Agents
 
-This file is the canonical orientation for Claude Code (and any other AI agent
-working in this repo). Read this before touching shadcn primitives, console
-screens, or anything that ships pixels.
+Read the [workspace instructions](../AGENTS.md) first. This file supplies the
+React/TypeScript console conventions for any assistant or engineer.
+
+## Current graph work
+
+The design entrypoint is
+[`SPEC-iga-phase2-graph.md`](../authsec/.claude/specs/SPEC-iga-phase2-graph.md).
+The goal is an end-to-end AWS scanning and graph experience; a fixture-backed
+screen is not evidence that its backend contract exists. Keep screen contracts,
+capability handling, authorization, workspace-scoped caching and publication
+consistency aligned with the backend.
+
+Preserve existing GitHub, Kubernetes and other product screens and behaviors.
+Do not remove unrelated navigation or substitute legacy endpoints just to make
+the AWS graph appear complete. Use the current `authsec-staging` working tree;
+preserve other people's changes. Reviews and prompt requests stay read-only
+unless the user asks for edits.
 
 ---
 
@@ -17,24 +31,14 @@ The `default` variant carries `bg-[var(--component-button-primary-bg)] text-whit
 and the `destructive` variant carries `bg-[var(--component-button-destructive-bg)]
 text-white`. Don't override those unless you know exactly what you're doing.
 
-### The trap: `size="sm"` used to strip the white
+### Arbitrary font sizes
 
-Until 2026-06-08, the `sm` and `lg` size variants used `text-[var(--font-size-sm)]`
-without a `length:` hint. `tailwind-merge` reads that as a `text-*` class and
-collides it with `text-white` from the color variant — and silently drops the
-white. The bug surfaced as `<Button size="sm">` rendering dark text on blue
-while `<Button>` (default size) rendered correctly.
-
-The size variants now use `text-[length:var(...)]` to disambiguate. **Do not
-revert that.** If you add new size variants or arbitrary text-size classes
-elsewhere, always use the `length:` hint:
+Use `text-[length:var(...)]` for arbitrary font sizes. Without the `length:`
+hint, `tailwind-merge` can treat the size as a text-color class and drop
+`text-white`. Preserve the existing size variants' hints:
 
 ```tsx
-// CORRECT
 className="text-[length:var(--font-size-sm)]"
-
-// WRONG — tailwind-merge will collide this with text-white
-className="text-[var(--font-size-sm)]"
 ```
 
 ### Belt-and-suspenders rule
@@ -80,10 +84,9 @@ rendered through `<Outlet>` in `ApplicationLayout` is **outside** that scope —
 so console-refresh utility classes (`.tabbar`, `.btn-primary`, `.drawer-head`,
 etc.) won't apply unless you wrap your subtree in `data-cr` yourself.
 
-The tab strip already sits inside `data-cr` from `ApplicationLayout`. Don't add
-an explicit `marginTop` to `.tabbar-wrap` — the header's `padding-bottom`
-already creates the right gap. (Doubling it produces a visibly loose tab strip;
-removed on 2026-06-08.)
+The tab strip sits inside `data-cr` from `ApplicationLayout`. Do not add
+an explicit `marginTop` to `.tabbar-wrap` when the header padding already
+provides the gap.
 
 ---
 
@@ -95,30 +98,35 @@ sit at the login wall. Verify with `npx tsc -p tsconfig.app.json --noEmit` and
 `npx eslint <file>`.
 
 > **Use `-p tsconfig.app.json`.** The root `tsconfig.json` is a solution file
-> with `"files": []`, so a bare `npx tsc --noEmit` type-checks **nothing** and
-> exits 0 on a broken tree. That is not a hypothetical: the project carries 198
-> pre-existing errors that a bare run reports as clean. A passing `vite build`
-> is not a substitute either — esbuild strips types without checking them.
->
-> To prove a change adds no errors, compare counts rather than eyeballing the
-> list: `npx tsc -p tsconfig.app.json --noEmit 2>&1 | grep -c "error TS"` before
-> and after. Note `wc -l` over-counts — a multi-line diagnostic is one error.
+> with `"files": []`; bare `npx tsc --noEmit` does not type-check the app. A
+> successful Vite build is not a substitute for TypeScript checking.
 
-When an operator supplies a valid token, `/dev/bypass` may be used for an
-authenticated local check. Use `https://app.authsec.ai` for the production UI;
-its API and OAuth issuer are both `https://prod.api.authsec.ai`.
+Capture the actual baseline before a code change and compare diagnostics by
+file, code and message afterwards. Error counts alone can hide a new failure
+replacing an old one. Do not assume a fixed number of pre-existing failures or
+raise CI thresholds to hide new diagnostics. Run applicable lint and the
+production build for application changes; verify authenticated behavior against
+an authorized backend when the task requires it.
+
+Documentation-only changes require reference and diff checks, not a dev server,
+application build, SDK change, commit or deployment. Never paste session tokens
+into documentation or logs. Deployment hosts and build configuration are in the
+release reference below.
 
 ## Production deployment
 
-The only active release path is the K3s procedure in
-[`../.claude/specs/SPEC-deployment-k3s.md`](../.claude/specs/SPEC-deployment-k3s.md).
+The production release procedure is documented in
+[`../authsec/.claude/specs/SPEC-deployment-k3s.md`](../authsec/.claude/specs/SPEC-deployment-k3s.md).
 
 - Production Deployment/container: `authsec-prod/prod-ui` / `prod-ui`.
 - Build the local working tree as an immutable `linux/amd64` image.
 - Set both `VITE_API_URL` and `VITE_OAUTH_BASE_URL` to
   `https://prod.api.authsec.ai` at build time.
 - Deploy only after the matching backend is healthy.
-- Pushing `authsec-staging` does not deploy the cluster.
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) declares push
+  deployment from `authsec-staging` and manual dispatch. A push may deploy;
+  workflow configuration alone does not prove its prerequisites are configured.
+  Apply the root approval and cutover restrictions.
 
 ---
 
@@ -172,12 +180,12 @@ text, empty-state, dialog heading, error message), check what the dominant
 security vendors call the same concept. Use that name. Do not invent product
 jargon where a standard term exists.**
 
-### Canonical term map for UI copy
+### Legacy-runtime term map for UI copy
 
 | Concept | ✅ Use this | ❌ Never use this |
 |---|---|---|
 | Non-human identity with client_id + secret for M2M | **Service Account** | "Workload" for credential-based M2M |
-| k8s pod / SPIFFE SVID identity | **Workload** | "Service Account" for k8s identities |
+| Running pod / SPIFFE workload identity | **Workload** | Conflating the runtime with its credential or service account |
 | Sidebar section covering both | **Workloads** only if the page clearly separates the two types with correct sub-labels | Unnamed mix |
 | OAuth registered application | **Client** or **Application** (consistent with Okta/Auth0) | custom names |
 | Token permission string | **Scope** | "Permission" at the OAuth UI layer |
@@ -185,32 +193,29 @@ jargon where a standard term exists.**
 | Organization boundary | **Workspace** | "Tenant" |
 | Cross-app agent delegation | **Agent** (product term) — explain as "acts on behalf of a user" | internal protocol names as UI copy |
 
-### Concrete example that triggered this rule (2026-06-22)
-
-The Workloads page conflates credential-based M2M identities (industry:
-**Service Accounts**) with SPIFFE/k8s pod identities (industry: **Workloads**)
-under one "Workloads" label. A developer registers a "Workload" to do M2M
-and gets confused because every AWS/GCP/Okta doc calls that a Service Account.
-The fix is not a one-off patch — it is a standing rule: when copying UI labels,
-always use the market term, then verify it against at least one of
-AWS IAM / GCP IAM / Okta / Auth0 docs before shipping.
+For IGA discovery, distinguish the running workload from the identity it uses.
+Keep provider-native object names: a Kubernetes ServiceAccount and a GCP service
+account are legitimate identity types. Do not apply the legacy M2M term map as a
+ban on those names or imply that every discovered workload is an AI agent. Use
+the graph spec's classification and evidence wording, and verify provider-specific
+claims when introducing them.
 
 ---
 
-## Mandatory steps after any edit
+## Completion checks
 
-**Run `/ship` before calling a task done.** It covers verification, SDK check, docs
-check, and commit in one place. Do not skip it.
+Use the applicable parts of [the ship checklist](../.claude/commands/ship.md),
+with the explicit app TypeScript command above. The checklist is not an
+instruction to commit or deploy a review or documentation change.
 
-Quick reminder of what `/ship` enforces:
-1. `npx tsc -p tsconfig.app.json --noEmit` — the error count must not rise
-   (a bare `npx tsc --noEmit` checks nothing; see the verification note above)
-2. SDK check — state explicitly whether a machine caller needs this (yes/no + one sentence why)
-3. Docs check — state explicitly whether `/docs` is needed (yes/no + one sentence why)
-4. Commit — stage only touched files; no `Co-Authored-By` lines; message describes the why
-
-If you used the Rescan/Refresh pattern or any existing mutation, confirm the RTK
-`invalidatesTags` chain is correct — the table must auto-refetch without a page reload.
+- For UI code: compare TypeScript diagnostics, lint affected files, build, and
+  verify changed interactions in the authorized authenticated environment.
+- State SDK/public-doc implications when the change affects those consumers.
+- Preserve unrelated changes; do not stage, commit or deploy unless the task
+  calls for it. `git push` requires explicit per-command approval.
+- For mutations, verify the RTK invalidation/refetch path. Graph publication
+  changes must follow the spec's explicit refresh rule rather than silently
+  combining data from different revisions. Preserve workspace isolation.
 
 ---
 

@@ -276,7 +276,11 @@ export function QuarantineAgentDialog({
     if (!agent || !reason.trim()) return;
     try {
       await quarantine({ id: agent.id, reason: reason.trim() }).unwrap();
-      toast.success(`${agent.display_name || agent.fingerprint} quarantined.`);
+      // A decision, not an outcome: it is enforced only where actuation is
+      // enabled, and the Enforcement queue shows whether it applied.
+      toast.success(
+        `Quarantine recorded for ${agent.display_name || agent.fingerprint}. It takes effect only in clusters with actuation enabled — the Enforcement queue shows whether it applied.`,
+      );
       onDone();
       setReason("");
       onOpenChange(false);

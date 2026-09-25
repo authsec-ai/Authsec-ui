@@ -163,6 +163,18 @@
   --color-chart-4: oklch(0.488 0.243 264.376);
   --color-chart-5: oklch(0.424 0.199 265.638);
 
+  /* Object categories — what KIND of thing a graph object is, never its
+     status. Used by the identity graph (cards, legend, selection card) and
+     anywhere an object's type is shown as colour. Always paired with an icon
+     and a type label; colour alone never carries the meaning. Status keeps
+     the success/warning/danger/info tokens. -accent is a border or icon,
+     -soft a tinted header, -text readable text on -soft. */
+  --color-object-workload-accent: #2f6fdb;   --color-object-workload-soft: #eaf1fd;   --color-object-workload-text: #1d4f9e;
+  --color-object-identity-accent: #7c4ddb;   --color-object-identity-soft: #f1ecfc;   --color-object-identity-text: #5530a8;
+  --color-object-resource-accent: #0f8f86;   --color-object-resource-soft: #e5f5f3;   --color-object-resource-text: #0b6b64;
+  --color-object-statement-accent: #64748b;  --color-object-statement-soft: #f1f4f8;  --color-object-statement-text: #475569;
+  --color-object-external-accent: #9a6b1f;   --color-object-external-soft: #fbf4e8;   --color-object-external-text: #7a5212;
+
   /* Console content width — single knob for how wide every console page runs.
      Was a hardcoded 1280px in two places (console-screens.css + the app
      console shell); widened so content breathes on large monitors instead of
@@ -376,6 +388,13 @@
   --color-chart-3: oklch(0.78 0.14 238);
   --color-chart-4: oklch(0.66 0.19 264);
   --color-chart-5: oklch(0.82 0.11 228);
+
+  /* Object categories (dark): same hues, lifted for contrast on dark cards. */
+  --color-object-workload-accent: #6ea2f5;   --color-object-workload-soft: rgba(110, 162, 245, 0.14);  --color-object-workload-text: #a9c8fb;
+  --color-object-identity-accent: #a784f0;   --color-object-identity-soft: rgba(167, 132, 240, 0.15);  --color-object-identity-text: #cbb6f7;
+  --color-object-resource-accent: #3cc2b7;   --color-object-resource-soft: rgba(60, 194, 183, 0.14);   --color-object-resource-text: #8fe0d9;
+  --color-object-statement-accent: #94a3b8;  --color-object-statement-soft: rgba(148, 163, 184, 0.13); --color-object-statement-text: #cbd5e1;
+  --color-object-external-accent: #d4a24f;   --color-object-external-soft: rgba(212, 162, 79, 0.14);   --color-object-external-text: #ecc98a;
 
   /* ── Console Refresh design tokens (dark) ───────────────────────────── */
   --color-success-soft: rgba(34, 197, 94, 0.16);

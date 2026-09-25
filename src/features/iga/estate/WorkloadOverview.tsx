@@ -6,7 +6,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { objectPath, refId, type WorkloadDetail } from "@/app/api/igaGraphApi";
+import { igaGraphApi, objectPath, refId, useGetGraphWorkloadIdentitiesQuery, type WorkloadDetail } from "@/app/api/igaGraphApi";
+import { useAppDispatch } from "@/app/hooks";
 import { CopyField, DetailGrid, DetailRow, DrawerSection } from "@/components/console/detail";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,9 @@ import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
 import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountLabel, agoText, dayText } from "../shared/labels";
+import { classifyGraphError } from "../shared/graphErrors";
 import { viaLink } from "../shared/links";
+import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClassificationHistory } from "../classification/ClassificationHistory";
 import { ClassifyDialog } from "../classification/ClassifyDialog";
 
@@ -68,6 +71,83 @@ function RunsAs({ w }: { w: WorkloadDetail }) {
     case "none":
       return <>No execution role configured</>;
   }
+}
+
+/**
+ * Which identities the workload uses, and for what. ECS has two and they are
+ * not equivalent: the TASK role is what the application runs as; the task
+ * EXECUTION role is used by the ECS agent to pull images and write logs, and
+ * its credentials are not available to the containers.
+ */
+function IdentitiesSummary({ ws, w }: { ws: string; w: WorkloadDetail }) {
+  const dispatch = useAppDispatch();
+  const { rev, epoch } = useGraphRevision(ws);
+  const args = { ws, rev, key: String(epoch), id: refId(w.ref) };
+  const q = useGetGraphWorkloadIdentitiesQuery(args, { skip: rev == null });
+  const failure = classifyGraphError(q.error);
+  useTrackRevision(ws, q.currentData, failure, (r, d) =>
+    dispatch(igaGraphApi.util.upsertQueryData("getGraphWorkloadIdentities", { ...args, rev: r }, d)),
+  );
+  const ecs = w.runtime_kind === "ecs_task_definition";
+  const other = q.currentData?.data.other;
+  const infra = (other?.items ?? []).filter((r) => r.type === "task_execution_role");
+  // Not asked yet (no graph revision), or asked and not answered: loading,
+  // never "none configured".
+  const pending = !failure && !q.currentData;
+  const from = { ref: w.ref, name: w.name };
+  return (
+    <DetailGrid>
+      <DetailRow
+        full
+        label={ecs ? "Application identity (task role)" : "Runs as"}
+        value={
+          <span className="flex flex-col gap-0.5">
+            <RunsAs w={w} />
+            {ecs ? <span className="text-xs text-(--color-text-muted)">What the application code in the task runs as.</span> : null}
+          </span>
+        }
+      />
+      {ecs ? (
+        <DetailRow
+          full
+          label="Supporting infrastructure (task execution role)"
+          value={
+            pending ? (
+              <span className="text-(--color-text-muted)">Loading…</span>
+            ) : failure ? (
+              <span className="text-(--color-text-muted)">
+                Could not load it.{" "}
+                <button type="button" onClick={() => void q.refetch()} className="font-medium text-(--color-primary-text) hover:underline">
+                  Retry
+                </button>
+              </span>
+            ) : infra.length ? (
+              <span className="flex flex-col gap-0.5">
+                {infra.map((r) => {
+                  const path = objectPath(r.identity.ref);
+                  return path ? (
+                    <Link key={r.claim} {...viaLink(path, from)} className="font-medium text-(--color-primary-text) hover:underline">
+                      {r.identity.name}
+                    </Link>
+                  ) : (
+                    <span key={r.claim} className="font-medium">{r.identity.name}</span>
+                  );
+                })}
+                {other?.next_cursor ? (
+                  <span className="text-xs text-(--color-text-muted)">More roles are linked than this page shows — open the graph to see them all.</span>
+                ) : null}
+                <span className="text-xs text-(--color-text-muted)">
+                  Used by the ECS agent to pull images and write logs. The application does not run as it.
+                </span>
+              </span>
+            ) : (
+              <span className="text-(--color-text-muted)">None configured, or not resolved to a role in a connected account.</span>
+            )
+          }
+        />
+      ) : null}
+    </DetailGrid>
+  );
 }
 
 export function WorkloadOverview({
@@ -152,7 +232,6 @@ export function WorkloadOverview({
                   <ClassificationHistory ws={ws} id={refId(w.ref)} />
                 </div>
               ) : null}
-              <DetailRow full label="Runs as" value={<RunsAs w={w} />} />
               {w.instances?.state === "not_collected" ? (
                 <DetailRow
                   full
@@ -164,8 +243,23 @@ export function WorkloadOverview({
                   }
                 />
               ) : null}
-              <CopyField label="ARN" value={w.arn} />
             </DetailGrid>
+          </DrawerSection>
+
+          <DrawerSection
+            label="Identities"
+            action={
+              <span className="flex gap-3">
+                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/graph`} className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+                  Open graph
+                </Link>
+                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/identities`} className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+                  All identities
+                </Link>
+              </span>
+            }
+          >
+            <IdentitiesSummary ws={ws} w={w} />
           </DrawerSection>
 
           <DrawerSection
@@ -177,6 +271,7 @@ export function WorkloadOverview({
             }
           >
             <DetailGrid>
+              <CopyField label="ARN" value={w.arn} />
               <DetailRow label="First seen" value={dayText(w.first_seen_at)} />
               <DetailRow
                 label="Last confirmed"

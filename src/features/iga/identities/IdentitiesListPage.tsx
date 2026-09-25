@@ -7,7 +7,6 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
 
 import {
   igaGraphApi,
@@ -26,6 +25,7 @@ import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
+import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
@@ -37,7 +37,7 @@ import {
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
-import { IDENTITY_KIND_LABEL, countText } from "../shared/labels";
+import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, countText } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, SortSelect } from "../shared/components/FacetSelect";
@@ -145,7 +145,7 @@ export default function IdentitiesListPage() {
     f.q && `search "${f.q}"`,
     ...accounts.map(nameOf),
     kind && IDENTITY_KIND_LABEL[kind],
-    usedBy && "run as by a workload",
+    usedBy && "bound to a workload",
   ].filter(Boolean) as string[];
 
   // Priority: the name (its kind in the context line), then account,
@@ -175,19 +175,19 @@ export default function IdentitiesListPage() {
       },
       {
         id: "used_by",
-        header: "Run as by",
-        label: "Direct workload bindings",
+        header: "Bindings",
+        label: DIRECT_BINDINGS_LABEL,
         priority: 2,
         approxWidth: 120,
         cardSummary: true,
         // Workloads configured to run as it — not every workload that
         // reaches it through another role.
         cell: ({ row }) => (
-          <span className="text-sm tabular-nums" title="Workloads configured to run as this identity directly">
+          <span className="text-sm tabular-nums" title={DIRECT_BINDINGS_MEANING}>
             {usedByText(row.original)}
           </span>
         ),
-        detail: (r) => (r.kind === "iam_group" ? "Groups are not run as" : `${usedByText(r)} configured to run as it directly`),
+        detail: (r) => (r.kind === "iam_group" ? "Groups are not run as" : `${usedByText(r)} — ${DIRECT_BINDINGS_MEANING}`),
       },
       {
         id: "confirmed",
@@ -236,8 +236,7 @@ export default function IdentitiesListPage() {
                   {
                     label: "Copy ARN",
                     onSelect: () => {
-                      void navigator.clipboard.writeText(row.original.arn);
-                      toast.success("ARN copied");
+                      void copyToClipboard(row.original.arn, "ARN");
                     },
                   },
                 ]}
@@ -253,7 +252,7 @@ export default function IdentitiesListPage() {
   const [columnsLayout, setColumnsLayout] = useState<AdaptiveColumnsLayout | undefined>();
   const applied: AppliedFilter[] = [
     ...accounts.map((a) => ({ key: `account:${a}`, label: `Account: ${nameOf(a)}`, onRemove: () => f.setMany("account", accounts.filter((x) => x !== a)) })),
-    ...(usedBy ? [{ key: "used_by", label: "Run as by a workload", onRemove: () => f.set("used_by", null) }] : []),
+    ...(usedBy ? [{ key: "used_by", label: "Bound to a workload", onRemove: () => f.set("used_by", null) }] : []),
   ];
 
   const kindFacet = facets?.kind;
@@ -297,7 +296,7 @@ export default function IdentitiesListPage() {
                   onCheckedChange={(on) => f.set("used_by", on ? "workloads" : null)}
                   aria-label="Only identities a workload runs as"
                 />
-                Only identities a workload runs as
+                Only identities bound to a workload
               </label>
             </>
           }

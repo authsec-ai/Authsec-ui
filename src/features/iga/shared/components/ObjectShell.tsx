@@ -22,6 +22,7 @@ import { TableCard } from "@/theme/components/cards";
 
 import type { GraphFailure } from "../graphErrors";
 import type { ActiveTab, TabRoute } from "../links";
+import { listHrefWithFilters } from "../useListFilters";
 import { dayText } from "../labels";
 import { GraphStatePanel } from "./GraphStatePanel";
 import { EvidenceLayout, IgaPage } from "./IgaPage";
@@ -139,7 +140,7 @@ export function ObjectShell({
       description={object?.description}
       actions={object?.actions}
       objectPage
-      objectCrumb={object ? { path: base, label: object.name, list: { label: listCrumb.label, href: listCrumb.to } } : undefined}
+      objectCrumb={object ? { path: base, label: object.name, list: { label: listCrumb.label, href: listHrefWithFilters(listCrumb.to) } } : undefined}
       publishedAt={object?.publishedAt}
       pageEvidence={false}
     >

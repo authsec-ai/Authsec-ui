@@ -1,27 +1,42 @@
 /**
- * Wording and layout vocabulary specific to the graph canvas
- * (SPEC-iga-phase2-graph.md §2.14.11 *Wording*).
+ * Wording specific to the graph canvas (SPEC-iga-phase2-graph.md §2.14.11
+ * *Wording*). Every relationship word describes configuration or a
+ * declaration — never "can access".
  *
- * Edge labels are ONLY "configured to run as", "may assume", "granted by",
- * "names" — never "can access", never "uses". `member_of` is structural
- * ("member of"), not a claim about access, so it is not one of the four.
+ * ECS has two roles and they are not equivalent: the TASK role is what the
+ * application code runs as ("runs as"); the task EXECUTION role is used by
+ * the ECS agent to pull images and write logs, and its credentials are not
+ * available to the containers ("ECS agent uses").
  */
 
 import type { EvidenceLimitation, GraphEdgeKind, GraphFrontier, GraphNodeKind, RelState } from "@/app/api/igaGraphApi";
 
 import { IDENTITY_KIND_LABEL, RESOURCE_KIND_LABEL } from "../shared/labels";
-import type { VisualEdge } from "./types";
+import type { VisualEdge, VisualEdgeKind } from "./types";
 
-export const EDGE_LABEL: Record<GraphEdgeKind, string> = {
-  executes_as: "configured to run as",
-  task_execution_role: "configured to run as",
+export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
+  executes_as: "runs as",
+  task_execution_role: "ECS agent uses",
   member_of: "member of",
   can_assume: "may assume",
-  grant: "granted by",
-  target: "names",
+  grant: "has statement",
+  target: "applies to",
+  // Overview only: identity → resource through a statement (see `summarize`).
+  declares: "declares",
 };
 
-const NOUN: Partial<Record<GraphEdgeKind, [string, string]>> = {
+/** What each relationship means, in one sentence's worth, for the legend and the selection card. */
+export const EDGE_MEANING: Record<VisualEdgeKind, string> = {
+  executes_as: "The workload is configured to run as this identity. For ECS this is the task role: what the application code runs as.",
+  task_execution_role: "ECS uses this role to start the task — pulling images, writing logs. The application does not run as it.",
+  member_of: "The user is a member of the group, so the group's policies apply to it.",
+  can_assume: "The role's trust policy names this principal. Whether the caller may call sts:AssumeRole was not checked.",
+  grant: "A policy attached to the identity contains this statement.",
+  target: "The statement lists this resource or pattern.",
+  declares: "A policy statement attached to the identity lists actions on this resource or pattern.",
+};
+
+const NOUN: Partial<Record<VisualEdgeKind, [string, string]>> = {
   executes_as: ["workload", "workloads"],
   task_execution_role: ["workload", "workloads"],
   member_of: ["group", "groups"],
@@ -45,8 +60,9 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
  */
 export function frontierLabel(f: GraphFrontier): string {
   const n = f.more.exact && f.more.count != null ? f.more.count : null;
-  const isUsedBy = f.direction === "reverse" && (f.edge === "executes_as" || f.edge === "task_execution_role");
-  if (isUsedBy) return n != null ? `Load ${n} ${noun(f.edge, n)} that run as it` : "Load workloads that run as it";
+  if (f.direction === "reverse" && f.edge === "executes_as") return n != null ? `Load ${n} ${noun(f.edge, n)} that run as it` : "Load workloads that run as it";
+  if (f.direction === "reverse" && f.edge === "task_execution_role")
+    return n != null ? `Load ${n} ECS ${noun(f.edge, n)} that use it for setup` : "Load ECS workloads that use it for setup";
   if (f.edge === "can_assume" && f.direction === "forward") return n != null ? `Load ${n} ${noun(f.edge, n)} it may assume` : "Load roles it may assume";
   if (f.edge === "can_assume") return n != null ? `Load ${n} that may assume it` : "Load what may assume it";
   return n != null ? `Load ${n} more ${noun(f.edge, n)}` : `Load more ${noun(f.edge, null)}`;
@@ -118,17 +134,35 @@ const MARKED: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitati
 export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
   const seen = new Set<string>();
   const out: EvidenceLimitation[] = [];
-  for (const m of e.members)
-    for (const l of m.limitations ?? [])
-      if (MARKED.has(l.code) && !seen.has(l.code)) {
-        seen.add(l.code);
-        out.push(l);
-      }
+  const all = [...e.members.flatMap((m) => m.limitations ?? []), ...(e.summary?.limitations ?? [])];
+  for (const l of all)
+    if (MARKED.has(l.code) && !seen.has(l.code)) {
+      seen.add(l.code);
+      out.push(l);
+    }
   return out;
 }
 
 export function edgeVerb(e: VisualEdge): string {
+  if (e.kind === "declares") {
+    // The actions the statements behind the line list, never "can access".
+    const actions = [...new Set((e.summary?.statements ?? []).flatMap((st) => st.members.map((m) => m.label)).filter(Boolean))];
+    const verb = e.summary?.effect === "deny" ? "denies" : e.summary?.effect === "mixed" ? "allows and denies" : "declares";
+    if (!actions.length) return verb;
+    const first = actions[0].length > 34 ? `${actions[0].slice(0, 33)}…` : actions[0];
+    return `${verb} ${first}${actions.length > 1 ? ` +${actions.length - 1}` : ""}`;
+  }
   if (e.kind === "grant" && e.members.length === 1 && (e.targetPolicy ?? e.members[0].policy))
     return `${EDGE_LABEL.grant} ${e.targetPolicy ?? e.members[0].policy}`;
   return EDGE_LABEL[e.kind];
+}
+
+/**
+ * How many independent claims a line stands for: statements behind a
+ * `declares` line (each statement's grant and target are one declaration),
+ * otherwise its members.
+ */
+export function independentCount(e: VisualEdge): number {
+  if (e.kind === "declares") return (e.summary?.statements ?? []).reduce((n, st) => n + st.members.length, 0);
+  return e.members.length;
 }

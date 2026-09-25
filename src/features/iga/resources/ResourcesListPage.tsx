@@ -10,7 +10,6 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
 
 import {
   igaGraphApi,
@@ -29,6 +28,7 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
+import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
@@ -270,8 +270,7 @@ export default function ResourcesListPage() {
                   {
                     label: "Copy reference",
                     onSelect: () => {
-                      void navigator.clipboard.writeText(row.original.text);
-                      toast.success("Reference copied");
+                      void copyToClipboard(row.original.text, "Reference");
                     },
                   },
                 ]}

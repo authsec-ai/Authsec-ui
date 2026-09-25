@@ -13,6 +13,7 @@
  * a destroyed agent look like it still needs a claim decision, which is wrong.
  */
 
+import { tableFailure } from "@/components/console/load-failure";
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { GitBranch } from "lucide-react";
@@ -183,7 +184,7 @@ export default function DiscoveredAgentsPage() {
   // and including it makes coverage look worse than the actionable reality.
   const [liveOnly, setLiveOnly] = useState(true);
 
-  const { data, isError, error, refetch } = useListDiscoveredAgentsQuery({
+  const { data, isLoading, error, refetch } = useListDiscoveredAgentsQuery({
     ...(filter === "all" ? {} : { status: filter }),
     ...(liveOnly ? { live: true } : {}),
   });
@@ -237,11 +238,9 @@ export default function DiscoveredAgentsPage() {
           const branch = nonDefaultBranch(row.original);
           return (
             <div className="max-w-[260px]">
-              <EntityCell
-                label={row.original.display_name || "Unnamed"}
-                detail={row.original.fingerprint}
-                monoDetail
-              />
+              {/* The fingerprint is an identifier, not something to read in a
+                  list: it is in the details and still matches the search. */}
+              <EntityCell label={row.original.display_name || "Unnamed"} />
               {/* Two rows for the same file on different branches are NOT a
                   duplicate — they are two different declarations — but they read
                   as one until the branch is on screen. Only non-default refs are
@@ -321,6 +320,8 @@ export default function DiscoveredAgentsPage() {
         id: "matched",
         header: "Matched identity",
         priority: 5,
+        // In the row's details unless the customer adds it as a column.
+        defaultHidden: true,
         approxWidth: 150,
         cell: ({ row }) => {
           const cid = row.original.matched_client_id;
@@ -426,21 +427,9 @@ export default function DiscoveredAgentsPage() {
 
   return (
     <ConsolePage
-      title="Discovered Agents"
-      description="Agent sightings from every discovery channel, deduped by fingerprint. Unmatched sightings that are still running need a decision: provision or quarantine."
+      title="Agent sightings"
+      description="Agents found in your repositories and clusters — one row per agent, however often it was seen. A running agent that matches no identity needs a decision: claim, provision or quarantine."
     >
-      {isError ? (
-        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load the inventory.</strong>{" "}
-          {(error as { status?: number })?.status === 403
-            ? "Your role is missing the discovery:read permission."
-            : "The discovery API returned an error."}{" "}
-          <button className="underline" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
-      ) : null}
-
       {coverage ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-md border px-4 py-3">
@@ -519,6 +508,17 @@ export default function DiscoveredAgentsPage() {
             enableExpansion={false}
             onRowClick={(a) => setSelected(a)}
             pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
+            sizing="fit"
+            cardsBelow={640}
+            loading={isLoading}
+            failure={tableFailure(error, "sightings", () => refetch(), "discovery:read")}
+            emptyState={
+              <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+                {filter !== "all" || liveOnly
+                  ? "No sightings match these filters. Clear them to see every sighting."
+                  : "No agents have been sighted yet. Connect a repository or cluster from Integrations and run a scan."}
+              </p>
+            }
           />
         </CardContent>
       </TableCard>
@@ -698,9 +698,15 @@ export default function DiscoveredAgentsPage() {
               </DrawerSection>
 
               <DrawerSection label="Source metadata">
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">
-                  {JSON.stringify(selected.metadata, null, 2)}
-                </pre>
+                {/* The raw record, for support: collapsed so it does not read as the finding. */}
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-medium text-(--color-primary-text) hover:underline">
+                    Show the raw record
+                  </summary>
+                  <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-[11px] leading-relaxed">
+                    {JSON.stringify(selected.metadata, null, 2)}
+                  </pre>
+                </details>
               </DrawerSection>
             </DrawerBody>
           </>

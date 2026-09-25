@@ -10,6 +10,7 @@ import {
   type ResponsiveTableConfig,
 } from "./responsive-data-table";
 import { ResponsiveTableProvider } from "./responsive-table";
+import { DataTableSkeleton } from "./table-skeleton";
 import { AdaptiveVisibleContext } from "./adaptive-table-context";
 
 type AdaptiveLayout = "minimal" | "compact" | "medium" | "standard" | "full";
@@ -22,7 +23,8 @@ export interface AdaptiveColumn<TData, TValue = unknown>
   /**
    * `sizing="fit"` only. The object's own column (its name and a way to
    * open it): never hidden, and it takes whatever width the other visible
-   * columns leave, down to `minWidth`.
+   * columns leave, down to `minWidth`. Without one marked, the first column
+   * that is not `actions` is it.
    */
   primary?: boolean;
   /** `sizing="fit"`: the least width the primary column may shrink to. Default 240. */
@@ -84,6 +86,16 @@ interface AdaptiveTableProps<TData> {
   onColumnsLayout?: (layout: AdaptiveColumnsLayout) => void;
   /** `sizing="fit"`: below this container width, rows become concise cards with expandable details. */
   cardsBelow?: number;
+  /**
+   * Loading, failed and empty are three different answers. Without these
+   * props a table says "No results." for all three; with them it shows a
+   * skeleton while loading, the failure with Retry (never an empty table),
+   * and `emptyState` only when the request succeeded with nothing.
+   */
+  loading?: boolean;
+  /** `onRetry` may return the refetch; Retry stays busy until it settles. */
+  failure?: { message: React.ReactNode; onRetry: () => unknown };
+  emptyState?: React.ReactNode;
 }
 
 const DEFAULT_COLUMN_WIDTH = 220;
@@ -127,6 +139,9 @@ export function AdaptiveTable<TData>({
   chosenColumns,
   onColumnsLayout,
   cardsBelow,
+  loading,
+  failure,
+  emptyState,
 }: AdaptiveTableProps<TData>) {
   const fit = sizing === "fit";
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -151,19 +166,26 @@ export function AdaptiveTable<TData>({
   }, []);
 
   const columnIds = React.useMemo(() => columns.map((column) => column.id), [columns]);
+  // The object's own column: the one marked `primary`, else the first that
+  // is not the actions menu — every consumer lists the object's name first.
+  const primaryId = React.useMemo(
+    () => columns.find((c) => c.primary)?.id ?? columns.find((c) => c.id !== "actions")?.id,
+    [columns]
+  );
+  const isPrimary = React.useCallback((c: AdaptiveColumn<TData>) => fit && c.id === primaryId, [fit, primaryId]);
 
   const alwaysVisibleColumns = React.useMemo(
-    () => columns.filter((column) => column.alwaysVisible || (fit && column.primary)),
-    [columns, fit]
+    () => columns.filter((column) => column.alwaysVisible || isPrimary(column)),
+    [columns, isPrimary]
   );
 
   const optionalColumns = React.useMemo(
     () =>
       columns
-        .filter((column) => !(column.alwaysVisible || (fit && column.primary)))
+        .filter((column) => !(column.alwaysVisible || isPrimary(column)))
         .filter((column) => !fit || (chosenColumns ? chosenColumns.includes(column.id) : !column.defaultHidden))
         .sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10)),
-    [columns, fit, chosenColumns]
+    [columns, fit, chosenColumns, isPrimary]
   );
 
   const visibleColumnSet = React.useMemo(() => {
@@ -175,7 +197,7 @@ export function AdaptiveTable<TData>({
 
     const reservedWidth = fit
       ? alwaysVisibleColumns.reduce(
-          (sum, column) => sum + (column.primary ? column.minWidth ?? PRIMARY_MIN_WIDTH : column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
+          (sum, column) => sum + (isPrimary(column) ? column.minWidth ?? PRIMARY_MIN_WIDTH : column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
           0
         ) + DETAILS_COLUMN_WIDTH
       : alwaysVisibleColumns.reduce(
@@ -207,13 +229,14 @@ export function AdaptiveTable<TData>({
     enableExpansion,
     renderExpandedRow,
     fit,
+    isPrimary,
   ]);
 
   // Everything a fitted row does not show is in its details: chosen fields
   // that did not fit, and the ones the customer has not chosen.
   const detailColumns = React.useMemo(
-    () => (fit ? columns.filter((c) => !visibleColumnSet.has(c.id) && c.id !== "actions" && !c.primary) : []),
-    [fit, columns, visibleColumnSet]
+    () => (fit ? columns.filter((c) => !visibleColumnSet.has(c.id) && c.id !== "actions" && !isPrimary(c)) : []),
+    [fit, columns, visibleColumnSet, isPrimary]
   );
   const hasDetails = fit && detailColumns.length > 0;
 
@@ -289,9 +312,9 @@ export function AdaptiveTable<TData>({
   const columnWidths = React.useMemo(() => {
     if (!fit) return undefined;
     const out: Record<string, number | undefined> = {};
-    for (const c of columns) out[c.id] = c.primary ? undefined : c.approxWidth ?? DEFAULT_COLUMN_WIDTH;
+    for (const c of columns) out[c.id] = isPrimary(c) ? undefined : c.approxWidth ?? DEFAULT_COLUMN_WIDTH;
     return out;
-  }, [fit, columns]);
+  }, [fit, columns, isPrimary]);
 
   const tableConfig: ResponsiveTableConfig<TData> = React.useMemo(
     () => ({
@@ -324,6 +347,7 @@ export function AdaptiveTable<TData>({
       // A fitted row's click is the caller's (usually: open the object);
       // its details open from their own button.
       expandOnRowClick: fit ? !onRowClick : true,
+      emptyState,
     }),
     [
       data,
@@ -351,6 +375,7 @@ export function AdaptiveTable<TData>({
       hasDetails,
       renderDetails,
       columnWidths,
+      emptyState,
     ]
   );
 
@@ -363,10 +388,20 @@ export function AdaptiveTable<TData>({
     >
       <AdaptiveVisibleContext.Provider value={fit ? (cards ? CARD_SHOWN : visibleColumnSet) : null}>
         <div ref={containerRef} className="w-full min-w-0">
-          {cards ? (
+          {loading ? (
+            <div className="p-4" aria-busy="true" aria-label="Loading">
+              <DataTableSkeleton columns={Math.min(columns.length, 6)} rows={5} showSelection={false} showActions={false} />
+            </div>
+          ) : failure ? (
+            <FailureRow message={failure.message} onRetry={failure.onRetry} />
+          ) : cards && !allCellsTable.getRowModel().rows.length ? (
+            // A narrow container still says why it is empty.
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyState ?? "No results."}</div>
+          ) : cards ? (
             <AdaptiveCards
               rows={allCellsTable.getRowModel().rows}
               columns={columns}
+              primaryId={primaryId}
               renderField={renderField}
               onRowClick={onRowClick}
             />
@@ -385,16 +420,18 @@ const CARD_SHOWN: ReadonlySet<string> = new Set<string>();
 function AdaptiveCards<TData>({
   rows,
   columns,
+  primaryId,
   renderField,
   onRowClick,
 }: {
   rows: Row<TData>[];
   columns: AdaptiveColumn<TData>[];
+  primaryId?: string;
   renderField: (rowId: string, column: AdaptiveColumn<TData>) => React.ReactNode;
   onRowClick?: (row: TData) => void;
 }) {
   const [open, setOpen] = React.useState<Set<string>>(new Set());
-  const primary = columns.find((c) => c.primary) ?? columns[0];
+  const primary = columns.find((c) => c.id === primaryId) ?? columns[0];
   const actions = columns.find((c) => c.id === "actions");
   const summary = columns.filter((c) => c.cardSummary && c !== primary);
   const rest = columns.filter((c) => c !== primary && c !== actions && !c.cardSummary);
@@ -464,5 +501,22 @@ function AdaptiveCards<TData>({
         );
       })}
     </ul>
+  );
+}
+
+function FailureRow({ message, onRetry }: { message: React.ReactNode; onRetry: () => unknown }) {
+  // RTK Query keeps the error while a retry is in flight: show the retry is running.
+  const [busy, setBusy] = React.useState(false);
+  const retry = () => {
+    setBusy(true);
+    void Promise.resolve(onRetry()).finally(() => setBusy(false));
+  };
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm">
+      <span className="text-(--color-danger-text)">{message}</span>
+      <button type="button" onClick={retry} disabled={busy} className="font-semibold text-(--color-primary-text) hover:underline disabled:opacity-60">
+        {busy ? "Retrying…" : "Retry"}
+      </button>
+    </div>
   );
 }

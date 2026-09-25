@@ -1,16 +1,18 @@
 /**
- * The graph card (SPEC-iga-phase2-graph.md §2.14.11 *The worked example*,
- * §2.14.15 *Components*). One component for every kind — the kinds differ in
- * icon and a few lines, not in shape.
+ * The graph card (SPEC-iga-phase2-graph.md §2.14.11, §2.14.15 *Components*).
+ * One component for every kind — the kinds differ by category, icon and a
+ * few lines, not by shape.
  *
- * It draws exactly what `describeNode` says, at exactly the size `nodeSize`
- * returns, every line clamped to one row: the layout and the card never
- * disagree about how tall a card is. Full identifiers, every indicator's
- * explanation and any further expansions are in the inspector.
+ * A tinted header says what the object IS (category colour from the
+ * `--color-object-*` tokens, an icon and explicit type text — colour is
+ * never the only signal); the neutral body names it and gives one line of
+ * context, at most two indicators and one Load control. It is drawn at
+ * exactly `nodeSize`, every line clamped to one row.
  *
- * Keyboard: Enter selects, Shift+Enter opens the object's page, `+`/`-`
- * expand and collapse the card's own frontier (arrow-key traversal is one
- * level up, in `GraphCanvas`, since it needs the whole graph).
+ * Pointer: React Flow owns click and drag on the card (`GraphCanvas`), so
+ * a drag moves it and never selects it; the card's own buttons are `nodrag`
+ * and handle their clicks. Keyboard: Enter or Space selects, Shift+Enter
+ * opens the object's page, `+`/`-` load and collapse.
  */
 
 import { memo, type KeyboardEvent, type MouseEvent } from "react";
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { frontierAriaLabel, frontierLabel } from "./graphLabels";
 import { NODE_ICON } from "./icons";
 import { nodeAriaLabel, type NodeDescription } from "./nodeView";
-import { frontierKey, type FrontierControl, type VisualNode } from "./types";
+import type { FrontierControl, VisualNode } from "./types";
 
 export type { FrontierControl };
 
@@ -51,8 +53,6 @@ const TONE_CLASS = {
   info: "bg-(--color-info-soft) text-(--color-info-text)",
 } as const;
 
-/** Chips drawn on the card; the rest are summarised as "+N" (all are in the inspector). */
-const MAX_CHIPS = 3;
 
 function FrontierRow({
   frontier,
@@ -78,7 +78,7 @@ function FrontierRow({
     fn();
   };
   const { expanded, pending } = control;
-  const row = "flex h-5 items-center gap-2 truncate text-[11.5px]";
+  const row = "nodrag flex h-5 items-center gap-2 truncate text-xs";
   const link = "truncate font-medium hover:underline";
 
   if (!expanded) {
@@ -131,11 +131,20 @@ function FrontierRow({
   );
 }
 
-function GraphNodeViewImpl({ data, id, width, height }: NodeProps<RFGraphNode>) {
+const CATEGORY_CLASS: Record<NodeDescription["category"], { header: string; icon: string }> = {
+  workload: { header: "bg-(--color-object-workload-soft) text-(--color-object-workload-text)", icon: "text-(--color-object-workload-accent)" },
+  identity: { header: "bg-(--color-object-identity-soft) text-(--color-object-identity-text)", icon: "text-(--color-object-identity-accent)" },
+  resource: { header: "bg-(--color-object-resource-soft) text-(--color-object-resource-text)", icon: "text-(--color-object-resource-accent)" },
+  statement: { header: "bg-(--color-object-statement-soft) text-(--color-object-statement-text)", icon: "text-(--color-object-statement-accent)" },
+  external: { header: "bg-(--color-object-external-soft) text-(--color-object-external-text)", icon: "text-(--color-object-external-accent)" },
+};
+
+function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGraphNode>) {
   const { visual: v, description: d } = data;
   const first = v.members[0];
   const Icon = NODE_ICON[d.icon];
-  const external = v.kind === "external_principal" || v.kind === "external";
+  const cat = CATEGORY_CLASS[d.category];
+  const dashed = d.category === "external" || !!v.overflow;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // A key press from a nested control (Retry, Collapse) is that control's.
@@ -161,9 +170,6 @@ function GraphNodeViewImpl({ data, id, width, height }: NodeProps<RFGraphNode>) 
     }
   };
 
-  const chips = d.indicators.slice(0, MAX_CHIPS);
-  const extraChips = d.indicators.length - chips.length;
-
   return (
     <div
       data-node-id={id}
@@ -171,70 +177,63 @@ function GraphNodeViewImpl({ data, id, width, height }: NodeProps<RFGraphNode>) 
       role="button"
       aria-label={`${nodeAriaLabel(d)}${data.isRoot ? ", starting object" : ""}`}
       aria-pressed={data.isSelected}
-      onClick={() => data.onSelect(id)}
-      onDoubleClick={() => data.onOpen(first.ref)}
       onKeyDown={onKeyDown}
       style={{ width, height }}
       className={cn(
-        "flex flex-col overflow-hidden rounded-lg border bg-(--color-surface-raised) px-3 py-2.5 text-left outline-none",
+        "flex flex-col overflow-hidden rounded-lg border bg-(--color-surface-raised) text-left outline-none",
         "focus-visible:ring-2 focus-visible:ring-(--color-primary) focus-visible:ring-offset-2",
-        data.reducedMotion ? "" : "transition-[border-color,box-shadow] duration-150",
+        dragging ? "cursor-grabbing shadow-(--shadow-sm)" : "cursor-pointer",
+        data.reducedMotion || dragging ? "" : "transition-[border-color,box-shadow] duration-150",
         data.isSelected
-          ? "border-(--color-primary) shadow-[0_0_0_1px_var(--color-primary)]"
+          ? "border-(--color-primary) shadow-[0_0_0_2px_var(--color-primary)]"
           : "border-(--color-border-subtle) shadow-(--shadow-xs) hover:border-(--color-border-strong)",
-        data.isRoot && !data.isSelected && "border-(--color-text-muted)",
-        (external || v.overflow) && "border-dashed",
-        v.overflow && "bg-(--color-surface-subtle)",
+        dashed && !data.isSelected && "border-dashed border-(--color-border-strong)",
       )}
     >
-      <Handle type="target" position={Position.Left} className="!size-1.5 !border-0 !bg-(--color-border-strong)" isConnectable={false} />
-      <Handle type="source" position={Position.Right} className="!size-1.5 !border-0 !bg-(--color-border-strong)" isConnectable={false} />
+      {/* Invisible anchors for the lines: nothing can be drawn from them. */}
+      <Handle type="target" position={Position.Left} isConnectable={false} className="!pointer-events-none !opacity-0" />
+      <Handle type="source" position={Position.Right} isConnectable={false} className="!pointer-events-none !opacity-0" />
 
-      <p className="flex h-5 items-center gap-1.5">
-        <Icon aria-hidden="true" className="size-3.5 shrink-0 text-(--color-text-muted)" />
-        <span className="min-w-0 truncate text-[13px] font-semibold text-(--color-text)" title={d.title}>
-          {d.title}
+      <p className={cn("flex h-6 shrink-0 items-center gap-1.5 px-3 text-[11px] font-semibold", cat.header)}>
+        <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", cat.icon)} />
+        <span className="min-w-0 truncate" title={d.type}>
+          {d.type}
         </span>
+        {data.isRoot ? <span className="ml-auto shrink-0 font-medium opacity-80">start</span> : null}
       </p>
-      <p className="h-4 truncate text-[11.5px] leading-4 text-(--color-text-muted)" title={d.type}>
-        {d.type}
-      </p>
-      {d.context ? (
-        <p className="h-4 truncate text-[11.5px] leading-4 text-(--color-text-muted)" title={d.context}>
-          {d.context}
+      <div className="flex min-h-0 flex-1 flex-col px-3 pt-1.5 pb-2">
+        <p className="h-5 truncate text-[13px] font-semibold leading-5 text-(--color-text)" title={d.title}>
+          {d.title}
         </p>
-      ) : null}
-      {d.indicators.length ? (
-        <p className="mt-1.5 flex h-4 items-center gap-1 overflow-hidden">
-          {chips.map((c) => (
-            <span key={c.key} title={c.long} className={cn("shrink-0 truncate rounded px-1.5 text-[10.5px] leading-4 font-medium", TONE_CLASS[c.tone])}>
-              {c.text}
-            </span>
-          ))}
-          {extraChips > 0 ? <span className="shrink-0 text-[10.5px] text-(--color-text-muted)">+{extraChips}</span> : null}
-        </p>
-      ) : null}
-      {d.frontier.length || d.frontierHidden ? (
-        <div className="mt-1">
-          {d.frontier.map((f) => (
-            <FrontierRow
-              key={frontierKey(f)}
-              frontier={f}
-              control={data.stateOf(f)}
-              canLoadMore={data.canLoadMore(f)}
-              onExpand={() => data.onExpand(f)}
-              onLoadMore={() => data.onLoadMore(f)}
-              onCollapse={() => data.onCollapse(f)}
-              onRefresh={data.onRefresh}
-            />
-          ))}
-          {d.frontierHidden ? (
-            <span className="flex h-5 items-center text-[11.5px] text-(--color-text-muted)">
-              +{d.frontierHidden} more to load — select the card
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+        {d.context ? (
+          <p className="h-4 truncate text-xs leading-4 text-(--color-text-muted)" title={d.context}>
+            {d.context}
+          </p>
+        ) : null}
+        {d.indicators.length ? (
+          <p className="mt-1 flex h-4 items-center gap-1 overflow-hidden">
+            {d.indicators.map((c) => (
+              <span key={c.key} title={c.long} className={cn("shrink-0 truncate rounded px-1.5 text-[11px] leading-4 font-medium", TONE_CLASS[c.tone])}>
+                {c.text}
+              </span>
+            ))}
+          </p>
+        ) : null}
+        {d.frontier.length ? (
+          <FrontierRow
+            frontier={d.frontier[0]}
+            control={data.stateOf(d.frontier[0])}
+            canLoadMore={data.canLoadMore(d.frontier[0])}
+            onExpand={() => data.onExpand(d.frontier[0])}
+            onLoadMore={() => data.onLoadMore(d.frontier[0])}
+            onCollapse={() => data.onCollapse(d.frontier[0])}
+            onRefresh={data.onRefresh}
+          />
+        ) : d.frontierHidden ? (
+          <span className="flex h-5 items-center text-xs text-(--color-text-muted)">More to load — select</span>
+        ) : null}
+        {d.frontier.length && d.frontierHidden ? <span className="sr-only">{d.frontierHidden} more to load in the selection card</span> : null}
+      </div>
     </div>
   );
 }

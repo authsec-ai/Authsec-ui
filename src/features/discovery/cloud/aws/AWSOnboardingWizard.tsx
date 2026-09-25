@@ -493,8 +493,8 @@ export function AWSOnboardingWizard({
               </p>
               {scanStarted ? (
                 <p className="text-xs text-(--color-success-text)">
-                  Scan started — it runs in the background. Track progress from this account's row
-                  in the connectors list.
+                  Scan queued — it runs in the background. Open this account from the Integrations
+                  list to follow it.
                 </p>
               ) : (
                 <Button

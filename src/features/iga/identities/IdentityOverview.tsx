@@ -8,7 +8,7 @@ import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
-import { IDENTITY_KIND_LABEL, accountLabel, agoText, countText, dayText } from "../shared/labels";
+import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, accountWithId, agoText, countText, dayText } from "../shared/labels";
 
 
 export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) {
@@ -42,21 +42,21 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
               <DetailRow
                 label="Account"
                 value={
-                  <>
-                    {accountLabel(i.account)}
-                    {i.account ? <span className="ml-1 font-mono text-xs text-(--color-text-muted)">{i.account.id}</span> : null}
-                  </>
+                  accountWithId(i.account) ?? "Not known"
                 }
               />
               {attrs.path ? <DetailRow label="Path" value={attrs.path} mono /> : null}
               <DetailRow
-                label="Run as by"
+                label={DIRECT_BINDINGS_LABEL}
                 value={
-                  i.kind === "iam_group"
-                    ? "Groups are not run as"
-                    : i.used_by_count.value === 0
-                      ? "No workload is configured to run as it"
-                      : countText(i.used_by_count, "workload", "workloads")
+                  i.kind === "iam_group" ? (
+                    "Groups are not run as"
+                  ) : (
+                    <span title={DIRECT_BINDINGS_MEANING}>
+                      {i.used_by_count.value === 0 ? "None" : countText(i.used_by_count, "workload", "workloads")}
+                      <span className="block text-xs text-(--color-text-muted)">{DIRECT_BINDINGS_MEANING}</span>
+                    </span>
+                  )
                 }
               />
               <CopyField label="ARN" value={i.arn} />

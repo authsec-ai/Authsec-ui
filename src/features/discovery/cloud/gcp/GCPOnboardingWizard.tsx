@@ -54,6 +54,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { copyToClipboard } from "@/lib/clipboard";
 import { Check, ChevronDown, Copy, Terminal } from "lucide-react";
 
 import { GoogleProjectPicker } from "./GoogleProjectPicker";
@@ -326,7 +327,8 @@ function RunSetupSection({ code }: { code: string }) {
   const [fallbackCopied, setFallbackCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const copyToClipboard = () => void navigator.clipboard.writeText(code);
+  // Says "copied" only once the browser accepted it; a failure toasts how to recover.
+  const copyCommand = () => copyToClipboard(code, "Command", { toastSuccess: false });
 
   return (
     <div className="space-y-2">
@@ -335,10 +337,13 @@ function RunSetupSection({ code }: { code: string }) {
       <Button
         className="flex w-full items-center justify-center gap-2 text-[length:var(--text-sm)] text-white"
         onClick={() => {
-          copyToClipboard();
-          setCloudShellJustCopied(true);
-          window.setTimeout(() => setCloudShellJustCopied(false), 4000);
+          // Opened synchronously, so the browser treats it as the click's own window.
           window.open(CLOUD_SHELL_URL, "_blank", "noopener,noreferrer");
+          void copyCommand().then((ok) => {
+            if (!ok) return;
+            setCloudShellJustCopied(true);
+            window.setTimeout(() => setCloudShellJustCopied(false), 4000);
+          });
         }}
       >
         <Terminal className="size-4" />
@@ -355,9 +360,11 @@ function RunSetupSection({ code }: { code: string }) {
         <button
           type="button"
           onClick={() => {
-            copyToClipboard();
-            setFallbackCopied(true);
-            window.setTimeout(() => setFallbackCopied(false), 1600);
+            void copyCommand().then((ok) => {
+              if (!ok) return;
+              setFallbackCopied(true);
+              window.setTimeout(() => setFallbackCopied(false), 1600);
+            });
           }}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
         >

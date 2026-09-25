@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { LayoutGrid, LocateFixed, Maximize2 } from "lucide-react";
+import { Expand, LayoutGrid, Maximize2, Minimize, Search } from "lucide-react";
 
 import {
   igaGraphApi,
@@ -39,6 +39,7 @@ import {
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import { viaLink } from "../shared/links";
@@ -48,15 +49,16 @@ import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { classifyGraphError } from "../shared/graphErrors";
 import { graphSessionGeneration, useGraphRevision, useTrackRevision } from "../shared/revision";
 import { GraphCanvas, type CanvasApi } from "./GraphCanvas";
-import { GraphInspector, type InspectorActions, type InspectorSubject } from "./GraphInspector";
+import { GraphInspector } from "./GraphInspector";
+import { edgeVerb } from "./graphLabels";
 import { Legend } from "./Legend";
 import { computeLayout, placeNewNodes, rectsOverlap, terminateLayoutWorker, type Position, type Size } from "./layout";
 import {
   buildVisual,
   boundVisual,
   discloseVisual,
-  displayedModel,
   rememberGraphModel,
+  summarizeStatements,
   canLoadMoreOf,
   enumerateRawPaths,
   expandStateOf,
@@ -69,8 +71,10 @@ import {
 } from "./model";
 import { describeNode, nodeSize, type NodeDescription } from "./nodeView";
 import { PathsList } from "./PathsList";
+import { readSavedLayout, writeSavedLayout } from "./savedLayout";
+import { SelectionCard, type SelectionActions, type SelectionSubject } from "./SelectionCard";
 import { useWorkspaceSize } from "./useWorkspaceSize";
-import { anchorOf, frontierKey, type FrontierKey, type GraphSelection } from "./types";
+import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -89,6 +93,19 @@ const INSPECTOR_MIN = 360;
 const INSPECTOR_MAX = 420;
 
 type GraphTabProps = { ws: string; root: GraphRef; rootName: string };
+
+/**
+ * The claims that name a line in `edge=`: a drawn relationship's first
+ * claim, or — for an Overview `declares` line — one of its statements'
+ * grant and that statement's target, which together belong to it alone.
+ */
+function lineKey(e: VisualEdge): GraphRef[] {
+  if (e.kind !== "declares") return [e.members[0].claim];
+  const target = e.members.find((m) => m.kind === "target");
+  const grant = e.members.find((m) => m.kind === "grant" && m.to === target?.from);
+  return grant && target ? [grant.claim, target.claim] : [e.members[0].claim];
+}
+
 export default function GraphTab(props: GraphTabProps) {
   const [params] = useSearchParams();
   const direction = refType(props.root) === "resource" ? "reverse" : params.get("direction") === "reverse" && refType(props.root) === "identity" ? "reverse" : "forward";
@@ -428,7 +445,26 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
   /* ------------------------------- derived view ------------------------------ */
 
+  // The view: Overview (statements summarised into `declares` lines, the
+  // default), Detailed (every statement drawn) or Paths. `as=canvas` from an
+  // older link means Overview.
+  const asParam = params.get("as");
+  const view: "overview" | "detailed" | "paths" =
+    asParam === "paths" || (narrow && !asParam) ? "paths" : asParam === "detailed" ? "detailed" : "overview";
+  const showPaths = view === "paths";
+  const setView = (mode: "overview" | "detailed" | "paths") => {
+    const next = new URLSearchParams(params);
+    next.set("as", mode);
+    setParams(next, { replace: true, state: location.state });
+  };
+
   const nodeParam = params.get("node");
+  // `edge=` names a line by its claims: one claim for a drawn relationship;
+  // a statement's grant and target for an Overview `declares` line, since a
+  // grant is shared by every line of that statement and a target by every
+  // holder of it.
+  const edgeParam = params.get("edge");
+  const edgeClaims = useMemo(() => (edgeParam ? (edgeParam.split(",") as GraphRef[]) : []), [edgeParam]);
   const selectedClaims = evidence.claims;
   const selectedClaimsKey = selectedClaims.join(",");
   const tracedPath = model.tracedPath;
@@ -450,19 +486,19 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const keep = useMemo(() => {
     const set = new Set(pathRefs);
     if (nodeParam) set.add(nodeParam as GraphRef);
-    for (const claim of selectedClaimsKey ? (selectedClaimsKey.split(",") as GraphRef[]) : []) {
-      const e = model.edges.get(claim);
+    for (const claim of [...edgeClaims, ...(selectedClaimsKey ? (selectedClaimsKey.split(",") as GraphRef[]) : [])]) {
+      const e = claim ? model.edges.get(claim) : undefined;
       if (e) {
         set.add(e.from);
         set.add(e.to);
       }
     }
     return set;
-  }, [pathRefs, nodeParam, selectedClaimsKey, model.edges]);
+  }, [pathRefs, nodeParam, edgeClaims, selectedClaimsKey, model.edges]);
 
   const revealedWorkloads = model.revealedWorkloads;
   // Keyed on the fields the view is built from — not the whole model, which
-  // also changes on every pan (the saved viewport).
+  // also changes on every pan (the saved viewport) and every drag.
   const { nodes: mNodes, edges: mEdges, nodeOwners, edgeOwners, frontierEntries, expanded: mExpanded, cursors: mCursors, loading: mLoading, failed: mFailed } = model;
   const grouped = useMemo(() => {
     const ungrouped = new Set([...revealedWorkloads, ...pathRefs]);
@@ -470,6 +506,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     // modelRef.current is the model of this render; its view fields are the deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mNodes, mEdges, nodeOwners, edgeOwners, frontierEntries, model.root, revealedWorkloads, pathRefs]);
+  // Only Overview summarises; Paths lists and selects the claims themselves.
+  const projected = useMemo(() => (view === "overview" ? summarizeStatements(grouped) : grouped), [grouped, view]);
   // A folded branch says whether its parent still has relationships of that
   // kind the server has not sent: not loaded yet, or loaded with pages left.
   const hasUnloaded = useCallback(
@@ -481,11 +519,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   );
   // The canvas: bounded, with large loaded branches folded.
   const visual = useMemo(
-    () => boundVisual(discloseVisual(grouped, root, model.revealedBranches, keep, hasUnloaded), root, keep),
-    [grouped, root, model.revealedBranches, keep, hasUnloaded],
+    () => boundVisual(discloseVisual(projected, root, model.revealedBranches, keep, hasUnloaded), root, keep),
+    [projected, root, model.revealedBranches, keep, hasUnloaded],
   );
-  // Paths lists everything loaded (bounded, never folded).
-  const listed = useMemo(() => boundVisual(grouped, root, keep), [grouped, root, keep]);
   const frontierMap = useMemo(
     () => frontierByNode(modelRef.current),
     // frontierByNode reads only the frontier entries.
@@ -506,13 +542,23 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     return { descriptions, sizes };
   }, [visual.nodes, rootAccountId]);
 
+  // Find in the loaded graph: matches by name among what is loaded (never
+  // the whole estate), and says so.
+  const [find, setFind] = useState("");
+  const findMatches = useMemo(() => {
+    const q = find.trim().toLowerCase();
+    if (q.length < 2) return null;
+    return visual.nodes.filter((v) => (descriptions.get(v.id)?.title ?? "").toLowerCase().includes(q) || v.members.some((m) => m.label.toLowerCase().includes(q)));
+  }, [find, visual.nodes, descriptions]);
+
   const traced = useMemo(() => new Set(tracedPath ?? []), [tracedPath]);
   const highlightedNodeIds = useMemo(() => {
-    if (!highlighted && !traced.size) return undefined;
+    if (!highlighted && !traced.size && !findMatches) return undefined;
     const set = new Set<string>();
     for (const vn of visual.nodes) if (vn.members.some((m) => highlighted?.nodeRefs.has(m.ref) || pathRefs.has(m.ref))) set.add(vn.id);
+    for (const vn of findMatches ?? []) set.add(vn.id);
     return set;
-  }, [highlighted, traced, pathRefs, visual.nodes]);
+  }, [highlighted, traced, pathRefs, visual.nodes, findMatches]);
   const highlightedEdgeIds = useMemo(() => {
     if (!highlighted && !traced.size) return undefined;
     const set = new Set<string>();
@@ -522,12 +568,30 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
   /* ------------------------------ layout & placement ------------------------- */
 
+  // Positions the customer set on an earlier visit to this graph.
+  useEffect(() => {
+    if (!model.root || model.generationKey !== currentKey || model.manualPositions.size) return;
+    const saved = readSavedLayout(ws, root, direction);
+    if (saved.size) dispatchModel({ type: "seed-manual", positions: saved });
+    // Once per investigation (and again after a refresh reset the model).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.root, model.generationKey, currentKey]);
+  const manualPositions = model.manualPositions;
+  const savedOnce = useRef(false);
+  useEffect(() => {
+    // Nothing to write until the customer has moved something or reset.
+    if (!savedOnce.current && !manualPositions.size) return;
+    savedOnce.current = true;
+    writeSavedLayout(ws, root, direction, manualPositions);
+  }, [manualPositions, ws, root, direction]);
+
   // What is drawn now, and what was drawn last render: a node shown again
   // keeps its old place only if nothing drawn meanwhile has taken it.
   const stored = useMemo(() => resolveVisualPositions(visual.nodes, model.positions), [visual.nodes, model.positions]);
   // Sizes as last drawn: a card shown again, or one that grew in place (a
   // group gaining a member, a new Load row), keeps its place only if it
-  // still fits there; otherwise it alone is placed again.
+  // still fits there; otherwise it alone is placed again. A position the
+  // customer set is always kept.
   const lastDrawnRef = useRef<Map<string, number>>(new Map());
   const placement = useMemo(() => {
     if (!model.laidOut) return stored;
@@ -535,7 +599,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     const usable = new Map(stored);
     const last = lastDrawnRef.current;
     if (last.size) {
-      const settled = (id: string) => last.get(id) === sizes.get(id)?.height;
+      const settled = (id: string) => last.get(id) === sizes.get(id)?.height || manualPositions.has(id);
       for (const n of drawn) {
         if (settled(n.id) || !usable.has(n.id)) continue;
         const p = usable.get(n.id)!;
@@ -549,7 +613,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       if (p) out.set(n.id, p);
     }
     return out;
-  }, [model.laidOut, visual.nodes, visual.edges, sizes, stored]);
+  }, [model.laidOut, visual.nodes, visual.edges, sizes, stored, manualPositions]);
   useEffect(() => {
     lastDrawnRef.current = new Map(visual.nodes.map((v) => [v.id, sizes.get(v.id)?.height ?? 0]));
   }, [visual.nodes, sizes]);
@@ -563,9 +627,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     if (fresh.size) dispatchModel({ type: "positions", positions: fresh });
   }, [placement, model.laidOut, model.positions, dispatchModel]);
 
-  // ELK: the first view of this graph, and Arrange. A result for a layout
-  // that has since been superseded — a newer Arrange, another root,
-  // workspace or publication — is dropped.
+  // ELK: the first view of this graph, a refresh, and Reset layout. A result
+  // for a layout that has since been superseded — a newer reset, another
+  // root, workspace or publication — is dropped.
   const [revealToken, setRevealToken] = useState(0);
   const layoutRun = useRef(0);
   const layoutSig = model.laidOut || !rootReadyForLayout(model, currentKey)
@@ -591,9 +655,13 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutSig]);
 
-  const arrange = useCallback(() => {
-    pendingAnnounceRef.current = "Graph arranged";
-    dispatchModel({ type: "relayout" });
+  const resetLayout = useCallback(() => {
+    pendingAnnounceRef.current = "Layout reset. Restore previous layout undoes it.";
+    dispatchModel({ type: "reset-layout" });
+  }, [dispatchModel]);
+  const restoreLayout = useCallback(() => {
+    dispatchModel({ type: "restore-layout" });
+    announce("Previous layout restored");
   }, [dispatchModel]);
 
   /* -------------------------------- selection -------------------------------- */
@@ -610,8 +678,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     }
   }, []);
 
-  // Where focus goes back to when the inspector closes: the card, line or
-  // list item the selection was made from.
+  // Where focus goes back to when the card or panel closes: the card, line
+  // or list item the selection was made from.
   const originRef = useRef<HTMLElement | null>(null);
   const noteOrigin = () => {
     const active = document.activeElement;
@@ -629,78 +697,108 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     });
   };
 
-  const evidenceEdge = selectedClaims.length
-    ? visual.edges.find((e) => selectedClaims.every((c) => e.members.some((m) => m.claim === c))) ??
-      visual.edges.find((e) => e.members.some((m) => m.claim === selectedClaims[0]))
-    : undefined;
-  const nodeVisual = nodeParam
+  // The selected line: by one of its claims (`edge=`), or — for evidence
+  // opened straight from a link — by the evidence's claims. A statement
+  // selected in Detailed is its `declares` line in Overview, so switching
+  // views keeps the selection.
+  const edgeOf = (claims: GraphRef[]) => {
+    if (!claims.length) return undefined;
+    const lines = visual.edges.filter((e) => claims.every((c) => e.members.some((m) => m.claim === c)));
+    // The narrowest line that holds them all.
+    return lines.sort((a, b) => a.members.length - b.members.length)[0];
+  };
+  const nodeVisualDirect = nodeParam
     ? visual.nodes.find((v) => v.id === nodeParam) ?? visual.nodes.find((v) => v.members.some((m) => m.ref === nodeParam))
     : undefined;
-  const selectionKind = evidenceEdge ? "edge" : nodeVisual ? "node" : null;
-  const selectionId = evidenceEdge?.id ?? nodeVisual?.id ?? null;
+  const statementLine = !nodeVisualDirect && nodeParam
+    ? visual.edges.find((e) => e.summary?.statements.some((st) => st.id === nodeParam || st.members.some((m) => m.ref === nodeParam)))
+    : undefined;
+  const selectedEdge = edgeOf(edgeClaims) ?? statementLine ?? (nodeParam || edgeParam ? undefined : edgeOf(selectedClaims));
+  // An Overview line opened in Detailed: its statement, which Detailed draws.
+  const lineStatement =
+    !selectedEdge && !nodeVisualDirect && edgeClaims.length > 1
+      ? visual.nodes.find((v) => v.members.some((m) => m.ref === model.edges.get(edgeClaims[edgeClaims.length - 1])?.from))
+      : undefined;
+  const nodeVisual = selectedEdge ? undefined : nodeVisualDirect ?? lineStatement;
+  const selectionKind = selectedEdge ? "edge" : nodeVisual ? "node" : null;
+  const selectionId = selectedEdge?.id ?? nodeVisual?.id ?? null;
   const selection = useMemo<GraphSelection | null>(
     () => (selectionKind && selectionId ? { kind: selectionKind, id: selectionId } : null),
     [selectionKind, selectionId],
   );
-  const subject: InspectorSubject | null = selectedClaims.length
-    ? { kind: "evidence", claims: selectedClaims, edge: evidenceEdge, fromNode: evidenceEdge ? undefined : nodeVisual }
-    : nodeVisual
-      ? { kind: "node", visual: nodeVisual }
-      : null;
+  const card: SelectionSubject | null = selectedEdge ? { kind: "edge", edge: selectedEdge } : nodeVisual ? { kind: "node", visual: nodeVisual } : null;
+  const evidenceOpen = selectedClaims.length > 0;
 
-  const selectNode = useCallback(
-    (id: string) => {
+  const clearMark = () => withoutMark(location.state as Record<string, unknown> | null);
+  const select = useCallback(
+    (param: "node" | "edge", value: string) => {
       noteOrigin();
       const next = new URLSearchParams(params);
-      next.set("node", id);
+      next.delete("node");
+      next.delete("edge");
       next.delete("evidence");
-      setParams(next, { replace: true, state: withoutMark(location.state as Record<string, unknown> | null) });
+      next.set(param, value);
+      setParams(next, { replace: true, state: clearMark() });
+    },
+    // noteOrigin/clearMark read refs and location only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params, setParams, location.state],
+  );
+  const selectNode = useCallback(
+    (id: string) => {
+      select("node", id);
       const vn = visual.nodes.find((v) => v.id === id);
       if (vn) announce(`Selected ${descriptions.get(vn.id)?.title ?? vn.members[0].label}`);
     },
-    [params, setParams, location.state, visual.nodes, descriptions],
+    [select, visual.nodes, descriptions],
   );
-
-  const openEvidence = useCallback(
-    (claims: GraphRef[], fromNode = false) => {
-      noteOrigin();
-      // The inspector is one panel: opening evidence while it shows a card
-      // replaces the entry, so Close never walks back to that card.
-      evidence.open(claims, { drop: fromNode ? [] : ["node"], within: ["node"] });
-    },
-    [evidence],
-  );
-
   const selectEdge = useCallback(
     (id: string) => {
       const ve = visual.edges.find((e) => e.id === id);
       if (!ve) return;
       // The line into a folded branch stands for every hidden relationship:
-      // select the branch (its inspector lists them) rather than open all
-      // their evidence at once — which would also unfold the branch.
+      // select the branch (its card lists them) rather than unfold it.
       const folded = visual.nodes.find((n) => n.overflow && (n.id === ve.to || n.id === ve.from));
       if (folded) selectNode(folded.id);
-      else openEvidence(ve.members.map((m) => m.claim));
+      else {
+        select("edge", lineKey(ve).join(","));
+        announce(`Selected ${edgeVerb(ve)}`);
+      }
     },
-    [visual.edges, visual.nodes, openEvidence, selectNode],
+    [visual.edges, visual.nodes, select, selectNode],
+  );
+  const openEvidence = useCallback(
+    (claims: GraphRef[]) => {
+      // The evidence panel replaces the card; the selection stays, so Back
+      // returns to it. One layer at a time.
+      evidence.open(claims, { within: ["node", "edge"] });
+    },
+    [evidence],
   );
 
-  // One close per history entry: Escape can reach both the drawer and the
+  // One close per history entry: Escape can reach both a drawer and the
   // canvas, and a second `navigate(-1)` would leave the page.
   const closedAt = useRef<string | null>(null);
-  const closeInspector = useCallback(() => {
+  const clearAll = useCallback(() => {
     if (closedAt.current === location.key) return;
     closedAt.current = location.key;
     const fallback = selection ? (selection.kind === "node" ? `[data-node-id="${CSS.escape(selection.id)}"]` : `[data-edge-id="${CSS.escape(selection.id)}"]`) : null;
-    if (evidence.isOpen && !nodeParam) evidence.close();
-    else if (params.has("node") || params.has("evidence")) {
+    if (evidence.isOpen && !nodeParam && !edgeParam) evidence.close();
+    else if (params.has("node") || params.has("edge") || params.has("evidence")) {
       const next = new URLSearchParams(params);
       next.delete("evidence");
       next.delete("node");
-      setParams(next, { replace: true, state: withoutMark(location.state as Record<string, unknown> | null) });
+      next.delete("edge");
+      setParams(next, { replace: true, state: clearMark() });
     }
     focusOrigin(fallback);
-  }, [selection, evidence, nodeParam, params, setParams, location.state, location.key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection, evidence, nodeParam, edgeParam, params, setParams, location.state, location.key]);
+  // Escape steps back one layer: evidence → card → nothing.
+  const backFromEvidence = useCallback(() => {
+    if (nodeParam || edgeParam) evidence.close();
+    else clearAll();
+  }, [nodeParam, edgeParam, evidence, clearAll]);
 
   const openRef = useCallback(
     (ref: GraphRef) => {
@@ -741,28 +839,22 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     [mCursors],
   );
 
-  /* ------------------------------ paths toggle -------------------------------- */
+  /* ---------------------------------- Paths ---------------------------------- */
 
-  const asParam = params.get("as");
-  const showPaths = asParam === "paths" || (narrow && asParam !== "canvas");
+  // Paths lists EVERYTHING loaded — never only what the canvas has room to
+  // draw — and says where its own listing stopped.
   const rawPathsResult = useMemo(
-    () => (showPaths ? enumerateRawPaths(displayedModel(modelRef.current, listed), root, direction) : { paths: [], boundByMax: false }),
+    () => (showPaths ? enumerateRawPaths(modelRef.current, root, direction) : { paths: [], boundByMax: false, depthLimited: false }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [showPaths, listed, root, direction, nodeOwners, edgeOwners],
+    [showPaths, root, direction, nodeOwners, edgeOwners],
   );
-  const setAs = (mode: "canvas" | "paths") => {
-    const next = new URLSearchParams(params);
-    next.set("as", mode);
-    setParams(next, { replace: true, state: location.state });
-  };
   // Tracing a path from Paths: switch to the canvas, and once the traced
-  // objects are drawn (unfolded if they were in a folded branch), pan to its
-  // first step.
+  // objects are drawn (unfolded if they were folded), pan to its first step.
   const pendingTrace = useRef<GraphRef[] | null>(null);
   const trace = (claims: GraphRef[]) => {
     dispatchModel({ type: "trace", claims });
     pendingTrace.current = claims;
-    setAs("canvas");
+    setView("detailed");
     announce("Showing the path on the canvas");
   };
   useEffect(() => {
@@ -777,7 +869,18 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     else pendingView.current = { kind: "edge", id: edge.id };
   }, [visual.edges, showPaths]);
 
-  /* ------------------------------ workspace size ------------------------------ */
+  /* --------------------------- workspace and fullscreen ----------------------- */
+
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const on = () => setFullscreen(document.fullscreenElement === workspaceRef.current);
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void workspaceRef.current?.requestFullscreen?.().catch(() => announce("Full screen is not available in this browser"));
+  };
 
   const { width: wsWidth, height: wsHeight } = useWorkspaceSize(workspaceRef);
   const inline = wsWidth - CANVAS_MIN >= INSPECTOR_MIN;
@@ -799,20 +902,18 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       "px-2.5 py-1 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
       active ? "bg-(--color-primary) text-white" : "text-(--color-text-muted) hover:bg-(--color-surface-subtle)",
     );
-  const startLabel = refType(root) === "workload" ? "Focus workload" : refType(root) === "resource" ? "Focus resource" : "Focus identity";
   const canvasControls = !showPaths && rootReady && model.laidOut;
 
-  const actions: InspectorActions = {
-    onClose: closeInspector,
-    onBackToNode: () => evidence.close(),
+  const cardActions: SelectionActions = {
+    onClose: clearAll,
+    onEvidence: openEvidence,
     onOpenObject: openRef,
     onFocusHere: focusHere,
-    onEvidence: (claims) => openEvidence(claims, true),
-    onShowBranch: (id, select) => {
+    onSelectNode: selectNode,
+    onShowBranch: (id, sel) => {
       dispatchModel({ type: "reveal-branch", id, shown: true });
-      if (select) selectNode(select);
+      if (sel) selectNode(sel);
     },
-    onHideBranch: (id) => dispatchModel({ type: "reveal-branch", id, shown: false }),
     onShowWorkloads: (refs) => dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...refs] }),
     onExpand: handleExpand,
     onLoadMore: handleLoadMore,
@@ -849,17 +950,34 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       notices.push({ key: "target", tone: "warning", text: "A declared path was returned, but its target is beyond the display limit. Open the target to see its own graph." });
   }
   if (tracedPath) notices.push({ key: "trace", tone: "muted", text: "Tracing a path from the Paths list.", action: { label: "Clear", run: () => dispatchModel({ type: "trace", claims: null }) } });
-  if (nodeParam && rootReady && !nodeVisual)
-    notices.push({ key: "missing", tone: "muted", text: "The selected object is not in this loaded view. It may be beyond the display limit or absent from the newer scan." });
+  if ((nodeParam || edgeParam) && rootReady && model.laidOut && !card)
+    notices.push({ key: "missing", tone: "muted", text: "The selected item is not in this loaded view. It may be beyond the display limit or absent from the newer scan." });
   if (revealedWorkloads.size) notices.push({ key: "group", tone: "muted", text: "Workloads sharing an identity are drawn one by one.", action: { label: "Group them", run: () => dispatchModel({ type: "reveal-workloads", refs: [] }) } });
   if (model.revealedBranches.size) notices.push({ key: "branches", tone: "muted", text: "Every loaded relationship of the branches you opened is drawn.", action: { label: "Fold them again", run: () => { for (const id of model.revealedBranches) dispatchModel({ type: "reveal-branch", id, shown: false }); } } });
-  if (visual.limited)
-    notices.push({ key: "limit", tone: "warning", text: `Display limit: ${visual.nodes.length} objects and ${visual.edges.length} relationships are drawn (maximum 150 / 300). Everything loaded is in Paths; open an object's own graph to narrow it.` });
+  if (visual.limited && !showPaths)
+    notices.push({ key: "limit", tone: "warning", text: `Display limit: ${visual.nodes.length} objects and ${visual.edges.length} relationships are drawn (maximum 150 / 300). Paths lists everything loaded.`, action: { label: "Open Paths", run: () => setView("paths") } });
   if (model.truncated)
-    notices.push({ key: "truncated", tone: "warning", text: `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls on a card to fetch them.` });
+    notices.push({ key: "truncated", tone: "warning", text: `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls to fetch them.` });
 
   const noRelationships = rootReady && model.laidOut && visual.edges.length === 0 && visual.nodes.length <= 1;
   const rootFrontier = frontierMap.get(root) ?? [];
+
+  const evidencePanel = evidenceOpen ? (
+    <GraphInspector
+      ws={ws}
+      subject={{
+        claims: selectedClaims,
+        edge: selectedEdge,
+        backTo: card ? `Back to ${card.kind === "node" ? descriptions.get(card.visual.id)?.title ?? "selection" : edgeVerb(card.edge)}` : undefined,
+      }}
+      nodes={model.nodes}
+      presentation={inline ? "inline" : "drawer"}
+      width={inspectorWidth}
+      modal={narrow}
+      onClose={clearAll}
+      onBack={backFromEvidence}
+    />
+  ) : null;
 
   let body;
   if (hardFailure || (firstLoad && rootFailure)) {
@@ -876,30 +994,36 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     );
   } else if (showPaths) {
     body = (
-      <div className="h-full overflow-y-auto">
-        <PathsList
-          rootName={rootName}
-          paths={rawPathsResult.paths}
-          nodesByRef={model.nodes}
-          frontierByNode={frontierMap}
-          truncated={!!model.truncated || listed.limited}
-          boundByMax={rawPathsResult.boundByMax}
-          stateOf={stateOf}
-          canLoadMore={canLoadMore}
-          onExpand={handleExpand}
-          onLoadMore={handleLoadMore}
-          onCollapse={handleCollapse}
-          onRefresh={refresh}
-          onSelectNode={(ref) => {
-            const group = grouped.nodes.find((n) => n.kind === "workload" && n.members.length > 1 && n.members.some((m) => m.ref === ref));
-            if (group) dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((m) => m.ref)] });
-            selectNode(ref);
-          }}
-          onSelectEdge={(claim) => openEvidence([claim])}
-          onTrace={trace}
-          selectedRef={(nodeVisual?.members[0].ref ?? null) as GraphRef | null}
-          selectedClaims={selectedClaims}
-        />
+      <div className="flex h-full">
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          <PathsList
+            rootName={rootName}
+            paths={rawPathsResult.paths}
+            nodesByRef={model.nodes}
+            frontierByNode={frontierMap}
+            truncated={!!model.truncated}
+            boundByMax={rawPathsResult.boundByMax}
+            depthLimited={rawPathsResult.depthLimited}
+            stateOf={stateOf}
+            canLoadMore={canLoadMore}
+            onExpand={handleExpand}
+            onLoadMore={handleLoadMore}
+            onCollapse={handleCollapse}
+            onRefresh={refresh}
+            onSelectNode={(ref) => {
+              const group = grouped.nodes.find((n) => n.kind === "workload" && n.members.length > 1 && n.members.some((m) => m.ref === ref));
+              if (group) dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((m) => m.ref)] });
+              select("node", ref);
+            }}
+            onSelectEdge={(claim) => select("edge", claim)}
+            onTrace={trace}
+            selectedRef={(nodeVisual?.members[0].ref ?? (nodeParam as GraphRef | null)) ?? null}
+            selectedClaims={edgeClaims.length ? edgeClaims : selectedClaims}
+          />
+        </div>
+        {card && !evidenceOpen ? (
+          <SelectionCard subject={card} edges={visual.edges} nodes={model.nodes} rootAccountId={rootAccountId} actions={cardActions} docked />
+        ) : null}
       </div>
     );
   } else {
@@ -924,12 +1048,21 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           onRefresh={refresh}
           stateOf={stateOf}
           canLoadMore={canLoadMore}
-          onClearSelection={closeInspector}
+          onClearSelection={clearAll}
+          onMoveNode={(id, position) => dispatchModel({ type: "move", id, position })}
+          rightInset={card && !evidenceOpen ? 344 : 0}
           revealToken={revealToken}
           viewport={model.viewport}
           onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
           onApi={onApi}
         />
+        {card && !evidenceOpen ? (
+          <div className="pointer-events-none absolute inset-y-3 right-3 flex items-start">
+            <div className="pointer-events-auto max-h-full">
+              <SelectionCard subject={card} edges={visual.edges} nodes={model.nodes} rootAccountId={rootAccountId} actions={cardActions} />
+            </div>
+          </div>
+        ) : null}
         {!model.laidOut ? (
           <div className="absolute inset-0 flex items-center justify-center bg-(--color-surface-raised)/60" role="status" aria-label="Arranging the graph">
             <div className="size-8 animate-spin rounded-full border-2 border-(--color-border-subtle) border-t-(--color-primary)" />
@@ -949,15 +1082,18 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   return (
     <div
       ref={workspaceRef}
-      style={{ height: wsHeight }}
+      style={{ height: fullscreen ? "100vh" : wsHeight }}
       className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)"
     >
       <div role="toolbar" aria-label="Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
-        <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
-          <button type="button" aria-pressed={!showPaths} onClick={() => setAs("canvas")} className={toggleClass(!showPaths)}>
-            Canvas
+        <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
+          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title="Workload → identity → what it declares">
+            Overview
           </button>
-          <button type="button" aria-pressed={showPaths} onClick={() => setAs("paths")} className={toggleClass(showPaths)}>
+          <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title="Every policy statement drawn">
+            Detailed
+          </button>
+          <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="Every loaded path as a list">
             Paths
           </button>
         </div>
@@ -974,23 +1110,58 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
             </div>
           </div>
         ) : null}
-        <p className="min-w-0 flex-1 truncate text-xs text-(--color-text-muted)" title="Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated.">
-          Declared access · effective access not evaluated
+        {!showPaths ? (
+          <label className="relative flex min-w-[180px] max-w-xs flex-1 items-center">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-2 size-3.5 text-(--color-text-muted)" />
+            <input
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && findMatches?.[0]) selectNode(findMatches[0].id);
+                // Escape clears the text first; only an empty box lets it
+                // reach the selection.
+                if (e.key === "Escape" && find) {
+                  e.stopPropagation();
+                  setFind("");
+                }
+              }}
+              placeholder="Find in loaded graph"
+              aria-label="Find an object in the loaded graph"
+              className="h-8 w-full rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) pl-7 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)"
+            />
+            {findMatches ? (
+              <span className="ml-2 shrink-0 text-[11px] text-(--color-text-muted)" role="status">
+                {findMatches.length} of {visual.nodes.length} loaded
+              </span>
+            ) : null}
+          </label>
+        ) : null}
+        <p className="min-w-0 flex-1 truncate text-right text-xs text-(--color-text-muted)" title="Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated.">
+          Declared access · not evaluated
         </p>
         <div className="flex items-center gap-1">
           {canvasControls ? (
             <>
-              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.fitGraph()}>
-                <Maximize2 className="size-3.5" /> Fit graph
+              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.fitGraph()} title="Frame everything drawn">
+                <Maximize2 className="size-3.5" /> Fit
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.revealStart()}>
-                <LocateFixed className="size-3.5" /> {startLabel}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={arrange} title="Lay the graph out again from scratch">
-                <LayoutGrid className="size-3.5" /> Arrange
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" aria-label="Layout options">
+                    <LayoutGrid className="size-3.5" /> Layout
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => canvasApi.current?.revealStart()}>Go to the starting object</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={resetLayout}>Reset layout{manualPositions.size ? ` (discards ${manualPositions.size} moved)` : ""}</DropdownMenuItem>
+                  <DropdownMenuItem disabled={!model.previousLayout} onSelect={restoreLayout}>Restore previous layout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : null}
+          <Button variant="ghost" size="icon" className="size-8" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit full screen" : "Full screen"} title={fullscreen ? "Exit full screen" : "Full screen"}>
+            {fullscreen ? <Minimize className="size-3.5" /> : <Expand className="size-3.5" />}
+          </Button>
           <Legend />
         </div>
       </div>
@@ -1012,13 +1183,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">{body}</div>
-        {subject && inline ? (
-          <GraphInspector ws={ws} subject={subject} nodes={model.nodes} rootAccountId={rootAccountId} presentation="inline" width={inspectorWidth} modal={false} actions={actions} />
-        ) : null}
+        {evidencePanel && inline ? evidencePanel : null}
       </div>
-      {subject && !inline ? (
-        <GraphInspector ws={ws} subject={subject} nodes={model.nodes} rootAccountId={rootAccountId} presentation="drawer" width={inspectorWidth} modal={narrow} actions={actions} />
-      ) : null}
+      {evidencePanel && !inline ? evidencePanel : null}
     </div>
   );
 }

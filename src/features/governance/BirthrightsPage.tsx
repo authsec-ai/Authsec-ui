@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { tableFailure } from "@/components/console/load-failure";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
 
@@ -34,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { EntityCell, ConsoleRowActions } from "@/components/console/iam-console";
+import { EntityCell, ConsoleRowActions, ImpactPreviewDialog } from "@/components/console/iam-console";
 import {
   Dialog,
   DialogContent,
@@ -410,10 +411,14 @@ function PlanLine({ label, value, warn }: { label: string; value: number; warn?:
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BirthrightsPage() {
-  const { data: birthrightsData } = useListBirthrightsQuery();
-  const { data: staleData } = useListStaleBirthrightsQuery();
-  const { data: orphansData } = useListOrphanedAgentsQuery();
-  const [deleteBirthright] = useDeleteBirthrightMutation();
+  const birthrightsQuery = useListBirthrightsQuery();
+  const staleQuery = useListStaleBirthrightsQuery();
+  const orphansQuery = useListOrphanedAgentsQuery();
+  const { data: birthrightsData } = birthrightsQuery;
+  const { data: staleData } = staleQuery;
+  const { data: orphansData } = orphansQuery;
+  const [deleteBirthright, { isLoading: deleting }] = useDeleteBirthrightMutation();
+  const [confirmDelete, setConfirmDelete] = useState<BirthrightPolicy | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [reconcileOpen, setReconcileOpen] = useState(false);
@@ -427,6 +432,7 @@ export default function BirthrightsPage() {
       const r = await deleteBirthright(b.id).unwrap();
       // Delete does NOT revoke existing grants — they surface in stale. Show the note.
       toast.success(r.note || "Policy deleted. Existing grants remain for review.");
+      setConfirmDelete(null);
     } catch (err) {
       toast.error(governanceError(err, "Could not delete the birthright."));
     }
@@ -496,7 +502,7 @@ export default function BirthrightsPage() {
               {
                 label: "Delete policy…",
                 destructive: true,
-                onSelect: () => void onDelete(row.original),
+                onSelect: () => setConfirmDelete(row.original),
               },
             ]}
           />
@@ -609,6 +615,11 @@ export default function BirthrightsPage() {
           <CardContent variant="flush">
             <AdaptiveTable
               tableId="birthrights"
+              sizing="fit"
+              cardsBelow={640}
+              loading={birthrightsQuery.isLoading}
+              failure={tableFailure(birthrightsQuery.error, "birthright policies", () => birthrightsQuery.refetch(), "governance:read")}
+              emptyState="No birthright policies yet."
               columns={brColumns}
               data={birthrights}
               getRowId={(b) => b.id}
@@ -632,6 +643,11 @@ export default function BirthrightsPage() {
           <CardContent variant="flush">
             <AdaptiveTable
               tableId="stale-birthrights"
+              sizing="fit"
+              cardsBelow={640}
+              loading={staleQuery.isLoading}
+              failure={tableFailure(staleQuery.error, "stale grants", () => staleQuery.refetch(), "governance:read")}
+              emptyState="No stale grants."
               columns={staleColumns}
               data={stale}
               getRowId={(s) => s.provenance_id}
@@ -655,6 +671,11 @@ export default function BirthrightsPage() {
           <CardContent variant="flush">
             <AdaptiveTable
               tableId="orphaned-agents"
+              sizing="fit"
+              cardsBelow={640}
+              loading={orphansQuery.isLoading}
+              failure={tableFailure(orphansQuery.error, "orphaned agents", () => orphansQuery.refetch(), "governance:read")}
+              emptyState="No orphaned agents."
               columns={orphanColumns}
               data={orphans}
               getRowId={(o) => o.oauth_client_id}
@@ -666,6 +687,17 @@ export default function BirthrightsPage() {
         </TableCard>
       </div>
 
+      <ImpactPreviewDialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title="Delete this birthright policy?"
+        description="New joiners stop receiving its access. Grants it already made are not revoked — they move to Stale grants for a person to review."
+        confirmLabel={deleting ? "Deleting…" : "Delete policy"}
+        confirmDisabled={deleting}
+        onConfirm={() => confirmDelete && void onDelete(confirmDelete)}
+      >
+        <p className="text-sm font-medium">{confirmDelete?.name}</p>
+      </ImpactPreviewDialog>
       <CreateBirthrightDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ReconcileDialog open={reconcileOpen} onOpenChange={setReconcileOpen} />
     </ConsolePage>

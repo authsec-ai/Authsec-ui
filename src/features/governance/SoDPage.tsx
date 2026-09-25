@@ -13,6 +13,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { tableFailure } from "@/components/console/load-failure";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
 
@@ -301,10 +302,10 @@ function ResolveViolationDialog({
 }
 
 export default function SoDPage() {
-  const { data: rulesData } = useListSoDRulesQuery();
-  const { data: violationsData, refetch: refetchViolations } = useListSoDViolationsQuery({
-    open: true,
-  });
+  const rulesQuery = useListSoDRulesQuery();
+  const violationsQuery = useListSoDViolationsQuery({ open: true });
+  const { data: rulesData } = rulesQuery;
+  const { data: violationsData, refetch: refetchViolations } = violationsQuery;
   const [scan, { isLoading: scanning }] = useScanSoDMutation();
   const [resolveTarget, setResolveTarget] = useState<SoDViolation | null>(null);
 
@@ -444,6 +445,11 @@ export default function SoDPage() {
           <CardContent variant="flush">
             <AdaptiveTable
               tableId="sod-violations"
+              sizing="fit"
+              cardsBelow={640}
+              loading={violationsQuery.isLoading}
+              failure={tableFailure(violationsQuery.error, "open violations", () => violationsQuery.refetch(), "governance:read")}
+              emptyState="No open violations. Run a scan to check again."
               columns={violationColumns}
               data={violations}
               getRowId={(v) => v.id}
@@ -461,6 +467,11 @@ export default function SoDPage() {
           <CardContent variant="flush">
             <AdaptiveTable
               tableId="sod-rules"
+              sizing="fit"
+              cardsBelow={640}
+              loading={rulesQuery.isLoading}
+              failure={tableFailure(rulesQuery.error, "rules", () => rulesQuery.refetch(), "governance:read")}
+              emptyState="No rules are defined."
               columns={ruleColumns}
               data={rules}
               getRowId={(r) => r.id}

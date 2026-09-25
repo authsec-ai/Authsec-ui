@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { tableFailure } from "@/components/console/load-failure";
 import { formatDistanceToNow } from "date-fns";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -46,7 +47,7 @@ export default function ProvenancePage() {
     return undefined;
   }, [filter]);
 
-  const { data, isError, error, refetch } = useListProvenanceQuery(queryArgs);
+  const { data, isLoading, error, refetch } = useListProvenanceQuery(queryArgs);
   const rows = useMemo(() => data?.items ?? [], [data]);
 
   const items = useMemo(() => {
@@ -134,17 +135,6 @@ export default function ProvenancePage() {
       title="Provenance"
       description="The standing record of why every entitlement exists — its grantor, justification, approval, and expiry. The evidence behind every access review."
     >
-      {isError ? (
-        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load provenance.</strong>{" "}
-          {(error as { status?: number })?.status === 403
-            ? "Your role is missing the governance:read permission."
-            : "The governance API returned an error."}{" "}
-          <button className="underline" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
-      ) : null}
 
       <ConsoleFilterBar
         search={search}
@@ -158,6 +148,10 @@ export default function ProvenancePage() {
       <TableCard>
         <CardContent variant="flush">
           <AdaptiveTable
+            sizing="fit"
+            cardsBelow={640}
+            loading={isLoading}
+            failure={tableFailure(error, "provenance records", () => refetch(), "governance:read")}
             tableId="provenance"
             columns={columns}
             data={items}

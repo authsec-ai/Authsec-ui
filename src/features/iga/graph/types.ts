@@ -7,6 +7,7 @@
  */
 
 import type {
+  EvidenceLimitation,
   GraphEdge,
   GraphEdgeKind,
   GraphFrontier,
@@ -39,13 +40,15 @@ export const ROOT_OWNER = "root";
 export interface OverflowInfo {
   /** The visual node the hidden branch hangs from. */
   parent: string;
-  edgeKind: GraphEdgeKind;
+  edgeKind: VisualEdgeKind;
   /** The hidden nodes nearest the parent, each as it would be drawn. */
   hidden: VisualNode[];
   /** Nodes reachable only through the hidden ones, hidden with them. */
   beyond: number;
   /** The parent also has relationships of this kind the server has not sent yet. */
   moreNotLoaded: boolean;
+  /** What an ECS task execution role declares: supporting infrastructure, folded from the start. */
+  infrastructure?: boolean;
 }
 
 /** One drawn node. `members.length > 1` for equivalent statements or workloads sharing one execution identity (§2.14.11 *Grouped edges*). */
@@ -59,10 +62,18 @@ export interface VisualNode {
   overflow?: OverflowInfo;
 }
 
+/**
+ * What a drawn line is. The server's relationship kinds, plus `declares`: the
+ * Overview's summary of identity → statement → resource, drawn identity →
+ * resource. It is a presentation of those claims, never a fact of its own —
+ * its members are the grant and target claims it summarises.
+ */
+export type VisualEdgeKind = GraphEdgeKind | "declares";
+
 /** One drawn edge. `members.length > 1` for grouped grants (and their shared target). */
 export interface VisualEdge {
   id: string;
-  kind: GraphEdgeKind;
+  kind: VisualEdgeKind;
   from: string;
   to: string;
   members: GraphEdge[];
@@ -72,6 +83,15 @@ export interface VisualEdge {
   closesCycle: boolean;
   /** A single (ungrouped) grant names its statement's policy directly (§2.14.11, review item 16). */
   targetPolicy?: string;
+  /** `declares` lines only: the statements this line stands for, and their effect. */
+  summary?: {
+    statements: VisualNode[];
+    effect: "allow" | "deny" | "mixed";
+    /** NotResource exclusions on the statements behind it. */
+    exclusions: string[];
+    /** Limitations recorded on those statements (conditions, negation). */
+    limitations: EvidenceLimitation[];
+  };
 }
 
 export type GraphSelection = { kind: "node"; id: string } | { kind: "edge"; id: string };

@@ -165,7 +165,7 @@ export default function AWSIdentitiesPage() {
   const handleScan = async (connectorId: string) => {
     try {
       await scanConnector(connectorId).unwrap();
-      toast.success("Scan started — it runs in the background.");
+      toast.success("Scan queued — it runs in the background. Its results appear here when it finishes.");
     } catch (err) {
       const copy = awsErrorCopy(
         (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
@@ -468,6 +468,12 @@ export default function AWSIdentitiesPage() {
             <div className="p-4">
               <DataTableSkeleton columns={5} rows={6} showSelection={false} showActions={false} />
             </div>
+          ) : identitiesQuery.isError && !rows.length ? (
+            // The banner above says what failed; an empty-inventory message
+            // here would claim there is nothing to find.
+            <p className="px-6 py-10 text-center text-xs text-muted-foreground">
+              Nothing is listed because the request failed — this is not an empty inventory.
+            </p>
           ) : !rows.length ? (
             <InventoryEmptyState
               reason={emptyReason}
@@ -486,6 +492,8 @@ export default function AWSIdentitiesPage() {
             </div>
           ) : (
             <AdaptiveTable
+              sizing="fit"
+              cardsBelow={640}
               tableId="aws-identities"
               columns={columns}
               data={filtered}

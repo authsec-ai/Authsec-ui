@@ -371,6 +371,14 @@ export function AWSResourceDrawer({
 
               {loading ? (
                 <p className="pt-3 text-sm text-muted-foreground">Loading…</p>
+              ) : permissionsQuery.isError ? (
+                // A failed read is not "nothing names this resource".
+                <p className="pt-3 text-sm text-muted-foreground">
+                  Could not load the permission statements, so who can reach this resource is unknown — this is not a finding.{" "}
+                  <button type="button" className="font-medium text-(--color-primary-text) hover:underline" onClick={() => void permissionsQuery.refetch()}>
+                    Retry
+                  </button>
+                </p>
               ) : reaching.length === 0 ? (
                 <div className="pt-3">
                   {/* Three titles, because the same empty list means three
@@ -427,7 +435,7 @@ export function AWSResourceDrawer({
                 Deny is authoritative in IAM, so these identities are the
                 opposite of "reaching" and must not be read as a weaker form of
                 it. */}
-            {!loading && denied.length > 0 ? (
+            {!loading && !permissionsQuery.isError && denied.length > 0 ? (
               <DrawerSection label="Identities explicitly denied this resource">
                 <InventoryNotice tone="info" icon={<Info />}>
                   An explicit Deny beats every Allow, from any policy. These identities cannot

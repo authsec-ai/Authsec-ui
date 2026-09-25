@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { copyToClipboard } from "@/lib/clipboard";
 import { toast } from "react-hot-toast";
 import { Check, Copy } from "lucide-react";
 
@@ -97,9 +98,11 @@ export function ActuationTokenDialog({
                 size="sm"
                 className="shrink-0 gap-1.5 text-xs"
                 onClick={() => {
-                  void navigator.clipboard.writeText(token);
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1600);
+                  void copyToClipboard(token, "Token", { toastSuccess: false }).then((ok) => {
+                    if (!ok) return;
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1600);
+                  });
                 }}
               >
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}

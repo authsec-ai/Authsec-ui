@@ -8,10 +8,12 @@
  * one size while the card draws another — the mismatch that made cards with
  * extra badges or expansion rows overlap their neighbours.
  *
- * Reading order: name or action summary, object type, one line of context,
- * then compact indicators and expansion controls. Full identifiers live in
- * the inspector; a truncated line keeps its full text in `title` and in the
- * card's accessible name.
+ * Reading order: a tinted header with the object's CATEGORY (icon, colour
+ * and explicit type text — colour never alone), then the name, one line of
+ * context, at most two indicators that change how the card should be read,
+ * and one compact Load control. Everything else — every indicator's
+ * explanation, full identifiers, further Load controls — is in the
+ * selection card (`notes`).
  */
 
 import type { GraphFrontier, GraphNode, GraphNodeKind } from "@/app/api/igaGraphApi";
@@ -20,17 +22,20 @@ import { RUNTIME_LABEL, accountLabel } from "../shared/labels";
 import { KIND_LABEL, dominantRelState, frontierLabel, mixedStateText } from "./graphLabels";
 import type { VisualNode } from "./types";
 
-export const NODE_WIDTH = 248;
-const PAD_Y = 10;
+export const NODE_WIDTH = 240;
 /** 1px border top and bottom: the card is border-box. */
 const BORDER = 2;
+const HEADER = 24;
+const BODY_PAD_TOP = 6;
+const BODY_PAD_BOTTOM = 8;
 const TITLE = 20;
 const LINE = 16;
-const INDICATORS = 22;
+const INDICATORS = 20;
 const FRONTIER_ROW = 20;
-const FRONTIER_GAP = 4;
-/** Expansion rows drawn on the card; any further ones are offered in the inspector. */
-export const MAX_FRONTIER_ROWS = 2;
+/** Load controls drawn on the card; the rest are in the selection card. */
+export const MAX_FRONTIER_ROWS = 1;
+/** Indicators drawn on the card; all of them are in the selection card. */
+const MAX_BADGES = 2;
 
 export type IndicatorTone = "neutral" | "warning" | "info";
 
@@ -45,13 +50,25 @@ export interface Indicator {
 
 export type NodeIcon = "workload" | "role" | "user" | "group" | "external" | "statement" | "resource" | "selector" | "more";
 
+/**
+ * What KIND of thing a card is — drawn with the `--color-object-*` tokens.
+ * Never a status: a resource's colour says it is a resource, not that it is
+ * safe, exposed or reachable.
+ */
+export type NodeCategory = "workload" | "identity" | "resource" | "statement" | "external";
+
 export interface NodeDescription {
   icon: NodeIcon;
+  category: NodeCategory;
   title: string;
+  /** Explicit type text in the header: "Identity · Role", "Resource · Selector". */
   type: string;
   /** Null when no line of context applies — never a made-up value. */
   context: string | null;
+  /** Drawn on the card: at most two, the ones that change how it reads. */
   indicators: Indicator[];
+  /** Every indicator, for the selection card. */
+  notes: Indicator[];
   /** Expansion rows drawn on the card, in server order. */
   frontier: GraphFrontier[];
   /** Expansion entries not drawn on the card (offered in the inspector). */
@@ -68,6 +85,27 @@ const ICON_OF: Record<GraphNodeKind, NodeIcon> = {
   exact: "resource",
   selector: "selector",
   external: "resource",
+};
+
+const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
+  workload: "workload",
+  iam_role: "identity",
+  iam_user: "identity",
+  iam_group: "identity",
+  external_principal: "external",
+  statement: "statement",
+  exact: "resource",
+  selector: "resource",
+  external: "external",
+};
+
+const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
+  iam_role: "Identity · Role",
+  iam_user: "Identity · User",
+  iam_group: "Identity · Group",
+  exact: "Resource · Exact reference",
+  selector: "Resource · Selector",
+  external: "External resource",
 };
 
 const NOUN_OF: Partial<Record<GraphNodeKind, [string, string]>> = {
@@ -130,11 +168,14 @@ function typeOf(v: VisualNode): string {
   if (first.kind === "workload") return first.runtime_kind ? `Workload · ${RUNTIME_LABEL[first.runtime_kind]}` : "Workload";
   if (first.kind === "statement") {
     const effect = first.effect === "deny" ? "Deny" : first.effect === "allow" ? "Allow" : null;
-    return [v.members.length > 1 ? `${v.members.length} statements, same grant` : "Statement", effect].filter(Boolean).join(" · ");
+    return [v.members.length > 1 ? `${v.members.length} statements` : "Statement", effect].filter(Boolean).join(" · ");
   }
-  if (first.kind === "external_principal" && first.mechanism) return `External · ${first.mechanism.replace(/_/g, " ")}`;
-  return KIND_LABEL[first.kind];
+  if (first.kind === "external_principal") return first.mechanism ? `External principal · ${first.mechanism.replace(/_/g, " ")}` : "External principal";
+  return SUBTYPE[first.kind] ?? KIND_LABEL[first.kind];
 }
+
+/** The indicators worth a place on the card, in the order they matter. */
+const BADGE_ORDER = ["state", "account", "resolution", "except", "deny", "coverage"];
 
 export function describeNode(v: VisualNode, rootAccountId: string | null): NodeDescription {
   const first = v.members[0];
@@ -144,10 +185,18 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
     const shown = o.hidden.reduce((n, h) => n + h.members.length, 0);
     return {
       icon: "more",
-      title: `+${shown} more ${plural(first.kind, shown)}`,
-      type: "Hidden in this view",
-      context: o.moreNotLoaded ? "Loaded · more not fetched yet" : o.beyond ? `Loaded · ${o.beyond} more beyond` : "Loaded · select to review",
+      category: CATEGORY_OF[first.kind],
+      title: o.infrastructure ? "ECS agent permissions" : `+${shown} more ${plural(first.kind, shown)}`,
+      type: o.infrastructure ? "Supporting infrastructure · folded" : "Folded in this view",
+      context: o.infrastructure
+        ? `${shown} loaded · select to review`
+        : o.moreNotLoaded
+          ? "Loaded · more not fetched yet"
+          : o.beyond
+            ? `Loaded · ${o.beyond} more beyond`
+            : "Loaded · select to review",
       indicators: [],
+      notes: [],
       frontier: [],
       frontierHidden: 0,
     };
@@ -156,10 +205,12 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
   if (first.kind === "workload" && v.members.length > 1) {
     return {
       icon: "workload",
+      category: "workload",
       title: `${v.members.length} workloads`,
-      type: "Workloads sharing one identity",
+      type: "Workloads · one shared identity",
       context: first.account ? accountLabel(first.account) : null,
       indicators: [],
+      notes: [],
       frontier: v.frontier.slice(0, MAX_FRONTIER_ROWS),
       frontierHidden: Math.max(0, v.frontier.length - MAX_FRONTIER_ROWS),
     };
@@ -197,8 +248,10 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
     const n = usedBy.value == null ? "some" : `${usedBy.exact ? "" : "≥"}${usedBy.value}`;
     indicators.push({
       key: "used-by",
-      text: `run as by ${n}`,
-      long: usedBy.value == null ? "Run as by workloads directly; the count is not known" : `${usedBy.exact ? "" : "At least "}${usedBy.value} workload${usedBy.value === 1 ? "" : "s"} configured to run as it directly`,
+      text: `${n} direct workload${usedBy.value === 1 ? "" : "s"}`,
+      long: usedBy.value == null
+        ? "Bound to workloads directly; the count is not known"
+        : `${usedBy.exact ? "" : "At least "}${usedBy.value} direct workload binding${usedBy.value === 1 ? "" : "s"} (runs as it, or its ECS agent uses it)`,
       tone: "neutral",
     });
   }
@@ -206,14 +259,20 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
   if (v.members.some((m) => m.limitations?.some((l) => l.code === "surface_stale" || l.code === "surface_partial" || l.code === "surface_denied")))
     indicators.push({ key: "coverage", text: "coverage gap", long: "The collection that reads this was incomplete", tone: "warning" });
 
+  const badges = [...indicators]
+    .filter((i) => BADGE_ORDER.includes(i.key))
+    .sort((a, b) => BADGE_ORDER.indexOf(a.key) - BADGE_ORDER.indexOf(b.key))
+    .slice(0, MAX_BADGES);
   return {
     icon: ICON_OF[first.kind],
+    category: CATEGORY_OF[first.kind],
     title: first.label,
     type: typeOf(v),
     context: v.members.length > 1 && first.kind === "statement"
       ? [...new Set(v.members.map((m) => m.policy).filter(Boolean))].join(", ") || null
       : contextOf(first),
-    indicators,
+    indicators: badges,
+    notes: indicators,
     frontier: v.frontier.slice(0, MAX_FRONTIER_ROWS),
     frontierHidden: Math.max(0, v.frontier.length - MAX_FRONTIER_ROWS),
   };
@@ -221,11 +280,10 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
 
 /** The card's exact size: the layout reserves this, and the card is drawn at it. */
 export function nodeSize(d: NodeDescription): { width: number; height: number } {
-  let h = BORDER + PAD_Y * 2 + TITLE + LINE;
+  let h = BORDER + HEADER + BODY_PAD_TOP + TITLE + BODY_PAD_BOTTOM;
   if (d.context) h += LINE;
   if (d.indicators.length) h += INDICATORS;
-  const rows = d.frontier.length + (d.frontierHidden ? 1 : 0);
-  if (rows) h += FRONTIER_GAP + rows * FRONTIER_ROW;
+  if (d.frontier.length || d.frontierHidden) h += FRONTIER_ROW;
   return { width: NODE_WIDTH, height: h };
 }
 
@@ -235,7 +293,7 @@ export function nodeAriaLabel(d: NodeDescription): string {
     d.title,
     d.type,
     d.context,
-    ...d.indicators.map((i) => i.long),
+    ...d.notes.map((i) => i.long),
     ...d.frontier.map((f) => frontierLabel(f)),
     d.frontierHidden ? `${d.frontierHidden} more expansion${d.frontierHidden === 1 ? "" : "s"} in the inspector` : null,
   ]

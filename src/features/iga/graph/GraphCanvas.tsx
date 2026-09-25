@@ -19,9 +19,15 @@
  *   drawing out of the pane when focus moved to a card or label near its
  *   edge. The container's scroll offset is pinned to zero.
  *
+ * Pointer: dragging a card moves that card (its lines follow); dragging the
+ * background pans; a click selects; a drag never selects. A moved card's
+ * position is handed to the caller on release (`onMoveNode`) and becomes
+ * the customer's — nothing about the graph's facts changes.
+ *
  * Keyboard (§2.14.14): Tab follows React Flow's node order; Enter, Shift+Enter
  * and +/- are handled on the card (`nodes.tsx`); arrow keys move along
  * edges (left/right) or to the nearest card above or below; Escape clears.
+ * Moving cards is never needed to reach anything.
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -32,6 +38,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  type NodeChange,
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -96,6 +103,10 @@ export interface GraphCanvasProps {
   stateOf: (f: GraphFrontier) => FrontierControl;
   canLoadMore: (f: GraphFrontier) => boolean;
   onClearSelection: () => void;
+  /** A card was dragged to `position` (released). */
+  onMoveNode: (id: string, position: Position) => void;
+  /** Width covered by the selection card at the right edge: kept clear when bringing something into view. */
+  rightInset?: number;
   /** Bumped when the start object should be revealed: first layout, Arrange. */
   revealToken: number;
   /** Where the customer left this investigation, if they have been here before. */
@@ -132,6 +143,8 @@ function GraphCanvasInner({
   stateOf,
   canLoadMore,
   onClearSelection,
+  onMoveNode,
+  rightInset = 0,
   revealToken,
   viewport,
   onViewportChange,
@@ -145,6 +158,10 @@ function GraphCanvasInner({
   const flow = useReactFlow();
   const scopeClass = `iga-graph-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
+  // Where a card is while it is being dragged; committed on release.
+  const [dragging, setDragging] = useState<Map<string, Position>>(new Map());
+  // The click that ends a drag is not a selection.
+  const lastDragEnd = useRef<{ id: string; at: number } | null>(null);
   const [lost, setLost] = useState(false);
 
   const rfNodes = useMemo<RFGraphNode[]>(
@@ -172,29 +189,36 @@ function GraphCanvasInner({
           return {
             id: v.id,
             type: v.kind,
-            position: positions.get(v.id)!,
+            position: dragging.get(v.id) ?? positions.get(v.id)!,
             // The layout's size, handed to React Flow so fitting, edges and
             // the card itself all use the same box.
             width: size.width,
             height: size.height,
             data,
-            draggable: false,
+            draggable: true,
             connectable: false,
             className: highlightedNodeIds?.has(v.id) ? "iga-graph-highlight" : undefined,
           } satisfies RFGraphNode;
         }),
-    [visualNodes, positions, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds],
+    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds],
   );
   const drawnIds = useMemo(() => new Set(rfNodes.map((n) => n.id)), [rfNodes]);
 
-  const rfEdges = useMemo<RFGraphEdge[]>(
-    () =>
-      visualEdges
-        .filter((e) => drawnIds.has(e.from) && drawnIds.has(e.to))
-        .map((e) => {
+  const rfEdges = useMemo<RFGraphEdge[]>(() => {
+    const drawn = visualEdges.filter((e) => drawnIds.has(e.from) && drawnIds.has(e.to));
+    // Lines between the same two cards (an Allow and a Deny, two kinds of
+    // relationship) are spread apart rather than drawn on top of each other.
+    const pairs = new Map<string, string[]>();
+    for (const e of drawn) {
+      const k = [e.from, e.to].sort().join("\u0000");
+      pairs.set(k, [...(pairs.get(k) ?? []), e.id]);
+    }
+    return drawn.map((e) => {
+          const siblings = pairs.get([e.from, e.to].sort().join("\u0000")) ?? [e.id];
+          const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * 14;
           const selected = selection?.kind === "edge" && selection.id === e.id;
           const highlighted = highlightedEdgeIds?.has(e.id) ?? false;
-          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge };
+          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread };
           return {
             id: e.id,
             type: "graphEdge",
@@ -210,9 +234,8 @@ function GraphCanvasInner({
               color: selected ? "var(--color-primary)" : highlighted ? "var(--color-text)" : "var(--color-border-strong)",
             },
           } satisfies RFGraphEdge;
-        }),
-    [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge],
-  );
+        });
+  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge]);
 
   /* ------------------------------- viewport ------------------------------- */
 
@@ -261,11 +284,13 @@ function GraphCanvasInner({
       const view = visibleRect();
       if (!box || !view) return;
       const m = 24 / view.zoom;
-      const inside = box.x >= view.x + m && box.y >= view.y + m && box.x + box.w <= view.x + view.w - m && box.y + box.h <= view.y + view.h - m;
+      // The selection card covers the right edge: that strip is not "in view".
+      const inset = rightInset / view.zoom;
+      const inside = box.x >= view.x + m && box.y >= view.y + m && box.x + box.w <= view.x + view.w - inset - m && box.y + box.h <= view.y + view.h - m;
       if (inside) return;
-      void flow.setCenter(box.x + box.w / 2, box.y + box.h / 2, { zoom: view.zoom, duration });
+      void flow.setCenter(box.x + box.w / 2 + inset / 2, box.y + box.h / 2, { zoom: view.zoom, duration });
     },
-    [boxOf, visibleRect, flow, duration],
+    [boxOf, visibleRect, flow, duration, rightInset],
   );
 
   const api = useMemo<CanvasApi>(
@@ -387,6 +412,7 @@ function GraphCanvasInner({
       <style>{`
         .${scopeClass} .iga-graph-highlight > div { box-shadow: 0 0 0 2px var(--color-text); }
         .${scopeClass} .react-flow__node { transition: ${reducedMotion ? "none" : "transform 180ms ease"}; }
+        .${scopeClass} .react-flow__node.dragging { transition: none; z-index: 10; }
         .${scopeClass} .react-flow__controls { box-shadow: var(--shadow-xs); border-radius: 6px; overflow: hidden; }
         .${scopeClass} .react-flow__controls-button { width: 26px; height: 26px; }
       `}</style>
@@ -400,7 +426,35 @@ function GraphCanvasInner({
         edges={rfEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={false}
+        nodesDraggable
+        nodeDragThreshold={4}
+        onNodesChange={(changes: NodeChange<RFGraphNode>[]) => {
+          const moving = changes.filter((c) => c.type === "position" && c.dragging && c.position);
+          if (!moving.length) return;
+          setDragging((prev) => {
+            const next = new Map(prev);
+            for (const c of moving) if (c.type === "position" && c.position) next.set(c.id, c.position);
+            return next;
+          });
+        }}
+        onNodeDragStop={(_event, node) => {
+          lastDragEnd.current = { id: node.id, at: Date.now() };
+          onMoveNode(node.id, { x: Math.round(node.position.x), y: Math.round(node.position.y) });
+          setDragging((prev) => {
+            const next = new Map(prev);
+            next.delete(node.id);
+            return next;
+          });
+        }}
+        onNodeClick={(_event, node) => {
+          const d = lastDragEnd.current;
+          if (d && d.id === node.id && Date.now() - d.at < 300) return;
+          onSelectNode(node.id);
+        }}
+        onNodeDoubleClick={(_event, node) => {
+          const v = visualNodes.find((x) => x.id === node.id);
+          if (v) onOpenNode(v.members[0].ref);
+        }}
         nodesConnectable={false}
         // Our own card is the one focusable, described element (`nodes.tsx`);
         // React Flow's wrapper would add a second tab stop per node.

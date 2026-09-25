@@ -69,9 +69,19 @@ const WARN: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitation
   "account_not_connected",
 ]);
 
-function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+/** One full-width labelled row: long values wrap instead of breaking in a narrow column. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className={cn("min-w-0", wide && "col-span-2")}>
+    <section className="space-y-2">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-muted)">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
       <dt className="mb-0.5 text-[11px] font-medium text-(--color-text-muted)">{label}</dt>
       <dd className="min-w-0 break-words text-[13px] text-(--color-text)">{children}</dd>
     </div>
@@ -201,113 +211,125 @@ export function EvidenceClaim({
   const lifecycle = e.status.lifecycle;
 
   return (
-    <article className="space-y-4">
-      <header className="space-y-2">
-        {heading ? <p className="text-[11px] font-medium uppercase tracking-wider text-(--color-text-muted)">{heading}</p> : null}
-        <p className="text-sm font-medium leading-snug text-(--color-text)">{e.claim.sentence}</p>
+    <article className="space-y-5">
+      <Section title={heading ?? "Explanation"}>
+        <p className="text-sm leading-snug text-(--color-text)">{e.claim.sentence}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           {e.status.basis ? <StatusBadge tone="neutral">{e.status.basis}</StatusBadge> : null}
           {lifecycle !== "current" ? <StatusBadge tone={REL_STATE_TONE[lifecycle]}>{lifecycle}</StatusBadge> : null}
-          {e.status.collection !== "complete" ? (
-            <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge>
-          ) : null}
-          {ex?.effect ? (
-            // The provider's own effect, as written — not a decision.
-            <StatusBadge tone={ex.effect === "Deny" ? "warning" : "neutral"}>Effect: {ex.effect}</StatusBadge>
-          ) : null}
+          {e.status.collection !== "complete" ? <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge> : null}
         </div>
-        <Limitations limitations={e.limitations} />
-      </header>
+        {context?.relationship || context?.source || context?.target ? (
+          <dl className="space-y-2">
+            {context?.relationship ? <Field label="Relationship">{context.relationship}</Field> : null}
+            {context?.source || context?.target ? (
+              <Field label="Source → target">
+                {context.source ?? "—"} → {context.target ?? "—"}
+              </Field>
+            ) : null}
+          </dl>
+        ) : null}
+      </Section>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        {context?.relationship ? <Field label="Relationship">{context.relationship}</Field> : null}
-        {context?.source || context?.target ? (
-          <Field label="Source → target">
-            {context.source ?? "—"} → {context.target ?? "—"}
-          </Field>
-        ) : null}
-        {withPolicy ? (
-          <Field label="Policy and statement" wide>
-            {withPolicy.policy?.name ?? "Policy"}
-            {withPolicy.statement
-              ? withPolicy.statement.sid
-                ? ` · Sid ${withPolicy.statement.sid}`
-                : withPolicy.statement.index != null
-                  ? ` · statement ${withPolicy.statement.index + 1}`
-                  : ""
-              : ""}
-            {withPolicy.policy_version ? <span className="text-(--color-text-muted)"> · {withPolicy.policy_version}</span> : null}
-          </Field>
-        ) : null}
-        {ex && (ex.actions.length || ex.notActions.length) ? (
-          <Field label={ex.notActions.length && !ex.actions.length ? "All actions except" : "Actions"} wide>
-            <Codes items={ex.actions.length ? ex.actions : ex.notActions} />
-          </Field>
-        ) : null}
-        {ex && (ex.resources.length || ex.notResources.length) ? (
-          <Field label={ex.notResources.length && !ex.resources.length ? "All resources except" : "Resource reference"} wide>
-            <Codes items={ex.resources.length ? ex.resources : ex.notResources} max={3} />
-          </Field>
-        ) : null}
-        {ex?.condition.length ? (
-          <Field label="Conditions" wide>
-            <span className="text-(--color-warning-text)">Recorded, not evaluated:</span> <Codes items={ex.condition} />
-          </Field>
-        ) : null}
-        <Field label="Evidence source">{sources.length ? sources.join(", ") : "not recorded"}</Field>
-        <Field label="Last confirmed">
-          <Timestamp iso={e.freshness.last_confirmed_at} />
-        </Field>
-        <Field label="First seen">
-          <Timestamp iso={e.freshness.first_seen_at} />
-        </Field>
-        {e.freshness.stale_since ? (
-          <Field label="Stale since">
-            <span className="text-(--color-warning-text)">
-              <Timestamp iso={e.freshness.stale_since} />
-            </span>
-          </Field>
-        ) : null}
-        {lifecycle === "ended" ? (
-          <Field label="Ended">
-            {e.freshness.valid_to ? <Timestamp iso={e.freshness.valid_to} /> : "Ended"}
-            {e.freshness.ended_reason ? ` · ${e.freshness.ended_reason.replace(/_/g, " ")}` : ""}
-          </Field>
-        ) : null}
-      </dl>
+      {withPolicy || ex ? (
+        <Section title="Policy and statement">
+          <dl className="space-y-2">
+            {withPolicy ? (
+              <Field label="Policy">
+                {withPolicy.policy?.name ?? "Policy"}
+                {withPolicy.statement
+                  ? withPolicy.statement.sid
+                    ? ` · Sid ${withPolicy.statement.sid}`
+                    : withPolicy.statement.index != null
+                      ? ` · statement ${withPolicy.statement.index + 1}`
+                      : ""
+                  : ""}
+                {withPolicy.policy_version ? <span className="text-(--color-text-muted)"> · {withPolicy.policy_version}</span> : null}
+              </Field>
+            ) : null}
+            {ex?.effect ? (
+              // The provider's own effect, as written — not a decision.
+              <Field label="Effect">{ex.effect} <span className="text-(--color-text-muted)">(as written; not evaluated)</span></Field>
+            ) : null}
+            {ex && (ex.actions.length || ex.notActions.length) ? (
+              <Field label={ex.notActions.length && !ex.actions.length ? "All actions except" : "Actions"}>
+                <Codes items={ex.actions.length ? ex.actions : ex.notActions} />
+              </Field>
+            ) : null}
+            {ex && (ex.resources.length || ex.notResources.length) ? (
+              <Field label={ex.notResources.length && !ex.resources.length ? "All resources except" : "Resource reference"}>
+                <Codes items={ex.resources.length ? ex.resources : ex.notResources} max={3} />
+              </Field>
+            ) : null}
+          </dl>
+        </Section>
+      ) : null}
 
-      {e.facts.length ? (
-        <Disclosure summary={`Supporting records (${e.facts.length})`}>
-          <p className="text-[11px] text-(--color-text-muted)">
-            Each record is one collection of this fact — not a separate grant.
-          </p>
-          <ol className="space-y-2">
-            {e.facts.map((f, i) => (
-              <li key={i} className="space-y-1 rounded bg-(--color-surface-subtle) px-2.5 py-2 text-xs">
-                <p className="text-(--color-text)">{f.fact}</p>
-                <p className="break-all font-mono text-[11px] text-(--color-text-muted)">
-                  {[f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · ")}
-                </p>
-                {f.last_confirmed_at ? (
-                  <p className="text-(--color-text-muted)">
-                    Collected <Timestamp iso={f.last_confirmed_at} />
+      {ex?.condition.length || e.limitations.some((l) => l.code !== "effective_access_not_evaluated") ? (
+        <Section title="Conditions and constraints">
+          {ex?.condition.length ? (
+            <p className="text-[13px]">
+              <span className="text-(--color-warning-text)">Conditions recorded, not evaluated:</span> <Codes items={ex.condition} />
+            </p>
+          ) : null}
+          <Limitations limitations={e.limitations} />
+        </Section>
+      ) : null}
+
+      <Section title="Collection source and freshness">
+        <dl className="space-y-2">
+          <Field label="Evidence source">{sources.length ? sources.join(", ") : "not recorded"}</Field>
+          <Field label="Last confirmed">
+            <Timestamp iso={e.freshness.last_confirmed_at} />
+          </Field>
+          <Field label="First seen">
+            <Timestamp iso={e.freshness.first_seen_at} />
+          </Field>
+          {e.freshness.stale_since ? (
+            <Field label="Stale since">
+              <span className="text-(--color-warning-text)">
+                <Timestamp iso={e.freshness.stale_since} />
+              </span>
+            </Field>
+          ) : null}
+          {lifecycle === "ended" ? (
+            <Field label="Ended">
+              {e.freshness.valid_to ? <Timestamp iso={e.freshness.valid_to} /> : "Ended"}
+              {e.freshness.ended_reason ? ` · ${e.freshness.ended_reason.replace(/_/g, " ")}` : ""}
+            </Field>
+          ) : null}
+        </dl>
+        {e.facts.length ? (
+          <Disclosure summary={`Supporting records (${e.facts.length})`}>
+            <p className="text-[11px] text-(--color-text-muted)">Each record is one collection of this fact — not a separate grant.</p>
+            <ol className="space-y-2">
+              {e.facts.map((f, i) => (
+                <li key={i} className="space-y-1 rounded bg-(--color-surface-subtle) px-2.5 py-2 text-xs">
+                  <p className="text-(--color-text)">{f.fact}</p>
+                  <p className="break-all font-mono text-[11px] text-(--color-text-muted)">
+                    {[f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · ")}
                   </p>
-                ) : null}
-                {f.statement_excerpt ? (
-                  <details>
-                    <summary className="cursor-pointer text-[11px] font-medium text-(--color-primary-text)">Statement as written</summary>
-                    <pre className="mt-1 max-h-60 overflow-auto rounded bg-(--color-surface-raised) p-2 font-mono text-[11px]">
-                      {JSON.stringify(f.statement_excerpt, null, 2)}
-                    </pre>
-                  </details>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        </Disclosure>
-      ) : (
-        <p className="text-xs text-(--color-text-muted)">No supporting record was returned for this claim.</p>
-      )}
+                  {f.last_confirmed_at ? (
+                    <p className="text-(--color-text-muted)">
+                      Collected <Timestamp iso={f.last_confirmed_at} />
+                    </p>
+                  ) : null}
+                  {f.statement_excerpt ? (
+                    <details>
+                      <summary className="cursor-pointer text-[11px] font-medium text-(--color-primary-text)">Statement as written</summary>
+                      <pre className="mt-1 max-h-60 overflow-auto rounded bg-(--color-surface-raised) p-2 font-mono text-[11px]">
+                        {JSON.stringify(f.statement_excerpt, null, 2)}
+                      </pre>
+                    </details>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </Disclosure>
+        ) : (
+          <p className="text-xs text-(--color-text-muted)">No supporting record was returned for this claim.</p>
+        )}
+      </Section>
 
       <details
         className="text-xs"
@@ -315,7 +337,7 @@ export function EvidenceClaim({
           if ((ev.currentTarget as HTMLDetailsElement).open) setRaw(true);
         }}
       >
-        <summary className="cursor-pointer font-medium text-(--color-primary-text)">Raw record</summary>
+        <summary className="cursor-pointer font-semibold uppercase tracking-wider text-[11px] text-(--color-text-muted)">Raw record</summary>
         {e.raw != null ? (
           <pre className="mt-2 max-h-80 overflow-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
             {JSON.stringify(e.raw, null, 2)}
@@ -372,8 +394,8 @@ export function EvidenceClaims({
 /** The one statement true of every claim, said once per panel. */
 export function DeclaredAccessNotice({ className }: { className?: string }) {
   return (
-    <p className={cn("rounded-md bg-(--color-info-soft) px-3 py-2 text-xs text-(--color-info-text)", className)}>
-      Declared access. Whether a request would succeed has not been evaluated.
+    <p className={cn("text-xs text-(--color-text-muted)", className)}>
+      Declared access — whether a request would succeed has not been evaluated.
     </p>
   );
 }

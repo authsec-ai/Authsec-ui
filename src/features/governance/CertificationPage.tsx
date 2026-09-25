@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { tableFailure } from "@/components/console/load-failure";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -145,7 +146,7 @@ function CreateCampaignDialog({
 
 export default function CertificationPage() {
   const navigate = useNavigate();
-  const { data, isError, error, refetch } = useListCampaignsQuery();
+  const { data, isLoading, error, refetch } = useListCampaignsQuery();
   const [createOpen, setCreateOpen] = useState(false);
   const campaigns = useMemo(() => data?.items ?? [], [data]);
 
@@ -232,21 +233,14 @@ export default function CertificationPage() {
         </Button>
       }
     >
-      {isError ? (
-        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load campaigns.</strong>{" "}
-          {(error as { status?: number })?.status === 403
-            ? "Your role is missing the governance:read permission."
-            : "The governance API returned an error."}{" "}
-          <button className="underline" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
-      ) : null}
 
       <TableCard>
         <CardContent variant="flush">
           <AdaptiveTable
+            sizing="fit"
+            cardsBelow={640}
+            loading={isLoading}
+            failure={tableFailure(error, "campaigns", () => refetch(), "governance:read")}
             tableId="certification-campaigns"
             columns={columns}
             data={campaigns}

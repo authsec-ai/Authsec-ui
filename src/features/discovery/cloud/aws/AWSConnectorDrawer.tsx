@@ -12,6 +12,8 @@
  * is never opened for a GCP row — DiscoveryIntegrationsPage gates that.
  */
 
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
@@ -174,7 +176,7 @@ export function AWSConnectorDrawer({
 
   const open = !!connectorId;
 
-  const { data: connector, isLoading } = useGetAwsConnectorQuery(connectorId ?? "", {
+  const { data: connector, isLoading, currentData: connectorNow, error: connectorError, refetch: refetchConnector } = useGetAwsConnectorQuery(connectorId ?? "", {
     skip: !connectorId,
     pollingInterval: autoPoll ? 4000 : 0,
   });
@@ -246,14 +248,16 @@ export function AWSConnectorDrawer({
     action: () => Promise<unknown>,
     successMessage: string,
     failFallback: string,
-  ) => {
+  ): Promise<boolean> => {
     try {
       await action();
       toast.success(successMessage);
+      return true;
     } catch (err) {
       const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
       const copy = awsErrorCopy(apiErr, failFallback);
       toast.error(`${copy.title}. ${copy.body}`);
+      return false;
     }
   };
 
@@ -287,12 +291,15 @@ export function AWSConnectorDrawer({
 
   const handleRevoke = async () => {
     if (!connector) return;
-    await runOrToast(
+    const revoked = await runOrToast(
       () => revokeConnector(connector.id).unwrap(),
       "AWS connector revoked. Everything already discovered is kept, for audit.",
       "Could not revoke the connector.",
     );
+    // A failed revoke leaves the connection as it was: keep the drawer open
+    // on it so the customer can see that and try again.
     setConfirmRevokeOpen(false);
+    if (!revoked) return;
     handleClose();
     onRevoked();
   };
@@ -326,7 +333,11 @@ export function AWSConnectorDrawer({
         ariaTitle={connector ? `AWS account ${connector.scope_id}` : "AWS connector"}
         ariaDescription="AWS connector overview, discovered identities, secrets, scan history, and actions."
       >
-        {isLoading || !connector ? (
+        {connectorError && !connectorNow ? (
+          <div className="p-6">
+            <LoadFailurePanel failure={loadFailureOf(connectorError) ?? "failed"} subject="this AWS account" permission="discovery:read" onRetry={() => void refetchConnector()} />
+          </div>
+        ) : isLoading || !connector ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : (
           <>
@@ -452,8 +463,8 @@ export function AWSConnectorDrawer({
                         title="Not scanned yet"
                         description="Run a scan to discover IAM roles, users, access keys and policies in this account."
                         action={
-                          <Button size="sm" onClick={handleScan} disabled={scanStarting}>
-                            {scanStarting ? "Starting…" : "Scan now"}
+                          <Button size="sm" onClick={handleScan} disabled={scanStarting || connector.status === "revoked"}>
+                            {scanStarting ? "Queuing…" : "Scan now"}
                           </Button>
                         }
                       />

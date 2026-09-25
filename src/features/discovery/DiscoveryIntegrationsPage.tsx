@@ -42,6 +42,7 @@
  *    `DiscoverySource.last_error` — same meaning, shown the same way.
  */
 
+import { tableFailure } from "@/components/console/load-failure";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
@@ -213,12 +214,10 @@ type IntegrationRow =
   | { rowKind: "cloud"; connector: CloudConnector };
 
 export default function DiscoveryIntegrationsPage() {
-  const { data, isError: sourcesError, error: sourcesErrorObj, refetch } = useListDiscoverySourcesQuery();
+  const { data, isError: sourcesError, error: sourcesErrorObj, refetch, isLoading: sourcesLoading } = useListDiscoverySourcesQuery();
   const aws = useListAwsConnectorsQuery();
   const gcp = useListGcpConnectorsQuery();
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const navigate = useNavigate();
   const [githubOpen, setGithubOpen] = useState(false);
   const [cloudPickerOpen, setCloudPickerOpen] = useState(false);
@@ -228,6 +227,23 @@ export default function DiscoveryIntegrationsPage() {
   const [selectedAwsConnectorId, setSelectedAwsConnectorId] = useState<string | null>(null);
   const [convertManifest] = useConvertGitHubAppManifestMutation();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Search and status live in the URL, so returning from an integration's
+  // page (Back) restores the list as it was.
+  const search = searchParams.get("q") ?? "";
+  const statusParam = searchParams.get("status");
+  const statusFilter: StatusFilter = FILTERS.some((f) => f.key === statusParam) ? (statusParam as StatusFilter) : "all";
+  const setListParam = (key: string, value: string | null) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const setSearch = (v: string) => setListParam("q", v || null);
+  const setStatusFilter = (v: StatusFilter) => setListParam("status", v === "all" ? null : v);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscoverySource | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<CloudConnector | null>(null);
@@ -353,11 +369,7 @@ export default function DiscoveryIntegrationsPage() {
     sourcesErrorObj ??
     (awsUnavailable ? undefined : aws.error) ??
     (gcpUnavailable ? undefined : gcp.error);
-  const retryAll = () => {
-    void refetch();
-    void aws.refetch();
-    void gcp.refetch();
-  };
+  const retryAll = () => Promise.allSettled([refetch(), aws.refetch(), gcp.refetch()]);
 
   // Whether deleting this one takes the workspace's GitHub App with it. Mirrors
   // the server's condition (last repo_scan source in the workspace) so the
@@ -634,7 +646,7 @@ export default function DiscoveryIntegrationsPage() {
               onSelect: () =>
                 void runAwsRowAction(
                   () => scanAws(connector.id).unwrap(),
-                  "Scan started — it runs in the background.",
+                  "Scan queued — it runs in the background. Open the account to follow it.",
                   "Could not start the scan.",
                 ),
             },
@@ -677,11 +689,13 @@ export default function DiscoveryIntegrationsPage() {
     >
       {isError ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load integrations.</strong>{" "}
+          <strong className="font-medium">
+            {items.length ? "Some integrations could not load — the list below is partial." : "Could not load integrations."}
+          </strong>{" "}
           {(firstError as { status?: number })?.status === 403
             ? "Your role is missing the discovery:read permission."
             : "The discovery API returned an error."}{" "}
-          <button className="underline" onClick={retryAll}>
+          <button className="underline" onClick={() => void retryAll()}>
             Retry
           </button>
         </div>
@@ -700,6 +714,12 @@ export default function DiscoveryIntegrationsPage() {
         <CardContent variant="flush">
           <AdaptiveTable
             tableId="discovery-integrations"
+            sizing="fit"
+            cardsBelow={640}
+            loading={sourcesLoading}
+            // Nothing loaded because a request failed: say so, not "none yet".
+            failure={isError && !items.length ? tableFailure(firstError, "integrations", retryAll, "discovery:read") : undefined}
+            emptyState={search || statusFilter !== "all" ? "No integrations match these filters." : "No integrations yet. Add one to start discovery."}
             columns={columns}
             data={items}
             getRowId={(r) => (r.rowKind === "source" ? `source:${r.source.id}` : `cloud:${r.connector.id}`)}

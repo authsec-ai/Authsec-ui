@@ -15,13 +15,13 @@
  * keyboard's target and carries the full description as its name.
  */
 
-import { memo } from "react";
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { memo, useState } from "react";
+import { BaseEdge, EdgeLabelRenderer, Position, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 
 import { limitationText } from "../shared/labels";
-import { edgeVerb, markedLimitations, mixedStateText } from "./graphLabels";
+import { edgeVerb, independentCount, markedLimitations, mixedStateText } from "./graphLabels";
 import type { VisualEdge } from "./types";
 
 export interface GraphEdgeData extends Record<string, unknown> {
@@ -32,21 +32,37 @@ export interface GraphEdgeData extends Record<string, unknown> {
   hovered: boolean;
   reducedMotion: boolean;
   onSelect: (id: string) => void;
+  /** Offset, in pixels, from a sibling line between the same two cards. */
+  spread: number;
 }
 
 export type RFGraphEdge = Edge<GraphEdgeData, "graphEdge">;
 
 function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<RFGraphEdge>) {
+  const [focused, setFocused] = useState(false);
   if (!data) return null;
   const { visual: e } = data;
-  const grants = e.members.length;
-  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, curvature: 0.3 });
+  const grants = independentCount(e);
+  // Sibling lines leave and enter their cards side by side.
+  const across = sourcePosition === Position.Left || sourcePosition === Position.Right;
+  const dx = across ? 0 : data.spread;
+  const dy = across ? data.spread : 0;
+  const [path, labelX, labelY] = getBezierPath({
+    sourceX: sourceX + dx,
+    sourceY: sourceY + dy,
+    sourcePosition,
+    targetX: targetX + dx,
+    targetY: targetY + dy,
+    targetPosition,
+    curvature: 0.3,
+  });
 
   const stale = e.state === "stale";
   const ended = e.state === "ended";
   const mixed = mixedStateText(e.members.map((m) => m.state ?? "current"));
   const marked = markedLimitations(e);
-  const showWords = data.isSelected || data.hovered || data.highlighted;
+  const showWords = data.isSelected || data.hovered || data.highlighted || focused;
+  const deny = e.summary?.effect === "deny";
   const hasMarks = grants > 1 || marked.length > 0 || e.closesCycle || e.crossesAccount;
 
   const stroke = data.isSelected
@@ -63,7 +79,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
 
   const description = [
     edgeVerb(e),
-    grants > 1 ? (e.kind === "grant" ? `${grants} independent grants` : `${grants} relationships`) : null,
+    grants > 1 ? (e.kind === "grant" ? `${grants} independent grants` : e.kind === "declares" ? `${grants} statements` : `${grants} relationships`) : null,
     e.state !== "current" ? e.state : null,
     mixed,
     e.closesCycle ? "closes a cycle" : null,
@@ -81,7 +97,9 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
         markerEnd={markerEnd}
         interactionWidth={18}
         style={{
-          strokeDasharray: stale ? "6 4" : ended ? "2 4" : undefined,
+          // Stale and ended by dash; a Deny line by a long dash-dot, and its
+          // label says "denies" — never the same line as an Allow.
+          strokeDasharray: stale ? "6 4" : ended ? "2 4" : deny ? "10 3 2 3" : undefined,
           stroke,
           strokeWidth: data.isSelected || data.highlighted ? 2.25 : 1.25,
           transition: data.reducedMotion ? undefined : "stroke 150ms",
@@ -99,6 +117,8 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
               ev.stopPropagation();
               data.onSelect(id);
             }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             aria-label={description}
             aria-pressed={data.isSelected}
             title={description}

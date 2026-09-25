@@ -109,6 +109,8 @@ export interface ResponsiveTableConfig<TData> {
   columnWidths?: Record<string, number | undefined>;
   /** false: only the row's expand button toggles its details (the row click does something else). Default true. */
   expandOnRowClick?: boolean;
+  /** What an empty table says, instead of "No results.". */
+  emptyState?: React.ReactNode;
 }
 
 // Reusable column resize handle
@@ -289,6 +291,7 @@ export function ResponsiveDataTable<TData>({
   layout = "auto",
   columnWidths,
   expandOnRowClick = true,
+  emptyState,
 }: ResponsiveTableConfig<TData>) {
   const { visibleColumns } = useResponsiveTableContext();
   const fixed = layout === "fixed";
@@ -822,7 +825,7 @@ export function ResponsiveDataTable<TData>({
                   ) : (
                     <TableRow>
                       <TableCell colSpan={enhancedColumns.length} className="h-24 text-center">
-                        No results.
+                        {emptyState ?? "No results."}
                       </TableCell>
                     </TableRow>
                   )}

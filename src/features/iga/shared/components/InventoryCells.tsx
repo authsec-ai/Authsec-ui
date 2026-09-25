@@ -11,7 +11,7 @@
 import type { ReactNode } from "react";
 import { Copy } from "lucide-react";
 import { Link } from "react-router-dom";
-import { toast } from "react-hot-toast";
+import { copyToClipboard } from "@/lib/clipboard";
 
 import type { GraphAccount } from "@/app/api/igaGraphApi";
 import { useAdaptiveColumnShown } from "@/components/ui/adaptive-table-context";
@@ -73,8 +73,7 @@ export function CopyValue({ value, label = "Copy" }: { value: string; label?: Re
         aria-label={typeof label === "string" ? `${label} ${value}` : "Copy"}
         onClick={(e) => {
           e.stopPropagation();
-          void navigator.clipboard.writeText(value);
-          toast.success("Copied");
+          void copyToClipboard(value);
         }}
         className="no-row-click grid size-6 shrink-0 place-items-center rounded border border-(--color-border-subtle) text-(--color-text-muted) hover:text-(--color-text)"
       >
@@ -94,8 +93,7 @@ export function CopyValueWrapped({ value }: { value: string }) {
         aria-label={`Copy ${value}`}
         onClick={(e) => {
           e.stopPropagation();
-          void navigator.clipboard.writeText(value);
-          toast.success("Copied");
+          void copyToClipboard(value);
         }}
         className="no-row-click grid size-6 shrink-0 place-items-center rounded border border-(--color-border-subtle) text-(--color-text-muted) hover:text-(--color-text)"
       >

@@ -10,7 +10,6 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
 
 import {
   igaGraphApi,
@@ -30,6 +29,7 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
+import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
@@ -297,8 +297,7 @@ export default function EstateListPage() {
                   {
                     label: "Copy ARN",
                     onSelect: () => {
-                      void navigator.clipboard.writeText(row.original.arn);
-                      toast.success("ARN copied");
+                      void copyToClipboard(row.original.arn, "ARN");
                     },
                   },
                 ]}
@@ -332,7 +331,7 @@ export default function EstateListPage() {
       title="Agents & workloads"
       description={
         coverageSummary(meta, accountCount, incomplete, accounts.length ? accounts.map(nameOf).join(", ") : undefined) ??
-        "What runs in your connected AWS accounts, and the identities it runs as."
+        "What runs in your connected accounts, the identities it runs as, and what those identities declare — built from each scan into one graph."
       }
       actions={<AsOf meta={meta} />}
     >

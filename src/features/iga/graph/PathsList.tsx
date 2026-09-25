@@ -134,6 +134,7 @@ export function PathsList({
   frontierByNode,
   truncated,
   boundByMax,
+  depthLimited,
   stateOf,
   canLoadMore,
   onExpand,
@@ -150,8 +151,12 @@ export function PathsList({
   paths: RawPath[];
   nodesByRef: Map<GraphRef, GraphNode>;
   frontierByNode: Map<GraphRef, GraphFrontier[]>;
+  /** The server stopped at a limit: more exists than is loaded. */
   truncated: boolean;
+  /** This list stopped at its own path limit. */
   boundByMax: boolean;
+  /** A path was cut at the depth limit. */
+  depthLimited: boolean;
   stateOf: (f: GraphFrontier) => FrontierControl;
   canLoadMore: (f: GraphFrontier) => boolean;
   onExpand: (f: GraphFrontier) => void;
@@ -274,13 +279,21 @@ export function PathsList({
       ) : null}
       {boundByMax ? (
         <p className="text-xs text-(--color-warning-text)">
-          Path listing stopped at its limit, so this is not every path. Open an object's own graph to narrow it.
+          This list stopped at its limit of 200 paths, so it is not every path over what is loaded. Open an object's own
+          graph to narrow it.
         </p>
-      ) : truncated ? (
+      ) : null}
+      {depthLimited ? (
+        <p className="text-xs text-(--color-warning-text)">Some paths were cut after 12 steps; they continue beyond what is listed.</p>
+      ) : null}
+      {truncated ? (
         <p className="text-xs text-(--color-warning-text)">
-          Traversal stopped at a limit: these are the paths over what was loaded, not a complete answer. Expand an
-          object to load more.
+          The server stopped at a limit, so more relationships exist than are loaded — these paths are over what is
+          loaded, not a complete answer. Use the Load controls to fetch more.
         </p>
+      ) : null}
+      {!boundByMax && !depthLimited && !truncated ? (
+        <p className="text-xs text-(--color-text-muted)">Every path over what is loaded is listed. Load controls fetch relationships not loaded yet.</p>
       ) : null}
     </div>
   );

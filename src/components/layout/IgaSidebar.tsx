@@ -54,29 +54,28 @@ interface IgaNavItem {
   graphFeature?: GraphFeature;
 }
 
-const NAV_DISCOVERY: IgaNavItem[] = [
-  { title: "Integrations", url: "/iga/integrations", icon: Radar },
-  // The identity graph's entry point (SPEC-iga-phase2-graph.md §2.14.2).
+// Grouped by the customer's task (SPEC-iga-phase2-graph.md §2.14.2):
+// explore the estate, govern access, manage where the data comes from.
+// Every route is unchanged; only the grouping and two labels moved.
+const NAV_EXPLORE: IgaNavItem[] = [
+  // The identity graph's entry point.
   { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
-  { title: "Discovered Agents", url: "/iga/agents", icon: ScanSearch },
-  // The graph's identities and resources, estate-wide: an investigation often
-  // starts from a shared role or a sensitive bucket rather than a workload.
+  // Estate-wide: an investigation often starts from a shared role or a
+  // sensitive bucket rather than a workload.
   { title: "Identities", url: "/iga/identities", icon: Fingerprint, graphFeature: "identities" },
   { title: "Resources", url: "/iga/resources", icon: Database, graphFeature: "resources" },
-  // The cloud inventory — Identities, Compute and Resources as three tabs of
-  // one shell, not three sidebar items.
-  //
-  // Separate from "Discovered Agents" and "Identities" above because cloud
-  // results do NOT land in the shared discovered_agents table those two read
-  // from: they have their own route family and their own cloud_* tables, so a
-  // reader looking for an IAM role on "Discovered Agents" would never find it.
-  //
-  // One entry rather than one per provider per data type: the GCP build
-  // workflow has GCP inheriting these same provider-filterable views, so three
-  // items here would have become six, then nine.
+];
+
+const NAV_DATA_SOURCES: IgaNavItem[] = [
+  { title: "Integrations", url: "/iga/integrations", icon: Radar },
+  // The discovered-agents workflow: sightings from repositories and clusters
+  // waiting for a decision (claim, provision, quarantine). Named for that
+  // purpose so it does not read as a second copy of Agents & workloads.
+  { title: "Agent sightings", url: "/iga/agents", icon: ScanSearch },
+  // The rows each scan collected, as collected — the graph's source. One
+  // entry with Identities / Compute / Resources tabs, not one per provider.
   { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud },
-  // Sits under Discovery, not Settings: it defines what a scan looks for, so it
-  // belongs beside the scanning it governs rather than in a config drawer.
+  // Defines what a repository scan looks for, so it sits beside the scanning.
   { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },
 ];
 
@@ -116,8 +115,9 @@ export function IgaSidebar({
     [location.pathname, handleNavigation, serves],
   );
 
-  const discoveryItems = useMemo(() => decorate(NAV_DISCOVERY), [decorate]);
+  const exploreItems = useMemo(() => decorate(NAV_EXPLORE), [decorate]);
   const governanceItems = useMemo(() => decorate(NAV_GOVERNANCE), [decorate]);
+  const sourceItems = useMemo(() => decorate(NAV_DATA_SOURCES), [decorate]);
 
   return (
     <Sidebar
@@ -159,8 +159,9 @@ export function IgaSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        <NavMain title="Discovery" items={discoveryItems} />
+        {exploreItems.length ? <NavMain title="Explore" items={exploreItems} /> : null}
         <NavMain title="Governance" items={governanceItems} />
+        <NavMain title="Data sources" items={sourceItems} />
       </SidebarContent>
 
       <SidebarFooter>

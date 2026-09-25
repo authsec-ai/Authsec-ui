@@ -8,6 +8,9 @@
  */
 
 import { useMemo, useState } from "react";
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
+import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
@@ -68,10 +71,11 @@ export default function CampaignDetailPage() {
   const { id = "" } = useParams<{ id?: string }>();
   const navigate = useNavigate();
 
-  const { data: campaign, isLoading } = useGetCampaignQuery(id, { skip: !id });
+  const { data: campaign, isLoading, error: campaignError, refetch } = useGetCampaignQuery(id, { skip: !id });
+  useBreadcrumbTail(campaign ? `/iga/certification/${id}` : null, campaign?.name ?? null, { label: "Access Certification", href: "/iga/certification" });
   const [pendingOnly, setPendingOnly] = useState(true);
   const [mineOnly, setMineOnly] = useState(false);
-  const { data: itemsData } = useListCampaignItemsQuery(
+  const { data: itemsData, isError: itemsFailed, isLoading: itemsLoading, refetch: refetchItems } = useListCampaignItemsQuery(
     { id, filters: { pending: pendingOnly, mine: mineOnly } },
     { skip: !id },
   );
@@ -85,8 +89,10 @@ export default function CampaignDetailPage() {
     return <ConsolePage title="Campaign" description="Loading…">{null}</ConsolePage>;
   }
   if (!campaign) {
+    // A failed request is not a missing campaign: say which it is.
     return (
-      <ConsolePage title="Campaign" description="Not found.">
+      <ConsolePage title="Campaign">
+        <LoadFailurePanel failure={loadFailureOf(campaignError) ?? "not_found"} subject="this campaign" permission="governance:read" onRetry={() => void refetch()} />
         <Button variant="outline" onClick={() => navigate("/iga/certification")}>
           <ArrowLeft className="size-4" /> Back to campaigns
         </Button>
@@ -221,6 +227,11 @@ export default function CampaignDetailPage() {
             <CardContent variant="flush">
               <AdaptiveTable
                 tableId="certification-items"
+                sizing="fit"
+                cardsBelow={640}
+                loading={itemsLoading}
+                failure={itemsFailed ? { message: "Could not load this campaign's items. This is a failed request, not an empty review.", onRetry: () => void refetchItems() } : undefined}
+                emptyState={pendingOnly ? "Nothing left to decide." : "No items match."}
                 columns={columns}
                 data={items}
                 getRowId={(i) => i.id}
@@ -282,7 +293,15 @@ function ItemDecisionDrawer({
           ...(decision === "delegate" ? { delegate_to: delegateTo.trim() } : {}),
         },
       }).unwrap();
-      toast.success(`Marked ${decision}.`);
+      // The backend runs a revoke's de-provision before it records the
+      // decision, so success here means the access was removed.
+      toast.success(
+        decision === "revoke"
+          ? "Access revoked, and the decision recorded."
+          : decision === "delegate"
+            ? "Delegated — the reviewer you named decides it."
+            : "Kept — the decision is recorded.",
+      );
       setNote("");
       setDelegateTo("");
       onClose();

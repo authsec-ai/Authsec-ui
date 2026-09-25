@@ -83,7 +83,24 @@ export function Breadcrumb() {
           label = "Agents & workloads";
           break;
         case "agents":
-          label = "Agents Identities";
+          // Outside IGA this is the legacy agent-identities page; under IGA it
+          // is the sightings workflow, named as the IGA sidebar names it.
+          label = pathname.startsWith("/iga/") ? "Agent sightings" : "Agents Identities";
+          break;
+        case "cloud":
+          label = "Cloud Inventory";
+          break;
+        case "certification":
+          label = "Access Certification";
+          break;
+        case "sod":
+          label = "Separation of Duties";
+          break;
+        case "birthrights":
+          label = "Birthrights & Lifecycle";
+          break;
+        case "enforcement":
+          label = "Enforcement queue";
           break;
         case "services":
           label = "Services";

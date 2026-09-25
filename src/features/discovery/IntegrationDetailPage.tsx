@@ -9,6 +9,9 @@
  */
 
 import { useMemo, useState } from "react";
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
+import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowLeft, ShieldCheck, ShieldAlert, KeyRound } from "lucide-react";
@@ -47,10 +50,11 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 export default function IntegrationDetailPage() {
   const { id = "" } = useParams<{ id?: string }>();
   const navigate = useNavigate();
-  const { data: source, isLoading: sourceLoading } = useGetDiscoverySourceQuery(id, {
+  const { data: source, isLoading: sourceLoading, error: sourceError, refetch } = useGetDiscoverySourceQuery(id, {
     skip: !id,
   });
-  const { data: agentsData } = useListDiscoveredAgentsQuery();
+  const { data: agentsData, isError: agentsFailed } = useListDiscoveredAgentsQuery();
+  useBreadcrumbTail(source ? `/iga/integrations/${id}` : null, source?.display_name ?? null, { label: "Integrations", href: "/iga/integrations" });
   const [tokenOpen, setTokenOpen] = useState(false);
 
   const foundHere = useMemo(
@@ -70,8 +74,10 @@ export default function IntegrationDetailPage() {
   }
 
   if (!source) {
+    // A failed request is not a missing integration: say which it is.
     return (
-      <ConsolePage title="Integration" description="Not found.">
+      <ConsolePage title="Integration">
+        <LoadFailurePanel failure={loadFailureOf(sourceError) ?? "not_found"} subject="this integration" permission="discovery:read" onRetry={() => void refetch()} />
         <Button variant="outline" onClick={() => navigate("/iga/integrations")}>
           <ArrowLeft className="size-4" /> Back to integrations
         </Button>
@@ -227,7 +233,7 @@ export default function IntegrationDetailPage() {
             <Stat
               label="Agents matched"
               value={status.workloadsMatched != null ? String(status.workloadsMatched) : "—"}
-              hint={`${foundHere.length} in inventory`}
+              hint={agentsFailed ? "Inventory count could not load" : `${foundHere.length} in inventory`}
             />
             <Stat
               label="Namespaces visible"

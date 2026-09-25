@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Copy } from "lucide-react";
-import { toast } from "react-hot-toast";
 
+import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 /**
@@ -96,8 +96,7 @@ export function CopyField({ label, value }: { label?: ReactNode; value: string }
           type="button"
           aria-label="Copy"
           onClick={() => {
-            void navigator.clipboard.writeText(value);
-            toast.success("Copied");
+            void copyToClipboard(value);
           }}
           className="flex size-6 flex-none items-center justify-center rounded-md border bg-background text-muted-foreground transition-colors hover:text-foreground"
         >

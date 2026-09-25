@@ -19,7 +19,6 @@ import { useReducer } from "react";
 import type {
   GraphDirection,
   GraphEdge,
-  GraphEdgeKind,
   GraphExpansion,
   GraphFrontier,
   GraphNeighbourhood,
@@ -39,6 +38,7 @@ import {
   type RawPath,
   type VisualEdge,
   type VisualNode,
+  type VisualEdgeKind,
 } from "./types";
 
 export type { Position };
@@ -60,6 +60,15 @@ export interface ModelState {
   truncated: GraphTruncation | null;
   /** By drawn node id. Kept for nodes not drawn right now, so a branch shown again returns to its place. */
   positions: Map<string, Position>;
+  /**
+   * Positions the customer set by dragging. Presentation only — moving a
+   * card never changes a fact. They survive expansion, a refresh's re-layout
+   * and a return to the graph; only Reset layout discards them (and can be
+   * undone once).
+   */
+  manualPositions: Map<string, Position>;
+  /** The layout Reset layout replaced, for Restore previous layout. */
+  previousLayout: { positions: Map<string, Position>; manualPositions: Map<string, Position> } | null;
   /** Set once, by the layout effect, so a second ELK run is never triggered implicitly. */
   laidOut: boolean;
   viewport?: { x: number; y: number; zoom: number };
@@ -86,6 +95,8 @@ export function initialModelState(): ModelState {
     failed: new Set(),
     truncated: null,
     positions: new Map(),
+    manualPositions: new Map(),
+    previousLayout: null,
     laidOut: false,
     revealedWorkloads: new Set(),
     revealedBranches: new Set(),
@@ -106,6 +117,10 @@ type Action =
   | { type: "path"; owner: string; nodes: GraphNode[]; edges: GraphEdge[] }
   | { type: "positions"; positions: Map<string, Position> }
   | { type: "arranged"; positions: Map<string, Position> }
+  | { type: "move"; id: string; position: Position }
+  | { type: "seed-manual"; positions: Map<string, Position> }
+  | { type: "reset-layout" }
+  | { type: "restore-layout" }
   | { type: "reveal-branch"; id: string; shown: boolean }
   | { type: "trace"; claims: GraphRef[] | null }
   | { type: "relayout" };
@@ -282,9 +297,49 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
       return { ...state, positions };
     }
 
-    case "arranged":
-      // ELK's answer for everything drawn: the first view, or Arrange.
-      return { ...state, positions: new Map(action.positions), laidOut: true };
+    case "arranged": {
+      // ELK's answer for everything drawn (first view, a refresh, Reset
+      // layout); every position the customer set stays theirs.
+      const positions = new Map(action.positions);
+      for (const [id, p] of state.manualPositions) positions.set(id, p);
+      return { ...state, positions, laidOut: true };
+    }
+
+    case "move": {
+      const positions = new Map(state.positions);
+      positions.set(action.id, action.position);
+      const manualPositions = new Map(state.manualPositions);
+      manualPositions.set(action.id, action.position);
+      return { ...state, positions, manualPositions };
+    }
+
+    case "seed-manual": {
+      // Saved positions from an earlier visit to this graph, applied once.
+      if (state.manualPositions.size) return state;
+      const positions = new Map(state.positions);
+      for (const [id, p] of action.positions) positions.set(id, p);
+      return { ...state, positions, manualPositions: new Map(action.positions) };
+    }
+
+    case "reset-layout":
+      // Discard the customer's positions and lay out again; keep what they
+      // replaced so it can be restored.
+      return {
+        ...state,
+        previousLayout: { positions: state.positions, manualPositions: state.manualPositions },
+        manualPositions: new Map(),
+        laidOut: false,
+      };
+
+    case "restore-layout":
+      if (!state.previousLayout) return state;
+      return {
+        ...state,
+        positions: new Map(state.previousLayout.positions),
+        manualPositions: new Map(state.previousLayout.manualPositions),
+        previousLayout: null,
+        laidOut: true,
+      };
 
     case "relayout":
       // Arrange / a refresh to a new revision: ELK runs again over what is
@@ -297,7 +352,8 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
 }
 
 // Same-session Back and tab detours restore the already loaded investigation.
-// Nothing is written to persistent storage, and session changes erase it.
+// Only moved-card positions are written to browser storage (`savedLayout.ts`);
+// session changes erase the rest.
 const investigations = new Map<string, ModelState>();
 onGraphSessionReset(() => investigations.clear());
 export function rememberGraphModel(key: string, state: ModelState) {
@@ -459,14 +515,84 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
   return { nodes: [...nodesById.values()], edges: [...edgesById.values()] };
 }
 
+/* ------------------------------- overview view ------------------------------ */
+
+/**
+ * The Overview (§2.14.11 *Views*): identity → statement → resource drawn as
+ * one `declares` line identity → resource, so the default graph reads
+ * workload → identity → what it declares. A PRESENTATION of those claims:
+ *
+ * - one line per (holder, resource, effect) — an Allow and a Deny are never
+ *   one line; each statement behind it stays listed (`summary.statements`)
+ *   with its own grant and target claims, so independent grants remain
+ *   independently inspectable;
+ * - role assumption, membership and execution-role edges are untouched, so
+ *   a relationship that depends on another role still shows that hop;
+ * - a statement that names nothing loaded, or has targets not loaded yet
+ *   (its own Load control), stays drawn as a statement.
+ */
+export function summarizeStatements(visual: { nodes: VisualNode[]; edges: VisualEdge[] }): { nodes: VisualNode[]; edges: VisualEdge[] } {
+  const grantsInto = new Map<string, VisualEdge[]>();
+  const targetsOut = new Map<string, VisualEdge[]>();
+  for (const e of visual.edges) {
+    if (e.kind === "grant") grantsInto.set(e.to, [...(grantsInto.get(e.to) ?? []), e]);
+    if (e.kind === "target") targetsOut.set(e.from, [...(targetsOut.get(e.from) ?? []), e]);
+  }
+  const removed = new Set<string>();
+  const lines = new Map<string, VisualEdge>();
+  for (const n of visual.nodes) {
+    if (n.kind !== "statement" || n.overflow || n.frontier.length) continue;
+    const grants = grantsInto.get(n.id) ?? [];
+    const targets = targetsOut.get(n.id) ?? [];
+    if (!grants.length || !targets.length) continue;
+    removed.add(n.id);
+    const effect = n.members.every((m) => m.effect === "deny") ? "deny" : n.members.some((m) => m.effect === "deny") ? "mixed" : "allow";
+    for (const g of grants) {
+      for (const t of targets) {
+        const id = `declares:${g.from}=>${t.to}:${effect}`;
+        let line = lines.get(id);
+        if (!line) {
+          line = { id, kind: "declares", from: g.from, to: t.to, members: [], state: "current", crossesAccount: false, closesCycle: false, summary: { statements: [], effect, exclusions: [], limitations: [] } };
+          lines.set(id, line);
+        }
+        line.members.push(...g.members, ...t.members);
+        if (!line.summary!.statements.includes(n)) {
+          line.summary!.statements.push(n);
+          // What the statement node itself carries (NotResource exclusions,
+          // conditions recorded on it) stays attached to the line.
+          for (const m of n.members) {
+            for (const x of m.exclusions ?? []) if (!line.summary!.exclusions.includes(x.text)) line.summary!.exclusions.push(x.text);
+            line.summary!.limitations.push(...(m.limitations ?? []));
+          }
+        }
+      }
+    }
+  }
+  if (!removed.size) return visual;
+  for (const line of lines.values()) {
+    line.state = dominantRelState(line.members.map((m) => m.state ?? "current"));
+    line.crossesAccount = line.members.some((m) => m.crosses_account);
+    // Two statements from one policy are still two lines of evidence; the
+    // label names the actions of every statement behind it.
+  }
+  return {
+    nodes: visual.nodes.filter((n) => !removed.has(n.id)),
+    edges: [...visual.edges.filter((e) => !removed.has(e.from) && !removed.has(e.to)), ...lines.values()],
+  };
+}
+
 /* --------------------------- progressive disclosure ------------------------ */
 
 /** Relationships of one kind a node shows before the rest fold into "+N more". */
 export const BRANCH_LIMIT = 6;
 
-/** The id of the node standing in for `parent`'s hidden `kind` relationships. */
-export function overflowId(parent: string, kind: GraphEdgeKind) {
-  return `more:${parent}:${kind}`;
+/**
+ * The id of the node standing in for `parent`'s hidden `kind` relationships
+ * in one direction. Incoming and outgoing branches are never one fold: the
+ * roles a role may assume and the roles that may assume it are two.
+ */
+export function overflowId(parent: string, kind: VisualEdgeKind, outward: boolean) {
+  return `more:${parent}:${kind}:${outward ? "out" : "in"}`;
 }
 
 /**
@@ -528,32 +654,51 @@ export function discloseVisual(
     }
   }
 
-  const children = new Map<string, Map<GraphEdgeKind, string[]>>();
+  // Children by (relationship kind, direction relative to the parent).
+  const children = new Map<string, Map<string, { kind: VisualEdgeKind; outward: boolean; ids: string[] }>>();
   for (const id of order.slice(1)) {
     const p = parent.get(id)!;
-    const kinds = children.get(p.id) ?? new Map<GraphEdgeKind, string[]>();
-    const list = kinds.get(p.edge.kind) ?? [];
-    list.push(id);
-    kinds.set(p.edge.kind, list);
+    const outward = p.edge.from === p.id;
+    const kinds = children.get(p.id) ?? new Map<string, { kind: VisualEdgeKind; outward: boolean; ids: string[] }>();
+    const k = `${p.edge.kind}:${outward}`;
+    const entry = kinds.get(k) ?? { kind: p.edge.kind, outward, ids: [] };
+    entry.ids.push(id);
+    kinds.set(k, entry);
     children.set(p.id, kinds);
   }
+  // An ECS task execution role is supporting infrastructure: what it
+  // declares is folded from the start (its presence stays drawn). Only a
+  // role reached OUTWARD from a workload through task_execution_role, and
+  // only when no workload runs as it — a role that is also a task role is
+  // the application's identity and folds like any other.
+  const runsAsTarget = new Set(visual.edges.filter((e) => e.kind === "executes_as").map((e) => e.to));
+  const infrastructure = (id: string) => {
+    const p = parent.get(id);
+    return !!p && p.edge.kind === "task_execution_role" && p.edge.from === p.id && p.edge.to === id && !runsAsTarget.has(id);
+  };
 
   // Candidate folds, parent by parent in breadth-first order.
-  const groups = new Map<string, { parent: string; kind: GraphEdgeKind; ids: string[]; edges: VisualEdge[] }>();
+  const groups = new Map<string, { parent: string; kind: VisualEdgeKind; ids: string[]; edges: VisualEdge[]; infrastructure: boolean }>();
   for (const id of order) {
-    for (const [kind, ids] of children.get(id) ?? []) {
-      const oid = overflowId(id, kind);
-      if (ids.length <= BRANCH_LIMIT || revealed.has(oid)) continue;
+    const infraNode = infrastructure(id);
+    for (const { kind, outward, ids } of children.get(id)?.values() ?? []) {
+      // What the role declares (outward grants / declares lines) — never
+      // the hops that lead to or from it.
+      const infra = infraNode && outward && (kind === "grant" || kind === "declares");
+      const limit = infra ? 0 : BRANCH_LIMIT;
+      const oid = overflowId(id, kind, outward);
+      if (ids.length <= limit || revealed.has(oid)) continue;
       let shown = ids.filter((c) => holdsKeep.has(c)).length;
       const folded: string[] = [];
       for (const c of ids) {
         if (holdsKeep.has(c)) continue;
-        if (shown < BRANCH_LIMIT) shown++;
+        if (shown < limit) shown++;
         else folded.push(c);
       }
-      // Folding a single node saves nothing: draw it.
-      if (folded.length < 2) continue;
-      groups.set(oid, { parent: id, kind, ids: folded, edges: folded.map((c) => parent.get(c)!.edge) });
+      // Folding a single node saves nothing: draw it (an infrastructure
+      // branch folds even one, so its supporting role reads as supporting).
+      if (folded.length < (infra ? 1 : 2)) continue;
+      groups.set(oid, { parent: id, kind, ids: folded, edges: folded.map((c) => parent.get(c)!.edge), infrastructure: infra });
     }
   }
   if (groups.size === 0) return visual;
@@ -617,8 +762,10 @@ export function discloseVisual(
         edgeKind: g.kind,
         hidden: members,
         beyond: beyond.get(oid) ?? 0,
+        infrastructure: g.infrastructure,
         moreNotLoaded: parentNode.frontier.some(
-          (f) => f.edge === g.kind && f.direction === (g.edges[0].from === g.parent ? "forward" : "reverse") && hasUnloaded(f),
+          // A `declares` fold stands for the parent's grants.
+          (f) => f.edge === (g.kind === "declares" ? "grant" : g.kind) && f.direction === (g.edges[0].from === g.parent ? "forward" : "reverse") && hasUnloaded(f),
         ),
       },
     });
@@ -672,6 +819,8 @@ export interface RawPathsResult {
   paths: RawPath[];
   /** `MAX_PATHS` bound the walk before every visible edge was covered (review item 5). */
   boundByMax: boolean;
+  /** A path reached `MAX_DEPTH` steps and was cut there. */
+  depthLimited: boolean;
 }
 
 /** Per-node frontier entries: the Load controls in the Paths list and the inspector. */
@@ -701,7 +850,7 @@ export function frontierByNode(state: ModelState): Map<GraphRef, GraphFrontier[]
 export function enumerateRawPaths(state: ModelState, root: GraphRef, direction: GraphDirection): RawPathsResult {
   const visible = visibleNodeRefs(state);
   const allEdges = visibleEdgeList(state, visible);
-  if (!visible.has(root)) return { paths: [], boundByMax: false };
+  if (!visible.has(root)) return { paths: [], boundByMax: false, depthLimited: false };
 
   const bucketOf = (e: GraphEdge) => (direction === "forward" ? e.from : e.to);
   const targetOf = (e: GraphEdge) => (direction === "forward" ? e.to : e.from);
@@ -719,6 +868,7 @@ export function enumerateRawPaths(state: ModelState, root: GraphRef, direction: 
   const stack: GraphRef[] = [root];
   const edgeStack: GraphEdge[] = [];
   let boundByMax = false;
+  let depthLimited = false;
 
   function record() {
     paths.push({ nodes: [...stack], edges: [...edgeStack] });
@@ -732,6 +882,7 @@ export function enumerateRawPaths(state: ModelState, root: GraphRef, direction: 
     }
     const out = outByNode.get(node) ?? [];
     if (out.length === 0 || stack.length > MAX_DEPTH) {
+      if (out.length) depthLimited = true;
       record();
       return;
     }
@@ -771,7 +922,7 @@ export function enumerateRawPaths(state: ModelState, root: GraphRef, direction: 
 
   const covered = new Set(paths.flatMap((path) => path.nodes));
   for (const ref of visible) if (!covered.has(ref)) paths.push({ nodes: [ref], edges: [] });
-  return { paths, boundByMax };
+  return { paths, boundByMax, depthLimited };
 }
 
 /** Bound the drawing, retaining the root and prioritising requested paths.

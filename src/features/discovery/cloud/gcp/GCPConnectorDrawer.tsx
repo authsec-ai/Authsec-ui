@@ -17,6 +17,8 @@
  * how a role granted out of band gets picked up.
  */
 
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
 import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
@@ -281,7 +283,7 @@ export function GCPConnectorDrawer({
   // flip polling off between two frames of the same scan.
   const [autoPoll, setAutoPoll] = useState(false);
 
-  const { data: connector, isLoading } = useGetGcpConnectorQuery(
+  const { data: connector, isLoading, currentData: connectorNow, error: connectorError, refetch: refetchConnector } = useGetGcpConnectorQuery(
     connectorId ?? "",
     {
       skip: !connectorId,
@@ -318,14 +320,16 @@ export function GCPConnectorDrawer({
     action: () => Promise<unknown>,
     ok: string,
     fallback: string,
-  ) => {
+  ): Promise<boolean> => {
     try {
       await action();
       toast.success(ok);
+      return true;
     } catch (err) {
       const apiErr = (err as { data?: CloudOnboardingApiError })?.data;
       const copy = gcpErrorCopy(apiErr, fallback);
       toast.error(`${copy.title}. ${copy.body}`);
+      return false;
     }
   };
 
@@ -360,7 +364,11 @@ export function GCPConnectorDrawer({
         ariaTitle="Google Cloud connector"
         ariaDescription="Inspect what this connector was proved able to read, and verify or revoke it."
       >
-        {isLoading || !connector ? (
+        {connectorError && !connectorNow ? (
+          <div className="p-6">
+            <LoadFailurePanel failure={loadFailureOf(connectorError) ?? "failed"} subject="this Google Cloud connector" permission="discovery:read" onRetry={() => void refetchConnector()} />
+          </div>
+        ) : isLoading || !connector ? (
           <DrawerEmpty
             title="Loading…"
             description="Fetching this connector."
@@ -770,7 +778,7 @@ export function GCPConnectorDrawer({
                 onClick={() =>
                   void runAction(
                     () => scan(connector.id).unwrap(),
-                    "Scan started — it runs in the background.",
+                    "Scan queued — it runs in the background.",
                     "Could not start the scan.",
                   )
                 }
@@ -784,7 +792,7 @@ export function GCPConnectorDrawer({
                 {connector.coverage?.status === "running"
                   ? "Scanning…"
                   : scanStarting
-                    ? "Starting…"
+                    ? "Queuing…"
                     : "Scan now"}
               </Button>
 
@@ -854,7 +862,11 @@ export function GCPConnectorDrawer({
                     () => revoke(connector.id).unwrap(),
                     "Connector revoked. Remove the reader service account and pool in Google Cloud to fully end access.",
                     "Could not revoke the connector.",
-                  ).then(handleClose);
+                  ).then((ok) => {
+                    // A failed revoke leaves the connector as it was: keep it open.
+                    if (ok) handleClose();
+                    else setConfirmRevoke(false);
+                  });
                 }}
               >
                 {revoking ? "Revoking…" : "Revoke"}

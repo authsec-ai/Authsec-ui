@@ -47,6 +47,16 @@ export const CLASSIFICATION_LABEL: Record<Classification, string> = {
   unclassified: "Unclassified workload",
 };
 
+/**
+ * What an identity's `used_by_count` counts (D-17): workloads that run as it
+ * AND ECS workloads whose agent uses it as the task execution role — one
+ * number from the server, so it is labelled as both. Workloads that reach it
+ * through another role are not in it.
+ */
+export const DIRECT_BINDINGS_LABEL = "Direct workload bindings";
+export const DIRECT_BINDINGS_MEANING =
+  "Workloads that run as it, or whose ECS agent uses it as the task execution role. Workloads reaching it through another role are not counted.";
+
 /** The chip's word; its meaning is `CLASSIFICATION_MEANING`, on demand. */
 export const CLASSIFICATION_SHORT: Record<Classification, string> = {
   provider_native_agent: "Agent",

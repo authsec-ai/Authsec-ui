@@ -9,6 +9,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { tableFailure } from "@/components/console/load-failure";
 import { formatDistanceToNow } from "date-fns";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -51,7 +52,7 @@ const KIND_LABEL: Record<ProvisioningInstruction["kind"], string> = {
 export default function InstructionsPage() {
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
-  const { data, isError, error, refetch } = useListInstructionsQuery(
+  const { data, isLoading, error, refetch } = useListInstructionsQuery(
     filter === "open" ? { open: true } : undefined,
   );
   const rows = useMemo(() => data?.items ?? [], [data]);
@@ -152,17 +153,6 @@ export default function InstructionsPage() {
       title="Enforcement queue"
       description="Pending and failed in-cluster enforcement of governance decisions. A failed instruction means a decision did not take effect."
     >
-      {isError ? (
-        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load the queue.</strong>{" "}
-          {(error as { status?: number })?.status === 403
-            ? "Your role is missing the governance:read permission."
-            : "The governance API returned an error."}{" "}
-          <button className="underline" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
-      ) : null}
 
       {failedCount > 0 ? (
         <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs text-(--color-danger-text)">
@@ -189,6 +179,10 @@ export default function InstructionsPage() {
       <TableCard>
         <CardContent variant="flush">
           <AdaptiveTable
+            sizing="fit"
+            cardsBelow={640}
+            loading={isLoading}
+            failure={tableFailure(error, "enforcement instructions", () => refetch(), "governance:read")}
             tableId="enforcement-queue"
             columns={columns}
             data={items}

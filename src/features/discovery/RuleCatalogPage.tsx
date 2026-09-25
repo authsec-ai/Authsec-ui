@@ -28,6 +28,8 @@
  *    exactly like fewer agents, so it is labelled as a scope decision.
  */
 
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -184,7 +186,7 @@ function Chip({
 
 export default function RuleCatalogPage() {
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useGetRuleCatalogQuery();
+  const { data, isLoading, isError, error: loadError, refetch } = useGetRuleCatalogQuery();
   const [save, { isLoading: saving }] = useSetRuleCatalogMutation();
   const [reset, { isLoading: resetting }] = useResetRuleCatalogMutation();
   const [testPaths] = useTestRuleCatalogMutation();
@@ -295,10 +297,8 @@ export default function RuleCatalogPage() {
       }
     >
       {isError ? (
-        <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-3 text-xs">
-          <strong className="font-medium">Could not load the detection rules.</strong> Your
-          role may be missing the discovery:read permission.
-        </div>
+        // Says which failure it was — a missing permission is not an outage.
+        <LoadFailurePanel failure={loadFailureOf(loadError) ?? "failed"} subject="the detection rules" permission="discovery:read" onRetry={() => void refetch()} />
       ) : isLoading || !data ? (
         <p className="text-xs text-muted-foreground">Loading…</p>
       ) : (
