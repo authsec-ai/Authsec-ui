@@ -95,6 +95,12 @@ export function useListFilters<S extends FilterSpec>(spec: S) {
     }, { replace: true }),
     set,
     clear,
+    /** Removes these filters in ONE history write — separate `set` calls in one tick would each start from the same URL. */
+    clearKeys: (keys: string[]) => setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const k of keys) next.delete(k);
+      return next;
+    }, { replace: true }),
     searchText,
     setSearchText,
     /** The search as the server receives it: trimmed, and only from two characters. */

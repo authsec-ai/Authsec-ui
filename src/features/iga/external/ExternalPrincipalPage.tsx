@@ -35,7 +35,7 @@ import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { IdentityName } from "../shared/components/IdentityName";
 import { ObjectShell, type ObjectTabDef } from "../shared/components/ObjectShell";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
+import { CoverageSummary } from "../coverage/CoverageSummary";
 import { emptyGiven } from "../shared/listSummary";
 import { activeTabOf } from "../shared/links";
 
@@ -116,7 +116,7 @@ function ReferencedBy({ ws, p }: { ws: string; p: ExternalPrincipalDetail }) {
       <CardContent variant="flush">
         {q.currentData?.meta.coverage?.length ? (
           <div className="p-3">
-            <CoverageNotice ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
+            <CoverageSummary subject="references" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
           </div>
         ) : null}
         {view.kind === "loading" ? (

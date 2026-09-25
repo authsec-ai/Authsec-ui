@@ -1,6 +1,7 @@
 import type { RelState, StaleReason } from "@/app/api/igaGraphApi";
 import { StatusBadge } from "@/components/console/status";
 
+import { readableSurface } from "../../coverage/surfaceNames";
 import { agoText, dayText, surfaceStateText } from "../labels";
 
 /**
@@ -28,7 +29,8 @@ export function ConfirmedCell({
       </span>
       {why ? (
         <span className="text-xs text-(--color-text-muted)">
-          {why.surface} {surfaceStateText(why.state)}
+          {readableSurface(why.surface).service}
+          {readableSurface(why.surface).region ? ` ${readableSurface(why.surface).region}` : ""} {surfaceStateText(why.state)}
           {why.since ? ` since ${dayText(why.since)}` : ""}
           {staleReason && staleReason.length > 1 ? ` (+${staleReason.length - 1} more)` : ""}
         </span>

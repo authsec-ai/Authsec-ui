@@ -36,7 +36,7 @@ import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { viaLink } from "../shared/links";
 import { emptyGiven } from "../shared/listSummary";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
+import { CoverageSummary } from "../coverage/CoverageSummary";
 
 /** "names 3 selectors and 1 exact reference" — only when the page is the whole answer. */
 function namesSummary(rows: WorkloadResourceRow[]): string {
@@ -197,7 +197,7 @@ export function WorkloadResourcesTab({
         </div>
         {q.currentData?.meta.coverage?.length ? (
           <div className="p-3">
-            <CoverageNotice ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
+            <CoverageSummary subject="resources" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
           </div>
         ) : null}
         {view.kind === "loading" ? (

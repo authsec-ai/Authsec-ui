@@ -1,5 +1,8 @@
 import * as React from "react";
-import type { Row } from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, type Row } from "@tanstack/react-table";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 import {
   ResponsiveDataTable,
@@ -7,6 +10,7 @@ import {
   type ResponsiveTableConfig,
 } from "./responsive-data-table";
 import { ResponsiveTableProvider } from "./responsive-table";
+import { AdaptiveVisibleContext } from "./adaptive-table-context";
 
 type AdaptiveLayout = "minimal" | "compact" | "medium" | "standard" | "full";
 
@@ -15,6 +19,29 @@ export interface AdaptiveColumn<TData, TValue = unknown>
   priority?: number;
   alwaysVisible?: boolean;
   approxWidth?: number;
+  /**
+   * `sizing="fit"` only. The object's own column (its name and a way to
+   * open it): never hidden, and it takes whatever width the other visible
+   * columns leave, down to `minWidth`.
+   */
+  primary?: boolean;
+  /** `sizing="fit"`: the least width the primary column may shrink to. Default 240. */
+  minWidth?: number;
+  /** What the field is called in the Columns menu and in row details, when `header` is not a string. */
+  label?: string;
+  /** Off until the customer chooses it in the Columns menu. */
+  defaultHidden?: boolean;
+  /** How the field reads in row details and cards, when its table cell is not right there. */
+  detail?: (row: TData) => React.ReactNode;
+  /** Card layout: shown beside the name on the card itself rather than in its details. */
+  cardSummary?: boolean;
+}
+
+/** Which columns a fitted table is showing, and which fields went to row details. */
+export interface AdaptiveColumnsLayout {
+  shown: string[];
+  /** Chosen by the customer, but moved to row details for want of room. */
+  inDetails: string[];
 }
 
 interface AdaptiveTableProps<TData> {
@@ -40,11 +67,34 @@ interface AdaptiveTableProps<TData> {
   serverTotalItems?: number;
   getRowId: (row: TData) => string;
   className?: string;
+  /**
+   * "auto" (default): the original behaviour — `alwaysVisible` columns are
+   * reserved, optional ones added while they fit, the browser sizes cells.
+   *
+   * "fit": the table is exactly its container's width and never scrolls
+   * sideways. Only the `primary` column is reserved; the others are added in
+   * `priority` order while their `approxWidth` fits the measured container
+   * (re-measured when the sidebar or an inspector changes it), are rendered
+   * at exactly that width, and clip their content. Every field that is not
+   * shown stays reachable in the row's details.
+   */
+  sizing?: "auto" | "fit";
+  /** `sizing="fit"`: the optional columns the customer chose (see `useColumnPreferences`). */
+  chosenColumns?: string[];
+  onColumnsLayout?: (layout: AdaptiveColumnsLayout) => void;
+  /** `sizing="fit"`: below this container width, rows become concise cards with expandable details. */
+  cardsBelow?: number;
 }
 
 const DEFAULT_COLUMN_WIDTH = 220;
 const SELECTION_COLUMN_WIDTH = 56;
 const EXPAND_COLUMN_WIDTH = 48;
+const DETAILS_COLUMN_WIDTH = 44;
+const PRIMARY_MIN_WIDTH = 240;
+
+function labelOf<TData>(c: AdaptiveColumn<TData>): string {
+  return c.label ?? (typeof c.header === "string" ? c.header : c.id);
+}
 
 export function AdaptiveTable<TData>({
   tableId,
@@ -73,22 +123,29 @@ export function AdaptiveTable<TData>({
   serverTotalItems,
   getRowId,
   className,
+  sizing = "auto",
+  chosenColumns,
+  onColumnsLayout,
+  cardsBelow,
 }: AdaptiveTableProps<TData>) {
+  const fit = sizing === "fit";
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = React.useState(0);
 
-  React.useEffect(() => {
+  // Measured before paint, so a fitted table never flashes a wider layout.
+  React.useLayoutEffect(() => {
     if (typeof window === "undefined" || !containerRef.current) return;
-
+    const el = containerRef.current;
+    setContainerWidth(el.clientWidth);
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        if (entry.target === containerRef.current) {
+        if (entry.target === el) {
           setContainerWidth(entry.contentRect.width);
         }
       }
     });
 
-    observer.observe(containerRef.current);
+    observer.observe(el);
 
     return () => observer.disconnect();
   }, []);
@@ -96,16 +153,17 @@ export function AdaptiveTable<TData>({
   const columnIds = React.useMemo(() => columns.map((column) => column.id), [columns]);
 
   const alwaysVisibleColumns = React.useMemo(
-    () => columns.filter((column) => column.alwaysVisible),
-    [columns]
+    () => columns.filter((column) => column.alwaysVisible || (fit && column.primary)),
+    [columns, fit]
   );
 
   const optionalColumns = React.useMemo(
     () =>
       columns
-        .filter((column) => !column.alwaysVisible)
+        .filter((column) => !(column.alwaysVisible || (fit && column.primary)))
+        .filter((column) => !fit || (chosenColumns ? chosenColumns.includes(column.id) : !column.defaultHidden))
         .sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10)),
-    [columns]
+    [columns, fit, chosenColumns]
   );
 
   const visibleColumnSet = React.useMemo(() => {
@@ -115,13 +173,17 @@ export function AdaptiveTable<TData>({
       return fallbackSet;
     }
 
-    const reservedWidth =
-      alwaysVisibleColumns.reduce(
-        (sum, column) => sum + (column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
-        0
-      ) +
-      (enableSelection ? SELECTION_COLUMN_WIDTH : 0) +
-      (enableExpansion && renderExpandedRow ? EXPAND_COLUMN_WIDTH : 0);
+    const reservedWidth = fit
+      ? alwaysVisibleColumns.reduce(
+          (sum, column) => sum + (column.primary ? column.minWidth ?? PRIMARY_MIN_WIDTH : column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
+          0
+        ) + DETAILS_COLUMN_WIDTH
+      : alwaysVisibleColumns.reduce(
+          (sum, column) => sum + (column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
+          0
+        ) +
+        (enableSelection ? SELECTION_COLUMN_WIDTH : 0) +
+        (enableExpansion && renderExpandedRow ? EXPAND_COLUMN_WIDTH : 0);
 
     let remainingWidth = Math.max(containerWidth - reservedWidth, 0);
     const dynamicSet = new Set(alwaysVisibleColumns.map((column) => column.id));
@@ -144,7 +206,60 @@ export function AdaptiveTable<TData>({
     enableSelection,
     enableExpansion,
     renderExpandedRow,
+    fit,
   ]);
+
+  // Everything a fitted row does not show is in its details: chosen fields
+  // that did not fit, and the ones the customer has not chosen.
+  const detailColumns = React.useMemo(
+    () => (fit ? columns.filter((c) => !visibleColumnSet.has(c.id) && c.id !== "actions" && !c.primary) : []),
+    [fit, columns, visibleColumnSet]
+  );
+  const hasDetails = fit && detailColumns.length > 0;
+
+  const layoutKey = `${[...visibleColumnSet].join(",")}|${optionalColumns.filter((c) => !visibleColumnSet.has(c.id)).map((c) => c.id).join(",")}`;
+  React.useEffect(() => {
+    if (!fit || !onColumnsLayout || containerWidth <= 0) return;
+    onColumnsLayout({
+      shown: columnIds.filter((id) => visibleColumnSet.has(id)),
+      inDetails: optionalColumns.filter((c) => !visibleColumnSet.has(c.id)).map((c) => c.id),
+    });
+    // The key is the layout itself; the callback identity does not matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey, fit, containerWidth > 0]);
+
+  // Every column, for cells drawn outside the table's own column set: a
+  // card's fields and a row's details get real cell contexts from here.
+  const allCellsTable = useReactTable({
+    data: fit ? data : [],
+    columns: columns as never,
+    getRowId,
+    getCoreRowModel: getCoreRowModel(),
+  });
+  const renderField = React.useCallback(
+    (rowId: string, column: AdaptiveColumn<TData>) => {
+      const r = allCellsTable.getRowModel().rowsById[rowId];
+      if (!r) return null;
+      if (column.detail) return column.detail(r.original);
+      const cell = r.getAllCells().find((c) => c.column.id === column.id);
+      return cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : null;
+    },
+    [allCellsTable]
+  );
+
+  const renderDetails = React.useCallback(
+    (row: Row<TData>) => (
+      <dl className="grid gap-x-6 gap-y-3 px-4 py-3 text-sm sm:grid-cols-2">
+        {detailColumns.map((c) => (
+          <div key={c.id} className="min-w-0">
+            <dt className="mb-0.5 text-[11px] font-medium text-(--color-text-muted)">{labelOf(c)}</dt>
+            <dd className="min-w-0 break-words">{renderField(row.id, c)}</dd>
+          </div>
+        ))}
+      </dl>
+    ),
+    [detailColumns, renderField]
+  );
 
   const visibilityConfig = React.useMemo(() => {
     const layouts: AdaptiveLayout[] = ["minimal", "compact", "medium", "standard", "full"];
@@ -155,7 +270,7 @@ export function AdaptiveTable<TData>({
     });
     baseVisibility.checkbox = enableSelection;
     baseVisibility.dragHandle = false;
-    baseVisibility.expand = enableExpansion && Boolean(renderExpandedRow);
+    baseVisibility.expand = fit ? hasDetails : enableExpansion && Boolean(renderExpandedRow);
 
     return layouts.reduce<Record<AdaptiveLayout, Record<string, boolean>>>((acc, layout) => {
       acc[layout] = { ...baseVisibility };
@@ -167,7 +282,16 @@ export function AdaptiveTable<TData>({
     enableSelection,
     enableExpansion,
     renderExpandedRow,
+    fit,
+    hasDetails,
   ]);
+
+  const columnWidths = React.useMemo(() => {
+    if (!fit) return undefined;
+    const out: Record<string, number | undefined> = {};
+    for (const c of columns) out[c.id] = c.primary ? undefined : c.approxWidth ?? DEFAULT_COLUMN_WIDTH;
+    return out;
+  }, [fit, columns]);
 
   const tableConfig: ResponsiveTableConfig<TData> = React.useMemo(
     () => ({
@@ -176,10 +300,10 @@ export function AdaptiveTable<TData>({
       features: {
         selection: enableSelection,
         dragDrop: false,
-        expandable: enableExpansion && Boolean(renderExpandedRow),
+        expandable: fit ? hasDetails : enableExpansion && Boolean(renderExpandedRow),
         pagination: enablePagination,
         sorting: enableSorting,
-        resizing: enableResizing,
+        resizing: fit ? false : enableResizing,
       },
       pagination,
       selectedRowIds,
@@ -187,7 +311,7 @@ export function AdaptiveTable<TData>({
       onSelectAll,
       expandedRowIds,
       onExpandedRowsChange,
-      renderExpandedRow,
+      renderExpandedRow: fit ? (hasDetails ? renderDetails : undefined) : renderExpandedRow,
       onRowClick,
       getRowId,
       rowClassName,
@@ -195,6 +319,11 @@ export function AdaptiveTable<TData>({
       pageIndex,
       onPageIndexChange,
       serverTotalItems,
+      layout: fit ? "fixed" : "auto",
+      columnWidths,
+      // A fitted row's click is the caller's (usually: open the object);
+      // its details open from their own button.
+      expandOnRowClick: fit ? !onRowClick : true,
     }),
     [
       data,
@@ -218,17 +347,122 @@ export function AdaptiveTable<TData>({
       pageIndex,
       onPageIndexChange,
       serverTotalItems,
+      fit,
+      hasDetails,
+      renderDetails,
+      columnWidths,
     ]
   );
+
+  const cards = fit && cardsBelow !== undefined && containerWidth > 0 && containerWidth < cardsBelow;
 
   return (
     <ResponsiveTableProvider
       tableType={`adaptive-${tableId}`}
       visibilityConfig={visibilityConfig}
     >
-      <div ref={containerRef} className="w-full overflow-x-hidden">
-        <ResponsiveDataTable {...tableConfig} />
-      </div>
+      <AdaptiveVisibleContext.Provider value={fit ? (cards ? CARD_SHOWN : visibleColumnSet) : null}>
+        <div ref={containerRef} className="w-full min-w-0">
+          {cards ? (
+            <AdaptiveCards
+              rows={allCellsTable.getRowModel().rows}
+              columns={columns}
+              renderField={renderField}
+              onRowClick={onRowClick}
+            />
+          ) : (
+            <ResponsiveDataTable {...tableConfig} />
+          )}
+        </div>
+      </AdaptiveVisibleContext.Provider>
     </ResponsiveTableProvider>
+  );
+}
+
+/** In card layout only the name and summary fields are on the card itself. */
+const CARD_SHOWN: ReadonlySet<string> = new Set<string>();
+
+function AdaptiveCards<TData>({
+  rows,
+  columns,
+  renderField,
+  onRowClick,
+}: {
+  rows: Row<TData>[];
+  columns: AdaptiveColumn<TData>[];
+  renderField: (rowId: string, column: AdaptiveColumn<TData>) => React.ReactNode;
+  onRowClick?: (row: TData) => void;
+}) {
+  const [open, setOpen] = React.useState<Set<string>>(new Set());
+  const primary = columns.find((c) => c.primary) ?? columns[0];
+  const actions = columns.find((c) => c.id === "actions");
+  const summary = columns.filter((c) => c.cardSummary && c !== primary);
+  const rest = columns.filter((c) => c !== primary && c !== actions && !c.cardSummary);
+  return (
+    <ul className="divide-y divide-(--color-border-subtle)">
+      {rows.map((row) => {
+        const expanded = open.has(row.id);
+        const toggle = () =>
+          setOpen((prev) => {
+            const next = new Set(prev);
+            if (next.has(row.id)) next.delete(row.id);
+            else next.add(row.id);
+            return next;
+          });
+        return (
+          <li
+            key={row.id}
+            data-mobile-row
+            className={cn("space-y-2 px-4 py-3", onRowClick && "cursor-pointer")}
+            onClick={
+              onRowClick
+                ? (e) => {
+                    if ((e.target as HTMLElement).closest("a,button,[role=menu],.no-row-click")) return;
+                    onRowClick(row.original);
+                  }
+                : undefined
+            }
+          >
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">{renderField(row.id, primary)}</div>
+              {actions ? <div className="shrink-0">{renderField(row.id, actions)}</div> : null}
+            </div>
+            {summary.length ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {summary.map((c) => (
+                  <span key={c.id}>{renderField(row.id, c)}</span>
+                ))}
+              </div>
+            ) : null}
+            {rest.length ? (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggle();
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-(--color-primary-text) hover:underline"
+                >
+                  {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                  {expanded ? "Hide details" : "Details"}
+                </button>
+                {expanded ? (
+                  <dl className="grid gap-y-2 text-sm">
+                    {rest.map((c) => (
+                      <div key={c.id} className="min-w-0">
+                        <dt className="text-[11px] font-medium text-(--color-text-muted)">{labelOf(c)}</dt>
+                        <dd className="min-w-0 break-words">{renderField(row.id, c)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              </>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

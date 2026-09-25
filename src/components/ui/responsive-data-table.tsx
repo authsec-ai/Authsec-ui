@@ -99,6 +99,16 @@ export interface ResponsiveTableConfig<TData> {
   onPageIndexChange?: (page: number) => void;
   // Server-side pagination: when provided, skips client-side slicing and uses this as total
   serverTotalItems?: number;
+  /**
+   * "fixed": the table is exactly its container's width. Columns take
+   * `columnWidths` (a column with none shares what is left), and a cell's
+   * content is clipped to its column — rendered and computed widths agree,
+   * so a long value can never push the table wider. Default "auto".
+   */
+  layout?: "auto" | "fixed";
+  columnWidths?: Record<string, number | undefined>;
+  /** false: only the row's expand button toggles its details (the row click does something else). Default true. */
+  expandOnRowClick?: boolean;
 }
 
 // Reusable column resize handle
@@ -276,8 +286,12 @@ export function ResponsiveDataTable<TData>({
   pageIndex,
   onPageIndexChange,
   serverTotalItems,
+  layout = "auto",
+  columnWidths,
+  expandOnRowClick = true,
 }: ResponsiveTableConfig<TData>) {
   const { visibleColumns } = useResponsiveTableContext();
+  const fixed = layout === "fixed";
 
   const enabledFeatures = {
     selection: false,
@@ -357,7 +371,7 @@ export function ResponsiveDataTable<TData>({
       const rowId = getRowId(row);
 
       // If expandable is enabled and there's a render function, toggle expansion
-      if (enabledFeatures.expandable && renderExpandedRow) {
+      if (enabledFeatures.expandable && renderExpandedRow && expandOnRowClick) {
         if (isExternalExpansion && onExpandedRowsChange) {
           // Handle external expansion state
           const newExpanded = new Set(activeExpandedRows);
@@ -386,7 +400,7 @@ export function ResponsiveDataTable<TData>({
       // Call the user-provided onRowClick if it exists
       onRowClick?.(row);
     },
-    [enabledFeatures.expandable, renderExpandedRow, getRowId, isExternalExpansion,
+    [enabledFeatures.expandable, renderExpandedRow, expandOnRowClick, getRowId, isExternalExpansion,
      onExpandedRowsChange, activeExpandedRows, onRowClick]
   );
 
@@ -473,6 +487,8 @@ export function ResponsiveDataTable<TData>({
             <Button
               variant="ghost"
               size="sm"
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? "Hide row details" : "Show row details"}
               onClick={(e) => {
                 e.stopPropagation();
                 if (isExternalExpansion && onExpandedRowsChange) {
@@ -646,11 +662,21 @@ export function ResponsiveDataTable<TData>({
                 bordered={false}
                 className="w-full min-w-0"
                 style={{
-                  tableLayout: "auto",
+                  tableLayout: fixed ? "fixed" : "auto",
                   maxWidth: "100%",
                   width: "100%",
                 }}
               >
+                {fixed ? (
+                  <colgroup>
+                    {table.getVisibleLeafColumns().map((column) => (
+                      <col
+                        key={column.id}
+                        style={{ width: column.id === "expand" ? 44 : columnWidths?.[column.id] }}
+                      />
+                    ))}
+                  </colgroup>
+                ) : null}
                 <TableHeader className="sticky top-0 z-10 bg-transparent">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow
@@ -663,7 +689,7 @@ export function ResponsiveDataTable<TData>({
                           <ResponsiveTableHead
                             key={header.id}
                             resizable={enabledFeatures.resizing && columnDef.resizable}
-                            className={columnDef.className}
+                            className={cn(columnDef.className, fixed && "overflow-hidden")}
                           >
                             <div className="flex items-center justify-between">
                               {flexRender(header.column.columnDef.header, header.getContext())}
@@ -719,7 +745,7 @@ export function ResponsiveDataTable<TData>({
                                 return (
                                   <ResponsiveTableCell
                                     key={cell.id}
-                                    className={columnDef.cellClassName}
+                                    className={cn(columnDef.cellClassName, fixed && "overflow-hidden")}
                                   >
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                   </ResponsiveTableCell>
@@ -765,7 +791,7 @@ export function ResponsiveDataTable<TData>({
                                 return (
                                   <ResponsiveTableCell
                                     key={cell.id}
-                                    className={columnDef.cellClassName}
+                                    className={cn(columnDef.cellClassName, fixed && "overflow-hidden")}
                                   >
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                   </ResponsiveTableCell>

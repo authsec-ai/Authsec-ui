@@ -6,9 +6,8 @@
  */
 
 import type { ReactNode, KeyboardEvent } from "react";
-import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 
-import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import { AdaptiveTable, type AdaptiveColumn, type AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 
 import type { PagedView } from "../listView";
@@ -30,6 +29,8 @@ export function PagedTable<T, M extends PagerMeta>({
   subject,
   empty,
   incompleteAccounts,
+  chosenColumns,
+  onColumnsLayout,
 }: {
   tableId: string;
   view: PagedView<T, M>;
@@ -46,8 +47,10 @@ export function PagedTable<T, M extends PagerMeta>({
   /** The Empty answer: we looked, completely, and there is nothing. */
   empty: ReactNode;
   incompleteAccounts?: string[];
+  /** The optional columns the customer chose (`useColumnPreferences`). */
+  chosenColumns?: string[];
+  onColumnsLayout?: (layout: AdaptiveColumnsLayout) => void;
 }) {
-  const mobileTable = useReactTable({ data: view.kind === "rows" ? view.rows : [], columns, getRowId, getCoreRowModel: getCoreRowModel() });
   const rowKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (target.matches("input,textarea,select") || target.isContentEditable) return;
@@ -92,8 +95,9 @@ export function PagedTable<T, M extends PagerMeta>({
   if (!view.rows.length && !view.footerFailure) return <>{empty}</>;
   return (
     <>
-      <div onKeyDown={rowKeys} className={view.dim ? "opacity-60 transition-opacity" : undefined}>
-        <div className="hidden md:block">
+      <div onKeyDown={rowKeys} aria-label={subject} className={view.dim ? "opacity-60 transition-opacity" : undefined}>
+        {/* Fitted to its container: no sideways scrolling; what does not fit
+            is in each row's details, and a narrow container gets cards. */}
         <AdaptiveTable
           tableId={tableId}
           columns={columns}
@@ -104,16 +108,11 @@ export function PagedTable<T, M extends PagerMeta>({
           enableSorting={false}
           enablePagination={false}
           onRowClick={onRowClick}
+          sizing="fit"
+          chosenColumns={chosenColumns}
+          onColumnsLayout={onColumnsLayout}
+          cardsBelow={640}
         />
-        </div>
-        <div className="divide-y divide-(--color-border-subtle) md:hidden" aria-label={subject}>
-          {mobileTable.getRowModel().rows.map((row) => <article key={row.id} data-mobile-row className="space-y-3 p-4">
-            {row.getVisibleCells().map((cell, index) => <div key={cell.id} className={index === 0 ? "font-medium" : "text-sm"}>
-              {index > 0 && typeof cell.column.columnDef.header === "string" && cell.column.id !== "actions" ? <p className="mb-1 text-xs text-(--color-text-muted)">{cell.column.columnDef.header}</p> : null}
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </div>)}
-          </article>)}
-        </div>
       </div>
       <CursorPager
         meta={view.meta}

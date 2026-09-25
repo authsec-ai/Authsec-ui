@@ -47,6 +47,19 @@ export const CLASSIFICATION_LABEL: Record<Classification, string> = {
   unclassified: "Unclassified workload",
 };
 
+/** The chip's word; its meaning is `CLASSIFICATION_MEANING`, on demand. */
+export const CLASSIFICATION_SHORT: Record<Classification, string> = {
+  provider_native_agent: "Agent",
+  classified_agent: "Agent",
+  unclassified: "Unclassified",
+};
+
+export const CLASSIFICATION_MEANING: Record<Classification, string> = {
+  provider_native_agent: "An agent by what it is: the provider's own agent runtime (for example Bedrock AgentCore).",
+  classified_agent: "Recorded as an agent by a person in this workspace.",
+  unclassified: "Not known to be an agent. Nothing has been decided about it — this is not a negative finding.",
+};
+
 /** `Unclassified` is never a negative (§2.14.3), so it is neutral, not muted. */
 export const CLASSIFICATION_TONE: Record<Classification, ConsoleTone> = {
   provider_native_agent: "info",

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { MoreHorizontal, Search } from "lucide-react";
+import { MoreHorizontal, Search, SlidersHorizontal, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { FilterCard } from "@/theme/components/cards";
@@ -72,6 +73,7 @@ export function ConsoleFilterBar({
   activeFilter,
   onFilterChange,
   trailing,
+  below,
   className,
 }: {
   search: string;
@@ -81,11 +83,13 @@ export function ConsoleFilterBar({
   activeFilter?: string;
   onFilterChange?: (value: string) => void;
   trailing?: ReactNode;
+  /** A second line under the controls — the applied filters (`AppliedFilters`). */
+  below?: ReactNode;
   className?: string;
 }) {
   return (
     <FilterCard className={className}>
-      <CardContent variant="compact">
+      <CardContent variant="compact" className={below ? "space-y-2.5" : undefined}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -125,10 +129,86 @@ export function ConsoleFilterBar({
               })}
             </div>
           ) : null}
-          {trailing ? <div className="flex shrink-0 items-center gap-2">{trailing}</div> : null}
+          {trailing ? <div className="flex shrink-0 flex-wrap items-center gap-2">{trailing}</div> : null}
         </div>
+        {below}
       </CardContent>
     </FilterCard>
+  );
+}
+
+/**
+ * One Filters button in place of a row of expanded dropdowns: the controls
+ * live in a popover, and the count says how many are applied. The search
+ * field and view controls keep the room.
+ */
+export function ConsoleFiltersButton({
+  activeCount,
+  children,
+}: {
+  activeCount: number;
+  children: ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9" aria-label={activeCount ? `Filters, ${activeCount} applied` : "Filters"}>
+          <SlidersHorizontal className="size-4" /> Filters
+          {activeCount ? (
+            <span className="rounded bg-(--color-primary-soft) px-1.5 text-[11px] font-semibold tabular-nums text-(--color-primary-text)">
+              {activeCount}
+            </span>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-3 p-3">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** One labelled control inside `ConsoleFiltersButton`. */
+export function ConsoleFilterField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-(--color-text-muted)">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+export interface AppliedFilter {
+  key: string;
+  label: string;
+  onRemove: () => void;
+}
+
+/** The filters in force, each removable, and Clear all. Nothing when none apply. */
+export function AppliedFilters({ filters, onClearAll }: { filters: AppliedFilter[]; onClearAll: () => void }) {
+  if (!filters.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" aria-label="Applied filters">
+      {filters.map((f) => (
+        <span
+          key={f.key}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle) pl-2 pr-1 text-xs text-(--color-text)"
+        >
+          {f.label}
+          <button
+            type="button"
+            onClick={f.onRemove}
+            aria-label={`Remove filter ${f.label}`}
+            className="grid size-5 place-items-center rounded text-(--color-text-muted) hover:bg-(--color-surface-raised) hover:text-(--color-text)"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      <button type="button" onClick={onClearAll} className="ml-1 text-xs font-medium text-(--color-primary-text) hover:underline">
+        Clear all
+      </button>
+    </div>
   );
 }
 

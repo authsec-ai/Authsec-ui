@@ -8,8 +8,8 @@
  * account" is a real filter value and "All accounts" includes it.
  */
 
-import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import {
@@ -22,13 +22,11 @@ import {
   type ResourceSort,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
+import { ConsoleFilterField, ConsoleRowActions, type AppliedFilter } from "@/components/console/iam-console";
 import { StatusBadge } from "@/components/console/status";
-import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
+import type { AdaptiveColumn, AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
+import { ColumnsMenu } from "@/components/ui/table-columns";
+import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
@@ -42,10 +40,12 @@ import {
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
-import { RESOURCE_KIND_LABEL, accountLabel, countText } from "../shared/labels";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, countText } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
-import { FacetSelect, MultiFacetSelect, SortSelect } from "../shared/components/FacetSelect";
+import { CoverageSummary } from "../coverage/CoverageSummary";
+import { FacetCheckList, FacetSelect, SortSelect } from "../shared/components/FacetSelect";
+import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import {
   AsOf,
@@ -84,6 +84,17 @@ const FILTERS = {
   kind: ["exact", "selector", "external"],
   sort: SORTS.map((s) => s.value),
 } as const;
+
+/**
+ * A reference's readable part: an ARN's resource segment
+ * ("support-tickets/*", "table/Orders"); anything else as written. The whole
+ * reference is in the row's details and on the resource's page.
+ */
+function referenceName(text: string): string {
+  if (!text.startsWith("arn:")) return text;
+  const rest = text.split(":").slice(5).join(":");
+  return rest || text;
+}
 
 function namedBy(r: ResourceRow): string {
   return countText(r.named_by_count, "statement", "statements");
@@ -154,79 +165,60 @@ export default function ResourcesListPage() {
     kind && RESOURCE_KIND_LABEL[kind],
   ].filter(Boolean) as string[];
 
+  // Priority: the reference's readable name (service and region as its
+  // context), then kind, account, how many statements name it, freshness;
+  // the whole reference and region in details unless chosen.
   const columns = useMemo<AdaptiveColumn<ResourceRow>[]>(
     () => [
       {
         id: "text",
         header: "Resource or selector",
-        alwaysVisible: true,
-        priority: 1,
-        approxWidth: 380,
+        primary: true,
+        minWidth: 240,
         cell: ({ row }) => (
-          <EntityCell
-            label={
-              <Link
-                to={`/iga/resources/${refId(row.original.ref)}`}
-                className="break-all font-mono text-sm hover:underline"
-              >
-                {row.original.text}
-              </Link>
-            }
-            detail={row.original.type !== "unknown" ? row.original.type : (row.original.service ?? undefined)}
+          <NameCell
+            to={`/iga/resources/${refId(row.original.ref)}`}
+            name={referenceName(row.original.text)}
+            context={[row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service, row.original.region]}
+            account={row.original.account}
           />
         ),
       },
       {
         id: "kind",
         header: "Kind",
-        alwaysVisible: true,
-        priority: 2,
+        priority: 1,
         approxWidth: 150,
+        cardSummary: true,
         cell: ({ row }) => (
-          <StatusBadge
-            tone={row.original.kind === "external" ? "warning" : "neutral"}
-          >
-            {RESOURCE_KIND_LABEL[row.original.kind]}
-          </StatusBadge>
+          <span title={RESOURCE_KIND_NOTE[row.original.kind]}>
+            <StatusBadge tone={row.original.kind === "external" ? "warning" : "neutral"}>{RESOURCE_KIND_LABEL[row.original.kind]}</StatusBadge>
+          </span>
+        ),
+        detail: (r) => (
+          <span>
+            {RESOURCE_KIND_LABEL[r.kind]} <span className="text-(--color-text-muted)">— {RESOURCE_KIND_NOTE[r.kind]}</span>
+          </span>
         ),
       },
       {
         id: "account",
         header: "Account",
-        alwaysVisible: true,
         priority: 2,
         approxWidth: 160,
-        cell: ({ row }) => (
-          <EntityCell
-            label={accountLabel(row.original.account)}
-            detail={row.original.account?.id}
-            monoDetail
-          />
-        ),
-      },
-      {
-        id: "region",
-        header: "Region",
-        priority: 5,
-        approxWidth: 120,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-(--color-text-muted)">
-            {row.original.region ?? "Region not stated"}
-          </span>
-        ),
+        cell: ({ row }) => <AccountCell account={row.original.account} />,
       },
       {
         id: "named_by",
         header: "Named by",
         priority: 3,
-        approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="text-sm tabular-nums">{namedBy(row.original)}</span>
-        ),
+        approxWidth: 120,
+        cell: ({ row }) => <span className="text-sm tabular-nums">{namedBy(row.original)}</span>,
       },
       {
         id: "confirmed",
         header: "Last confirmed",
+        label: "Freshness",
         priority: 4,
         approxWidth: 150,
         cell: ({ row }) => (
@@ -238,11 +230,27 @@ export default function ResourcesListPage() {
         ),
       },
       {
+        id: "region",
+        header: "Region",
+        priority: 5,
+        approxWidth: 120,
+        defaultHidden: true,
+        cell: ({ row }) => <span className="font-mono text-xs text-(--color-text-muted)">{row.original.region ?? "Not stated"}</span>,
+      },
+      {
+        id: "reference",
+        header: "Full reference",
+        priority: 6,
+        approxWidth: 320,
+        defaultHidden: true,
+        cell: ({ row }) => <CopyValue value={row.original.text} />,
+        detail: (r) => <CopyValueWrapped value={r.text} />,
+      },
+      {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        priority: 1,
-        approxWidth: 56,
+        approxWidth: 48,
         cell: ({ row }) => {
           const base = `/iga/resources/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the
@@ -260,10 +268,10 @@ export default function ResourcesListPage() {
                     onSelect: () => navigate(`${base}/access`),
                   },
                   {
-                    label: "Copy ARN",
+                    label: "Copy reference",
                     onSelect: () => {
                       void navigator.clipboard.writeText(row.original.text);
-                      toast.success("ARN copied");
+                      toast.success("Reference copied");
                     },
                   },
                 ]}
@@ -275,6 +283,12 @@ export default function ResourcesListPage() {
     ],
     [navigate],
   );
+  const prefs = useColumnPreferences("iga-resources", columns);
+  const [columnsLayout, setColumnsLayout] = useState<AdaptiveColumnsLayout | undefined>();
+  const applied: AppliedFilter[] = [
+    ...accounts.map((a) => ({ key: `account:${a}`, label: `Account: ${accountName(a)}`, onRemove: () => f.setMany("account", accounts.filter((x) => x !== a)) })),
+    ...(service ? [{ key: "service", label: `Service: ${service}`, onRemove: () => f.set("service", null) }] : []),
+  ];
 
   const kindFacet = facets?.kind;
   const kindCount = (k?: string) =>
@@ -299,44 +313,42 @@ export default function ResourcesListPage() {
         subject="resources"
       >
         {pipeline ? <PipelineNotice pipeline={pipeline} /> : null}
-        <div data-graph-search>
-          <ConsoleFilterBar
-            search={f.searchText}
-            onSearchChange={f.setSearchText}
-            searchPlaceholder="Search ARN, pattern or account id"
-            filters={KINDS.map((k) => ({
-              key: k.key,
-              label: k.label,
-              count: kindCount(k.kind),
-            }))}
-            activeFilter={kind ?? "all"}
-            onFilterChange={(k) => f.set("kind", k === "all" ? null : k)}
-            trailing={
-              <>
-                <MultiFacetSelect
+        <ListToolbar
+          search={f.searchText}
+          onSearchChange={f.setSearchText}
+          searchPlaceholder="Search ARN, pattern or account id"
+          views={KINDS.map((k) => ({ key: k.key, label: k.label, count: kindCount(k.kind) }))}
+          activeView={kind ?? "all"}
+          onViewChange={(k) => f.set("kind", k === "all" ? null : k)}
+          filters={
+            <>
+              <ConsoleFilterField label="Account">
+                <FacetCheckList
                   label="Account"
-                  allLabel="All accounts"
+                  noun="accounts"
                   value={accounts}
                   options={facets?.account ?? []}
                   onChange={(v) => f.setMany("account", v)}
-                  labelFor={(v, l) => (v === "unknown" ? "Unknown account" : l)}
+                  labelFor={(v, l) => (v === "unknown" ? "Account not stated by the reference" : l)}
                 />
+              </ConsoleFilterField>
+              <ConsoleFilterField label="Service">
                 <FacetSelect
                   label="Service"
                   allLabel="All services"
                   value={service}
                   options={facets?.service ?? []}
                   onChange={(v) => f.set("service", v)}
+                  className="h-9 w-full"
                 />
-                <SortSelect
-                  value={sort}
-                  options={SORTS}
-                  onChange={(v) => f.set("sort", v === "kind" ? null : v)}
-                />
-              </>
-            }
-          />
-        </div>
+              </ConsoleFilterField>
+            </>
+          }
+          applied={applied}
+          onClearAll={() => f.clearKeys(["account", "service"])}
+          sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "kind" ? null : v)} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+        />
         <UnknownAccountNote
           account={accounts.length && !accounts.includes("unknown") ? accounts.join(",") : undefined}
           accountName={accounts.map(accountName).join(", ")}
@@ -346,7 +358,7 @@ export default function ResourcesListPage() {
           onShow={() => f.set("account", null)}
         />
 
-        <CoverageNotice
+        <CoverageSummary subject="resources"
           ws={ws}
           gaps={gaps}
           accountName={nameOf}
@@ -377,6 +389,8 @@ export default function ResourcesListPage() {
                 onRefresh={refresh}
                 subject="resources"
                 incompleteAccounts={incomplete}
+                chosenColumns={prefs.chosen}
+                onColumnsLayout={setColumnsLayout}
                 empty={
                   <EmptyScope
                     subject="resources"

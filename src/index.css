@@ -484,6 +484,14 @@
     animation: collapsible-up 0.2s ease-out;
   }
 
+  /* Horizontal overflow that stays reachable. Used by the shared table
+     container: a table wider than its box scrolls, with a visible scrollbar,
+     instead of being clipped by an ancestor. (The name predates this rule;
+     it never hid the scrollbar, it was simply undefined.) */
+  .overflow-x-auto-hidden {
+    overflow-x: auto;
+  }
+
   /* Hide scrollbars */
   .scrollbar-hide {
     scrollbar-width: none; /* Firefox */

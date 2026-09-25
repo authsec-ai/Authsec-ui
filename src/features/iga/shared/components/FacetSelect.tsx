@@ -18,6 +18,7 @@ export function FacetSelect({
   options,
   onChange,
   labelFor,
+  className,
 }: {
   label: string;
   allLabel: string;
@@ -26,13 +27,14 @@ export function FacetSelect({
   onChange: (value: string | null) => void;
   /** Console wording for a value, when it differs from the server's label. */
   labelFor?: (value: string, serverLabel: string) => string;
+  className?: string;
 }) {
   const v = value ?? ALL;
   const listed = v === ALL || options.some((o) => o.value === v);
   const name = (o: GraphFacetValue) => (labelFor ? labelFor(o.value, o.label) : o.label);
   return (
     <Select value={v} onValueChange={(next) => onChange(next === ALL ? null : next)}>
-      <SelectTrigger className="h-9 w-[170px]" aria-label={label}>
+      <SelectTrigger className={className ?? "h-9 w-[170px]"} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -101,4 +103,35 @@ export function MultiFacetSelect({ label, allLabel, value, options, onChange, la
       </div>
     </PopoverContent>
   </Popover>;
+}
+
+/** The same multi-choice as a list in place — for inside a Filters popover. */
+export function FacetCheckList({ label, value, options, onChange, labelFor, noun }: {
+  label: string; value: string[]; options: GraphFacetValue[];
+  onChange: (values: string[]) => void; labelFor?: (value: string, serverLabel: string) => string;
+  /** "accounts": what "all" means. */
+  noun: string;
+}) {
+  const all = [...options, ...value.filter((v) => !options.some((o) => o.value === v)).map((v) => ({ value: v, label: v, count: 0 }))];
+  const name = (v: string) => { const raw = all.find((o) => o.value === v)?.label ?? v; return labelFor?.(v, raw) ?? raw; };
+  return (
+    <fieldset className="space-y-1">
+      <legend className="sr-only">{label}</legend>
+      <div className="max-h-48 overflow-auto rounded-md border border-(--color-border-subtle)">
+        {all.map((o) => (
+          <label key={o.value} className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm hover:bg-(--color-surface-subtle)">
+            <input type="checkbox" checked={value.includes(o.value)} onChange={(e) => onChange(e.target.checked ? [...value, o.value] : value.filter((v) => v !== o.value))} />
+            <span className="min-w-0 flex-1 break-words">{name(o.value)}</span>
+            <span className="tabular-nums text-xs text-(--color-text-muted)">{o.count}</span>
+          </label>
+        ))}
+        {!all.length ? <p className="p-2 text-xs text-(--color-text-muted)">None reported.</p> : null}
+      </div>
+      {value.length ? (
+        <button type="button" className="text-xs font-medium text-(--color-primary-text) hover:underline" onClick={() => onChange([])}>
+          All {noun}
+        </button>
+      ) : null}
+    </fieldset>
+  );
 }

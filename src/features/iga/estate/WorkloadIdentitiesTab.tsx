@@ -31,7 +31,7 @@ import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { viaLink } from "../shared/links";
 import { IdentityName } from "../shared/components/IdentityName";
 import { TabBody } from "../shared/components/ObjectShell";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
+import { CoverageSummary } from "../coverage/CoverageSummary";
 import { SectionList } from "../shared/components/SectionList";
 
 type From = { ref: WorkloadDetail["ref"]; name: string };
@@ -114,7 +114,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
     <TabBody ready={!!data} failure={failure} subject="identities" onRetry={() => void q.refetch()} onRefresh={refresh}>
       {data ? (
         <div className="space-y-6">
-          {coverage.length ? <CoverageNotice ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
+          {coverage.length ? <CoverageSummary subject="identities" ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
           <SectionList
             label="Execution identity"
             first={data.execution ?? none}

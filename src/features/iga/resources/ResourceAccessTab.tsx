@@ -38,7 +38,7 @@ import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { IdentityName } from "../shared/components/IdentityName";
 import { viaLink } from "../shared/links";
 import { emptyGiven } from "../shared/listSummary";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
+import { CoverageSummary } from "../coverage/CoverageSummary";
 
 type From = { ref: ResourceDetail["ref"]; name: string };
 
@@ -185,7 +185,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
     <TableCard>
       <CardContent className="space-y-6">
         {q.currentData?.meta.coverage?.length ? (
-          <CoverageNotice ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
+          <CoverageSummary subject="holders" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
         ) : null}
         <DrawerSection label="Granted by declared access">{access}</DrawerSection>
         {whole ? (

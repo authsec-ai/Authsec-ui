@@ -4,11 +4,12 @@
  *
  * Filters, search and sort live in the URL; the page cursor lives in history
  * state (see `useListFilters`, `usePaging`). Two rows with one name are two
- * workloads in two accounts, so the account is always a column.
+ * workloads in two accounts: the account is a column when there is room,
+ * and part of the name's context line when there is not.
  */
 
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import {
@@ -22,13 +23,11 @@ import {
   type WorkloadSort,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
+import { ConsoleFilterField, ConsoleRowActions, type AppliedFilter } from "@/components/console/iam-console";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
-import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
+import type { AdaptiveColumn, AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
+import { ColumnsMenu } from "@/components/ui/table-columns";
+import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
@@ -43,15 +42,17 @@ import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
 import {
-  CLASSIFICATION_LABEL,
+  CLASSIFICATION_MEANING,
+  CLASSIFICATION_SHORT,
   CLASSIFICATION_TONE,
   RUNTIME_LABEL,
   RUNTIME_SHORT,
-  accountLabel,
 } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
-import { FacetSelect, MultiFacetSelect, SortSelect } from "../shared/components/FacetSelect";
+import { CoverageSummary } from "../coverage/CoverageSummary";
+import { FacetCheckList, FacetSelect, SortSelect } from "../shared/components/FacetSelect";
+import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
 import {
@@ -168,92 +169,57 @@ export default function EstateListPage() {
       CLASSIFICATION_CHIPS.find((c) => c.key === classification)?.label,
   ].filter(Boolean) as string[];
 
+  // Priority: the name (always), then account, classification and
+  // freshness while they fit; region, ARN and instances in row details
+  // unless chosen. Runtime and region ride in the name's context line.
   const columns = useMemo<AdaptiveColumn<WorkloadRow>[]>(
     () => [
       {
         id: "name",
         header: "Name",
-        alwaysVisible: true,
-        priority: 1,
-        approxWidth: 340,
+        primary: true,
+        minWidth: 240,
         cell: ({ row }) => (
-          <div className="min-w-0">
-            <EntityCell
-              label={
-                <Link
-                  to={`/iga/estate/${refId(row.original.ref)}`}
-                  className="hover:underline"
-                >
-                  {row.original.name}
-                </Link>
-              }
-              detail={row.original.arn}
-              monoDetail
-            />
-            {/* Not a count of zero: nothing reads Bedrock aliases yet (§2.14.4). */}
-            {row.original.instances?.state === "not_collected" ? (
-              <p className="mt-0.5 text-xs text-(--color-text-muted)">
-                instances: not collected
-              </p>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        id: "classification",
-        header: "Classification",
-        alwaysVisible: true,
-        priority: 2,
-        approxWidth: 190,
-        cell: ({ row }) => (
-          <StatusBadge tone={CLASSIFICATION_TONE[row.original.classification]}>
-            {CLASSIFICATION_LABEL[row.original.classification]}
-          </StatusBadge>
-        ),
-      },
-      {
-        id: "runtime",
-        header: "Runtime",
-        priority: 3,
-        approxWidth: 110,
-        cell: ({ row }) => (
-          <span
-            className="text-sm"
-            title={RUNTIME_LABEL[row.original.runtime_kind]}
-          >
-            {RUNTIME_SHORT[row.original.runtime_kind]}
-          </span>
+          <NameCell
+            to={`/iga/estate/${refId(row.original.ref)}`}
+            name={row.original.name}
+            context={[RUNTIME_SHORT[row.original.runtime_kind], row.original.region]}
+            account={row.original.account}
+          />
         ),
       },
       {
         id: "account",
         header: "Account",
-        alwaysVisible: true,
-        priority: 2,
+        priority: 1,
         approxWidth: 170,
-        cell: ({ row }) => (
-          <EntityCell
-            label={accountLabel(row.original.account)}
-            detail={row.original.account?.id}
-            monoDetail
-          />
-        ),
+        cell: ({ row }) => <AccountCell account={row.original.account} />,
       },
       {
-        id: "region",
-        header: "Region",
-        priority: 5,
-        approxWidth: 120,
+        id: "classification",
+        header: "Classification",
+        priority: 2,
+        approxWidth: 128,
+        cardSummary: true,
         cell: ({ row }) => (
-          <span className="font-mono text-xs text-(--color-text-muted)">
-            {row.original.region ?? "Region not stated"}
+          <span title={CLASSIFICATION_MEANING[row.original.classification]}>
+            <StatusBadge tone={CLASSIFICATION_TONE[row.original.classification]}>
+              {CLASSIFICATION_SHORT[row.original.classification]}
+            </StatusBadge>
+          </span>
+        ),
+        detail: (r) => (
+          <span>
+            {CLASSIFICATION_SHORT[r.classification]}{" "}
+            <span className="text-(--color-text-muted)">— {CLASSIFICATION_MEANING[r.classification]}</span>
           </span>
         ),
       },
       {
         id: "confirmed",
         header: "Last confirmed",
-        priority: 4,
+        label: "Freshness",
+        priority: 3,
         approxWidth: 150,
         cell: ({ row }) => (
           <ConfirmedCell
@@ -264,11 +230,54 @@ export default function EstateListPage() {
         ),
       },
       {
+        id: "region",
+        header: "Region",
+        priority: 4,
+        approxWidth: 120,
+        defaultHidden: true,
+        cell: ({ row }) => <span className="font-mono text-xs text-(--color-text-muted)">{row.original.region ?? "Not stated"}</span>,
+      },
+      {
+        id: "runtime",
+        header: "Runtime",
+        priority: 5,
+        approxWidth: 150,
+        defaultHidden: true,
+        cell: ({ row }) => <span className="text-sm">{RUNTIME_LABEL[row.original.runtime_kind]}</span>,
+      },
+      {
+        id: "arn",
+        header: "ARN",
+        priority: 6,
+        approxWidth: 300,
+        defaultHidden: true,
+        cell: ({ row }) => <CopyValue value={row.original.arn} />,
+        detail: (r) => <CopyValueWrapped value={r.arn} />,
+      },
+      {
+        id: "instances",
+        header: "Instances",
+        priority: 7,
+        approxWidth: 160,
+        defaultHidden: true,
+        // Not a count of zero: nothing reads Bedrock aliases or versions yet (§2.14.4).
+        cell: ({ row }) => (
+          <span className="text-xs text-(--color-text-muted)">
+            {row.original.instances?.state === "not_collected" ? "Not collected" : "—"}
+          </span>
+        ),
+        detail: (r) =>
+          r.instances?.state === "not_collected" ? (
+            <span className="text-(--color-text-muted)">Not collected — aliases and versions are not read yet, so this is not a count of zero.</span>
+          ) : (
+            <span className="text-(--color-text-muted)">Not applicable</span>
+          ),
+      },
+      {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        priority: 1,
-        approxWidth: 56,
+        approxWidth: 48,
         cell: ({ row }) => {
           const base = `/iga/estate/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the
@@ -301,6 +310,14 @@ export default function EstateListPage() {
     ],
     [navigate],
   );
+  const prefs = useColumnPreferences("iga-estate", columns);
+  const [columnsLayout, setColumnsLayout] = useState<AdaptiveColumnsLayout | undefined>();
+
+  const applied: AppliedFilter[] = [
+    ...accounts.map((a) => ({ key: `account:${a}`, label: `Account: ${nameOf(a)}`, onRemove: () => f.setMany("account", accounts.filter((x) => x !== a)) })),
+    ...(region ? [{ key: "region", label: `Region: ${region === "not_stated" ? "not stated" : region}`, onRemove: () => f.set("region", null) }] : []),
+    ...(runtime ? [{ key: "runtime", label: `Runtime: ${RUNTIME_LABEL[runtime]}`, onRemove: () => f.set("runtime_kind", null) }] : []),
+  ];
 
   const accountCount = pipeline?.accounts.length ?? 0;
   const classFacet = facets?.classification;
@@ -334,52 +351,45 @@ export default function EstateListPage() {
         ) : null}
         {pipeline ? <PipelineNotice pipeline={pipeline} /> : null}
 
-        <div data-graph-search>
-          <ConsoleFilterBar
-            search={f.searchText}
-            onSearchChange={(v) => {
-              setRestarted(false);
-              f.setSearchText(v);
-            }}
-            searchPlaceholder="Search name, ARN or account id"
-            filters={CLASSIFICATION_CHIPS.map((c) => ({
-              key: c.key,
-              label: c.label,
-              count:
-                c.key === "all"
-                  ? count(
-                      "provider_native_agent",
-                      "classified_agent",
-                      "unclassified",
-                    )
-                  : c.key === "agent"
-                    ? count("provider_native_agent", "classified_agent")
-                    : count("unclassified"),
-            }))}
-            activeFilter={classification ?? "all"}
-            onFilterChange={(k) => {
-              setRestarted(false);
-              f.set("classification", k === "all" ? null : k);
-            }}
-            trailing={
-              <>
-                <MultiFacetSelect
-                  label="Account"
-                  allLabel="All accounts"
-                  value={accounts}
-                  options={facets?.account ?? []}
-                  onChange={(v) => f.setMany("account", v)}
-                />
+        <ListToolbar
+          search={f.searchText}
+          onSearchChange={(v) => {
+            setRestarted(false);
+            f.setSearchText(v);
+          }}
+          searchPlaceholder="Search name, ARN or account id"
+          views={CLASSIFICATION_CHIPS.map((c) => ({
+            key: c.key,
+            label: c.label,
+            count:
+              c.key === "all"
+                ? count("provider_native_agent", "classified_agent", "unclassified")
+                : c.key === "agent"
+                  ? count("provider_native_agent", "classified_agent")
+                  : count("unclassified"),
+          }))}
+          activeView={classification ?? "all"}
+          onViewChange={(k) => {
+            setRestarted(false);
+            f.set("classification", k === "all" ? null : k);
+          }}
+          filters={
+            <>
+              <ConsoleFilterField label="Account">
+                <FacetCheckList label="Account" noun="accounts" value={accounts} options={facets?.account ?? []} onChange={(v) => f.setMany("account", v)} />
+              </ConsoleFilterField>
+              <ConsoleFilterField label="Region">
                 <FacetSelect
                   label="Region"
                   allLabel="All regions"
                   value={region}
                   options={facets?.region ?? []}
                   onChange={(v) => f.set("region", v)}
-                  labelFor={(v, l) =>
-                    v === "not_stated" ? "Region not stated" : l
-                  }
+                  labelFor={(v, l) => (v === "not_stated" ? "Region not stated" : l)}
+                  className="h-9 w-full"
                 />
+              </ConsoleFilterField>
+              <ConsoleFilterField label="Runtime">
                 <FacetSelect
                   label="Runtime"
                   allLabel="All runtimes"
@@ -387,18 +397,18 @@ export default function EstateListPage() {
                   options={facets?.runtime_kind ?? []}
                   onChange={(v) => f.set("runtime_kind", v)}
                   labelFor={(v, l) => RUNTIME_LABEL[v as RuntimeKind] ?? l}
+                  className="h-9 w-full"
                 />
-                <SortSelect
-                  value={sort}
-                  options={SORTS}
-                  onChange={(v) => f.set("sort", v === "name" ? null : v)}
-                />
-              </>
-            }
-          />
-        </div>
+              </ConsoleFilterField>
+            </>
+          }
+          applied={applied}
+          onClearAll={() => f.clearKeys(["account", "region", "runtime_kind"])}
+          sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+        />
 
-        <CoverageNotice
+        <CoverageSummary subject="workloads"
           ws={ws}
           gaps={gaps}
           accountName={nameOf}
@@ -429,6 +439,8 @@ export default function EstateListPage() {
                 onRefresh={refresh}
                 subject="agents and workloads"
                 incompleteAccounts={incomplete}
+                chosenColumns={prefs.chosen}
+                onColumnsLayout={setColumnsLayout}
                 empty={
                   <EmptyScope
                     subject="agents or workloads"

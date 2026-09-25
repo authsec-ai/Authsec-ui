@@ -5,8 +5,8 @@
  * is estate-wide.
  */
 
-import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import {
@@ -19,12 +19,10 @@ import {
   type ListIdentitiesArgs,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
-import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
+import { ConsoleFilterField, ConsoleRowActions, type AppliedFilter } from "@/components/console/iam-console";
+import type { AdaptiveColumn, AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
+import { ColumnsMenu } from "@/components/ui/table-columns";
+import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
@@ -39,10 +37,12 @@ import {
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
-import { IDENTITY_KIND_LABEL, accountLabel, countText } from "../shared/labels";
+import { IDENTITY_KIND_LABEL, countText } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
-import { MultiFacetSelect, SortSelect } from "../shared/components/FacetSelect";
+import { CoverageSummary } from "../coverage/CoverageSummary";
+import { FacetCheckList, SortSelect } from "../shared/components/FacetSelect";
+import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
 import {
@@ -81,7 +81,7 @@ const FILTERS = {
 function usedByText(r: IdentityRow): string {
   const c = r.used_by_count;
   if (r.kind === "iam_group") return "—";
-  if (c.value === 0 && c.exact) return "No workload";
+  if (c.value === 0 && c.exact) return "None";
   return countText(c, "workload", "workloads");
 }
 
@@ -148,70 +148,52 @@ export default function IdentitiesListPage() {
     usedBy && "run as by a workload",
   ].filter(Boolean) as string[];
 
+  // Priority: the name (its kind in the context line), then account,
+  // direct workload bindings and freshness while they fit; ARN in details.
   const columns = useMemo<AdaptiveColumn<IdentityRow>[]>(
     () => [
       {
         id: "name",
         header: "Name",
-        alwaysVisible: true,
-        priority: 1,
-        approxWidth: 340,
+        primary: true,
+        minWidth: 240,
         cell: ({ row }) => (
-          <EntityCell
-            label={
-              <Link
-                to={`/iga/identities/${refId(row.original.ref)}`}
-                className="hover:underline"
-              >
-                {row.original.name}
-              </Link>
-            }
-            detail={row.original.arn}
-            monoDetail
+          <NameCell
+            to={`/iga/identities/${refId(row.original.ref)}`}
+            name={row.original.name}
+            context={[IDENTITY_KIND_LABEL[row.original.kind]]}
+            account={row.original.account}
           />
-        ),
-      },
-      {
-        id: "kind",
-        header: "Kind",
-        alwaysVisible: true,
-        priority: 2,
-        approxWidth: 110,
-        cell: ({ row }) => (
-          <span className="text-sm">
-            {IDENTITY_KIND_LABEL[row.original.kind]}
-          </span>
         ),
       },
       {
         id: "account",
         header: "Account",
-        alwaysVisible: true,
-        priority: 2,
+        priority: 1,
         approxWidth: 170,
-        cell: ({ row }) => (
-          <EntityCell
-            label={accountLabel(row.original.account)}
-            detail={row.original.account?.id}
-            monoDetail
-          />
-        ),
+        cell: ({ row }) => <AccountCell account={row.original.account} />,
       },
       {
         id: "used_by",
         header: "Run as by",
-        priority: 3,
-        approxWidth: 130,
+        label: "Direct workload bindings",
+        priority: 2,
+        approxWidth: 120,
+        cardSummary: true,
+        // Workloads configured to run as it — not every workload that
+        // reaches it through another role.
         cell: ({ row }) => (
-          <span className="text-sm tabular-nums">
+          <span className="text-sm tabular-nums" title="Workloads configured to run as this identity directly">
             {usedByText(row.original)}
           </span>
         ),
+        detail: (r) => (r.kind === "iam_group" ? "Groups are not run as" : `${usedByText(r)} configured to run as it directly`),
       },
       {
         id: "confirmed",
         header: "Last confirmed",
-        priority: 4,
+        label: "Freshness",
+        priority: 3,
         approxWidth: 150,
         cell: ({ row }) => (
           <ConfirmedCell
@@ -222,11 +204,19 @@ export default function IdentitiesListPage() {
         ),
       },
       {
+        id: "arn",
+        header: "ARN",
+        priority: 4,
+        approxWidth: 300,
+        defaultHidden: true,
+        cell: ({ row }) => <CopyValue value={row.original.arn} />,
+        detail: (r) => <CopyValueWrapped value={r.arn} />,
+      },
+      {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        priority: 1,
-        approxWidth: 56,
+        approxWidth: 48,
         cell: ({ row }) => {
           const base = `/iga/identities/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the
@@ -259,6 +249,12 @@ export default function IdentitiesListPage() {
     ],
     [navigate],
   );
+  const prefs = useColumnPreferences("iga-identities", columns);
+  const [columnsLayout, setColumnsLayout] = useState<AdaptiveColumnsLayout | undefined>();
+  const applied: AppliedFilter[] = [
+    ...accounts.map((a) => ({ key: `account:${a}`, label: `Account: ${nameOf(a)}`, onRemove: () => f.setMany("account", accounts.filter((x) => x !== a)) })),
+    ...(usedBy ? [{ key: "used_by", label: "Run as by a workload", onRemove: () => f.set("used_by", null) }] : []),
+  ];
 
   const kindFacet = facets?.kind;
   const kindCount = (k?: string) =>
@@ -283,48 +279,35 @@ export default function IdentitiesListPage() {
         subject="identities"
       >
         {pipeline ? <PipelineNotice pipeline={pipeline} /> : null}
-        <div data-graph-search>
-          <ConsoleFilterBar
-            search={f.searchText}
-            onSearchChange={f.setSearchText}
-            searchPlaceholder="Search name, ARN or account id"
-            filters={KINDS.map((k) => ({
-              key: k.key,
-              label: k.label,
-              count: kindCount(k.kind),
-            }))}
-            activeFilter={kind ?? "all"}
-            onFilterChange={(k) => f.set("kind", k === "all" ? null : k)}
-            trailing={
-              <>
-                <label className="flex items-center gap-2 text-xs font-medium text-(--color-text-muted)">
-                  <Switch
-                    checked={usedBy === "workloads"}
-                    onCheckedChange={(on) =>
-                      f.set("used_by", on ? "workloads" : null)
-                    }
-                    aria-label="Only identities a workload runs as"
-                  />
-                  Run as by a workload
-                </label>
-                <MultiFacetSelect
-                  label="Account"
-                  allLabel="All accounts"
-                  value={accounts}
-                  options={facets?.account ?? []}
-                  onChange={(v) => f.setMany("account", v)}
+        <ListToolbar
+          search={f.searchText}
+          onSearchChange={f.setSearchText}
+          searchPlaceholder="Search name, ARN or account id"
+          views={KINDS.map((k) => ({ key: k.key, label: k.label, count: kindCount(k.kind) }))}
+          activeView={kind ?? "all"}
+          onViewChange={(k) => f.set("kind", k === "all" ? null : k)}
+          filters={
+            <>
+              <ConsoleFilterField label="Account">
+                <FacetCheckList label="Account" noun="accounts" value={accounts} options={facets?.account ?? []} onChange={(v) => f.setMany("account", v)} />
+              </ConsoleFilterField>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch
+                  checked={usedBy === "workloads"}
+                  onCheckedChange={(on) => f.set("used_by", on ? "workloads" : null)}
+                  aria-label="Only identities a workload runs as"
                 />
-                <SortSelect
-                  value={sort}
-                  options={SORTS}
-                  onChange={(v) => f.set("sort", v === "name" ? null : v)}
-                />
-              </>
-            }
-          />
-        </div>
+                Only identities a workload runs as
+              </label>
+            </>
+          }
+          applied={applied}
+          onClearAll={() => f.clearKeys(["account", "used_by"])}
+          sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+        />
 
-        <CoverageNotice
+        <CoverageSummary subject="identities"
           ws={ws}
           gaps={gaps}
           accountName={nameOf}
@@ -355,6 +338,8 @@ export default function IdentitiesListPage() {
                 onRefresh={refresh}
                 subject="identities"
                 incompleteAccounts={incomplete}
+                chosenColumns={prefs.chosen}
+                onColumnsLayout={setColumnsLayout}
                 empty={
                   <EmptyScope
                     subject="identities"

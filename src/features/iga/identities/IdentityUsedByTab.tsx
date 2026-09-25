@@ -31,7 +31,7 @@ import { RELATIONSHIP_LABEL, RUNTIME_LABEL, accountLabel, limitationText } from 
 import { emptyGiven } from "../shared/listSummary";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
-import { CoverageNotice } from "../shared/components/CoverageNotice";
+import { CoverageSummary } from "../coverage/CoverageSummary";
 import { IdentityName } from "../shared/components/IdentityName";
 import { TabBody } from "../shared/components/ObjectShell";
 import { SectionList } from "../shared/components/SectionList";
@@ -117,7 +117,7 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
     <TabBody ready={!!data} failure={failure} subject="what uses this identity" onRetry={() => void q.refetch()} onRefresh={refresh}>
       {data ? (
         <div className="space-y-6">
-          {coverage.length ? <CoverageNotice ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
+          {coverage.length ? <CoverageSummary subject="workloads or principals" ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
           {identity.kind === "iam_group" ? (
             <SectionList
               label="Members"
