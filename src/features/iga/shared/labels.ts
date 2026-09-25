@@ -190,7 +190,9 @@ export function limitationText(l: EvidenceLimitation): string {
     case "selector_may_match_nothing":
       return "A selector, not a resource. We have not enumerated what it matches, and it may match nothing.";
     case "account_not_connected":
-      return `Account ${l.account_id ?? "on the far side"} is not connected, so nothing about it could be read.`;
+      return l.accounts?.length
+        ? `${l.accounts.length === 1 ? "Account" : "Accounts"} ${l.accounts.join(", ")} ${l.accounts.length === 1 ? "is" : "are"} not connected, so nothing about ${l.accounts.length === 1 ? "it" : "them"} could be read.`
+        : "An account on the far side is not connected, so nothing about it could be read.";
     case "caller_permission_not_evaluated":
       return "Assuming the role also needs sts:AssumeRole permission on the caller's side, which was not checked.";
     case "not_principal_unresolved":
@@ -222,6 +224,13 @@ export const IDENTITY_KIND_LABEL: Record<IdentitySummary["kind"], string> = {
   iam_user: "IAM user",
   iam_group: "IAM group",
   external_principal: "External principal",
+  // An external principal named on another object carries its mechanism.
+  aws_account: "AWS account",
+  aws_principal: "AWS principal",
+  aws_service: "AWS service",
+  oidc: "OIDC provider",
+  saml: "SAML provider",
+  k8s_service_account: "Kubernetes service account",
 };
 
 /** §2.14.12: an ARN in a policy is not proof a resource exists. */

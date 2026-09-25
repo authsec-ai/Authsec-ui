@@ -52,7 +52,7 @@ function Overview({ p }: { p: ExternalPrincipalDetail }) {
   const res = p.resolution;
   return (
     <div className="space-y-4">
-      {!p.account_connected ? (
+      {p.account_connected === false ? (
         <DecisionBanner
           tone="warning"
           title={p.account ? `Account ${p.account.id} is not connected` : "Its account could not be determined"}

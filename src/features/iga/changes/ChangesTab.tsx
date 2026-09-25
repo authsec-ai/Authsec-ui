@@ -18,6 +18,7 @@ import {
   type ChangeFeed,
   type ChangesArgs,
   type ChangesMeta,
+  type GraphRef,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { CardContent } from "@/components/ui/card";
@@ -42,6 +43,17 @@ const ENDED_REASON: Record<string, string> = {
   recreated: "recreated under the same name — the new one is a separate object",
   policy_recreated: "its policy was deleted and recreated",
 };
+
+
+/** The claim types `/evidence` answers for (§5.3 *Evidence*); a change also
+ * names its integration, which has no evidence of its own. */
+const EVIDENCE_TYPES = new Set([
+  "grant", "assignment", "relationship", "target", "presence", "coverage",
+  "workload", "identity", "resource", "external_principal", "policy", "statement",
+]);
+function evidenceClaims(claims: GraphRef[]): GraphRef[] {
+  return claims.filter((c) => EVIDENCE_TYPES.has(c.slice(0, c.indexOf(":"))));
+}
 
 function reason(r?: string | null): string {
   return r ? ` — ${ENDED_REASON[r] ?? r.replace(/_/g, " ")}` : "";
@@ -134,10 +146,10 @@ function EventRow({ e }: { e: ChangeEvent }) {
           {format(new Date(e.at), "d MMM yyyy, HH:mm")}
         </time>
         <span className="min-w-0 flex-1">{sentence(e)}</span>
-        {e.claims.length ? (
+        {evidenceClaims(e.claims).length ? (
           <button
             type="button"
-            onClick={() => open(e.claims)}
+            onClick={() => open(evidenceClaims(e.claims))}
             className="shrink-0 text-xs font-semibold text-(--color-primary-text) hover:underline"
           >
             Evidence

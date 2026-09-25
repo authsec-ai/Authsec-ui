@@ -20,7 +20,8 @@ export function IdentityName({ identity, from }: { identity: IdentitySummary; fr
         <span className="font-medium">{identity.name}</span>
       )}
       <span className="ml-2 text-xs text-(--color-text-muted)">
-        {IDENTITY_KIND_LABEL[identity.kind]} · {accountLabel(identity.account)}
+        {IDENTITY_KIND_LABEL[identity.kind] ?? identity.kind.replace(/_/g, " ")}
+        {identity.account || identity.kind.startsWith("iam_") ? ` · ${accountLabel(identity.account)}` : ""}
         {identity.account && !identity.account.connected ? " · account not connected" : ""}
       </span>
       <p className="mt-0.5 break-all font-mono text-xs text-(--color-text-muted)">{identity.arn}</p>

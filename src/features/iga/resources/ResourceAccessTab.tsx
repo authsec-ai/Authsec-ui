@@ -169,7 +169,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
         <CursorPager
           meta={view.meta}
           pageIndex={paging.pageIndex}
-          rowsOnPage={view.rows.length}
+          rowsOnPage={new Set(view.rows.map((a) => a.holder.ref)).size}
           onPrev={paging.prev}
           onNext={paging.next}
           failure={view.footerFailure}

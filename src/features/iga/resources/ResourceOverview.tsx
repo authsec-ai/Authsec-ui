@@ -73,7 +73,11 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
               <DetailRow label="Named by" value={countText(r.named_by_count, "statement", "statements")} />
               <DetailRow
                 label="Excluded by"
-                value={r.excluded_by_count?.value ? countText(r.excluded_by_count, "statement (NotResource)", "statements (NotResource)") : "No statement"}
+                value={
+                  !r.excluded_by_count || r.excluded_by_count.value === 0
+                    ? "No statement"
+                    : countText(r.excluded_by_count, "statement (NotResource)", "statements (NotResource)")
+                }
               />
               <DetailRow
                 full

@@ -8,7 +8,7 @@ import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
-import { IDENTITY_KIND_LABEL, accountLabel, agoText, dayText } from "../shared/labels";
+import { IDENTITY_KIND_LABEL, accountLabel, agoText, countText, dayText } from "../shared/labels";
 
 
 export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) {
@@ -54,9 +54,9 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
                 value={
                   i.kind === "iam_group"
                     ? "Groups are not run as"
-                    : i.used_by_count.value
-                      ? `${i.used_by_count.exact ? "" : "at least "}${i.used_by_count.value} ${i.used_by_count.value === 1 ? "workload" : "workloads"}`
-                      : "No workload is configured to run as it"
+                    : i.used_by_count.value === 0
+                      ? "No workload is configured to run as it"
+                      : countText(i.used_by_count, "workload", "workloads")
                 }
               />
               <CopyField label="ARN" value={i.arn} />
