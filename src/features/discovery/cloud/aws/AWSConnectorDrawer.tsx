@@ -56,6 +56,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import {
+  cloudDiscoveryApi,
   useGetAwsConnectorQuery,
   useVerifyAwsConnectorMutation,
   useRevokeAwsConnectorMutation,
@@ -70,6 +71,7 @@ import {
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
 import { useGetGraphCapabilitiesQuery } from "@/app/api/igaGraphApi";
+import { useAppDispatch } from "@/app/hooks";
 import { getWorkspaceId } from "@/utils/workspace";
 import { awsErrorCopy } from "./awsErrorCopy";
 import { AWSRegionEditor } from "./AWSRegionEditor";
@@ -176,6 +178,7 @@ export function AWSConnectorDrawer({
   const [finishedRun, setFinishedRun] = useState<{ status: string; error: string } | null>(null);
   const caps = useGetGraphCapabilitiesQuery({ ws: getWorkspaceId() ?? "" }).data;
   const graphServed = caps?.graph_projection === "on" && caps.features.workloads === true;
+  const dispatch = useAppDispatch();
   // Once true, stays true until this component instance is torn down —
   // avoids the connector's own transient `coverage.status` flipping back to
   // "running" on the very next scan reading as if the button reset itself.
@@ -205,14 +208,29 @@ export function AWSConnectorDrawer({
   const scanRun = scanRunQuery.data;
 
   useEffect(() => {
-    // Stop polling once the run reaches a terminal state. `published` is the
-    // one that means the inventory now reflects this pass; the RTK tag on that
-    // transition is what refreshes the inventory views.
     if (scanRun && scanRun.status !== "queued" && scanRun.status !== "running") {
       setFinishedRun({ status: scanRun.status, error: scanRun.last_error });
       setWatchedRunId(null);
+      // providesTags alone does not invalidate — only a mutation's invalidatesTags
+      // does. Dispatch here when the run reaches published so every inventory
+      // query (identities, secrets, permissions, workloads) refetches with the
+      // new data rather than showing pre-scan rows until the drawer is reopened.
+      if (scanRun.status === "published") {
+        dispatch(
+          cloudDiscoveryApi.util.invalidateTags([
+            { type: "CloudIdentity", id: "ALL" },
+            { type: "CloudSecret", id: "ALL" },
+            { type: "CloudAssumeEdge", id: "ALL" },
+            { type: "CloudPermission", id: "ALL" },
+            { type: "CloudResource", id: "ALL" },
+            { type: "CloudWorkload", id: "ALL" },
+            { type: "CloudUsage", id: "ALL" },
+            { type: "CloudObservation", id: "ALL" },
+          ]),
+        );
+      }
     }
-  }, [scanRun]);
+  }, [scanRun, dispatch]);
 
   useEffect(() => {
     // Coverage still drives the connector poll, because a scan started
@@ -530,7 +548,7 @@ export function AWSConnectorDrawer({
                           </Button>
                         ) : null}
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to={`/iga/cloud/identities?account=${connector.id}`}>
+                          <Link to={`/iga/cloud/identities?account=${encodeURIComponent(connector.scope_id)}`}>
                             <span className="flex items-center gap-1.5">
                               <Users className="size-3.5" />
                               Identities, permissions and activity
@@ -539,7 +557,7 @@ export function AWSConnectorDrawer({
                           </Link>
                         </Button>
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to={`/iga/cloud/resources?account=${connector.id}`}>
+                          <Link to={`/iga/cloud/resources?account=${encodeURIComponent(connector.scope_id)}`}>
                             <span className="flex items-center gap-1.5">
                               <Database className="size-3.5" />
                               Resources these permissions name
