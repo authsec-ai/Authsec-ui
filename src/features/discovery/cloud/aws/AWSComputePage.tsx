@@ -76,6 +76,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
+import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
 import {
   metricLabel,
@@ -433,6 +434,14 @@ export default function AWSComputePage() {
             {relativeOrUnknown(row.original.last_seen_at)}
           </span>
         ),
+      },
+      {
+        // The projected graph object, found by this row's source key.
+        id: "graph",
+        header: "",
+        priority: 8,
+        approxWidth: 140,
+        cell: ({ row }) => <OpenInGraph cloudRef={`cloud_workload:${row.original.id}`} />,
       },
     ],
     [connectorById, identityById, identitiesQuery.isLoading],

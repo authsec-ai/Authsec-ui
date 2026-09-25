@@ -349,6 +349,18 @@ export type CloudScanRunStatus =
   | "failed"
   | "abandoned";
 
+/** Building the identity graph from a run (SPEC-iga-phase2-graph.md §5.3). */
+export interface CloudScanRunProjection {
+  status: "queued" | "running" | "complete" | "failed" | "abandoned";
+  /** The graph publication this run produced, once built. */
+  rev: number | null;
+  attempts: number;
+  /** Failed, and will be tried again. */
+  retrying: boolean;
+  last_error: string | null;
+}
+
+/** `GET /aws/scan-runs/:id` — the stored run, plus its projection. */
 export interface CloudScanRun {
   id: string;
   workspace_id: string;
@@ -357,10 +369,83 @@ export interface CloudScanRun {
   status: CloudScanRunStatus;
   trigger: string;
   attempts: number;
+  /** "" when none. */
   last_error: string;
   requested_at: string;
-  started_at?: string | null;
-  published_at?: string | null;
+  started_at?: string;
+  published_at?: string;
+  updated_at: string;
+  projection: CloudScanRunProjection | null;
+}
+
+/** One surface a run did not fully read. */
+export interface CloudScanRunGap {
+  surface: string;
+  state: string;
+  api: string | null;
+  error_code: string | null;
+}
+
+/** One row of `GET /aws/connectors/:id/scan-runs`. */
+export interface CloudScanRunHistoryItem {
+  ref: string;
+  id: string;
+  integration: string;
+  status: CloudScanRunStatus;
+  trigger: string;
+  attempts: number;
+  generation: number;
+  /** When it last entered the queue. */
+  queued_at: string | null;
+  started_at: string | null;
+  published_at: string | null;
+  finished_at: string | null;
+  updated_at: string | null;
+  last_error: string | null;
+  /** Stamped at publication; null before. */
+  coverage: {
+    status: "running" | "complete" | "partial" | "failed" | "";
+    /** Surface state → how many surfaces ended in it. */
+    counts: Record<string, number>;
+    not_reached: CloudScanRunGap[];
+  } | null;
+  projection: CloudScanRunProjection | null;
+}
+
+/** `GET /aws/connectors/:id/scan-runs` — newest first, cursor-paged. */
+export interface CloudScanRunPage {
+  data: CloudScanRunHistoryItem[];
+  meta: { as_of: string; next_cursor: string | null; limit: number; note?: string };
+}
+
+/** Why the account's regions could not be read (the answer is still 200). */
+export interface AWSRegionsFailure {
+  code: "aws_error" | "aws_access_denied" | "role_not_assumable" | "aws_throttled" | "aws_timeout";
+  api: string | null;
+  error_code: string | null;
+  message: string;
+  fault: "aws" | "customer_account";
+}
+
+/** One region: enabled in the account, and whether scans read it. */
+export interface AWSConnectorRegion {
+  name: string;
+  /** AWS `OptInStatus`, when reported. */
+  opt_in_status: string | null;
+  /** null: AWS could not be asked; false: selected but no longer enabled. */
+  enabled: boolean | null;
+  selected: boolean;
+}
+
+/** `GET /aws/connectors/:id/regions`. When AWS cannot be asked, `data` holds
+ * only the selected regions, each with `enabled: null`, and `meta.error` says why. */
+export interface AWSConnectorRegions {
+  data: AWSConnectorRegion[];
+  meta: {
+    as_of: string;
+    error: AWSRegionsFailure | null;
+    template: { deployed: string | null; current: string; outdated: boolean | null };
+  };
 }
 
 interface CloudScanRunEnvelope {
@@ -1215,6 +1300,40 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
           : [{ type: "CloudScanRun" as const, id: result?.id ?? "ALL" }],
     }),
 
+    /** Run history, newest first. Each run says how it ended, what it could
+     * read, and whether — and at which revision — it reached the graph. */
+    listAwsScanRuns: builder.query<CloudScanRunPage, { connectorId: string; cursor?: string }>({
+      query: ({ connectorId, cursor }) => ({
+        url: `/authsec/discovery/aws/connectors/${connectorId}/scan-runs`,
+        params: cursor ? { cursor } : undefined,
+      }),
+      providesTags: (_r, _e, { connectorId }) => [
+        { type: "CloudScanRun" as const, id: "ALL" },
+        { type: "CloudConnector" as const, id: connectorId },
+      ],
+    }),
+
+    getAwsConnectorRegions: builder.query<AWSConnectorRegions, string>({
+      query: (id) => ({ url: `/authsec/discovery/aws/connectors/${id}/regions` }),
+      transformResponse: (r: AWSConnectorRegions) => ({ data: r.data, meta: r.meta }),
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector" as const, id }],
+    }),
+
+    /** Applies from the next scan. `422 invalid_region` names the offenders in
+     * `regions`; `422 regions_unavailable` means AWS could not be asked. */
+    updateAwsConnectorRegions: builder.mutation<CloudConnector, { id: string; regions: string[] }>({
+      query: ({ id, regions }) => ({
+        url: `/authsec/discovery/aws/connectors/${id}`,
+        method: "PATCH",
+        body: { regions },
+      }),
+      transformResponse: (r: ConnectorEnvelope) => r.data,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "AWS_LIST" },
+      ],
+    }),
+
     /* ──────────────────── The seven AWS discovery reads ───────────────────
      *
      * PAGINATED, every one of them, since the backend's pagination-and-scoping
@@ -1596,6 +1715,9 @@ export const {
   useRevokeAwsConnectorMutation,
   useScanAwsConnectorMutation,
   useGetAwsScanRunQuery,
+  useListAwsScanRunsQuery,
+  useGetAwsConnectorRegionsQuery,
+  useUpdateAwsConnectorRegionsMutation,
   useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
   useListAwsAssumeEdgesQuery,

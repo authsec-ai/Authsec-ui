@@ -69,7 +69,11 @@ import {
   type CloudCoverageState,
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
+import { useGetGraphCapabilitiesQuery } from "@/app/api/igaGraphApi";
+import { getWorkspaceId } from "@/utils/workspace";
 import { awsErrorCopy } from "./awsErrorCopy";
+import { AWSRegionEditor } from "./AWSRegionEditor";
+import { AWSScanHistory } from "./AWSScanHistory";
 import {
   coverageSurfaceLabel,
   stackPredatesCompute,
@@ -164,6 +168,14 @@ export function AWSConnectorDrawer({
 }) {
   const [tab, setTab] = useState("overview");
   const [confirmRevokeOpen, setConfirmRevokeOpen] = useState(false);
+  const [editingRegions, setEditingRegions] = useState(false);
+  // A scan that could not be queued says so where the customer is looking,
+  // not only in a toast that disappears (T7.9).
+  const [scanError, setScanError] = useState<string | null>(null);
+  // How the run this drawer watched ended, kept after polling stops.
+  const [finishedRun, setFinishedRun] = useState<{ status: string; error: string } | null>(null);
+  const caps = useGetGraphCapabilitiesQuery({ ws: getWorkspaceId() ?? "" }).data;
+  const graphServed = caps?.graph_projection === "on" && caps.features.workloads === true;
   // Once true, stays true until this component instance is torn down —
   // avoids the connector's own transient `coverage.status` flipping back to
   // "running" on the very next scan reading as if the button reset itself.
@@ -197,6 +209,7 @@ export function AWSConnectorDrawer({
     // one that means the inventory now reflects this pass; the RTK tag on that
     // transition is what refreshes the inventory views.
     if (scanRun && scanRun.status !== "queued" && scanRun.status !== "running") {
+      setFinishedRun({ status: scanRun.status, error: scanRun.last_error });
       setWatchedRunId(null);
     }
   }, [scanRun]);
@@ -232,6 +245,9 @@ export function AWSConnectorDrawer({
   const handleClose = () => {
     setTab("overview");
     setConfirmRevokeOpen(false);
+    setEditingRegions(false);
+    setScanError(null);
+    setFinishedRun(null);
     onClose();
   };
 
@@ -259,6 +275,8 @@ export function AWSConnectorDrawer({
 
   const handleScan = async () => {
     if (!connector) return;
+    setScanError(null);
+    setFinishedRun(null);
     try {
       const res = await scanConnector(connector.id).unwrap();
       const runId = res.meta?.run_id;
@@ -271,6 +289,7 @@ export function AWSConnectorDrawer({
         (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
         "Could not start the scan.",
       );
+      setScanError(`${copy.title}. ${copy.body}`);
       toast.error(`${copy.title}. ${copy.body}`);
     }
   };
@@ -314,7 +333,7 @@ export function AWSConnectorDrawer({
         // 560. The footer wraps, so the narrower panel degrades gracefully.
         width={480}
         ariaTitle={connector ? `AWS account ${connector.scope_id}` : "AWS connector"}
-        ariaDescription="AWS connector overview, discovered identities, secrets, and actions."
+        ariaDescription="AWS connector overview, discovered identities, secrets, scan history, and actions."
       >
         {isLoading || !connector ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>
@@ -332,11 +351,38 @@ export function AWSConnectorDrawer({
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="identities">Identities</TabsTrigger>
                   <TabsTrigger value="secrets">Secrets</TabsTrigger>
+                  <TabsTrigger value="scans">Scans</TabsTrigger>
                 </TabsList>
               </div>
 
               <DrawerBody>
                 <TabsContent value="overview" className="space-y-6">
+                  {scanError ? (
+                    <div role="alert" className="rounded-md bg-(--color-danger-soft) px-3 py-2.5 text-xs text-(--color-danger-text)">
+                      <strong className="font-medium">The scan was not started.</strong> {scanError}
+                    </div>
+                  ) : null}
+                  {watchedRunId && scanRun ? (
+                    <div role="status" className="rounded-md bg-(--color-info-soft) px-3 py-2.5 text-xs text-(--color-info-text)">
+                      {scanRun.status === "queued"
+                        ? "Scan queued. Scans in a workspace run one at a time, so it may wait for another account's scan."
+                        : "Scanning this account."}
+                    </div>
+                  ) : finishedRun ? (
+                    <div
+                      role="status"
+                      className={cn(
+                        "rounded-md px-3 py-2.5 text-xs",
+                        finishedRun.status === "published"
+                          ? "bg-(--color-success-soft) text-(--color-success-text)"
+                          : "bg-(--color-danger-soft) text-(--color-danger-text)",
+                      )}
+                    >
+                      {finishedRun.status === "published"
+                        ? "Scan finished. The inventory reflects it; the graph is built from it next — see Scans for when."
+                        : `Scan ${finishedRun.status}${finishedRun.error ? `: ${finishedRun.error}` : ""}. Earlier results are still shown.`}
+                    </div>
+                  ) : null}
                   {connector.status === "error" && connector.last_error ? (
                     <div className="rounded-md bg-(--color-danger-soft) px-3 py-2.5 text-xs text-(--color-danger-text)">
                       {connector.last_error}
@@ -361,7 +407,28 @@ export function AWSConnectorDrawer({
                     <DetailGrid>
                       <CopyField label="Role ARN" value={attrs?.role_arn ?? ""} />
                       <DetailRow label="Partition" value={attrs?.partition ?? "—"} />
-                      <DetailRow label="Regions" value={attrs?.regions?.join(", ") ?? "—"} />
+                      <DetailRow
+                        full
+                        label="Regions scanned"
+                        value={
+                          editingRegions ? (
+                            <AWSRegionEditor connectorId={connector.id} onDone={() => setEditingRegions(false)} />
+                          ) : (
+                            <span className="flex flex-wrap items-center gap-2">
+                              {attrs?.regions?.length ? attrs.regions.join(", ") : "—"}
+                              {connector.status !== "revoked" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingRegions(true)}
+                                  className="text-[11px] font-semibold text-(--color-primary-text) hover:underline"
+                                >
+                                  Change regions
+                                </button>
+                              ) : null}
+                            </span>
+                          )
+                        }
+                      />
                       <DetailRow
                         label="Template version"
                         value={
@@ -451,6 +518,17 @@ export function AWSConnectorDrawer({
                   {scanned ? (
                     <DrawerSection label="Discovered in this account">
                       <div className="grid gap-1.5">
+                        {graphServed ? (
+                          <Button asChild size="sm" className="justify-between">
+                            <Link to={`/iga/estate?account=${encodeURIComponent(connector.scope_id)}`}>
+                              <span className="flex items-center gap-1.5">
+                                <Boxes className="size-3.5" />
+                                Agents & workloads in the identity graph
+                              </span>
+                              <ArrowRight className="size-3.5" />
+                            </Link>
+                          </Button>
+                        ) : null}
                         <Button asChild variant="outline" size="sm" className="justify-between">
                           <Link to={`/iga/cloud/identities?account=${connector.id}`}>
                             <span className="flex items-center gap-1.5">
@@ -593,6 +671,10 @@ export function AWSConnectorDrawer({
                       ) : null}
                     </div>
                   )}
+                </TabsContent>
+
+                <TabsContent value="scans" className="space-y-4">
+                  <AWSScanHistory connectorId={connector.id} />
                 </TabsContent>
               </DrawerBody>
             </Tabs>

@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 import { DrawerPrevNext } from "@/components/primitives/DrawerPrevNext";
 import { DrawerBody, DrawerFooter, DrawerHeader, DrawerSection, CopyField } from "@/components/console/detail";
+import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import type { CloudIdentity } from "@/app/api/cloudDiscoveryApi";
 import { IDENTITY_KIND_LABEL } from "./awsInventoryLabels";
 import {
@@ -174,6 +175,7 @@ export function AWSIdentityDrawer({
             {/* Same reason as the connector drawer: an auto margin survives a
                 wrapping footer, a flex-1 spacer would eat a row. */}
             <div className="ml-auto" />
+            <OpenInGraph cloudRef={`cloud_identity:${identity.id}`} />
             {showPager ? (
               <DrawerPrevNext
                 onPrev={onPrev}

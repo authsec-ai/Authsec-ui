@@ -61,7 +61,13 @@ import AgentsPage from "./features/agents/AgentsPage";
 import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
 import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
-import IdentitiesPage from "./features/discovery/IdentitiesPage";
+import EstateListPage from "./features/iga/estate/EstateListPage";
+import WorkloadPage from "./features/iga/estate/WorkloadPage";
+import IdentitiesListPage from "./features/iga/identities/IdentitiesListPage";
+import IdentityPage from "./features/iga/identities/IdentityPage";
+import ResourcesListPage from "./features/iga/resources/ResourcesListPage";
+import ResourcePage from "./features/iga/resources/ResourcePage";
+import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
 import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
 import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
@@ -639,6 +645,36 @@ function AppContent() {
                     element={<GoogleOAuthCallbackPage />}
                   />
                   <Route
+                    path="/iga/estate"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <EstateListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/estate/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <WorkloadPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/estate/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <WorkloadPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/iga/agents"
                     element={
                       <ProtectedRoute requireProject>
@@ -663,7 +699,77 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <IdentitiesPage />
+                          <IdentitiesListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/identities/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <IdentityPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/identities/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <IdentityPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/resources"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ResourcesListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/resources/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ResourcePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/resources/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ResourcePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/external-principals/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ExternalPrincipalPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/external-principals/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ExternalPrincipalPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -690,10 +796,11 @@ function AppContent() {
                       the connector endpoints and the seven list endpoints
                       under /authsec/discovery/aws/*.
 
-                      Deliberately NOT folded into /iga/identities above: that
-                      page covers every identity channel (SPIFFE, OAuth
-                      clients, service accounts), and filling it with cloud
-                      rows would make its name wrong. */}
+                      Kept apart from /iga/identities above: that is the
+                      identity graph's projected, revision-pinned list, and
+                      this is the raw collection view of every cloud_* row,
+                      including surfaces the graph does not project
+                      (SPEC-iga-phase2-graph.md §2.14.2). */}
                   <Route
                     path="/iga/cloud"
                     element={

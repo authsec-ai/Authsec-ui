@@ -10,7 +10,9 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  Boxes,
   Cloud,
+  Database,
   Fingerprint,
   SlidersHorizontal,
   Radar,
@@ -36,6 +38,8 @@ import {
 } from "@/components/ui/sidebar";
 import { AuthSecLogo } from "@/components/ui/authsec-logo";
 import { cn } from "@/lib/utils";
+import { getWorkspaceId } from "@/utils/workspace";
+import { useGetGraphCapabilitiesQuery, type GraphFeature } from "@/app/api/igaGraphApi";
 
 interface IgaNavItem {
   title: string;
@@ -43,12 +47,22 @@ interface IgaNavItem {
   icon: LucideIcon;
   isActive?: boolean;
   onClick?: () => void;
+  /**
+   * An identity-graph view: shown only when the backend serves it
+   * (SPEC-iga-phase2-graph.md §2.14.14 *Unavailable features*). No teasers.
+   */
+  graphFeature?: GraphFeature;
 }
 
 const NAV_DISCOVERY: IgaNavItem[] = [
   { title: "Integrations", url: "/iga/integrations", icon: Radar },
+  // The identity graph's entry point (SPEC-iga-phase2-graph.md §2.14.2).
+  { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
   { title: "Discovered Agents", url: "/iga/agents", icon: ScanSearch },
-  { title: "Identities", url: "/iga/identities", icon: Fingerprint },
+  // The graph's identities and resources, estate-wide: an investigation often
+  // starts from a shared role or a sensitive bucket rather than a workload.
+  { title: "Identities", url: "/iga/identities", icon: Fingerprint, graphFeature: "identities" },
+  { title: "Resources", url: "/iga/resources", icon: Database, graphFeature: "resources" },
   // The cloud inventory — Identities, Compute and Resources as three tabs of
   // one shell, not three sidebar items.
   //
@@ -83,17 +97,23 @@ export function IgaSidebar({
   const navigate = useNavigate();
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
+  const caps = useGetGraphCapabilitiesQuery({ ws: getWorkspaceId() ?? "" }).data;
+  const serves = useCallback(
+    (f: GraphFeature | undefined) =>
+      f === undefined || (caps?.graph_projection === "on" && caps.features[f] === true),
+    [caps],
+  );
 
   const decorate = useCallback(
     (nav: IgaNavItem[]) =>
-      nav.map((item) => ({
+      nav.filter((item) => serves(item.graphFeature)).map((item) => ({
         ...item,
         // Match the section root too, so /iga/certification/:id keeps the parent active.
         isActive:
           location.pathname === item.url || location.pathname.startsWith(`${item.url}/`),
         onClick: () => handleNavigation(item.url),
       })),
-    [location.pathname, handleNavigation],
+    [location.pathname, handleNavigation, serves],
   );
 
   const discoveryItems = useMemo(() => decorate(NAV_DISCOVERY), [decorate]);
