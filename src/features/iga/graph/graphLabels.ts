@@ -11,7 +11,8 @@
 
 import type { EvidenceLimitation, GraphEdgeKind, GraphFrontier, GraphNodeKind, RelState } from "@/app/api/igaGraphApi";
 
-import { IDENTITY_KIND_LABEL, RESOURCE_KIND_LABEL } from "../shared/labels";
+import { ACCOUNT_KIND_LABEL, IDENTITY_KIND_LABEL, RESOURCE_KIND_LABEL } from "../shared/labels";
+import { classifyEdge, edgeClassLabel, grantHonestyText } from "./v2/edgeClass";
 import type { VisualEdge, VisualEdgeKind } from "./types";
 
 export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
@@ -21,6 +22,8 @@ export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
   can_assume: "may assume",
   grant: "has statement",
   target: "applies to",
+  observed_access: "Observed",
+  backed_by_directory: "directory backing",
   // Overview only: identity → resource through a statement (see `summarize`).
   declares: "declares",
 };
@@ -33,6 +36,8 @@ export const EDGE_MEANING: Record<VisualEdgeKind, string> = {
   can_assume: "The role's trust policy names this principal. Whether the caller may call sts:AssumeRole was not checked.",
   grant: "A policy attached to the identity contains this statement.",
   target: "The statement lists this resource or pattern.",
+  observed_access: "An observation of an action. It is not a declared grant.",
+  backed_by_directory: "The local identity is backed by a directory identity. The two stay separate.",
   declares: "A policy statement attached to the identity lists actions on this resource or pattern.",
 };
 
@@ -43,6 +48,8 @@ const NOUN: Partial<Record<VisualEdgeKind, [string, string]>> = {
   can_assume: ["role", "roles"],
   grant: ["statement", "statements"],
   target: ["resource", "resources"],
+  observed_access: ["observation", "observations"],
+  backed_by_directory: ["directory backing", "directory backing"],
 };
 
 function noun(edge: GraphEdgeKind, count: number | null): string {
@@ -105,6 +112,14 @@ export const KIND_LABEL: Record<GraphNodeKind, string> = {
   iam_role: IDENTITY_KIND_LABEL.iam_role,
   iam_user: IDENTITY_KIND_LABEL.iam_user,
   iam_group: IDENTITY_KIND_LABEL.iam_group,
+  local_user: ACCOUNT_KIND_LABEL.local_user,
+  local_group: ACCOUNT_KIND_LABEL.local_group,
+  k8s_service_account: ACCOUNT_KIND_LABEL.k8s_service_account,
+  k8s_group: ACCOUNT_KIND_LABEL.k8s_group,
+  ad_user: ACCOUNT_KIND_LABEL.ad_user,
+  ad_group: ACCOUNT_KIND_LABEL.ad_group,
+  ad_computer: ACCOUNT_KIND_LABEL.ad_computer,
+  ad_managed_service_account: ACCOUNT_KIND_LABEL.ad_managed_service_account,
   external_principal: IDENTITY_KIND_LABEL.external_principal,
   statement: "Statement",
   exact: RESOURCE_KIND_LABEL.exact,
@@ -144,6 +159,9 @@ export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
 }
 
 export function edgeVerb(e: VisualEdge): string {
+  const member = e.members[0];
+  if (member && classifyEdge(member) === "directory_backing") return "directory backing";
+  if (member && classifyEdge(member) === "observed") return edgeClassLabel(member);
   if (e.kind === "declares") {
     // The actions the statements behind the line list, never "can access".
     const actions = [...new Set((e.summary?.statements ?? []).flatMap((st) => st.members.map((m) => m.label)).filter(Boolean))];
@@ -152,9 +170,13 @@ export function edgeVerb(e: VisualEdge): string {
     const first = actions[0].length > 34 ? `${actions[0].slice(0, 33)}…` : actions[0];
     return `${verb} ${first}${actions.length > 1 ? ` +${actions.length - 1}` : ""}`;
   }
-  if (e.kind === "grant" && e.members.length === 1 && (e.targetPolicy ?? e.members[0].policy))
-    return `${EDGE_LABEL.grant} ${e.targetPolicy ?? e.members[0].policy}`;
-  return EDGE_LABEL[e.kind];
+  if (e.kind === "grant" && e.members.length === 1 && (e.targetPolicy ?? e.members[0].policy)) {
+    const honesty = member ? grantHonestyText(member) : null;
+    const named = `${EDGE_LABEL.grant} ${e.targetPolicy ?? e.members[0].policy}`;
+    return honesty ? `${named} · ${honesty}` : named;
+  }
+  const honesty = member ? grantHonestyText(member) : null;
+  return honesty ? `${EDGE_LABEL[e.kind]} · ${honesty}` : EDGE_LABEL[e.kind];
 }
 
 /**

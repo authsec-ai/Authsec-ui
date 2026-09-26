@@ -13,6 +13,16 @@
  * never moved by an expansion, a collapse or a branch being shown.
  */
 
+/** Default AWS edges keep `${from}=>${to}:${kind}`. v2 fields split a line only when the server sent them. */
+export function visualEdgeId(
+  from: string,
+  to: string,
+  edge: { kind: string; access_class?: string; outcome?: string; meaning?: string },
+): string {
+  const v2 = [edge.access_class, edge.outcome, edge.meaning].filter(Boolean).join(":");
+  return v2 ? `${from}=>${to}:${edge.kind}:${v2}` : `${from}=>${to}:${edge.kind}`;
+}
+
 import { onGraphSessionReset } from "../shared/revision";
 import { useReducer } from "react";
 
@@ -493,7 +503,7 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
   for (const e of edges) {
     const from = visualId(e.from);
     const to = visualId(e.to);
-    const id = `${from}=>${to}:${e.kind}`;
+    const id = visualEdgeId(from, to, e);
     let ve = edgesById.get(id);
     if (!ve) {
       ve = { id, kind: e.kind, from, to, members: [], state: "current", crossesAccount: false, closesCycle: false };

@@ -10,7 +10,7 @@ import { TableCard } from "@/theme/components/cards";
  */
 const GraphTab = lazy(() => import("../../graph/GraphTab"));
 
-export function LazyGraphTab(props: { ws: string; root: GraphRef; rootName: string }) {
+export function LazyGraphTab(props: { ws: string; root: GraphRef; rootName: string; graphV2?: boolean }) {
   return (
     <Suspense
       fallback={

@@ -7,6 +7,8 @@
 import { format, formatDistanceToNow } from "date-fns";
 
 import type {
+  AccountKind,
+  AccountState,
   Basis,
   Classification,
   EvidenceLimitation,
@@ -40,6 +42,48 @@ export const RUNTIME_SHORT: Record<RuntimeKind, string> = {
   bedrock_agentcore_runtime: "AgentCore",
   bedrock_agentcore_gateway: "Gateway",
 };
+
+/** AWS runtimes keep their names. Anything else is shown as the server sent it. */
+export function runtimeLabel(kind: string | null | undefined): string {
+  if (!kind) return "Workload";
+  return RUNTIME_LABEL[kind as RuntimeKind] ?? kind.replace(/_/g, " ");
+}
+
+export function runtimeShort(kind: string | null | undefined): string {
+  if (!kind) return "";
+  return RUNTIME_SHORT[kind as RuntimeKind] ?? kind.replace(/_/g, " ");
+}
+
+export const ACCOUNT_KIND_LABEL: Record<AccountKind, string> = {
+  iam_role: "IAM role",
+  iam_user: "IAM user",
+  iam_group: "IAM group",
+  local_user: "Local user",
+  local_group: "Local group",
+  k8s_service_account: "Kubernetes service account",
+  k8s_group: "Kubernetes group",
+  ad_user: "Active Directory user",
+  ad_group: "Active Directory group",
+  ad_computer: "Active Directory computer",
+  ad_managed_service_account: "Active Directory managed service account",
+};
+
+export function identityKindLabel(kind: string | null | undefined): string {
+  if (!kind) return "Identity";
+  return ACCOUNT_KIND_LABEL[kind as AccountKind] ?? IDENTITY_KIND_LABEL[kind] ?? kind.replace(/_/g, " ");
+}
+
+export const ACCOUNT_STATE_LABEL: Record<AccountState, string> = {
+  enabled: "Enabled",
+  disabled: "Disabled",
+  unknown: "Unknown",
+};
+
+/** Absent account_state is Unknown. Never treated as enabled. */
+export function accountStateLabel(state: string | null | undefined): string {
+  if (!state) return ACCOUNT_STATE_LABEL.unknown;
+  return ACCOUNT_STATE_LABEL[state as AccountState] ?? "Unknown";
+}
 
 export const CLASSIFICATION_LABEL: Record<Classification, string> = {
   provider_native_agent: "Provider-native agent",

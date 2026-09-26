@@ -9,6 +9,7 @@ import type { ResourceDetail } from "@/app/api/igaGraphApi";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, agoText, dayText, countText } from "../shared/labels";
+import { referenceStatusLabel } from "../graph/v2/edgeClass";
 import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
 
 
@@ -35,6 +36,12 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
                     <span className="text-(--color-text-muted)">{RESOURCE_KIND_NOTE[r.kind]}</span>
                   </span>
                 }</Fact>
+              {r.reference_status ? (
+                <Fact label="Reference status">
+                  <StatusBadge tone="neutral">{referenceStatusLabel(r.reference_status)}</StatusBadge>
+                </Fact>
+              ) : null}
+              {r.native_kind ? <Fact label="Native kind" mono>{r.native_kind}</Fact> : null}
               {r.type !== "unknown" ? <Fact label="Type" mono>{r.type}</Fact> : null}
               {r.service ? <Fact label="Service" mono>{r.service}</Fact> : null}
               <Fact label="Account">{

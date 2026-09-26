@@ -27,8 +27,9 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 
 import { classifyGraphError } from "../shared/graphErrors";
-import { RELATIONSHIP_LABEL, RUNTIME_LABEL, accountLabel, limitationText } from "../shared/labels";
+import { RELATIONSHIP_LABEL, runtimeLabel, accountLabel, limitationText } from "../shared/labels";
 import { emptyGiven } from "../shared/listSummary";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { CoverageSummary } from "../coverage/CoverageSummary";
@@ -55,7 +56,7 @@ function WorkloadBody({ r, from }: { r: UsedByWorkload; from: From }) {
             <span className="text-[13px] font-medium">{r.workload.name}</span>
           )}
           <span className="ml-2 text-xs text-(--color-text-muted)">
-            {RUNTIME_LABEL[r.workload.runtime_kind]} · {accountLabel(r.workload.account)} · {r.workload.region ?? "Region not stated"}
+            {runtimeLabel(r.workload.runtime_kind)} · {accountLabel(r.workload.account)} · {r.workload.region ?? "Region not stated"}
           </span>
         </div>
       }
@@ -91,8 +92,9 @@ function MemberBody({ r, from }: { r: GroupMember; from: From }) {
 export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: IdentityDetail }) {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh, markStale } = useGraphRevision(ws);
-  const args = { ws, rev, key: String(epoch), id: refId(identity.ref) };
-  const q = useGetGraphIdentityUsedByQuery(args);
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: String(epoch), id: refId(identity.ref), ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useGetGraphIdentityUsedByQuery(args, { skip: v2.loading });
   const [fetchSection] = useLazyGetGraphIdentityUsedByQuery();
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>

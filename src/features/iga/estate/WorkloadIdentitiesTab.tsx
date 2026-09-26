@@ -26,6 +26,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { classifyGraphError } from "../shared/graphErrors";
 import { RELATIONSHIP_LABEL, countText } from "../shared/labels";
 import { emptyGiven } from "../shared/listSummary";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { viaLink } from "../shared/links";
@@ -91,8 +92,9 @@ function executionEmpty(data: WorkloadIdentities): string {
 export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: WorkloadDetail }) {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh, markStale } = useGraphRevision(ws);
-  const args = { ws, rev, key: String(epoch), id: refId(workload.ref) };
-  const q = useGetGraphWorkloadIdentitiesQuery(args);
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: String(epoch), id: refId(workload.ref), ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useGetGraphWorkloadIdentitiesQuery(args, { skip: v2.loading });
   const [fetchSection] = useLazyGetGraphWorkloadIdentitiesQuery();
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>

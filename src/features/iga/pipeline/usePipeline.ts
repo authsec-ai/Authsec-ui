@@ -15,10 +15,10 @@ import { useGraphRevision } from "../shared/revision";
 
 const PIPELINE_POLL_MS = 15_000;
 
-export function usePipeline(ws: string, skip: boolean) {
+export function usePipeline(ws: string, skip: boolean, graphV2 = false) {
   const { rev, markStale } = useGraphRevision(ws);
   const [poll, setPoll] = useState(0);
-  const q = useGetGraphPipelineQuery({ ws }, { skip, pollingInterval: poll });
+  const q = useGetGraphPipelineQuery(graphV2 ? { ws, graph: "v2" } : { ws }, { skip, pollingInterval: poll });
   const p = q.data;
 
   const inFlight =

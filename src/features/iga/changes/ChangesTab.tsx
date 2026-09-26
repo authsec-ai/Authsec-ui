@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { classifyGraphError } from "../shared/graphErrors";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { RELATIONSHIP_LABEL, dayText, surfaceStateText } from "../shared/labels";
 import { useAnnounce } from "../shared/announce";
@@ -190,8 +191,9 @@ export function ChangesTab({
   const feed: ChangeFeed = params.get("feed") === "coverage" ? "coverage" : "configuration";
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const paging = usePaging(`changes-${feed}`, epoch);
-  const args: ChangesArgs = { ws, rev, key: paging.cacheKey, object, id, kind: feed, cursor: paging.cursor };
-  const q = useListGraphChangesQuery(args);
+  const v2 = useGraphV2(ws);
+  const args: ChangesArgs = { ws, rev, key: paging.cacheKey, object, id, kind: feed, cursor: paging.cursor, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useListGraphChangesQuery(args, { skip: v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("listGraphChanges", { ...args, rev: r }, d)),

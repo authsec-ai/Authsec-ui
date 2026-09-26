@@ -13,7 +13,8 @@ import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/clipboard";
 
-import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountLabel, agoText, dayText } from "../shared/labels";
+import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, runtimeLabel, accountLabel, agoText, dayText } from "../shared/labels";
+import { useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import { viaLink } from "../shared/links";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
@@ -82,8 +83,9 @@ function RunsAs({ w }: { w: WorkloadDetail }) {
 function IdentitiesSummary({ ws, w }: { ws: string; w: WorkloadDetail }) {
   const dispatch = useAppDispatch();
   const { rev, epoch } = useGraphRevision(ws);
-  const args = { ws, rev, key: String(epoch), id: refId(w.ref) };
-  const q = useGetGraphWorkloadIdentitiesQuery(args, { skip: rev == null });
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: String(epoch), id: refId(w.ref), ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useGetGraphWorkloadIdentitiesQuery(args, { skip: rev == null || v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphWorkloadIdentities", { ...args, rev: r }, d)),
@@ -155,7 +157,7 @@ export function WorkloadOverview({
 }) {
   const [dialog, setDialog] = useState<"classify" | "undo" | null>(null);
   const [history, setHistory] = useState(false);
-  const runtime = RUNTIME_LABEL[w.runtime_kind];
+  const runtime = runtimeLabel(w.runtime_kind);
   const attrs = w.provider_attrs;
   const editable = canClassify && w.classification !== "provider_native_agent" && w.lifecycle === "active";
 

@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { classifyGraphError } from "../shared/graphErrors";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { POLICY_KIND_LABEL, RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, statementLabel } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
@@ -171,8 +172,9 @@ export function WorkloadResourcesTab({
     setParams(next, { replace: true, state: location.state });
   };
   const paging = usePaging(`workload-resources-${sort}`, epoch);
-  const args = { ws, rev, key: paging.cacheKey, id: refId(workload.ref), sort, cursor: paging.cursor };
-  const q = useListGraphWorkloadResourcesQuery(args);
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: paging.cacheKey, id: refId(workload.ref), sort, cursor: paging.cursor, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useListGraphWorkloadResourcesQuery(args, { skip: v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("listGraphWorkloadResources", { ...args, rev: r }, d)),

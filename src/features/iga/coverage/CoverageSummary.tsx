@@ -20,8 +20,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 import { INCOMPLETE_STATES } from "../shared/labels";
+import { CollectorCard } from "./CollectorCard";
+import { coverageStateLabel, isCollectorAccount } from "./collectorCoverage";
 import { CoverageSheet } from "./CoverageSheet";
+import { ProtectionBadge } from "./ProtectionBadge";
 import { readableSurface } from "./surfaceNames";
+import { StatusBadge } from "@/components/console/status";
 
 /** What happened to the collection, in words that cannot be read as access. */
 const COLLECTION_STATE: Record<SurfaceState, string> = {
@@ -58,7 +62,8 @@ export function CoverageSummary({
   const [account, setAccount] = useState<string | null>(null);
   const incomplete = useMemo(() => gaps.filter((g) => INCOMPLETE_STATES.has(g.state)), [gaps]);
   const scoped = useMemo(() => gaps.filter((g) => OUT_OF_SCOPE.has(g.state)), [gaps]);
-  if (gaps.length === 0) return null;
+  const collectors = useMemo(() => (pipeline?.accounts ?? []).filter(isCollectorAccount), [pipeline]);
+  if (gaps.length === 0 && collectors.length === 0) return null;
 
   const accounts = [...new Set(incomplete.map((g) => g.account_id))];
   const connectorOf = (accountId: string) => {
@@ -72,6 +77,34 @@ export function CoverageSummary({
 
   return (
     <>
+      {collectors.length ? (
+        <section aria-label="Collector coverage" className="space-y-3 rounded-md border border-(--color-border-subtle) px-3 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-(--color-text)">Collector coverage</h2>
+            <ProtectionBadge controls={null} />
+          </div>
+          <ul className="space-y-3">
+            {collectors.map((account) => (
+              <li key={account.integration} className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium text-(--color-text)">{account.label}</span>
+                  <StatusBadge tone={account.projection?.coverage_state === "stale" || !account.projection?.coverage_state || account.projection.coverage_state === "unknown" ? "warning" : "neutral"}>
+                    {coverageStateLabel(account.projection?.coverage_state)}
+                  </StatusBadge>
+                </div>
+                {account.collector_id ? (
+                  <CollectorCard ws={ws} id={account.collector_id} />
+                ) : (
+                  <p className="text-xs text-(--color-text-muted)">
+                    This coverage row does not name a collector instance, so the collector record is not requested.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {gaps.length === 0 ? null : (
       <div
         role="status"
         className={
@@ -85,6 +118,7 @@ export function CoverageSummary({
           Review collection gaps
         </button>
       </div>
+      )}
 
       <Sheet open={review} onOpenChange={setReview}>
         <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-[440px]">

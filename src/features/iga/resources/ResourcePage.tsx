@@ -10,7 +10,7 @@ import { igaGraphApi, useGetGraphResourceQuery } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import { StatusBadge } from "@/components/console/status";
 
@@ -29,9 +29,10 @@ export default function ResourcePage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "resources");
+  const v2 = useGraphV2(ws);
 
-  const args = { ws, rev, key: String(epoch), id };
-  const detail = useGetGraphResourceQuery(args, { skip: feature.off || !id });
+  const args = { ws, rev, key: String(epoch), id, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const detail = useGetGraphResourceQuery(args, { skip: feature.off || !id || v2.loading });
   const failure = feature.off
     ? ({ kind: "unavailable" } as const)
     : feature.unauthorized
@@ -62,7 +63,7 @@ export default function ResourcePage() {
     if (active === "overview") body = <ResourceOverview resource={r} />;
     else if (r.lifecycle === "retired") body = <RetiredTab name={r.text} lastConfirmed={r.last_confirmed_at} />;
     else if (active === "access") body = <ResourceAccessTab ws={ws} resource={r} />;
-    else if (active === "graph") body = <LazyGraphTab ws={ws} root={r.ref} rootName={r.text} />;
+    else if (active === "graph") body = <LazyGraphTab ws={ws} root={r.ref} rootName={r.text} graphV2={v2.available} />;
     else if (active === "changes") body = <ChangesTab ws={ws} object="resources" id={id} />;
   }
 

@@ -18,7 +18,8 @@
 
 import type { GraphFrontier, GraphNode, GraphNodeKind } from "@/app/api/igaGraphApi";
 
-import { RUNTIME_LABEL, accountLabel } from "../shared/labels";
+import { runtimeLabel, accountLabel } from "../shared/labels";
+import { referenceStatusLabel } from "./v2/edgeClass";
 import { KIND_LABEL, dominantRelState, frontierLabel, mixedStateText } from "./graphLabels";
 import type { VisualNode } from "./types";
 
@@ -48,7 +49,20 @@ export interface Indicator {
   tone: IndicatorTone;
 }
 
-export type NodeIcon = "workload" | "role" | "user" | "group" | "external" | "statement" | "resource" | "selector" | "more";
+export type NodeIcon =
+  | "workload"
+  | "role"
+  | "user"
+  | "group"
+  | "external"
+  | "statement"
+  | "resource"
+  | "selector"
+  | "more"
+  | "linux"
+  | "kubernetes"
+  | "directory"
+  | "computer";
 
 /**
  * What KIND of thing a card is — drawn with the `--color-object-*` tokens.
@@ -80,6 +94,14 @@ const ICON_OF: Record<GraphNodeKind, NodeIcon> = {
   iam_role: "role",
   iam_user: "user",
   iam_group: "group",
+  local_user: "user",
+  local_group: "group",
+  k8s_service_account: "kubernetes",
+  k8s_group: "kubernetes",
+  ad_user: "directory",
+  ad_group: "directory",
+  ad_computer: "computer",
+  ad_managed_service_account: "directory",
   external_principal: "external",
   statement: "statement",
   exact: "resource",
@@ -92,6 +114,14 @@ const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
   iam_role: "identity",
   iam_user: "identity",
   iam_group: "identity",
+  local_user: "identity",
+  local_group: "identity",
+  k8s_service_account: "identity",
+  k8s_group: "identity",
+  ad_user: "identity",
+  ad_group: "identity",
+  ad_computer: "identity",
+  ad_managed_service_account: "identity",
   external_principal: "external",
   statement: "statement",
   exact: "resource",
@@ -103,6 +133,14 @@ const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
   iam_role: "Identity · Role",
   iam_user: "Identity · User",
   iam_group: "Identity · Group",
+  local_user: "Identity · Local user",
+  local_group: "Identity · Local group",
+  k8s_service_account: "Identity · Kubernetes service account",
+  k8s_group: "Identity · Kubernetes group",
+  ad_user: "Identity · Active Directory user",
+  ad_group: "Identity · Active Directory group",
+  ad_computer: "Identity · Active Directory computer",
+  ad_managed_service_account: "Identity · Active Directory managed service account",
   exact: "Resource · Exact reference",
   selector: "Resource · Selector",
   external: "External resource",
@@ -148,6 +186,14 @@ function contextOf(node: GraphNode): string | null {
     case "iam_role":
     case "iam_user":
     case "iam_group":
+    case "local_user":
+    case "local_group":
+    case "k8s_service_account":
+    case "k8s_group":
+    case "ad_user":
+    case "ad_group":
+    case "ad_computer":
+    case "ad_managed_service_account":
       return node.account ? accountLabel(node.account) : "Account not known";
     case "external_principal":
       // Only AWS principals have an account; for a service or an identity
@@ -157,7 +203,11 @@ function contextOf(node: GraphNode): string | null {
       return [node.policy, node.sid ? `Sid ${node.sid}` : null].filter(Boolean).join(" · ") || null;
     default:
       // A resource's account is stated only when the reference names one.
-      return [node.type && node.type !== "unknown" ? node.type.replace(/_/g, " ") : null, node.account ? accountLabel(node.account) : null]
+      return [
+        node.native_kind ? node.native_kind.replace(/_/g, " ") : null,
+        node.type && node.type !== "unknown" ? node.type.replace(/_/g, " ") : null,
+        node.account ? accountLabel(node.account) : null,
+      ]
         .filter(Boolean)
         .join(" · ") || null;
   }
@@ -165,7 +215,7 @@ function contextOf(node: GraphNode): string | null {
 
 function typeOf(v: VisualNode): string {
   const first = v.members[0];
-  if (first.kind === "workload") return first.runtime_kind ? `Workload · ${RUNTIME_LABEL[first.runtime_kind]}` : "Workload";
+  if (first.kind === "workload") return first.runtime_kind ? `Workload · ${runtimeLabel(first.runtime_kind)}` : "Workload";
   if (first.kind === "statement") {
     const effect = first.effect === "deny" ? "Deny" : first.effect === "allow" ? "Allow" : null;
     return [v.members.length > 1 ? `${v.members.length} statements` : "Statement", effect].filter(Boolean).join(" · ");
@@ -175,7 +225,18 @@ function typeOf(v: VisualNode): string {
 }
 
 /** The indicators worth a place on the card, in the order they matter. */
-const BADGE_ORDER = ["state", "account", "resolution", "except", "deny", "coverage"];
+const K8S_RUNTIMES = new Set(["deployment", "statefulset", "daemonset", "job", "cronjob", "pod", "replicaset"]);
+
+function iconFor(node: GraphNode): NodeIcon {
+  if (node.kind === "workload") {
+    const rt = (node.runtime_kind ?? "").toLowerCase();
+    if (rt === "systemd" || rt === "process_group" || rt.startsWith("linux")) return "linux";
+    if (rt.startsWith("k8s") || K8S_RUNTIMES.has(rt)) return "kubernetes";
+  }
+  return ICON_OF[node.kind];
+}
+
+const BADGE_ORDER = ["state", "reference", "account", "resolution", "except", "deny", "coverage"];
 
 export function describeNode(v: VisualNode, rootAccountId: string | null): NodeDescription {
   const first = v.members[0];
@@ -259,12 +320,18 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
   if (v.members.some((m) => m.limitations?.some((l) => l.code === "surface_stale" || l.code === "surface_partial" || l.code === "surface_denied")))
     indicators.push({ key: "coverage", text: "coverage gap", long: "The collection that reads this was incomplete", tone: "warning" });
 
+  const reference = v.members.map((m) => m.reference_status).find((status) => !!status);
+  if (reference) {
+    const text = referenceStatusLabel(reference);
+    indicators.push({ key: "reference", text, long: `Reference status: ${text}`, tone: "info" });
+  }
+
   const badges = [...indicators]
     .filter((i) => BADGE_ORDER.includes(i.key))
     .sort((a, b) => BADGE_ORDER.indexOf(a.key) - BADGE_ORDER.indexOf(b.key))
     .slice(0, MAX_BADGES);
   return {
-    icon: ICON_OF[first.kind],
+    icon: iconFor(first),
     category: CATEGORY_OF[first.kind],
     title: first.label,
     type: typeOf(v),
