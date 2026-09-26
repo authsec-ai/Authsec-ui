@@ -122,6 +122,8 @@ function edgeWord(e: GraphEdge, statementPolicy: string | undefined, reverse: bo
     can_assume: "may be assumed by",
     grant: "is declared by",
     target: "is named by statement",
+    observed_access: "observed from",
+    backed_by_directory: "directory backing",
   };
   const base = reverse ? inverse[e.kind] : EDGE_LABEL[e.kind];
   return e.kind === "grant" && statementPolicy && !reverse ? `${base} ${statementPolicy}` : base;

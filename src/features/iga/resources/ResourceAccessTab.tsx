@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { classifyGraphError } from "../shared/graphErrors";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { POLICY_KIND_LABEL, statementLabel } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
@@ -86,8 +87,9 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const paging = usePaging("resource-access", epoch);
-  const args = { ws, rev, key: paging.cacheKey, id: refId(resource.ref), cursor: paging.cursor };
-  const q = useGetGraphResourceAccessQuery(args);
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: paging.cacheKey, id: refId(resource.ref), cursor: paging.cursor, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useGetGraphResourceAccessQuery(args, { skip: v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphResourceAccess", { ...args, rev: r }, d)),

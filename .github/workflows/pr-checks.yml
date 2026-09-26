@@ -17,7 +17,7 @@ name: PR Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [main, authsec-staging, authsec-dev]
+    branches: [main, authsec-staging, authsec-dev, experimental]
 
 jobs:
   typecheck:
@@ -86,10 +86,36 @@ jobs:
       - name: Run tests
         run: npx vitest run
 
+  # Mocked browser pass for the v2 graph screens. No backend. Chromium on
+  # ubuntu-latest (amd64). A live iga-local run is a later coordinator step.
+  playwright:
+    name: Playwright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Run Playwright
+        run: npx playwright test
+
   merge-gate:
     name: Merge Gate
     runs-on: ubuntu-latest
-    needs: [typecheck, lint, test]
+    needs: [typecheck, lint, test, playwright]
     if: always()
     steps:
       - name: Type check must pass
@@ -106,6 +132,11 @@ jobs:
         if: needs.test.result != 'success'
         run: |
           echo "Vitest failed — merge blocked"
+          exit 1
+      - name: Playwright must pass
+        if: needs.playwright.result != 'success'
+        run: |
+          echo "Playwright failed — merge blocked"
           exit 1
       - name: All checks passed
         run: echo "All required checks passed"

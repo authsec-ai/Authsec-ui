@@ -5,12 +5,22 @@ import { Link } from "react-router-dom";
 import { refId, type GraphRef, type IdentityDetail } from "@/app/api/igaGraphApi";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, accountWithId, agoText, countText, dayText } from "../shared/labels";
+import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, accountStateLabel, identityKindLabel, accountWithId, agoText, countText, dayText } from "../shared/labels";
+import type { ReactNode } from "react";
+
 import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
 
 
-export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) {
-  const kind = IDENTITY_KIND_LABEL[i.kind];
+export function IdentityOverview({
+  identity: i,
+  showAccountState = false,
+  backing = null,
+}: {
+  identity: IdentityDetail;
+  showAccountState?: boolean;
+  backing?: ReactNode;
+}) {
+  const kind = identityKindLabel(i.kind);
   const attrs = i.provider_attrs;
   const connector = i.sources[0]?.integration;
   const connectorId = connector ? refId(connector as GraphRef) : null;
@@ -37,6 +47,9 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
           <Panel title="What it is">
             <Facts>
               <Fact label="Kind">{kind}</Fact>
+              {showAccountState || i.account_state ? (
+                <Fact label="Account state">{accountStateLabel(i.account_state)}</Fact>
+              ) : null}
               <Fact label="Account">{
                   accountWithId(i.account) ?? "Not known"
                 }</Fact>
@@ -124,6 +137,7 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
             </Facts>
           </Panel>
       </div>
+      {backing}
     </div>
   );
 }

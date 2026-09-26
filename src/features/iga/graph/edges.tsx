@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 import { limitationText } from "../shared/labels";
 import { EDGE_MEANING, edgeVerb, independentCount, markedLimitations, mixedStateText } from "./graphLabels";
+import { classifyEdge } from "./v2/edgeClass";
 import type { VisualEdge } from "./types";
 
 export interface GraphEdgeData extends Record<string, unknown> {
@@ -59,6 +60,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
 
   const stale = e.state === "stale";
   const ended = e.state === "ended";
+  const observed = e.members.some((m) => classifyEdge(m) === "observed");
   const mixed = mixedStateText(e.members.map((m) => m.state ?? "current"));
   const marked = markedLimitations(e);
   // Every line says what it is; hover and focus only emphasise it.
@@ -73,9 +75,11 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
         ? "var(--color-text-subtle)"
         : stale
           ? "var(--color-warning-text)"
-          : data.hovered
-            ? "var(--color-text-muted)"
-            : "var(--color-border-strong)";
+          : observed
+        ? "var(--color-info-text)"
+        : data.hovered
+          ? "var(--color-text-muted)"
+          : "var(--color-border-strong)";
 
   const description = [
     edgeVerb(e),
@@ -99,7 +103,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
         style={{
           // Stale and ended by dash; a Deny line by a long dash-dot, and its
           // label says "denies" — never the same line as an Allow.
-          strokeDasharray: stale ? "6 4" : ended ? "2 4" : deny ? "10 3 2 3" : undefined,
+          strokeDasharray: observed ? "2 3" : stale ? "6 4" : ended ? "2 4" : deny ? "10 3 2 3" : undefined,
           stroke,
           strokeWidth: data.isSelected || data.highlighted ? 2.25 : 1.25,
           transition: data.reducedMotion ? undefined : "stroke 150ms",

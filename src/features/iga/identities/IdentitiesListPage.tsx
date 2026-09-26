@@ -28,7 +28,7 @@ import { TableCard } from "@/theme/components/cards";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
   resolvePagedView,
@@ -37,7 +37,9 @@ import {
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
-import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, countText } from "../shared/labels";
+import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, identityKindLabel, countText } from "../shared/labels";
+import { ProviderFilter } from "../shared/ProviderFilter";
+import { PROVIDER_LABEL, listGraphOptIn, providerOfIdentity } from "../shared/providers";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, SortSelect } from "../shared/components/FacetSelect";
@@ -75,6 +77,7 @@ const FILTERS = {
   account: null,
   kind: ["iam_role", "iam_user", "iam_group"],
   used_by: ["workloads"],
+  provider: ["aws", "linux", "kubernetes", "ad", "all"],
   sort: SORTS.map((s) => s.value),
 } as const;
 
@@ -91,6 +94,7 @@ export default function IdentitiesListPage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "identities");
+  const v2 = useGraphV2(ws);
   const f = useListFilters(FILTERS);
   const paging = usePaging("identities", epoch);
   useSlashToSearch();
@@ -100,7 +104,8 @@ export default function IdentitiesListPage() {
   const usedBy = f.value("used_by") as "workloads" | undefined;
   const sort = (f.value("sort") as IdentitySort | undefined) ?? "name";
 
-  const pipeline = usePipeline(ws, feature.off);
+  const provider = v2.available ? f.value("provider") : undefined;
+  const pipeline = usePipeline(ws, feature.off || v2.loading, v2.available);
   const args: ListIdentitiesArgs = {
     ws,
     rev,
@@ -111,8 +116,9 @@ export default function IdentitiesListPage() {
     used_by: usedBy,
     sort,
     cursor: paging.cursor,
+    ...listGraphOptIn(provider),
   };
-  const list = useListGraphIdentitiesQuery(args, { skip: feature.off });
+  const list = useListGraphIdentitiesQuery(args, { skip: feature.off || (v2.loading && !!f.value("provider")) });
   const view = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll("identities", view.kind === "rows");
   useTrackRevision(
@@ -161,7 +167,10 @@ export default function IdentitiesListPage() {
           <NameCell
             to={`/iga/identities/${refId(row.original.ref)}`}
             name={row.original.name}
-            context={[IDENTITY_KIND_LABEL[row.original.kind]]}
+            context={[
+              identityKindLabel(row.original.kind),
+              providerOfIdentity(row.original.kind) ? PROVIDER_LABEL[providerOfIdentity(row.original.kind)!] : null,
+            ]}
             account={row.original.account}
           />
         ),
@@ -287,6 +296,7 @@ export default function IdentitiesListPage() {
           onViewChange={(k) => f.set("kind", k === "all" ? null : k)}
           filters={
             <>
+              {v2.available ? <ProviderFilter value={provider} onChange={(v) => f.set("provider", v)} /> : null}
               <ConsoleFilterField label="Account">
                 <FacetCheckList label="Account" noun="accounts" value={accounts} options={facets?.account ?? []} onChange={(v) => f.setMany("account", v)} />
               </ConsoleFilterField>
@@ -301,7 +311,7 @@ export default function IdentitiesListPage() {
             </>
           }
           applied={applied}
-          onClearAll={() => f.clearKeys(["account", "used_by"])}
+          onClearAll={() => f.clearKeys(["account", "used_by", "provider"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
           columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
         />

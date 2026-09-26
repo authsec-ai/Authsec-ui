@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 import { classifyGraphError } from "../shared/graphErrors";
 import { REL_STATE_TONE, limitationText } from "../shared/labels";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { Timestamp } from "../shared/components/Timestamp";
@@ -181,10 +182,18 @@ export function EvidenceClaim({
   heading?: string;
 }) {
   const { rev, epoch, refresh } = useGraphRevision(ws);
+  const v2 = useGraphV2(ws);
   const [raw, setRaw] = useState(false);
   const dispatch = useAppDispatch();
-  const args = { ws, rev, key: String(epoch), claim, include: raw ? ("raw" as const) : undefined };
-  const q = useGetGraphEvidenceQuery(args);
+  const args = {
+    ws,
+    rev,
+    key: String(epoch),
+    claim,
+    include: raw ? ("raw" as const) : undefined,
+    ...(v2.available ? { graph: "v2" as const } : {}),
+  };
+  const q = useGetGraphEvidenceQuery(args, { skip: v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphEvidence", { ...args, rev: r }, d)),
@@ -229,6 +238,14 @@ export function EvidenceClaim({
     <article className="space-y-4">
       <Section title={heading ?? "Explanation"}>
         <p className="text-[13px] leading-relaxed text-(--color-text)">{e.claim.sentence}</p>
+        {q.currentData?.meta.provenance ? (
+          <p className="text-xs text-(--color-text-muted)">
+            Provenance
+            {q.currentData.meta.provenance.graph_revision != null ? ` · revision ${q.currentData.meta.provenance.graph_revision}` : ""}
+            {q.currentData.meta.provenance.integration_id ? ` · integration ${q.currentData.meta.provenance.integration_id}` : ""}
+            {q.currentData.meta.provenance.manifest ? ` · ${q.currentData.meta.provenance.manifest}` : ""}
+          </p>
+        ) : null}
         {e.status.basis || lifecycle !== "current" || e.status.collection !== "complete" ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {e.status.basis ? <StatusBadge tone="neutral">{e.status.basis}</StatusBadge> : null}

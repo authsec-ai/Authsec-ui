@@ -190,6 +190,12 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
     case "target":
       sentence = `The statement lists ${target?.kind === "selector" ? "this pattern" : "this reference"}.`;
       break;
+    case "observed_access":
+      sentence = `${from} has observed access to ${to}. The outcome is ${m.outcome ?? "not stated"}. This is not a declared grant.`;
+      break;
+    case "backed_by_directory":
+      sentence = `${from} and ${to} are linked by directory backing. They stay two identities.`;
+      break;
   }
   facts.push(["Last confirmed", <Timestamp iso={m.last_confirmed_at} />]);
   return { sentence, facts: facts.slice(0, 3), title: `${from} → ${to}`, type: edgeVerb(e) };

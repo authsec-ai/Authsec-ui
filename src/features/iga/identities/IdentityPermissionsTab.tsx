@@ -28,6 +28,7 @@ import { StatusBadge } from "@/components/console/status";
 
 import { classifyGraphError } from "../shared/graphErrors";
 import { POLICY_KIND_LABEL, REL_STATE_TONE, RESOURCE_KIND_LABEL, agoText, statementLabel } from "../shared/labels";
+import { useGraphV2 } from "../shared/capabilities";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { ActionList } from "../shared/components/ActionList";
@@ -180,8 +181,9 @@ function Activity({ activity }: { activity: IdentityPermissions["activity"] }) {
 export function IdentityPermissionsTab({ ws, identity }: { ws: string; identity: IdentityDetail }) {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
-  const args = { ws, rev, key: String(epoch), id: refId(identity.ref) };
-  const q = useGetGraphIdentityPermissionsQuery(args);
+  const v2 = useGraphV2(ws);
+  const args = { ws, rev, key: String(epoch), id: refId(identity.ref), ...(v2.available ? { graph: "v2" as const } : {}) };
+  const q = useGetGraphIdentityPermissionsQuery(args, { skip: v2.loading });
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, q.currentData, failure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphIdentityPermissions", { ...args, rev: r }, d)),

@@ -11,16 +11,18 @@ import { igaGraphApi, useGetGraphIdentityQuery } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import { StatusBadge } from "@/components/console/status";
 
-import { IDENTITY_KIND_LABEL, accountWithId } from "../shared/labels";
+import { identityKindLabel, accountWithId } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
 import { ObjectShell, RetiredTab, type ObjectTabDef } from "../shared/components/ObjectShell";
 import { activeTabOf } from "../shared/links";
+import { IdentityBacking } from "./DirectoryBacking";
+import { IdentityObservedUseTab } from "./IdentityObservedUseTab";
 import { IdentityOverview } from "./IdentityOverview";
 import { IdentityPermissionsTab } from "./IdentityPermissionsTab";
 import { IdentityUsedByTab } from "./IdentityUsedByTab";
@@ -31,9 +33,10 @@ export default function IdentityPage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "identities");
+  const v2 = useGraphV2(ws);
 
-  const args = { ws, rev, key: String(epoch), id };
-  const detail = useGetGraphIdentityQuery(args, { skip: feature.off || !id });
+  const args = { ws, rev, key: String(epoch), id, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const detail = useGetGraphIdentityQuery(args, { skip: feature.off || !id || v2.loading });
   const failure = feature.off
     ? ({ kind: "unavailable" } as const)
     : feature.unauthorized
@@ -52,6 +55,7 @@ export default function IdentityPage() {
     { key: "permissions", label: "Permissions", path: "/permissions" },
     { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
+    { key: "observed-use", label: "Observed use", path: "/observed-use", gated: true, available: v2.loading ? undefined : v2.available },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -63,12 +67,13 @@ export default function IdentityPage() {
   // the investigation's expansions across to the new revision (§2.14.5).
   let body = null;
   if (i && (active === "overview" || active === "graph" || rev != null)) {
-    if (active === "overview") body = <IdentityOverview identity={i} />;
+    if (active === "overview") body = <IdentityOverview identity={i} showAccountState={v2.available} backing={v2.available ? <IdentityBacking ws={ws} root={i.ref} /> : null} />;
     else if (i.lifecycle === "retired") body = <RetiredTab name={i.name} lastConfirmed={i.last_confirmed_at} />;
     else if (active === "used-by") body = <IdentityUsedByTab ws={ws} identity={i} />;
     else if (active === "permissions") body = <IdentityPermissionsTab ws={ws} identity={i} />;
-    else if (active === "graph") body = <LazyGraphTab ws={ws} root={i.ref} rootName={i.name} />;
+    else if (active === "graph") body = <LazyGraphTab ws={ws} root={i.ref} rootName={i.name} graphV2={v2.available} />;
     else if (active === "changes") body = <ChangesTab ws={ws} object="identities" id={id} />;
+    else if (active === "observed-use") body = <IdentityObservedUseTab ws={ws} id={id} />;
   }
 
   return (
@@ -87,7 +92,7 @@ export default function IdentityPage() {
           ? {
               name: i.name,
               description: [
-                IDENTITY_KIND_LABEL[i.kind],
+                identityKindLabel(i.kind),
                 accountWithId(i.account) ?? "Account not known",
                 "global",
               ].join(" · "),

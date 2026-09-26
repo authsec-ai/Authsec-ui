@@ -13,19 +13,22 @@ import { igaGraphApi, useGetGraphWorkloadQuery } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import { StatusBadge } from "@/components/console/status";
 
-import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountWithId } from "../shared/labels";
+import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, runtimeLabel, accountWithId } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
 import { ObjectShell, RetiredTab, type ObjectTabDef } from "../shared/components/ObjectShell";
 import { activeTabOf } from "../shared/links";
 import { WorkloadIdentitiesTab } from "./WorkloadIdentitiesTab";
+import { WorkloadObservedAccessTab } from "./WorkloadObservedAccessTab";
 import { WorkloadOverview } from "./WorkloadOverview";
 import { WorkloadResourcesTab } from "./WorkloadResourcesTab";
+import { RuntimePolicyStatus } from "./RuntimePolicyCard";
+import { WorkloadRuntimeTab } from "./WorkloadRuntimeTab";
 
 export default function WorkloadPage() {
   const { id = "", tab } = useParams<{ id: string; tab?: string }>();
@@ -33,9 +36,10 @@ export default function WorkloadPage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "workloads");
+  const v2 = useGraphV2(ws);
 
-  const args = { ws, rev, key: String(epoch), id };
-  const detail = useGetGraphWorkloadQuery(args, { skip: feature.off || !id });
+  const args = { ws, rev, key: String(epoch), id, ...(v2.available ? { graph: "v2" as const } : {}) };
+  const detail = useGetGraphWorkloadQuery(args, { skip: feature.off || !id || v2.loading });
   const failure = feature.off
     ? ({ kind: "unavailable" } as const)
     : feature.unauthorized
@@ -51,6 +55,8 @@ export default function WorkloadPage() {
     { key: "resources", label: "Resources", path: "/resources" },
     { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
+    { key: "runtime", label: "Runtime instances", path: "/runtime", gated: true, available: v2.loading ? undefined : v2.available },
+    { key: "observed-access", label: "Observed access", path: "/observed-access", gated: true, available: v2.loading ? undefined : v2.available },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -66,13 +72,21 @@ export default function WorkloadPage() {
   let body = null;
   if (w && (active === "overview" || active === "graph" || rev != null)) {
     const retired = w.lifecycle === "retired";
-    if (active === "overview") body = <WorkloadOverview ws={ws} workload={w} canClassify={!!meta?.capabilities?.can_classify} />;
+    if (active === "overview")
+      body = (
+        <div className="space-y-4">
+          <WorkloadOverview ws={ws} workload={w} canClassify={!!meta?.capabilities?.can_classify} />
+          {v2.available ? <RuntimePolicyStatus ws={ws} id={id} /> : null}
+        </div>
+      );
     else if (retired) body = <RetiredTab name={w.name} lastConfirmed={w.last_confirmed_at} />;
     else if (active === "identities") body = <WorkloadIdentitiesTab ws={ws} workload={w} />;
     else if (active === "resources")
       body = <WorkloadResourcesTab ws={ws} workload={w} graphAvailable={feature.features.graph === true} />;
-    else if (active === "graph") body = <LazyGraphTab ws={ws} root={w.ref} rootName={w.name} />;
+    else if (active === "graph") body = <LazyGraphTab ws={ws} root={w.ref} rootName={w.name} graphV2={v2.available} />;
     else if (active === "changes") body = <ChangesTab ws={ws} object="workloads" id={id} />;
+    else if (active === "runtime") body = <WorkloadRuntimeTab ws={ws} id={id} />;
+    else if (active === "observed-access") body = <WorkloadObservedAccessTab ws={ws} id={id} />;
   }
 
   return (
@@ -91,7 +105,7 @@ export default function WorkloadPage() {
           ? {
               name: w.name,
               description: [
-                RUNTIME_LABEL[w.runtime_kind],
+                runtimeLabel(w.runtime_kind),
                 accountWithId(w.account) ?? "Account not known",
                 w.region ?? "Region not stated",
               ].join(" · "),

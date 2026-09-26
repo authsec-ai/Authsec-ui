@@ -15,6 +15,11 @@
  * count), so a refreshed read is never answered from a pre-refresh entry
  * (§2.14.14). `rev` is part of the key for the same reason.
  *
+ * OPT-IN. `graph` and `provider` are also part of that cache key. They are
+ * omitted from the request unless the caller sets them, so a default read
+ * sends the same URL it did before TRD 2. A v2 read (`graph: "v2"`) never
+ * reuses a default entry, and two provider filters do not share one.
+ *
  * TYPED REFERENCES. Objects and claims are `"<type>:<uuid>"` strings. A bare
  * uuid never identifies an object on its own (§5.2).
  */
@@ -40,7 +45,10 @@ export type GraphClaimType =
   | "coverage"
   | "cloud_scan_run"
   | "cloud_connector"
-  | "cloud_observation";
+  | "cloud_observation"
+  | "observed_access"
+  | "runtime_instance"
+  | "runtime_binding";
 
 /** `"workload:6f1e…"` — the type is always part of the reference. */
 export type GraphRef = `${GraphObjectType | GraphClaimType}:${string}`;
@@ -109,6 +117,8 @@ export interface GraphListMeta {
   /** A facet whose count timed out is null: not counted, never guessed (§5.1). */
   facets?: Record<string, GraphFacetValue[] | null>;
   coverage: GraphCoverageGap[];
+  /** Present only when the read opted in with `graph=v2`. */
+  graph_revision?: number;
 }
 
 export interface GraphDetailMeta {
@@ -118,6 +128,8 @@ export interface GraphDetailMeta {
   /** `{}` everywhere except workload detail, which always states `can_classify`. */
   capabilities: { can_classify?: boolean };
   coverage?: GraphCoverageGap[];
+  /** Present only when the read opted in with `graph=v2`. */
+  graph_revision?: number;
 }
 
 export interface GraphList<T> {
@@ -181,6 +193,26 @@ export type ExecutionRoleState = "resolved" | "not_in_scan" | "not_in_inventory"
 
 export type IdentityKind = "iam_role" | "iam_user" | "iam_group";
 
+/** S21.2c. The AWS kinds stay `IdentityKind`. The rest arrive only under graph=v2. */
+export type AccountKind =
+  | IdentityKind
+  | "local_user"
+  | "local_group"
+  | "k8s_service_account"
+  | "k8s_group"
+  | "ad_user"
+  | "ad_group"
+  | "ad_computer"
+  | "ad_managed_service_account";
+
+/** enabled, disabled or unknown. Not lifecycle. The reader may omit it until it is projected. */
+export type AccountState = "enabled" | "disabled" | "unknown";
+
+export type GraphProvider = "aws" | "linux" | "kubernetes" | "ad";
+
+/** referenced, observed or inventoried. Set on resources only for graph=v2. */
+export type ReferenceStatus = "referenced" | "observed" | "inventoried";
+
 /** §2.14.12. "Discovered resource" is not produced this phase. */
 export type ResourceKind = "exact" | "selector" | "external";
 
@@ -239,7 +271,8 @@ export interface PagedSection<T> {
 export interface WorkloadSummary {
   ref: GraphRef;
   name: string;
-  runtime_kind: RuntimeKind;
+  /** AWS runtimes are `RuntimeKind`. Linux and Kubernetes send their own (`systemd`, `deployment`, …). */
+  runtime_kind: string;
   arn: string;
   account: GraphAccount | null;
   region: string | null;
@@ -307,7 +340,7 @@ export type ExecutionRole =
 export interface WorkloadRow {
   ref: GraphRef;
   name: string;
-  runtime_kind: RuntimeKind;
+  runtime_kind: string;
   arn: string;
   account: GraphAccount | null;
   region: string | null;
@@ -439,7 +472,9 @@ export interface WorkloadResourceRow {
 export interface IdentityRow {
   ref: GraphRef;
   name: string;
-  kind: IdentityKind;
+  kind: AccountKind;
+  /** Present when the reader projects it. Absent is unknown, never assumed enabled. */
+  account_state?: AccountState;
   arn: string;
   account: GraphAccount | null;
   region: "global";
@@ -503,7 +538,7 @@ export interface GroupMember extends ClaimFields {
 export interface IdentityHeader {
   ref: GraphRef;
   name: string;
-  kind: IdentityKind;
+  kind: AccountKind;
   lifecycle: Lifecycle;
   retired_reason?: string;
   state: RelState;
@@ -620,6 +655,10 @@ export interface ResourceRow {
   ref: GraphRef;
   text: string;
   kind: ResourceKind;
+  /** graph=v2 only. */
+  reference_status?: ReferenceStatus;
+  /** graph=v2 only. Provider-native kind, not the reference class. */
+  native_kind?: string;
   /** Distinguishes an object selector from a bucket (§2.14.12); `unknown` when not an ARN. */
   type: string;
   service: string | null;
@@ -679,7 +718,7 @@ export interface ResourceAccess {
 
 export type GraphNodeKind =
   | "workload"
-  | IdentityKind
+  | AccountKind
   | "external_principal"
   | "statement"
   | ResourceKind;
@@ -690,7 +729,9 @@ export type GraphEdgeKind =
   | "member_of"
   | "can_assume"
   | "grant"
-  | "target";
+  | "target"
+  | "observed_access"
+  | "backed_by_directory";
 
 export interface GraphNode {
   ref: GraphRef;
@@ -703,7 +744,11 @@ export interface GraphNode {
   last_confirmed_at: string | null;
   stale_reason?: StaleReason[];
   arn?: string;
-  runtime_kind?: RuntimeKind;
+  /** AWS values are `RuntimeKind`. Linux and Kubernetes send free strings (`systemd`, `deployment`). */
+  runtime_kind?: string;
+  /** graph=v2 resource nodes only. */
+  reference_status?: ReferenceStatus;
+  native_kind?: string;
   restrictions?: Restrictions;
   used_by_count?: ExactCount;
   mechanism?: string;
@@ -740,6 +785,17 @@ export interface GraphEdge {
   last_confirmed_at: string | null;
   stale_reason?: StaleReason[];
   limitations: EvidenceLimitation[];
+  /**
+   * graph=v2. Observed edges carry `observed` and an outcome. Directory
+   * backing is `declared` plus `meaning: "directory_backing"`. Absent on the
+   * default AWS graph, so those lines stay grouped as they are today.
+   */
+  access_class?: "declared" | "observed";
+  outcome?: string;
+  meaning?: string;
+  /** Stored grant facts. A traversal does not turn these into effective access. */
+  calculation_state?: string;
+  effective_conclusion?: string;
 }
 
 export type GraphDirection = "forward" | "reverse";
@@ -781,6 +837,10 @@ export interface GraphMeta {
   budgets?: GraphBudgets;
   /** Stated once for every element of the response. */
   limitations?: EvidenceLimitation[];
+  /** Present only when the read opted in with `graph=v2`. */
+  graph_revision?: number;
+  /** Evidence reads under graph=v2. */
+  provenance?: EvidenceProvenance;
 }
 
 export interface GraphExpansion {
@@ -996,10 +1056,16 @@ export interface CoverageAccount {
   integration: string;
   account: GraphAccount | null;
   connector_status: "active" | "error" | "revoked";
-  template: { deployed: string | null; current: string; outdated: boolean | null };
+  /** Empty for a collector integration row. AWS rows still carry the stack fields. */
+  template: { deployed?: string | null; current?: string; outdated?: boolean | null };
   /** Empty when the revision holds nothing of this account yet — never "no gaps". */
   runs: string[];
   surfaces: CoverageSurface[];
+  /**
+   * Collector instance id, when the server sends one. Coverage rows at
+   * authsec 6a7becc do not; the card is skipped until it is present.
+   */
+  collector_id?: string;
 }
 
 /* ------------------------------ classification ---------------------------- */
@@ -1041,7 +1107,8 @@ export type PipelineState =
   | "first_publication_pending"
   | "published"
   | "failed"
-  | "revoked";
+  | "revoked"
+  | "collector";
 
 export interface PipelineAccount {
   integration: string;
@@ -1051,7 +1118,8 @@ export interface PipelineAccount {
   state: PipelineState;
   latest_run: {
     ref: string;
-    status: "queued" | "running" | "published" | "failed" | "abandoned";
+    /** Omitted on a collector row, which may carry only `ref`. */
+    status?: "queued" | "running" | "published" | "failed" | "abandoned";
     queued_at?: string | null;
     started_at?: string | null;
     published_at?: string | null;
@@ -1060,14 +1128,18 @@ export interface PipelineAccount {
     error?: string | null;
   } | null;
   projection: {
-    status: "queued" | "running" | "complete" | "failed" | "abandoned";
+    status?: "queued" | "running" | "complete" | "failed" | "abandoned";
     rev: number | null;
-    attempts: number;
+    attempts?: number;
     /** A failed job the projector will try again: not the end of the story. */
-    retrying: boolean;
+    retrying?: boolean;
     last_error: string | null;
+    /** Collector rows: unknown and stale are first-class. */
+    coverage_state?: string;
   } | null;
   last_published_rev: number | null;
+  /** Present when the server names the collector instance. Not sent at 6a7becc. */
+  collector_id?: string;
 }
 
 export interface Pipeline {
@@ -1084,6 +1156,8 @@ export interface Pipeline {
   accounts: PipelineAccount[];
   current_rev: number | null;
   current_published_at: string | null;
+  /** Present only when the read opted in with `graph=v2`. */
+  graph_revision?: number;
 }
 
 export type GraphFeature =
@@ -1101,6 +1175,15 @@ export interface Capabilities {
   reason: string | null;
   features: Partial<Record<GraphFeature, boolean>>;
   schema_head: string | null;
+  /**
+   * Sibling of `features`, not a ninth feature key. Older servers omit it.
+   * v2 views render only when `available` is true.
+   */
+  graph_v2?: {
+    opt_in: string;
+    available: boolean;
+    providers: string[];
+  };
 }
 
 /* --------------------------------- args ---------------------------------- */
@@ -1113,6 +1196,13 @@ export interface GraphScope {
   ws: string;
   rev?: number | null;
   key?: string;
+  /**
+   * Opt in to the v2 graph. Omitted unless `"v2"`, so a default call keeps
+   * today's URL. `provider` is valid only together with this.
+   */
+  graph?: "v2";
+  /** Repeatable. Empty means every v2 provider. */
+  provider?: GraphProvider[];
 }
 
 interface Paged {
@@ -1175,6 +1265,94 @@ export type ChangesArgs = GraphScope & {
   cursor?: string;
 };
 
+/* ------------------------------ v2 reads ---------------------------------- */
+
+/** Evidence `meta.provenance` when the read opted in with graph=v2. */
+export interface EvidenceProvenance {
+  graph_revision?: number;
+  manifest?: string;
+  source_manifest_v2?: unknown;
+  integration_id?: string;
+}
+
+export interface RuntimeInstanceRow {
+  ref: GraphRef;
+  runtime_key: string;
+  runtime_kind: string;
+  started_at: string | null;
+  ended_at: string | null;
+  last_observed_at: string | null;
+  /** Null while live. `runtime_unobserved` once `ended_at` is set. */
+  ttl_basis: string | null;
+}
+
+export interface ObservedAccessRow {
+  ref?: GraphRef;
+  resource?: { ref?: string; text?: string; native_kind?: string } | string | null;
+  action: string;
+  outcome: string;
+  attribution: string;
+  access_class?: string;
+  count?: number;
+  first_observed_at?: string | null;
+  last_observed_at?: string | null;
+  runtime_instance?: string | null;
+  observed_at?: string | null;
+}
+
+export interface ObservedAccessArgs {
+  view?: "aggregate" | "events";
+  from?: string;
+  to?: string;
+  action?: string;
+  outcome?: string;
+  runtime_instance?: string;
+  attribution?: string;
+}
+
+export interface RuntimePolicyStatus {
+  workload_id: string;
+  status: string;
+}
+
+export interface ObservedUseBinding {
+  ref: GraphRef;
+  runtime_instance: GraphRef | string;
+  workload: GraphRef | string;
+  binding_kind: string;
+  basis: string;
+  valid_from: string | null;
+  valid_to: string | null;
+}
+
+export interface ObservedUse {
+  bindings: ObservedUseBinding[];
+  observed_access?: unknown;
+}
+
+export interface CollectorCoverageItem {
+  object_class: string;
+  state: string;
+  reason_code?: string | null;
+}
+
+/** `GET /api/iga/v2/collectors/:id`. The body is the view, not `{ data }`. */
+export interface CollectorView {
+  id: string;
+  kind: string;
+  status: string;
+  row_version?: number;
+  agent_version?: string | null;
+  health?: { status?: string; last_seen_at?: string | null };
+  capabilities?: unknown;
+  coverage?: CollectorCoverageItem[];
+  desired_revision?: number | null;
+  applied_revision?: number | null;
+  discovery_source_id?: string | null;
+  integration_id?: string | null;
+  estate_id?: string | null;
+}
+
 /* --------------------------------- helpers -------------------------------- */
 
 type ParamValue = string | number | boolean | string[] | null | undefined;
@@ -1183,8 +1361,9 @@ type ParamValue = string | number | boolean | string[] | null | undefined;
  * The query string for a graph request: every argument except the
  * client-only `ws` and `key`, and except any named in `omit` (path params).
  * Arrays repeat the parameter (`account=a&account=b`).
+ * `graph` and `provider` are included only when the caller set them.
  */
-function query(args: Record<string, ParamValue>, omit: string[] = [], extra: Record<string, string> = {}): string {
+export function graphQueryString(args: Record<string, ParamValue>, omit: string[] = [], extra: Record<string, string> = {}): string {
   const skip = new Set(["ws", "key", ...omit]);
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(args)) {
@@ -1223,20 +1402,63 @@ function collectPaths(wire: WirePathResult): GraphPathResult {
 }
 
 const BASE = "/api/iga/v1";
+const COLLECTOR_BASE = "/api/iga/v2";
 const enc = encodeURIComponent;
+
+function q(args: object, omit: string[] = [], extra: Record<string, string> = {}): string {
+  return graphQueryString(asParams(args), omit, extra);
+}
+
+/**
+ * One URL per read. Endpoints and the golden-URL tests both call these, so a
+ * default argument list cannot drift from the request the console sends.
+ * `ws` and `key` never appear. `graph` and `provider` appear only when set.
+ */
+export const graphUrls = {
+  capabilities: () => `${BASE}/capabilities`,
+  pipeline: (args: GraphScope) => `${BASE}/pipeline${q(args)}`,
+  coverage: (args: GraphScope & { account?: string }) => `${BASE}/coverage${q(args)}`,
+  workloads: (args: ListWorkloadsArgs) =>
+    `${BASE}/workloads${q(args, [], { facets: "account,runtime_kind,classification,region" })}`,
+  workload: (args: ById) => `${BASE}/workloads/${enc(args.id)}${q(args, ["id"])}`,
+  workloadIdentities: (args: ById) => `${BASE}/workloads/${enc(args.id)}/identities${q(args, ["id"])}`,
+  workloadResources: (args: ById) => `${BASE}/workloads/${enc(args.id)}/resources${q(args, ["id"])}`,
+  workloadClassification: (args: ById) => `${BASE}/workloads/${enc(args.id)}/classification${q(args, ["id", "rev"])}`,
+  workloadClassificationPost: (id: string) => `${BASE}/workloads/${enc(id)}/classification`,
+  runtimeInstances: (args: ById) => `${BASE}/workloads/${enc(args.id)}/runtime-instances${q(args, ["id"])}`,
+  observedAccess: (args: ById) => `${BASE}/workloads/${enc(args.id)}/observed-access${q(args, ["id"])}`,
+  runtimePolicyStatus: (args: ById) => `${BASE}/workloads/${enc(args.id)}/runtime-policy-status${q(args, ["id"])}`,
+  identities: (args: ListIdentitiesArgs) => `${BASE}/identities${q(args, [], { facets: "account,kind" })}`,
+  identity: (args: ById) => `${BASE}/identities/${enc(args.id)}${q(args, ["id"])}`,
+  identityUsedBy: (args: ById) => `${BASE}/identities/${enc(args.id)}/used-by${q(args, ["id"])}`,
+  identityPermissions: (args: ById) => `${BASE}/identities/${enc(args.id)}/permissions${q(args, ["id"])}`,
+  identityObservedUse: (args: ById) => `${BASE}/identities/${enc(args.id)}/observed-use${q(args, ["id"])}`,
+  externalPrincipal: (args: ById) => `${BASE}/external-principals/${enc(args.id)}${q(args, ["id"])}`,
+  externalReferencedBy: (args: ById) => `${BASE}/external-principals/${enc(args.id)}/referenced-by${q(args, ["id"])}`,
+  resources: (args: ListResourcesArgs) => `${BASE}/resources${q(args, [], { facets: "kind,service,account" })}`,
+  resource: (args: ById) => `${BASE}/resources/${enc(args.id)}${q(args, ["id"])}`,
+  resourceAccess: (args: ById) => `${BASE}/resources/${enc(args.id)}/access${q(args, ["id"])}`,
+  changes: (args: ChangesArgs) => `${BASE}/${args.object}/${enc(args.id)}/changes${q(args, ["object", "id"])}`,
+  neighbourhood: (args: GraphRootArgs) => `${BASE}/graph${q(args)}`,
+  expand: (args: GraphExpandArgs) => `${BASE}/graph/expand${q(args)}`,
+  path: (args: GraphPathArgs) => `${BASE}/graph/path${q(args)}`,
+  evidence: (args: GraphScope & { claim: GraphRef; include?: "raw" }) => `${BASE}/evidence${q(args)}`,
+  lookup: (args: GraphScope & { cloud_ref: string }) => `${BASE}/lookup${q(args)}`,
+  collector: (id: string) => `${COLLECTOR_BASE}/collectors/${enc(id)}`,
+};
 
 /* -------------------------------- endpoints ------------------------------- */
 
 export const igaGraphApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getGraphCapabilities: builder.query<Capabilities, GraphScope>({
-      query: () => ({ url: `${BASE}/capabilities` }),
+      query: () => ({ url: graphUrls.capabilities() }),
       transformResponse: (res: { data: Capabilities }) => res.data,
       providesTags: [{ type: "IgaGraph", id: "CAPABILITIES" }],
     }),
 
     getGraphPipeline: builder.query<Pipeline, GraphScope>({
-      query: () => ({ url: `${BASE}/pipeline` }),
+      query: (args) => ({ url: graphUrls.pipeline(args) }),
       transformResponse: (res: { data: Pipeline }) => res.data,
       // A scan request invalidates CloudScanRun, which is when the pipeline
       // has something new to say.
@@ -1248,7 +1470,7 @@ export const igaGraphApi = baseApi.injectEndpoints({
 
     /** The meta is kept: `graph_state` tells "nothing published yet" from "no gaps". */
     getGraphCoverage: builder.query<GraphDetail<CoverageAccount[]>, GraphScope & { account?: string }>({
-      query: (args) => ({ url: `${BASE}/coverage${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.coverage(args) }),
       providesTags: [{ type: "IgaGraph", id: "COVERAGE" }],
     }),
 
@@ -1256,13 +1478,13 @@ export const igaGraphApi = baseApi.injectEndpoints({
 
     listGraphWorkloads: builder.query<GraphList<WorkloadRow>, ListWorkloadsArgs>({
       query: (args) => ({
-        url: `${BASE}/workloads${query(asParams(args), [], { facets: "account,runtime_kind,classification,region" })}`,
+        url: graphUrls.workloads(args),
       }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:WORKLOADS` }],
     }),
 
     getGraphWorkload: builder.query<GraphDetail<WorkloadDetail>, ById>({
-      query: (args) => ({ url: `${BASE}/workloads/${enc(args.id)}${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.workload(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
     }),
 
@@ -1271,7 +1493,7 @@ export const igaGraphApi = baseApi.injectEndpoints({
       GraphDetail<WorkloadIdentities>,
       ById & { section?: WorkloadIdentitySection; cursor?: string }
     >({
-      query: (args) => ({ url: `${BASE}/workloads/${enc(args.id)}/identities${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.workloadIdentities(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
     }),
 
@@ -1279,20 +1501,20 @@ export const igaGraphApi = baseApi.injectEndpoints({
       GraphList<WorkloadResourceRow>,
       ById & Paged & { sort?: "kind" | "name" }
     >({
-      query: (args) => ({ url: `${BASE}/workloads/${enc(args.id)}/resources${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.workloadResources(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
     }),
 
     getWorkloadClassificationHistory: builder.query<GraphList<ClassificationDecision>, ById & Paged>({
       query: (args) => ({
-        url: `${BASE}/workloads/${enc(args.id)}/classification${query(asParams(args), ["id", "rev"])}`,
+        url: graphUrls.workloadClassification(args),
       }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
     }),
 
     /** Not revision-bound (§5.5): a decision lands at the current `rev`. */
     classifyWorkload: builder.mutation<ClassifyResult, { ws: string; id: string; body: ClassifyRequest }>({
-      query: ({ id, body }) => ({ url: `${BASE}/workloads/${enc(id)}/classification`, method: "POST", body }),
+      query: ({ id, body }) => ({ url: graphUrls.workloadClassificationPost(id), method: "POST", body }),
       transformResponse: (res: { data: ClassifyResult }) => res.data,
       invalidatesTags: (result, _e, { ws, id }) => result ? [
         { type: "IgaGraph", id: `${ws}:workload:${id}` },
@@ -1303,12 +1525,12 @@ export const igaGraphApi = baseApi.injectEndpoints({
     /* ---- identities ---- */
 
     listGraphIdentities: builder.query<GraphList<IdentityRow>, ListIdentitiesArgs>({
-      query: (args) => ({ url: `${BASE}/identities${query(asParams(args), [], { facets: "account,kind" })}` }),
+      query: (args) => ({ url: graphUrls.identities(args) }),
       providesTags: [{ type: "IgaGraph", id: "IDENTITIES" }],
     }),
 
     getGraphIdentity: builder.query<GraphDetail<IdentityDetail>, ById>({
-      query: (args) => ({ url: `${BASE}/identities/${enc(args.id)}${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.identity(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `identity:${args.id}` }],
     }),
 
@@ -1322,25 +1544,25 @@ export const igaGraphApi = baseApi.injectEndpoints({
       GraphDetail<IdentityUsedBy>,
       ById & { section?: UsedBySection; cursor?: string }
     >({
-      query: (args) => ({ url: `${BASE}/identities/${enc(args.id)}/used-by${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.identityUsedBy(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `identity:${args.id}` }],
     }),
 
     getGraphIdentityPermissions: builder.query<GraphDetail<IdentityPermissions>, ById>({
-      query: (args) => ({ url: `${BASE}/identities/${enc(args.id)}/permissions${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.identityPermissions(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `identity:${args.id}` }],
     }),
 
     /* ---- external principals ---- */
 
     getGraphExternalPrincipal: builder.query<GraphDetail<ExternalPrincipalDetail>, ById>({
-      query: (args) => ({ url: `${BASE}/external-principals/${enc(args.id)}${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.externalPrincipal(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `external_principal:${args.id}` }],
     }),
 
     listGraphExternalReferencedBy: builder.query<GraphList<ReferencedByRow>, ById & Paged>({
       query: (args) => ({
-        url: `${BASE}/external-principals/${enc(args.id)}/referenced-by${query(asParams(args), ["id"])}`,
+        url: graphUrls.externalReferencedBy(args),
       }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `external_principal:${args.id}` }],
     }),
@@ -1348,18 +1570,18 @@ export const igaGraphApi = baseApi.injectEndpoints({
     /* ---- resources ---- */
 
     listGraphResources: builder.query<GraphList<ResourceRow>, ListResourcesArgs>({
-      query: (args) => ({ url: `${BASE}/resources${query(asParams(args), [], { facets: "kind,service,account" })}` }),
+      query: (args) => ({ url: graphUrls.resources(args) }),
       providesTags: [{ type: "IgaGraph", id: "RESOURCES" }],
     }),
 
     getGraphResource: builder.query<GraphDetail<ResourceDetail>, ById>({
-      query: (args) => ({ url: `${BASE}/resources/${enc(args.id)}${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.resource(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `resource:${args.id}` }],
     }),
 
     /** Paged by holder; `excluded_by` and `deny_statements_naming` are never counted as access. */
     getGraphResourceAccess: builder.query<{ data: ResourceAccess; meta: GraphListMeta }, ById & Paged>({
-      query: (args) => ({ url: `${BASE}/resources/${enc(args.id)}/access${query(asParams(args), ["id"])}` }),
+      query: (args) => ({ url: graphUrls.resourceAccess(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `resource:${args.id}` }],
     }),
 
@@ -1367,7 +1589,7 @@ export const igaGraphApi = baseApi.injectEndpoints({
 
     listGraphChanges: builder.query<{ data: ChangeEvent[]; meta: ChangesMeta }, ChangesArgs>({
       query: (args) => ({
-        url: `${BASE}/${args.object}/${enc(args.id)}/changes${query(asParams(args), ["object", "id"])}`,
+        url: graphUrls.changes(args),
       }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `changes:${args.id}` }],
     }),
@@ -1375,17 +1597,17 @@ export const igaGraphApi = baseApi.injectEndpoints({
     /* ---- graph ---- */
 
     getGraphNeighbourhood: builder.query<{ data: GraphNeighbourhood; meta: GraphMeta }, GraphRootArgs>({
-      query: (args) => ({ url: `${BASE}/graph${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.neighbourhood(args) }),
       providesTags: [{ type: "IgaGraph", id: "GRAPH" }],
     }),
 
     getGraphExpansion: builder.query<{ data: GraphExpansion; meta: GraphMeta }, GraphExpandArgs>({
-      query: (args) => ({ url: `${BASE}/graph/expand${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.expand(args) }),
       providesTags: [{ type: "IgaGraph", id: "GRAPH" }],
     }),
 
     getGraphPath: builder.query<{ data: GraphPathResult; meta: GraphMeta }, GraphPathArgs>({
-      query: (args) => ({ url: `${BASE}/graph/path${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.path(args) }),
       transformResponse: (res: { data: WirePathResult; meta: GraphMeta }) => ({
         data: collectPaths(res.data),
         meta: res.meta,
@@ -1396,14 +1618,42 @@ export const igaGraphApi = baseApi.injectEndpoints({
     /* ---- evidence, lookup ---- */
 
     getGraphEvidence: builder.query<{ data: Evidence; meta: GraphMeta }, GraphScope & { claim: GraphRef; include?: "raw" }>({
-      query: (args) => ({ url: `${BASE}/evidence${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.evidence(args) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `evidence:${args.claim}` }],
     }),
 
     /** The graph object projected from a Cloud Inventory row — by source key, never by name. */
     lookupGraphObject: builder.query<{ ref: GraphRef; lifecycle: Lifecycle }, GraphScope & { cloud_ref: string }>({
-      query: (args) => ({ url: `${BASE}/lookup${query(asParams(args))}` }),
+      query: (args) => ({ url: graphUrls.lookup(args) }),
       transformResponse: (res: { data: { ref: GraphRef; lifecycle: Lifecycle } }) => res.data,
+    }),
+
+    /* ---- v2 runtime, observed use, collector ---- */
+
+    getWorkloadRuntimeInstances: builder.query<GraphList<RuntimeInstanceRow>, ById & Paged>({
+      query: (args) => ({ url: graphUrls.runtimeInstances(args) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
+    }),
+
+    getWorkloadObservedAccess: builder.query<GraphList<ObservedAccessRow>, ById & Paged & ObservedAccessArgs>({
+      query: (args) => ({ url: graphUrls.observedAccess(args) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
+    }),
+
+    getWorkloadRuntimePolicyStatus: builder.query<{ data: RuntimePolicyStatus }, ById>({
+      query: (args) => ({ url: graphUrls.runtimePolicyStatus(args) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:workload:${args.id}` }],
+    }),
+
+    getIdentityObservedUse: builder.query<{ data: ObservedUse }, ById>({
+      query: (args) => ({ url: graphUrls.identityObservedUse(args) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `identity:${args.id}` }],
+    }),
+
+    /** 404 when ingest is off or the collector is not in the workspace. `ws` is cache-only. */
+    getCollector: builder.query<CollectorView, { ws: string; id: string }>({
+      query: (args) => ({ url: graphUrls.collector(args.id) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:collector:${args.id}` }],
     }),
   }),
   overrideExisting: false,
@@ -1438,4 +1688,9 @@ export const {
   useGetGraphEvidenceQuery,
   useLookupGraphObjectQuery,
   useLazyLookupGraphObjectQuery,
+  useGetWorkloadRuntimeInstancesQuery,
+  useGetWorkloadObservedAccessQuery,
+  useGetWorkloadRuntimePolicyStatusQuery,
+  useGetIdentityObservedUseQuery,
+  useGetCollectorQuery,
 } = igaGraphApi;

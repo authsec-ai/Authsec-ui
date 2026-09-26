@@ -92,7 +92,7 @@ const CANVAS_MIN = 560;
 const INSPECTOR_MIN = 360;
 const INSPECTOR_MAX = 420;
 
-type GraphTabProps = { ws: string; root: GraphRef; rootName: string };
+type GraphTabProps = { ws: string; root: GraphRef; rootName: string; graphV2?: boolean };
 
 /**
  * The claims that name a line in `edge=`: a drawn relationship's first
@@ -111,7 +111,8 @@ export default function GraphTab(props: GraphTabProps) {
   const direction = refType(props.root) === "resource" ? "reverse" : params.get("direction") === "reverse" && refType(props.root) === "identity" ? "reverse" : "forward";
   return <GraphInvestigation key={`${graphSessionGeneration()}|${props.ws}|${props.root}|${direction}`} {...props} direction={direction} />;
 }
-function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & { direction: GraphDirection }) {
+function GraphInvestigation({ ws, root, rootName, direction, graphV2 }: GraphTabProps & { direction: GraphDirection }) {
+  const graph = graphV2 ? ("v2" as const) : undefined;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   // Selection edits replace the entry and keep its history state: the
@@ -146,7 +147,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
   /* ------------------------------ initial load ----------------------------- */
 
-  const rootArgs = { ws, rev, key: String(epoch), root, direction, assume_hops: 2 };
+  const rootArgs = { ws, rev, key: String(epoch), root, direction, assume_hops: 2, ...(graph ? { graph } : {}) };
   const rootQuery = useGetGraphNeighbourhoodQuery(rootArgs);
   const rootFailure = classifyGraphError(rootQuery.error);
   useTrackRevision(ws, rootQuery.currentData, rootFailure, (r, d) =>
@@ -257,6 +258,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
             edge: item.frontier.edge,
             direction: item.frontier.direction,
             cursor,
+            ...(graph ? { graph } : {}),
           }).unwrap();
           if (cancelled) return;
           if (cancelledReplayKeys.current.has(item.key)) break;
@@ -291,7 +293,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       cancelled = true;
       if (next < queue.length) replayQueueRef.current = [...queue.slice(next), ...replayQueueRef.current].filter((item) => !cancelledKeys.has(item.key));
     };
-  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
+  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale, graph]);
 
 
   /* -------------------------------- expansion -------------------------------- */
@@ -306,7 +308,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       expansionAttempts.current.set(key, attempt);
       const requestKey = currentKey;
       dispatchModel({ type: "expand-start", key });
-      triggerExpand({ ws, rev, key: String(epoch), node: f.node, edge: f.edge, direction: f.direction, cursor })
+      triggerExpand({ ws, rev, key: String(epoch), node: f.node, edge: f.edge, direction: f.direction, cursor, ...(graph ? { graph } : {}) })
         .unwrap()
         .then((res) => {
           // The investigation has moved to a different root, direction or
@@ -335,7 +337,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           announce("Could not load. Retry");
         });
     },
-    [stale, ws, rev, epoch, currentKey, triggerExpand, dispatchModel, markStale],
+    [stale, ws, rev, epoch, currentKey, triggerExpand, dispatchModel, markStale, graph],
   );
 
   const handleLoadMore = useCallback(
@@ -381,7 +383,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const targetRef = params.get("target") as GraphRef | null;
   const lastGoodPathTargetRef = useRef<string | null>(null);
   const sameTargetAsShown = targetRef !== null && lastGoodPathTargetRef.current === `${root}|${targetRef}`;
-  const pathArgs = { ws, rev, key: String(epoch), from: root, to: targetRef ?? root };
+  const pathArgs = { ws, rev, key: String(epoch), from: root, to: targetRef ?? root, ...(graph ? { graph } : {}) };
   // Pause only a NEW target while stale; a target already answered keeps its
   // result on screen instead of being hidden by the revision moving under it
   // (review item 10).

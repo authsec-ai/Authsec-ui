@@ -32,7 +32,7 @@ import { TableCard } from "@/theme/components/cards";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
   resolvePagedView,
@@ -40,13 +40,16 @@ import {
 } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { ProviderFilter } from "../shared/ProviderFilter";
+import { PROVIDER_LABEL, listGraphOptIn, providerOfWorkload } from "../shared/providers";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
 import {
   CLASSIFICATION_MEANING,
   CLASSIFICATION_SHORT,
   CLASSIFICATION_TONE,
   RUNTIME_LABEL,
-  RUNTIME_SHORT,
+  runtimeLabel,
+  runtimeShort,
 } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
@@ -91,6 +94,7 @@ const FILTERS = {
   region: null,
   runtime_kind: RUNTIMES,
   classification: ["agent", "unclassified"],
+  provider: ["aws", "linux", "kubernetes", "ad", "all"],
   sort: SORTS.map((s) => s.value),
 } as const;
 
@@ -100,6 +104,7 @@ export default function EstateListPage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "workloads");
+  const v2 = useGraphV2(ws);
   const f = useListFilters(FILTERS);
   const paging = usePaging("workloads", epoch);
   const [restarted, setRestarted] = useState(false);
@@ -111,7 +116,8 @@ export default function EstateListPage() {
   const classification = f.value("classification");
   const sort = (f.value("sort") as WorkloadSort | undefined) ?? "name";
 
-  const pipeline = usePipeline(ws, feature.off);
+  const provider = v2.available ? f.value("provider") : undefined;
+  const pipeline = usePipeline(ws, feature.off || v2.loading, v2.available);
   const args: ListWorkloadsArgs = {
     ws,
     rev,
@@ -124,8 +130,9 @@ export default function EstateListPage() {
       ?.filter,
     sort,
     cursor: paging.cursor,
+    ...listGraphOptIn(provider),
   };
-  const list = useListGraphWorkloadsQuery(args, { skip: feature.off });
+  const list = useListGraphWorkloadsQuery(args, { skip: feature.off || (v2.loading && !!f.value("provider")) });
   const view = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll("workloads", view.kind === "rows");
 
@@ -183,7 +190,11 @@ export default function EstateListPage() {
           <NameCell
             to={`/iga/estate/${refId(row.original.ref)}`}
             name={row.original.name}
-            context={[RUNTIME_SHORT[row.original.runtime_kind], row.original.region]}
+            context={[
+              runtimeShort(row.original.runtime_kind),
+              providerOfWorkload(row.original.runtime_kind) ? PROVIDER_LABEL[providerOfWorkload(row.original.runtime_kind)!] : null,
+              row.original.region,
+            ]}
             account={row.original.account}
           />
         ),
@@ -243,7 +254,7 @@ export default function EstateListPage() {
         priority: 5,
         approxWidth: 150,
         defaultHidden: true,
-        cell: ({ row }) => <span className="text-sm">{RUNTIME_LABEL[row.original.runtime_kind]}</span>,
+        cell: ({ row }) => <span className="text-sm">{runtimeLabel(row.original.runtime_kind)}</span>,
       },
       {
         id: "arn",
@@ -316,6 +327,7 @@ export default function EstateListPage() {
     ...accounts.map((a) => ({ key: `account:${a}`, label: `Account: ${nameOf(a)}`, onRemove: () => f.setMany("account", accounts.filter((x) => x !== a)) })),
     ...(region ? [{ key: "region", label: `Region: ${region === "not_stated" ? "not stated" : region}`, onRemove: () => f.set("region", null) }] : []),
     ...(runtime ? [{ key: "runtime", label: `Runtime: ${RUNTIME_LABEL[runtime]}`, onRemove: () => f.set("runtime_kind", null) }] : []),
+    ...(provider ? [{ key: "provider", label: `Provider: ${PROVIDER_LABEL[provider as keyof typeof PROVIDER_LABEL] ?? provider}`, onRemove: () => f.set("provider", null) }] : []),
   ];
 
   const accountCount = pipeline?.accounts.length ?? 0;
@@ -388,6 +400,7 @@ export default function EstateListPage() {
                   className="h-9 w-full"
                 />
               </ConsoleFilterField>
+              {v2.available ? <ProviderFilter value={provider} onChange={(v) => f.set("provider", v)} /> : null}
               <ConsoleFilterField label="Runtime">
                 <FacetSelect
                   label="Runtime"
@@ -402,7 +415,7 @@ export default function EstateListPage() {
             </>
           }
           applied={applied}
-          onClearAll={() => f.clearKeys(["account", "region", "runtime_kind"])}
+          onClearAll={() => f.clearKeys(["account", "region", "runtime_kind", "provider"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
           columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
         />

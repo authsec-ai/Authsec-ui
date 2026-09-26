@@ -103,6 +103,15 @@ function describe(a: PipelineAccount, pipeline: Pipeline): AccountState | null {
         action: "retry",
       };
     }
+    case "collector": {
+      const coverage = a.projection?.coverage_state;
+      const label = coverage === "stale" ? "Stale" : coverage && coverage !== "unknown" ? coverage.replace(/_/g, " ") : "Unknown";
+      return {
+        tone: "warning",
+        label,
+        detail: `${a.label} collector coverage is ${label}. Desired and applied policy are not configured.`,
+      };
+    }
     case "revoked":
       return {
         tone: "neutral",

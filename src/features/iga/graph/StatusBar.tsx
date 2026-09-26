@@ -12,6 +12,7 @@ import { Info, Minus, Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { EdgeClassLegend } from "./v2/EdgeClassLegend";
 import { markedLimitations } from "./graphLabels";
 import { NODE_ICON } from "./icons";
 import type { NodeCategory, NodeDescription, NodeIcon } from "./nodeView";
@@ -109,6 +110,8 @@ export function StatusBar({
           </li>
         ) : null}
       </ul>
+
+      <EdgeClassLegend edges={edges.flatMap((edge) => edge.members)} />
 
       {styles.length || marks.length ? (
         <ul className="flex flex-wrap items-center gap-3" aria-label="Line styles in view">

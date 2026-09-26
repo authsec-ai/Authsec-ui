@@ -31,7 +31,7 @@ import { TableCard } from "@/theme/components/cards";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { useGraphFeature } from "../shared/capabilities";
+import { useGraphFeature, useGraphV2 } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
   resolvePagedView,
@@ -39,6 +39,8 @@ import {
 } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { ProviderFilter } from "../shared/ProviderFilter";
+import { PROVIDER_LABEL, listGraphOptIn, providerOfResource } from "../shared/providers";
 import { useListFilters, useSlashToSearch } from "../shared/useListFilters";
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, countText } from "../shared/labels";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
@@ -82,6 +84,7 @@ const FILTERS = {
   account: null,
   service: null,
   kind: ["exact", "selector", "external"],
+  provider: ["aws", "linux", "kubernetes", "ad", "all"],
   sort: SORTS.map((s) => s.value),
 } as const;
 
@@ -106,6 +109,7 @@ export default function ResourcesListPage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "resources");
+  const v2 = useGraphV2(ws);
   const f = useListFilters(FILTERS);
   const paging = usePaging("resources", epoch);
   useSlashToSearch();
@@ -115,7 +119,8 @@ export default function ResourcesListPage() {
   const kind = f.value("kind") as ResourceKind | undefined;
   const sort = (f.value("sort") as ResourceSort | undefined) ?? "kind";
 
-  const pipeline = usePipeline(ws, feature.off);
+  const provider = v2.available ? f.value("provider") : undefined;
+  const pipeline = usePipeline(ws, feature.off || v2.loading, v2.available);
   const args: ListResourcesArgs = {
     ws,
     rev,
@@ -126,8 +131,9 @@ export default function ResourcesListPage() {
     kind,
     sort,
     cursor: paging.cursor,
+    ...listGraphOptIn(provider),
   };
-  const list = useListGraphResourcesQuery(args, { skip: feature.off });
+  const list = useListGraphResourcesQuery(args, { skip: feature.off || (v2.loading && !!f.value("provider")) });
   const view = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll("resources", view.kind === "rows");
   useTrackRevision(
@@ -179,7 +185,13 @@ export default function ResourcesListPage() {
           <NameCell
             to={`/iga/resources/${refId(row.original.ref)}`}
             name={referenceName(row.original.text)}
-            context={[row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service, row.original.region]}
+            context={[
+              row.original.native_kind,
+              row.original.reference_status,
+              row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service,
+              providerOfResource(row.original.native_kind) ? PROVIDER_LABEL[providerOfResource(row.original.native_kind)!] : null,
+              row.original.region,
+            ]}
             account={row.original.account}
           />
         ),
@@ -321,6 +333,7 @@ export default function ResourcesListPage() {
           onViewChange={(k) => f.set("kind", k === "all" ? null : k)}
           filters={
             <>
+              {v2.available ? <ProviderFilter value={provider} onChange={(v) => f.set("provider", v)} /> : null}
               <ConsoleFilterField label="Account">
                 <FacetCheckList
                   label="Account"
@@ -344,7 +357,7 @@ export default function ResourcesListPage() {
             </>
           }
           applied={applied}
-          onClearAll={() => f.clearKeys(["account", "service"])}
+          onClearAll={() => f.clearKeys(["account", "service", "provider"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "kind" ? null : v)} />}
           columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
         />

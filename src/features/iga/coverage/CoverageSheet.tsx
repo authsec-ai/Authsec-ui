@@ -12,6 +12,7 @@
 import { Link } from "react-router-dom";
 
 import { useGetGraphCoverageQuery, type CoverageSurface } from "@/app/api/igaGraphApi";
+import { useGraphV2 } from "../shared/capabilities";
 import { StatusBadge } from "@/components/console/status";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
@@ -94,7 +95,11 @@ export function CoverageSheet({
   // Coverage is read at the pinned revision, so it describes the same graph
   // as the rows beside it (§5.1); a newer publication answers 409.
   const { rev, epoch, refresh } = useGraphRevision(ws);
-  const q = useGetGraphCoverageQuery({ ws, rev, key: String(epoch), account: accountId ?? undefined }, { skip: !accountId });
+  const v2 = useGraphV2(ws);
+  const q = useGetGraphCoverageQuery(
+    { ws, rev, key: String(epoch), account: accountId ?? undefined, ...(v2.available ? { graph: "v2" as const } : {}) },
+    { skip: !accountId || v2.loading },
+  );
   const failure = classifyGraphError(q.error);
   useTrackRevision(ws, undefined, failure, () => undefined);
   const answer = q.currentData;
