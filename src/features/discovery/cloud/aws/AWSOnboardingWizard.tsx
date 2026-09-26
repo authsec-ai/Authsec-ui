@@ -61,33 +61,11 @@ import {
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
 import { awsErrorCopy } from "./awsErrorCopy";
+import { AWS_REGIONS } from "./awsRegions";
+import { AWSQuickCreateFlow } from "./AWSQuickCreateFlow";
+import type { AWSAutomaticBlock } from "./awsQuickCreateApi";
 
 const STEPS = ["Review & connect", "Confirm the role", "Connected"] as const;
-
-// A curated, common subset — not AWS's full region list. The plan is explicit
-// that scan cost scales with regions × services, so the picker defaults to
-// one region rather than "select all"; the operator can widen it later by
-// re-onboarding with a wider list. Region validity itself is a shape check
-// server-side (internal/awsdiscovery.ValidateRegion), not this allow-list, so
-// a region missing here is a display gap, never a hard block.
-const AWS_REGIONS: { value: string; label: string }[] = [
-  { value: "us-east-1", label: "US East (N. Virginia)" },
-  { value: "us-east-2", label: "US East (Ohio)" },
-  { value: "us-west-1", label: "US West (N. California)" },
-  { value: "us-west-2", label: "US West (Oregon)" },
-  { value: "ca-central-1", label: "Canada (Central)" },
-  { value: "eu-west-1", label: "Europe (Ireland)" },
-  { value: "eu-west-2", label: "Europe (London)" },
-  { value: "eu-west-3", label: "Europe (Paris)" },
-  { value: "eu-central-1", label: "Europe (Frankfurt)" },
-  { value: "eu-north-1", label: "Europe (Stockholm)" },
-  { value: "ap-south-1", label: "Asia Pacific (Mumbai)" },
-  { value: "ap-southeast-1", label: "Asia Pacific (Singapore)" },
-  { value: "ap-southeast-2", label: "Asia Pacific (Sydney)" },
-  { value: "ap-northeast-1", label: "Asia Pacific (Tokyo)" },
-  { value: "ap-northeast-2", label: "Asia Pacific (Seoul)" },
-  { value: "sa-east-1", label: "South America (São Paulo)" },
-];
 
 // internal/awsdiscovery.Permission.Surface, in a form a security reviewer
 // reads without knowing AuthSec's internal names for things. Falls back to
@@ -205,6 +183,12 @@ export function AWSOnboardingWizard({
 
   const pkg = packageResult.data?.configured ? packageResult.data.data : undefined;
 
+  // Quick Create ("Launch in AWS") is offered whenever the backend reports it
+  // enabled; the manual flow below stays one click away and unchanged.
+  const automatic = (packageResult.data as { automatic?: AWSAutomaticBlock } | undefined)?.automatic;
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const useQuickCreate = Boolean(pkg && automatic?.enabled) && mode === "auto";
+
   // Step 1 — Confirm the role
   const [roleArn, setRoleArn] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -219,6 +203,7 @@ export function AWSOnboardingWizard({
 
   const reset = () => {
     setStep(0);
+    setMode("auto");
     setRoleArn("");
     setDisplayName("");
     setRegions(["us-east-1"]);
@@ -268,6 +253,47 @@ export function AWSOnboardingWizard({
 
   const connectedAttrs = connected?.attrs as AWSConnectorAttrs | undefined;
 
+  // The same permissions review in both flows: what the role grants and what
+  // it is explicitly denied.
+  const permissionsReview = pkg ? (
+    <>
+      <Disclosure label="View permissions this role grants">
+        <div className="rounded-md border p-2.5 text-xs">
+          <span className="font-medium text-foreground">Baseline: </span>
+          <span className="font-mono text-[11px] text-muted-foreground">{pkg.baseline_managed_policy}</span>
+          <p className="mt-1 text-xs text-muted-foreground">
+            AWS-managed, read-only metadata access. Does not include reading secret values, parameter
+            values, or decryption keys.
+          </p>
+        </div>
+        {pkg.additional_permissions.map((perm) => (
+          <PermissionRow key={perm.surface} perm={perm} />
+        ))}
+      </Disclosure>
+
+      <Disclosure label="What AuthSec is explicitly denied">
+        <div className="space-y-1.5">
+          {pkg.hard_denies.map((perm) => (
+            <div key={perm.surface} className="space-y-1 rounded-md border border-dashed p-2.5">
+              <div className="flex items-center gap-1.5">
+                <ShieldOff className="size-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-foreground">{surfaceLabel(perm.surface)}</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {perm.actions.map((a) => (
+                  <span key={a} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    {a}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{perm.why}</p>
+            </div>
+          ))}
+        </div>
+      </Disclosure>
+    </>
+  ) : null;
+
   return (
     <Dialog
       open={open}
@@ -286,6 +312,22 @@ export function AWSOnboardingWizard({
           </DialogDescription>
         </DialogHeader>
 
+        {useQuickCreate && automatic ? (
+          <AWSQuickCreateFlow
+            automatic={automatic}
+            review={permissionsReview}
+            onUseManual={() => {
+              setStep(0);
+              setMode("manual");
+            }}
+            onConnected={onCreated}
+            onDone={() => {
+              reset();
+              onOpenChange(false);
+            }}
+          />
+        ) : (
+        <>
         <ol className="flex items-center gap-1.5 py-1 text-[11px]">
           {STEPS.map((label, i) => (
             <li key={label} className="flex items-center gap-1.5">
@@ -333,6 +375,14 @@ export function AWSOnboardingWizard({
                 </div>
               ) : pkg ? (
                 <>
+                  {automatic?.enabled ? (
+                    <p className="text-xs text-muted-foreground">
+                      Manual setup: you deploy the template and paste the role back.{" "}
+                      <button type="button" className="underline hover:text-foreground" onClick={() => setMode("auto")}>
+                        Launch in AWS instead
+                      </button>
+                    </p>
+                  ) : null}
                   <div className="rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-xs text-(--color-warning-text)">
                     <strong className="font-medium">This ExternalId is shown once.</strong> Hold
                     onto the exact value below and paste it into your CloudFormation stack.
@@ -360,47 +410,7 @@ export function AWSOnboardingWizard({
                     your account.
                   </p>
 
-                  <Disclosure label="View permissions this role grants">
-                    <div className="rounded-md border p-2.5 text-xs">
-                      <span className="font-medium text-foreground">Baseline: </span>
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        {pkg.baseline_managed_policy}
-                      </span>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        AWS-managed, read-only metadata access. Does not include reading secret
-                        values, parameter values, or decryption keys.
-                      </p>
-                    </div>
-                    {pkg.additional_permissions.map((perm) => (
-                      <PermissionRow key={perm.surface} perm={perm} />
-                    ))}
-                  </Disclosure>
-
-                  <Disclosure label="What AuthSec is explicitly denied">
-                    <div className="space-y-1.5">
-                      {pkg.hard_denies.map((perm) => (
-                        <div key={perm.surface} className="space-y-1 rounded-md border border-dashed p-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <ShieldOff className="size-3.5 text-muted-foreground" />
-                            <span className="text-xs font-medium text-foreground">
-                              {surfaceLabel(perm.surface)}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {perm.actions.map((a) => (
-                              <span
-                                key={a}
-                                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
-                              >
-                                {a}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{perm.why}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </Disclosure>
+                  {permissionsReview}
                 </>
               ) : null}
             </>
@@ -517,7 +527,16 @@ export function AWSOnboardingWizard({
         <DialogFooter className="sm:justify-between">
           <Button
             variant="outline"
-            onClick={() => (step === 0 ? onOpenChange(false) : setStep(step - 1))}
+            onClick={() => {
+              if (step === 0) {
+                // Cancel resets like any other close, so the next open starts
+                // on Launch in AWS again rather than staying in manual mode.
+                reset();
+                onOpenChange(false);
+              } else {
+                setStep(step - 1);
+              }
+            }}
             disabled={step === 2}
           >
             {step === 0 ? "Cancel" : "Back"}
@@ -551,6 +570,8 @@ export function AWSOnboardingWizard({
             </Button>
           )}
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

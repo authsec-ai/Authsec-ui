@@ -41,6 +41,7 @@ import {
   useListAwsWorkloadsQuery,
   type AWSConnectorAttrs,
   type AWSWorkloadAttrs,
+  type AWSIdentityAttrs,
   type CloudIdentity,
   type CloudPermission,
 } from "@/app/api/cloudDiscoveryApi";
@@ -69,7 +70,9 @@ import {
   cloudTrailFacts,
   credentialReportFacts,
   SOURCE_CLOUDTRAIL_EVENTS,
+  SOURCE_CLOUDTRAIL_TRAIL_STATUS,
   SOURCE_CREDENTIAL_REPORT,
+  trailCoverageOf,
 } from "./awsObservationFacts";
 
 /* ─────────────────────────────── helpers ────────────────────────────────── */
@@ -659,6 +662,32 @@ export function EventsTab({ identity }: { identity: CloudIdentity }) {
   const { data, isLoading, isError } = eventsQuery;
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
+  // Trail health, read only to explain an EMPTY list. Subject-less rows, so no
+  // identity filter — there is one per trail in the account, not per principal.
+  //
+  // This is the surface that tells "this identity was quiet" apart from "this
+  // account records nothing". It was collected from the first release and read
+  // by nothing, so the empty state below could only ever offer the first story
+  // while being unable to rule out the second.
+  const trailQuery = useListAwsObservationsQuery({
+    source_api: SOURCE_CLOUDTRAIL_TRAIL_STATUS,
+    limit: AWS_DISCOVERY_MAX_LIMIT,
+  });
+  // Narrowed to THIS identity's account before being read.
+  //
+  // /aws/observations takes no connector_id filter, so the query above returns
+  // every trail in the workspace. A workspace with two connected accounts would
+  // otherwise let a trail logging in account A answer for an identity in
+  // account B — the copy below says "in this account", and that would make it
+  // false. The rows carry connector_id, so the narrowing happens here instead.
+  const trailCoverage = useMemo(
+    () =>
+      trailCoverageOf(
+        (trailQuery.data?.rows ?? []).filter((o) => o.connector_id === identity.connector_id),
+      ),
+    [trailQuery.data, identity.connector_id],
+  );
+
   const deniedCount = useMemo(
     () => rows.filter((o) => cloudTrailFacts(o).denied === true).length,
     [rows],
@@ -668,13 +697,39 @@ export function EventsTab({ identity }: { identity: CloudIdentity }) {
   if (isError) return <TabError what="API events" onRetry={() => void eventsQuery.refetch()} />;
 
   if (!rows.length) {
+    // An account with nothing logging cannot produce events for anyone, so the
+    // absence says nothing about THIS identity and the usual copy — which
+    // invites the reader to conclude the identity was quiet — would be
+    // actively misleading. Lead with the account-level fact when we have it.
+    if (trailCoverage === "not_logging") {
+      return (
+        <div className="space-y-3">
+          <InventoryNotice tone="warning" icon={<Info />}>
+            <strong className="font-medium">No CloudTrail trail in this account is logging.</strong>{" "}
+            Every trail the scan found reports delivery switched off, so no API call by any
+            identity is being recorded. This list is empty because the account writes no events,
+            not because this identity made none — and nothing here can be read as evidence of what
+            it did or did not do.
+          </InventoryNotice>
+          <DrawerEmpty
+            icon={<ScrollText />}
+            title="No API events recorded"
+            description="The account is not logging, so there is nothing to attribute."
+          />
+        </div>
+      );
+    }
     return (
       <div className="space-y-3">
-        <PhaseUnobservableNotice surface="CloudTrail events" />
+        {trailCoverage === "unknown" ? <PhaseUnobservableNotice surface="CloudTrail events" /> : null}
         <DrawerEmpty
           icon={<ScrollText />}
           title="No API events recorded"
-          description="No CloudTrail event was matched to this identity. CloudTrail is read over a recent window and events are attributed only where the match is confident, so this is not the same as 'this identity did nothing'."
+          description={
+            trailCoverage === "logging"
+              ? "A CloudTrail trail is logging in this account, but no event was matched to this identity. CloudTrail is read over a recent window and events are attributed only where the match is confident — an assumed-role session, in particular, cannot be resolved back to the role."
+              : "No CloudTrail event was matched to this identity. CloudTrail is read over a recent window and events are attributed only where the match is confident, so this is not the same as 'this identity did nothing'."
+          }
         />
       </div>
     );
@@ -881,7 +936,7 @@ export function KeysTab({ identity }: { identity: CloudIdentity }) {
 /* ───────────────────────────── Overview ───────────────────────────────── */
 
 export function OverviewTab({ identity }: { identity: CloudIdentity }) {
-  const attrs = identity.attrs as { path?: string; description?: string; unique_id?: string; max_session_duration?: number; tags?: Record<string, string>; has_trust_policy?: boolean };
+  const attrs = identity.attrs as AWSIdentityAttrs;
   const tags = Object.entries(attrs?.tags ?? {});
 
   return (
@@ -926,8 +981,39 @@ export function OverviewTab({ identity }: { identity: CloudIdentity }) {
           {attrs?.description ? (
             <DetailRow label="Description" value={attrs.description} full />
           ) : null}
+          {/* The boundary is a CEILING, not a grant, so it is labelled as one.
+              Shown whenever it is known: an identity capped by a boundary and
+              one with none are materially different, and the console offered no
+              way to tell them apart. */}
+          {attrs?.permissions_boundary_arn ? (
+            <DetailRow
+              label="Permissions boundary"
+              value={attrs.permissions_boundary_arn}
+              mono
+              full
+            />
+          ) : null}
         </DetailGrid>
       </section>
+
+      {/* A half-read identity used to look identical to a fully-read one.
+          `detail_incomplete` is written when iam:GetRole failed -- throttled,
+          usually -- which leaves tags, last-used and the boundary UNKNOWN
+          rather than absent. Everything above is then the last COMPLETE read,
+          not this one, and a reader deciding on an entitlement has to know
+          that before trusting an empty boundary or an empty tag list. */}
+      {attrs?.detail_incomplete ? (
+        <section>
+          <div className="rounded-md border border-(--color-warning-border) bg-(--color-warning-soft) px-3 py-2">
+            <p className="text-xs text-(--color-warning-text)">
+              The last scan could not read this identity in full. AWS did not return its detail —
+              typically throttling — so the tags, last-used date and permissions boundary above are
+              whatever an earlier complete read established, not what the last scan saw. Absence
+              here means unknown, not none.
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {tags.length ? (
         <section>

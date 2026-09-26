@@ -1025,7 +1025,7 @@ function AppContent() {
                     element={<Navigate to="/authz/effective-access" replace />}
                   />
                   <Route
-                    path="/authz/application-scopes"
+                    path="/access/scope-catalog"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
@@ -1036,7 +1036,7 @@ function AppContent() {
                   />
                   <Route
                     path="/authz/scope-catalog"
-                    element={<Navigate to="/authz/application-scopes" replace />}
+                    element={<Navigate to="/access/scope-catalog" replace />}
                   />
                   <Route
                     path="/consent-grants"

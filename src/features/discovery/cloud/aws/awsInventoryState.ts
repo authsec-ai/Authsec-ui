@@ -10,14 +10,16 @@
  * It exists because two facts about the backend are not expressed by any
  * response field:
  *
- * 1. `coverage` REPORTS THE IAM PHASE ONLY. `POST /connectors/:id/scan`
- *    returns 202 and chains three scanners in one goroutine — AWSIAMScanner,
- *    then AWSPermissionScanner, then AWSWorkloadScanner. Only the first writes
- *    `coverage.surfaces`, and only ever the four `iam_*` keys. The other two
- *    return in-process reports the controller discards apart from logging
- *    failures. So `coverage.status === "complete"` means the IAM phase
- *    finished; permissions, compute and usage may still be running, or may
- *    have failed with only the server log knowing.
+ * 1. `coverage` IS WRITTEN AT PUBLISH, NOT DURING THE SCAN.
+ *    `POST /connectors/:id/scan` enqueues a run; a leased background worker
+ *    then runs AWSIAMScanner, AWSPermissionScanner and AWSWorkloadScanner
+ *    against one generation and calls FinalizeCoverage, which merges all three
+ *    phases' surfaces into this blob before the run publishes. So the report
+ *    DOES describe every phase — an earlier version of this file said it
+ *    covered the IAM phase only, which stopped being true when FinalizeCoverage
+ *    landed. What it cannot describe is a scan still in flight: until that run
+ *    publishes, this is the previous run's answer, and a surface the last scan
+ *    never reported on is one nobody can speak for.
  *
  * 2. A STACK DEPLOYED BEFORE TEMPLATE 2026-09-08 CANNOT DISCOVER COMPUTE.
  *    That version added the `WorkloadReads` statement; the commit that did it
@@ -145,9 +147,83 @@ export function inventoryEmptyReason(
     if (anyStale) return { kind: "stale_stack" };
   }
 
-  // The IAM phase succeeded. For identities that is a real verdict, because
-  // coverage actually describes the surface they came from. For the other
-  // three it is not: nothing in the API reports whether their scanner ran.
-  if (surface === "identities") return { kind: "genuinely_empty" };
+  // The scan succeeded. Whether that is a verdict for THIS surface depends on
+  // whether the coverage report actually describes it.
+  //
+  // It used to depend only on `surface === "identities"`, on the premise that
+  // coverage carried the four iam_* keys and nothing else. FinalizeCoverage
+  // made that false — it merges the permission and workload phases' surfaces
+  // into the same blob before publishing — so every non-identity view was
+  // answering "we cannot tell you why this is empty" while holding, in hand,
+  // a report that says the surface was reached.
+  //
+  // The check is per-connector and conservative: a connector whose blob does
+  // not mention this surface (an older backend, or a scan predating the merge)
+  // still cannot speak for it, and one silent connector is enough to withhold
+  // the verdict for everyone.
+  if (coverageDescribes(live, surface)) return { kind: "genuinely_empty" };
   return { kind: "phase_unobservable" };
+}
+
+/** The coverage surface keys that answer for each inventory view.
+ *
+ * These are the keys a SUCCESSFUL scan writes, verified against a real
+ * published report rather than inferred from the constant names. Two traps
+ * worth recording, because both were fallen into first:
+ *
+ *  - `permission_scan` and `workload_scan` are NOT markers that those phases
+ *    ran. FinalizeCoverage writes them only when a phase failed before
+ *    producing any snapshot at all, as a stand-in for the surfaces it never
+ *    reached. Keying on them means never recognising a healthy scan.
+ *  - `policy_documents` appears only on a PARTIAL permission read
+ *    (surfacePartial), so it is absent from every clean scan.
+ *
+ * What a healthy phase always writes: the IAM phase, iam_roles / iam_users;
+ * the permission phase, oidc_providers / eks_pod_identity / resource_policies;
+ * the workload phase, activity plus one "<surface>:<region>" per selected
+ * region and "compute:<region>" per unselected one. */
+const SURFACE_COVERAGE_KEYS: Record<InventorySurface, string[]> = {
+  identities: ["iam_roles", "iam_users"],
+  permissions: ["oidc_providers", "resource_policies"],
+  // A cloud_resource row exists only because a parsed statement named its ARN,
+  // so the permission phase is what answers for this view too.
+  resources: ["resource_policies"],
+  usage: ["activity"],
+  compute: [],
+  workload_identities: [],
+};
+
+/** Prefix-matched keys, for the surfaces that carry a region.
+ *
+ * There is one key per surface per region, so no fixed list can name them and
+ * the set depends on what the operator selected. At least one region is always
+ * selected — onboarding rejects an empty list — so a workload phase that ran
+ * always leaves at least one of these behind. */
+const SURFACE_COVERAGE_PREFIXES: Record<InventorySurface, string[]> = {
+  identities: [],
+  permissions: [],
+  resources: [],
+  usage: [],
+  compute: ["lambda:", "ecs:", "ec2:", "bedrock-agents:", "bedrock-agentcore:", "compute:"],
+  workload_identities: ["agentcore-workload-identities:"],
+};
+
+/** Whether EVERY live connector's coverage report speaks to this surface.
+ *
+ * Only presence is checked, not state: a surface that was denied, throttled or
+ * partly read has already been caught by the `partial`/`failed` branch above,
+ * because FinalizeCoverage folds those into the connector-level status. What
+ * is being asked here is narrower — "did the last scan report on this at
+ * all" — and the honest answer when it did not is that nobody can say. */
+function coverageDescribes(connectors: CloudConnector[], surface: InventorySurface): boolean {
+  const keys = SURFACE_COVERAGE_KEYS[surface];
+  const prefixes = SURFACE_COVERAGE_PREFIXES[surface];
+  if (!keys.length && !prefixes.length) return false;
+  return connectors.every((c) => {
+    const surfaces = c.coverage?.surfaces;
+    if (!surfaces) return false;
+    if (keys.some((k) => surfaces[k] !== undefined)) return true;
+    if (!prefixes.length) return false;
+    return Object.keys(surfaces).some((k) => prefixes.some((p) => k.startsWith(p)));
+  });
 }
