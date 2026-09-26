@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Expand, LayoutGrid, Maximize2, Minimize, Search } from "lucide-react";
+import { Expand, LayoutGrid, Maximize2, Minimize } from "lucide-react";
 
 import {
   igaGraphApi,
@@ -51,7 +51,6 @@ import { graphSessionGeneration, useGraphRevision, useTrackRevision } from "../s
 import { GraphCanvas, type CanvasApi } from "./GraphCanvas";
 import { GraphInspector } from "./GraphInspector";
 import { edgeVerb } from "./graphLabels";
-import { Legend } from "./Legend";
 import { computeLayout, placeNewNodes, rectsOverlap, terminateLayoutWorker, type Position, type Size } from "./layout";
 import {
   buildVisual,
@@ -69,10 +68,11 @@ import {
   visibleNodeRefs,
   type ModelState,
 } from "./model";
-import { describeNode, nodeSize, type NodeDescription } from "./nodeView";
+import { describeNode, nodeSize, type NodeCategory, type NodeDescription } from "./nodeView";
 import { PathsList } from "./PathsList";
 import { readSavedLayout, writeSavedLayout } from "./savedLayout";
 import { SelectionCard, type SelectionActions, type SelectionSubject } from "./SelectionCard";
+import { StatusBar } from "./StatusBar";
 import { useWorkspaceSize } from "./useWorkspaceSize";
 import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
 
@@ -542,23 +542,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     return { descriptions, sizes };
   }, [visual.nodes, rootAccountId]);
 
-  // Find in the loaded graph: matches by name among what is loaded (never
-  // the whole estate), and says so.
-  const [find, setFind] = useState("");
-  const findMatches = useMemo(() => {
-    const q = find.trim().toLowerCase();
-    if (q.length < 2) return null;
-    return visual.nodes.filter((v) => (descriptions.get(v.id)?.title ?? "").toLowerCase().includes(q) || v.members.some((m) => m.label.toLowerCase().includes(q)));
-  }, [find, visual.nodes, descriptions]);
+  // The status bar's hovered category: every other card is dimmed.
+  const [focusCategory, setFocusCategory] = useState<NodeCategory | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
 
   const traced = useMemo(() => new Set(tracedPath ?? []), [tracedPath]);
   const highlightedNodeIds = useMemo(() => {
-    if (!highlighted && !traced.size && !findMatches) return undefined;
+    if (!highlighted && !traced.size) return undefined;
     const set = new Set<string>();
     for (const vn of visual.nodes) if (vn.members.some((m) => highlighted?.nodeRefs.has(m.ref) || pathRefs.has(m.ref))) set.add(vn.id);
-    for (const vn of findMatches ?? []) set.add(vn.id);
     return set;
-  }, [highlighted, traced, pathRefs, visual.nodes, findMatches]);
+  }, [highlighted, traced, pathRefs, visual.nodes]);
   const highlightedEdgeIds = useMemo(() => {
     if (!highlighted && !traced.size) return undefined;
     const set = new Set<string>();
@@ -871,16 +865,24 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
   /* --------------------------- workspace and fullscreen ----------------------- */
 
-  const [fullscreen, setFullscreen] = useState(false);
+  // Expanded: the workspace fills the browser window (not the monitor) over
+  // the page. Escape leaves it once nothing is selected — the first Escape
+  // still steps back out of a selection.
+  const [expanded, setExpanded] = useState(false);
+  const hasSelection = params.has("node") || params.has("edge") || params.has("evidence");
   useEffect(() => {
-    const on = () => setFullscreen(document.fullscreenElement === workspaceRef.current);
-    document.addEventListener("fullscreenchange", on);
-    return () => document.removeEventListener("fullscreenchange", on);
-  }, []);
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void workspaceRef.current?.requestFullscreen?.().catch(() => announce("Full screen is not available in this browser"));
-  };
+    if (!expanded) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !hasSelection) setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [expanded, hasSelection]);
 
   const { width: wsWidth, height: wsHeight } = useWorkspaceSize(workspaceRef);
   const inline = wsWidth - CANVAS_MIN >= INSPECTOR_MIN;
@@ -1039,6 +1041,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           selection={selection}
           highlightedNodeIds={highlightedNodeIds}
           highlightedEdgeIds={highlightedEdgeIds}
+          focusCategory={focusCategory}
+          onZoomChange={setZoom}
           onSelectNode={selectNode}
           onSelectEdge={selectEdge}
           onOpenNode={openRef}
@@ -1082,8 +1086,13 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   return (
     <div
       ref={workspaceRef}
-      style={{ height: fullscreen ? "100vh" : wsHeight }}
-      className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)"
+      style={{ height: expanded ? undefined : wsHeight }}
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden bg-(--color-surface-raised)",
+        expanded ? "fixed inset-0 z-50" : "rounded-lg border border-(--color-border-subtle)",
+      )}
+      role={expanded ? "dialog" : undefined}
+      aria-label={expanded ? `Graph of ${rootName}` : undefined}
     >
       <div role="toolbar" aria-label="Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
@@ -1110,45 +1119,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
             </div>
           </div>
         ) : null}
-        {!showPaths ? (
-          <label className="relative flex min-w-[180px] max-w-xs flex-1 items-center">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-2 size-3.5 text-(--color-text-muted)" />
-            <input
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && findMatches?.[0]) selectNode(findMatches[0].id);
-                // Escape clears the text first; only an empty box lets it
-                // reach the selection.
-                if (e.key === "Escape" && find) {
-                  e.stopPropagation();
-                  setFind("");
-                }
-              }}
-              placeholder="Find in loaded graph"
-              aria-label="Find an object in the loaded graph"
-              className="h-8 w-full rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) pl-7 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)"
-            />
-            {findMatches ? (
-              <span className="ml-2 shrink-0 text-[11px] text-(--color-text-muted)" role="status">
-                {findMatches.length} of {visual.nodes.length} loaded
-              </span>
-            ) : null}
-          </label>
-        ) : null}
-        <p className="min-w-0 flex-1 truncate text-right text-xs text-(--color-text-muted)" title="Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated.">
-          Declared access · not evaluated
-        </p>
-        <div className="flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-0.5">
           {canvasControls ? (
             <>
-              <Button variant="ghost" size="sm" onClick={() => canvasApi.current?.fitGraph()} title="Frame everything drawn">
-                <Maximize2 className="size-3.5" /> Fit
+              <Button variant="ghost" size="icon" className="size-8" onClick={() => canvasApi.current?.fitGraph()} aria-label="Fit everything in view" title="Fit everything in view">
+                <Maximize2 className="size-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" aria-label="Layout options">
-                    <LayoutGrid className="size-3.5" /> Layout
+                  <Button variant="ghost" size="icon" className="relative size-8" aria-label="Layout" title="Layout">
+                    <LayoutGrid className="size-4" />
+                    {manualPositions.size ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-(--color-primary)" /> : null}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1159,10 +1140,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
               </DropdownMenu>
             </>
           ) : null}
-          <Button variant="ghost" size="icon" className="size-8" onClick={toggleFullscreen} aria-label={fullscreen ? "Exit full screen" : "Full screen"} title={fullscreen ? "Exit full screen" : "Full screen"}>
-            {fullscreen ? <Minimize className="size-3.5" /> : <Expand className="size-3.5" />}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => setExpanded((v) => !v)}
+            aria-pressed={expanded}
+            aria-label={expanded ? "Exit expanded view (Esc)" : "Expand to the window"}
+            title={expanded ? "Exit expanded view (Esc)" : "Expand to the window"}
+          >
+            {expanded ? <Minimize className="size-4" /> : <Expand className="size-4" />}
           </Button>
-          <Legend />
         </div>
       </div>
 
@@ -1185,6 +1173,19 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
         <div className="min-w-0 flex-1">{body}</div>
         {evidencePanel && inline ? evidencePanel : null}
       </div>
+      {!firstLoad && !hardFailure ? (
+        <StatusBar
+          nodes={visual.nodes}
+          edges={visual.edges}
+          descriptions={descriptions}
+          zoom={zoom}
+          focusCategory={focusCategory}
+          onFocusCategory={setFocusCategory}
+          onZoomIn={() => canvasApi.current?.zoomIn()}
+          onZoomOut={() => canvasApi.current?.zoomOut()}
+          canvas={!showPaths}
+        />
+      ) : null}
       {evidencePanel && !inline ? evidencePanel : null}
     </div>
   );

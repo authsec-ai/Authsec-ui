@@ -15,7 +15,7 @@
 
 import type { ReactNode } from "react";
 import { format } from "date-fns";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 
 import { objectPath, type GraphRef } from "@/app/api/igaGraphApi";
@@ -90,9 +90,31 @@ export function IgaPage({
 
   return (
     <div data-iga-page>
-      <ConsolePage title={title} description={description} actions={actions} variant={objectPage ? "object" : "default"}>
+      <ConsolePage
+        title={title}
+        description={description}
+        actions={
+          objectPage && viaPath ? (
+            // On an object page the way back sits in the header row, not a row of its own.
+            <>
+              <span className="inline-flex items-center rounded-full border border-(--color-border-subtle) text-xs">
+                <Link to={viaPath} className="inline-flex items-center gap-1 py-1 pl-2.5 pr-1.5 font-medium text-(--color-primary-text) hover:underline">
+                  <ArrowLeft className="size-3.5" /> {viaName ?? "Previous object"}
+                </Link>
+                <button type="button" onClick={dropVia} aria-label="Dismiss the way back" title="Dismiss" className="grid size-6 place-items-center rounded-full text-(--color-text-muted) hover:bg-(--color-surface-subtle)">
+                  <X className="size-3" />
+                </button>
+              </span>
+              {actions}
+            </>
+          ) : (
+            actions
+          )
+        }
+        variant={objectPage ? "object" : "default"}
+      >
         <LiveRegion />
-        {viaPath ? (
+        {viaPath && !objectPage ? (
           <div className="flex items-center gap-3 text-sm">
             <Link to={viaPath} className="inline-flex items-center gap-1.5 font-medium text-(--color-primary-text) hover:underline">
               <ArrowLeft className="size-4" /> Back to {viaName ?? "the previous object"}

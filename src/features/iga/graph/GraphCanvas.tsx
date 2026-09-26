@@ -33,12 +33,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   Background,
-  Controls,
   MarkerType,
   Position as Side,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   type NodeChange,
   type Viewport,
 } from "@xyflow/react";
@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
 import { GraphEdgeView, type GraphEdgeData, type RFGraphEdge } from "./edges";
 import { GraphNodeView, type FrontierControl, type GraphNodeData, type RFGraphNode } from "./nodes";
 import type { Position, Size } from "./layout";
-import type { NodeDescription } from "./nodeView";
+import type { NodeCategory, NodeDescription } from "./nodeView";
 import type { GraphSelection, VisualEdge, VisualNode } from "./types";
 
 const nodeTypes = {
@@ -82,6 +82,8 @@ export interface CanvasApi {
   revealStart: () => void;
   /** Pan (not zoom) until this drawn node or edge is in view. */
   bringIntoView: (sel: GraphSelection) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 }
 
 export interface GraphCanvasProps {
@@ -94,6 +96,8 @@ export interface GraphCanvasProps {
   selection: GraphSelection | null;
   highlightedNodeIds?: Set<string>;
   highlightedEdgeIds?: Set<string>;
+  /** The status bar's hovered category: every other card is dimmed. */
+  focusCategory?: NodeCategory | null;
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string) => void;
   onOpenNode: (ref: GraphRef) => void;
@@ -113,6 +117,8 @@ export interface GraphCanvasProps {
   /** Where the customer left this investigation, if they have been here before. */
   viewport?: Viewport;
   onViewportChange: (viewport: Viewport) => void;
+  /** The live zoom, for the status bar. */
+  onZoomChange?: (zoom: number) => void;
   onApi: (api: CanvasApi | null) => void;
 }
 
@@ -134,6 +140,8 @@ function GraphCanvasInner({
   selection,
   highlightedNodeIds,
   highlightedEdgeIds,
+  focusCategory,
+  onZoomChange,
   onSelectNode,
   onSelectEdge,
   onOpenNode,
@@ -158,6 +166,8 @@ function GraphCanvasInner({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const flow = useReactFlow();
   const scopeClass = `iga-graph-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const zoom = useStore((st) => st.transform[2]);
+  useEffect(() => onZoomChange?.(zoom), [zoom, onZoomChange]);
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   // Where a card is while it is being dragged; committed on release.
   const [dragging, setDragging] = useState<Map<string, Position>>(new Map());
@@ -208,10 +218,13 @@ function GraphCanvasInner({
             data,
             draggable: true,
             connectable: false,
-            className: highlightedNodeIds?.has(v.id) ? "iga-graph-highlight" : undefined,
+            className: cn(
+              highlightedNodeIds?.has(v.id) && "iga-graph-highlight",
+              focusCategory && (v.overflow || descriptions.get(v.id)!.category !== focusCategory) && "iga-graph-dim",
+            ) || undefined,
           } satisfies RFGraphNode;
         }),
-    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds],
+    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds, focusCategory],
   );
   const drawnIds = useMemo(() => new Set(rfNodes.map((n) => n.id)), [rfNodes]);
 
@@ -237,7 +250,8 @@ function GraphCanvasInner({
             target: e.to,
             data,
             focusable: false,
-            zIndex: selected || highlighted ? 1 : 0,
+            // Never raised: a raised line is drawn over every label.
+            zIndex: 0,
             markerEnd: {
               type: MarkerType.ArrowClosed,
               width: 14,
@@ -309,6 +323,8 @@ function GraphCanvasInner({
       fitGraph: () => void flow.fitView({ padding: 0.12, maxZoom: 1, duration }),
       revealStart: () => void revealStart(),
       bringIntoView,
+      zoomIn: () => void flow.zoomIn({ duration }),
+      zoomOut: () => void flow.zoomOut({ duration }),
     }),
     [flow, duration, revealStart, bringIntoView],
   );
@@ -422,10 +438,9 @@ function GraphCanvasInner({
     >
       <style>{`
         .${scopeClass} .iga-graph-highlight > div { box-shadow: 0 0 0 2px var(--color-text); }
-        .${scopeClass} .react-flow__node { transition: ${reducedMotion ? "none" : "transform 180ms ease"}; }
+        .${scopeClass} .react-flow__node { transition: ${reducedMotion ? "none" : "transform 180ms ease, opacity 150ms ease"}; }
         .${scopeClass} .react-flow__node.dragging { transition: none; z-index: 10; }
-        .${scopeClass} .react-flow__controls { box-shadow: var(--shadow-xs); border-radius: 6px; overflow: hidden; }
-        .${scopeClass} .react-flow__controls-button { width: 26px; height: 26px; }
+        .${scopeClass} .react-flow__node.iga-graph-dim { opacity: 0.28; }
       `}</style>
       <ReactFlow
         defaultViewport={viewport}
@@ -480,7 +495,6 @@ function GraphCanvasInner({
         maxZoom={1.5}
       >
         <Background gap={24} size={1} />
-        <Controls position="bottom-left" showInteractive={false} showFitView={false} />
       </ReactFlow>
       {lost ? (
         <div role="status" className="absolute inset-x-0 top-1/2 mx-auto flex w-fit -translate-y-1/2 flex-col items-center gap-2 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-sm shadow-(--shadow-sm)">

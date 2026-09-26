@@ -41,7 +41,7 @@ export function ConsolePage({
     <div data-cr>
       <div className={variant === "object" ? "console-page console-page--object" : "console-page"}>
         <header className="section-header">
-          <div className="min-w-0">
+          <div className={variant === "object" ? "sh-main min-w-0" : "min-w-0"}>
             <h1 className="sh-title">{title}</h1>
             {description ? <p className="sh-desc">{description}</p> : null}
           </div>
@@ -49,7 +49,7 @@ export function ConsolePage({
             <div className="flex shrink-0 items-center gap-2">{actions}</div>
           ) : null}
         </header>
-        <div className="space-y-4">{children}</div>
+        <div className={variant === "object" ? "space-y-3" : "space-y-4"}>{children}</div>
       </div>
     </div>
   );
