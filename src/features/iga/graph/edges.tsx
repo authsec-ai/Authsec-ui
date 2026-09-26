@@ -61,9 +61,9 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
   const ended = e.state === "ended";
   const mixed = mixedStateText(e.members.map((m) => m.state ?? "current"));
   const marked = markedLimitations(e);
-  const showWords = data.isSelected || data.hovered || data.highlighted || focused;
+  // Every line says what it is; hover and focus only emphasise it.
+  const emphasised = data.isSelected || data.hovered || data.highlighted || focused;
   const deny = e.summary?.effect === "deny";
-  const hasMarks = grants > 1 || marked.length > 0 || e.closesCycle || e.crossesAccount;
 
   const stroke = data.isSelected
     ? "var(--color-primary)"
@@ -121,17 +121,21 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
             onBlur={() => setFocused(false)}
             aria-label={description}
             aria-pressed={data.isSelected}
-            title={description}
+            // The label already says the verb; a tooltip only for what it adds.
+            title={description !== edgeVerb(e) ? description : undefined}
             className={cn(
               "group flex items-center gap-1 rounded-full text-[11px] font-medium outline-none",
               "focus-visible:ring-2 focus-visible:ring-(--color-primary)",
-              showWords || hasMarks
-                ? "border bg-(--color-surface-raised) px-1.5 py-px shadow-(--shadow-xs)"
-                : "size-2.5 border border-(--color-border-strong) bg-(--color-surface-raised) hover:size-3 focus-visible:size-3",
-              data.isSelected ? "border-(--color-primary) text-(--color-primary-text)" : "border-(--color-border-subtle) text-(--color-text-muted)",
+              "border bg-(--color-surface-raised) px-1.5 py-px",
+              emphasised && "shadow-(--shadow-xs)",
+              data.isSelected
+                ? "border-(--color-primary) text-(--color-primary-text)"
+                : emphasised
+                  ? "border-(--color-border-strong) text-(--color-text)"
+                  : "border-(--color-border-subtle) text-(--color-text-muted)",
             )}
           >
-            {showWords ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
+            <span className="whitespace-nowrap">{edgeVerb(e)}</span>
             {grants > 1 ? <span className="tabular-nums">×{grants}</span> : null}
             {marked.length ? <span className="text-(--color-warning-text)" aria-hidden="true">!</span> : null}
             {e.closesCycle ? <span aria-hidden="true">↻</span> : null}

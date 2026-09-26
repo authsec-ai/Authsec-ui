@@ -35,6 +35,7 @@ import {
   Background,
   Controls,
   MarkerType,
+  Position as Side,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -194,6 +195,16 @@ function GraphCanvasInner({
             // the card itself all use the same box.
             width: size.width,
             height: size.height,
+            // React Flow forgets a node's measured handles whenever it gets a
+            // new node object without `measured` — every drag frame, hover
+            // and selection here — and a line with no handles is not drawn.
+            // Stating the size and the two anchor points makes the lines
+            // independent of that DOM measurement.
+            measured: { width: size.width, height: size.height },
+            handles: [
+              { type: "target", position: Side.Left, x: 0, y: size.height / 2 - 0.5, width: 1, height: 1 },
+              { type: "source", position: Side.Right, x: size.width - 1, y: size.height / 2 - 0.5, width: 1, height: 1 },
+            ],
             data,
             draggable: true,
             connectable: false,
