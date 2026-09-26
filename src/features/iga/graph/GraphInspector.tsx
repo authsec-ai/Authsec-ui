@@ -85,7 +85,7 @@ export function GraphInspector({
             <ArrowLeft className="size-3" /> {subject.backTo}
           </button>
         ) : null}
-        <h2 ref={headingRef} tabIndex={-1} id="graph-evidence-heading" className="break-words text-sm font-semibold leading-snug text-(--color-text) outline-none">
+        <h2 ref={headingRef} tabIndex={-1} id="graph-evidence-heading" className="break-words text-[15px] font-semibold leading-snug text-(--color-text) outline-none">
           {title}
         </h2>
         <p className="mt-0.5 text-xs text-(--color-text-muted)">{subtitle}</p>

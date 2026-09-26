@@ -65,7 +65,7 @@ export function CursorPager({
   const next = meta.next_cursor;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--color-border-subtle) px-4 py-3 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--color-border-subtle) px-4 py-2 text-xs">
       <p className="tabular-nums text-(--color-text-muted)">
         {count}
         {incompleteAccounts.length > 0 ? (
@@ -92,24 +92,29 @@ export function CursorPager({
             Retry
           </Button>
         ) : null}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onPrev}
-          disabled={shownIndex === 0 && !previousPage}
-          aria-label="Previous page"
-        >
-          <ChevronLeft className="size-4" /> Prev
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => next && onNext(next)}
-          disabled={!next || !!failure || previousPage}
-          aria-label="Next page"
-        >
-          Next <ChevronRight className="size-4" />
-        </Button>
+        {/* One page is the whole answer: no paging controls to click. */}
+        {shownIndex === 0 && !previousPage && !next ? null : (
+          <span className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={shownIndex === 0 && !previousPage}
+              aria-label="Previous page"
+              className="grid h-7 w-8 place-items-center text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text) disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => next && onNext(next)}
+              disabled={!next || !!failure || previousPage}
+              aria-label="Next page"
+              className="grid h-7 w-8 place-items-center border-l border-(--color-border-subtle) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text) disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </span>
+        )}
       </div>
     </div>
   );

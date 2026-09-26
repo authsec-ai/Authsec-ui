@@ -33,6 +33,8 @@ import { usePaging } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { POLICY_KIND_LABEL, statementLabel } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
+import { ActionList } from "../shared/components/ActionList";
+import { ClaimRow } from "../shared/components/Panel";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { IdentityName } from "../shared/components/IdentityName";
@@ -60,15 +62,14 @@ function Restrictions({
       <p className="mb-2 text-xs text-(--color-text-muted)">{note}</p>
       <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
         {rows.map((r) => (
-          <li key={r.statement.ref} className="space-y-1 px-4 py-3 text-sm">
-            <p>
-              <span className="font-medium">{r.policy.name}</span>
-              <span className="text-xs text-(--color-text-muted)">
-                {" "}
-                ({POLICY_KIND_LABEL[r.policy.kind]}, {statementLabel(r.statement)})
-              </span>{" "}
-              <span className="font-mono text-xs">{r.statement.actions.join(", ")}</span>
+          <li key={r.statement.ref} className="space-y-1.5 px-4 py-3">
+            <p className="text-[13px]">
+              <span className="font-medium text-(--color-text)">{r.policy.name}</span>
+              <span className="ml-2 text-xs text-(--color-text-muted)">
+                {POLICY_KIND_LABEL[r.policy.kind]} policy, {statementLabel(r.statement)}
+              </span>
             </p>
+            <ActionList actions={r.statement.actions} />
             <p className="text-xs text-(--color-text-muted)">
               Held by {r.holders.length}
               {r.holders_more ? "+" : ""} {r.holders.length === 1 && !r.holders_more ? "identity" : "identities"}
@@ -124,8 +125,23 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
           {view.rows.map((a) => {
             const path = objectPath(a.holder.ref);
             return (
-              <li key={`${a.holder.ref}:${a.grant.claim}:${a.via_group?.ref ?? ""}`} className="space-y-1.5 px-4 py-3 text-sm">
-                <IdentityName identity={a.holder} from={from} />
+              <li key={`${a.holder.ref}:${a.grant.claim}:${a.via_group?.ref ?? ""}`} className="space-y-2 px-4 py-3">
+                <ClaimRow
+                  title={<IdentityName identity={a.holder} from={from} />}
+                  facts={
+                    <span className="flex flex-col items-end gap-1">
+                      <ClaimFacts claim={a.grant.claim} basis="declared" state={a.state} />
+                      {path ? (
+                        <Link
+                          to={`${path}/graph?target=${encodeURIComponent(resource.ref)}`}
+                          className="text-xs font-medium text-(--color-primary-text) hover:underline"
+                        >
+                          View the path in graph
+                        </Link>
+                      ) : null}
+                    </span>
+                  }
+                />
                 {a.via_group ? (
                   <p className="text-xs text-(--color-text-muted)">
                     Through group{" "}
@@ -138,29 +154,18 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
                     )}
                   </p>
                 ) : null}
-                <p>
-                  <span className="font-mono text-xs">{a.statement.actions.join(", ") || "—"}</span>
-                  <span className="text-(--color-text-muted)"> · granted by </span>
-                  <span className="font-medium">{a.policy.name}</span>
-                  <span className="text-xs text-(--color-text-muted)">
-                    {" "}
-                    ({POLICY_KIND_LABEL[a.policy.kind]}, {statementLabel(a.statement)})
-                  </span>
-                </p>
-                {a.statement.conditional ? (
-                  <p className="text-xs text-(--color-text-muted)">The statement has conditions, which were not evaluated.</p>
-                ) : null}
-                <ClaimFacts claim={a.grant.claim} basis="declared" state={a.state} />
+                <div className="space-y-1 rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle)/40 px-3 py-2">
+                  {a.statement.actions.length ? <ActionList actions={a.statement.actions} /> : null}
+                  <p className="text-xs text-(--color-text-muted)">
+                    Granted by <span className="font-medium text-(--color-text)">{a.policy.name}</span> · {POLICY_KIND_LABEL[a.policy.kind]} policy,{" "}
+                    {statementLabel(a.statement)}
+                  </p>
+                  {a.statement.conditional ? (
+                    <p className="text-xs text-(--color-warning-text)">The statement has conditions, which were not evaluated.</p>
+                  ) : null}
+                </div>
                 {a.via_group ? (
                   <ClaimFacts claim={a.via_group.membership.claim} type="member of" state={a.via_group.membership.state} />
-                ) : null}
-                {path ? (
-                  <Link
-                    to={`${path}/graph?target=${encodeURIComponent(resource.ref)}`}
-                    className="text-xs font-semibold text-(--color-primary-text) hover:underline"
-                  >
-                    View the path in graph
-                  </Link>
                 ) : null}
               </li>
             );

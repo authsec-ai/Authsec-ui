@@ -3,16 +3,15 @@
  * first; the ARN and the raw evidence are one click away, not the headline.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Copy } from "lucide-react";
 
 import { igaGraphApi, objectPath, refId, useGetGraphWorkloadIdentitiesQuery, type WorkloadDetail } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import { CopyField, DetailGrid, DetailRow, DrawerSection } from "@/components/console/detail";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
-import { CardContent } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
+import { copyToClipboard } from "@/lib/clipboard";
 
 import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountLabel, agoText, dayText } from "../shared/labels";
 import { classifyGraphError } from "../shared/graphErrors";
@@ -20,6 +19,7 @@ import { viaLink } from "../shared/links";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClassificationHistory } from "../classification/ClassificationHistory";
 import { ClassifyDialog } from "../classification/ClassifyDialog";
+import { Fact, Facts, Meta, Panel } from "../shared/components/Panel";
 
 
 function ClassificationText({ w }: { w: WorkloadDetail }) {
@@ -95,23 +95,19 @@ function IdentitiesSummary({ ws, w }: { ws: string; w: WorkloadDetail }) {
   // never "none configured".
   const pending = !failure && !q.currentData;
   const from = { ref: w.ref, name: w.name };
+  const row = (label: string, value: ReactNode, meaning?: string) => (
+    <li className="space-y-0.5 px-4 py-3">
+      <p className="text-xs text-(--color-text-muted)">{label}</p>
+      <div className="text-[13px] leading-5 text-(--color-text)">{value}</div>
+      {meaning ? <Meta>{meaning}</Meta> : null}
+    </li>
+  );
   return (
-    <DetailGrid>
-      <DetailRow
-        full
-        label={ecs ? "Application identity (task role)" : "Runs as"}
-        value={
-          <span className="flex flex-col gap-0.5">
-            <RunsAs w={w} />
-            {ecs ? <span className="text-xs text-(--color-text-muted)">What the application code in the task runs as.</span> : null}
-          </span>
-        }
-      />
-      {ecs ? (
-        <DetailRow
-          full
-          label="Supporting infrastructure (task execution role)"
-          value={
+    <ul className="divide-y divide-(--color-border-subtle)">
+      {row(ecs ? "Application identity · task role" : "Runs as", <RunsAs w={w} />, ecs ? "What the application code in the task runs as." : undefined)}
+      {ecs
+        ? row(
+            "Supporting infrastructure · task execution role",
             pending ? (
               <span className="text-(--color-text-muted)">Loading…</span>
             ) : failure ? (
@@ -126,7 +122,7 @@ function IdentitiesSummary({ ws, w }: { ws: string; w: WorkloadDetail }) {
                 {infra.map((r) => {
                   const path = objectPath(r.identity.ref);
                   return path ? (
-                    <Link key={r.claim} {...viaLink(path, from)} className="font-medium text-(--color-primary-text) hover:underline">
+                    <Link key={r.claim} {...viaLink(path, from)} className="w-fit font-medium text-(--color-primary-text) hover:underline">
                       {r.identity.name}
                     </Link>
                   ) : (
@@ -136,17 +132,14 @@ function IdentitiesSummary({ ws, w }: { ws: string; w: WorkloadDetail }) {
                 {other?.next_cursor ? (
                   <span className="text-xs text-(--color-text-muted)">More roles are linked than this page shows — open the graph to see them all.</span>
                 ) : null}
-                <span className="text-xs text-(--color-text-muted)">
-                  Used by the ECS agent to pull images and write logs. The application does not run as it.
-                </span>
               </span>
             ) : (
               <span className="text-(--color-text-muted)">None configured, or not resolved to a role in a connected account.</span>
-            )
-          }
-        />
-      ) : null}
-    </DetailGrid>
+            ),
+            infra.length ? "Used by the ECS agent to pull images and write logs. The application does not run as it." : undefined,
+          )
+        : null}
+    </ul>
   );
 }
 
@@ -182,175 +175,170 @@ export function WorkloadOverview({
         />
       ) : null}
 
-      <TableCard>
-        <CardContent className="space-y-6">
-          <DrawerSection
-            label="What it is"
-            action={
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <Panel
+            title="What it is"
+            actions={
               editable ? (
                 w.classification === "classified_agent" ? (
                   <Button variant="outline" size="sm" onClick={() => setDialog("undo")}>
                     Undo classification
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={() => setDialog("classify")}>
+                  <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => setDialog("classify")}>
                     Classify as agent
                   </Button>
                 )
               ) : undefined
             }
           >
-            <DetailGrid>
-              <DetailRow
-                full
-                label="Classification"
-                value={
-                  <span className="flex flex-col gap-1.5">
-                    <span>
-                      <StatusBadge tone={CLASSIFICATION_TONE[w.classification]}>
-                        {CLASSIFICATION_LABEL[w.classification]}
-                      </StatusBadge>
-                    </span>
-                    <span>
-                      <ClassificationText w={w} />
-                    </span>
-                    {w.classification !== "provider_native_agent" ? (
-                      <button
-                        type="button"
-                        onClick={() => setHistory((h) => !h)}
-                        aria-expanded={history}
-                        className="w-fit text-xs font-semibold text-(--color-primary-text) hover:underline"
-                      >
-                        {history ? "Hide decision history" : "Decision history"}
-                      </button>
-                    ) : null}
+            <Facts>
+              <Fact label="Classification">
+                <span className="flex flex-col items-start gap-1.5">
+                  <StatusBadge tone={CLASSIFICATION_TONE[w.classification]}>{CLASSIFICATION_LABEL[w.classification]}</StatusBadge>
+                  <span>
+                    <ClassificationText w={w} />
                   </span>
-                }
-              />
-              {history ? (
-                <div className="col-span-2">
-                  <ClassificationHistory ws={ws} id={refId(w.ref)} />
-                </div>
-              ) : null}
+                  {w.classification !== "provider_native_agent" ? (
+                    <button
+                      type="button"
+                      onClick={() => setHistory((h) => !h)}
+                      aria-expanded={history}
+                      className="text-xs font-medium text-(--color-primary-text) hover:underline"
+                    >
+                      {history ? "Hide decision history" : "Decision history"}
+                    </button>
+                  ) : null}
+                </span>
+              </Fact>
               {w.instances?.state === "not_collected" ? (
-                <DetailRow
-                  full
-                  label="Instances"
-                  value={
-                    w.runtime_kind === "bedrock_agent"
+                <Fact label="Instances">
+                  <span className="text-(--color-text-muted)">
+                    {w.runtime_kind === "bedrock_agent"
                       ? "Not collected. Aliases, which separate a live agent from a canary, are not read yet."
-                      : "Not collected."
-                  }
-                />
+                      : "Not collected."}
+                  </span>
+                </Fact>
               ) : null}
-            </DetailGrid>
-          </DrawerSection>
+            </Facts>
+            {history ? (
+              <div className="mt-3">
+                <ClassificationHistory ws={ws} id={refId(w.ref)} />
+              </div>
+            ) : null}
+          </Panel>
 
-          <DrawerSection
-            label="Identities"
-            action={
-              <span className="flex gap-3">
-                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/graph`} className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+          <Panel
+            title="Identities"
+            flush
+            actions={
+              <>
+                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/graph`} className="font-medium text-(--color-primary-text) hover:underline">
                   Open graph
                 </Link>
-                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/identities`} className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+                <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/identities`} className="font-medium text-(--color-primary-text) hover:underline">
                   All identities
                 </Link>
-              </span>
+              </>
             }
           >
             <IdentitiesSummary ws={ws} w={w} />
-          </DrawerSection>
+          </Panel>
+        </div>
 
-          <DrawerSection
-            label="How we know"
-            action={
-              <Link to="/iga/cloud/compute" className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+        <div className="space-y-4">
+          <Panel
+            title="How we know"
+            actions={
+              <Link to="/iga/cloud/compute" className="font-medium text-(--color-primary-text) hover:underline">
                 Raw inventory
               </Link>
             }
           >
-            <DetailGrid>
-              <CopyField label="ARN" value={w.arn} />
-              <DetailRow label="First seen" value={dayText(w.first_seen_at)} />
-              <DetailRow
-                label="Last confirmed"
-                value={agoText(w.last_confirmed_at)}
-              />
-              <DetailRow
-                full
-                label="Identity continuity"
-                value={
-                  w.continuity === "immutable"
+            <Facts>
+              <Fact label="ARN">
+                <span className="flex items-start gap-2">
+                  <span className="min-w-0 break-all font-mono text-xs leading-5">{w.arn}</span>
+                  <button
+                    type="button"
+                    aria-label="Copy the ARN"
+                    title="Copy"
+                    onClick={() => void copyToClipboard(w.arn, "ARN")}
+                    className="grid size-5 shrink-0 place-items-center rounded text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
+                  >
+                    <Copy className="size-3" />
+                  </button>
+                </span>
+              </Fact>
+              <Fact label="First seen">{dayText(w.first_seen_at)}</Fact>
+              <Fact label="Last confirmed">{agoText(w.last_confirmed_at)}</Fact>
+              <Fact label="Found by">
+                {w.sources.length ? (
+                  <span className="flex flex-col gap-1">
+                    {w.sources.map((s) => (
+                      <span key={s.presence} className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {accountLabel(s.account)}
+                          {s.account ? <span className="ml-1.5 font-mono text-xs text-(--color-text-muted)">{s.account.id}</span> : null}
+                        </span>
+                        {s.state !== "current" ? <StatusBadge tone="warning">{s.state}</StatusBadge> : null}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="text-(--color-text-muted)">No current source</span>
+                )}
+              </Fact>
+              <Fact label="Continuity">
+                <span className="text-(--color-text-muted)">
+                  {w.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation, so a ${runtime} deleted and recreated under the same name is a new workload.`
-                    : `Same name only. AWS gives this ${runtime} no creation id we can read, so one deleted and recreated under this name looks the same to us.`
-                }
-              />
-              <DetailRow
-                full
-                label="Found by"
-                value={
-                  w.sources.length ? (
-                    <span className="flex flex-col gap-1">
-                      {w.sources.map((s) => (
-                        <span key={s.presence} className="flex items-center gap-2">
-                          <span>
-                            {accountLabel(s.account)}
-                            {s.account ? <span className="ml-1 font-mono text-xs text-(--color-text-muted)">{s.account.id}</span> : null}
-                          </span>
-                          {s.state !== "current" ? <StatusBadge tone="warning">{s.state}</StatusBadge> : null}
+                    : `Same name only. AWS gives this ${runtime} no creation id we can read, so one deleted and recreated under this name looks the same to us.`}
+                </span>
+              </Fact>
+            </Facts>
+          </Panel>
+
+          {attrs.status || attrs.foundation_model || attrs.env_var_names?.length || attrs.gateway_targets?.length ? (
+            <Panel title="As AWS describes it">
+              <Facts>
+                {attrs.status ? <Fact label="Status">{attrs.status}</Fact> : null}
+                {attrs.foundation_model ? (
+                  <Fact label="Foundation model" mono>
+                    {attrs.foundation_model}
+                  </Fact>
+                ) : null}
+                {attrs.env_var_names?.length ? (
+                  <Fact label="Environment">
+                    <span className="flex flex-wrap gap-1">
+                      {attrs.env_var_names.map((n) => (
+                        <code key={n} className="rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs">
+                          {n}
+                        </code>
+                      ))}
+                    </span>
+                    <span className="mt-1 block text-xs text-(--color-text-muted)">Variable names only. Values are never collected.</span>
+                  </Fact>
+                ) : null}
+                {attrs.gateway_targets?.length ? (
+                  <Fact label="Gateway targets">
+                    <span className="flex flex-col divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
+                      {attrs.gateway_targets.map((t) => (
+                        <span key={t.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                          <span className="font-medium">{t.name}</span>
+                          <span className="text-xs text-(--color-text-muted)">{t.type}</span>
+                          <span className="ml-auto text-xs text-(--color-text-muted)">{t.status}</span>
                         </span>
                       ))}
                     </span>
-                  ) : (
-                    "No current source"
-                  )
-                }
-              />
-            </DetailGrid>
-          </DrawerSection>
-
-          {attrs.status || attrs.foundation_model || attrs.env_var_names?.length || attrs.gateway_targets?.length ? (
-            <DrawerSection label="As AWS describes it">
-              <DetailGrid>
-                {attrs.status ? <DetailRow label="Status" value={attrs.status} /> : null}
-                {attrs.foundation_model ? (
-                  <DetailRow label="Foundation model" value={attrs.foundation_model} mono />
+                  </Fact>
                 ) : null}
-                {attrs.env_var_names?.length ? (
-                  <DetailRow
-                    full
-                    label="Environment variable names"
-                    value={
-                      <span className="flex flex-col gap-1">
-                        <span className="font-mono text-xs">{attrs.env_var_names.join(", ")}</span>
-                        <span className="text-xs text-(--color-text-muted)">Names only. Values are never collected.</span>
-                      </span>
-                    }
-                  />
-                ) : null}
-                {attrs.gateway_targets?.length ? (
-                  <DetailRow
-                    full
-                    label="Gateway targets"
-                    value={
-                      <span className="flex flex-col divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
-                        {attrs.gateway_targets.map((t) => (
-                          <span key={t.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                            <span className="font-medium">{t.name}</span>
-                            <span className="text-xs text-(--color-text-muted)">{t.type}</span>
-                            <span className="ml-auto text-xs text-(--color-text-muted)">{t.status}</span>
-                          </span>
-                        ))}
-                      </span>
-                    }
-                  />
-                ) : null}
-              </DetailGrid>
-            </DrawerSection>
+              </Facts>
+            </Panel>
           ) : null}
-        </CardContent>
-      </TableCard>
+        </div>
+      </div>
 
       {dialog ? (
         <ClassifyDialog workload={w} mode={dialog} open onOpenChange={(o) => !o && setDialog(null)} />

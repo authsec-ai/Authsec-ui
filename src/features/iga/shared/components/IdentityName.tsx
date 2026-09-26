@@ -13,18 +13,18 @@ export function IdentityName({ identity, from }: { identity: IdentitySummary; fr
   return (
     <div className="min-w-0">
       {path ? (
-        <Link {...viaLink(path, from)} className="font-medium text-(--color-primary-text) hover:underline">
+        <Link {...viaLink(path, from)} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
           {identity.name}
         </Link>
       ) : (
-        <span className="font-medium">{identity.name}</span>
+        <span className="text-[13px] font-medium">{identity.name}</span>
       )}
       <span className="ml-2 text-xs text-(--color-text-muted)">
         {IDENTITY_KIND_LABEL[identity.kind] ?? identity.kind.replace(/_/g, " ")}
         {identity.account || identity.kind.startsWith("iam_") ? ` · ${accountLabel(identity.account)}` : ""}
         {identity.account && !identity.account.connected ? " · account not connected" : ""}
       </span>
-      <p className="mt-0.5 break-all font-mono text-xs text-(--color-text-muted)">{identity.arn}</p>
+      <p className="mt-0.5 break-all font-mono text-[11.5px] leading-5 text-(--color-text-muted)">{identity.arn}</p>
     </div>
   );
 }

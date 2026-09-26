@@ -32,6 +32,7 @@ import { usePaging } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { POLICY_KIND_LABEL, RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, statementLabel } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
+import { ActionList } from "../shared/components/ActionList";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { viaLink } from "../shared/links";
@@ -66,58 +67,67 @@ function ResourceRow({
   const runsAs = workload.execution_role.state === "resolved" ? workload.execution_role : null;
   const graph = `/iga/estate/${encodeURIComponent(refId(workload.ref))}/graph?target=${encodeURIComponent(r.ref)}`;
   return (
-    <li className="space-y-3 px-4 py-4">
-      <div className="flex flex-wrap items-start gap-3">
+    <li className="space-y-3 px-4 py-3.5">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
         <div className="min-w-0 flex-1">
           {path ? (
-            <Link {...viaLink(path, from)} className="break-all font-mono text-sm text-(--color-primary-text) hover:underline">
+            <Link {...viaLink(path, from)} className="break-all font-mono text-[13px] font-medium text-(--color-primary-text) hover:underline">
               {r.text}
             </Link>
           ) : (
-            <span className="break-all font-mono text-sm">{r.text}</span>
+            <span className="break-all font-mono text-[13px] font-medium">{r.text}</span>
           )}
-          <p className="mt-0.5 text-xs text-(--color-text-muted)">
+          <p className="mt-0.5 text-xs text-(--color-text-muted)" title={RESOURCE_KIND_NOTE[r.kind]}>
             {accountLabel(r.account)} · {r.region ?? "Region not stated"}
             {r.service ? ` · ${r.service}` : ""}
           </p>
         </div>
-        <StatusBadge tone={r.kind === "external" ? "warning" : "neutral"}>{RESOURCE_KIND_LABEL[r.kind]}</StatusBadge>
-        {graphAvailable ? (
-          <Link to={graph} className="shrink-0 text-xs font-semibold text-(--color-primary-text) hover:underline">
-            View in graph
-          </Link>
-        ) : null}
+        <span className="flex shrink-0 items-center gap-3">
+          <StatusBadge tone={r.kind === "external" ? "warning" : "neutral"} title={RESOURCE_KIND_NOTE[r.kind]}>
+            {RESOURCE_KIND_LABEL[r.kind]}
+          </StatusBadge>
+          {graphAvailable ? (
+            <Link to={graph} className="text-xs font-medium text-(--color-primary-text) hover:underline">
+              View in graph
+            </Link>
+          ) : null}
+        </span>
       </div>
-      <p className="text-xs text-(--color-text-muted)">{RESOURCE_KIND_NOTE[r.kind]}</p>
 
-      <ul className="space-y-2 border-l-2 border-(--color-border-subtle) pl-3">
+      <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle)/40">
         {row.grants.map((g) => (
-          <li key={g.claim} className="space-y-1 text-sm">
-            <p>
-              <span className="font-mono text-xs">{g.statement.actions.join(", ") || "—"}</span>
-              {g.statement.not_actions.length ? (
-                <span className="text-xs text-(--color-text-muted)"> · every action except {g.statement.not_actions.join(", ")}</span>
-              ) : null}
-              <span className="text-(--color-text-muted)"> · granted by </span>
-              <span className="font-medium">{g.policy.name}</span>
-              <span className="text-xs text-(--color-text-muted)">
-                {" "}
-                ({POLICY_KIND_LABEL[g.policy.kind]}, {statementLabel(g.statement)})
-              </span>
-              {runsAs && g.via_identity === runsAs.identity && runsAs.name ? (
-                <span className="text-(--color-text-muted)"> · via {runsAs.name}</span>
-              ) : null}
-              {g.via_group ? <span className="text-(--color-text-muted)"> · through a group it is a member of</span> : null}
-            </p>
+          <li key={g.claim} className="space-y-1.5 px-3 py-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1.5">
+              <div className="min-w-0 space-y-1">
+                {g.statement.actions.length ? <ActionList actions={g.statement.actions} /> : null}
+                {g.statement.not_actions.length ? (
+                  <p className="text-xs text-(--color-text-muted)">
+                    Every action except <span className="font-mono text-(--color-text)">{g.statement.not_actions.join(", ")}</span>
+                  </p>
+                ) : null}
+                <p className="text-xs text-(--color-text-muted)">
+                  Granted by <span className="font-medium text-(--color-text)">{g.policy.name}</span>
+                  {" · "}
+                  {POLICY_KIND_LABEL[g.policy.kind]} policy, {statementLabel(g.statement)}
+                  {runsAs && g.via_identity === runsAs.identity && runsAs.name ? (
+                    <>
+                      {" · via "}
+                      <span className="text-(--color-text)">{runsAs.name}</span>
+                    </>
+                  ) : null}
+                  {g.via_group ? " · through a group it is a member of" : null}
+                </p>
+              </div>
+              <ClaimFacts claim={g.claim} basis="declared" state={g.state} confirmedAt={g.last_confirmed_at} />
+            </div>
             {g.exclusions.length ? (
               <p className="text-xs text-(--color-text-muted)">
                 All resources except {g.exclusions.map((x) => x.text).join(", ")}.
               </p>
             ) : null}
             {g.statement.conditional ? (
-              <p className="text-xs text-(--color-text-muted)">The statement has conditions, which were not evaluated.</p>
+              <p className="text-xs text-(--color-warning-text)">The statement has conditions, which were not evaluated.</p>
             ) : null}
-            <ClaimFacts claim={g.claim} basis="declared" state={g.state} confirmedAt={g.last_confirmed_at} />
           </li>
         ))}
       </ul>

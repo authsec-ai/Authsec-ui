@@ -3,12 +3,10 @@
 import { Link } from "react-router-dom";
 
 import { refId, type GraphRef, type IdentityDetail } from "@/app/api/igaGraphApi";
-import { CopyField, DetailGrid, DetailRow, DrawerSection } from "@/components/console/detail";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
-import { CardContent } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
 
 import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, accountWithId, agoText, countText, dayText } from "../shared/labels";
+import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
 
 
 export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) {
@@ -34,21 +32,16 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
         />
       ) : null}
 
-      <TableCard>
-        <CardContent className="space-y-6">
-          <DrawerSection label="What it is">
-            <DetailGrid>
-              <DetailRow label="Kind" value={kind} />
-              <DetailRow
-                label="Account"
-                value={
+      {/* Panels flow into two balanced columns on a wide screen. */}
+      <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          <Panel title="What it is">
+            <Facts>
+              <Fact label="Kind">{kind}</Fact>
+              <Fact label="Account">{
                   accountWithId(i.account) ?? "Not known"
-                }
-              />
-              {attrs.path ? <DetailRow label="Path" value={attrs.path} mono /> : null}
-              <DetailRow
-                label={DIRECT_BINDINGS_LABEL}
-                value={
+                }</Fact>
+              {attrs.path ? <Fact label="Path" mono>{attrs.path}</Fact> : null}
+              <Fact label={DIRECT_BINDINGS_LABEL}>{
                   i.kind === "iam_group" ? (
                     "Groups are not run as"
                   ) : (
@@ -57,14 +50,13 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
                       <span className="block text-xs text-(--color-text-muted)">{DIRECT_BINDINGS_MEANING}</span>
                     </span>
                   )
-                }
-              />
-              <CopyField label="ARN" value={i.arn} />
-            </DetailGrid>
-          </DrawerSection>
+                }</Fact>
+              <Fact label="ARN"><CopyValue value={i.arn} /></Fact>
+            </Facts>
+          </Panel>
 
           {attrs.permissions_boundary_arn || attrs.trust_has_deny || attrs.trust_has_not_principal ? (
-            <DrawerSection label="Restrictions (listed, not evaluated)">
+            <Panel title="Restrictions (listed, not evaluated)">
               <ul className="list-disc space-y-1 pl-5 text-sm">
                 {attrs.permissions_boundary_arn ? (
                   <li>
@@ -77,11 +69,11 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
                   <li>Its trust policy uses NotPrincipal, so who it admits could not be resolved.</li>
                 ) : null}
               </ul>
-            </DrawerSection>
+            </Panel>
           ) : null}
 
           {i.credentials?.length ? (
-            <DrawerSection label="Access keys">
+            <Panel title="Access keys">
               <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
                 {i.credentials.map((c) => (
                   <li key={c.key_id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
@@ -97,37 +89,29 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
                 ))}
               </ul>
               <p className="mt-2 text-xs text-(--color-text-muted)">Key ids only. Secrets are never collected.</p>
-            </DrawerSection>
+            </Panel>
           ) : null}
 
-          <DrawerSection
-            label="How we know"
-            action={
+          <Panel title="How we know"
+            actions={
               <Link
                 to={connectorId ? `/iga/cloud/identities?account=${encodeURIComponent(connectorId)}` : "/iga/cloud/identities"}
-                className="text-xs font-semibold text-(--color-primary-text) hover:underline"
+                className="font-medium text-(--color-primary-text) hover:underline"
               >
                 Raw inventory
               </Link>
             }
           >
-            <DetailGrid>
-              <DetailRow label="First seen" value={dayText(i.first_seen_at)} />
-              <DetailRow label="Last confirmed" value={agoText(i.last_confirmed_at)} />
-              <DetailRow
-                full
-                label="Identity continuity"
-                value={
+            <Facts>
+              <Fact label="First seen">{dayText(i.first_seen_at)}</Fact>
+              <Fact label="Last confirmed">{agoText(i.last_confirmed_at)}</Fact>
+              <Fact label="Identity continuity">{
                   i.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation${i.immutable_key ? ` (${i.immutable_key})` : ""}, so an ${kind} deleted and recreated under the same name is a new identity.`
                     : "Same name only. AWS gives this identity no creation id we can read, so one recreated under this name looks the same to us."
-                }
-              />
+                }</Fact>
               {tags.length ? (
-                <DetailRow
-                  full
-                  label="Tags"
-                  value={
+                <Fact label="Tags">{
                     <span className="flex flex-wrap gap-1.5">
                       {tags.map(([k, v]) => (
                         <span key={k} className="rounded bg-(--color-surface-subtle) px-1.5 py-0.5 font-mono text-[11px]">
@@ -135,13 +119,11 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
                         </span>
                       ))}
                     </span>
-                  }
-                />
+                  }</Fact>
               ) : null}
-            </DetailGrid>
-          </DrawerSection>
-        </CardContent>
-      </TableCard>
+            </Facts>
+          </Panel>
+      </div>
     </div>
   );
 }

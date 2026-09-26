@@ -17,7 +17,7 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Info } from "lucide-react";
 
 import { igaGraphApi, useGetGraphEvidenceQuery, type Evidence, type EvidenceFact, type EvidenceLimitation, type GraphRef } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
@@ -29,6 +29,8 @@ import { REL_STATE_TONE, limitationText } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { Timestamp } from "../shared/components/Timestamp";
+import { ActionList } from "../shared/components/ActionList";
+import { Fact, Facts } from "../shared/components/Panel";
 
 /** The graph's own view of the claim, when it was opened from the canvas. */
 export interface ClaimContext {
@@ -69,33 +71,30 @@ const WARN: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitation
   "account_not_connected",
 ]);
 
-/** One full-width labelled row: long values wrap instead of breaking in a narrow column. */
+/** A titled part of the claim; parts after the first are set off by a hairline. */
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-muted)">{title}</h3>
+    <section className="space-y-2.5 border-t border-(--color-border-subtle) pt-4 first:border-t-0 first:pt-0">
+      <h3 className="text-xs font-semibold text-(--color-text)">{title}</h3>
       {children}
     </section>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A quiet row that opens in place: supporting records, the raw record. */
+function Disclosure({ summary, children, onOpen }: { summary: ReactNode; children: ReactNode; onOpen?: () => void }) {
   return (
-    <div className="min-w-0">
-      <dt className="mb-0.5 text-[11px] font-medium text-(--color-text-muted)">{label}</dt>
-      <dd className="min-w-0 break-words text-[13px] text-(--color-text)">{children}</dd>
-    </div>
-  );
-}
-
-function Disclosure({ summary, children, defaultOpen = false }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
-  return (
-    <details className="group rounded-md border border-(--color-border-subtle)" open={defaultOpen}>
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-xs font-medium text-(--color-text) outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden">
+    <details
+      className="group"
+      onToggle={(ev) => {
+        if ((ev.currentTarget as HTMLDetailsElement).open) onOpen?.();
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded text-xs font-medium text-(--color-text-muted) outline-none hover:text-(--color-text) focus-visible:ring-2 focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden">
         <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
         {summary}
       </summary>
-      <div className="space-y-2 border-t border-(--color-border-subtle) px-3 py-2">{children}</div>
+      <div className="mt-2 space-y-2">{children}</div>
     </details>
   );
 }
@@ -149,22 +148,23 @@ function Limitations({ limitations }: { limitations: EvidenceLimitation[] }) {
   });
   if (!specific.length) return null;
   return (
-    <section aria-label="What qualifies this claim" className="space-y-1.5">
+    <ul aria-label="What qualifies this claim" className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
       {specific.map((l) => (
-        <details key={l.code} className="group text-xs">
-          <summary
-            className={cn(
-              "inline-flex cursor-pointer list-none items-center gap-1 rounded px-1.5 py-0.5 font-medium outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden",
-              WARN.has(l.code) ? "bg-(--color-warning-soft) text-(--color-warning-text)" : "bg-(--color-surface-subtle) text-(--color-text-muted)",
-            )}
-          >
-            <ChevronRight aria-hidden="true" className="size-3 transition-transform group-open:rotate-90" />
-            {LIMITATION_SHORT[l.code] ?? l.code.replace(/_/g, " ")}
-          </summary>
-          <p className="mt-1 pl-5 text-(--color-text-muted)">{limitationText(l)}</p>
-        </details>
+        <li key={l.code}>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] text-(--color-text) outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary) [&::-webkit-details-marker]:hidden">
+              <span
+                aria-hidden="true"
+                className={cn("size-1.5 shrink-0 rounded-full", WARN.has(l.code) ? "bg-(--color-warning-text)" : "bg-(--color-text-subtle)")}
+              />
+              <span className="min-w-0 flex-1">{LIMITATION_SHORT[l.code] ?? l.code.replace(/_/g, " ")}</span>
+              <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-(--color-text-muted) transition-transform group-open:rotate-90" />
+            </summary>
+            <p className="px-3 pb-2.5 pl-6.5 text-xs leading-relaxed text-(--color-text-muted)">{limitationText(l)}</p>
+          </details>
+        </li>
       ))}
-    </section>
+    </ul>
   );
 }
 
@@ -210,114 +210,144 @@ export function EvidenceClaim({
   const sources = [...new Set(e.facts.map((f) => f.source_api).filter(Boolean))] as string[];
   const lifecycle = e.status.lifecycle;
 
+  const policyLine = withPolicy
+    ? [
+        withPolicy.policy?.name ?? "Policy",
+        withPolicy.statement
+          ? withPolicy.statement.sid
+            ? `Sid ${withPolicy.statement.sid}`
+            : withPolicy.statement.index != null
+              ? `statement ${withPolicy.statement.index + 1}`
+              : null
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
+
   return (
-    <article className="space-y-5">
+    <article className="space-y-4">
       <Section title={heading ?? "Explanation"}>
-        <p className="text-sm leading-snug text-(--color-text)">{e.claim.sentence}</p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {e.status.basis ? <StatusBadge tone="neutral">{e.status.basis}</StatusBadge> : null}
-          {lifecycle !== "current" ? <StatusBadge tone={REL_STATE_TONE[lifecycle]}>{lifecycle}</StatusBadge> : null}
-          {e.status.collection !== "complete" ? <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge> : null}
-        </div>
+        <p className="text-[13px] leading-relaxed text-(--color-text)">{e.claim.sentence}</p>
+        {e.status.basis || lifecycle !== "current" || e.status.collection !== "complete" ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {e.status.basis ? <StatusBadge tone="neutral">{e.status.basis}</StatusBadge> : null}
+            {lifecycle !== "current" ? <StatusBadge tone={REL_STATE_TONE[lifecycle]}>{lifecycle}</StatusBadge> : null}
+            {e.status.collection !== "complete" ? <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge> : null}
+          </div>
+        ) : null}
         {context?.relationship || context?.source || context?.target ? (
-          <dl className="space-y-2">
-            {context?.relationship ? <Field label="Relationship">{context.relationship}</Field> : null}
+          <Facts>
+            {context?.relationship ? <Fact label="Relationship">{context.relationship}</Fact> : null}
             {context?.source || context?.target ? (
-              <Field label="Source → target">
-                {context.source ?? "—"} → {context.target ?? "—"}
-              </Field>
+              <Fact label="From → to">
+                {context.source ?? "—"} <span className="text-(--color-text-muted)">→</span> {context.target ?? "—"}
+              </Fact>
             ) : null}
-          </dl>
+          </Facts>
         ) : null}
       </Section>
 
       {withPolicy || ex ? (
         <Section title="Policy and statement">
-          <dl className="space-y-2">
-            {withPolicy ? (
-              <Field label="Policy">
-                {withPolicy.policy?.name ?? "Policy"}
-                {withPolicy.statement
-                  ? withPolicy.statement.sid
-                    ? ` · Sid ${withPolicy.statement.sid}`
-                    : withPolicy.statement.index != null
-                      ? ` · statement ${withPolicy.statement.index + 1}`
-                      : ""
-                  : ""}
-                {withPolicy.policy_version ? <span className="text-(--color-text-muted)"> · {withPolicy.policy_version}</span> : null}
-              </Field>
+          <Facts>
+            {policyLine ? (
+              <Fact label="Policy">
+                {policyLine}
+                {withPolicy?.policy_version ? <span className="text-(--color-text-muted)"> · {withPolicy.policy_version}</span> : null}
+              </Fact>
             ) : null}
             {ex?.effect ? (
               // The provider's own effect, as written — not a decision.
-              <Field label="Effect">{ex.effect} <span className="text-(--color-text-muted)">(as written; not evaluated)</span></Field>
+              <Fact label="Effect">
+                {ex.effect} <span className="text-xs text-(--color-text-muted)">as written, not evaluated</span>
+              </Fact>
             ) : null}
             {ex && (ex.actions.length || ex.notActions.length) ? (
-              <Field label={ex.notActions.length && !ex.actions.length ? "All actions except" : "Actions"}>
-                <Codes items={ex.actions.length ? ex.actions : ex.notActions} />
-              </Field>
+              <Fact label={ex.notActions.length && !ex.actions.length ? "All actions except" : "Actions"}>
+                <ActionList actions={ex.actions.length ? ex.actions : ex.notActions} />
+              </Fact>
             ) : null}
             {ex && (ex.resources.length || ex.notResources.length) ? (
-              <Field label={ex.notResources.length && !ex.resources.length ? "All resources except" : "Resource reference"}>
+              <Fact label={ex.notResources.length && !ex.resources.length ? "All resources except" : "Resource"}>
                 <Codes items={ex.resources.length ? ex.resources : ex.notResources} max={3} />
-              </Field>
+              </Fact>
             ) : null}
-          </dl>
+          </Facts>
         </Section>
       ) : null}
 
       {ex?.condition.length || e.limitations.some((l) => l.code !== "effective_access_not_evaluated") ? (
         <Section title="Conditions and constraints">
           {ex?.condition.length ? (
-            <p className="text-[13px]">
-              <span className="text-(--color-warning-text)">Conditions recorded, not evaluated:</span> <Codes items={ex.condition} />
-            </p>
+            <Facts>
+              <Fact label="Conditions">
+                <Codes items={ex.condition} />
+                <span className="mt-1 block text-xs text-(--color-warning-text)">Recorded, not evaluated.</span>
+              </Fact>
+            </Facts>
           ) : null}
           <Limitations limitations={e.limitations} />
         </Section>
       ) : null}
 
       <Section title="Collection source and freshness">
-        <dl className="space-y-2">
-          <Field label="Evidence source">{sources.length ? sources.join(", ") : "not recorded"}</Field>
-          <Field label="Last confirmed">
+        <Facts>
+          <Fact label="Source">
+            {sources.length ? (
+              <span className="flex flex-col gap-0.5">
+                {sources.map((src) => (
+                  <span key={src} className="font-mono text-xs">
+                    {src}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="text-(--color-text-muted)">not recorded</span>
+            )}
+          </Fact>
+          <Fact label="Last confirmed">
             <Timestamp iso={e.freshness.last_confirmed_at} />
-          </Field>
-          <Field label="First seen">
+          </Fact>
+          <Fact label="First seen">
             <Timestamp iso={e.freshness.first_seen_at} />
-          </Field>
+          </Fact>
           {e.freshness.stale_since ? (
-            <Field label="Stale since">
+            <Fact label="Stale since">
               <span className="text-(--color-warning-text)">
                 <Timestamp iso={e.freshness.stale_since} />
               </span>
-            </Field>
+            </Fact>
           ) : null}
           {lifecycle === "ended" ? (
-            <Field label="Ended">
+            <Fact label="Ended">
               {e.freshness.valid_to ? <Timestamp iso={e.freshness.valid_to} /> : "Ended"}
               {e.freshness.ended_reason ? ` · ${e.freshness.ended_reason.replace(/_/g, " ")}` : ""}
-            </Field>
+            </Fact>
           ) : null}
-        </dl>
+        </Facts>
+      </Section>
+
+      <div className="space-y-2.5 border-t border-(--color-border-subtle) pt-4">
         {e.facts.length ? (
-          <Disclosure summary={`Supporting records (${e.facts.length})`}>
-            <p className="text-[11px] text-(--color-text-muted)">Each record is one collection of this fact — not a separate grant.</p>
+          <Disclosure summary={`Supporting records · ${e.facts.length}`}>
+            <p className="text-xs text-(--color-text-muted)">Each record is one collection of this fact — not a separate grant.</p>
             <ol className="space-y-2">
               {e.facts.map((f, i) => (
-                <li key={i} className="space-y-1 rounded bg-(--color-surface-subtle) px-2.5 py-2 text-xs">
-                  <p className="text-(--color-text)">{f.fact}</p>
+                <li key={i} className="space-y-1 rounded-md border border-(--color-border-subtle) px-3 py-2">
+                  <p className="text-[13px] leading-5 text-(--color-text)">{f.fact}</p>
                   <p className="break-all font-mono text-[11px] text-(--color-text-muted)">
                     {[f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · ")}
                   </p>
                   {f.last_confirmed_at ? (
-                    <p className="text-(--color-text-muted)">
+                    <p className="text-xs text-(--color-text-muted)">
                       Collected <Timestamp iso={f.last_confirmed_at} />
                     </p>
                   ) : null}
                   {f.statement_excerpt ? (
                     <details>
-                      <summary className="cursor-pointer text-[11px] font-medium text-(--color-primary-text)">Statement as written</summary>
-                      <pre className="mt-1 max-h-60 overflow-auto rounded bg-(--color-surface-raised) p-2 font-mono text-[11px]">
+                      <summary className="cursor-pointer text-xs font-medium text-(--color-primary-text)">Statement as written</summary>
+                      <pre className="mt-1 max-h-60 overflow-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
                         {JSON.stringify(f.statement_excerpt, null, 2)}
                       </pre>
                     </details>
@@ -329,27 +359,20 @@ export function EvidenceClaim({
         ) : (
           <p className="text-xs text-(--color-text-muted)">No supporting record was returned for this claim.</p>
         )}
-      </Section>
-
-      <details
-        className="text-xs"
-        onToggle={(ev) => {
-          if ((ev.currentTarget as HTMLDetailsElement).open) setRaw(true);
-        }}
-      >
-        <summary className="cursor-pointer font-semibold uppercase tracking-wider text-[11px] text-(--color-text-muted)">Raw record</summary>
-        {e.raw != null ? (
-          <pre className="mt-2 max-h-80 overflow-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
-            {JSON.stringify(e.raw, null, 2)}
-          </pre>
-        ) : raw && q.isFetching ? (
-          <p className="mt-2 text-(--color-text-muted)">Loading the stored observation…</p>
-        ) : raw && failure ? (
-          <GraphStatePanel failure={failure} subject="the raw record" onRetry={() => void q.refetch()} onRefresh={refresh} />
-        ) : raw ? (
-          <p className="mt-2 text-(--color-text-muted)">No raw record was returned for this claim.</p>
-        ) : null}
-      </details>
+        <Disclosure summary="Raw record" onOpen={() => setRaw(true)}>
+          {e.raw != null ? (
+            <pre className="max-h-80 overflow-auto rounded-md bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
+              {JSON.stringify(e.raw, null, 2)}
+            </pre>
+          ) : raw && q.isFetching ? (
+            <p className="text-xs text-(--color-text-muted)">Loading the stored observation…</p>
+          ) : raw && failure ? (
+            <GraphStatePanel failure={failure} subject="the raw record" onRetry={() => void q.refetch()} onRefresh={refresh} />
+          ) : raw ? (
+            <p className="text-xs text-(--color-text-muted)">No raw record was returned for this claim.</p>
+          ) : null}
+        </Disclosure>
+      </div>
     </article>
   );
 }
@@ -376,7 +399,7 @@ export function EvidenceClaims({
   return (
     <div className="space-y-6">
       {claims.length > 1 ? (
-        <p className="text-xs text-(--color-text-muted)">
+        <p className="text-[13px] text-(--color-text)">
           {grants
             ? `${claims.length} ${many} declare this relationship. Each has its own evidence below.`
             : `This line stands for ${claims.length} ${many}. Each has its own evidence below.`}
@@ -394,7 +417,8 @@ export function EvidenceClaims({
 /** The one statement true of every claim, said once per panel. */
 export function DeclaredAccessNotice({ className }: { className?: string }) {
   return (
-    <p className={cn("text-xs text-(--color-text-muted)", className)}>
+    <p className={cn("flex items-start gap-1.5 rounded-md bg-(--color-surface-subtle) px-2.5 py-1.5 text-xs leading-relaxed text-(--color-text-muted)", className)}>
+      <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
       Declared access — whether a request would succeed has not been evaluated.
     </p>
   );

@@ -33,6 +33,7 @@ import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { IdentityName } from "../shared/components/IdentityName";
+import { ClaimRow } from "../shared/components/Panel";
 import { TabBody } from "../shared/components/ObjectShell";
 import { SectionList } from "../shared/components/SectionList";
 import { viaLink } from "../shared/links";
@@ -42,51 +43,48 @@ type From = { ref: IdentityDetail["ref"]; name: string };
 function WorkloadBody({ r, from }: { r: UsedByWorkload; from: From }) {
   const path = objectPath(r.workload.ref);
   return (
-    <>
-      <div>
-        {path ? (
-          <Link {...viaLink(path, from)} className="font-medium text-(--color-primary-text) hover:underline">
-            {r.workload.name}
-          </Link>
-        ) : (
-          <span className="font-medium">{r.workload.name}</span>
-        )}
-        <span className="ml-2 text-xs text-(--color-text-muted)">
-          {RUNTIME_LABEL[r.workload.runtime_kind]} · {accountLabel(r.workload.account)} ·{" "}
-          {r.workload.region ?? "Region not stated"}
-        </span>
-      </div>
-      <ClaimFacts
-        claim={r.claim}
-        type={(RELATIONSHIP_LABEL[r.type] ?? r.type).toLowerCase()}
-        basis={r.basis}
-        state={r.state}
-        confirmedAt={r.last_confirmed_at}
-      />
-    </>
+    <ClaimRow
+      eyebrow={RELATIONSHIP_LABEL[r.type] ?? r.type}
+      title={
+        <div className="min-w-0">
+          {path ? (
+            <Link {...viaLink(path, from)} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
+              {r.workload.name}
+            </Link>
+          ) : (
+            <span className="text-[13px] font-medium">{r.workload.name}</span>
+          )}
+          <span className="ml-2 text-xs text-(--color-text-muted)">
+            {RUNTIME_LABEL[r.workload.runtime_kind]} · {accountLabel(r.workload.account)} · {r.workload.region ?? "Region not stated"}
+          </span>
+        </div>
+      }
+      facts={<ClaimFacts claim={r.claim} basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />}
+    />
   );
 }
 
 function PrincipalBody({ r, from }: { r: UsedByPrincipal; from: From }) {
   return (
-    <>
-      <IdentityName identity={r.principal} from={from} />
-      <ClaimFacts claim={r.claim} type="may assume" basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />
-      <p className="text-xs text-(--color-text-muted)">
+    <ClaimRow
+      title={<IdentityName identity={r.principal} from={from} />}
+      facts={<ClaimFacts claim={r.claim} basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />}
+    >
+      <p className="text-xs leading-relaxed text-(--color-text-muted)">
         Named by this role's trust policy{r.statement.sid ? ` (statement ${r.statement.sid})` : ""}. The caller's own
         sts:AssumeRole permission was not checked.
         {r.conditions ? " The trust policy sets conditions on it, which were not evaluated." : ""}
       </p>
-    </>
+    </ClaimRow>
   );
 }
 
 function MemberBody({ r, from }: { r: GroupMember; from: From }) {
   return (
-    <>
-      <IdentityName identity={r.member} from={from} />
-      <ClaimFacts claim={r.claim} type="member of" basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />
-    </>
+    <ClaimRow
+      title={<IdentityName identity={r.member} from={from} />}
+      facts={<ClaimFacts claim={r.claim} basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />}
+    />
   );
 }
 
@@ -111,12 +109,12 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
       (await fetchSection({ ...args, section, cursor }).unwrap()).data[section] as NonNullable<IdentityUsedBy[K]>;
   const onStale = (f: { currentRev?: number; currentPublishedAt?: string }) => markStale(f);
   const none = <T,>(): PagedSection<T> => ({ items: [], next_cursor: null, total_known: true, total: 0 });
-  const empty = (text: string) => <p className="text-sm text-(--color-text-muted)">{emptyGiven(text, coverage)}</p>;
+  const empty = (text: string) => <>{emptyGiven(text, coverage)}</>;
 
   return (
     <TabBody ready={!!data} failure={failure} subject="what uses this identity" onRetry={() => void q.refetch()} onRefresh={refresh}>
       {data ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {coverage.length ? <CoverageSummary subject="workloads or principals" ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
           {identity.kind === "iam_group" ? (
             <SectionList

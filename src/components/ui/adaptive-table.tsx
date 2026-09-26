@@ -309,12 +309,30 @@ export function AdaptiveTable<TData>({
     hasDetails,
   ]);
 
+  // The primary column takes about a third of the table, never all of what is
+  // left: the width beyond that is shared out among the other columns in
+  // proportion to their own width, so a wide table does not push every other
+  // value to the far right of a very wide name column.
   const columnWidths = React.useMemo(() => {
     if (!fit) return undefined;
     const out: Record<string, number | undefined> = {};
     for (const c of columns) out[c.id] = isPrimary(c) ? undefined : c.approxWidth ?? DEFAULT_COLUMN_WIDTH;
+    if (containerWidth <= 0) return out;
+    const primary = columns.find((c) => isPrimary(c));
+    const shown = columns.filter((c) => visibleColumnSet.has(c.id) && !isPrimary(c));
+    const data = shown.filter((c) => c.id !== "actions");
+    const used = shown.reduce((sum, c) => sum + (c.approxWidth ?? DEFAULT_COLUMN_WIDTH), 0) + DETAILS_COLUMN_WIDTH;
+    const primaryTarget = Math.max(primary?.minWidth ?? PRIMARY_MIN_WIDTH, Math.min(460, Math.round(containerWidth * 0.34)));
+    const extra = containerWidth - used - primaryTarget;
+    const dataWidth = data.reduce((sum, c) => sum + (c.approxWidth ?? DEFAULT_COLUMN_WIDTH), 0);
+    if (extra > 0 && dataWidth > 0) {
+      for (const c of data) {
+        const w = c.approxWidth ?? DEFAULT_COLUMN_WIDTH;
+        out[c.id] = Math.floor(w + (extra * w) / dataWidth);
+      }
+    }
     return out;
-  }, [fit, columns, isPrimary]);
+  }, [fit, columns, isPrimary, containerWidth, visibleColumnSet]);
 
   const tableConfig: ResponsiveTableConfig<TData> = React.useMemo(
     () => ({

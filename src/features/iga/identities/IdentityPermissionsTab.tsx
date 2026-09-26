@@ -30,6 +30,8 @@ import { classifyGraphError } from "../shared/graphErrors";
 import { POLICY_KIND_LABEL, REL_STATE_TONE, RESOURCE_KIND_LABEL, agoText, statementLabel } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
+import { ActionList } from "../shared/components/ActionList";
+import { Fact, Facts } from "../shared/components/Panel";
 import { viaLink } from "../shared/links";
 import { TabBody } from "../shared/components/ObjectShell";
 
@@ -39,10 +41,10 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
   const positive = s.targets.filter((t) => t.mode === "resource");
   const excluded = s.targets.filter((t) => t.mode === "not_resource");
   return (
-    <li className="space-y-1.5 px-4 py-3 text-sm">
+    <li className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge tone={s.effect === "deny" ? "warning" : "neutral"}>{s.effect === "deny" ? "Deny" : "Allow"}</StatusBadge>
-        <span className="font-medium">{statementLabel(s)}</span>
+        <span className="text-[13px] font-medium text-(--color-text)">{statementLabel(s)}</span>
         {s.state !== "current" ? <StatusBadge tone={REL_STATE_TONE[s.state]}>{s.state}</StatusBadge> : null}
         {(s.revision_count ?? 0) > 1 ? (
           <Link to={changesHref} className="text-xs text-(--color-primary-text) hover:underline">
@@ -50,38 +52,47 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
           </Link>
         ) : null}
       </div>
-      <p className="font-mono text-xs">
-        {s.actions.length ? s.actions.join(", ") : null}
-        {s.not_actions.length ? `every action except ${s.not_actions.join(", ")}` : null}
-      </p>
-      {positive.length ? (
-        <ul className="space-y-0.5">
-          {positive.map((t) => {
-            const path = objectPath(t.ref);
-            return (
-              <li key={t.ref} className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-(--color-text-muted)">names</span>
-                {path ? (
-                  <Link {...viaLink(path, from)} className="break-all font-mono text-(--color-primary-text) hover:underline">
-                    {t.text}
-                  </Link>
-                ) : (
-                  <span className="break-all font-mono">{t.text}</span>
-                )}
-                <span className="text-(--color-text-muted)">{RESOURCE_KIND_LABEL[t.kind]}</span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {excluded.length ? (
-        <p className="text-xs text-(--color-text-muted)">
-          All resources except <span className="font-mono">{excluded.map((t) => t.text).join(", ")}</span>.
-        </p>
-      ) : null}
+      <Facts>
+        {s.actions.length ? (
+          <Fact label="Actions">
+            <ActionList actions={s.actions} />
+          </Fact>
+        ) : null}
+        {s.not_actions.length ? (
+          <Fact label="All actions except">
+            <ActionList actions={s.not_actions} />
+          </Fact>
+        ) : null}
+        {positive.length ? (
+          <Fact label="Applies to">
+            <span className="flex flex-col gap-1">
+              {positive.map((t) => {
+                const path = objectPath(t.ref);
+                return (
+                  <span key={t.ref} className="flex flex-wrap items-center gap-2">
+                    {path ? (
+                      <Link {...viaLink(path, from)} className="break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs text-(--color-primary-text) hover:underline">
+                        {t.text}
+                      </Link>
+                    ) : (
+                      <code className="break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs">{t.text}</code>
+                    )}
+                    <span className="text-xs text-(--color-text-muted)">{RESOURCE_KIND_LABEL[t.kind]}</span>
+                  </span>
+                );
+              })}
+            </span>
+          </Fact>
+        ) : null}
+        {excluded.length ? (
+          <Fact label="Except">
+            <span className="font-mono text-xs">{excluded.map((t) => t.text).join(", ")}</span>
+          </Fact>
+        ) : null}
+      </Facts>
       {s.condition ? (
         <details className="text-xs">
-          <summary className="cursor-pointer text-(--color-text-muted)">Conditions (not evaluated)</summary>
+          <summary className="cursor-pointer font-medium text-(--color-warning-text)">Conditions — recorded, not evaluated</summary>
           <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
             {JSON.stringify(s.condition, null, 2)}
           </pre>
@@ -98,11 +109,13 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
 
 function Policy({ p, from, changesHref }: { p: PolicyGroup; from: From; changesHref: string }) {
   return (
-    <section className="rounded-md border border-(--color-border-subtle)">
-      <header className="flex flex-wrap items-center gap-2 border-b border-(--color-border-subtle) px-4 py-2.5">
-        <span className="font-medium">{p.name}</span>
-        <span className="text-xs text-(--color-text-muted)">{POLICY_KIND_LABEL[p.kind]}</span>
-        <span className="text-xs text-(--color-text-muted)">· {p.assignment.kind === "inline" ? "inline" : "attached"}</span>
+    <section className="rounded-lg border border-(--color-border-subtle)">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-(--color-border-subtle) bg-(--color-surface-subtle)/50 px-4 py-2.5">
+        <span className="text-[13px] font-semibold text-(--color-text)">{p.name}</span>
+        <span className="text-xs text-(--color-text-muted)">
+          {POLICY_KIND_LABEL[p.kind]} · {p.assignment.kind === "inline" ? "inline" : "attached"} · {p.statements.length}{" "}
+          {p.statements.length === 1 ? "statement" : "statements"}
+        </span>
         <span className="ml-auto">
           <ClaimFacts claim={p.assignment.claim} state={p.assignment.state} />
         </span>

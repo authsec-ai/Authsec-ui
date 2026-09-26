@@ -6,12 +6,10 @@
 
 
 import type { ResourceDetail } from "@/app/api/igaGraphApi";
-import { CopyField, DetailGrid, DetailRow, DrawerSection } from "@/components/console/detail";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
-import { CardContent } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
 
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, agoText, dayText, countText } from "../shared/labels";
+import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
 
 
 export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) {
@@ -25,27 +23,21 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
           body={`It was last confirmed ${dayText(r.last_confirmed_at)}.`}
         />
       ) : null}
-      <TableCard>
-        <CardContent className="space-y-6">
-          <DrawerSection label="What it is">
-            <DetailGrid>
-              <DetailRow
-                full
-                label="Kind"
-                value={
+      {/* Panels flow into two balanced columns on a wide screen. */}
+      <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          <Panel title="What it is">
+            <Facts>
+              <Fact label="Kind">{
                   <span className="flex flex-col gap-1">
                     <span>
                       <StatusBadge tone={r.kind === "external" ? "warning" : "neutral"}>{RESOURCE_KIND_LABEL[r.kind]}</StatusBadge>
                     </span>
                     <span className="text-(--color-text-muted)">{RESOURCE_KIND_NOTE[r.kind]}</span>
                   </span>
-                }
-              />
-              {r.type !== "unknown" ? <DetailRow label="Type" value={r.type} mono /> : null}
-              {r.service ? <DetailRow label="Service" value={r.service} mono /> : null}
-              <DetailRow
-                label="Account"
-                value={
+                }</Fact>
+              {r.type !== "unknown" ? <Fact label="Type" mono>{r.type}</Fact> : null}
+              {r.service ? <Fact label="Service" mono>{r.service}</Fact> : null}
+              <Fact label="Account">{
                   r.account ? (
                     <>
                       {accountLabel(r.account)}
@@ -60,29 +52,22 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
                       </span>
                     </>
                   )
-                }
-              />
-              <DetailRow label="Region" value={r.region ?? "Region not stated"} />
-              <DetailRow label="Existence" value="Not verified. Nothing enumerates resources in this phase." />
-              <CopyField label={r.kind === "selector" ? "Pattern" : "ARN"} value={r.text} />
-            </DetailGrid>
-          </DrawerSection>
+                }</Fact>
+              <Fact label="Region">{r.region ?? "Region not stated"}</Fact>
+              <Fact label="Existence">Not verified. Nothing enumerates resources in this phase.</Fact>
+              <Fact label={r.kind === "selector" ? "Pattern" : "ARN"}><CopyValue value={r.text} /></Fact>
+            </Facts>
+          </Panel>
 
-          <DrawerSection label="Declared access">
-            <DetailGrid>
-              <DetailRow label="Named by" value={countText(r.named_by_count, "statement", "statements")} />
-              <DetailRow
-                label="Excluded by"
-                value={
+          <Panel title="Declared access">
+            <Facts>
+              <Fact label="Named by">{countText(r.named_by_count, "statement", "statements")}</Fact>
+              <Fact label="Excluded by">{
                   !r.excluded_by_count || r.excluded_by_count.value === 0
                     ? "No statement"
                     : countText(r.excluded_by_count, "statement (NotResource)", "statements (NotResource)")
-                }
-              />
-              <DetailRow
-                full
-                label="Resource policy"
-                value={
+                }</Fact>
+              <Fact label="Resource policy">{
                   !policy.read
                     ? "Not read. Whether it has its own policy is unknown."
                     : policy.has_deny === true
@@ -90,27 +75,21 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
                       : policy.has_deny === false
                         ? "Read. It has no Deny statement. Its Allow statements are not combined with identity-side grants."
                         : "Read, but whether it has a Deny statement could not be determined."
-                }
-              />
-            </DetailGrid>
-          </DrawerSection>
+                }</Fact>
+            </Facts>
+          </Panel>
 
-          <DrawerSection label="How we know">
-            <DetailGrid>
-              <DetailRow label="Last confirmed" value={agoText(r.last_confirmed_at)} />
-              <DetailRow
-                full
-                label="Found in"
-                value={
+          <Panel title="How we know">
+            <Facts>
+              <Fact label="Last confirmed">{agoText(r.last_confirmed_at)}</Fact>
+              <Fact label="Found in">{
                   r.sources.length
                     ? r.sources.map((s) => `${accountLabel(s.account)}${s.state !== "current" ? ` (${s.state})` : ""}`).join(", ")
                     : "No current source"
-                }
-              />
-            </DetailGrid>
-          </DrawerSection>
-        </CardContent>
-      </TableCard>
+                }</Fact>
+            </Facts>
+          </Panel>
+      </div>
     </div>
   );
 }

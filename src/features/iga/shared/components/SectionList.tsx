@@ -10,10 +10,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { PagedSection } from "@/app/api/igaGraphApi";
-import { DrawerSection } from "@/components/console/detail";
 import { Button } from "@/components/ui/button";
 
 import { classifyGraphError, type GraphFailure } from "../graphErrors";
+import { Panel } from "./Panel";
 
 export function SectionList<T>({
   label,
@@ -68,29 +68,28 @@ export function SectionList<T>({
 
   const total = first.total_known && first.total !== undefined ? first.total : first.total_at_least;
   return (
-    <DrawerSection
-      label={label}
-      action={
-        total !== undefined && items.length ? (
-          <span className="text-xs tabular-nums text-(--color-text-muted)">
-            {items.length} of {first.total_known ? total : `more than ${total?.toLocaleString()}`}
-          </span>
-        ) : undefined
+    <Panel
+      title={label}
+      flush
+      count={
+        total !== undefined && items.length
+          ? `${items.length} of ${first.total_known ? total : `more than ${total?.toLocaleString()}`}`
+          : undefined
       }
     >
       {items.length ? (
-        <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
+        <ul className="divide-y divide-(--color-border-subtle)">
           {items.map((it) => (
-            <li key={itemKey(it)} className="space-y-2 px-4 py-3 text-sm">
+            <li key={itemKey(it)} className="px-4 py-3 text-[13px]">
               {render(it)}
             </li>
           ))}
         </ul>
       ) : (
-        empty
+        <div className="px-4 py-3 text-[13px] text-(--color-text-muted)">{empty}</div>
       )}
       {cursor || failure ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) px-4 py-2 text-xs">
           {failure ? (
             <span role="alert" className="text-(--color-warning-text)">
               {failure.kind === "revision_stale"
@@ -105,6 +104,6 @@ export function SectionList<T>({
           ) : null}
         </div>
       ) : null}
-    </DrawerSection>
+    </Panel>
   );
 }

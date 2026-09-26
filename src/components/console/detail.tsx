@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * Shared detail-panel + dialog building blocks.
  *
  * These give every side drawer (RightDrawer / Sheet) and modal a consistent,
- * polished structure: an icon-led header, uppercase section labels, key/value
+ * polished structure: an icon-led header, sentence-case section titles, key/value
  * rows, copy-able mono fields, dashed empty states, and a sticky footer.
  * Built on the app's shadcn semantic tokens (foreground / muted-foreground /
  * muted / border) so they adapt to theme without introducing new colors.
@@ -53,8 +53,8 @@ export function DrawerSection({
 }) {
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="mb-2.5 flex items-center justify-between gap-3">
+        <h3 className="text-[13px] font-semibold leading-5 text-foreground">{label}</h3>
         {action}
       </div>
       {children}
@@ -79,8 +79,8 @@ export function DetailRow({
 }) {
   return (
     <div className={cn(full && "col-span-2")}>
-      <p className="mb-0.5 text-[11px] font-medium text-muted-foreground">{label}</p>
-      <p className={cn("text-[13px] text-foreground", mono && "break-all font-mono text-xs")}>{value}</p>
+      <p className="mb-0.5 text-xs text-muted-foreground">{label}</p>
+      <div className={cn("text-[13px] leading-5 text-foreground", mono && "break-all font-mono text-xs")}>{value}</div>
     </div>
   );
 }
@@ -89,7 +89,7 @@ export function DetailRow({
 export function CopyField({ label, value }: { label?: ReactNode; value: string }) {
   return (
     <div className="col-span-2">
-      {label ? <p className="mb-1 text-[11px] font-medium text-muted-foreground">{label}</p> : null}
+      {label ? <p className="mb-1 text-xs text-muted-foreground">{label}</p> : null}
       <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5">
         <span className="flex-1 break-all font-mono text-[11.5px] text-muted-foreground">{value}</span>
         <button

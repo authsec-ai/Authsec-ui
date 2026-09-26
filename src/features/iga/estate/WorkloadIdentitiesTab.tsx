@@ -24,12 +24,13 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 
 import { classifyGraphError } from "../shared/graphErrors";
-import { BASIS_EXPLANATION, RELATIONSHIP_LABEL, countText } from "../shared/labels";
+import { RELATIONSHIP_LABEL, countText } from "../shared/labels";
 import { emptyGiven } from "../shared/listSummary";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { viaLink } from "../shared/links";
 import { IdentityName } from "../shared/components/IdentityName";
+import { ClaimRow } from "../shared/components/Panel";
 import { TabBody } from "../shared/components/ObjectShell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { SectionList } from "../shared/components/SectionList";
@@ -40,13 +41,11 @@ function RelationshipBody({ rel, from }: { rel: IdentityRelationship; from: From
   const shared = rel.used_by_count && (rel.used_by_count.value ?? 0) > 1 ? rel.used_by_count : null;
   const usedBy = objectPath(rel.identity.ref);
   return (
-    <>
-      {rel.type !== "executes_as" ? (
-        <p className="text-xs font-medium text-(--color-text-muted)">{RELATIONSHIP_LABEL[rel.type] ?? rel.type}</p>
-      ) : null}
-      <IdentityName identity={rel.identity} from={from} />
-      <ClaimFacts claim={rel.claim} type={rel.type} basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />
-      <p className="text-xs text-(--color-text-muted)">{BASIS_EXPLANATION[rel.basis]}</p>
+    <ClaimRow
+      eyebrow={rel.type !== "executes_as" ? RELATIONSHIP_LABEL[rel.type] ?? rel.type : undefined}
+      title={<IdentityName identity={rel.identity} from={from} />}
+      facts={<ClaimFacts claim={rel.claim} basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />}
+    >
       {shared && usedBy ? (
         <p className="text-xs text-(--color-info-text)">
           {countText(shared, "workload", "workloads")} run as this identity. Changing it affects all of them.{" "}
@@ -55,22 +54,23 @@ function RelationshipBody({ rel, from }: { rel: IdentityRelationship; from: From
           </Link>
         </p>
       ) : null}
-    </>
+    </ClaimRow>
   );
 }
 
 function AssumeBody({ rel, from }: { rel: AssumeRelationship; from: From }) {
   return (
-    <>
-      <IdentityName identity={rel.target} from={from} />
-      <ClaimFacts claim={rel.claim} type="may assume" basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />
-      <p className="text-xs text-(--color-text-muted)">
+    <ClaimRow
+      title={<IdentityName identity={rel.target} from={from} />}
+      facts={<ClaimFacts claim={rel.claim} basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />}
+    >
+      <p className="text-xs leading-relaxed text-(--color-text-muted)">
         The role's trust policy {rel.statement.sid ? `(statement ${rel.statement.sid}) ` : ""}names this workload's
         identity as a principal. The caller's own sts:AssumeRole permission was not checked.
         {rel.conditions ? " The trust policy also sets conditions, which were not evaluated." : ""}
         {rel.statement.negated ? " It uses NotPrincipal, so who it admits could not be resolved." : ""}
       </p>
-    </>
+    </ClaimRow>
   );
 }
 
@@ -113,7 +113,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
   return (
     <TabBody ready={!!data} failure={failure} subject="identities" onRetry={() => void q.refetch()} onRefresh={refresh}>
       {data ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {coverage.length ? <CoverageSummary subject="identities" ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
           <SectionList
             label="Execution identity"
@@ -123,7 +123,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={
-              <p className="rounded-md border border-(--color-border-subtle) px-4 py-3 text-sm">{executionEmpty(data)}</p>
+              <span className="text-(--color-text)">{executionEmpty(data)}</span>
             }
           />
           <SectionList
