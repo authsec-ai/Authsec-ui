@@ -220,14 +220,14 @@ export function AWSConnectorDrawer({
       if (scanRun.status === "published") {
         dispatch(
           cloudDiscoveryApi.util.invalidateTags([
-            { type: "CloudIdentity", id: "ALL" },
-            { type: "CloudSecret", id: "ALL" },
-            { type: "CloudAssumeEdge", id: "ALL" },
-            { type: "CloudPermission", id: "ALL" },
-            { type: "CloudResource", id: "ALL" },
-            { type: "CloudWorkload", id: "ALL" },
-            { type: "CloudUsage", id: "ALL" },
-            { type: "CloudObservation", id: "ALL" },
+            "CloudIdentity",
+            "CloudSecret",
+            "CloudAssumeEdge",
+            "CloudPermission",
+            "CloudResource",
+            "CloudWorkload",
+            "CloudUsage",
+            "CloudObservation",
           ]),
         );
       }
@@ -559,7 +559,7 @@ export function AWSConnectorDrawer({
                           </Button>
                         ) : null}
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to={`/iga/cloud/identities?account=${encodeURIComponent(connector.scope_id)}`}>
+                          <Link to={`/iga/cloud/identities?account=${encodeURIComponent(connector.id)}`}>
                             <span className="flex items-center gap-1.5">
                               <Users className="size-3.5" />
                               Identities, permissions and activity
@@ -568,7 +568,7 @@ export function AWSConnectorDrawer({
                           </Link>
                         </Button>
                         <Button asChild variant="outline" size="sm" className="justify-between">
-                          <Link to={`/iga/cloud/resources?account=${encodeURIComponent(connector.scope_id)}`}>
+                          <Link to={`/iga/cloud/resources?account=${encodeURIComponent(connector.id)}`}>
                             <span className="flex items-center gap-1.5">
                               <Database className="size-3.5" />
                               Resources these permissions name

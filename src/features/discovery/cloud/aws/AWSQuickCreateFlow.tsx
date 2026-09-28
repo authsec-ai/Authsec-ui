@@ -165,11 +165,12 @@ export function AWSQuickCreateFlow({
   const session: AWSOnboardingSession | undefined = sessionQuery.data;
   const terminal = isTerminalSession(session);
   const errorStatus = sessionQuery.isError ? (sessionQuery.error as { status?: unknown })?.status : undefined;
-  // 404: expired or unknown. 401/403: not this user's or workspace's any more.
-  // Either way the session is over for this screen.
-  const sessionGone = Boolean(sessionId) && (errorStatus === 404 || errorStatus === 403 || errorStatus === 401);
+  // 404: expired or unknown — the session is over. 401/403: this screen lost
+  // access (signed out, a role changed) — the session may still complete.
+  const sessionGone = Boolean(sessionId) && errorStatus === 404;
+  const accessLost = Boolean(sessionId) && (errorStatus === 403 || errorStatus === 401);
   // Anything else (network, 5xx) may clear up: keep polling, but say so.
-  const sessionUnreadable = Boolean(sessionId) && sessionQuery.isError && !sessionGone;
+  const sessionUnreadable = Boolean(sessionId) && sessionQuery.isError && !sessionGone && !accessLost;
 
   // Fallback: paste the Role ARN, reusing this session's ExternalId.
   const [showPaste, setShowPaste] = useState(false);
@@ -191,6 +192,7 @@ export function AWSQuickCreateFlow({
 
   const settled =
     sessionGone ||
+    accessLost ||
     Boolean(manualConnected) ||
     session?.status === "failed" ||
     (session?.status === "connected" && (Boolean(session.region_status) || regionWaitOver));
@@ -242,7 +244,12 @@ export function AWSQuickCreateFlow({
       const s = await startSession({ regions, deployment_region: deploymentRegion }).unwrap();
       if (tab) {
         tab.opener = null;
-        tab.location.href = s.quick_create_url;
+        const url = awsConsoleUrl(s.quick_create_url);
+        if (url) tab.location.href = url;
+        else {
+          tab.close();
+          setPopupBlocked(true);
+        }
       } else {
         setPopupBlocked(true);
       }
@@ -396,7 +403,7 @@ export function AWSQuickCreateFlow({
         {connectorId ? (
           scanStarted ? (
             <p className="text-xs text-(--color-success-text)">
-              Scan started — it runs in the background. Track progress from this account's row in the
+              Scan queued — it runs in the background. Track progress from this account's row in the
               connectors list.
             </p>
           ) : (
@@ -415,7 +422,7 @@ export function AWSQuickCreateFlow({
                     );
                 }}
               >
-                {scanning ? "Starting scan…" : "Scan now — discover IAM identities"}
+                {scanning ? "Queuing scan…" : "Scan now — discover IAM identities"}
               </Button>
               {scanError ? <p className="text-xs text-(--color-danger-text)">{scanError}</p> : null}
             </div>
@@ -439,6 +446,16 @@ export function AWSQuickCreateFlow({
           <Banner tone="warning">
             This setup session has ended. Check the connectors list — if the account isn't there, start
             again.
+          </Banner>
+        ) : accessLost ? (
+          <Banner tone="warning">
+            This screen can no longer read the setup session — your sign-in expired or your access changed. A
+            stack already launched may still connect: sign in again and check the connectors list.
+          </Banner>
+        ) : sessionUnreadable && session ? (
+          <Banner tone="warning">
+            Couldn't reach AuthSec to check this setup. Retrying — the status below is from the last successful
+            check.
           </Banner>
         ) : sessionUnreadable && !session ? (
           <Banner tone="danger">
@@ -476,10 +493,10 @@ export function AWSQuickCreateFlow({
           </ol>
         ) : null}
 
-        {popupBlocked && session?.quick_create_url ? (
+        {popupBlocked && awsConsoleUrl(session?.quick_create_url) ? (
           <Banner tone="warning">
             Your browser blocked the new tab.{" "}
-            <a className="underline" href={session.quick_create_url} target="_blank" rel="noopener noreferrer">
+            <a className="underline" href={awsConsoleUrl(session?.quick_create_url)} target="_blank" rel="noopener noreferrer">
               Open the AWS console
             </a>
             .
@@ -501,9 +518,9 @@ export function AWSQuickCreateFlow({
             {/* The link and ExternalId come back only to the user who started
                 the launch; for anyone else they are empty, and an empty href
                 would just reopen AuthSec. */}
-            {session.quick_create_url ? (
+            {awsConsoleUrl(session.quick_create_url) ? (
               <Button variant="outline" size="sm" asChild>
-                <a href={session.quick_create_url} target="_blank" rel="noopener noreferrer">
+                <a href={awsConsoleUrl(session.quick_create_url)} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-1 size-3.5" />
                   Reopen the launch page
                 </a>
@@ -576,7 +593,7 @@ export function AWSQuickCreateFlow({
               onUseManual();
             }}
           >
-            {terminal || sessionGone ? "Use manual setup" : "Cancel this launch and use manual setup"}
+            {terminal || sessionGone ? "Use manual setup" : "Stop waiting and use manual setup"}
           </Button>
           <Button variant="outline" size="sm" onClick={startOver}>
             <RotateCcw className="mr-1 size-3.5" />
@@ -675,4 +692,20 @@ export function AWSQuickCreateFlow({
       </div>
     </div>
   );
+}
+
+/**
+ * The Quick Create link, only if it opens the AWS console over https — the
+ * server builds it, and this is the one check that it cannot send a customer
+ * anywhere else. undefined otherwise.
+ */
+function awsConsoleUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    const host = u.hostname;
+    return u.protocol === "https:" && (host === "console.aws.amazon.com" || host.endsWith(".console.aws.amazon.com")) ? url : undefined;
+  } catch {
+    return undefined;
+  }
 }
