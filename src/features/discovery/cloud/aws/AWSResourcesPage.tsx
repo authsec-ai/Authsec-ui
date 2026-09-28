@@ -71,6 +71,8 @@ import {
   resourceKindLabel,
   SENSITIVITY_LABEL,
   SENSITIVITY_TONE,
+  stackPredatesResourcePolicies,
+  TEMPLATE_VERSION_WITH_RESOURCE_POLICIES,
 } from "./awsInventoryLabels";
 import { AWSResourceDrawer } from "./AWSResourceDrawer";
 import {
@@ -187,7 +189,17 @@ export default function AWSResourcesPage() {
   // render, which would invalidate every useMemo below it each time.
   const rows = useMemo(() => resourcesQuery.data?.rows ?? [], [resourcesQuery.data]);
   const total = resourcesQuery.data?.total ?? 0;
-  const truncated = total > rows.length;
+  // Via truncationOf, not `total > rows.length`. When the server omits
+  // meta.total, `total` falls back to offset + rows.length, so the raw
+  // comparison is ALWAYS false and every tile below silently drops its
+  // "(of N loaded)" qualifier — reading as a complete count of the account
+  // while the banner three hundred lines down, which does use the helper,
+  // correctly warns that rows are missing. One page, two answers.
+  //
+  // truncationOf presumes truncation on a full page when the total is
+  // unknown, which is the bias this screen needs: missing evidence must not
+  // be read as evidence of completeness.
+  const truncated = resourcesQuery.data ? truncationOf(resourcesQuery.data).truncated : false;
 
   const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
 
@@ -314,12 +326,23 @@ export default function AWSResourcesPage() {
         approxWidth: 140,
         cell: ({ row }) => {
           const s = row.original.sensitivity;
+          // The reason travels with the verdict. The backend records both --
+          // resourceSensitivityWithReason exists precisely so a rating is
+          // inspectable -- and the console dropped the reason, restoring the
+          // "High, with nothing to look at" problem the backend had fixed.
+          // A title rather than visible text: the grid has no room for a
+          // sentence, and the verdict is the scannable part.
+          const why = row.original.sensitivity_reason
+            ? `${row.original.sensitivity_reason} (source: ${row.original.sensitivity_source || "unknown"})`
+            : undefined;
           // Same idiom as PermissionsTab: a "low" pill says nothing, so low
           // renders as plain muted text and only med/high get a badge.
           return s === "low" ? (
-            <span className="text-xs text-muted-foreground">{SENSITIVITY_LABEL[s]}</span>
+            <span className="text-xs text-muted-foreground" title={why}>
+              {SENSITIVITY_LABEL[s]}
+            </span>
           ) : (
-            <CloudPill tone={SENSITIVITY_TONE[s]} dot={false}>
+            <CloudPill tone={SENSITIVITY_TONE[s]} dot={false} title={why}>
               {SENSITIVITY_LABEL[s]}
             </CloudPill>
           );
@@ -366,13 +389,26 @@ export default function AWSResourcesPage() {
           if (readIds.has(id)) return <span className="text-xs text-muted-foreground">None</span>;
           // Read succeeded but named no policy for this resource. Still unknown,
           // never "no deny".
+          //
+          // A stack older than the resource-policy grants is checked FIRST,
+          // because on such a connector this branch is the only one any row can
+          // reach: s3:GetBucketPolicy and kms:GetKeyPolicy are absent, so the
+          // scanner reads nothing and every row renders "—" with a tooltip
+          // implying AWS reported no policy. The account may be covered in
+          // denies. Naming the stack turns an unexplained dash into an action.
+          const rowConnector = connectorById.get(row.original.connector_id);
+          const rowStackIsStale = stackPredatesResourcePolicies(
+            (rowConnector?.attrs as { template_version?: string } | undefined)?.template_version,
+          );
           return (
             <span
               className="text-xs text-muted-foreground"
               title={
-                policyReadIncomplete
-                  ? "The resource-policy read was truncated, so this resource's policy may simply not have loaded."
-                  : "No resource policy was read for this resource."
+                rowStackIsStale
+                  ? `This account's CloudFormation stack predates template ${TEMPLATE_VERSION_WITH_RESOURCE_POLICIES}, which added the S3 and KMS policy reads. No resource policy could be read at all — update the stack in AWS and scan again.`
+                  : policyReadIncomplete
+                    ? "The resource-policy read was truncated, so this resource's policy may simply not have loaded."
+                    : "No resource policy was read for this resource."
               }
             >
               —
@@ -401,10 +437,38 @@ export default function AWSResourcesPage() {
         priority: 5,
         approxWidth: 150,
         cell: ({ row }) => {
+          // The resource's OWN account, not the connector's.
+          //
+          // This used to render connectorById.get(...)?.scope_id, so every row
+          // showed the account that did the scanning and a cross-account
+          // resource was displayed as local — the precise error the backend
+          // computes is_external to prevent, discarded at the last step.
+          //
+          // Falling back to the connector only when the ARN carries no account
+          // segment at all (S3 buckets and objects). That is a real property of
+          // the ARN shape rather than a gap, and such a resource cannot be
+          // classified external, so naming the scanning account is accurate
+          // there — marked with a title so the distinction is inspectable.
           const connector = connectorById.get(row.original.connector_id);
+          const own = row.original.resource_account;
+          if (!own) {
+            return (
+              <span
+                className="font-mono text-xs text-muted-foreground"
+                title="This ARN carries no account segment, so the account shown is the one that discovered it."
+              >
+                {connector?.scope_id ?? "—"}
+              </span>
+            );
+          }
           return (
-            <span className="font-mono text-xs text-muted-foreground">
-              {connector?.scope_id ?? "—"}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-mono text-xs text-muted-foreground">{own}</span>
+              {row.original.is_external ? (
+                <CloudPill tone="warning" dot={false}>
+                  External
+                </CloudPill>
+              ) : null}
             </span>
           );
         },

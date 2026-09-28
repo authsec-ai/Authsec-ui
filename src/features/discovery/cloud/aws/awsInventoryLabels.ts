@@ -201,6 +201,9 @@ export const COVERAGE_STATE_LABEL: Record<CloudCoverageState, string> = {
   unknown: "Not checked",
   constrained: "Blocked by policy",
   stale: "Stale",
+  partial: "Partly read",
+  not_selected: "Not selected",
+  unsupported: "Not supported",
 };
 
 /* ─────────────────────────── free-text kinds ────────────────────────────── */
@@ -300,6 +303,32 @@ export function stackPredatesCompute(templateVersion: string | undefined): boole
   return templateVersion < TEMPLATE_VERSION_WITH_COMPUTE;
 }
 
+/**
+ * The template version that grants the RESOURCE-POLICY reads.
+ *
+ * `internal/awsdiscovery.TemplateVersion` bumped 2026-09-08 → 2026-09-18 to add
+ * `s3:GetBucketPolicy` and `kms:GetKeyPolicy`. A stack deployed between those
+ * two dates discovers compute perfectly well and cannot read a single resource
+ * policy, so the Resources page's Policy column shows "—" for every row with
+ * no way to tell the operator why.
+ *
+ * Deliberately a SECOND constant rather than bumping TEMPLATE_VERSION_WITH_COMPUTE
+ * to 2026-09-18. That one is quoted verbatim in three places as the version
+ * that "added the Lambda, ECS and EC2 reads", which 2026-09-18 did not; moving
+ * it would make those messages false and would tell a 2026-09-08 stack that
+ * compute discovery is broken when it is working. Two grants arrived on two
+ * dates, so two constants.
+ */
+export const TEMPLATE_VERSION_WITH_RESOURCE_POLICIES = "2026-09-18";
+
+/** Whether this connector's stack predates the resource-policy permissions.
+ * Absent version is not stale, for the same reason as stackPredatesCompute:
+ * the field postdates some connectors, and guessing raises a false alarm. */
+export function stackPredatesResourcePolicies(templateVersion: string | undefined): boolean {
+  if (!templateVersion) return false;
+  return templateVersion < TEMPLATE_VERSION_WITH_RESOURCE_POLICIES;
+}
+
 /** Any headline number derived from a possibly-truncated list has to say so.
  *
  * The number itself stays honest — it really is the count of what loaded — but
@@ -327,4 +356,70 @@ export function accountLabel(connector: CloudConnector): string {
   const attrs = connector.attrs as AWSConnectorAttrs | undefined;
   const name = attrs?.display_name?.trim();
   return name ? `${name} · ${connector.scope_id}` : connector.scope_id;
+}
+
+/* ───────────────────── coverage surface labels ──────────────────────────── */
+
+
+// The AWS surfaces ticket [1] writes into `cloud_connector.coverage.surfaces`
+// (models.SurfaceIAMRoles etc., cloud_discovery.go) — in a form a reader
+// recognizes without knowing the internal key.
+const COVERAGE_SURFACE_LABEL: Record<string, string> = {
+  // IAM phase.
+  iam_roles: "IAM roles",
+  iam_users: "IAM users",
+  iam_access_keys: "Access keys",
+  iam_policies: "Policies (managed & inline)",
+  iam_credential_report: "Credential report",
+  // Permission phase.
+  oidc_providers: "OIDC providers",
+  eks_pod_identity: "EKS Pod Identity",
+  resource_policies: "Resource policies (S3, KMS)",
+  /** Written only on a PARTIAL permission read, never on a clean one. */
+  policy_documents: "Policy documents",
+  // Workload phase.
+  activity: "Service activity",
+  /** These two are written only when a whole phase failed before producing a
+   * snapshot — FinalizeCoverage's stand-in for the surfaces it never reached.
+   * They are the one case where a single row speaks for an entire phase. */
+  permission_scan: "Permission phase (did not run)",
+  workload_scan: "Compute phase (did not run)",
+};
+
+/** Compute surfaces are keyed "<surface>:<region>", so no fixed map can name
+ * them — there is one key per surface per selected region, plus a
+ * "compute:<region>" entry for every region NOT selected. Before this, all of
+ * them fell through to the raw key and the drawer showed rows like
+ * "bedrock-agentcore:eu-west-1" beside "IAM roles". */
+const COMPUTE_SURFACE_LABEL: Record<string, string> = {
+  compute: "Compute",
+  lambda: "Lambda",
+  ecs: "ECS task definitions",
+  ec2: "EC2 instances",
+  "bedrock-agents": "Bedrock agents",
+  "bedrock-agentcore": "AgentCore runtimes",
+  "agentcore-gateways": "AgentCore gateways",
+  // Present in a real published report and missing from the first draft of
+  // this map, which is why it was taken from one rather than written from the
+  // constant names.
+  "agentcore-workload-identities": "AgentCore workload identities",
+  "agentcore-credential-providers": "AgentCore credential providers",
+  "cloudtrail-events": "CloudTrail events",
+  "cloudtrail-status": "CloudTrail trail status",
+};
+
+/** A surface key in words. Falls back to the raw key rather than to a guess:
+ * an unrecognized key is a backend the console has not caught up with, and
+ * showing it verbatim is honest, whereas inventing a label would not be. */
+export function coverageSurfaceLabel(key: string): string {
+  const known = COVERAGE_SURFACE_LABEL[key];
+  if (known) return known;
+  const colon = key.lastIndexOf(":");
+  if (colon > 0) {
+    const name = key.slice(0, colon);
+    const region = key.slice(colon + 1);
+    const label = COMPUTE_SURFACE_LABEL[name];
+    if (label) return `${label} · ${region}`;
+  }
+  return key;
 }

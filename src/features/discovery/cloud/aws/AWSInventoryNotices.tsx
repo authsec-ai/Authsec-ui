@@ -182,10 +182,11 @@ export function StaleStackNotice({ connectors }: { connectors: CloudConnector[] 
 export function PhaseUnobservableNotice({ surface }: { surface: string }) {
   return (
     <InventoryNotice tone="info" icon={<Info />}>
-      <strong className="font-medium">The last scan reported the IAM phase only.</strong> {surface}{" "}
-      is read afterwards, in the same background run, and reports no progress of its own — so an
-      empty list shortly after a scan may still be filling in. Refresh in a minute; if it stays
-      empty after that, the account has none, or the read failed and only the server log recorded it.
+      <strong className="font-medium">The last scan did not report on this surface.</strong>{" "}
+      {surface} is read in the same background run as the identities above, but the coverage report
+      this account published names no result for it — so an empty list here is not evidence the
+      account has none. A scan started before this reporting existed, or one still in flight, both
+      look like this. Scan again; if it stays empty afterwards, the account genuinely has none.
     </InventoryNotice>
   );
 }

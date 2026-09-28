@@ -26,6 +26,13 @@ export const SOURCE_S3_BUCKET_POLICY = "s3:GetBucketPolicy";
 export const SOURCE_KMS_KEY_POLICY = "kms:GetKeyPolicy";
 export const SOURCE_AGENTCORE_WORKLOAD_IDENTITIES =
   "bedrock-agentcore:ListWorkloadIdentities";
+/** Trail configuration, one observation per trail. Subject-less, like the
+ * workload identities above, so it is queried by source_api alone. */
+export const SOURCE_CLOUDTRAIL_TRAILS = "cloudtrail:DescribeTrails";
+/** Whether a trail is actually delivering. The collector writes this ONLY
+ * when AWS answered: a trail whose GetTrailStatus failed is skipped rather
+ * than recorded as not logging, so an absent row here is unknown. */
+export const SOURCE_CLOUDTRAIL_TRAIL_STATUS = "cloudtrail:GetTrailStatus";
 
 /* ───────────────────────────── safe readers ──────────────────────────────── */
 
@@ -164,4 +171,44 @@ export function workloadIdentityFacts(o: CloudObservation): WorkloadIdentityFact
   // Falls back to subject_native_id, which the writer always sets even when the
   // row has no subject FK at all — the case every workload identity is in.
   return { name: str(f, "name"), arn: str(f, "arn") ?? o.subject_native_id };
+}
+
+/* ───────────────────────── CloudTrail trail health ───────────────────────── */
+
+export interface TrailStatusFacts {
+  arn?: string;
+  /** undefined means AWS did not answer, which is NOT "not logging". The
+   * collector skips the observation entirely in that case, so undefined here
+   * only arises from a malformed row. */
+  isLogging?: boolean;
+}
+
+export function trailStatusFacts(o: CloudObservation): TrailStatusFacts {
+  const f = o.sanitized_facts ?? {};
+  return { arn: str(f, "arn") ?? o.subject_native_id, isLogging: bool(f, "is_logging") };
+}
+
+/** What the console can say about whether this account is being logged at all.
+ *
+ * The distinction this exists to draw: an Events tab showing nothing means one
+ * of two very different things — the identity was quiet, or the account
+ * records nothing and the tab could never show anything. Only trail status can
+ * tell them apart, and until now it was collected and never read.
+ *
+ * Three answers, and the third is not a failure state. A stack that predates
+ * the CloudTrail grants, or a scan from before this surface existed, reports
+ * nothing here; "unknown" then keeps the empty tab honest rather than letting
+ * it assert either story. */
+export type TrailCoverage = "logging" | "not_logging" | "unknown";
+
+export function trailCoverageOf(observations: CloudObservation[]): TrailCoverage {
+  const rows = observations.filter((o) => o.source_api === SOURCE_CLOUDTRAIL_TRAIL_STATUS);
+  if (!rows.length) return "unknown";
+  // One trail delivering is enough for events to be possible, which is the
+  // question the Events tab is asking. Reporting "not logging" needs EVERY
+  // known trail to say so.
+  const anyLogging = rows.some((o) => trailStatusFacts(o).isLogging === true);
+  if (anyLogging) return "logging";
+  const allSaidNo = rows.every((o) => trailStatusFacts(o).isLogging === false);
+  return allSaidNo ? "not_logging" : "unknown";
 }
