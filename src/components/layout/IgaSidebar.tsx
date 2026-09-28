@@ -22,6 +22,8 @@ import {
   ClipboardCheck,
   UserPlus,
   Zap,
+  AlertTriangle,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +87,8 @@ const NAV_GOVERNANCE: IgaNavItem[] = [
   { title: "Separation of Duties", url: "/iga/sod", icon: ShieldAlert },
   { title: "Birthrights & Lifecycle", url: "/iga/birthrights", icon: UserPlus },
   { title: "Enforcement queue", url: "/iga/enforcement", icon: Zap },
+  { title: "ITDR Findings", url: "/iga/findings", icon: AlertTriangle },
+  { title: "Runtime Policies", url: "/iga/policies", icon: ScrollText },
 ];
 
 export function IgaSidebar({

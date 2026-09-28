@@ -82,6 +82,8 @@ import SoDPage from "./features/governance/SoDPage";
 import BirthrightsPage from "./features/governance/BirthrightsPage";
 import InstructionsPage from "./features/governance/InstructionsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
+import { FindingsTable, FindingDetail } from "./features/iga/itdr";
+import { PolicyList } from "./features/iga/policy";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -898,6 +900,37 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <InstructionsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── TRD 2: ITDR findings and runtime policies ── */}
+                  <Route
+                    path="/iga/findings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <FindingsTable />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/findings/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <FindingDetail />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyList />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
