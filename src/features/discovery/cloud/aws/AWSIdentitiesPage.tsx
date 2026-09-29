@@ -53,6 +53,7 @@ import {
   useListAwsUsageAllQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type CloudIdentity,
   type CloudIdentityKind,
 } from "@/app/api/cloudDiscoveryApi";
@@ -60,6 +61,7 @@ import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
 import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
+import { AWSAccountCell } from "./AWSAccountCell";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
   CandidateIdentityCaveat,
@@ -311,10 +313,9 @@ export default function AWSIdentitiesPage() {
         approxWidth: 150,
         cell: ({ row }) => {
           const connector = connectorById.get(row.original.connector_id);
+          const attrs = connector?.attrs as AWSConnectorAttrs | undefined;
           return (
-            <span className="font-mono text-xs text-muted-foreground">
-              {connector?.scope_id ?? "—"}
-            </span>
+            <AWSAccountCell accountId={connector?.scope_id} name={attrs?.display_name?.trim()} />
           );
         },
       },

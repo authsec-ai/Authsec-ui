@@ -60,6 +60,7 @@ import {
   useListAwsResourcesQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type CloudResource,
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
@@ -74,6 +75,7 @@ import {
   TEMPLATE_VERSION_WITH_RESOURCE_POLICIES,
 } from "./awsInventoryLabels";
 import { AWSResourceDrawer } from "./AWSResourceDrawer";
+import { AWSAccountCell } from "./AWSAccountCell";
 import {
   InventoryEmptyState,
   ResourceScopeCaveat,
@@ -203,6 +205,19 @@ export default function AWSResourcesPage() {
     (kmsPolicyQuery.data ? truncationOf(kmsPolicyQuery.data).truncated : false);
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
+
+  // Account id → the operator's name for it. Keyed on scope_id, not connector
+  // id, because a resource names the account that OWNS it, which may not be the
+  // account that scanned it — and may not be connected at all, in which case
+  // there is no name and the id stands alone.
+  const accountNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of connectors) {
+      const name = (c.attrs as AWSConnectorAttrs | undefined)?.display_name?.trim();
+      if (name) m.set(c.scope_id, name);
+    }
+    return m;
+  }, [connectors]);
 
   // Wrapped rather than inlined: `?? []` builds a new array identity on every
   // render, which would invalidate every useMemo below it each time.
@@ -354,12 +369,16 @@ export default function AWSResourcesPage() {
           const why = row.original.sensitivity_reason
             ? `${row.original.sensitivity_reason} (source: ${row.original.sensitivity_source || "unknown"})`
             : undefined;
-          // Same idiom as PermissionsTab: a "low" pill says nothing, so low
-          // renders as plain muted text and only med/high get a badge.
+          // Every rating gets a badge, including low. Low used to render as
+          // plain text while the others were pills, so a column of mixed
+          // ratings had two different shapes and the eye read the shape as the
+          // signal rather than the word. Now the shape is constant and only
+          // the word differs — which is the honest difference, since all three
+          // ratings come from the same place: the resource's type.
           return s === "low" ? (
-            <span className="text-xs text-muted-foreground" title={why}>
+            <CloudPill tone="muted" dot={false} title={why}>
               {SENSITIVITY_LABEL[s]}
-            </span>
+            </CloudPill>
           ) : (
             // Neutral, not the danger/warning tone the rating carries
             // elsewhere. Sensitivity here is derived from the resource TYPE —
@@ -474,24 +493,21 @@ export default function AWSResourcesPage() {
           const connector = connectorById.get(row.original.connector_id);
           const own = row.original.resource_account;
           if (!own) {
+            const scanned = connector?.scope_id;
             return (
-              <span
-                className="font-mono text-xs text-muted-foreground"
+              <AWSAccountCell
+                accountId={scanned}
+                name={scanned ? accountNameById.get(scanned) : undefined}
                 title="This ARN carries no account segment, so the account shown is the one that discovered it."
-              >
-                {connector?.scope_id ?? "—"}
-              </span>
+              />
             );
           }
           return (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-mono text-xs text-muted-foreground">{own}</span>
-              {row.original.is_external ? (
-                <CloudPill tone="warning" dot={false}>
-                  External
-                </CloudPill>
-              ) : null}
-            </span>
+            <AWSAccountCell
+              accountId={own}
+              name={accountNameById.get(own)}
+              external={row.original.is_external}
+            />
           );
         },
       },
@@ -504,7 +520,7 @@ export default function AWSResourcesPage() {
         cell: ({ row }) => <RelativeDate iso={row.original.first_seen_at} />,
       },
     ],
-    [connectorById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
+    [connectorById, accountNameById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
   );
 
   const liveConnectors = useMemo(

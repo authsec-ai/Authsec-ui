@@ -68,12 +68,14 @@ import {
   useListAwsWorkloadsQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type AWSWorkloadAttrs,
   type CloudIdentity,
   type CloudRuntimeKind,
   type CloudWorkload,
 } from "@/app/api/cloudDiscoveryApi";
 
+import { AWSAccountCell } from "./AWSAccountCell";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
@@ -408,11 +410,13 @@ export default function AWSComputePage() {
         header: "Account",
         priority: 6,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {connectorById.get(row.original.connector_id)?.scope_id ?? "—"}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const connector = connectorById.get(row.original.connector_id);
+          const attrs = connector?.attrs as AWSConnectorAttrs | undefined;
+          return (
+            <AWSAccountCell accountId={connector?.scope_id} name={attrs?.display_name?.trim()} />
+          );
+        },
       },
       {
         id: "status",
