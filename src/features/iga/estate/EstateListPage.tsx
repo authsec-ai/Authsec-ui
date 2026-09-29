@@ -51,7 +51,7 @@ import {
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, FacetSelect, SortSelect } from "../shared/components/FacetSelect";
-import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { AccountCell, NameCell } from "../shared/components/InventoryCells";
 import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
@@ -240,56 +240,11 @@ export default function EstateListPage() {
           />
         ),
       },
-      {
-        id: "region",
-        header: "Region",
-        priority: 4,
-        approxWidth: 120,
-        defaultHidden: true,
-        cell: ({ row }) => <span className="font-mono text-xs text-(--color-text-muted)">{row.original.region ?? "Not stated"}</span>,
-      },
-      {
-        id: "runtime",
-        header: "Runtime",
-        priority: 5,
-        approxWidth: 150,
-        defaultHidden: true,
-        cell: ({ row }) => <span className="text-sm">{RUNTIME_LABEL[row.original.runtime_kind]}</span>,
-      },
-      {
-        id: "arn",
-        header: "ARN",
-        priority: 6,
-        approxWidth: 300,
-        defaultHidden: true,
-        cell: ({ row }) => <CopyValue value={row.original.arn} />,
-        detail: (r) => <CopyValueWrapped value={r.arn} />,
-      },
-      {
-        id: "instances",
-        header: () => (
-          <span className="inline-flex items-center gap-1.5">
-            Instances
-            <HelpTooltip content="Aliases and versions, which separate a live agent from a canary. Nothing reads them yet, so “Not collected” is not a count of zero." />
-          </span>
-        ),
-        label: "Instances",
-        priority: 7,
-        approxWidth: 160,
-        defaultHidden: true,
-        // Not a count of zero: nothing reads Bedrock aliases or versions yet (§2.14.4).
-        cell: ({ row }) => (
-          <span className="text-xs text-(--color-text-muted)">
-            {row.original.instances?.state === "not_collected" ? "Not collected" : "—"}
-          </span>
-        ),
-        detail: (r) =>
-          r.instances?.state === "not_collected" ? (
-            <span className="text-(--color-text-muted)">Not collected — aliases and versions are not read yet, so this is not a count of zero.</span>
-          ) : (
-            <span className="text-(--color-text-muted)">Not applicable</span>
-          ),
-      },
+      // Region, Runtime, ARN and Instances are deliberately NOT columns here.
+      // They were hidden by default, so their only home was the row expander —
+      // a chevron on every row whose panel repeated what the workload's own
+      // page shows in full, one click away. Dropping them leaves nothing for a
+      // fitted row to reveal, which is why this table sets rowDetails={false}.
       {
         id: "actions",
         header: "",
@@ -426,7 +381,7 @@ export default function EstateListPage() {
           applied={applied}
           onClearAll={() => f.clearKeys(["account", "region", "runtime_kind"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
-          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} rowDetails={false} />}
         />
 
         <CoverageSummary subject="workloads"

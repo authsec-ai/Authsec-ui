@@ -1,8 +1,12 @@
 /**
  * The Columns control for an `AdaptiveTable` with `sizing="fit"`: which
- * optional fields the customer wants as columns. The table still decides
- * what fits; a chosen field that does not fit is shown in each row's details,
- * and this menu says so.
+ * optional fields the customer wants as columns. The table still decides what
+ * fits, and this menu says what became of a chosen field that did not.
+ *
+ * Where the table sets `rowDetails={false}` there is no row to expand, so a
+ * field that does not fit is simply not shown — pass `rowDetails={false}` here
+ * too and the wording follows. Promising row details a table does not have
+ * sends someone hunting for a chevron that is not there.
  *
  * Preferences are column ids only — never row contents — kept per table and
  * per signed-in user and workspace, in this browser.
@@ -22,6 +26,7 @@ export function ColumnsMenu<TData>({
   onChange,
   onReset,
   layout,
+  rowDetails = true,
 }: {
   optional: AdaptiveColumn<TData>[];
   chosen: string[];
@@ -29,15 +34,23 @@ export function ColumnsMenu<TData>({
   onReset: () => void;
   /** What the table is doing with the choice right now. */
   layout?: AdaptiveColumnsLayout;
+  /** Whether the table's rows expand. False: what does not fit is not shown. */
+  rowDetails?: boolean;
 }) {
   const label = (c: AdaptiveColumn<TData>) => c.label ?? (typeof c.header === "string" ? c.header : c.id);
   const moved = layout?.inDetails ?? [];
+  const where = rowDetails ? "in details" : "not shown";
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9" aria-label={`Columns${moved.length ? `, ${moved.length} in row details` : ""}`}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          aria-label={`Columns${moved.length ? `, ${moved.length} ${rowDetails ? "in row details" : "not shown"}` : ""}`}
+        >
           <Columns3 className="size-4" /> Columns
-          {moved.length ? <span className="rounded bg-(--color-surface-subtle) px-1 text-[11px] tabular-nums">{moved.length} in details</span> : null}
+          {moved.length ? <span className="rounded bg-(--color-surface-subtle) px-1 text-[11px] tabular-nums">{moved.length} {where}</span> : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-3">
@@ -53,14 +66,16 @@ export function ColumnsMenu<TData>({
                     onCheckedChange={(v) => onChange(v === true ? [...chosen, c.id] : chosen.filter((x) => x !== c.id))}
                   />
                   <span className="min-w-0 flex-1 truncate">{label(c)}</span>
-                  {on && moved.includes(c.id) ? <span className="text-[11px] text-(--color-text-muted)">in details</span> : null}
+                  {on && moved.includes(c.id) ? <span className="text-[11px] text-(--color-text-muted)">{where}</span> : null}
                 </label>
               </li>
             );
           })}
         </ul>
         <p className="mt-3 text-[11px] leading-snug text-(--color-text-muted)">
-          Fields that do not fit, or that are not chosen, are in each row's details.
+          {rowDetails
+            ? "Fields that do not fit, or that are not chosen, are in each row's details."
+            : "A field that does not fit is not shown. Open a row to see everything about it."}
         </p>
         <button type="button" onClick={onReset} className="mt-2 text-xs font-medium text-(--color-primary-text) hover:underline">
           Reset to default

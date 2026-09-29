@@ -44,7 +44,7 @@ import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, countText } from "../shared/la
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, FacetSelect, SortSelect } from "../shared/components/FacetSelect";
-import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { AccountCell, NameCell } from "../shared/components/InventoryCells";
 import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import {
@@ -249,23 +249,9 @@ export default function ResourcesListPage() {
           />
         ),
       },
-      {
-        id: "region",
-        header: "Region",
-        priority: 5,
-        approxWidth: 120,
-        defaultHidden: true,
-        cell: ({ row }) => <span className="font-mono text-xs text-(--color-text-muted)">{row.original.region ?? "Not stated"}</span>,
-      },
-      {
-        id: "reference",
-        header: "Full reference",
-        priority: 6,
-        approxWidth: 320,
-        defaultHidden: true,
-        cell: ({ row }) => <CopyValue value={row.original.text} />,
-        detail: (r) => <CopyValueWrapped value={r.text} />,
-      },
+      // No Region or Full reference column: both were hidden by default, so
+      // the row expander was their only home, and the resource's own page
+      // carries them. See rowDetails={false}.
       {
         id: "actions",
         header: "",
@@ -369,7 +355,7 @@ export default function ResourcesListPage() {
           applied={applied}
           onClearAll={() => f.clearKeys(["account", "service"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "kind" ? null : v)} />}
-          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} rowDetails={false} />}
         />
         <UnknownAccountNote
           account={accounts.length && !accounts.includes("unknown") ? accounts.join(",") : undefined}

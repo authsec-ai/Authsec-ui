@@ -806,6 +806,10 @@ export default function DiscoveryIntegrationsPage() {
           <AdaptiveTable
             tableId="discovery-integrations"
             sizing="fit"
+            // No row expander. In fit mode one appears as soon as a column does
+            // not fit, which made a chevron come and go with the window width;
+            // a row opens its connector's panel, which holds everything.
+            rowDetails={false}
             cardsBelow={640}
             loading={sourcesLoading}
             // Nothing loaded because a request failed: say so, not "none yet".

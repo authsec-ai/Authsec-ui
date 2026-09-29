@@ -41,7 +41,7 @@ import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, co
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, SortSelect } from "../shared/components/FacetSelect";
-import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { AccountCell, NameCell } from "../shared/components/InventoryCells";
 import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
@@ -214,15 +214,8 @@ export default function IdentitiesListPage() {
           />
         ),
       },
-      {
-        id: "arn",
-        header: "ARN",
-        priority: 4,
-        approxWidth: 300,
-        defaultHidden: true,
-        cell: ({ row }) => <CopyValue value={row.original.arn} />,
-        detail: (r) => <CopyValueWrapped value={r.arn} />,
-      },
+      // No ARN column: hidden by default, its only home was the row expander,
+      // and the identity's own page carries it in full. See rowDetails={false}.
       {
         id: "actions",
         header: "",
@@ -318,7 +311,7 @@ export default function IdentitiesListPage() {
           applied={applied}
           onClearAll={() => f.clearKeys(["account", "used_by"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
-          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} rowDetails={false} />}
         />
 
         <CoverageSummary subject="identities"
