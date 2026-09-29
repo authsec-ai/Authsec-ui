@@ -62,19 +62,25 @@ function coverageText(run: CloudScanRun): string | null {
   return parts.length ? `Surfaces: ${parts.join(" · ")}` : null;
 }
 
-/** What the run could not read, and the AWS call that refused. */
-function gapsText(run: CloudScanRun): string | null {
-  const gaps = run.coverage?.not_reached ?? [];
-  if (!gaps.length) return null;
-  const shown = gaps
-    .slice(0, 3)
-    .map((g) => `${g.surface.replace(/_/g, " ")} ${surfaceStateText(g.state)}${g.api ? ` (${g.api})` : ""}`);
-  return `Not read: ${shown.join("; ")}${gaps.length > 3 ? `; and ${gaps.length - 3} more` : ""}.`;
+/** How many gaps to show before folding the rest behind "+N more". Two is
+ * about one line at drawer width; the full list ran to fifteen-plus entries on
+ * a real scan and made every card taller than the result it was qualifying. */
+const GAPS_SHOWN = 2;
+
+/** What the run could not read, and the AWS call that refused — one entry per
+ * gap, so the card can fold the tail instead of rendering a paragraph. */
+function gapItems(run: CloudScanRun): string[] {
+  return (run.coverage?.not_reached ?? []).map(
+    (g) => `${g.surface.replace(/_/g, " ")} ${surfaceStateText(g.state)}${g.api ? ` (${g.api})` : ""}`,
+  );
 }
 
 export function AWSScanHistory({ connectorId }: { connectorId: string }) {
   const [cursors, setCursors] = useState<string[]>([]);
   const [poll, setPoll] = useState(0);
+  // Which runs have their full gap list open. Per-run rather than one flag, so
+  // expanding the newest scan does not lengthen every card below it.
+  const [openGaps, setOpenGaps] = useState<Record<string, boolean>>({});
   const q = useListAwsScanRunsQuery(
     { connectorId, cursor: cursors[cursors.length - 1] },
     { pollingInterval: poll },
@@ -120,29 +126,63 @@ export function AWSScanHistory({ connectorId }: { connectorId: string }) {
         {runs.map((run) => {
           const graph = graphOutcome(run);
           const cov = coverageText(run);
-          const gaps = gapsText(run);
+          const gaps = gapItems(run);
+          const gapsOpen = openGaps[run.id] === true;
+          const shownGaps = gapsOpen ? gaps : gaps.slice(0, GAPS_SHOWN);
+          const hiddenGaps = gaps.length - shownGaps.length;
           return (
-            <li key={run.id} className="space-y-1 rounded-md border px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-foreground">
+            <li key={run.id} className="rounded-md border px-3 py-2.5">
+              {/* When and how it ended — the line a reader scans first, so it
+                  carries the only strong type in the card. */}
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[12.5px] font-semibold leading-5 text-foreground">
                   {run.queued_at ? format(new Date(run.queued_at), "d MMM yyyy, HH:mm") : "Queued"}
-                  <span className="ml-1.5 font-normal text-muted-foreground">· {run.trigger}</span>
                 </span>
                 <CloudPill tone={RUN_TONE[run.status]}>{RUN_LABEL[run.status]}</CloudPill>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                {run.started_at ? `Started ${formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}` : "Not started yet"}
-                {run.finished_at ? ` · finished ${format(new Date(run.finished_at), "HH:mm")}` : ""}
-                {run.attempts > 1 ? ` · ${run.attempts} attempts` : ""}
-              </p>
-              {run.last_error && (run.status === "failed" || run.status === "abandoned") ? (
-                <p className="text-[11px] text-(--color-danger-text)">
-                  {run.last_error}. Earlier results are still shown, and marked stale where affected.
+
+              {/* Everything below is supporting detail, one step down in weight
+                  and colour. Previously the timing, the surfaces and the gap
+                  list were all the same size, and the gap list was the loudest
+                  colour on the card — it out-shouted the status pill that was
+                  the point of the row. */}
+              <div className="mt-1 space-y-0.5">
+                <p className="text-[11px] leading-[1.5] text-muted-foreground">
+                  <span className="text-(--color-text-muted)">{run.trigger}</span>
+                  {" · "}
+                  {run.started_at
+                    ? `started ${formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}`
+                    : "not started yet"}
+                  {run.finished_at ? ` → finished ${format(new Date(run.finished_at), "HH:mm")}` : ""}
+                  {run.attempts > 1 ? ` · ${run.attempts} attempts` : ""}
                 </p>
-              ) : null}
-              {cov ? <p className="text-[11px] text-muted-foreground">{cov}</p> : null}
-              {gaps ? <p className="text-[11px] text-(--color-warning-text)">{gaps}</p> : null}
-              {graph ? <p className="text-[11px] text-muted-foreground">{graph}</p> : null}
+                {run.last_error && (run.status === "failed" || run.status === "abandoned") ? (
+                  <p className="text-[11px] leading-[1.5] text-(--color-danger-text)">
+                    {run.last_error}. Earlier results are still shown, and marked stale where affected.
+                  </p>
+                ) : null}
+                {cov ? <p className="text-[11px] leading-[1.5] text-muted-foreground">{cov}</p> : null}
+                {gaps.length ? (
+                  // Only the label is warning-coloured. A whole paragraph of
+                  // orange competed with the green "Finished" pill and made an
+                  // ordinary partial read look like the headline.
+                  <p className="text-[11px] leading-[1.5] text-muted-foreground">
+                    <span className="font-medium text-(--color-warning-text)">Not read:</span>{" "}
+                    {shownGaps.join("; ")}
+                    {hiddenGaps > 0 ? "… " : " "}
+                    {gaps.length > GAPS_SHOWN ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpenGaps((o) => ({ ...o, [run.id]: !gapsOpen }))}
+                        className="font-medium text-(--color-primary-text) underline-offset-2 hover:underline"
+                      >
+                        {gapsOpen ? "Show less" : `+${hiddenGaps} more`}
+                      </button>
+                    ) : null}
+                  </p>
+                ) : null}
+                {graph ? <p className="text-[11px] leading-[1.5] text-muted-foreground">{graph}</p> : null}
+              </div>
             </li>
           );
         })}

@@ -423,3 +423,80 @@ export function coverageSurfaceLabel(key: string): string {
   }
   return key;
 }
+
+/** The scan phase a surface belongs to.
+ *
+ * A published report carries thirty-plus surfaces, because the compute phase
+ * writes one key per surface per region plus a `compute:<region>` entry for
+ * every region NOT selected. Flat, that is an undifferentiated wall; grouped,
+ * it is three short lists, and the one an operator came to read is usually
+ * Identities. The grouping mirrors the phases the scanner actually runs, which
+ * is also how the drawer's own copy describes the report. */
+export type CoverageGroup = "identities" | "permissions" | "compute" | "other";
+
+export const COVERAGE_GROUP_LABEL: Record<CoverageGroup, string> = {
+  identities: "Identities",
+  permissions: "Permissions",
+  compute: "Compute & activity",
+  // Normally empty, and the drawer skips empty groups — so this costs nothing
+  // until the backend ships a surface this build has not heard of.
+  other: "Other surfaces",
+};
+
+/** Order the drawer renders the groups in — the same order the scanner runs
+ * them, so the report reads as a sequence rather than an arbitrary list. */
+export const COVERAGE_GROUPS: CoverageGroup[] = ["identities", "permissions", "compute", "other"];
+
+const PERMISSION_SURFACES = new Set([
+  "oidc_providers",
+  "eks_pod_identity",
+  "resource_policies",
+  "policy_documents",
+  "permission_scan",
+]);
+
+const COMPUTE_SURFACES = new Set(["activity", "workload_scan"]);
+
+/**
+ * Which phase a surface key belongs to.
+ *
+ * Unrecognized keys land in `other`, NOT in `compute`. Defaulting them to
+ * compute was quietly wrong in one direction that matters: a future backend
+ * adding, say, `sso_permission_sets` would have been filed under "Compute &
+ * activity" and read as a compute gap. A group that says "this build does not
+ * know where this belongs" is the honest answer, and matches how
+ * `coverageSurfaceLabel` already falls back to the raw key rather than
+ * inventing a label.
+ *
+ * A `<name>:<region>` key is still compute by construction — per-region
+ * surfaces are only written by the compute phase — so a new AWS service shows
+ * up in the right place without this file being updated first.
+ */
+export function coverageSurfaceGroup(key: string): CoverageGroup {
+  if (key.startsWith("iam_")) return "identities";
+  if (PERMISSION_SURFACES.has(key)) return "permissions";
+  if (COMPUTE_SURFACES.has(key) || key.includes(":")) return "compute";
+  return "other";
+}
+
+/** How much a state demands attention, highest first. Sorting by this puts a
+ * denial at the top of its group instead of wherever the map happened to
+ * serialize it — the whole reason to read this report is to find the gaps. */
+const COVERAGE_SEVERITY: Record<CloudCoverageState, number> = {
+  denied: 6,
+  constrained: 5,
+  throttled: 4,
+  partial: 3,
+  stale: 2,
+  unknown: 1,
+  reached: 0,
+  not_configured: -1,
+  unsupported: -2,
+  // Last by a clear margin: an unselected region is a deliberate scope choice,
+  // and there is one per region AWS offers. These are what made the list long.
+  not_selected: -3,
+};
+
+export function coverageSeverity(state: CloudCoverageState): number {
+  return COVERAGE_SEVERITY[state] ?? 1;
+}
