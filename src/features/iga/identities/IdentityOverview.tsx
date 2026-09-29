@@ -7,6 +7,7 @@ import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
 import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, accountWithId, agoText, countText, dayText } from "../shared/labels";
 import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
+import { Timestamp } from "../shared/components/Timestamp";
 
 
 export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) {
@@ -104,7 +105,7 @@ export function IdentityOverview({ identity: i }: { identity: IdentityDetail }) 
           >
             <Facts>
               <Fact label="First seen">{dayText(i.first_seen_at)}</Fact>
-              <Fact label="Last confirmed">{agoText(i.last_confirmed_at)}</Fact>
+              <Fact label="Last confirmed"><Timestamp iso={i.last_confirmed_at} /></Fact>
               <Fact label="Identity continuity">{
                   i.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation${i.immutable_key ? ` (${i.immutable_key})` : ""}, so an ${kind} deleted and recreated under the same name is a new identity.`

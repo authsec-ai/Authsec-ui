@@ -96,8 +96,10 @@ export function PagedTable<T, M extends PagerMeta>({
   return (
     <>
       <div onKeyDown={rowKeys} aria-label={subject} className={view.dim ? "opacity-60 transition-opacity" : undefined}>
-        {/* Fitted to its container: no sideways scrolling; what does not fit
-            is in each row's details, and a narrow container gets cards. */}
+        {/* Fitted to its container: no sideways scrolling, and a narrow
+            container gets cards. Rows do not expand — every field these lists
+            carry is either a column or is on the object's own page, which the
+            row click opens, so a chevron per row revealed nothing new. */}
         <AdaptiveTable
           tableId={tableId}
           columns={columns}
@@ -109,6 +111,7 @@ export function PagedTable<T, M extends PagerMeta>({
           enablePagination={false}
           onRowClick={onRowClick}
           sizing="fit"
+          rowDetails={false}
           chosenColumns={chosenColumns}
           onColumnsLayout={onColumnsLayout}
           cardsBelow={640}

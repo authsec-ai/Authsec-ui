@@ -255,6 +255,9 @@ export interface CloudConnector {
   attrs: AWSConnectorAttrs | GCPConnectorAttrs | Record<string, unknown>;
   verified_at?: string | null;
   last_error?: string;
+  /** Stable class of `last_error`, stamped by the backend. Absent or "" when
+   * the failure matched no known sentinel — render `last_error` then. */
+  last_error_code?: string;
   created_by: string;
   created_at: string;
   updated_at: string;

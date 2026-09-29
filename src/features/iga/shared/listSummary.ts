@@ -60,7 +60,12 @@ export function unfilteredEmpty(subject: string, incomplete: string[]): string {
  */
 export function emptyGiven(empty: string, gaps: GraphCoverageGap[] | undefined): string {
   const incomplete = incompleteAccounts(gaps ?? [], (id) => id);
+  // Leads with the reason rather than with "None found in what could be read",
+  // which made the reader parse a qualifier before learning there was one. The
+  // claim is unchanged and still deliberately weaker than "none exist": this
+  // wording has to stay true for whatever the caller's subject is, since both
+  // the Identities and Resources tabs pass their own `empty` through here.
   return incomplete.length
-    ? `None found in what could be read. Collection is incomplete for ${incomplete.join(", ")}, so this may not be the whole answer.`
+    ? `Collection is incomplete for ${incomplete.join(", ")}, so this may not be the whole answer. Nothing was found in what could be read.`
     : empty;
 }

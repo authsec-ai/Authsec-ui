@@ -324,7 +324,11 @@
   --component-table-row-hover: #e7ecf3; /* clearly visible cool-gray row hover */
   --component-table-row-selected: var(--color-primary-soft);
   --component-table-cell-padding-inline: var(--space-5);
-  --component-table-cell-padding-block: var(--space-4); /* comfortable density (16px) */
+  /* 12px. Was 16px: with cells that routinely carry a name over an ARN, a
+     row ran tall enough that a screenful held very few of them. 12px keeps
+     two lines comfortable and shows meaningfully more at once; the compact
+     density variant (0.5rem) is still a step below for anyone who wants it. */
+  --component-table-cell-padding-block: var(--space-3);
   --component-table-radius: var(--radius-lg);
   --component-table-header-height: 2.5rem; /* compact header */
   --component-table-row-height: auto;

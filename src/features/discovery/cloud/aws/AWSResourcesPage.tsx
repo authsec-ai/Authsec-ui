@@ -45,10 +45,13 @@ import { Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -60,21 +63,23 @@ import {
   useListAwsResourcesQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type CloudResource,
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
+import { AWSFilterChips } from "./AWSFilterChips";
 import {
   ALL_ACCOUNTS,
   metricLabel,
   resourceKindLabel,
   SENSITIVITY_LABEL,
-  SENSITIVITY_TONE,
   stackPredatesResourcePolicies,
   TEMPLATE_VERSION_WITH_RESOURCE_POLICIES,
 } from "./awsInventoryLabels";
 import { AWSResourceDrawer } from "./AWSResourceDrawer";
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import {
   InventoryEmptyState,
   ResourceScopeCaveat,
@@ -89,6 +94,26 @@ import {
 } from "./awsObservationFacts";
 
 const ALL_KINDS = "all";
+
+/**
+ * A timestamp column's cell: relative text, the exact instant on hover.
+ *
+ * Both date columns used to call `formatDistanceToNow(new Date(iso))` inline
+ * with no guard, so a null or unparsable value rendered the string "Invalid
+ * Date" — or threw. The sibling Compute page has always guarded this; this is
+ * the same guard, and it says "Unknown" rather than inventing a time.
+ */
+function RelativeDate({ iso }: { iso: string | null | undefined }) {
+  const at = iso ? new Date(iso) : null;
+  if (!at || Number.isNaN(at.getTime())) {
+    return <span className="text-xs text-muted-foreground">Unknown</span>;
+  }
+  return (
+    <span className="text-xs text-muted-foreground" title={at.toLocaleString()}>
+      {formatDistanceToNow(at, { addSuffix: true })}
+    </span>
+  );
+}
 
 export default function AWSResourcesPage() {
   const [params, setParams] = useSearchParams();
@@ -185,6 +210,19 @@ export default function AWSResourcesPage() {
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
 
+  // Account id → the operator's name for it. Keyed on scope_id, not connector
+  // id, because a resource names the account that OWNS it, which may not be the
+  // account that scanned it — and may not be connected at all, in which case
+  // there is no name and the id stands alone.
+  const accountNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of connectors) {
+      const name = (c.attrs as AWSConnectorAttrs | undefined)?.display_name?.trim();
+      if (name) m.set(c.scope_id, name);
+    }
+    return m;
+  }, [connectors]);
+
   // Wrapped rather than inlined: `?? []` builds a new array identity on every
   // render, which would invalidate every useMemo below it each time.
   const rows = useMemo(() => resourcesQuery.data?.rows ?? [], [resourcesQuery.data]);
@@ -230,6 +268,44 @@ export default function AWSResourcesPage() {
         .map(([k, n]) => ({ key: k, label: resourceKindLabel(k), count: n })),
     ];
   }, [rows]);
+
+  /** What is narrowing the list right now, each removable. Search is excluded:
+   * it is visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (kind !== ALL_KINDS) {
+      out.push({
+        key: "kind",
+        label: `Type: ${resourceKindLabel(kind)}`,
+        onRemove: () => setParam("kind", null),
+      });
+    }
+    if (highOnly) {
+      out.push({ key: "high", label: "High sensitivity only", onRemove: () => setHighOnly(false) });
+    }
+    if (account !== ALL_ACCOUNTS) {
+      const c = connectors.find((x) => x.id === account);
+      out.push({
+        key: "account",
+        label: `Account: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("account", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, highOnly, account, connectors, params]);
+
+  /** Clear everything in ONE params write. Two sequential setParam calls each
+   * read the same stale `params`, so the second silently reverts the first —
+   * the hazard this file already documents. */
+  const clearAllFilters = () => {
+    const next = new URLSearchParams(params);
+    next.delete("kind");
+    next.delete("account");
+    setParams(next, { replace: true });
+    setHighOnly(false);
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -307,8 +383,7 @@ export default function AWSResourcesPage() {
           return (
             <EntityCell
               label={r.name || r.native_id}
-              detail={r.native_id}
-              monoDetail
+              detail={<CopyableId value={r.native_id} />}
               badge={
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {resourceKindLabel(r.kind)}
@@ -335,14 +410,25 @@ export default function AWSResourcesPage() {
           const why = row.original.sensitivity_reason
             ? `${row.original.sensitivity_reason} (source: ${row.original.sensitivity_source || "unknown"})`
             : undefined;
-          // Same idiom as PermissionsTab: a "low" pill says nothing, so low
-          // renders as plain muted text and only med/high get a badge.
+          // Every rating gets a badge, including low. Low used to render as
+          // plain text while the others were pills, so a column of mixed
+          // ratings had two different shapes and the eye read the shape as the
+          // signal rather than the word. Now the shape is constant and only
+          // the word differs — which is the honest difference, since all three
+          // ratings come from the same place: the resource's type.
           return s === "low" ? (
-            <span className="text-xs text-muted-foreground" title={why}>
+            <CloudPill tone="muted" dot={false} title={why}>
               {SENSITIVITY_LABEL[s]}
-            </span>
+            </CloudPill>
           ) : (
-            <CloudPill tone={SENSITIVITY_TONE[s]} dot={false} title={why}>
+            // Neutral, not the danger/warning tone the rating carries
+            // elsewhere. Sensitivity here is derived from the resource TYPE —
+            // every Secrets Manager secret and every KMS key is "high" — so
+            // colouring the row painted a normal account red forever and
+            // taught the reader to ignore the colour. The metric tiles above
+            // keep their tone: a COUNT of high-sensitivity resources is a
+            // summary worth noticing; a per-row restatement of the type is not.
+            <CloudPill tone="muted" dot={false} title={why}>
               {SENSITIVITY_LABEL[s]}
             </CloudPill>
           );
@@ -380,7 +466,10 @@ export default function AWSResourcesPage() {
           }
           if (denyIds.has(id)) {
             return (
-              <CloudPill tone="danger" dot={false}>
+              // Not danger. An explicit Deny is a guardrail, not a finding —
+              // the drawer says so itself ("An explicit Deny beats every
+              // Allow, from any policy"). Red claimed the opposite.
+              <CloudPill tone="info" dot={false} title="This resource's policy contains an explicit Deny, which overrides any Allow.">
                 Deny
               </CloudPill>
             );
@@ -422,14 +511,7 @@ export default function AWSResourcesPage() {
         header: "Last seen",
         priority: 4,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span
-            className="text-xs text-muted-foreground"
-            title={new Date(row.original.last_seen_at).toLocaleString()}
-          >
-            {formatDistanceToNow(new Date(row.original.last_seen_at), { addSuffix: true })}
-          </span>
-        ),
+        cell: ({ row }) => <RelativeDate iso={row.original.last_seen_at} />,
       },
       {
         id: "account",
@@ -452,24 +534,21 @@ export default function AWSResourcesPage() {
           const connector = connectorById.get(row.original.connector_id);
           const own = row.original.resource_account;
           if (!own) {
+            const scanned = connector?.scope_id;
             return (
-              <span
-                className="font-mono text-xs text-muted-foreground"
+              <AWSAccountCell
+                accountId={scanned}
+                name={scanned ? accountNameById.get(scanned) : undefined}
                 title="This ARN carries no account segment, so the account shown is the one that discovered it."
-              >
-                {connector?.scope_id ?? "—"}
-              </span>
+              />
             );
           }
           return (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-mono text-xs text-muted-foreground">{own}</span>
-              {row.original.is_external ? (
-                <CloudPill tone="warning" dot={false}>
-                  External
-                </CloudPill>
-              ) : null}
-            </span>
+            <AWSAccountCell
+              accountId={own}
+              name={accountNameById.get(own)}
+              external={row.original.is_external}
+            />
           );
         },
       },
@@ -479,14 +558,10 @@ export default function AWSResourcesPage() {
         header: "First seen",
         priority: 6,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(row.original.first_seen_at), { addSuffix: true })}
-          </span>
-        ),
+        cell: ({ row }) => <RelativeDate iso={row.original.first_seen_at} />,
       },
     ],
-    [connectorById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
+    [connectorById, accountNameById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
   );
 
   const liveConnectors = useMemo(
@@ -528,24 +603,26 @@ export default function AWSResourcesPage() {
 
       <ResourceScopeCaveat />
 
+      {/* Two rows, deliberately. Row one is the controls that are always worth
+          reaching — search, which takes the room, plus the sensitivity toggle
+          and the account scope. Row two is the type chips, which are as many as
+          the estate has kinds and so must never be allowed to wrap; AWSFilterChips
+          keeps six on the row and folds the tail behind More. Applied filters
+          and Clear all sit under both. */}
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name or ARN…"
-        filters={kindFilters}
-        activeFilter={kind}
-        onFilterChange={(v) => setParam("kind", v === ALL_KINDS ? null : v)}
         trailing={
           <>
-            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-              <input
-                id="aws-resources-high-only"
-                type="checkbox"
+            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
+              <Switch
                 checked={highOnly}
-                onChange={(e) => setHighOnly(e.target.checked)}
-                className="size-3.5 accent-(--color-primary)"
+                onCheckedChange={(v) => setHighOnly(v === true)}
+                aria-label="Show only high sensitivity resources"
               />
-              High sensitivity only
+              High sensitivity
             </label>
             <AWSAccountPicker
               connectors={connectors}
@@ -553,6 +630,19 @@ export default function AWSResourcesPage() {
               onChange={(next) => setParam("account", next)}
             />
           </>
+        }
+        below={
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Resource type"
+              options={kindFilters}
+              active={kind}
+              onSelect={(key) => setParam("kind", key === ALL_KINDS ? null : key)}
+            />
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
+            ) : null}
+          </div>
         }
       />
 
@@ -594,6 +684,11 @@ export default function AWSResourcesPage() {
               getRowId={(r) => r.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               onRowClick={(r) => setSelectedId(r.id)}
               pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />

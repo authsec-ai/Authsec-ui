@@ -38,10 +38,13 @@ import { AlertTriangle, Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -53,13 +56,16 @@ import {
   useListAwsUsageAllQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type CloudIdentity,
   type CloudIdentityKind,
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
-import { ALL_ACCOUNTS, metricLabel } from "./awsInventoryLabels";
+import { AWSFilterChips } from "./AWSFilterChips";
+import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
   CandidateIdentityCaveat,
@@ -87,11 +93,27 @@ export default function AWSIdentitiesPage() {
   // DiscoveryIntegrationsPage carries its own state.
   const account = params.get("account") ?? ALL_ACCOUNTS;
   const kindParam = params.get("kind");
+  // gcp_service_account belongs here too. Without it the GCP metric tile wrote
+  // ?kind=gcp_service_account, this reader fell through to "all", the query
+  // sent no kind and the table did not change — a tile that looked like a
+  // filter and was not one.
   const kind: "all" | CloudIdentityKind =
-    kindParam === "iam_role" || kindParam === "iam_user" ? kindParam : "all";
+    kindParam === "iam_role" || kindParam === "iam_user" || kindParam === "gcp_service_account"
+      ? kindParam
+      : "all";
 
   const [search, setSearch] = useState("");
   const [unusedOnly, setUnusedOnly] = useState(false);
+
+  /** Clear every filter in ONE params write: two sequential setParam calls each
+   * read the same stale `params`, so the second would revert the first. */
+  const clearAllFilters = () => {
+    const next = new URLSearchParams(params);
+    next.delete("kind");
+    next.delete("account");
+    setParams(next, { replace: true });
+    setUnusedOnly(false);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const setParam = (key: string, value: string | null) => {
@@ -268,6 +290,44 @@ export default function AWSIdentitiesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, total, truncated, usageByIdentity, usageIncomplete, params]);
 
+  /** Roles and Users always; GCP service accounts only once some exist, so a
+   * pure-AWS workspace is not offered a filter that can only ever return
+   * nothing. Pairs with the metric tile, which now filters for real. */
+  const kindFilters = useMemo<ConsoleFilterOption[]>(() => {
+    const base = [...KIND_FILTERS];
+    if (rows.some((i) => i.kind === "gcp_service_account")) {
+      base.push({ key: "gcp_service_account", label: "GCP service accounts" });
+    }
+    return base;
+  }, [rows]);
+
+  /** What is narrowing the list, each removable. Search is excluded — it is
+   * visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (kind !== "all") {
+      out.push({
+        key: "kind",
+        label: `Kind: ${IDENTITY_KIND_LABEL[kind] ?? kind}`,
+        onRemove: () => setParam("kind", null),
+      });
+    }
+    if (unusedOnly) {
+      out.push({ key: "unused", label: "Unused access only", onRemove: () => setUnusedOnly(false) });
+    }
+    if (account !== ALL_ACCOUNTS) {
+      const c = connectors.find((x) => x.id === account);
+      out.push({
+        key: "account",
+        label: `Account: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("account", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, unusedOnly, account, connectors, params]);
+
   const columns = useMemo<AdaptiveColumn<CloudIdentity>[]>(
     () => [
       {
@@ -282,11 +342,15 @@ export default function AWSIdentitiesPage() {
           return (
             <EntityCell
               label={i.name || i.native_id}
-              detail={i.native_id}
-              monoDetail
+              detail={<CopyableId value={i.native_id} />}
               badge={
+                // IDENTITY_KIND_LABEL, not a role/user ternary. The ternary
+                // called a GCP service account a "User", losing exactly the
+                // machine/human distinction that map exists to keep — and the
+                // drawer header, which uses the map, then disagreed with the
+                // table about the same identity.
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  {i.kind === "iam_role" ? "Role" : "User"}
+                  {IDENTITY_KIND_LABEL[i.kind] ?? i.kind}
                 </span>
               }
             />
@@ -300,10 +364,9 @@ export default function AWSIdentitiesPage() {
         approxWidth: 150,
         cell: ({ row }) => {
           const connector = connectorById.get(row.original.connector_id);
+          const attrs = connector?.attrs as AWSConnectorAttrs | undefined;
           return (
-            <span className="font-mono text-xs text-muted-foreground">
-              {connector?.scope_id ?? "—"}
-            </span>
+            <AWSAccountCell accountId={connector?.scope_id} name={attrs?.display_name?.trim()} />
           );
         },
       },
@@ -435,23 +498,22 @@ export default function AWSIdentitiesPage() {
       <CandidateIdentityCaveat />
 
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, ARN or tag…"
-        filters={KIND_FILTERS}
-        activeFilter={kind}
-        onFilterChange={(v) => setParam("kind", v === "all" ? null : v)}
         trailing={
+          // Row one: the toggle and the account scope beside search, matching
+          // Resources. The bare checkbox these replace sat flush against an
+          // unlabelled select and the two read as one control.
           <>
-            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-              <input
-                id="aws-identities-unused-only"
-                type="checkbox"
+            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
+              <Switch
                 checked={unusedOnly}
-                onChange={(e) => setUnusedOnly(e.target.checked)}
-                className="size-3.5 accent-(--color-primary)"
+                onCheckedChange={(v) => setUnusedOnly(v === true)}
+                aria-label="Show only identities with access they have never used"
               />
-              Unused access only
+              Unused access
             </label>
             <AWSAccountPicker
               connectors={connectors}
@@ -459,6 +521,19 @@ export default function AWSIdentitiesPage() {
               onChange={(next) => setParam("account", next)}
             />
           </>
+        }
+        below={
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Identity kind"
+              options={kindFilters}
+              active={kind}
+              onSelect={(key) => setParam("kind", key === "all" ? null : key)}
+            />
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
+            ) : null}
+          </div>
         }
       />
 
@@ -500,6 +575,11 @@ export default function AWSIdentitiesPage() {
               getRowId={(i) => i.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               onRowClick={(i) => setSelectedId(i.id)}
               pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />

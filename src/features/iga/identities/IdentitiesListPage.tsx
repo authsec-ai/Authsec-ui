@@ -41,7 +41,7 @@ import { DIRECT_BINDINGS_LABEL, DIRECT_BINDINGS_MEANING, IDENTITY_KIND_LABEL, co
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, SortSelect } from "../shared/components/FacetSelect";
-import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { AccountCell, NameCell } from "../shared/components/InventoryCells";
 import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
@@ -54,6 +54,7 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+import { HelpTooltip } from "@/components/ui/tooltip";
 
 const KINDS: { key: string; label: string; kind?: IdentityKind }[] = [
   { key: "all", label: "All" },
@@ -175,7 +176,17 @@ export default function IdentitiesListPage() {
       },
       {
         id: "used_by",
-        header: "Bindings",
+        // "Bindings" alone does not say which bindings are counted, and the
+        // distinction matters — the number deliberately excludes workloads that
+        // reach this identity through another role. That was only discoverable
+        // by hovering a cell. Reuses the same constant as the cell title so the
+        // two can never drift.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Bindings
+            <HelpTooltip content={DIRECT_BINDINGS_MEANING} />
+          </span>
+        ),
         label: DIRECT_BINDINGS_LABEL,
         priority: 2,
         approxWidth: 120,
@@ -203,20 +214,17 @@ export default function IdentitiesListPage() {
           />
         ),
       },
-      {
-        id: "arn",
-        header: "ARN",
-        priority: 4,
-        approxWidth: 300,
-        defaultHidden: true,
-        cell: ({ row }) => <CopyValue value={row.original.arn} />,
-        detail: (r) => <CopyValueWrapped value={r.arn} />,
-      },
+      // No ARN column: hidden by default, its only home was the row expander,
+      // and the identity's own page carries it in full. See rowDetails={false}.
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 48,
+        // The expand chevron is a fixed 44px cell immediately to the right, so
+        // at 48 the two controls sat almost edge to edge and read as one
+        // two-button group. The extra width is spent as right padding.
+        approxWidth: 64,
+        cellClassName: "pr-3",
         cell: ({ row }) => {
           const base = `/iga/identities/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the
@@ -303,7 +311,7 @@ export default function IdentitiesListPage() {
           applied={applied}
           onClearAll={() => f.clearKeys(["account", "used_by"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
-          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} rowDetails={false} />}
         />
 
         <CoverageSummary subject="identities"

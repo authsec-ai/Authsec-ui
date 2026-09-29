@@ -70,12 +70,17 @@ function ResourceRow({
     <li className="space-y-3 px-4 py-3.5">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
         <div className="min-w-0 flex-1">
+          {/* text-sm, a step above the supporting lines below it. The card
+              carries four or five lines of muted 12px — the account line, the
+              grant's actions, its provenance and its claim facts — and at 13px
+              the resource's own name did not clearly lead them. Weight only:
+              nothing moves. */}
           {path ? (
-            <Link {...viaLink(path, from)} className="break-all font-mono text-[13px] font-medium text-(--color-primary-text) hover:underline">
+            <Link {...viaLink(path, from)} className="break-all font-mono text-sm font-medium text-(--color-primary-text) hover:underline">
               {r.text}
             </Link>
           ) : (
-            <span className="break-all font-mono text-[13px] font-medium">{r.text}</span>
+            <span className="break-all font-mono text-sm font-medium">{r.text}</span>
           )}
           <p className="mt-0.5 text-xs text-(--color-text-muted)" title={RESOURCE_KIND_NOTE[r.kind]}>
             {accountLabel(r.account)} · {r.region ?? "Region not stated"}

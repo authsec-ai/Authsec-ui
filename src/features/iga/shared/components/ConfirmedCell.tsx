@@ -2,7 +2,8 @@ import type { RelState, StaleReason } from "@/app/api/igaGraphApi";
 import { StatusBadge } from "@/components/console/status";
 
 import { readableSurface } from "../../coverage/surfaceNames";
-import { agoText, dayText, surfaceStateText } from "../labels";
+import { dayText, surfaceStateText } from "../labels";
+import { Timestamp } from "./Timestamp";
 
 /**
  * A row's Last confirmed column: its age, and when it is stale, why — the
@@ -18,7 +19,16 @@ export function ConfirmedCell({
   lastConfirmedAt: string | null;
   staleReason?: StaleReason[];
 }) {
-  const age = <span className="text-(--color-text-muted)">{agoText(lastConfirmedAt)}</span>;
+  // `Timestamp` rather than bare `agoText`: same relative phrasing, but it
+  // carries the exact time on hover and an sr-only absolute. "Confirmed 4
+  // hours ago" is the readable form; the precise instant is what anyone
+  // correlating this against CloudTrail actually needs. It renders "not known"
+  // for a null, exactly as agoText did.
+  const age = (
+    <span className="text-(--color-text-muted)">
+      <Timestamp iso={lastConfirmedAt} />
+    </span>
+  );
   if (state !== "stale") return <span className="text-sm">{age}</span>;
   const why = staleReason?.[0];
   return (

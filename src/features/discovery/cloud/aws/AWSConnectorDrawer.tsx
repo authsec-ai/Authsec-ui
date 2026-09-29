@@ -14,22 +14,25 @@
 
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
 import {
   AlertTriangle,
   ArrowRight,
   Boxes,
+  ChevronRight,
   Database,
   Info,
   KeyRound,
   RefreshCw,
   ScanLine,
+  Search,
   ShieldCheck,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -79,9 +82,14 @@ import { awsErrorCopy } from "./awsErrorCopy";
 import { AWSRegionEditor } from "./AWSRegionEditor";
 import { AWSScanHistory } from "./AWSScanHistory";
 import {
+  coverageSeverity,
+  coverageSurfaceGroup,
   coverageSurfaceLabel,
+  COVERAGE_GROUPS,
+  COVERAGE_GROUP_LABEL,
   stackPredatesCompute,
   TEMPLATE_VERSION_WITH_COMPUTE,
+  type CoverageGroup,
 } from "./awsInventoryLabels";
 import { TruncationLine } from "./AWSInventoryNotices";
 import { truncationOf } from "./awsInventoryState";
@@ -140,6 +148,15 @@ const COVERAGE_LABEL: Record<CloudCoverageState, string> = {
 
 const IDENTITY_KIND_LABEL: Record<string, string> = { iam_role: "IAM role", iam_user: "IAM user" };
 
+// The shared TabsTrigger marks the active tab with a raised background and a
+// hairline shadow, which is legible on a wide page but nearly invisible against
+// this drawer's own panel. Weight, full-contrast text and a ring make the
+// selection obvious at a glance. Applied here rather than in tabs.tsx, which
+// every other tabbed screen renders.
+const TAB_TRIGGER =
+  "data-[state=active]:font-semibold data-[state=active]:text-(--color-primary-text) " +
+  "data-[state=active]:ring-1 data-[state=active]:ring-(--color-border-strong)";
+
 function relativeOrUnknown(iso: string | null | undefined): string {
   // nil means UNKNOWN, never "never used" — CloudIdentity/CloudSecret's own
   // comment in models/cloud_discovery.go. Never upgrade an absence into a
@@ -147,16 +164,172 @@ function relativeOrUnknown(iso: string | null | undefined): string {
   return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "Unknown";
 }
 
+/** "3 days ago" is the readable form; the exact timestamp is what an operator
+ * correlating with CloudTrail actually needs. Relative on the page, absolute
+ * on hover — never make someone choose between the two. */
+function AbsoluteOnHover({ iso, children }: { iso: string | null | undefined; children: ReactNode }) {
+  if (!iso) return <>{children}</>;
+  return <span title={format(new Date(iso), "d MMM yyyy, HH:mm:ss")}>{children}</span>;
+}
+
 function CoverageRow({ surfaceKey, state, count }: { surfaceKey: string; state: CloudCoverageState; count: number }) {
   return (
     <div className="flex items-center justify-between rounded-md border px-3 py-2">
-      <span className="text-xs text-foreground">{coverageSurfaceLabel(surfaceKey)}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-muted-foreground">
+      <span className="min-w-0 truncate pr-2 text-xs text-foreground">{coverageSurfaceLabel(surfaceKey)}</span>
+      <div className="flex flex-none items-center gap-2">
+        <span className="text-[11px] tabular-nums text-muted-foreground">
           {state === "reached" ? count : `≥ ${count}`}
         </span>
         <CloudPill tone={COVERAGE_TONE[state]}>{COVERAGE_LABEL[state]}</CloudPill>
       </div>
+    </div>
+  );
+}
+
+type Surface = { key: string; state: CloudCoverageState; count: number };
+
+/** A filter box for the drawer's long lists.
+ *
+ * Both tabs render up to AWS_DISCOVERY_MAX_LIMIT (500) rows into a 480px
+ * panel, which is a very long scroll with no way to find anything. Filtering
+ * is client-side over rows already fetched — deliberately, because a
+ * server-side search would re-page and make the truncation notice below the
+ * list mean something different from what it says. */
+function DrawerFilter({
+  value,
+  onChange,
+  placeholder,
+  matched,
+  total,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  matched: number;
+  total: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+          className="h-8 w-full rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus-ring)"
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            aria-label="Clear filter"
+            className="absolute right-1.5 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-(--color-surface-subtle) hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        ) : null}
+      </div>
+      {value ? (
+        <p className="text-[11px] text-muted-foreground">
+          {matched} of {total} shown
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One phase of the coverage report, collapsible.
+ *
+ * Two things keep this short. Surfaces sort worst-first, so a denial is the
+ * first thing in its group rather than wherever the map serialized it. And
+ * `not_selected` rows — one per AWS region the customer did not pick, which is
+ * most of them — collapse behind a single line, because "we deliberately did
+ * not look here" is scope, not a finding, and thirty of them buried the six
+ * rows that were.
+ */
+function CoverageGroupSection({
+  group,
+  surfaces,
+  open,
+  onToggle,
+}: {
+  group: CoverageGroup;
+  surfaces: Surface[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const [showUnselected, setShowUnselected] = useState(false);
+  const notSelected = surfaces.filter((s) => s.state === "not_selected");
+  const rest = surfaces.filter((s) => s.state !== "not_selected");
+  // The worst thing in the group, shown on the collapsed header so a closed
+  // group can still say "there is a denial in here".
+  const worst = rest.reduce<Surface | null>(
+    (acc, s) => (!acc || coverageSeverity(s.state) > coverageSeverity(acc.state) ? s : acc),
+    null,
+  );
+  const flagged = worst && coverageSeverity(worst.state) > 0 ? worst : null;
+
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-(--color-surface-subtle)"
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ChevronRight
+            className={cn("size-3.5 flex-none text-muted-foreground transition-transform", open && "rotate-90")}
+            aria-hidden
+          />
+          <span className="truncate text-xs font-medium text-foreground">{COVERAGE_GROUP_LABEL[group]}</span>
+        </span>
+        <span className="flex flex-none items-center gap-2">
+          <span className="text-[11px] tabular-nums text-muted-foreground">{surfaces.length}</span>
+          {flagged ? (
+            <CloudPill tone={COVERAGE_TONE[flagged.state]}>{COVERAGE_LABEL[flagged.state]}</CloudPill>
+          ) : null}
+        </span>
+      </button>
+
+      {open ? (
+        <div className="space-y-1.5 border-t px-2 py-2">
+          {rest.map((s) => (
+            <CoverageRow key={s.key} surfaceKey={s.key} state={s.state} count={s.count} />
+          ))}
+          {notSelected.length ? (
+            showUnselected ? (
+              <>
+                {notSelected.map((s) => (
+                  <CoverageRow key={s.key} surfaceKey={s.key} state={s.state} count={s.count} />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowUnselected(false)}
+                  className="px-1 text-[11px] font-medium text-(--color-primary-text) hover:underline"
+                >
+                  Hide regions that were not selected
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowUnselected(true)}
+                className="px-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {notSelected.length} not selected — show
+              </button>
+            )
+          ) : null}
+          {!rest.length && !notSelected.length ? (
+            <p className="px-1 text-[11px] text-muted-foreground">Nothing reported for this phase.</p>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -245,6 +418,15 @@ export function AWSConnectorDrawer({
     { skip: !connectorId },
   );
   const identities = identityPage?.rows;
+  const [identityFilter, setIdentityFilter] = useState("");
+  const [secretFilter, setSecretFilter] = useState("");
+  const shownIdentities = useMemo(() => {
+    const q = identityFilter.trim().toLowerCase();
+    if (!q) return identities ?? [];
+    return (identities ?? []).filter((i) =>
+      [i.name, i.native_id, IDENTITY_KIND_LABEL[i.kind] ?? i.kind].join(" ").toLowerCase().includes(q),
+    );
+  }, [identities, identityFilter]);
 
   // Scoped server-side. This used to fetch every secret in the workspace and
   // filter it against a Set of this connector's identity ids — a join that
@@ -257,6 +439,11 @@ export function AWSConnectorDrawer({
   );
   const { data: secretPage, isLoading: secretsLoading, isError: secretsError } = secretQuery;
   const connectorSecrets = useMemo(() => secretPage?.rows ?? [], [secretPage]);
+  const shownSecrets = useMemo(() => {
+    const q = secretFilter.trim().toLowerCase();
+    if (!q) return connectorSecrets;
+    return connectorSecrets.filter((s) => s.native_id.toLowerCase().includes(q));
+  }, [connectorSecrets, secretFilter]);
 
   const [verifyConnector, { isLoading: verifying }] = useVerifyAwsConnectorMutation();
   const [scanConnector, { isLoading: scanStarting }] = useScanAwsConnectorMutation();
@@ -268,6 +455,8 @@ export function AWSConnectorDrawer({
     setEditingRegions(false);
     setScanError(null);
     setFinishedRun(null);
+    setIdentityFilter("");
+    setSecretFilter("");
     onClose();
   };
 
@@ -334,6 +523,41 @@ export function AWSConnectorDrawer({
   const attrs = connector?.attrs as AWSConnectorAttrs | undefined;
   const surfaces = connector?.coverage?.surfaces ?? {};
   const surfaceEntries = Object.entries(surfaces);
+
+  // Surfaces bucketed by phase and sorted worst-first inside each bucket.
+  // `?? "unknown"` because the tone/label Records are total at COMPILE time and
+  // this value arrives over the wire: a state this build has never heard of
+  // must land on "Not checked", which claims nothing, rather than index the
+  // maps with it and render an empty pill.
+  const surfaceGroups = useMemo(() => {
+    const out: Record<CoverageGroup, Surface[]> = {
+      identities: [],
+      permissions: [],
+      compute: [],
+      other: [],
+    };
+    for (const [key, s] of Object.entries(connector?.coverage?.surfaces ?? {})) {
+      out[coverageSurfaceGroup(key)].push({
+        key,
+        state: (s?.state ?? "unknown") as CloudCoverageState,
+        count: s?.count ?? 0,
+      });
+    }
+    for (const g of COVERAGE_GROUPS) {
+      out[g].sort(
+        (a, b) => coverageSeverity(b.state) - coverageSeverity(a.state) || a.key.localeCompare(b.key),
+      );
+    }
+    return out;
+  }, [connector?.coverage?.surfaces]);
+
+  // Open a phase when it has something to act on, so the gaps are visible
+  // without a click and a clean report stays one line. Keyed by connector so
+  // opening a phase on one account does not decide the next one's layout.
+  const [openGroups, setOpenGroups] = useState<Partial<Record<CoverageGroup, boolean>>>({});
+  useEffect(() => setOpenGroups({}), [connectorId]);
+  const groupDefaultOpen = (g: CoverageGroup) =>
+    surfaceGroups[g].some((s) => coverageSeverity(s.state) > 0);
   // A denied/throttled IAM surface means an empty identities/secrets list is
   // a floor, not a total — never let that read as "found nothing".
   const iamIncomplete = ["iam_roles", "iam_users"].some((k) => surfaces[k] && surfaces[k].state !== "reached");
@@ -376,11 +600,24 @@ export function AWSConnectorDrawer({
 
             <Tabs value={tab} onValueChange={setTab} className="flex flex-1 flex-col gap-0 overflow-hidden">
               <div className="border-b px-6 pt-3">
-                <TabsList>
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="identities">Identities</TabsTrigger>
-                  <TabsTrigger value="secrets">Secrets</TabsTrigger>
-                  <TabsTrigger value="scans">Scans</TabsTrigger>
+                <TabsList className="w-full">
+                  {([
+                    ["overview", "Overview", undefined],
+                    // Only Identities carries a count: it is fetched with the
+                    // drawer. Secrets loads on first visit, so a count there
+                    // would read as "0 keys" until you opened the tab — worse
+                    // than no number at all.
+                    ["identities", "Identities", identities?.length],
+                    ["secrets", "Secrets", undefined],
+                    ["scans", "Scans", undefined],
+                  ] as const).map(([value, label, count]) => (
+                    <TabsTrigger key={value} value={value} className={TAB_TRIGGER}>
+                      {label}
+                      {count !== undefined && count > 0 ? (
+                        <span className="ml-1 text-[10px] tabular-nums text-muted-foreground">{count}</span>
+                      ) : null}
+                    </TabsTrigger>
+                  ))}
                 </TabsList>
               </div>
 
@@ -477,7 +714,15 @@ export function AWSConnectorDrawer({
                       />
                       <DetailRow
                         label="Last verified"
-                        value={connector.verified_at ? relativeOrUnknown(connector.verified_at) : "Never proven"}
+                        value={
+                          connector.verified_at ? (
+                            <AbsoluteOnHover iso={connector.verified_at}>
+                              {relativeOrUnknown(connector.verified_at)}
+                            </AbsoluteOnHover>
+                          ) : (
+                            "Never proven"
+                          )
+                        }
                       />
                       <DetailRow label="Caller identity" value={attrs?.caller_arn ?? "—"} mono />
                     </DetailGrid>
@@ -497,19 +742,18 @@ export function AWSConnectorDrawer({
                       />
                     ) : (
                       <div className="space-y-1.5">
-                        {surfaceEntries.map(([key, s]) => (
-                          // `?? "unknown"` because the Record's totality is a
-                          // COMPILE-time guarantee and this value arrives over
-                          // the wire: a backend that adds a state this build
-                          // has never heard of would otherwise index the maps
-                          // with it and render an empty pill. "Not checked" is
-                          // the safe landing — it claims nothing. The GCP
-                          // drawer already guards its equivalent this way.
-                          <CoverageRow
-                            key={key}
-                            surfaceKey={key}
-                            state={(s?.state ?? "unknown") as CloudCoverageState}
-                            count={s?.count ?? 0}
+                        {COVERAGE_GROUPS.filter((g) => surfaceGroups[g].length).map((g) => (
+                          <CoverageGroupSection
+                            // Keyed by connector too: without it the section
+                            // stays mounted across a switch to another account
+                            // and carries its "show unselected" state over.
+                            key={`${connector.id}:${g}`}
+                            group={g}
+                            surfaces={surfaceGroups[g]}
+                            open={openGroups[g] ?? groupDefaultOpen(g)}
+                            onToggle={() =>
+                              setOpenGroups((o) => ({ ...o, [g]: !(o[g] ?? groupDefaultOpen(g)) }))
+                            }
                           />
                         ))}
                         {connector.coverage.status === "partial" ? (
@@ -547,8 +791,13 @@ export function AWSConnectorDrawer({
                   {scanned ? (
                     <DrawerSection label="Discovered in this account">
                       <div className="grid gap-1.5">
+                        {/* All four are peer destinations, so they look alike.
+                            The first was a filled primary button, which read as
+                            the section's call to action and pulled the eye past
+                            the three links beside it — none of them is more
+                            "the" next step than the others. */}
                         {graphServed ? (
-                          <Button asChild size="sm" className="justify-between">
+                          <Button asChild variant="outline" size="sm" className="justify-between">
                             <Link to={`/iga/estate?account=${encodeURIComponent(connector.scope_id)}`}>
                               <span className="flex items-center gap-1.5">
                                 <Boxes className="size-3.5" />
@@ -620,7 +869,21 @@ export function AWSConnectorDrawer({
                     />
                   ) : (
                     <div className="space-y-1.5">
-                      {identities.map((identity) => {
+                      {identities.length > 8 ? (
+                        <DrawerFilter
+                          value={identityFilter}
+                          onChange={setIdentityFilter}
+                          placeholder="Filter by name, ARN or kind…"
+                          matched={shownIdentities.length}
+                          total={identities.length}
+                        />
+                      ) : null}
+                      {identityFilter && !shownIdentities.length ? (
+                        <p className="py-2 text-center text-[11px] text-muted-foreground">
+                          No identities match “{identityFilter}”.
+                        </p>
+                      ) : null}
+                      {shownIdentities.map((identity) => {
                         const iAttrs = identity.attrs as AWSIdentityAttrs;
                         return (
                           <div key={identity.id} className="rounded-md border px-3 py-2">
@@ -636,7 +899,10 @@ export function AWSConnectorDrawer({
                               {identity.native_id}
                             </p>
                             <p className="mt-1 text-[11px] text-muted-foreground">
-                              Last used {relativeOrUnknown(identity.last_used_at)}
+                              Last used{" "}
+                              <AbsoluteOnHover iso={identity.last_used_at}>
+                                {relativeOrUnknown(identity.last_used_at)}
+                              </AbsoluteOnHover>
                               {iAttrs?.has_trust_policy ? " · has a trust policy" : ""}
                             </p>
                           </div>
@@ -681,13 +947,33 @@ export function AWSConnectorDrawer({
                     />
                   ) : (
                     <div className="space-y-1.5">
-                      {connectorSecrets.map((secret) => (
+                      {connectorSecrets.length > 8 ? (
+                        <DrawerFilter
+                          value={secretFilter}
+                          onChange={setSecretFilter}
+                          placeholder="Filter by key id…"
+                          matched={shownSecrets.length}
+                          total={connectorSecrets.length}
+                        />
+                      ) : null}
+                      {secretFilter && !shownSecrets.length ? (
+                        <p className="py-2 text-center text-[11px] text-muted-foreground">
+                          No access keys match “{secretFilter}”.
+                        </p>
+                      ) : null}
+                      {shownSecrets.map((secret) => (
                         <div key={secret.id} className="flex items-center justify-between rounded-md border px-3 py-2">
                           <div className="min-w-0">
                             <p className="truncate font-mono text-xs text-foreground">{secret.native_id}</p>
                             <p className="text-[11px] text-muted-foreground">
-                              Created {relativeOrUnknown(secret.created_at)} · last used{" "}
-                              {relativeOrUnknown(secret.last_used_at)}
+                              Created{" "}
+                              <AbsoluteOnHover iso={secret.created_at}>
+                                {relativeOrUnknown(secret.created_at)}
+                              </AbsoluteOnHover>{" "}
+                              · last used{" "}
+                              <AbsoluteOnHover iso={secret.last_used_at}>
+                                {relativeOrUnknown(secret.last_used_at)}
+                              </AbsoluteOnHover>
                             </p>
                           </div>
                           <CloudPill tone={secret.status === "active" ? "success" : "muted"}>
@@ -708,36 +994,40 @@ export function AWSConnectorDrawer({
               </DrawerBody>
             </Tabs>
 
+            {/* Two groups, not three loose buttons and not `ml-auto`.
+                `ml-auto` pushed Revoke to the far edge, which left a wide gap
+                mid-row and dropped it onto a line of its own — that read as a
+                rendering fault, not a deliberate split. Grouping instead gives
+                the destructive action real separation while letting both
+                groups wrap as units, so a narrow drawer degrades tidily. */}
             <DrawerFooter>
-              <Button variant="outline" size="sm" onClick={handleVerify} disabled={verifying || connector.status === "revoked"}>
-                <ShieldCheck className={cn("mr-1.5 size-3.5", verifying && "animate-pulse")} />
-                {verifying ? "Verifying…" : "Verify"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleScan}
-                disabled={scanStarting || connector.status === "revoked" || connector.coverage?.status === "running"}
-              >
-                <RefreshCw className={cn("mr-1.5 size-3.5", scanStarting && "animate-spin")} />
-                {connector.coverage?.status === "running" ? "Scanning…" : "Scan now"}
-              </Button>
-              {/* No `ml-auto`. Pushing Revoke to the far edge of a wrapping
-                  footer left a wide gap mid-row and dropped the button onto a
-                  line of its own, which read as a rendering fault rather than a
-                  deliberate split. All three actions now sit together in one
-                  group; Revoke stays distinguishable by its danger colour, not
-                  by its position. */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-(--color-danger-text)"
-                onClick={() => setConfirmRevokeOpen(true)}
-                disabled={connector.status === "revoked"}
-              >
-                <Trash2 className="mr-1.5 size-3.5" />
-                Revoke
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleVerify} disabled={verifying || connector.status === "revoked"}>
+                  <ShieldCheck className={cn("mr-1.5 size-3.5", verifying && "animate-pulse")} />
+                  {verifying ? "Verifying…" : "Verify"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleScan}
+                  disabled={scanStarting || connector.status === "revoked" || connector.coverage?.status === "running"}
+                >
+                  <RefreshCw className={cn("mr-1.5 size-3.5", scanStarting && "animate-spin")} />
+                  {connector.coverage?.status === "running" ? "Scanning…" : "Scan now"}
+                </Button>
+              </div>
+              <div className="flex items-center border-(--color-border-subtle) sm:ml-2 sm:border-l sm:pl-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-(--color-danger-text)/30 text-(--color-danger-text) hover:bg-(--color-danger-soft) hover:text-(--color-danger-text)"
+                  onClick={() => setConfirmRevokeOpen(true)}
+                  disabled={connector.status === "revoked"}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" />
+                  Revoke
+                </Button>
+              </div>
             </DrawerFooter>
           </>
         )}

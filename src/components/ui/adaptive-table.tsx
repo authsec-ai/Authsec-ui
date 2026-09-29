@@ -87,6 +87,18 @@ interface AdaptiveTableProps<TData> {
   /** `sizing="fit"`: below this container width, rows become concise cards with expandable details. */
   cardsBelow?: number;
   /**
+   * `sizing="fit"`: whether a row can expand to show the fields its columns do
+   * not. Default true.
+   *
+   * Set false for a table whose every field is either a column or is on the
+   * object's own page — the expander then has nothing worth revealing, and a
+   * chevron on every row that opens a panel repeating what one click already
+   * gives is noise. It only turns off the TABLE's expander; the card layout
+   * below `cardsBelow` keeps its own "Details" toggle, which on a phone is the
+   * only way those fields can be read at all.
+   */
+  rowDetails?: boolean;
+  /**
    * Loading, failed and empty are three different answers. Without these
    * props a table says "No results." for all three; with them it shows a
    * skeleton while loading, the failure with Retry (never an empty table),
@@ -136,6 +148,7 @@ export function AdaptiveTable<TData>({
   getRowId,
   className,
   sizing = "auto",
+  rowDetails = true,
   chosenColumns,
   onColumnsLayout,
   cardsBelow,
@@ -199,7 +212,11 @@ export function AdaptiveTable<TData>({
       ? alwaysVisibleColumns.reduce(
           (sum, column) => sum + (isPrimary(column) ? column.minWidth ?? PRIMARY_MIN_WIDTH : column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
           0
-        ) + DETAILS_COLUMN_WIDTH
+        ) +
+        // Gated on the prop, not on `hasDetails`: that is derived from this
+        // set, so reading it here would be circular. Without an expander the
+        // 44px it occupied belongs to the columns.
+        (rowDetails ? DETAILS_COLUMN_WIDTH : 0)
       : alwaysVisibleColumns.reduce(
           (sum, column) => sum + (column.approxWidth ?? DEFAULT_COLUMN_WIDTH),
           0
@@ -229,6 +246,7 @@ export function AdaptiveTable<TData>({
     enableExpansion,
     renderExpandedRow,
     fit,
+    rowDetails,
     isPrimary,
   ]);
 
@@ -238,7 +256,7 @@ export function AdaptiveTable<TData>({
     () => (fit ? columns.filter((c) => !visibleColumnSet.has(c.id) && c.id !== "actions" && !isPrimary(c)) : []),
     [fit, columns, visibleColumnSet, isPrimary]
   );
-  const hasDetails = fit && detailColumns.length > 0;
+  const hasDetails = fit && rowDetails && detailColumns.length > 0;
 
   const layoutKey = `${[...visibleColumnSet].join(",")}|${optionalColumns.filter((c) => !visibleColumnSet.has(c.id)).map((c) => c.id).join(",")}`;
   React.useEffect(() => {
@@ -321,7 +339,9 @@ export function AdaptiveTable<TData>({
     const primary = columns.find((c) => isPrimary(c));
     const shown = columns.filter((c) => visibleColumnSet.has(c.id) && !isPrimary(c));
     const data = shown.filter((c) => c.id !== "actions");
-    const used = shown.reduce((sum, c) => sum + (c.approxWidth ?? DEFAULT_COLUMN_WIDTH), 0) + DETAILS_COLUMN_WIDTH;
+    const used =
+      shown.reduce((sum, c) => sum + (c.approxWidth ?? DEFAULT_COLUMN_WIDTH), 0) +
+      (rowDetails ? DETAILS_COLUMN_WIDTH : 0);
     const primaryTarget = Math.max(primary?.minWidth ?? PRIMARY_MIN_WIDTH, Math.min(460, Math.round(containerWidth * 0.34)));
     const extra = containerWidth - used - primaryTarget;
     const dataWidth = data.reduce((sum, c) => sum + (c.approxWidth ?? DEFAULT_COLUMN_WIDTH), 0);
@@ -332,7 +352,7 @@ export function AdaptiveTable<TData>({
       }
     }
     return out;
-  }, [fit, columns, isPrimary, containerWidth, visibleColumnSet]);
+  }, [fit, columns, isPrimary, containerWidth, visibleColumnSet, rowDetails]);
 
   const tableConfig: ResponsiveTableConfig<TData> = React.useMemo(
     () => ({

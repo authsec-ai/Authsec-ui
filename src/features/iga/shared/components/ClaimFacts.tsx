@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { formatDistanceToNow } from "date-fns";
 
 import type { Basis, GraphRef, RelState } from "@/app/api/igaGraphApi";
 import { StatusBadge } from "@/components/console/status";
 
 import { useEvidence } from "../../evidence/useEvidence";
 import { BASIS_EXPLANATION, RELATIONSHIP_LABEL, REL_STATE_TONE } from "../labels";
+import { Timestamp } from "./Timestamp";
 
 /**
  * One claim's facts on one line: its type, basis, lifecycle and last
@@ -43,7 +43,15 @@ export function ClaimFacts({
       </span>,
     );
   if (state === "current") parts.push(<span key="state">Current</span>);
-  if (confirmedAt) parts.push(<span key="at">Confirmed {formatDistanceToNow(new Date(confirmedAt), { addSuffix: true })}</span>);
+  // Via `Timestamp` so this row's freshness reads the same as every other
+  // confirmation in the product and carries the exact instant on hover. It was
+  // the one place that called formatDistanceToNow inline.
+  if (confirmedAt)
+    parts.push(
+      <span key="at">
+        Confirmed <Timestamp iso={confirmedAt} />
+      </span>,
+    );
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-text-muted)">
       {state && state !== "current" ? <StatusBadge tone={REL_STATE_TONE[state]}>{state}</StatusBadge> : null}

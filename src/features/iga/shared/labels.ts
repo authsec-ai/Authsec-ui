@@ -123,6 +123,19 @@ export function surfaceStateText(state: string): string {
  * States that leave a result short of the whole answer — rows missing or not
  * reconfirmed — as opposed to surfaces nobody asked for (not selected, not
  * supported, not configured). "Complete" is never said while one applies.
+ *
+ * `revoked` is deliberately NOT here. Every other member is something that
+ * happened TO the collection: AWS refused it, throttled it, a policy blocked
+ * it, or nobody has looked. Revocation is a decision the customer made in this
+ * product, and treating it as a collection gap told them their discovery was
+ * failing because they had switched an account off on purpose — an orange
+ * "Discovery is incomplete" banner, an "incomplete" badge in the pager, and a
+ * qualified empty state, none of which named a problem they could fix.
+ *
+ * It is not silently dropped: `PipelineNotice` renders a row per revoked
+ * account on every list page, in NEUTRAL tone, saying the last results are
+ * kept and are no longer reconfirmed. That is the honest message and the right
+ * place for it, so this set does not repeat it as a warning.
  */
 export const INCOMPLETE_STATES: ReadonlySet<SurfaceState> = new Set<SurfaceState>([
   "partial",
@@ -131,7 +144,6 @@ export const INCOMPLETE_STATES: ReadonlySet<SurfaceState> = new Set<SurfaceState
   "unknown",
   "stale",
   "constrained",
-  "revoked",
 ]);
 
 /** "22 min ago"; a time the server does not have is "not known", never now. */

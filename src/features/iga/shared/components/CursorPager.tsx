@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -66,12 +66,21 @@ export function CursorPager({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--color-border-subtle) px-4 py-2 text-xs">
-      <p className="tabular-nums text-(--color-text-muted)">
-        {count}
+      {/* The incomplete-accounts note used to be a coloured clause inside the
+          count's own sentence, so "1–25 of 431 found · 4294…, Akash incomplete"
+          read as one run of result text and the caveat disappeared into it. It
+          is a different KIND of statement — the count describes what loaded,
+          this describes what could not be collected — so it sits in its own
+          badge beside the count rather than continuing the line. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="tabular-nums text-(--color-text-muted)">{count}</p>
         {incompleteAccounts.length > 0 ? (
-          <span className="text-(--color-warning-text)"> · {incompleteAccounts.join(", ")} incomplete</span>
+          <span className="inline-flex items-center gap-1 rounded bg-(--color-warning-soft) px-1.5 py-0.5 font-medium text-(--color-warning-text)">
+            <AlertTriangle className="size-3 flex-none" aria-hidden="true" />
+            {incompleteAccounts.join(", ")} incomplete
+          </span>
         ) : null}
-      </p>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         {failure ? (
           <span role="alert" className="text-(--color-warning-text)">

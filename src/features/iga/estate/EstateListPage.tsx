@@ -51,7 +51,7 @@ import {
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { FacetCheckList, FacetSelect, SortSelect } from "../shared/components/FacetSelect";
-import { AccountCell, CopyValue, CopyValueWrapped, NameCell } from "../shared/components/InventoryCells";
+import { AccountCell, NameCell } from "../shared/components/InventoryCells";
 import { ListToolbar } from "../shared/components/ListToolbar";
 import { IgaPage } from "../shared/components/IgaPage";
 import { AsOf, ListGate, NotPublished } from "../shared/components/ListParts";
@@ -64,6 +64,7 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+import { HelpTooltip } from "@/components/ui/tooltip";
 
 const RUNTIMES = Object.keys(RUNTIME_LABEL) as RuntimeKind[];
 
@@ -197,7 +198,17 @@ export default function EstateListPage() {
       },
       {
         id: "classification",
-        header: "Classification",
+        // The per-value meaning is already a title on the cell, but that is
+        // only reachable by hovering a row — the column itself explained
+        // nothing. A thunk, because TanStack types `header` as
+        // `string | ((ctx) => ReactNode)`; `label` is what the Columns menu uses.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Classification
+            <HelpTooltip content="Whether this workload is recorded as an agent. AWS-run agent services are classified by what they are; anything else stays unclassified until someone records a decision. Unclassified is not a problem." />
+          </span>
+        ),
+        label: "Classification",
         priority: 2,
         approxWidth: 128,
         cardSummary: true,
@@ -229,55 +240,21 @@ export default function EstateListPage() {
           />
         ),
       },
-      {
-        id: "region",
-        header: "Region",
-        priority: 4,
-        approxWidth: 120,
-        defaultHidden: true,
-        cell: ({ row }) => <span className="font-mono text-xs text-(--color-text-muted)">{row.original.region ?? "Not stated"}</span>,
-      },
-      {
-        id: "runtime",
-        header: "Runtime",
-        priority: 5,
-        approxWidth: 150,
-        defaultHidden: true,
-        cell: ({ row }) => <span className="text-sm">{RUNTIME_LABEL[row.original.runtime_kind]}</span>,
-      },
-      {
-        id: "arn",
-        header: "ARN",
-        priority: 6,
-        approxWidth: 300,
-        defaultHidden: true,
-        cell: ({ row }) => <CopyValue value={row.original.arn} />,
-        detail: (r) => <CopyValueWrapped value={r.arn} />,
-      },
-      {
-        id: "instances",
-        header: "Instances",
-        priority: 7,
-        approxWidth: 160,
-        defaultHidden: true,
-        // Not a count of zero: nothing reads Bedrock aliases or versions yet (§2.14.4).
-        cell: ({ row }) => (
-          <span className="text-xs text-(--color-text-muted)">
-            {row.original.instances?.state === "not_collected" ? "Not collected" : "—"}
-          </span>
-        ),
-        detail: (r) =>
-          r.instances?.state === "not_collected" ? (
-            <span className="text-(--color-text-muted)">Not collected — aliases and versions are not read yet, so this is not a count of zero.</span>
-          ) : (
-            <span className="text-(--color-text-muted)">Not applicable</span>
-          ),
-      },
+      // Region, Runtime, ARN and Instances are deliberately NOT columns here.
+      // They were hidden by default, so their only home was the row expander —
+      // a chevron on every row whose panel repeated what the workload's own
+      // page shows in full, one click away. Dropping them leaves nothing for a
+      // fitted row to reveal, which is why this table sets rowDetails={false}.
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 48,
+        // The expand chevron is a fixed 44px cell immediately to the right, so
+        // at 48 the two controls sat almost edge to edge and read as one
+        // two-button group. The extra width is spent as right padding on the
+        // cell, which separates them without moving the chevron.
+        approxWidth: 64,
+        cellClassName: "pr-3",
         cell: ({ row }) => {
           const base = `/iga/estate/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the
@@ -404,7 +381,7 @@ export default function EstateListPage() {
           applied={applied}
           onClearAll={() => f.clearKeys(["account", "region", "runtime_kind"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
-          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
+          columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} rowDetails={false} />}
         />
 
         <CoverageSummary subject="workloads"

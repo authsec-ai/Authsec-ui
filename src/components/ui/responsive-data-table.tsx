@@ -761,7 +761,11 @@ export function ResponsiveDataTable<TData>({
                               data-clickable={hasRowInteraction ? "true" : "false"}
                               data-expanded={isExpanded ? "true" : "false"}
                               className={cn(
-                                "transition-colors hover:bg-[var(--component-table-row-hover)]",
+                                // `group` carries no styles of its own; it lets a
+                                // cell reveal an affordance on row hover (a copy
+                                // icon, say) the way the drag-drop row variant
+                                // above already could.
+                                "group relative transition-colors hover:bg-[var(--component-table-row-hover)]",
                                 hasRowInteraction && "cursor-pointer",
                                 rowClassName?.(row.original)
                               )}

@@ -53,15 +53,16 @@ import { Boxes, CircleSlash } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { CloudPill } from "../CloudPill";
 import { toast } from "react-hot-toast";
 import {
   useListAwsConnectorsQuery,
@@ -69,12 +70,15 @@ import {
   useListAwsWorkloadsQuery,
   useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
+  type AWSConnectorAttrs,
   type AWSWorkloadAttrs,
   type CloudIdentity,
   type CloudRuntimeKind,
   type CloudWorkload,
 } from "@/app/api/cloudDiscoveryApi";
 
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
+import { AWSFilterChips } from "./AWSFilterChips";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
@@ -153,6 +157,29 @@ export default function AWSComputePage() {
     next.delete("runtime");
     setParams(next, { replace: true });
   };
+
+  /** What is narrowing the list, each removable. Search is excluded — it is
+   * visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (attribution && attribution !== "all") {
+      out.push({
+        key: "attribution",
+        label: attribution === "unattributed" ? "Unattributed only" : "Attributed only",
+        onRemove: () => setParam("attribution", "all"),
+      });
+    }
+    if (runtime) {
+      out.push({
+        key: "runtime",
+        label: `Runtime: ${RUNTIME_KIND_LABEL[runtime] ?? runtime}`,
+        onRemove: () => setParam("runtime", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attribution, runtime, params]);
 
   const connectorsQuery = useListAwsConnectorsQuery();
   const connectors = useMemo(() => connectorsQuery.data ?? [], [connectorsQuery.data]);
@@ -311,8 +338,7 @@ export default function AWSComputePage() {
           return (
             <EntityCell
               label={w.name || w.native_id}
-              detail={w.native_id}
-              monoDetail
+              detail={<CopyableId value={w.native_id} />}
               badge={
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {RUNTIME_KIND_SHORT[w.runtime_kind]}
@@ -336,11 +362,16 @@ export default function AWSComputePage() {
           // scan did not discover. `unresolved_role_arn` says which role it
           // was looking for, so the row is actionable rather than just blank.
           if (!w.identity_id) {
+            // No "Unattributed" pill. The metric tile counts these and the
+            // banner above the table offers "Show only these" — both appear
+            // once. An amber pill per row restated that on a page whose whole
+            // premise is that unattributed compute is common, so a large
+            // account rendered hundreds of identical warnings. The word stays,
+            // muted, because the cell would otherwise be a bare ARN with no
+            // label; what it says is the ARN it names, which IS the finding.
             return (
               <div className="min-w-0">
-                <CloudPill tone="warning" dot={false}>
-                  Unattributed
-                </CloudPill>
+                <p className="text-xs text-muted-foreground">Unattributed</p>
                 {attrs?.unresolved_role_arn ? (
                   <p
                     className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground"
@@ -366,9 +397,12 @@ export default function AWSComputePage() {
             );
           }
           return (
-            <span className="truncate text-xs text-foreground" title={identity.native_id}>
+            // A block, not a span: `truncate` sets overflow/text-overflow,
+            // which do not apply to a non-replaced inline box, so this clipped
+            // at the cell's own overflow-hidden with no ellipsis at all.
+            <p className="truncate text-xs text-foreground" title={identity.native_id}>
               {identity.name || identity.native_id}
-            </span>
+            </p>
           );
         },
       },
@@ -401,11 +435,13 @@ export default function AWSComputePage() {
         header: "Account",
         priority: 6,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-muted-foreground">
-            {connectorById.get(row.original.connector_id)?.scope_id ?? "—"}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const connector = connectorById.get(row.original.connector_id);
+          const attrs = connector?.attrs as AWSConnectorAttrs | undefined;
+          return (
+            <AWSAccountCell accountId={connector?.scope_id} name={attrs?.display_name?.trim()} />
+          );
+        },
       },
       {
         id: "status",
@@ -535,36 +571,31 @@ export default function AWSComputePage() {
       <ComputeCaveat />
 
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, ARN or region…"
         filters={ATTRIBUTION_FILTERS}
         activeFilter={attribution}
         onFilterChange={(v) => setParam("attribution", v)}
+        below={
+          // The runtime pills used to be a second, hand-rolled row OUTSIDE the
+          // filter card, at a different height and font size from the bar's
+          // own. Same row-two position, but inside the card and sharing one
+          // chip component with Resources, so the two tabs match.
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Runtime"
+              options={runtimeFilters}
+              active={runtime ?? "all"}
+              onSelect={(key) => setParam("runtime", key === "all" ? null : key)}
+            />
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearFilters} />
+            ) : null}
+          </div>
+        }
       />
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        {runtimeFilters.map((f) => {
-          const active = f.key === "all" ? runtime === null : runtime === f.key;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setParam("runtime", f.key === "all" ? null : f.key)}
-              className={
-                active
-                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-(--color-primary-soft) px-2.5 text-[11px] font-semibold text-(--color-primary-text)"
-                  : "inline-flex h-7 items-center gap-1.5 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-[11px] font-medium text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
-              }
-            >
-              {f.label}
-              {f.count !== undefined ? (
-                <span className="tabular-nums text-muted-foreground">{f.count}</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
 
       <TableCard>
         <CardContent variant="flush">
@@ -609,6 +640,11 @@ export default function AWSComputePage() {
               getRowId={(w) => w.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               // Attributed rows lead to the identity, because "what may this
               // role do" is the question compute makes actionable. An
               // unattributed row has no identity to open, so it stays inert —

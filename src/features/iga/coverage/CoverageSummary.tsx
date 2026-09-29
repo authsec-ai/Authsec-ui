@@ -23,19 +23,32 @@ import { INCOMPLETE_STATES } from "../shared/labels";
 import { CoverageSheet } from "./CoverageSheet";
 import { readableSurface } from "./surfaceNames";
 
-/** What happened to the collection, in words that cannot be read as access. */
+/** What happened to the collection, in words that cannot be read as access.
+ *
+ * Split from the explanation below rather than one sentence: gaps are grouped
+ * account → service → state, so the same state repeats once per service and a
+ * full sentence in warning colour each time turned the panel into a block of
+ * orange that buried the service names. The short half stays coloured; the
+ * reason is rendered muted beside it. Same words, less shouting. */
 const COLLECTION_STATE: Record<SurfaceState, string> = {
   reached: "Collected",
   partial: "Collected in part",
-  denied: "Collection denied — AWS refused the discovery role's request",
+  denied: "Collection denied",
   throttled: "Collection throttled by AWS",
   unknown: "Collection failed or was not checked",
   stale: "Not reconfirmed by the latest scan",
   constrained: "Collection blocked by an account policy",
   revoked: "Connection revoked",
-  not_selected: "Outside the scan scope — region not selected",
+  not_selected: "Outside the scan scope",
   unsupported: "Not offered by AWS in this region",
   not_configured: "Not configured for collection",
+};
+
+/** The clause that used to sit after an em-dash in the label above. Only the
+ * two states that had one carry it; the rest say everything in the headline. */
+const COLLECTION_STATE_WHY: Partial<Record<SurfaceState, string>> = {
+  denied: "AWS refused the discovery role's request",
+  not_selected: "region not selected",
 };
 
 const OUT_OF_SCOPE: ReadonlySet<SurfaceState> = new Set<SurfaceState>(["not_selected", "unsupported", "not_configured"]);
@@ -58,7 +71,14 @@ export function CoverageSummary({
   const [account, setAccount] = useState<string | null>(null);
   const incomplete = useMemo(() => gaps.filter((g) => INCOMPLETE_STATES.has(g.state)), [gaps]);
   const scoped = useMemo(() => gaps.filter((g) => OUT_OF_SCOPE.has(g.state)), [gaps]);
-  if (gaps.length === 0) return null;
+  // Kept apart from both: a revoked account is neither a failed read nor a
+  // region nobody selected. It is still listed in the panel below, muted, so
+  // it is not hidden — but on its own it must not put a strip on the page.
+  const revoked = useMemo(() => gaps.filter((g) => g.state === "revoked"), [gaps]);
+
+  // Nothing to say when the only "gap" is an account the customer disconnected
+  // themselves. PipelineNotice already reports that, once, in neutral tone.
+  if (!incomplete.length && !scoped.length) return null;
 
   const accounts = [...new Set(incomplete.map((g) => g.account_id))];
   const connectorOf = (accountId: string) => {
@@ -87,7 +107,9 @@ export function CoverageSummary({
       </div>
 
       <Sheet open={review} onOpenChange={setReview}>
-        <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-[440px]">
+        {/* 520 rather than 440: the state line, its reason and the region list
+            share one row, and at 440 nearly every gap wrapped to three lines. */}
+        <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-[520px]">
           <SheetHeader className="shrink-0 border-b px-5 py-4">
             <SheetTitle>Collection gaps</SheetTitle>
             <SheetDescription>
@@ -96,10 +118,20 @@ export function CoverageSummary({
             </SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-            {groupByAccount(incomplete.length ? [...incomplete, ...scoped] : scoped).map(([accountId, list]) => (
+            {groupByAccount([...incomplete, ...scoped, ...revoked]).map(([accountId, list]) => (
               <section key={accountId} className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-(--color-text)">{accountName(accountId)}</h3>
+                  <h3 className="text-sm font-semibold text-(--color-text)">
+                    {accountName(accountId)}
+                    {/* How much is under this heading, before it is scrolled.
+                        Counts services, which is how the list below is grouped
+                        — not surfaces, which would be a larger and less
+                        meaningful number. */}
+                    <span className="ml-2 font-normal tabular-nums text-(--color-text-muted)">
+                      {groupByService(list).length}
+                      {groupByService(list).length === 1 ? " service" : " services"}
+                    </span>
+                  </h3>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -108,7 +140,10 @@ export function CoverageSummary({
                       setAccount(accountId);
                     }}
                   >
-                    Full coverage
+                    {/* "Full coverage" read as a claim about this account's
+                        state — the opposite of what the panel is showing. It
+                        is a link to the account's whole coverage report. */}
+                    Account coverage
                   </Button>
                 </div>
                 <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
@@ -117,16 +152,29 @@ export function CoverageSummary({
                       <p className="font-medium text-(--color-text)">{service}</p>
                       {groupByState(rows).map(([state, items]) => (
                         <div key={state} className="space-y-0.5">
-                          <p className={INCOMPLETE_STATES.has(state) ? "text-(--color-warning-text)" : "text-(--color-text-muted)"}>
-                            {COLLECTION_STATE[state] ?? state}
+                          <p className="text-(--color-text-muted)">
+                            <span
+                              className={
+                                INCOMPLETE_STATES.has(state)
+                                  ? "font-medium text-(--color-warning-text)"
+                                  : "text-(--color-text-muted)"
+                              }
+                            >
+                              {COLLECTION_STATE[state] ?? state}
+                            </span>
+                            {COLLECTION_STATE_WHY[state] ? ` — ${COLLECTION_STATE_WHY[state]}` : ""}
                             {regionsText(items)}
                           </p>
                           <p className="text-xs text-(--color-text-muted)">{items[0].affects}</p>
-                          <details className="text-xs text-(--color-text-muted)">
-                            <summary className="inline-flex cursor-pointer list-none items-center gap-1 [&::-webkit-details-marker]:hidden">
-                              <ChevronRight className="size-3" aria-hidden="true" /> Technical details
+                          <details className="group text-xs">
+                            <summary className="inline-flex cursor-pointer list-none items-center gap-1 font-medium text-(--color-primary-text) hover:underline [&::-webkit-details-marker]:hidden">
+                              <ChevronRight
+                                className="size-3 transition-transform group-open:rotate-90"
+                                aria-hidden="true"
+                              />
+                              View technical details
                             </summary>
-                            <ul className="mt-1 space-y-0.5 pl-4 font-mono text-[11px]">
+                            <ul className="mt-1 space-y-0.5 pl-4 font-mono text-[11px] font-normal text-(--color-text-muted)">
                               {items.map((g) => (
                                 <li key={g.surface}>
                                   {g.surface} · {g.state}

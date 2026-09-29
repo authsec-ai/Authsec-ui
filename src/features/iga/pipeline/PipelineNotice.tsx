@@ -173,9 +173,12 @@ export function PipelineNotice({ pipeline }: { pipeline: Pipeline }) {
       aria-label="Scan status"
       className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)"
     >
+      {/* Rows are py-2, not py-3: one account is one line of text, and the
+          taller padding made a single-row notice as tall as a table header for
+          no gain. Wrapping rows still breathe on gap-y. */}
       <ul className="divide-y divide-(--color-border-subtle)">
         {rows.map(({ account, state }) => (
-          <li key={account.integration} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+          <li key={account.integration} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm">
             <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
             <span className="font-medium text-(--color-text)">
               {account.label}

@@ -31,15 +31,21 @@
  *    the closest analog is the last completed scan, else the last proven
  *    connection, else "Never".
  *  - Enabled: cloud has three states (active/error/revoked), not a
- *    reversible boolean — the switch reflects "not revoked" but is read-only;
- *    revoking is one-way and lives in the row menu with a confirm dialog,
- *    exactly like a source's own "Delete…".
+ *    reversible boolean, so a cloud row shows "—" here rather than a switch.
+ *    This column is the CONTROL and Status is the RESULT; a read-only switch
+ *    mirroring `status !== "revoked"` made the two look like rival answers to
+ *    one question. Revoking is one-way and lives in the row menu with a
+ *    confirm dialog, exactly like a source's own "Delete…".
  *  - Agents: no agent classification is wired to cloud connectors yet
  *    (AWS discovers IAM identities, which are candidates, not agents; GCP
  *    has no discovery endpoints at all) — shown as "—", never a fabricated
  *    or mislabeled count.
  *  - Detail: `CloudConnector.last_error` is a direct analog of
- *    `DiscoverySource.last_error` — same meaning, shown the same way.
+ *    `DiscoverySource.last_error` — same meaning, shown the same way. A
+ *    connector also carries `last_error_code`, a stable class the backend
+ *    stamps where the error is understood, so the cell can show a short
+ *    phrase ("Access refused by the account") with the provider's own prose
+ *    behind a tooltip. A source has no such code, so it shows its prose.
  */
 
 import { tableFailure } from "@/components/console/load-failure";
@@ -107,6 +113,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { HelpTooltip, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cloudConnectorErrorSummary } from "./cloud/cloudConnectorErrorCopy";
 
 type StatusFilter = "all" | "enabled" | "disabled" | "attention";
 
@@ -116,6 +124,24 @@ const FILTERS: ConsoleFilterOption[] = [
   { key: "disabled", label: "Disabled" },
   { key: "attention", label: "Needs attention" },
 ];
+
+/** One definition of what each filter means, shared by the visible list and
+ * the counts on the filter pills. Two copies drifted apart is exactly how a
+ * pill ends up promising rows the table then doesn't show. */
+function matchesStatusFilter(r: IntegrationRow, filter: StatusFilter): boolean {
+  switch (filter) {
+    case "enabled":
+      return r.rowKind === "source" ? r.source.enabled : r.connector.status !== "revoked";
+    case "disabled":
+      return r.rowKind === "source" ? !r.source.enabled : r.connector.status === "revoked";
+    case "attention":
+      return r.rowKind === "source"
+        ? r.source.enabled && (r.source.last_status === "failed" || r.source.last_status === "degraded")
+        : r.connector.status === "error";
+    default:
+      return true;
+  }
+}
 
 const PILL =
   "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium";
@@ -388,24 +414,7 @@ export default function DiscoveryIntegrationsPage() {
   );
 
   const items = useMemo(() => {
-    let list = allRows;
-    if (statusFilter === "enabled") {
-      list = list.filter((r) =>
-        r.rowKind === "source" ? r.source.enabled : r.connector.status !== "revoked",
-      );
-    }
-    if (statusFilter === "disabled") {
-      list = list.filter((r) =>
-        r.rowKind === "source" ? !r.source.enabled : r.connector.status === "revoked",
-      );
-    }
-    if (statusFilter === "attention") {
-      list = list.filter((r) =>
-        r.rowKind === "source"
-          ? r.source.enabled && (r.source.last_status === "failed" || r.source.last_status === "degraded")
-          : r.connector.status === "error",
-      );
-    }
+    let list = allRows.filter((r) => matchesStatusFilter(r, statusFilter));
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((r) => {
@@ -416,11 +425,28 @@ export default function DiscoveryIntegrationsPage() {
             .includes(q);
         }
         const { label, detail } = cloudIntegrationText(r.connector);
-        return [label, detail, r.connector.scope_id].join(" ").toLowerCase().includes(q);
+        // Regions are searchable because "which accounts cover eu-west-1" is a
+        // real question an operator asks of this list, and the answer was not
+        // reachable from any column shown here.
+        const regions =
+          r.connector.provider === "aws" ? ((r.connector.attrs as AWSConnectorAttrs)?.regions ?? []) : [];
+        return [label, detail, r.connector.scope_id, ...regions].join(" ").toLowerCase().includes(q);
       });
     }
     return list;
   }, [allRows, search, statusFilter]);
+
+  // A count on every pill, so "Needs attention" carries a number instead of
+  // looking like just another way to slice the list. Counts ignore the search
+  // box: a pill that changed as you typed would be measuring the wrong thing.
+  const filters = useMemo<ConsoleFilterOption[]>(
+    () =>
+      FILTERS.map((f) => ({
+        ...f,
+        count: allRows.filter((r) => matchesStatusFilter(r, f.key as StatusFilter)).length,
+      })),
+    [allRows],
+  );
 
   const columns = useMemo<AdaptiveColumn<IntegrationRow>[]>(
     () => [
@@ -484,7 +510,19 @@ export default function DiscoveryIntegrationsPage() {
       },
       {
         id: "enabled",
-        header: "Enabled",
+        // Status and this column look like two answers to one question. They
+        // aren't: this is the control, Status is the result of using it. The
+        // header says so rather than leaving a reader to guess which wins.
+        // A thunk, not a bare element: TanStack types `header` as
+        // `string | ((ctx) => ReactNode)`, so a JSX value is a type error even
+        // though it renders. `label` is what the Columns menu uses.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Enabled
+            <HelpTooltip content="Turns discovery on or off. Status shows the result — a source can be enabled and still be failing. Cloud accounts have no reversible switch; use Revoke in the row menu." />
+          </span>
+        ),
+        label: "Enabled",
         priority: 5,
         approxWidth: 100,
         cell: ({ row }) => {
@@ -506,10 +544,16 @@ export default function DiscoveryIntegrationsPage() {
               />
             ) : (
               // Cloud has no reversible enabled/disabled flag — active/error
-              // are both "still onboarded", revoked is a one-way action.
-              // Read-only here on purpose; "Revoke…" in the row menu is the
-              // real lever, with the confirmation a one-way action deserves.
-              <Switch checked={item.connector.status !== "revoked"} disabled />
+              // are both "still onboarded", revoked is a one-way action whose
+              // lever is "Revoke…" in the row menu. A disabled switch here
+              // just restated the Status pill in a second, dimmer vocabulary;
+              // the dash says "no control here" without competing with it.
+              <span
+                className="text-xs text-muted-foreground"
+                title="Cloud accounts have no on/off switch. Use Revoke in the row menu."
+              >
+                —
+              </span>
             )}
           </div>
           );
@@ -539,16 +583,53 @@ export default function DiscoveryIntegrationsPage() {
         id: "last_error",
         header: "Detail",
         priority: 4,
-        approxWidth: 240,
+        approxWidth: 260,
         cell: ({ row }) => {
-          const err =
-            row.original.rowKind === "source" ? row.original.source.last_error : row.original.connector.last_error;
-          return err ? (
-            <span className="block max-w-[220px] truncate text-xs text-muted-foreground" title={err}>
-              {err}
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+          const item = row.original;
+          // A connector carries a stable class alongside the prose, so the cell
+          // can say what KIND of failure this is instead of showing the first
+          // 30 characters of an AWS error. A source has no such code yet, so it
+          // falls back to its own prose — same as before.
+          // A revoked connector keeps the error it failed with, because that is
+          // evidence worth retaining — but this column answers "what is wrong
+          // now", and the answer for a revoked connection is "nothing, it was
+          // disconnected". Status already says Revoked; repeating the old
+          // failure beside it reads as an active problem.
+          const stale = item.rowKind === "cloud" && item.connector.status === "revoked";
+          const full = item.rowKind === "source" ? item.source.last_error : item.connector.last_error;
+          const summary = stale
+            ? undefined
+            : item.rowKind === "source"
+              ? full?.trim() || undefined
+              : cloudConnectorErrorSummary(item.connector.last_error_code, item.connector.last_error);
+
+          if (!summary) return <span className="text-xs text-muted-foreground">—</span>;
+
+          // The full prose is always behind the tooltip, because the cell
+          // truncates either way and losing the rest of an error to an ellipsis
+          // is what this column was reported for. The dotted underline is
+          // reserved for the case where the visible text is a SUMMARY, so it
+          // signals "there is more than this", not merely "this is clipped".
+          const detailed = full?.trim() || summary;
+          const summarized = detailed !== summary;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* No stopPropagation here. The tooltip opens on hover and
+                    focus, so nothing needs a click — and swallowing it made
+                    this the one cell in the row that did not open the row. */}
+                <span
+                  className={`block cursor-help truncate text-xs text-muted-foreground${
+                    summarized ? " underline decoration-dotted underline-offset-2" : ""
+                  }`}
+                >
+                  {summary}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-sm whitespace-pre-wrap">
+                {detailed}
+              </TooltipContent>
+            </Tooltip>
           );
         },
       },
@@ -556,7 +637,12 @@ export default function DiscoveryIntegrationsPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 56,
+        // Wide enough that the extra right padding below doesn't squeeze the
+        // trigger: `sizing="fit"` renders the cell at exactly approxWidth and
+        // clips the overflow.
+        approxWidth: 76,
+        className: "pr-6",
+        cellClassName: "pr-6 text-right",
         cell: ({ row }) => {
           if (row.original.rowKind === "source") {
             const source = row.original.source;
@@ -701,11 +787,16 @@ export default function DiscoveryIntegrationsPage() {
         </div>
       ) : null}
 
+      {/* The bar holds one search box and four pills, and the card's default
+          16px block padding gave that more vertical room than it earns. Scoped
+          here rather than changed in ConsoleFilterBar, which ~30 other list
+          pages render. */}
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search integrations…"
-        filters={FILTERS}
+        filters={filters}
         activeFilter={statusFilter}
         onFilterChange={(v) => setStatusFilter(v as StatusFilter)}
       />
@@ -715,6 +806,10 @@ export default function DiscoveryIntegrationsPage() {
           <AdaptiveTable
             tableId="discovery-integrations"
             sizing="fit"
+            // No row expander. In fit mode one appears as soon as a column does
+            // not fit, which made a chevron come and go with the window width;
+            // a row opens its connector's panel, which holds everything.
+            rowDetails={false}
             cardsBelow={640}
             loading={sourcesLoading}
             // Nothing loaded because a request failed: say so, not "none yet".
