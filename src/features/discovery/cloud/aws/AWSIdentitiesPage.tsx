@@ -59,7 +59,7 @@ import {
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
-import { ALL_ACCOUNTS, metricLabel } from "./awsInventoryLabels";
+import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
   CandidateIdentityCaveat,
@@ -87,8 +87,14 @@ export default function AWSIdentitiesPage() {
   // DiscoveryIntegrationsPage carries its own state.
   const account = params.get("account") ?? ALL_ACCOUNTS;
   const kindParam = params.get("kind");
+  // gcp_service_account belongs here too. Without it the GCP metric tile wrote
+  // ?kind=gcp_service_account, this reader fell through to "all", the query
+  // sent no kind and the table did not change — a tile that looked like a
+  // filter and was not one.
   const kind: "all" | CloudIdentityKind =
-    kindParam === "iam_role" || kindParam === "iam_user" ? kindParam : "all";
+    kindParam === "iam_role" || kindParam === "iam_user" || kindParam === "gcp_service_account"
+      ? kindParam
+      : "all";
 
   const [search, setSearch] = useState("");
   const [unusedOnly, setUnusedOnly] = useState(false);
@@ -285,8 +291,13 @@ export default function AWSIdentitiesPage() {
               detail={i.native_id}
               monoDetail
               badge={
+                // IDENTITY_KIND_LABEL, not a role/user ternary. The ternary
+                // called a GCP service account a "User", losing exactly the
+                // machine/human distinction that map exists to keep — and the
+                // drawer header, which uses the map, then disagreed with the
+                // table about the same identity.
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  {i.kind === "iam_role" ? "Role" : "User"}
+                  {IDENTITY_KIND_LABEL[i.kind] ?? i.kind}
                 </span>
               }
             />
@@ -500,6 +511,11 @@ export default function AWSIdentitiesPage() {
               getRowId={(i) => i.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               onRowClick={(i) => setSelectedId(i.id)}
               pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />

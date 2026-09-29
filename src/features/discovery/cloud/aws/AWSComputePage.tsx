@@ -61,7 +61,6 @@ import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { CloudPill } from "../CloudPill";
 import { toast } from "react-hot-toast";
 import {
   useListAwsConnectorsQuery,
@@ -336,11 +335,16 @@ export default function AWSComputePage() {
           // scan did not discover. `unresolved_role_arn` says which role it
           // was looking for, so the row is actionable rather than just blank.
           if (!w.identity_id) {
+            // No "Unattributed" pill. The metric tile counts these and the
+            // banner above the table offers "Show only these" — both appear
+            // once. An amber pill per row restated that on a page whose whole
+            // premise is that unattributed compute is common, so a large
+            // account rendered hundreds of identical warnings. The word stays,
+            // muted, because the cell would otherwise be a bare ARN with no
+            // label; what it says is the ARN it names, which IS the finding.
             return (
               <div className="min-w-0">
-                <CloudPill tone="warning" dot={false}>
-                  Unattributed
-                </CloudPill>
+                <p className="text-xs text-muted-foreground">Unattributed</p>
                 {attrs?.unresolved_role_arn ? (
                   <p
                     className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground"
@@ -366,9 +370,12 @@ export default function AWSComputePage() {
             );
           }
           return (
-            <span className="truncate text-xs text-foreground" title={identity.native_id}>
+            // A block, not a span: `truncate` sets overflow/text-overflow,
+            // which do not apply to a non-replaced inline box, so this clipped
+            // at the cell's own overflow-hidden with no ellipsis at all.
+            <p className="truncate text-xs text-foreground" title={identity.native_id}>
               {identity.name || identity.native_id}
-            </span>
+            </p>
           );
         },
       },
@@ -609,6 +616,11 @@ export default function AWSComputePage() {
               getRowId={(w) => w.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               // Attributed rows lead to the identity, because "what may this
               // role do" is the question compute makes actionable. An
               // unattributed row has no identity to open, so it stays inert —

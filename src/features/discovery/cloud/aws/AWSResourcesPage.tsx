@@ -70,7 +70,6 @@ import {
   metricLabel,
   resourceKindLabel,
   SENSITIVITY_LABEL,
-  SENSITIVITY_TONE,
   stackPredatesResourcePolicies,
   TEMPLATE_VERSION_WITH_RESOURCE_POLICIES,
 } from "./awsInventoryLabels";
@@ -89,6 +88,26 @@ import {
 } from "./awsObservationFacts";
 
 const ALL_KINDS = "all";
+
+/**
+ * A timestamp column's cell: relative text, the exact instant on hover.
+ *
+ * Both date columns used to call `formatDistanceToNow(new Date(iso))` inline
+ * with no guard, so a null or unparsable value rendered the string "Invalid
+ * Date" — or threw. The sibling Compute page has always guarded this; this is
+ * the same guard, and it says "Unknown" rather than inventing a time.
+ */
+function RelativeDate({ iso }: { iso: string | null | undefined }) {
+  const at = iso ? new Date(iso) : null;
+  if (!at || Number.isNaN(at.getTime())) {
+    return <span className="text-xs text-muted-foreground">Unknown</span>;
+  }
+  return (
+    <span className="text-xs text-muted-foreground" title={at.toLocaleString()}>
+      {formatDistanceToNow(at, { addSuffix: true })}
+    </span>
+  );
+}
 
 export default function AWSResourcesPage() {
   const [params, setParams] = useSearchParams();
@@ -342,7 +361,14 @@ export default function AWSResourcesPage() {
               {SENSITIVITY_LABEL[s]}
             </span>
           ) : (
-            <CloudPill tone={SENSITIVITY_TONE[s]} dot={false} title={why}>
+            // Neutral, not the danger/warning tone the rating carries
+            // elsewhere. Sensitivity here is derived from the resource TYPE —
+            // every Secrets Manager secret and every KMS key is "high" — so
+            // colouring the row painted a normal account red forever and
+            // taught the reader to ignore the colour. The metric tiles above
+            // keep their tone: a COUNT of high-sensitivity resources is a
+            // summary worth noticing; a per-row restatement of the type is not.
+            <CloudPill tone="muted" dot={false} title={why}>
               {SENSITIVITY_LABEL[s]}
             </CloudPill>
           );
@@ -380,7 +406,10 @@ export default function AWSResourcesPage() {
           }
           if (denyIds.has(id)) {
             return (
-              <CloudPill tone="danger" dot={false}>
+              // Not danger. An explicit Deny is a guardrail, not a finding —
+              // the drawer says so itself ("An explicit Deny beats every
+              // Allow, from any policy"). Red claimed the opposite.
+              <CloudPill tone="info" dot={false} title="This resource's policy contains an explicit Deny, which overrides any Allow.">
                 Deny
               </CloudPill>
             );
@@ -422,14 +451,7 @@ export default function AWSResourcesPage() {
         header: "Last seen",
         priority: 4,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span
-            className="text-xs text-muted-foreground"
-            title={new Date(row.original.last_seen_at).toLocaleString()}
-          >
-            {formatDistanceToNow(new Date(row.original.last_seen_at), { addSuffix: true })}
-          </span>
-        ),
+        cell: ({ row }) => <RelativeDate iso={row.original.last_seen_at} />,
       },
       {
         id: "account",
@@ -479,11 +501,7 @@ export default function AWSResourcesPage() {
         header: "First seen",
         priority: 6,
         approxWidth: 130,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(row.original.first_seen_at), { addSuffix: true })}
-          </span>
-        ),
+        cell: ({ row }) => <RelativeDate iso={row.original.first_seen_at} />,
       },
     ],
     [connectorById, denyIds, readIds, policyReadIncomplete, policyReadPending, policyReadFailed],
@@ -594,6 +612,11 @@ export default function AWSResourcesPage() {
               getRowId={(r) => r.id}
               enableSelection={false}
               enableExpansion={false}
+              // In fit mode enableExpansion above is ignored: the expander is driven
+              // purely by whether every column fits, so it appeared and vanished with
+              // the window width. Every field here is a column or is in the row's own
+              // drawer, which the row click opens, so there is nothing to reveal.
+              rowDetails={false}
               onRowClick={(r) => setSelectedId(r.id)}
               pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />

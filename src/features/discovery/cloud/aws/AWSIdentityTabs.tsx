@@ -53,6 +53,7 @@ import {
   CONSTRAINT_TONE,
   EFFECT_LABEL,
   EFFECT_TONE,
+  IDENTITY_KIND_LABEL,
   resourceKindLabel,
   RUNTIME_KIND_LABEL,
   SCOPE_KIND_LABEL,
@@ -943,7 +944,10 @@ export function OverviewTab({ identity }: { identity: CloudIdentity }) {
     <div className="space-y-6">
       <section>
         <DetailGrid>
-          <DetailRow label="Kind" value={identity.kind === "iam_role" ? "IAM role" : "IAM user"} />
+          {/* Through the label map: the ternary this replaces reported a GCP
+              service account as an "IAM user", which the drawer's own header
+              already contradicted two lines above it. */}
+          <DetailRow label="Kind" value={IDENTITY_KIND_LABEL[identity.kind] ?? identity.kind} />
           <DetailRow
             label="Enabled"
             value={identity.enabled ? "Yes" : "No"}
