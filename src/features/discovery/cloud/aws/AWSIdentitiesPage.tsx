@@ -61,7 +61,7 @@ import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
 import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
-import { AWSAccountCell } from "./AWSAccountCell";
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import {
   CandidateIdentityCaveat,
@@ -290,8 +290,7 @@ export default function AWSIdentitiesPage() {
           return (
             <EntityCell
               label={i.name || i.native_id}
-              detail={i.native_id}
-              monoDetail
+              detail={<CopyableId value={i.native_id} />}
               badge={
                 // IDENTITY_KIND_LABEL, not a role/user ternary. The ternary
                 // called a GCP service account a "User", losing exactly the

@@ -75,7 +75,7 @@ import {
   type CloudWorkload,
 } from "@/app/api/cloudDiscoveryApi";
 
-import { AWSAccountCell } from "./AWSAccountCell";
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
@@ -312,8 +312,7 @@ export default function AWSComputePage() {
           return (
             <EntityCell
               label={w.name || w.native_id}
-              detail={w.native_id}
-              monoDetail
+              detail={<CopyableId value={w.native_id} />}
               badge={
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {RUNTIME_KIND_SHORT[w.runtime_kind]}

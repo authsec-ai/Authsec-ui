@@ -75,7 +75,7 @@ import {
   TEMPLATE_VERSION_WITH_RESOURCE_POLICIES,
 } from "./awsInventoryLabels";
 import { AWSResourceDrawer } from "./AWSResourceDrawer";
-import { AWSAccountCell } from "./AWSAccountCell";
+import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import {
   InventoryEmptyState,
   ResourceScopeCaveat,
@@ -341,8 +341,7 @@ export default function AWSResourcesPage() {
           return (
             <EntityCell
               label={r.name || r.native_id}
-              detail={r.native_id}
-              monoDetail
+              detail={<CopyableId value={r.native_id} />}
               badge={
                 <span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {resourceKindLabel(r.kind)}

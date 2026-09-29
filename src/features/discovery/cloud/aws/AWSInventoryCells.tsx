@@ -13,6 +13,10 @@
  * the id leads on its own rather than inventing a label for it.
  */
 
+import { Copy } from "lucide-react";
+
+import { copyToClipboard } from "@/lib/clipboard";
+
 import { CloudPill } from "../CloudPill";
 
 export function AWSAccountCell({
@@ -53,5 +57,41 @@ export function AWSAccountCell({
         <p className="truncate font-mono text-[11px] text-muted-foreground">{accountId}</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A long identifier under a row's name: clipped to one line, whole on hover,
+ * and copyable without opening the row.
+ *
+ * ARNs are the value people actually need out of these tables — to paste into
+ * the AWS console, a ticket or a policy — and the only way to get one was to
+ * open the drawer and find it there. The copy button appears on row hover so
+ * it costs nothing visually until wanted, and it stays reachable by keyboard:
+ * `focus-visible` shows it even when the pointer is elsewhere.
+ *
+ * `no-row-click` and stopPropagation both matter. The table treats a click
+ * anywhere in the row as "open this"; without them, copying would also open
+ * the drawer over the thing just copied.
+ */
+export function CopyableId({ value, label = "ARN" }: { value: string; label?: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-muted-foreground" title={value}>
+        {value}
+      </span>
+      <button
+        type="button"
+        aria-label={`Copy ${label}`}
+        title={`Copy ${label}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          void copyToClipboard(value, label);
+        }}
+        className="no-row-click grid size-5 flex-none place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus-ring) group-hover:opacity-100"
+      >
+        <Copy className="size-3" />
+      </button>
+    </span>
   );
 }
