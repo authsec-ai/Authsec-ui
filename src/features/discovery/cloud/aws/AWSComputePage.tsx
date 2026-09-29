@@ -55,13 +55,10 @@ import { MetricStrip, type MetricStripItemDef } from "@/components/console/Metri
 import {
   AppliedFilters,
   ConsoleFilterBar,
-  ConsoleFilterField,
-  ConsoleFiltersButton,
   EntityCell,
   type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
-import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -81,6 +78,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 
 import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
+import { AWSFilterChips } from "./AWSFilterChips";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { AWSWorkloadIdentitiesView } from "./AWSWorkloadIdentitiesView";
@@ -573,50 +571,29 @@ export default function AWSComputePage() {
       <ComputeCaveat />
 
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, ARN or region…"
         filters={ATTRIBUTION_FILTERS}
         activeFilter={attribution}
         onFilterChange={(v) => setParam("attribution", v)}
-        trailing={
-          // The seven runtime pills used to be a second, hand-rolled row
-          // OUTSIDE the filter card, at a different height and font size from
-          // the bar's own pills, and they always rendered all six kinds even at
-          // zero. Behind the Filters button they are one labelled field, and
-          // the two rows of controls become one.
-          <ConsoleFiltersButton activeCount={appliedFilters.length}>
-            <ConsoleFilterField label="Runtime">
-              <div className="max-h-56 space-y-0.5 overflow-y-auto">
-                {runtimeFilters.map((f) => {
-                  const active = f.key === "all" ? runtime === null : runtime === f.key;
-                  return (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setParam("runtime", f.key === "all" ? null : f.key)}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs",
-                        active
-                          ? "bg-(--color-primary-soft) font-semibold text-(--color-primary-text)"
-                          : "text-(--color-text) hover:bg-(--color-surface-subtle)",
-                      )}
-                    >
-                      <span className="truncate">{f.label}</span>
-                      {f.count !== undefined ? (
-                        <span className="tabular-nums text-(--color-text-muted)">{f.count}</span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </ConsoleFilterField>
-          </ConsoleFiltersButton>
-        }
         below={
-          appliedFilters.length ? (
-            <AppliedFilters filters={appliedFilters} onClearAll={clearFilters} />
-          ) : null
+          // The runtime pills used to be a second, hand-rolled row OUTSIDE the
+          // filter card, at a different height and font size from the bar's
+          // own. Same row-two position, but inside the card and sharing one
+          // chip component with Resources, so the two tabs match.
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Runtime"
+              options={runtimeFilters}
+              active={runtime ?? "all"}
+              onSelect={(key) => setParam("runtime", key === "all" ? null : key)}
+            />
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearFilters} />
+            ) : null}
+          </div>
         }
       />
 

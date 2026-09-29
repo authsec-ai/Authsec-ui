@@ -12,8 +12,6 @@
  * server-side scoping the endpoint does not do.
  */
 
-import { Server } from "lucide-react";
-
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { ALL_ACCOUNTS, accountLabel } from "./awsInventoryLabels";
@@ -40,17 +38,18 @@ export function AWSAccountPicker({
     })),
   ];
 
+  // Just the dropdown. The Server icon beside it added no information the
+  // word "accounts" does not already carry, and sitting loose in a row of
+  // other controls it read as a third control rather than a label.
   return (
-    <div className="flex items-center gap-2">
-      <Server className="size-3.5 flex-none text-muted-foreground" aria-hidden />
-      <SearchableSelect
-        options={options}
-        value={value}
-        onChange={(next) => onChange(next ?? ALL_ACCOUNTS)}
-        placeholder="All accounts"
-        searchPlaceholder="Search accounts…"
-        className="h-9 min-w-[200px]"
-      />
-    </div>
+    <SearchableSelect
+      options={options}
+      value={value}
+      onChange={(next) => onChange(next ?? ALL_ACCOUNTS)}
+      placeholder="All accounts"
+      searchPlaceholder="Search accounts…"
+      aria-label="Filter by AWS account"
+      className="h-8 min-w-[168px]"
+    />
   );
 }

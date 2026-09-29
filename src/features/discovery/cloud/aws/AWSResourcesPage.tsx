@@ -47,14 +47,11 @@ import { MetricStrip, type MetricStripItemDef } from "@/components/console/Metri
 import {
   AppliedFilters,
   ConsoleFilterBar,
-  ConsoleFilterField,
-  ConsoleFiltersButton,
   EntityCell,
   type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -72,6 +69,7 @@ import {
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
+import { AWSFilterChips } from "./AWSFilterChips";
 import {
   ALL_ACCOUNTS,
   metricLabel,
@@ -605,74 +603,46 @@ export default function AWSResourcesPage() {
 
       <ResourceScopeCaveat />
 
-      {/* The type pills used to sit in the bar itself. With one per resource
-          kind they wrapped onto two or three rows, squeezed the search box to
-          its 220px minimum, and left a bare checkbox and an unlabelled account
-          select crowded together at the end. Everything except search now
-          lives behind one Filters control — which is what ConsoleFiltersButton
-          was written for — so search gets the row, each filter gets a label,
-          and what is actually applied is stated below with a way to clear it. */}
+      {/* Two rows, deliberately. Row one is the controls that are always worth
+          reaching — search, which takes the room, plus the sensitivity toggle
+          and the account scope. Row two is the type chips, which are as many as
+          the estate has kinds and so must never be allowed to wrap; AWSFilterChips
+          keeps six on the row and folds the tail behind More. Applied filters
+          and Clear all sit under both. */}
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name or ARN…"
         trailing={
-          <ConsoleFiltersButton activeCount={appliedFilters.length}>
-            <ConsoleFilterField label="Type">
-              <div className="max-h-56 space-y-0.5 overflow-y-auto">
-                {kindFilters.map((f) => {
-                  const on = kind === f.key;
-                  return (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setParam("kind", f.key === ALL_KINDS ? null : f.key)}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs",
-                        on
-                          ? "bg-(--color-primary-soft) font-semibold text-(--color-primary-text)"
-                          : "text-(--color-text) hover:bg-(--color-surface-subtle)",
-                      )}
-                    >
-                      <span className="truncate">{f.label}</span>
-                      {f.count !== undefined ? (
-                        <span className="tabular-nums text-(--color-text-muted)">{f.count}</span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </ConsoleFilterField>
-
-            <ConsoleFilterField label="Sensitivity">
-              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-(--color-text)">
-                High sensitivity only
-                <Switch
-                  checked={highOnly}
-                  onCheckedChange={(v) => setHighOnly(v === true)}
-                  aria-label="Show only high sensitivity resources"
-                />
-              </label>
-            </ConsoleFilterField>
-
-            {connectors.length > 1 ? (
-              <ConsoleFilterField label="Account">
-                <AWSAccountPicker
-                  connectors={connectors}
-                  value={account}
-                  onChange={(next) => setParam("account", next)}
-                />
-              </ConsoleFilterField>
-            ) : null}
-          </ConsoleFiltersButton>
+          <>
+            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
+              <Switch
+                checked={highOnly}
+                onCheckedChange={(v) => setHighOnly(v === true)}
+                aria-label="Show only high sensitivity resources"
+              />
+              High sensitivity
+            </label>
+            <AWSAccountPicker
+              connectors={connectors}
+              value={account}
+              onChange={(next) => setParam("account", next)}
+            />
+          </>
         }
         below={
-          appliedFilters.length ? (
-            <AppliedFilters
-              filters={appliedFilters}
-              onClearAll={clearAllFilters}
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Resource type"
+              options={kindFilters}
+              active={kind}
+              onSelect={(key) => setParam("kind", key === ALL_KINDS ? null : key)}
             />
-          ) : null
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
+            ) : null}
+          </div>
         }
       />
 

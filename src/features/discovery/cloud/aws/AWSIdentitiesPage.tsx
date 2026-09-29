@@ -40,8 +40,6 @@ import { MetricStrip, type MetricStripItemDef } from "@/components/console/Metri
 import {
   AppliedFilters,
   ConsoleFilterBar,
-  ConsoleFilterField,
-  ConsoleFiltersButton,
   EntityCell,
   type AppliedFilter,
   type ConsoleFilterOption,
@@ -65,6 +63,7 @@ import {
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
+import { AWSFilterChips } from "./AWSFilterChips";
 import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
 import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
@@ -499,44 +498,42 @@ export default function AWSIdentitiesPage() {
       <CandidateIdentityCaveat />
 
       <ConsoleFilterBar
+        className="[&>[data-slot=card-content]]:py-2.5"
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, ARN or tag…"
-        filters={kindFilters}
-        activeFilter={kind}
-        onFilterChange={(v) => setParam("kind", v === "all" ? null : v)}
         trailing={
-          // The bare checkbox and the unlabelled account select used to sit
-          // side by side at the end of the row, reading as one control. Each
-          // gets a labelled field behind the Filters button instead, and what
-          // is applied is stated below with a way to clear it.
-          <ConsoleFiltersButton activeCount={appliedFilters.length}>
-            <ConsoleFilterField label="Access">
-              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-(--color-text)">
-                Unused access only
-                <Switch
-                  checked={unusedOnly}
-                  onCheckedChange={(v) => setUnusedOnly(v === true)}
-                  aria-label="Show only identities with access they have never used"
-                />
-              </label>
-            </ConsoleFilterField>
-
-            {connectors.length > 1 ? (
-              <ConsoleFilterField label="Account">
-                <AWSAccountPicker
-                  connectors={connectors}
-                  value={account}
-                  onChange={(next) => setParam("account", next)}
-                />
-              </ConsoleFilterField>
-            ) : null}
-          </ConsoleFiltersButton>
+          // Row one: the toggle and the account scope beside search, matching
+          // Resources. The bare checkbox these replace sat flush against an
+          // unlabelled select and the two read as one control.
+          <>
+            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
+              <Switch
+                checked={unusedOnly}
+                onCheckedChange={(v) => setUnusedOnly(v === true)}
+                aria-label="Show only identities with access they have never used"
+              />
+              Unused access
+            </label>
+            <AWSAccountPicker
+              connectors={connectors}
+              value={account}
+              onChange={(next) => setParam("account", next)}
+            />
+          </>
         }
         below={
-          appliedFilters.length ? (
-            <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
-          ) : null
+          <div className="space-y-2">
+            <AWSFilterChips
+              label="Identity kind"
+              options={kindFilters}
+              active={kind}
+              onSelect={(key) => setParam("kind", key === "all" ? null : key)}
+            />
+            {appliedFilters.length ? (
+              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
+            ) : null}
+          </div>
         }
       />
 
