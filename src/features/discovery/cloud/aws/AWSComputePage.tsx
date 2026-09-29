@@ -53,10 +53,15 @@ import { Boxes, CircleSlash } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
+  ConsoleFilterField,
+  ConsoleFiltersButton,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -154,6 +159,29 @@ export default function AWSComputePage() {
     next.delete("runtime");
     setParams(next, { replace: true });
   };
+
+  /** What is narrowing the list, each removable. Search is excluded — it is
+   * visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (attribution && attribution !== "all") {
+      out.push({
+        key: "attribution",
+        label: attribution === "unattributed" ? "Unattributed only" : "Attributed only",
+        onRemove: () => setParam("attribution", "all"),
+      });
+    }
+    if (runtime) {
+      out.push({
+        key: "runtime",
+        label: `Runtime: ${RUNTIME_KIND_LABEL[runtime] ?? runtime}`,
+        onRemove: () => setParam("runtime", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attribution, runtime, params]);
 
   const connectorsQuery = useListAwsConnectorsQuery();
   const connectors = useMemo(() => connectorsQuery.data ?? [], [connectorsQuery.data]);
@@ -551,30 +579,46 @@ export default function AWSComputePage() {
         filters={ATTRIBUTION_FILTERS}
         activeFilter={attribution}
         onFilterChange={(v) => setParam("attribution", v)}
+        trailing={
+          // The seven runtime pills used to be a second, hand-rolled row
+          // OUTSIDE the filter card, at a different height and font size from
+          // the bar's own pills, and they always rendered all six kinds even at
+          // zero. Behind the Filters button they are one labelled field, and
+          // the two rows of controls become one.
+          <ConsoleFiltersButton activeCount={appliedFilters.length}>
+            <ConsoleFilterField label="Runtime">
+              <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                {runtimeFilters.map((f) => {
+                  const active = f.key === "all" ? runtime === null : runtime === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setParam("runtime", f.key === "all" ? null : f.key)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs",
+                        active
+                          ? "bg-(--color-primary-soft) font-semibold text-(--color-primary-text)"
+                          : "text-(--color-text) hover:bg-(--color-surface-subtle)",
+                      )}
+                    >
+                      <span className="truncate">{f.label}</span>
+                      {f.count !== undefined ? (
+                        <span className="tabular-nums text-(--color-text-muted)">{f.count}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </ConsoleFilterField>
+          </ConsoleFiltersButton>
+        }
+        below={
+          appliedFilters.length ? (
+            <AppliedFilters filters={appliedFilters} onClearAll={clearFilters} />
+          ) : null
+        }
       />
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        {runtimeFilters.map((f) => {
-          const active = f.key === "all" ? runtime === null : runtime === f.key;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setParam("runtime", f.key === "all" ? null : f.key)}
-              className={
-                active
-                  ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-(--color-primary-soft) px-2.5 text-[11px] font-semibold text-(--color-primary-text)"
-                  : "inline-flex h-7 items-center gap-1.5 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-[11px] font-medium text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
-              }
-            >
-              {f.label}
-              {f.count !== undefined ? (
-                <span className="tabular-nums text-muted-foreground">{f.count}</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
 
       <TableCard>
         <CardContent variant="flush">

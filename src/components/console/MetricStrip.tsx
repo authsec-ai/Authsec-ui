@@ -21,26 +21,32 @@ const DOT_TONE_CLASS: Record<MetricTone, string> = {
   danger: "bg-(--color-danger)",
 };
 
-function MetricStripSegment({ label, value, tone = "neutral", onClick }: MetricStripItemDef) {
+function MetricStripSegment({ label, value, tone = "neutral", onClick }: Omit<MetricStripItemDef, "key">) {
   return (
+    // Value over label, not beside it. Side by side at 22px and 14px they read
+    // as one sentence of roughly equal weight, so four tiles looked alike and
+    // none of the numbers stood out — which is the whole job of a metric strip.
+    // Stacked, the number leads and the label explains it.
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-1 items-center gap-3 px-5 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
+        "flex flex-1 flex-col items-start gap-1 px-5 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
         onClick ? "hover:bg-(--color-hover)" : "cursor-default",
       )}
     >
-      <span className={cn("h-2 w-2 flex-none rounded-full", DOT_TONE_CLASS[tone])} />
       <span
         className={cn(
-          "text-[22px] leading-none font-semibold tracking-tight tabular-nums",
+          "text-[26px] leading-none font-semibold tracking-tight tabular-nums",
           value === 0 ? "text-(--color-text-subtle)" : "text-(--color-text)",
         )}
       >
         {value}
       </span>
-      <span className="text-sm text-(--color-text-muted)">{label}</span>
+      <span className="flex items-center gap-1.5 text-xs text-(--color-text-muted)">
+        <span className={cn("h-1.5 w-1.5 flex-none rounded-full", DOT_TONE_CLASS[tone])} />
+        {label}
+      </span>
     </button>
   );
 }
@@ -57,8 +63,11 @@ export function MetricStrip({ items, className, ...rest }: MetricStripProps) {
       className={cn("flex-row divide-x divide-(--color-border-subtle) overflow-hidden", className)}
       {...rest}
     >
-      {items.map((item) => (
-        <MetricStripSegment key={item.key} {...item} />
+      {/* `key` is pulled out of the spread rather than being overwritten by it:
+          spreading an object that carries `key` after an explicit one is a
+          TS2783, and React strips the prop anyway. */}
+      {items.map(({ key, ...item }) => (
+        <MetricStripSegment key={key} {...item} />
       ))}
     </Card>
   );

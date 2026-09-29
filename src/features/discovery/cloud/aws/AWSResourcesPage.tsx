@@ -45,10 +45,16 @@ import { Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
+  ConsoleFilterField,
+  ConsoleFiltersButton,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -264,6 +270,44 @@ export default function AWSResourcesPage() {
         .map(([k, n]) => ({ key: k, label: resourceKindLabel(k), count: n })),
     ];
   }, [rows]);
+
+  /** What is narrowing the list right now, each removable. Search is excluded:
+   * it is visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (kind !== ALL_KINDS) {
+      out.push({
+        key: "kind",
+        label: `Type: ${resourceKindLabel(kind)}`,
+        onRemove: () => setParam("kind", null),
+      });
+    }
+    if (highOnly) {
+      out.push({ key: "high", label: "High sensitivity only", onRemove: () => setHighOnly(false) });
+    }
+    if (account !== ALL_ACCOUNTS) {
+      const c = connectors.find((x) => x.id === account);
+      out.push({
+        key: "account",
+        label: `Account: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("account", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, highOnly, account, connectors, params]);
+
+  /** Clear everything in ONE params write. Two sequential setParam calls each
+   * read the same stale `params`, so the second silently reverts the first —
+   * the hazard this file already documents. */
+  const clearAllFilters = () => {
+    const next = new URLSearchParams(params);
+    next.delete("kind");
+    next.delete("account");
+    setParams(next, { replace: true });
+    setHighOnly(false);
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -561,31 +605,74 @@ export default function AWSResourcesPage() {
 
       <ResourceScopeCaveat />
 
+      {/* The type pills used to sit in the bar itself. With one per resource
+          kind they wrapped onto two or three rows, squeezed the search box to
+          its 220px minimum, and left a bare checkbox and an unlabelled account
+          select crowded together at the end. Everything except search now
+          lives behind one Filters control — which is what ConsoleFiltersButton
+          was written for — so search gets the row, each filter gets a label,
+          and what is actually applied is stated below with a way to clear it. */}
       <ConsoleFilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name or ARN…"
-        filters={kindFilters}
-        activeFilter={kind}
-        onFilterChange={(v) => setParam("kind", v === ALL_KINDS ? null : v)}
         trailing={
-          <>
-            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-              <input
-                id="aws-resources-high-only"
-                type="checkbox"
-                checked={highOnly}
-                onChange={(e) => setHighOnly(e.target.checked)}
-                className="size-3.5 accent-(--color-primary)"
-              />
-              High sensitivity only
-            </label>
-            <AWSAccountPicker
-              connectors={connectors}
-              value={account}
-              onChange={(next) => setParam("account", next)}
+          <ConsoleFiltersButton activeCount={appliedFilters.length}>
+            <ConsoleFilterField label="Type">
+              <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                {kindFilters.map((f) => {
+                  const on = kind === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setParam("kind", f.key === ALL_KINDS ? null : f.key)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs",
+                        on
+                          ? "bg-(--color-primary-soft) font-semibold text-(--color-primary-text)"
+                          : "text-(--color-text) hover:bg-(--color-surface-subtle)",
+                      )}
+                    >
+                      <span className="truncate">{f.label}</span>
+                      {f.count !== undefined ? (
+                        <span className="tabular-nums text-(--color-text-muted)">{f.count}</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </ConsoleFilterField>
+
+            <ConsoleFilterField label="Sensitivity">
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-(--color-text)">
+                High sensitivity only
+                <Switch
+                  checked={highOnly}
+                  onCheckedChange={(v) => setHighOnly(v === true)}
+                  aria-label="Show only high sensitivity resources"
+                />
+              </label>
+            </ConsoleFilterField>
+
+            {connectors.length > 1 ? (
+              <ConsoleFilterField label="Account">
+                <AWSAccountPicker
+                  connectors={connectors}
+                  value={account}
+                  onChange={(next) => setParam("account", next)}
+                />
+              </ConsoleFilterField>
+            ) : null}
+          </ConsoleFiltersButton>
+        }
+        below={
+          appliedFilters.length ? (
+            <AppliedFilters
+              filters={appliedFilters}
+              onClearAll={clearAllFilters}
             />
-          </>
+          ) : null
         }
       />
 

@@ -38,10 +38,15 @@ import { AlertTriangle, Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
+  AppliedFilters,
   ConsoleFilterBar,
+  ConsoleFilterField,
+  ConsoleFiltersButton,
   EntityCell,
+  type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
+import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -100,6 +105,16 @@ export default function AWSIdentitiesPage() {
 
   const [search, setSearch] = useState("");
   const [unusedOnly, setUnusedOnly] = useState(false);
+
+  /** Clear every filter in ONE params write: two sequential setParam calls each
+   * read the same stale `params`, so the second would revert the first. */
+  const clearAllFilters = () => {
+    const next = new URLSearchParams(params);
+    next.delete("kind");
+    next.delete("account");
+    setParams(next, { replace: true });
+    setUnusedOnly(false);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const setParam = (key: string, value: string | null) => {
@@ -276,6 +291,44 @@ export default function AWSIdentitiesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, total, truncated, usageByIdentity, usageIncomplete, params]);
 
+  /** Roles and Users always; GCP service accounts only once some exist, so a
+   * pure-AWS workspace is not offered a filter that can only ever return
+   * nothing. Pairs with the metric tile, which now filters for real. */
+  const kindFilters = useMemo<ConsoleFilterOption[]>(() => {
+    const base = [...KIND_FILTERS];
+    if (rows.some((i) => i.kind === "gcp_service_account")) {
+      base.push({ key: "gcp_service_account", label: "GCP service accounts" });
+    }
+    return base;
+  }, [rows]);
+
+  /** What is narrowing the list, each removable. Search is excluded — it is
+   * visible in its own box, so a chip repeating it would be noise. */
+  const appliedFilters = useMemo<AppliedFilter[]>(() => {
+    const out: AppliedFilter[] = [];
+    if (kind !== "all") {
+      out.push({
+        key: "kind",
+        label: `Kind: ${IDENTITY_KIND_LABEL[kind] ?? kind}`,
+        onRemove: () => setParam("kind", null),
+      });
+    }
+    if (unusedOnly) {
+      out.push({ key: "unused", label: "Unused access only", onRemove: () => setUnusedOnly(false) });
+    }
+    if (account !== ALL_ACCOUNTS) {
+      const c = connectors.find((x) => x.id === account);
+      out.push({
+        key: "account",
+        label: `Account: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("account", null),
+      });
+    }
+    return out;
+    // setParam closes over `params`; rebuilding when it changes is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, unusedOnly, account, connectors, params]);
+
   const columns = useMemo<AdaptiveColumn<CloudIdentity>[]>(
     () => [
       {
@@ -449,27 +502,41 @@ export default function AWSIdentitiesPage() {
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, ARN or tag…"
-        filters={KIND_FILTERS}
+        filters={kindFilters}
         activeFilter={kind}
         onFilterChange={(v) => setParam("kind", v === "all" ? null : v)}
         trailing={
-          <>
-            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-              <input
-                id="aws-identities-unused-only"
-                type="checkbox"
-                checked={unusedOnly}
-                onChange={(e) => setUnusedOnly(e.target.checked)}
-                className="size-3.5 accent-(--color-primary)"
-              />
-              Unused access only
-            </label>
-            <AWSAccountPicker
-              connectors={connectors}
-              value={account}
-              onChange={(next) => setParam("account", next)}
-            />
-          </>
+          // The bare checkbox and the unlabelled account select used to sit
+          // side by side at the end of the row, reading as one control. Each
+          // gets a labelled field behind the Filters button instead, and what
+          // is applied is stated below with a way to clear it.
+          <ConsoleFiltersButton activeCount={appliedFilters.length}>
+            <ConsoleFilterField label="Access">
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs text-(--color-text)">
+                Unused access only
+                <Switch
+                  checked={unusedOnly}
+                  onCheckedChange={(v) => setUnusedOnly(v === true)}
+                  aria-label="Show only identities with access they have never used"
+                />
+              </label>
+            </ConsoleFilterField>
+
+            {connectors.length > 1 ? (
+              <ConsoleFilterField label="Account">
+                <AWSAccountPicker
+                  connectors={connectors}
+                  value={account}
+                  onChange={(next) => setParam("account", next)}
+                />
+              </ConsoleFilterField>
+            ) : null}
+          </ConsoleFiltersButton>
+        }
+        below={
+          appliedFilters.length ? (
+            <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
+          ) : null
         }
       />
 
