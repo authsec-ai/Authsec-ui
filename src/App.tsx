@@ -81,6 +81,9 @@ import CampaignDetailPage from "./features/governance/CampaignDetailPage";
 import SoDPage from "./features/governance/SoDPage";
 import BirthrightsPage from "./features/governance/BirthrightsPage";
 import InstructionsPage from "./features/governance/InstructionsPage";
+import AgentPoliciesPage from "./features/governance/AgentPoliciesPage";
+import UpcomingActionsPage from "./features/governance/UpcomingActionsPage";
+import PolicyWarningsPage from "./features/governance/PolicyWarningsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
@@ -898,6 +901,36 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <InstructionsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentPoliciesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/upcoming"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <UpcomingActionsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy-warnings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyWarningsPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

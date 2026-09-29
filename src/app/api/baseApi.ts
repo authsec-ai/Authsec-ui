@@ -195,6 +195,15 @@ export const baseApi = createApi({
     "BirthrightPolicy",
     "StaleBirthright",
     "OrphanedAgent",
+    // Agent policy + enforcement. A policy is a standing instruction reconciled
+    // every five minutes, so a mutation invalidates the lookahead and the
+    // warnings as well as the policy list — all three are views of the same
+    // decision and going stale separately would show contradictory futures.
+    "AgentPolicy",
+    "UpcomingAction",
+    "PolicyWarning",
+    "EnforcementPlan",
+    "NotificationSettings",
     // Cloud Discovery — cloud_connector rows (see app/api/cloudDiscoveryApi.ts).
     // Onboarding only today; AWS also writes discovery evidence under this tag
     // family once a scan runs.

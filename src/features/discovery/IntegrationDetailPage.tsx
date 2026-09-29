@@ -19,6 +19,7 @@ import { ArrowLeft, ShieldCheck, ShieldAlert, KeyRound } from "lucide-react";
 import { ActuationTokenDialog } from "../governance/ActuationTokenDialog";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { EnforcementStatusCard } from "./EnforcementStatusCard";
 import { GitHubRepositoryPanel } from "./GitHubRepositoryPanel";
 import { GitHubScanPanel } from "./GitHubScanPanel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -288,6 +289,8 @@ export default function IntegrationDetailPage() {
                 </p>
               </CardContent>
             </Card>
+
+            <EnforcementStatusCard connectorId={source.id} />
 
             <Card>
               <CardContent className="space-y-2 px-4 py-4">

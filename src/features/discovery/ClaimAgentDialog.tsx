@@ -16,6 +16,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
+import { useForceEvictAgentMutation } from "@/app/api/governanceApi";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -656,6 +657,103 @@ export function ClassifyAgentDialog({
             onClick={() => void submit()}
           >
             {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Force-delete the pods of a contained agent, overriding a PodDisruptionBudget.
+ *
+ * THE MOST DANGEROUS ACTION IN THE CONSOLE, and the only one that deliberately
+ * overrules something the cluster owner declared. Eviction asks politely and
+ * accepts no for an answer; this deletes with a zero grace period — no SIGTERM
+ * handling, no connection draining, no flush.
+ *
+ * It is not a button beside Quarantine. The backend additionally refuses it
+ * unless the agent is quarantined AND a PDB refusal is already on record, so
+ * this dialog is reachable only from a contained agent and says plainly what it
+ * overrides. A reason is mandatory here and again at a database CHECK: overruling
+ * an availability guarantee is a decision somebody has to answer for.
+ */
+export function ForceEvictAgentDialog({
+  agent,
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  agent: DiscoveredAgent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [forceEvict, { isLoading: saving }] = useForceEvictAgentMutation();
+
+  const submit = async () => {
+    if (!agent || !reason.trim()) return;
+    try {
+      const res = await forceEvict({ id: agent.id, reason: reason.trim() }).unwrap();
+      toast.success(
+        `Override queued for ${res.blocked_pods.length} pod(s) a disruption budget refused.`,
+      );
+      onDone();
+      setReason("");
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(
+        errorMessage(
+          err,
+          "Could not queue the override. It requires a quarantined agent with an eviction a PodDisruptionBudget already refused.",
+        ),
+      );
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[540px]">
+        <DialogHeader>
+          <DialogTitle>Override the disruption budget</DialogTitle>
+          <DialogDescription>
+            Delete the pods of {agent?.display_name || agent?.fingerprint} immediately, past the
+            PodDisruptionBudget that refused to evict them.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-3 py-2.5 text-xs text-(--color-danger-text)">
+            The pods are deleted with a zero grace period: no shutdown handling, no connection
+            draining, no flush. For a compromised agent that is the point — for anything else it
+            is data loss. This overrules an availability guarantee somebody set deliberately, and
+            your name is recorded against it.
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="force-evict-reason">Why this budget must be overridden</Label>
+            <Textarea
+              id="force-evict-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Agent is exfiltrating to an unknown host; containment cannot wait for the budget."
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            className="text-white"
+            onClick={submit}
+            disabled={saving || !reason.trim()}
+          >
+            {saving ? "Queueing…" : "Override and delete pods"}
           </Button>
         </DialogFooter>
       </DialogContent>

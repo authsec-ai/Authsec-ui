@@ -396,6 +396,178 @@ export interface ListResult<T> {
   total: number;
 }
 
+// ── Agent policies + enforcement ─────────────────────────────────────────────
+//
+// A policy is a STANDING instruction, not a button: a reconciler runs every five
+// minutes, compares what every policy implies against what is true, and closes
+// the gap. So the UI authors intent and reads consequences; it never triggers an
+// action directly.
+
+export interface AgentPolicySelector {
+  cluster?: string;
+  namespace?: string;
+  labels?: Record<string, string>;
+  archetype?: string;
+  deployment_origin?: string;
+  framework?: string;
+}
+
+export interface AgentPolicy {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  /** XOR selector — exactly one is set. */
+  discovered_agent_id?: string;
+  selector?: AgentPolicySelector;
+  /** Entitlement arm: a CEILING, never a grant. Can only ever narrow. */
+  scope_ceiling?: string[];
+  role_ceiling_id?: string;
+  /** Cluster arm. */
+  desired_state: "active" | "quarantined";
+  /** XOR expires_at. Go duration, e.g. "720h". */
+  duration?: string;
+  expires_at?: string;
+  on_expiry: "revoke" | "quarantine" | "evict";
+  reason: string;
+  confirmed_by?: string;
+  confirmed_at?: string;
+  enabled: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  /** Computed: duration resolved against created_at, or expires_at. */
+  effective_expiry?: string;
+  destructive: boolean;
+  matched_agents?: number;
+}
+
+export interface CreateAgentPolicyRequest {
+  name: string;
+  description?: string;
+  /** Exactly one of these two. */
+  discovered_agent_id?: string;
+  selector?: AgentPolicySelector;
+  scope_ceiling?: string[];
+  role_ceiling_id?: string;
+  desired_state?: "active" | "quarantined";
+  /** XOR expires_at. */
+  duration?: string;
+  expires_at?: string;
+  on_expiry?: "revoke" | "quarantine" | "evict";
+  /** Both REQUIRED when on_expiry is "evict". */
+  reason?: string;
+  /**
+   * The expansion the operator actually saw. A destructive expiry is authorised
+   * against THESE agents, so an agent that starts matching the selector later is
+   * refused rather than deleted under an older confirmation.
+   */
+  confirm_agent_ids?: string[];
+}
+
+/** What all matching policies add up to for one agent. */
+export interface EffectivePolicy {
+  agent_id: string;
+  desired_state: "active" | "quarantined";
+  scope_ceiling?: string[];
+  role_ceiling_id?: string;
+  /** Set when two policies name incomparable role ceilings; NOTHING is applied. */
+  ambiguous?: string;
+  policy_ids: string[];
+}
+
+/** One scheduled action, from the lookahead. */
+export interface UpcomingAction {
+  policy_id: string;
+  policy_name: string;
+  discovered_agent_id: string;
+  agent_label: string;
+  action: "revoke" | "quarantine" | "evict";
+  destructive: boolean;
+  at: string;
+  reason: string;
+  /** false ⇒ this will be REFUSED, not carried out. */
+  confirmed: boolean;
+  /** true ⇒ deletion will not stick; a reconciler recreates the workload. */
+  gitops_managed: boolean;
+  author_active: boolean;
+  created_by: string;
+}
+
+export interface PolicyWarning {
+  id: string;
+  workspace_id: string;
+  policy_id: string;
+  discovered_agent_id: string;
+  deadline: string;
+  on_expiry: string;
+  channel: "email" | "webhook";
+  recipient: string;
+  recipient_role: string;
+  available_at: string;
+  state: "pending" | "sent" | "failed" | "dead";
+  attempt_count: number;
+  last_error: string;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnforcementPlanRow {
+  id: string;
+  workspace_id: string;
+  discovery_source_id: string;
+  version: number;
+  plan: unknown;
+  content_hash: string;
+  generated_at: string;
+  created_at: string;
+}
+
+/**
+ * The enforcement gap, stated rather than left for the UI to subtract:
+ * "decided at v43, enforcing v42".
+ */
+export interface EnforcementPlansResult {
+  plans: EnforcementPlanRow[];
+  published_version: number;
+  enforcement_mode: string;
+  enforced_plan_version?: number | null;
+  enforced_plan_at?: string | null;
+  enforcement_denials_total: number;
+  behind: boolean;
+}
+
+export interface NotificationSettings {
+  workspace_id: string;
+  warning_lead_seconds: number;
+  webhook_url: string;
+  /** Never the secret itself — only whether one is set. */
+  webhook_secret_set: boolean;
+  email_enabled: boolean;
+}
+
+export interface PolicyReconcileResult {
+  dry_run: boolean;
+  policies_active: number;
+  agents_covered: number;
+  would_narrow: number;
+  would_quarantine: number;
+  would_release: number;
+  would_revoke: number;
+  would_evict: number;
+  refused: number;
+  bindings_narrowed: number;
+  grants_lapsed: number;
+  errors?: string[];
+}
+
+export interface ForceEvictResult {
+  instruction_id: string;
+  blocked_pods: string[];
+  queued: boolean;
+}
+
 // ── The slice ────────────────────────────────────────────────────────────────
 
 export const governanceApi = baseApi.injectEndpoints({
@@ -580,6 +752,134 @@ export const governanceApi = baseApi.injectEndpoints({
       providesTags: ["ProvisioningInstruction"],
     }),
 
+    // ── Agent policies + enforcement ──────────────────────────────────────────
+    listAgentPolicies: builder.query<ListResult<AgentPolicy>, { enabled?: boolean } | void>({
+      query: (f) => ({
+        url: "/authsec/governance/agent-policies",
+        method: "GET",
+        params: f?.enabled ? { enabled: "true" } : undefined,
+      }),
+      transformResponse: unwrap<AgentPolicy>("policies"),
+      providesTags: ["AgentPolicy"],
+    }),
+    getAgentPolicy: builder.query<
+      { policy: AgentPolicy; expands_to: unknown[] },
+      string
+    >({
+      query: (id) => ({ url: `/authsec/governance/agent-policies/${id}`, method: "GET" }),
+      providesTags: (_r, _e, id) => [{ type: "AgentPolicy", id }],
+    }),
+    createAgentPolicy: builder.mutation<AgentPolicy, CreateAgentPolicyRequest>({
+      query: (body) => ({ url: "/authsec/governance/agent-policies", method: "POST", body }),
+      // A policy changes what the next sweep will do, so the lookahead and the
+      // warning schedule are both stale the moment it lands. Invalidating only
+      // the list would leave the console showing a future that no longer exists.
+      invalidatesTags: ["AgentPolicy", "UpcomingAction", "PolicyWarning"],
+    }),
+    deleteAgentPolicy: builder.mutation<{ deleted: boolean; note: string }, string>({
+      query: (id) => ({ url: `/authsec/governance/agent-policies/${id}`, method: "DELETE" }),
+      // Deleting a policy does NOT undo what it already did — those stay in
+      // agent_policy_actions. It only stops future sweeps acting on it.
+      invalidatesTags: ["AgentPolicy", "UpcomingAction", "PolicyWarning"],
+    }),
+    reconcileAgentPolicies: builder.mutation<PolicyReconcileResult, { dryRun: boolean }>({
+      query: ({ dryRun }) => ({
+        url: "/authsec/governance/agent-policies/reconcile",
+        method: "POST",
+        params: dryRun ? undefined : { dry_run: "false" },
+      }),
+      // A live run contains agents and queues cluster work; a dry run changes
+      // nothing, but both are cheap to refetch and getting this wrong would show
+      // a stale inventory next to a fresh result.
+      invalidatesTags: (_r, _e, { dryRun }) =>
+        dryRun
+          ? []
+          : [
+              "AgentPolicy",
+              "UpcomingAction",
+              "DiscoveredAgent",
+              "ProvisioningInstruction",
+              "Provenance",
+            ],
+    }),
+    listUpcomingActions: builder.query<
+      { items: UpcomingAction[]; total: number; destructive: number },
+      { days?: number } | void
+    >({
+      query: (f) => ({
+        url: "/authsec/governance/policies/upcoming",
+        method: "GET",
+        params: f?.days ? { days: String(f.days) } : undefined,
+      }),
+      transformResponse: (r: Record<string, unknown>) => ({
+        items: (r?.upcoming as UpcomingAction[]) ?? [],
+        total: (r?.total as number) ?? 0,
+        destructive: (r?.destructive as number) ?? 0,
+      }),
+      providesTags: ["UpcomingAction"],
+    }),
+    listPolicyWarnings: builder.query<
+      { items: PolicyWarning[]; undelivered: number },
+      { policyId?: string; limit?: number } | void
+    >({
+      query: (f) => ({
+        url: "/authsec/governance/policy-warnings",
+        method: "GET",
+        params: {
+          ...(f?.policyId ? { policy_id: f.policyId } : {}),
+          ...(f?.limit ? { limit: String(f.limit) } : {}),
+        },
+      }),
+      transformResponse: (r: Record<string, unknown>) => ({
+        items: (r?.warnings as PolicyWarning[]) ?? [],
+        undelivered: (r?.undelivered as number) ?? 0,
+      }),
+      providesTags: ["PolicyWarning"],
+    }),
+    runPolicyWarnings: builder.mutation<
+      { scheduled: number; attempted: number; sent: number; failed: number; dead: number; errors?: string[] },
+      void
+    >({
+      query: () => ({ url: "/authsec/governance/policy-warnings/run", method: "POST" }),
+      invalidatesTags: ["PolicyWarning"],
+    }),
+    getNotificationSettings: builder.query<NotificationSettings, void>({
+      query: () => ({ url: "/authsec/governance/notification-settings", method: "GET" }),
+      providesTags: ["NotificationSettings"],
+    }),
+    updateNotificationSettings: builder.mutation<
+      NotificationSettings,
+      { warning_lead?: string; webhook_url?: string; webhook_secret?: string; email_enabled?: boolean }
+    >({
+      query: (body) => ({
+        url: "/authsec/governance/notification-settings",
+        method: "PUT",
+        body,
+      }),
+      // The lead time decides WHEN warnings are scheduled, so changing it
+      // reschedules them.
+      invalidatesTags: ["NotificationSettings", "PolicyWarning"],
+    }),
+    listEnforcementPlans: builder.query<EnforcementPlansResult, { connectorId: string; limit?: number }>({
+      query: ({ connectorId, limit }) => ({
+        url: `/authsec/governance/connectors/${connectorId}/enforcement-plans`,
+        method: "GET",
+        params: limit ? { limit: String(limit) } : undefined,
+      }),
+      providesTags: (_r, _e, { connectorId }) => [{ type: "EnforcementPlan", id: connectorId }],
+    }),
+    forceEvictAgent: builder.mutation<ForceEvictResult, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/authsec/governance/agents/${id}/force-evict`,
+        method: "POST",
+        body: { reason },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "DiscoveredAgent", id },
+        "ProvisioningInstruction",
+      ],
+    }),
+
     // ── Birthrights + JML ─────────────────────────────────────────────────────
     createBirthright: builder.mutation<BirthrightPolicy, CreateBirthrightRequest>({
       query: (body) => ({ url: "/authsec/governance/birthrights", method: "POST", body }),
@@ -646,6 +946,18 @@ export const {
   useReconcileJmlMutation,
   useListStaleBirthrightsQuery,
   useListOrphanedAgentsQuery,
+  useListAgentPoliciesQuery,
+  useGetAgentPolicyQuery,
+  useCreateAgentPolicyMutation,
+  useDeleteAgentPolicyMutation,
+  useReconcileAgentPoliciesMutation,
+  useListUpcomingActionsQuery,
+  useListPolicyWarningsQuery,
+  useRunPolicyWarningsMutation,
+  useGetNotificationSettingsQuery,
+  useUpdateNotificationSettingsMutation,
+  useListEnforcementPlansQuery,
+  useForceEvictAgentMutation,
 } = governanceApi;
 
 // Shared 403/409-aware error helper for governance mutations.

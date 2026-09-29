@@ -22,6 +22,9 @@ import {
   ClipboardCheck,
   UserPlus,
   Zap,
+  Scale,
+  CalendarClock,
+  BellRing,
   type LucideIcon,
 } from "lucide-react";
 
@@ -80,6 +83,11 @@ const NAV_DATA_SOURCES: IgaNavItem[] = [
 ];
 
 const NAV_GOVERNANCE: IgaNavItem[] = [
+  // Policies come before the queue they fill: you author intent here, and the
+  // queue below is what the cluster did about it.
+  { title: "Agent policies", url: "/iga/policies", icon: Scale },
+  { title: "Scheduled actions", url: "/iga/upcoming", icon: CalendarClock },
+  { title: "Policy warnings", url: "/iga/policy-warnings", icon: BellRing },
   { title: "Provenance", url: "/iga/provenance", icon: FileText },
   { title: "Access Certification", url: "/iga/certification", icon: ClipboardCheck },
   { title: "Separation of Duties", url: "/iga/sod", icon: ShieldAlert },
