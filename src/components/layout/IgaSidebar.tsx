@@ -24,6 +24,7 @@ import {
   Zap,
   AlertTriangle,
   ScrollText,
+  Radio,
   type LucideIcon,
 } from "lucide-react";
 
@@ -79,6 +80,8 @@ const NAV_DATA_SOURCES: IgaNavItem[] = [
   { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud },
   // Defines what a repository scan looks for, so it sits beside the scanning.
   { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },
+  // Host/node collectors streaming runtime observations.
+  { title: "Collectors", url: "/iga/collectors", icon: Radio },
 ];
 
 const NAV_GOVERNANCE: IgaNavItem[] = [

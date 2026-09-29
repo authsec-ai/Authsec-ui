@@ -224,6 +224,8 @@ export const baseApi = createApi({
     // is pinned to a published revision, so a refresh re-requests everything
     // at the new revision rather than invalidating objects one by one.
     "IgaGraph",
+    // Collector enrollment + management (see app/api/collectorApi.ts)
+    "Collector",
   ],
   endpoints: () => ({}),
 });

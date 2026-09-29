@@ -84,6 +84,7 @@ import InstructionsPage from "./features/governance/InstructionsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { FindingsTable, FindingDetail } from "./features/iga/itdr";
 import { PolicyList } from "./features/iga/policy";
+import { CollectorsPage } from "./features/iga/collectors";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -931,6 +932,17 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <PolicyList />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── Collector enrollment + management ── */}
+                  <Route
+                    path="/iga/collectors"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <CollectorsPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
