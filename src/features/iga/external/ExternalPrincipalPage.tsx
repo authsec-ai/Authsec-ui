@@ -29,7 +29,7 @@ import { classifyGraphError } from "../shared/graphErrors";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
-import { accountWithId, agoText, dayText } from "../shared/labels";
+import { accountWithId, dayText } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
@@ -38,6 +38,7 @@ import { ObjectShell, type ObjectTabDef } from "../shared/components/ObjectShell
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { emptyGiven } from "../shared/listSummary";
 import { activeTabOf } from "../shared/links";
+import { Timestamp } from "../shared/components/Timestamp";
 
 /** Why nothing resolves a principal, in words (never "absent"). */
 const UNRESOLVED_REASON: Record<string, string> = {
@@ -88,7 +89,7 @@ function Overview({ p }: { p: ExternalPrincipalDetail }) {
           <DrawerSection label="How we know">
             <DetailGrid>
               <DetailRow label="First named" value={dayText(p.first_seen_at)} />
-              <DetailRow label="Last confirmed" value={agoText(p.last_confirmed_at)} />
+              <DetailRow label="Last confirmed" value={<Timestamp iso={p.last_confirmed_at} />} />
             </DetailGrid>
           </DrawerSection>
         </CardContent>

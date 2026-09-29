@@ -54,6 +54,7 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+import { HelpTooltip } from "@/components/ui/tooltip";
 
 const KINDS: { key: string; label: string; kind?: IdentityKind }[] = [
   { key: "all", label: "All" },
@@ -175,7 +176,17 @@ export default function IdentitiesListPage() {
       },
       {
         id: "used_by",
-        header: "Bindings",
+        // "Bindings" alone does not say which bindings are counted, and the
+        // distinction matters — the number deliberately excludes workloads that
+        // reach this identity through another role. That was only discoverable
+        // by hovering a cell. Reuses the same constant as the cell title so the
+        // two can never drift.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Bindings
+            <HelpTooltip content={DIRECT_BINDINGS_MEANING} />
+          </span>
+        ),
         label: DIRECT_BINDINGS_LABEL,
         priority: 2,
         approxWidth: 120,
@@ -216,7 +227,11 @@ export default function IdentitiesListPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 48,
+        // The expand chevron is a fixed 44px cell immediately to the right, so
+        // at 48 the two controls sat almost edge to edge and read as one
+        // two-button group. The extra width is spent as right padding.
+        approxWidth: 64,
+        cellClassName: "pr-3",
         cell: ({ row }) => {
           const base = `/iga/identities/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the

@@ -8,8 +8,9 @@
 import type { ResourceDetail } from "@/app/api/igaGraphApi";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, agoText, dayText, countText } from "../shared/labels";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, dayText, countText } from "../shared/labels";
 import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
+import { Timestamp } from "../shared/components/Timestamp";
 
 
 export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) {
@@ -81,7 +82,7 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
 
           <Panel title="How we know">
             <Facts>
-              <Fact label="Last confirmed">{agoText(r.last_confirmed_at)}</Fact>
+              <Fact label="Last confirmed"><Timestamp iso={r.last_confirmed_at} /></Fact>
               <Fact label="Found in">{
                   r.sources.length
                     ? r.sources.map((s) => `${accountLabel(s.account)}${s.state !== "current" ? ` (${s.state})` : ""}`).join(", ")

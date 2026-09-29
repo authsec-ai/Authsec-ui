@@ -62,6 +62,7 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+import { HelpTooltip } from "@/components/ui/tooltip";
 
 const KINDS: { key: string; label: string; kind?: ResourceKind }[] = [
   { key: "all", label: "All" },
@@ -186,7 +187,17 @@ export default function ResourcesListPage() {
       },
       {
         id: "kind",
-        header: "Kind",
+        // The per-value note is already a cell title; this says what the
+        // column is measuring at all. The "from policy text, not from
+        // discovery" point is the one every RESOURCE_KIND_NOTE entry makes,
+        // and it is the thing most likely to be misread as an inventory.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Kind
+            <HelpTooltip content="How a policy statement referred to this resource — named exactly, matched by a pattern, or owned by an account we cannot read. These come from policy text, so none of them confirms the resource exists." />
+          </span>
+        ),
+        label: "Kind",
         priority: 1,
         approxWidth: 150,
         cardSummary: true,
@@ -210,7 +221,16 @@ export default function ResourcesListPage() {
       },
       {
         id: "named_by",
-        header: "Named by",
+        // A bare count with a two-word header invites reading it as "how many
+        // things can reach this". It is neither — it counts policy statements
+        // that mention the resource.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Named by
+            <HelpTooltip content="How many policy statements name this resource. A count of statements, not of identities that can reach it — one statement may grant many principals, and a statement naming it does not mean the access is usable." />
+          </span>
+        ),
+        label: "Named by",
         priority: 3,
         approxWidth: 120,
         cell: ({ row }) => <span className="text-sm tabular-nums">{namedBy(row.original)}</span>,
@@ -250,7 +270,10 @@ export default function ResourcesListPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 48,
+        // Matches the estate and identities tables: the fixed 44px chevron cell
+        // sits immediately right, so 48 left the two controls touching.
+        approxWidth: 64,
+        cellClassName: "pr-3",
         cell: ({ row }) => {
           const base = `/iga/resources/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the

@@ -64,6 +64,7 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+import { HelpTooltip } from "@/components/ui/tooltip";
 
 const RUNTIMES = Object.keys(RUNTIME_LABEL) as RuntimeKind[];
 
@@ -197,7 +198,17 @@ export default function EstateListPage() {
       },
       {
         id: "classification",
-        header: "Classification",
+        // The per-value meaning is already a title on the cell, but that is
+        // only reachable by hovering a row — the column itself explained
+        // nothing. A thunk, because TanStack types `header` as
+        // `string | ((ctx) => ReactNode)`; `label` is what the Columns menu uses.
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Classification
+            <HelpTooltip content="Whether this workload is recorded as an agent. AWS-run agent services are classified by what they are; anything else stays unclassified until someone records a decision. Unclassified is not a problem." />
+          </span>
+        ),
+        label: "Classification",
         priority: 2,
         approxWidth: 128,
         cardSummary: true,
@@ -256,7 +267,13 @@ export default function EstateListPage() {
       },
       {
         id: "instances",
-        header: "Instances",
+        header: () => (
+          <span className="inline-flex items-center gap-1.5">
+            Instances
+            <HelpTooltip content="Aliases and versions, which separate a live agent from a canary. Nothing reads them yet, so “Not collected” is not a count of zero." />
+          </span>
+        ),
+        label: "Instances",
         priority: 7,
         approxWidth: 160,
         defaultHidden: true,
@@ -277,7 +294,12 @@ export default function EstateListPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 48,
+        // The expand chevron is a fixed 44px cell immediately to the right, so
+        // at 48 the two controls sat almost edge to edge and read as one
+        // two-button group. The extra width is spent as right padding on the
+        // cell, which separates them without moving the chevron.
+        approxWidth: 64,
+        cellClassName: "pr-3",
         cell: ({ row }) => {
           const base = `/iga/estate/${refId(row.original.ref)}`;
           // The menu renders in a portal, so its clicks still bubble to the

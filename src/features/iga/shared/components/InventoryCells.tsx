@@ -56,7 +56,14 @@ export function AccountCell({ account }: { account: GraphAccount | null }) {
         {named ? account.label : <span className="font-mono text-xs">{account.id}</span>}
       </p>
       {named ? <p className="truncate font-mono text-[11px] text-(--color-text-muted)">{account.id}</p> : null}
-      {!account.connected ? <p className="text-[11px] text-(--color-warning-text)">Not connected</p> : null}
+      {/* Muted, not warning. This is an ACCOUNT-level condition rendered once
+          per ROW, so a revoked account painted every row of the table orange —
+          and `GraphAccount` carries only `connected`, so this cannot tell a
+          deliberate revocation from a broken connection and was warning-toned
+          for both. PipelineNotice already reports each at the top of the page
+          with the right severity: neutral "Revoked", warning "Connection
+          error". The fact still belongs on the row; the alarm does not. */}
+      {!account.connected ? <p className="text-[11px] text-(--color-text-muted)">Not connected</p> : null}
     </div>
   );
 }
@@ -83,11 +90,16 @@ export function CopyValue({ value, label = "Copy" }: { value: string; label?: Re
   );
 }
 
-/** The same identifier in details: wrapped in full, not clipped. */
+/** The same identifier in details: wrapped in full, not clipped.
+ *
+ * A step larger than the `text-xs` used in the table cell, and deliberately so.
+ * In a cell the ARN is a glance-past identifier next to a copy button; in the
+ * expanded panel it is the thing the reader opened the row to read, and a
+ * mono 12px string of 60-odd characters is genuinely hard to parse. */
 export function CopyValueWrapped({ value }: { value: string }) {
   return (
     <span className="flex items-start gap-1.5">
-      <span className="min-w-0 flex-1 break-all font-mono text-xs">{value}</span>
+      <span className="min-w-0 flex-1 break-all font-mono text-[13px] leading-5 text-(--color-text)">{value}</span>
       <button
         type="button"
         aria-label={`Copy ${value}`}

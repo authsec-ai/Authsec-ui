@@ -20,6 +20,7 @@ import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClassificationHistory } from "../classification/ClassificationHistory";
 import { ClassifyDialog } from "../classification/ClassifyDialog";
 import { Fact, Facts, Meta, Panel } from "../shared/components/Panel";
+import { Timestamp } from "../shared/components/Timestamp";
 
 
 function ClassificationText({ w }: { w: WorkloadDetail }) {
@@ -38,7 +39,7 @@ function ClassificationText({ w }: { w: WorkloadDetail }) {
       </>
     );
   }
-  return <>Nobody has recorded what this is for.</>;
+  return <>No purpose has been recorded for this workload.</>;
 }
 
 function RunsAs({ w }: { w: WorkloadDetail }) {
@@ -272,7 +273,7 @@ export function WorkloadOverview({
                 </span>
               </Fact>
               <Fact label="First seen">{dayText(w.first_seen_at)}</Fact>
-              <Fact label="Last confirmed">{agoText(w.last_confirmed_at)}</Fact>
+              <Fact label="Last confirmed"><Timestamp iso={w.last_confirmed_at} /></Fact>
               <Fact label="Found by">
                 {w.sources.length ? (
                   <span className="flex flex-col gap-1">

@@ -8,6 +8,7 @@
  * otherwise detaching one of two policies would look like losing the access.
  */
 
+import { useState } from "react";
 import { format } from "date-fns";
 import { useLocation, useSearchParams } from "react-router-dom";
 
@@ -132,8 +133,16 @@ function sentence(e: ChangeEvent): string {
 
 function EventRow({ e }: { e: ChangeEvent }) {
   const { open } = useEvidence();
+  const [expanded, setExpanded] = useState(false);
   const rest = remainingText(e);
   const paths = pathsText(e);
+  // `sentence()` flattens every action and target into one string, so a broad
+  // managed policy becomes a paragraph and one event can fill the viewport.
+  // Clamped to four lines with a way out — the full text stays in the DOM, so
+  // find-in-page and screen readers still reach it.
+  const text = sentence(e);
+  const long = text.length > 220;
+  const claims = evidenceClaims(e.claims);
   const after = (e.after as { state?: string } | null | undefined)?.state;
   const visibility =
     e.event === "coverage_changed" && after && after !== "reached"
@@ -145,12 +154,27 @@ function EventRow({ e }: { e: ChangeEvent }) {
         <time dateTime={e.at} className="shrink-0 tabular-nums text-xs text-(--color-text-muted)">
           {format(new Date(e.at), "d MMM yyyy, HH:mm")}
         </time>
-        <span className="min-w-0 flex-1">{sentence(e)}</span>
-        {evidenceClaims(e.claims).length ? (
+        <span className="min-w-0 flex-1">
+          <span className={cn("block", long && !expanded && "line-clamp-4")}>{text}</span>
+          {long ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-0.5 text-xs font-medium text-(--color-primary-text) hover:underline"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          ) : null}
+        </span>
+        {/* font-medium, matching ClaimFacts' Evidence button on the Identities
+            and Resources tabs. It was font-semibold here, which made the one
+            affordance that repeats on every single row the boldest thing in
+            the feed. */}
+        {claims.length ? (
           <button
             type="button"
-            onClick={() => open(evidenceClaims(e.claims))}
-            className="shrink-0 text-xs font-semibold text-(--color-primary-text) hover:underline"
+            onClick={() => open(claims)}
+            className="shrink-0 text-xs font-medium text-(--color-primary-text) hover:underline"
           >
             Evidence
           </button>
