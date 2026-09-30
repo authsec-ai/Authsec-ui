@@ -12,8 +12,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Boxes,
   Cloud,
-  Database,
-  Fingerprint,
   SlidersHorizontal,
   Radar,
   ScanSearch,
@@ -61,12 +59,10 @@ interface IgaNavItem {
 // explore the estate, govern access, manage where the data comes from.
 // Every route is unchanged; only the grouping and two labels moved.
 const NAV_EXPLORE: IgaNavItem[] = [
-  // The identity graph's entry point.
+  // The identity graph's entry point. Identities and resources are reached
+  // from Cloud Inventory and from a workload's graph, so they have no entries
+  // of their own; their pages and links are unchanged.
   { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
-  // Estate-wide: an investigation often starts from a shared role or a
-  // sensitive bucket rather than a workload.
-  { title: "Identities", url: "/iga/identities", icon: Fingerprint, graphFeature: "identities" },
-  { title: "Resources", url: "/iga/resources", icon: Database, graphFeature: "resources" },
 ];
 
 const NAV_DATA_SOURCES: IgaNavItem[] = [

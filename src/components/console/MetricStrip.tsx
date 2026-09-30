@@ -11,6 +11,10 @@ export interface MetricStripItemDef {
   value: number | string;
   tone?: MetricTone;
   onClick?: () => void;
+  /** The tile is the filter currently applied: marked, and announced as pressed. */
+  active?: boolean;
+  /** What clicking it does, for a tile that filters. */
+  title?: string;
 }
 
 const DOT_TONE_CLASS: Record<MetricTone, string> = {
@@ -21,7 +25,7 @@ const DOT_TONE_CLASS: Record<MetricTone, string> = {
   danger: "bg-(--color-danger)",
 };
 
-function MetricStripSegment({ label, value, tone = "neutral", onClick }: Omit<MetricStripItemDef, "key">) {
+function MetricStripSegment({ label, value, tone = "neutral", onClick, active, title }: Omit<MetricStripItemDef, "key">) {
   return (
     // Value over label, not beside it. Side by side at 22px and 14px they read
     // as one sentence of roughly equal weight, so four tiles looked alike and
@@ -30,9 +34,13 @@ function MetricStripSegment({ label, value, tone = "neutral", onClick }: Omit<Me
     <button
       type="button"
       onClick={onClick}
+      title={title}
+      aria-pressed={onClick && active !== undefined ? active : undefined}
       className={cn(
-        "flex flex-1 flex-col items-start gap-1 px-5 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
+        "relative flex flex-1 flex-col items-start gap-1 px-5 py-3.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
         onClick ? "hover:bg-(--color-hover)" : "cursor-default",
+        // The applied tile: a tinted ground and an accent rule along its foot.
+        active && "bg-(--color-primary-soft)/50 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-(--color-primary)",
       )}
     >
       <span

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 const INLINE_MAX = 6;
 
 const CHIP_BASE =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors";
+  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors";
 const CHIP_ON = "border-transparent bg-(--color-primary-soft) font-semibold text-(--color-primary-text)";
 const CHIP_OFF =
   "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)";

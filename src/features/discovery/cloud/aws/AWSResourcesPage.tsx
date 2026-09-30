@@ -45,13 +45,10 @@ import { Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
-  AppliedFilters,
-  ConsoleFilterBar,
   EntityCell,
   type AppliedFilter,
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
-import { Switch } from "@/components/ui/switch";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -69,6 +66,7 @@ import {
 import { toast } from "react-hot-toast";
 
 import { AWSAccountPicker } from "./AWSAccountPicker";
+import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "./AWSFilterChips";
 import {
   ALL_ACCOUNTS,
@@ -337,6 +335,8 @@ export default function AWSResourcesPage() {
         label: metricLabel("Resources", truncated, rows.length),
         value: total,
         tone: "primary",
+        active: kind === ALL_KINDS && !highOnly,
+        title: "Show every resource",
         onClick: () => {
           setParam("kind", null);
           setHighOnly(false);
@@ -355,7 +355,9 @@ export default function AWSResourcesPage() {
         label: metricLabel("High sensitivity", truncated, rows.length),
         value: high,
         tone: high > 0 ? "danger" : "neutral",
-        onClick: () => setHighOnly(true),
+        active: highOnly,
+        title: highOnly ? "Show resources of every sensitivity" : "Show only high-sensitivity resources",
+        onClick: () => setHighOnly((v) => !v),
       },
       {
         key: "med",
@@ -601,49 +603,31 @@ export default function AWSResourcesPage() {
         />
       ) : null}
 
-      <ResourceScopeCaveat />
-
-      {/* Two rows, deliberately. Row one is the controls that are always worth
-          reaching — search, which takes the room, plus the sensitivity toggle
-          and the account scope. Row two is the type chips, which are as many as
-          the estate has kinds and so must never be allowed to wrap; AWSFilterChips
-          keeps six on the row and folds the tail behind More. Applied filters
-          and Clear all sit under both. */}
-      <ConsoleFilterBar
-        className="[&>[data-slot=card-content]]:py-2.5"
+      {/* The tiles above filter by sensitivity; this row is search, the
+          resource type and the account scope. */}
+      <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or ARN…"
-        trailing={
-          <>
-            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
-              <Switch
-                checked={highOnly}
-                onCheckedChange={(v) => setHighOnly(v === true)}
-                aria-label="Show only high sensitivity resources"
-              />
-              High sensitivity
-            </label>
-            <AWSAccountPicker
-              connectors={connectors}
-              value={account}
-              onChange={(next) => setParam("account", next)}
-            />
-          </>
+        searchPlaceholder="Search by name or ARN"
+        chips={
+          <AWSFilterChips
+            label="Resource type"
+            options={kindFilters}
+            active={kind}
+            onSelect={(key) => setParam("kind", key === ALL_KINDS ? null : key)}
+          />
         }
-        below={
-          <div className="space-y-2">
-            <AWSFilterChips
-              label="Resource type"
-              options={kindFilters}
-              active={kind}
-              onSelect={(key) => setParam("kind", key === ALL_KINDS ? null : key)}
-            />
-            {appliedFilters.length ? (
-              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
-            ) : null}
-          </div>
+        controls={
+          <AWSAccountPicker connectors={connectors} value={account} onChange={(next) => setParam("account", next)} />
         }
+        applied={appliedFilters}
+        onClearAll={() => {
+          clearAllFilters();
+          setSearch("");
+        }}
+        shown={filtered.length}
+        total={rows.length}
+        noun="resources"
       />
 
       <TableCard>
@@ -695,6 +679,10 @@ export default function AWSResourcesPage() {
           )}
         </CardContent>
       </TableCard>
+
+      <footer className="text-[11px] leading-relaxed text-muted-foreground">
+        <ResourceScopeCaveat />
+      </footer>
 
       {connectors.length > 1 && account === ALL_ACCOUNTS ? (
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">

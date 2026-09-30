@@ -37,19 +37,11 @@ import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Info } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
-import {
-  AppliedFilters,
-  ConsoleFilterBar,
-  EntityCell,
-  type AppliedFilter,
-  type ConsoleFilterOption,
-} from "@/components/console/iam-console";
-import { Switch } from "@/components/ui/switch";
+import { EntityCell, type AppliedFilter, type ConsoleFilterOption } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { CloudPill } from "../CloudPill";
 import {
   useListAwsConnectorsQuery,
   useListAwsIdentityPageQuery,
@@ -62,6 +54,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
 
+import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSAccountPicker } from "./AWSAccountPicker";
 import { AWSFilterChips } from "./AWSFilterChips";
 import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
@@ -82,8 +75,9 @@ const KIND_FILTERS: ConsoleFilterOption[] = [
   { key: "iam_user", label: "Users" },
 ];
 
+/** A date in words, or an em dash when none was reported (the column header says what it is). */
 function relativeOrUnknown(iso: string | null | undefined): string {
-  return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "Unknown";
+  return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "—";
 }
 
 export default function AWSIdentitiesPage() {
@@ -247,6 +241,8 @@ export default function AWSIdentitiesPage() {
         label: metricLabel("Identities", truncated, rows.length),
         value: total,
         tone: "primary",
+        active: kind === "all" && !unusedOnly,
+        title: "Show every identity",
         onClick: () => {
           setParam("kind", null);
           setUnusedOnly(false);
@@ -256,13 +252,17 @@ export default function AWSIdentitiesPage() {
         key: "roles",
         label: metricLabel("IAM roles", truncated, rows.length),
         value: roles,
-        onClick: () => setParam("kind", "iam_role"),
+        active: kind === "iam_role",
+        title: "Show only IAM roles",
+        onClick: () => setParam("kind", kind === "iam_role" ? null : "iam_role"),
       },
       {
         key: "users",
         label: metricLabel("IAM users", truncated, rows.length),
         value: users,
-        onClick: () => setParam("kind", "iam_user"),
+        active: kind === "iam_user",
+        title: "Show only IAM users",
+        onClick: () => setParam("kind", kind === "iam_user" ? null : "iam_user"),
       },
       ...(gcpServiceAccounts > 0
         ? [
@@ -270,7 +270,9 @@ export default function AWSIdentitiesPage() {
               key: "gcp",
               label: metricLabel("GCP service accounts", truncated, rows.length),
               value: gcpServiceAccounts,
-              onClick: () => setParam("kind", "gcp_service_account"),
+              active: kind === "gcp_service_account",
+              title: "Show only GCP service accounts",
+              onClick: () => setParam("kind", kind === "gcp_service_account" ? null : "gcp_service_account"),
             } as MetricStripItemDef,
           ]
         : []),
@@ -282,7 +284,10 @@ export default function AWSIdentitiesPage() {
         label: metricLabel("With unused access", usageIncomplete, rows.length),
         value: withUnused,
         tone: withUnused > 0 ? "warning" : "neutral",
-        onClick: () => setUnusedOnly(true),
+        active: unusedOnly,
+        title: unusedOnly ? "Show identities whether or not they have unused access" : "Show only identities with access they have never used",
+        // Combines with a kind: "IAM roles with unused access".
+        onClick: () => setUnusedOnly((v) => !v),
       },
     ];
     // setParam closes over `params`; rebuilding the strip when it changes is
@@ -405,12 +410,21 @@ export default function AWSIdentitiesPage() {
           // rows loaded 2,000 and rendered "2000 never used" — a precise
           // figure, and wrong. "At least" is the only honest form until
           // completeness is established.
+          // A dot, not a filled pill: most roles carry some never-used access,
+          // and a column of amber pills stops meaning anything.
           return (
-            <CloudPill tone="warning" dot={false}>
-              {usageIncomplete
-                ? `At least ${usage.never} never used`
-                : `${usage.never} of ${usage.total} never used`}
-            </CloudPill>
+            <span className="inline-flex items-center gap-1.5 text-xs text-(--color-text)">
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-(--color-warning)" />
+              {usageIncomplete ? (
+                <>
+                  <span className="text-(--color-text-muted)">at least</span> {usage.never} never used
+                </>
+              ) : (
+                <>
+                  {usage.never} <span className="text-(--color-text-muted)">of {usage.total}</span> never used
+                </>
+              )}
+            </span>
           );
         },
       },
@@ -487,54 +501,43 @@ export default function AWSIdentitiesPage() {
           the reader to narrow a filter that does not affect the shortfall. */}
       {usageIncomplete ? (
         <InventoryNotice tone="warning" icon={<AlertTriangle />}>
-          <strong className="font-medium">Service activity is partial.</strong>{" "}
+          <strong className="font-medium">Service activity is partial</strong>
+          {" — "}
           {usageQuery.data?.partialError
-            ? "Reading activity failed part-way through, so some identities show fewer services than they have."
-            : "This workspace holds more activity rows than one read collects, so per-identity service totals are a floor."}{" "}
-          Never-used counts are still exact — those rows are read first.
+            ? "reading it failed part-way, so some identities show fewer services than they have."
+            : "more activity rows exist than one read collects, so service totals are a floor."}{" "}
+          Never-used counts come first and are shown as "at least".
         </InventoryNotice>
       ) : null}
 
-      <CandidateIdentityCaveat />
-
-      <ConsoleFilterBar
-        className="[&>[data-slot=card-content]]:py-2.5"
+      {/* The tiles above are the kind and unused-access filters; this row is
+          search and the account scope. Nothing is offered twice. With no
+          rows there are no tiles, so the kind chips stand in for them. */}
+      <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, ARN or tag…"
-        trailing={
-          // Row one: the toggle and the account scope beside search, matching
-          // Resources. The bare checkbox these replace sat flush against an
-          // unlabelled select and the two read as one control.
-          <>
-            <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-xs font-medium text-(--color-text)">
-              <Switch
-                checked={unusedOnly}
-                onCheckedChange={(v) => setUnusedOnly(v === true)}
-                aria-label="Show only identities with access they have never used"
-              />
-              Unused access
-            </label>
-            <AWSAccountPicker
-              connectors={connectors}
-              value={account}
-              onChange={(next) => setParam("account", next)}
-            />
-          </>
-        }
-        below={
-          <div className="space-y-2">
+        searchPlaceholder="Search by name, ARN or tag"
+        chips={
+          rows.length ? null : (
             <AWSFilterChips
               label="Identity kind"
               options={kindFilters}
               active={kind}
               onSelect={(key) => setParam("kind", key === "all" ? null : key)}
             />
-            {appliedFilters.length ? (
-              <AppliedFilters filters={appliedFilters} onClearAll={clearAllFilters} />
-            ) : null}
-          </div>
+          )
         }
+        controls={
+          <AWSAccountPicker connectors={connectors} value={account} onChange={(next) => setParam("account", next)} />
+        }
+        applied={appliedFilters}
+        onClearAll={() => {
+          clearAllFilters();
+          setSearch("");
+        }}
+        shown={filtered.length}
+        total={rows.length}
+        noun="identities"
       />
 
       <TableCard>
@@ -587,13 +590,17 @@ export default function AWSIdentitiesPage() {
         </CardContent>
       </TableCard>
 
-      {connectors.length > 1 && account === ALL_ACCOUNTS ? (
-        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-          <Info className="mt-px size-3.5 flex-none" aria-hidden />
-          {connectors.length} AWS accounts are connected. Identities can be narrowed to one account;
-          the per-identity tabs inside a row are already scoped to that identity.
-        </p>
-      ) : null}
+      {/* What this list is, said once under it rather than above the table. */}
+      <footer className="flex flex-col gap-1 text-[11px] leading-relaxed text-muted-foreground">
+        <CandidateIdentityCaveat />
+        {connectors.length > 1 && account === ALL_ACCOUNTS ? (
+          <p className="flex items-start gap-1.5">
+            <Info className="mt-px size-3.5 flex-none" aria-hidden />
+            {connectors.length} AWS accounts are connected. Narrow to one with the account picker; each
+            identity's own tabs are already scoped to it.
+          </p>
+        ) : null}
+      </footer>
 
       <AWSIdentityDrawer
         identity={selected}

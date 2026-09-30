@@ -53,8 +53,6 @@ import { Boxes, CircleSlash } from "lucide-react";
 
 import { MetricStrip, type MetricStripItemDef } from "@/components/console/MetricStrip";
 import {
-  AppliedFilters,
-  ConsoleFilterBar,
   EntityCell,
   type AppliedFilter,
   type ConsoleFilterOption,
@@ -78,6 +76,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 
 import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
+import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "./AWSFilterChips";
 import { AWSIdentityDrawer } from "./AWSIdentityDrawer";
 import { OpenInGraph } from "@/features/iga/shared/components/OpenInGraph";
@@ -99,12 +98,6 @@ import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
 import { awsErrorCopy } from "./awsErrorCopy";
 
 type AttributionFilter = "all" | "attributed" | "unattributed";
-
-const ATTRIBUTION_FILTERS: ConsoleFilterOption[] = [
-  { key: "all", label: "All" },
-  { key: "attributed", label: "Attributed" },
-  { key: "unattributed", label: "Unattributed" },
-];
 
 function relativeOrUnknown(iso: string | null | undefined): string {
   return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "Unknown";
@@ -283,21 +276,27 @@ export default function AWSComputePage() {
         label: metricLabel("Compute resources", t.truncated, loaded),
         value: t.totalKnown ? t.total : loaded,
         tone: "primary",
-        onClick: clearFilters,
+        active: attribution === "all",
+        title: "Show all compute",
+        onClick: () => setParam("attribution", null),
       },
       {
         key: "attributed",
         label: metricLabel("Run as a known identity", t.truncated, loaded),
         value: loaded - unattributed,
         tone: "success",
-        onClick: () => setParam("attribution", "attributed"),
+        active: attribution === "attributed",
+        title: "Show only compute that runs as a discovered identity",
+        onClick: () => setParam("attribution", attribution === "attributed" ? null : "attributed"),
       },
       {
         key: "unattributed",
         label: metricLabel("Unattributed", t.truncated, loaded),
         value: unattributed,
         tone: unattributed > 0 ? "warning" : "neutral",
-        onClick: () => setParam("attribution", "unattributed"),
+        active: attribution === "unattributed",
+        title: "Show only compute whose execution role was not found",
+        onClick: () => setParam("attribution", attribution === "unattributed" ? null : "unattributed"),
       },
       {
         key: "regions",
@@ -568,33 +567,28 @@ export default function AWSComputePage() {
         </div>
       ) : null}
 
-      <ComputeCaveat />
-
-      <ConsoleFilterBar
-        className="[&>[data-slot=card-content]]:py-2.5"
+      {/* The tiles above are the attribution filter; this row is search and
+          the runtime. Nothing is offered twice. */}
+      <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, ARN or region…"
-        filters={ATTRIBUTION_FILTERS}
-        activeFilter={attribution}
-        onFilterChange={(v) => setParam("attribution", v)}
-        below={
-          // The runtime pills used to be a second, hand-rolled row OUTSIDE the
-          // filter card, at a different height and font size from the bar's
-          // own. Same row-two position, but inside the card and sharing one
-          // chip component with Resources, so the two tabs match.
-          <div className="space-y-2">
-            <AWSFilterChips
-              label="Runtime"
-              options={runtimeFilters}
-              active={runtime ?? "all"}
-              onSelect={(key) => setParam("runtime", key === "all" ? null : key)}
-            />
-            {appliedFilters.length ? (
-              <AppliedFilters filters={appliedFilters} onClearAll={clearFilters} />
-            ) : null}
-          </div>
+        searchPlaceholder="Search by name, ARN or region"
+        chips={
+          <AWSFilterChips
+            label="Runtime"
+            options={runtimeFilters}
+            active={runtime ?? "all"}
+            onSelect={(key) => setParam("runtime", key === "all" ? null : key)}
+          />
         }
+        applied={appliedFilters}
+        onClearAll={() => {
+          clearFilters();
+          setSearch("");
+        }}
+        shown={filtered.length}
+        total={rows.length}
+        noun="compute resources"
       />
 
       <TableCard>
@@ -657,6 +651,10 @@ export default function AWSComputePage() {
           )}
         </CardContent>
       </TableCard>
+
+      <footer className="text-[11px] leading-relaxed text-muted-foreground">
+        <ComputeCaveat />
+      </footer>
 
       {identityLookupTruncated ? (
         <p className="text-[11px] text-muted-foreground">

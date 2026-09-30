@@ -46,21 +46,21 @@ export const CLOUD_INVENTORY_TABS: CloudInventoryTab[] = [
     key: "identities",
     label: "Identities",
     description:
-      "The IAM roles and users each scan collected from your AWS accounts, as collected. For how they connect to workloads and resources, use Explore › Identities.",
+      "The IAM roles, users and service accounts each scan collected, as collected. To see what one can reach, open it and choose Open in graph.",
     scopedByAccount: true,
   },
   {
     key: "compute",
     label: "Compute",
     description:
-      "The Lambda functions, ECS task definitions, EC2 instances and Bedrock runtimes each scan collected, as collected. To investigate one, use Explore › Agents & workloads.",
+      "The Lambda functions, ECS task definitions, EC2 instances and Bedrock runtimes each scan collected, as collected. To investigate one, use Agents & workloads.",
     scopedByAccount: false,
   },
   {
     key: "resources",
     label: "Resources",
     description:
-      "The S3 buckets, DynamoDB tables, KMS keys and secrets each scan collected, as collected. For what policies name and who holds it, use Explore › Resources.",
+      "The S3 buckets, DynamoDB tables, KMS keys and secrets policy statements name, as collected. To see who holds access to one, open it.",
     scopedByAccount: true,
   },
 ];
