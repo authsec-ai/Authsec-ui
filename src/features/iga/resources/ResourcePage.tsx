@@ -69,7 +69,7 @@ export default function ResourcePage() {
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Resources", to: "/iga/resources" }}
+      listCrumb={{ label: "Cloud Inventory · Resources", to: "/iga/cloud/resources" }}
       kindLabel="Resource"
       base={`/iga/resources/${encodeURIComponent(id)}`}
       tabs={tabs}

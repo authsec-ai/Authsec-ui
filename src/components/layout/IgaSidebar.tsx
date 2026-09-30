@@ -48,6 +48,8 @@ interface IgaNavItem {
   icon: LucideIcon;
   isActive?: boolean;
   onClick?: () => void;
+  /** Other sections this entry owns: its detail pages that live elsewhere. */
+  activeFor?: string[];
   /**
    * An identity-graph view: shown only when the backend serves it
    * (SPEC-iga-phase2-graph.md §2.14.14 *Unavailable features*). No teasers.
@@ -73,7 +75,9 @@ const NAV_DATA_SOURCES: IgaNavItem[] = [
   { title: "Agent sightings", url: "/iga/agents", icon: ScanSearch },
   // The rows each scan collected, as collected — the graph's source. One
   // entry with Identities / Compute / Resources tabs, not one per provider.
-  { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud },
+  // Its Identities and Resources tabs are the lists; an identity's or a
+  // resource's graph page is their detail view, so this entry owns them.
+  { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud, activeFor: ["/iga/identities", "/iga/resources", "/iga/external-principals"] },
   // Defines what a repository scan looks for, so it sits beside the scanning.
   { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },
 ];
@@ -112,8 +116,9 @@ export function IgaSidebar({
       nav.filter((item) => serves(item.graphFeature)).map((item) => ({
         ...item,
         // Match the section root too, so /iga/certification/:id keeps the parent active.
-        isActive:
-          location.pathname === item.url || location.pathname.startsWith(`${item.url}/`),
+        isActive: [item.url, ...(item.activeFor ?? [])].some(
+          (url) => location.pathname === url || location.pathname.startsWith(`${url}/`),
+        ),
         onClick: () => handleNavigation(item.url),
       })),
     [location.pathname, handleNavigation, serves],

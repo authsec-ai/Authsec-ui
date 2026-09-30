@@ -63,9 +63,7 @@ import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegration
 import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
 import EstateListPage from "./features/iga/estate/EstateListPage";
 import WorkloadPage from "./features/iga/estate/WorkloadPage";
-import IdentitiesListPage from "./features/iga/identities/IdentitiesListPage";
 import IdentityPage from "./features/iga/identities/IdentityPage";
-import ResourcesListPage from "./features/iga/resources/ResourcesListPage";
 import ResourcePage from "./features/iga/resources/ResourcePage";
 import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
 import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
@@ -697,16 +695,9 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/iga/identities"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <IdentitiesListPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
+                  {/* Cloud Inventory's tabs are the one list of identities and of
+                      resources; the graph pages below are their detail views. */}
+                  <Route path="/iga/identities" element={<Navigate to="/iga/cloud/identities" replace />} />
                   <Route
                     path="/iga/identities/:id"
                     element={
@@ -727,16 +718,7 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/iga/resources"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <ResourcesListPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/iga/resources" element={<Navigate to="/iga/cloud/resources" replace />} />
                   <Route
                     path="/iga/resources/:id"
                     element={

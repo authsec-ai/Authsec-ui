@@ -46,6 +46,7 @@
  * whose policy was never read renders as unknown, never as "no deny".
  */
 
+import { OpenResourceInGraph } from "@/features/iga/shared/components/OpenInGraph";
 import { useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Info, ShieldQuestion } from "lucide-react";
@@ -330,7 +331,7 @@ export function AWSResourceDrawer({
           />
 
           <DrawerBody>
-            <DrawerSection label="Resource">
+            <DrawerSection label="Resource" action={<OpenResourceInGraph arn={resource.native_id} />}>
               <DetailGrid>
                 <CopyField label="ARN" value={resource.native_id} />
                 <DetailRow label="Type" value={resourceKindLabel(resource.kind)} />

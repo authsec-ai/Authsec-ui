@@ -1428,6 +1428,7 @@ export const {
   useGetGraphExternalPrincipalQuery,
   useListGraphExternalReferencedByQuery,
   useListGraphResourcesQuery,
+  useLazyListGraphResourcesQuery,
   useGetGraphResourceQuery,
   useGetGraphResourceAccessQuery,
   useListGraphChangesQuery,

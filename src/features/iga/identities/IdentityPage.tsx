@@ -74,7 +74,7 @@ export default function IdentityPage() {
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Identities", to: "/iga/identities" }}
+      listCrumb={{ label: "Cloud Inventory · Identities", to: "/iga/cloud/identities" }}
       kindLabel="Identity"
       base={base}
       tabs={tabs}
