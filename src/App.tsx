@@ -80,6 +80,7 @@ import SoDPage from "./features/governance/SoDPage";
 import BirthrightsPage from "./features/governance/BirthrightsPage";
 import InstructionsPage from "./features/governance/InstructionsPage";
 import AgentPoliciesPage from "./features/governance/AgentPoliciesPage";
+import K8sAccessPage from "./features/discovery/K8sAccessPage";
 import UpcomingActionsPage from "./features/governance/UpcomingActionsPage";
 import PolicyWarningsPage from "./features/governance/PolicyWarningsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
@@ -883,6 +884,16 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <InstructionsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/k8s-access"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <K8sAccessPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

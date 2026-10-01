@@ -203,6 +203,10 @@ export const baseApi = createApi({
     "UpcomingAction",
     "PolicyWarning",
     "EnforcementPlan",
+    // Kubernetes access graph (provider 'k8s' in iga_*).
+    "K8sCluster",
+    "K8sIdentity",
+    "K8sWorkload",
     "NotificationSettings",
     // Cloud Discovery — cloud_connector rows (see app/api/cloudDiscoveryApi.ts).
     // Onboarding only today; AWS also writes discovery evidence under this tag

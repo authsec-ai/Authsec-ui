@@ -11,6 +11,7 @@ import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Boxes,
+  Network,
   Cloud,
   SlidersHorizontal,
   Radar,
@@ -65,6 +66,10 @@ const NAV_EXPLORE: IgaNavItem[] = [
   // from Cloud Inventory and from a workload's graph, so they have no entries
   // of their own; their pages and links are unchanged.
   { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
+  // What a workload can do INSIDE the cluster, through the ServiceAccount it
+  // runs as. It belongs here rather than under Governance: it is an
+  // observation of the estate, not a decision about it.
+  { title: "Kubernetes access", url: "/iga/k8s-access", icon: Network },
 ];
 
 const NAV_DATA_SOURCES: IgaNavItem[] = [
