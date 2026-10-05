@@ -4,21 +4,22 @@
  *
  * The console never infers a permission from a role name, and the token does
  * not reliably carry `discovery:admin`: the server decides from the token's
- * permission claims, its scopes, or a role binding in the database
- * (internal/authz `Allows`). So the one thing this console can know for certain
- * is what the server has told it. Until the server says no, the controls are
- * offered; the first 403 from an administrative request hides them for the rest
- * of the session, and the request itself is answered *Your role cannot do this*,
- * never as a failure. The server enforces regardless.
+ * permission claims, its scopes, or a role binding in the database. So the
+ * console asks the server (`GET /connections/can-administer`, behind the same
+ * discovery:admin middleware as the administrative routes): 200 means offer
+ * the controls, 403 means a read-only reader sees none of them.
  *
- * A server-stated answer on the connections read (a `meta.capabilities`, as the
- * graph's detail responses carry) would let read-only readers see no control at
- * all before they try one; it is a dependency on the B3 contract, which this
- * module does not change.
+ * Until that answer arrives the controls are not shown (a read-only reader is
+ * never offered a control that was never theirs). If the route does not exist
+ * (an older backend) or cannot be reached, the earlier behaviour applies: the
+ * controls are offered until the first 403 from an administrative request,
+ * which hides them for the rest of the session and is answered *Your role
+ * cannot do this*, never as a failure. The server enforces regardless.
  */
 
 import { useSyncExternalStore } from "react";
 
+import { useGetCanAdministerQuery } from "@/app/api/connectionsApi";
 import { SessionManager } from "@/utils/sessionManager";
 
 const denied = new Set<string>();
@@ -42,11 +43,19 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 
-/** Offered unless the server has said this reader cannot administer. */
+/** Offered when the server says this reader can administer, and not after it has refused one. */
 export function useCanAdminister(): boolean {
-  return useSyncExternalStore(
+  const refused = useSyncExternalStore(
     subscribe,
-    () => !denied.has(key()),
-    () => true,
+    () => denied.has(key()),
+    () => false,
   );
+  const probe = useGetCanAdministerQuery();
+  if (refused) return false;
+  if (probe.isLoading) return false;
+  if (probe.isSuccess) return probe.data.can_administer;
+  const status = (probe.error as { status?: unknown } | undefined)?.status;
+  if (status === 403) return false;
+  // The route is absent or unreachable: offer, and let the first refusal hide them.
+  return true;
 }

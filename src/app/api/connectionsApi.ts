@@ -83,6 +83,14 @@ export interface Connection {
 
 export const connectionsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    /**
+     * Can this reader administer connections? Answered by the server's own
+     * discovery:admin middleware: 200 means yes, 403 means no. The console never
+     * infers a permission from a role name or a token claim.
+     */
+    getCanAdminister: builder.query<{ can_administer: boolean }, void>({
+      query: () => ({ url: "/authsec/discovery/connections/can-administer" }),
+    }),
     listConnections: builder.query<Connection[], void>({
       query: () => ({ url: "/authsec/discovery/connections" }),
       transformResponse: (r: { connections?: Connection[] }) => r?.connections ?? [],
@@ -91,4 +99,4 @@ export const connectionsApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useListConnectionsQuery } = connectionsApi;
+export const { useListConnectionsQuery, useGetCanAdministerQuery } = connectionsApi;
