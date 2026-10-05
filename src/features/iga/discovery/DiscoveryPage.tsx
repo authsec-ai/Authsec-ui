@@ -139,7 +139,7 @@ export default function DiscoveryPage() {
       ? heartbeatDiscrepancy(scope.source.connection, inScope(overview.sweeps ?? [], cluster).find((s) => s.observedAt)?.observedAt ?? undefined)
       : null;
   const notices = [
-    ...connectionNotices(scoped, { publishedView: awsPublished }),
+    ...connectionNotices(scoped, { publishedView: awsPublished, skipCoverage: active === "k8s" }),
     ...(provider === "k8s" ? sweepNotices(inScope(overview.sweeps ?? [], cluster)) : []),
   ];
 

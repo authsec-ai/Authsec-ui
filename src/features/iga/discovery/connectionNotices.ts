@@ -18,7 +18,7 @@ export interface Notice {
   href?: string;
 }
 
-export function connectionNotices(connections: Connection[], opts: { publishedView: boolean }): Notice[] {
+export function connectionNotices(connections: Connection[], opts: { publishedView: boolean; skipCoverage?: boolean }): Notice[] {
   const out: Notice[] = [];
   for (const c of connections) {
     const href = `/iga/connections/${encodeURIComponent(c.id)}`;
@@ -43,7 +43,7 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
       out.push({ key: `${c.id}:graph`, tone: "info", label: "Publishing", text: `${name}: the graph is being built from the latest scan.`, href });
     }
     // On the published AWS lists the graph's own coverage summary says this, with its sheet.
-    if (!opts.publishedView && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
+    if (!opts.publishedView && !opts.skipCoverage && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
       const gaps = c.coverage.gaps.slice(0, 3).map((g) => `${readableSurface(g.surface).service} ${surfaceStateText(g.state)}`);
       out.push({
         key: `${c.id}:coverage`,

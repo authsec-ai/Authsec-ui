@@ -80,7 +80,7 @@ import { countOfExact, countWithNoun } from "../shared/components/countValue";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
 import { facetSummary, fixedFacet, reportedFacet, sourceFacet, type FacetOptions } from "./facets";
 import type { FacetSpec } from "./FacetBar";
-import { EmptyList, FilteredEmpty, SourceHasNoRows, UnknownSource } from "./ListStates";
+import { EmptyList, FailurePanel, FilteredEmpty, SourceHasNoRows, UnknownSource } from "./ListStates";
 import { ResourceHolders, WorkloadFact } from "./PublishedPreviewFacts";
 import { ScreenFrame } from "./ScreenFrame";
 import type { ScreenProps } from "./screenTypes";
@@ -175,8 +175,13 @@ function PublishedBody<Row>(b: BodyProps<Row>) {
     if (dropSelection) select(null);
   }, [dropSelection, select]);
 
+  // The deployment does not serve this view, or the role may not read it: said in
+  // place of the list — never a list that stays "loading", never an empty one.
+  const gateFailure = c.gate.unauthorized ? ({ kind: "unauthorized" } as const) : c.gate.off ? ({ kind: "unavailable" } as const) : null;
   const notPublished = meta?.graph_state === "not_published";
-  const body = notPublished ? (
+  const body = gateFailure ? (
+    <FailurePanel failure={gateFailure} subject={b.subject} permission="iga:read" />
+  ) : notPublished ? (
     <div className="px-6 py-14 text-center" role="status">
       <p className="text-sm font-semibold text-(--color-text)">Nothing is published yet</p>
       <p className="mx-auto mt-1 max-w-md text-xs text-(--color-text-muted)">
