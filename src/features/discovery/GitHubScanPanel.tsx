@@ -146,6 +146,8 @@ export function GitHubScanPanel({ sourceId }: { sourceId: string }) {
         "DiscoveredAgent",
         "AgentCoverage",
         "DiscoverySource",
+        // The connection's Last scan and Status say how this run ended.
+        "Connections",
         { type: "DiscoverySource", id: sourceId },
         { type: "ScanRun", id: sourceId },
       ]),
@@ -286,7 +288,7 @@ export function GitHubScanPanel({ sourceId }: { sourceId: string }) {
 }
 
 /** One-word state, coloured by what it demands of the reader. */
-function StatusPill({ run }: { run: ScanRun }) {
+export function StatusPill({ run }: { run: ScanRun }) {
   const map: Record<string, { label: string; cls: string }> = {
     queued: { label: "Queued", cls: "bg-muted text-muted-foreground" },
     running: { label: "Running", cls: "bg-(--color-info-soft) text-(--color-info-text)" },
@@ -309,7 +311,7 @@ function StatusPill({ run }: { run: ScanRun }) {
   );
 }
 
-function RunReport({ run }: { run: ScanRun }) {
+export function RunReport({ run }: { run: ScanRun }) {
   const terminal = isScanRunTerminal(run.status);
   const clean = isClean(run);
 
@@ -529,9 +531,8 @@ function RunReport({ run }: { run: ScanRun }) {
 
       <p className="text-xs text-muted-foreground">
         Findings appear in{" "}
-        <span className="font-medium text-foreground">Discovered agents</span> as
-        unregistered, marked <em>declared in code</em> — a declaration is not proof that
-        an agent ran.
+        <span className="font-medium text-foreground">Discovery</span> as sightings,
+        marked <em>declared in code</em> — a declaration is not proof that an agent ran.
       </p>
     </div>
   );

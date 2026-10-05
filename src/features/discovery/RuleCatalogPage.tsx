@@ -1,5 +1,5 @@
 /**
- * Discovery → Detection rules
+ * Connections → a GitHub organisation → Scan rules
  *
  * What a scan looks for: which files get opened, how each is read, and the words
  * those readers match against. Workspace-level — one catalogue serves every
@@ -44,7 +44,6 @@ import {
   X,
 } from "lucide-react";
 
-import { ConsolePage } from "@/components/console/ConsolePage";
 import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -184,7 +183,7 @@ function Chip({
   );
 }
 
-export default function RuleCatalogPage() {
+export function RuleCatalogPanel({ scansHref }: { scansHref: string }) {
   const navigate = useNavigate();
   const { data, isLoading, isError, error: loadError, refetch } = useGetRuleCatalogQuery();
   const [save, { isLoading: saving }] = useSetRuleCatalogMutation();
@@ -284,18 +283,19 @@ export default function RuleCatalogPage() {
   };
 
   return (
-    <ConsolePage
-      title="Detection rules"
-      description="What a scan looks for inside your repositories: which files it opens, how each is read, and the words it matches. Used by every GitHub organisation you have connected."
-      actions={
-        data?.customised ? (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-2xl text-xs text-muted-foreground">
+          What a scan looks for inside your repositories: which files it opens, how each is read, and the words it matches. One
+          catalogue serves every GitHub organisation you have connected, so a change here applies to all of them.
+        </p>
+        {data?.customised ? (
           <Button variant="outline" size="sm" onClick={() => setConfirmReset(true)}>
             <RotateCcw className="mr-1.5 size-3.5" />
             Reset to defaults
           </Button>
-        ) : undefined
-      }
-    >
+        ) : null}
+      </div>
       {isError ? (
         // Says which failure it was — a missing permission is not an outage.
         <LoadFailurePanel failure={loadFailureOf(loadError) ?? "failed"} subject="the detection rules" permission="discovery:read" onRetry={() => void refetch()} />
@@ -336,7 +336,7 @@ export default function RuleCatalogPage() {
                   </p>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={() => navigate("/iga/integrations")}>
+              <Button size="sm" variant="outline" onClick={() => navigate(scansHref)}>
                 Run a scan
               </Button>
             </div>
@@ -641,10 +641,10 @@ export default function RuleCatalogPage() {
               className="text-[length:var(--text-sm)] text-white"
               onClick={() => {
                 setSavedVersion(null);
-                navigate("/iga/integrations");
+                navigate(scansHref);
               }}
             >
-              Go to integrations
+              Go to scans
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -670,7 +670,7 @@ export default function RuleCatalogPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </ConsolePage>
+    </div>
   );
 }
 
