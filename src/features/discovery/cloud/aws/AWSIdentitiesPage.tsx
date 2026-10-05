@@ -9,8 +9,8 @@
  * account", needs table width, search, paging and a deep link, and is where a
  * reader spends time. The drawer keeps the connection view; this owns contents.
  *
- * Rendered as the Identities tab of CloudInventoryLayout, which owns the page
- * header and the tab strip — so this file begins at the body. Everything below
+ * Rendered by Discovery as the Latest collected view of identities, which owns
+ * the page header and the type switcher — so this file begins at the body. Everything below
  * still follows the console table standard (AGENTS.md → "Console page
  * standard"): MetricStrip → ConsoleFilterBar → TableCard/flush → AdaptiveTable
  * → RightDrawer. Nothing here hand-rolls a page header.
@@ -44,6 +44,7 @@ import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-tab
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import {
   useListAwsConnectorsQuery,
+  useListGcpConnectorsQuery,
   useListAwsIdentityPageQuery,
   useListAwsUsageAllQuery,
   useScanAwsConnectorMutation,
@@ -55,7 +56,6 @@ import {
 import { toast } from "react-hot-toast";
 
 import { InventoryToolbar } from "../InventoryToolbar";
-import { AWSAccountPicker } from "./AWSAccountPicker";
 import { AWSFilterChips } from "./AWSFilterChips";
 import { ALL_ACCOUNTS, IDENTITY_KIND_LABEL, metricLabel } from "./awsInventoryLabels";
 import { AWSAccountCell, CopyableId } from "./AWSInventoryCells";
@@ -80,21 +80,34 @@ function relativeOrUnknown(iso: string | null | undefined): string {
   return iso ? formatDistanceToNow(new Date(iso), { addSuffix: true }) : "—";
 }
 
-export default function AWSIdentitiesPage() {
+/**
+ * Embedded in Discovery as the Latest collected reading of identities. The
+ * Source facet is Discovery's: a connection's id arrives as `?source=`. For
+ * Google Cloud the page is forced to service accounts (`forcedKind`); for AWS
+ * it leaves them out (`excludeKinds`), since the inventory table is shared.
+ */
+export default function AWSIdentitiesPage({
+  forcedKind,
+  excludeKinds,
+}: {
+  forcedKind?: CloudIdentityKind;
+  excludeKinds?: CloudIdentityKind[];
+} = {}) {
   const [params, setParams] = useSearchParams();
 
   // URL-backed so an inventory view is shareable, the same way
   // DiscoveryIntegrationsPage carries its own state.
-  const account = params.get("account") ?? ALL_ACCOUNTS;
+  const account = params.get("source") ?? ALL_ACCOUNTS;
   const kindParam = params.get("kind");
   // gcp_service_account belongs here too. Without it the GCP metric tile wrote
   // ?kind=gcp_service_account, this reader fell through to "all", the query
   // sent no kind and the table did not change — a tile that looked like a
   // filter and was not one.
   const kind: "all" | CloudIdentityKind =
-    kindParam === "iam_role" || kindParam === "iam_user" || kindParam === "gcp_service_account"
+    forcedKind ??
+    (kindParam === "iam_role" || kindParam === "iam_user" || kindParam === "gcp_service_account"
       ? kindParam
-      : "all";
+      : "all");
 
   const [search, setSearch] = useState("");
   const [unusedOnly, setUnusedOnly] = useState(false);
@@ -104,7 +117,7 @@ export default function AWSIdentitiesPage() {
   const clearAllFilters = () => {
     const next = new URLSearchParams(params);
     next.delete("kind");
-    next.delete("account");
+    next.delete("source");
     setParams(next, { replace: true });
     setUnusedOnly(false);
   };
@@ -117,7 +130,9 @@ export default function AWSIdentitiesPage() {
     setParams(next, { replace: true });
   };
 
-  const connectorsQuery = useListAwsConnectorsQuery();
+  const awsConnectorsQuery = useListAwsConnectorsQuery();
+  const gcpConnectorsQuery = useListGcpConnectorsQuery(undefined, { skip: forcedKind !== "gcp_service_account" });
+  const connectorsQuery = forcedKind === "gcp_service_account" ? gcpConnectorsQuery : awsConnectorsQuery;
   const connectors = useMemo(() => connectorsQuery.data ?? [], [connectorsQuery.data]);
 
   const identitiesQuery = useListAwsIdentityPageQuery({
@@ -172,8 +187,14 @@ export default function AWSIdentitiesPage() {
 
   // Wrapped rather than inlined: `?? []` builds a new array identity on every
   // render, which would invalidate every useMemo below it each time.
-  const rows = useMemo(() => identitiesQuery.data?.rows ?? [], [identitiesQuery.data]);
-  const total = identitiesQuery.data?.total ?? 0;
+  const rows = useMemo(
+    () => (identitiesQuery.data?.rows ?? []).filter((i) => !excludeKinds?.includes(i.kind)),
+    [identitiesQuery.data, excludeKinds],
+  );
+  // Rows left out of this reading are not in its total either (those in hand; a
+  // capped page cannot say how many more there are, and the truncation notice
+  // already says the total is the server's).
+  const total = Math.max(0, (identitiesQuery.data?.total ?? 0) - ((identitiesQuery.data?.rows.length ?? 0) - rows.length));
   const truncated = total > rows.length;
 
   const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
@@ -324,8 +345,8 @@ export default function AWSIdentitiesPage() {
       const c = connectors.find((x) => x.id === account);
       out.push({
         key: "account",
-        label: `Account: ${c?.scope_id ?? account}`,
-        onRemove: () => setParam("account", null),
+        label: `Source: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("source", null),
       });
     }
     return out;
@@ -471,7 +492,7 @@ export default function AWSIdentitiesPage() {
   const loading = identitiesQuery.isLoading || connectorsQuery.isLoading;
 
   return (
-    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // The page header and type switcher belong to Discovery; this is the
     // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
     <div className="space-y-4">
       {identitiesQuery.isError ? (
@@ -486,13 +507,13 @@ export default function AWSIdentitiesPage() {
         </div>
       ) : null}
 
-      {rows.length > 0 ? <MetricStrip items={metrics} /> : null}
+      {rows.length > 0 && !forcedKind ? <MetricStrip items={metrics} /> : null}
 
       {identitiesQuery.data ? (
         <TruncationNotice
           truncation={truncationOf(identitiesQuery.data)}
           noun="identities"
-          narrowBy="Narrow by account or by role/user first — both of those filter server-side."
+          narrowBy="Narrow by Source or by role/user first — both of those filter server-side."
         />
       ) : null}
 
@@ -516,9 +537,9 @@ export default function AWSIdentitiesPage() {
       <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, ARN or tag"
+        searchPlaceholder={`Search the ${rows.length} loaded rows by name, ARN or tag`}
         chips={
-          rows.length ? null : (
+          rows.length || forcedKind ? null : (
             <AWSFilterChips
               label="Identity kind"
               options={kindFilters}
@@ -526,9 +547,6 @@ export default function AWSIdentitiesPage() {
               onSelect={(key) => setParam("kind", key === "all" ? null : key)}
             />
           )
-        }
-        controls={
-          <AWSAccountPicker connectors={connectors} value={account} onChange={(next) => setParam("account", next)} />
         }
         applied={appliedFilters}
         onClearAll={() => {
@@ -596,7 +614,7 @@ export default function AWSIdentitiesPage() {
         {connectors.length > 1 && account === ALL_ACCOUNTS ? (
           <p className="flex items-start gap-1.5">
             <Info className="mt-px size-3.5 flex-none" aria-hidden />
-            {connectors.length} AWS accounts are connected. Narrow to one with the account picker; each
+            {connectors.length} AWS accounts are connected. Narrow to one with Source; each
             identity's own tabs are already scoped to it.
           </p>
         ) : null}

@@ -1,5 +1,5 @@
 /**
- * The Cloud Inventory tabs' filter row — one flat line over the table, not a
+ * The Latest collected pages' filter row — one flat line over the table, not a
  * card of its own.
  *
  * Search takes the room; the chips that narrow by kind sit beside it; the

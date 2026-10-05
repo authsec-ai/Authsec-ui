@@ -4,9 +4,10 @@
  * Types mirror `models/discovery.go` exactly. Response envelopes are
  * `{sources: […]}` and `{agents: […], total: n}`.
  *
- * Live: sources CRUD, agents list/get/update/delete, claim, quarantine,
- * coverage, and the GitHub channel (source-from-connector, repository
- * selection, scan).
+ * Live: sources CRUD, agents list/get/events (sightings are read-only in the
+ * console: the claim, quarantine, update and delete endpoints exist in the
+ * backend and are not called), and the GitHub channel (source-from-connector,
+ * repository selection, scan).
  * Still mocked: Identities — the backend has no identity endpoint, so that page
  * keeps its fixtures and says so.
  *
@@ -155,31 +156,6 @@ export interface DiscoveredAgentEvent {
   metadata: unknown;
   observed_at: string;
   created_at: string;
-}
-
-/** Headline governance KPI: registered ÷ total, segmented by origin. */
-export interface CoverageBucket {
-  total: number;
-  registered: number;
-  coverage_percent: number;
-}
-
-export interface AgentCoverage {
-  workspace_id: string;
-  total: number;
-  registered: number;
-  unregistered: number;
-  quarantined: number;
-  ignored: number;
-  coverage_percent: number;
-  unowned_agents: number;
-  by_origin: Record<string, CoverageBucket>;
-  by_source: Record<string, number>;
-  /** Counts keyed by RuntimeStatus. */
-  by_runtime_status: Record<string, number>;
-  /** The ACTIONABLE count: unregistered AND still live. Use this as the KPI. */
-  live_unregistered: number;
-  generated_at: string;
 }
 
 // ── GitHub discovery ────────────────────────────────────────────────────────
@@ -432,6 +408,8 @@ export interface AgentFilters {
    */
   live?: boolean;
   runtime_status?: RuntimeStatus;
+  /** The connection's discovery source: "agents in this cluster / organisation". */
+  discovery_source_id?: string;
   limit?: number;
   offset?: number;
 }
@@ -628,6 +606,7 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.unowned ? { unowned: "true" } : {}),
           ...(f?.live ? { live: "true" } : {}),
           ...(f?.runtime_status ? { runtime_status: f.runtime_status } : {}),
+          ...(f?.discovery_source_id ? { discovery_source_id: f.discovery_source_id } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },
@@ -641,87 +620,6 @@ export const discoveryApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "DiscoveredAgent", id }],
     }),
 
-    updateDiscoveredAgent: builder.mutation<
-      DiscoveredAgent,
-      {
-        id: string;
-        display_name?: string;
-        metadata?: Record<string, unknown>;
-        deployment_origin?: DeploymentOrigin;
-        archetype?: Exclude<AgentArchetype, "">;
-        status?: DiscoveredAgentStatus;
-        owner_user_id?: string;
-      }
-    >({
-      query: ({ id, ...body }) => ({
-        url: `/authsec/discovery/agents/${id}`,
-        method: "PUT",
-        body,
-      }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoveredAgent", id }, "DiscoveredAgent"],
-    }),
-
-    // ── The two governance decisions ──────────────────────────────────────
-    // Claim needs an OWNER. The identity is optional: omit it and the backend
-    // mints a governed identity from the sighting, named after the workload.
-    //
-    // A DB CHECK still forbids a registered agent without both, but satisfying
-    // that is the platform's job — most discovered agents are workloads that
-    // never authenticate to AuthSec (no SVID, no client secret), so asking an
-    // operator to pick a credential-holder for them blocked the claim on
-    // information they did not have.
-    claimAgent: builder.mutation<
-      DiscoveredAgent,
-      {
-        id: string;
-        matched_client_id?: string;
-        owner_user_id: string;
-        archetype?: Exclude<AgentArchetype, "">;
-      }
-    >({
-      query: ({ id, ...body }) => ({
-        url: `/authsec/discovery/agents/${id}/claim`,
-        method: "POST",
-        body,
-      }),
-      invalidatesTags: ["DiscoveredAgent", "AgentCoverage"],
-    }),
-
-    quarantineAgent: builder.mutation<DiscoveredAgent, { id: string; reason: string }>({
-      query: ({ id, reason }) => ({
-        url: `/authsec/discovery/agents/${id}/quarantine`,
-        method: "POST",
-        body: { reason },
-      }),
-      invalidatesTags: ["DiscoveredAgent", "AgentCoverage"],
-    }),
-
-    // Releasing a quarantine. No request body. Same permission as quarantine on
-    // purpose. The status it returns to is DERIVED by the backend, not chosen —
-    // render what came back rather than predicting it (an agent whose owner was
-    // deleted comes back `unregistered`). A release may commit without being
-    // enforced: quarantine_enforcement_error then carries the leftover-policy
-    // kubectl.
-    unquarantineAgent: builder.mutation<DiscoveredAgent, { id: string }>({
-      query: ({ id }) => ({
-        url: `/authsec/discovery/agents/${id}/unquarantine`,
-        method: "POST",
-      }),
-      invalidatesTags: (_r, _e, { id }) => [
-        { type: "DiscoveredAgent", id },
-        "DiscoveredAgent",
-        "AgentCoverage",
-      ],
-    }),
-
-    // Deleting the inventory row destroys the audit trail. This is a cleanup tool
-    // for bad data, NOT lifecycle management — deprovision removes access and
-    // keeps the record. Guard the UI behind a typed confirmation.
-    deleteDiscoveredAgent: builder.mutation<void, string>({
-      query: (id) => ({ url: `/authsec/discovery/agents/${id}`, method: "DELETE" }),
-      invalidatesTags: ["DiscoveredAgent", "AgentCoverage"],
-    }),
-
     // The lifecycle trail — the only place a user sees WHO deleted an agent and
     // HOW it was noticed. `pod_terminated` is a rollout (routine); `deleted` is
     // attributed admission; `absent` is a resync sweep with no attributable actor.
@@ -732,12 +630,6 @@ export const discoveryApi = baseApi.injectEndpoints({
         total: r.total ?? 0,
       }),
       providesTags: (_r, _e, id) => [{ type: "DiscoveredAgent", id }],
-    }),
-
-    // ── Headline KPI ──────────────────────────────────────────────────────
-    getAgentCoverage: builder.query<AgentCoverage, void>({
-      query: () => ({ url: "/authsec/discovery/coverage", method: "GET" }),
-      providesTags: ["AgentCoverage"],
     }),
 
     // ── GitHub discovery ──────────────────────────────────────────────────
@@ -998,13 +890,7 @@ export const {
   useDeleteDiscoverySourceMutation,
   useListDiscoveredAgentsQuery,
   useGetDiscoveredAgentQuery,
-  useUpdateDiscoveredAgentMutation,
-  useClaimAgentMutation,
-  useQuarantineAgentMutation,
-  useUnquarantineAgentMutation,
-  useDeleteDiscoveredAgentMutation,
   useGetAgentEventsQuery,
-  useGetAgentCoverageQuery,
   useGetGitHubAppQuery,
   useDescribeGitHubAppQuery,
   useSetGitHubAppMutation,
