@@ -24,6 +24,7 @@ import { usePipeline } from "../pipeline/usePipeline";
 import { CountText } from "../shared/components/CountText";
 import { COUNT_UNAVAILABLE } from "../shared/components/countValue";
 import { LiveRegion } from "../shared/components/LiveRegion";
+import { useAnnounce } from "../shared/announce";
 import { RevisionBanner } from "../shared/components/RevisionBanner";
 import { useGraphRevision } from "../shared/revision";
 import { useSlashToSearch } from "../shared/useListFilters";
@@ -65,6 +66,10 @@ export default function DiscoveryPage() {
   const view: DiscoveryView = provider ? effectiveView(provider, type, url.view) : "published";
   // A failed refetch keeps the connections already read: only a read that has never
   // succeeded replaces the page.
+  // The announcer keeps its last words until something replaces them. Screens that
+  // announce their own counts do so when their data arrives; one that does not
+  // (Latest collected) must not leave the previous list's sentence in its place.
+  useAnnounce(provider ? `Discovery: ${PROVIDER_LABEL[provider]}, ${TYPE_LABEL[type]}${hasViews(provider, type) ? (view === "latest" ? ", latest collected" : ", published") : ""}` : null);
   const connectionsFailed = connQ.isError && !connQ.data;
   const ready = !connQ.isLoading && !connectionsFailed;
 
