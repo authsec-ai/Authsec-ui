@@ -50,7 +50,8 @@ export interface CoverageRow {
   service: string;
   region: string | null;
   state: CloudCoverageState;
-  count: number;
+  /** How many were found. Absent where a count is meaningless (a cluster's whole sweep). */
+  count?: number;
   error?: string;
   api?: string | null;
   errorCode?: string | null;
@@ -115,6 +116,44 @@ export function consequence(
     default:
       return { lead: `Not supported — AuthSec does not collect ${service} yet.` };
   }
+}
+
+/**
+ * A Kubernetes cluster's coverage. The agent reports one thing: whether its
+ * latest sweep read the whole cluster (`namespaced_only`, `incomplete`). That
+ * is not a collection surface, and a cluster cannot be scanned from the
+ * console, so these rows say what the gap means and that the agent's next
+ * sweep is what updates it. The sentences are the backend's own
+ * (internal/k8sread: Affects and the sweep limitation).
+ */
+export function k8sCoverageRows(gaps: { surface: string; state: string }[]): CoverageRow[] {
+  const next = "A cluster is not scanned from here; the agent's next sweep updates this.";
+  return gaps.map((g) => {
+    const base = { key: g.surface, region: null, state: "partial" as CloudCoverageState };
+    switch (g.state) {
+      case "namespaced_only":
+        return {
+          ...base,
+          service: "Cluster-scoped objects",
+          lead: "Namespaces only — the latest sweep could not read cluster-scoped objects. ClusterRoles and ClusterRoleBindings are not covered, which is where cluster-wide access is granted, so the absence of one proves nothing.",
+          todo: next,
+        };
+      case "incomplete":
+        return {
+          ...base,
+          service: "Cluster sweep",
+          lead: "Sweep incomplete — a list failed during the latest sweep, so anything missing from this cluster's inventory may simply not have been read. Nothing was retired.",
+          todo: next,
+        };
+      default:
+        return {
+          ...base,
+          service: "Cluster sweep",
+          lead: `The agent reported "${g.state.replace(/_/g, " ")}" for its latest sweep, which this console does not describe yet. Treat the cluster as not fully read.`,
+          todo: next,
+        };
+    }
+  });
 }
 
 export function buildCoverage(
