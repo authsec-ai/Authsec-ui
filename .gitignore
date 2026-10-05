@@ -13,8 +13,8 @@ dist
 dist-ssr
 *.local
 
-# Logs
-logs
+# Logs: runtime output at the repo root, never a source directory named logs
+/logs
 *.log
 npm-debug.log*
 yarn-debug.log*
