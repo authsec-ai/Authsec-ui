@@ -1215,7 +1215,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       // writes without changing the timeout of any other endpoint.
       query: (body) => ({ url: "/authsec/discovery/aws/connectors", method: "POST", body, timeout: 60000 }),
       transformResponse: (r: ConnectorEnvelope) => r.data,
-      invalidatesTags: [{ type: "CloudConnector", id: "AWS_LIST" }],
+      invalidatesTags: [{ type: "CloudConnector", id: "AWS_LIST" }, "Connections"],
     }),
 
     // Re-proves an existing connection. Never removes anything the connector
@@ -1227,6 +1227,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1239,6 +1240,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1262,6 +1264,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
         { type: "CloudScanRun", id: "ALL" },
+        "Connections",
       ],
     }),
 
@@ -1334,6 +1337,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "AWS_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1578,7 +1582,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     createGcpConnector: builder.mutation<CloudConnector, GCPCreateConnectorRequest>({
       query: (body) => ({ url: "/authsec/discovery/gcp/connectors", method: "POST", body }),
       transformResponse: (r: ConnectorEnvelope) => r.data,
-      invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }],
+      invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }, "Connections"],
     }),
 
     getGcpConnector: builder.query<CloudConnector, string>({
@@ -1603,6 +1607,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "GCP_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1635,6 +1640,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "GCP_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1643,6 +1649,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, id) => [
         { type: "CloudConnector", id },
         { type: "CloudConnector", id: "GCP_LIST" },
+        "Connections",
       ],
     }),
 
@@ -1703,7 +1710,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
         timeout: GOOGLE_PROVISION_TIMEOUT_MS,
       }),
       transformResponse: (r: ConnectorEnvelope) => r.data,
-      invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }],
+      invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }, "Connections"],
     }),
   }),
 });

@@ -1,12 +1,12 @@
 /**
- * "Connect a cloud" — the provider-selection step of Cloud Discovery
- * onboarding. Modeled directly on
+ * "Add a connection" — the provider-selection step. Modeled directly on
  * `src/features/connectors/AddConnectorDialog.tsx`'s `step === "provider"`
  * card grid, the existing AuthSec pattern for "pick one of several sources."
  *
  * This dialog only picks a provider. It does not itself onboard anything —
- * `onContinue` hands control back to the caller, since the actual GCP wizard
- * (build stage 3) and AWS wizard (build stage 6) don't exist yet.
+ * `onContinue` hands control back to the caller, which opens that provider's
+ * own setup (the AWS and Google Cloud wizards, the Kubernetes agent install,
+ * the GitHub App setup).
  */
 
 import { useState } from "react";
@@ -21,12 +21,34 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CloudProviderBadge } from "./CloudProviderBadge";
-import { CLOUD_PROVIDER_META, type CloudProviderMeta } from "./cloudProviderMeta";
-import type { CloudProvider } from "@/app/api/cloudDiscoveryApi";
+import { ProviderGlyph } from "@/features/iga/connections/ProviderGlyph";
+import { CLOUD_PROVIDER_META } from "./cloudProviderMeta";
 
-const PROVIDERS: CloudProviderMeta[] = [
+/** What can be connected: the clouds, plus the two sources that are not clouds. */
+export type PickerProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
+
+interface PickerEntry {
+  key: PickerProvider;
+  label: string;
+  tagline: string;
+  available: boolean;
+}
+
+const PROVIDERS: PickerEntry[] = [
   CLOUD_PROVIDER_META.aws,
   CLOUD_PROVIDER_META.gcp,
+  {
+    key: "k8s",
+    label: "Kubernetes",
+    tagline: "Workloads and service accounts in a cluster, reported by an agent you install.",
+    available: true,
+  },
+  {
+    key: "github",
+    label: "GitHub",
+    tagline: "Agents declared in the repositories of an organisation.",
+    available: true,
+  },
   CLOUD_PROVIDER_META.azure,
 ];
 
@@ -37,9 +59,9 @@ export function CloudProviderPicker({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onContinue: (provider: CloudProvider) => void;
+  onContinue: (provider: PickerProvider) => void;
 }) {
-  const [selected, setSelected] = useState<CloudProvider | null>(null);
+  const [selected, setSelected] = useState<PickerProvider | null>(null);
 
   const close = () => {
     setSelected(null);
@@ -50,13 +72,13 @@ export function CloudProviderPicker({
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : close())}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Connect a cloud</DialogTitle>
+          <DialogTitle>Add a connection</DialogTitle>
           <DialogDescription>
-            Choose where you want Cloud Discovery to discover from.
+            Choose what you want AuthSec to discover from.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-2 py-2">
+        <div className="grid gap-2 py-2 sm:grid-cols-2 lg:grid-cols-3">
           {PROVIDERS.map((meta) => {
             const isSelected = selected === meta.key;
             return (
@@ -80,7 +102,11 @@ export function CloudProviderPicker({
                 )}
               >
                 <div className="flex w-full items-center gap-2">
-                  <CloudProviderBadge provider={meta.key} size="size-9" />
+                  {meta.key === "azure" ? (
+                    <CloudProviderBadge provider="azure" size="size-9" />
+                  ) : (
+                    <ProviderGlyph provider={meta.key} size="size-9" />
+                  )}
                   <span className="truncate text-sm font-medium text-foreground">
                     {meta.label}
                   </span>

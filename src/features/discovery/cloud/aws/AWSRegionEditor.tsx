@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 
+import { markAdminDenied } from "@/features/iga/connections/permissions";
 import {
   useGetAwsConnectorRegionsQuery,
   useUpdateAwsConnectorRegionsMutation,
@@ -118,9 +119,10 @@ export function AWSRegionEditor({ connectorId, onDone }: { connectorId: string; 
             : err?.code === "connector_revoked"
               ? "This account's connection has been revoked."
               : status === 403
-                ? "Your role is missing the discovery:admin permission."
+                ? "Your role cannot do this."
                 : "Could not save the regions. Try again.",
       );
+      if (status === 403) markAdminDenied();
     }
   };
 
@@ -142,7 +144,8 @@ export function AWSRegionEditor({ connectorId, onDone }: { connectorId: string; 
         </p>
       ) : null}
       <p className="text-[11px] text-muted-foreground">
-        A region you remove is reported as not selected. Its earlier results are kept and marked stale.
+        Applies from the next scan. Workloads and their links in a region you remove are kept and show as stale from the next
+        publication; nothing is deleted. IAM identities, policies and resources are account-wide and are not affected.
       </p>
       {templateNote}
       {problem ? (

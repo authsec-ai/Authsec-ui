@@ -41,3 +41,13 @@ export function cloudConnectorErrorSummary(
   if (code && SUMMARY[code]) return SUMMARY[code];
   return raw;
 }
+
+/**
+ * The short phrase for a stored reason code on its own, for a screen that has
+ * the code but not the provider's prose (the Connections list). `undefined`
+ * for an absent or unknown code: the caller says what it knows, not a guess.
+ */
+export function cloudConnectorReasonSummary(code: string | null | undefined): string | undefined {
+  const c = code?.trim();
+  return c ? SUMMARY[c] : undefined;
+}

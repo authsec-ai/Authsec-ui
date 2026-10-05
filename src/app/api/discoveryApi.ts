@@ -53,8 +53,6 @@ export interface DiscoverySource {
   self_registered: boolean;
   /** Last runtime snapshot the agent reported. Opaque json blob. */
   runtime: unknown;
-  /** null = actuation is not enabled here; quarantine is advisory in this cluster. */
-  actuation_enabled_at?: string;
   /** DERIVED at read time (heartbeat within ~5 min), not stored. Read it; don't recompute. */
   connected: boolean;
   seconds_since_heartbeat?: number;
@@ -594,7 +592,7 @@ export const discoveryApi = baseApi.injectEndpoints({
       { kind: DiscoverySourceKind; display_name: string; config?: Record<string, unknown>; enabled?: boolean }
     >({
       query: (body) => ({ url: "/authsec/discovery/sources", method: "POST", body }),
-      invalidatesTags: ["DiscoverySource"],
+      invalidatesTags: ["DiscoverySource", "Connections"],
     }),
 
     updateDiscoverySource: builder.mutation<
@@ -606,7 +604,7 @@ export const discoveryApi = baseApi.injectEndpoints({
         method: "PUT",
         body,
       }),
-      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoverySource", id }, "DiscoverySource"],
+      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoverySource", id }, "DiscoverySource", "Connections"],
     }),
 
     deleteDiscoverySource: builder.mutation<void, string>({
@@ -614,7 +612,7 @@ export const discoveryApi = baseApi.injectEndpoints({
       // Deleting a repo_scan source also deletes the integration binding it
       // owns, which frees the organisation to be added again — so the
       // installation list's already_added annotations are now stale too.
-      invalidatesTags: ["DiscoverySource", "DiscoveredAgent", "GitHubInstallation"],
+      invalidatesTags: ["DiscoverySource", "DiscoveredAgent", "GitHubInstallation", "Connections"],
     }),
 
     // ── Inventory ─────────────────────────────────────────────────────────
@@ -832,7 +830,7 @@ export const discoveryApi = baseApi.injectEndpoints({
       transformResponse: (res: {
         data: { source: DiscoverySource; already_existed?: boolean };
       }) => res.data,
-      invalidatesTags: ["DiscoverySource", "GitHubInstallation"],
+      invalidatesTags: ["DiscoverySource", "GitHubInstallation", "Connections"],
     }),
 
     /**
@@ -871,7 +869,8 @@ export const discoveryApi = baseApi.injectEndpoints({
       }),
       transformResponse: (res: { data?: RepoSelection } | RepoSelection) =>
         ("data" in (res as object) ? (res as { data: RepoSelection }).data : res) as RepoSelection,
-      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoverySource", id }],
+      // The scope summary on Connections ("12 repositories") changes with it.
+      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoverySource", id }, "Connections"],
     }),
 
     /** Run a scan now. Findings land in the agent inventory as unregistered. */
@@ -896,7 +895,8 @@ export const discoveryApi = baseApi.injectEndpoints({
       // run FINISHES, so those tags are invalidated by the poller on the
       // terminal transition, not here — invalidating now would refetch an
       // inventory that has not changed and show a stale one as fresh.
-      invalidatesTags: (_r, _e, id) => [{ type: "ScanRun" as const, id }],
+      // "Connections" so the row says "Queued" now, not when the page is next opened.
+      invalidatesTags: (_r, _e, id) => [{ type: "ScanRun" as const, id }, "Connections"],
     }),
 
     /** Poll one run. */
@@ -931,6 +931,7 @@ export const discoveryApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { runId, sourceId }) => [
         { type: "ScanRun" as const, id: runId },
         { type: "ScanRun" as const, id: sourceId },
+        "Connections",
       ],
     }),
     /* ── Detection rules ───────────────────────────────────────────────────── */
@@ -1196,7 +1197,6 @@ export interface ConnectorStatus {
   lastHeartbeatAt: string | null;
   secondsSinceHeartbeat: number | null;
   selfRegistered: boolean;
-  actuationEnabledAt: string | null;
   /** From the runtime blob, if the agent reported it. */
   namespacesVisible: number | null;
   workloadsScanned: number | null;
@@ -1223,7 +1223,6 @@ export function connectorStatusFromSource(source: DiscoverySource): ConnectorSta
     lastHeartbeatAt: source.last_heartbeat_at ?? null,
     secondsSinceHeartbeat: source.seconds_since_heartbeat ?? null,
     selfRegistered: source.self_registered,
-    actuationEnabledAt: source.actuation_enabled_at ?? null,
     namespacesVisible: rt.namespaces_visible ?? null,
     workloadsScanned: rt.workloads_scanned ?? null,
     workloadsMatched: rt.workloads_matched ?? null,
