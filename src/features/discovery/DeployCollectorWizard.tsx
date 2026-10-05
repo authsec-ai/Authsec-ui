@@ -587,7 +587,7 @@ export function DeployCollectorWizard({
             <>
               {created ? (
                 <div className="rounded-md border-l-2 border-l-(--color-success-text) bg-(--color-success-soft) px-3 py-2 text-xs text-(--color-success-text)">
-                  Integration recorded. Run the command below; the cluster appears here once the
+                  Connection recorded. Run the command below; the cluster appears here once the
                   agent&apos;s first heartbeat lands.
                 </div>
               ) : null}

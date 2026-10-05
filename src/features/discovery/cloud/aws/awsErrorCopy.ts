@@ -9,10 +9,9 @@ import type { CloudOnboardingApiError } from "@/app/api/cloudDiscoveryApi";
  * caller-input rejection (bad ARN, bad region, external id not issued to
  * this workspace) carries no `fault` at all and is shown as written.
  *
- * Shared by AWSOnboardingWizard (connect), AWSConnectorDrawer (verify/scan/
- * revoke) and DiscoveryIntegrationsPage (the same row actions, merged into
- * its Integrations table) so the three-way
- * distinction the plan calls for never drifts between them.
+ * Shared by AWSOnboardingWizard (connect) and the Connections screens (verify,
+ * scan, revoke) so the three-way distinction the plan calls for never drifts
+ * between them.
  */
 export function awsErrorCopy(
   apiErr: CloudOnboardingApiError | undefined,

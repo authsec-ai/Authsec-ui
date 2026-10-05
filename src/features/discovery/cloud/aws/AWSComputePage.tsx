@@ -61,12 +61,10 @@ import { TableCard } from "@/theme/components/cards";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
-import { toast } from "react-hot-toast";
 import {
   useListAwsConnectorsQuery,
   useListAwsIdentityPageQuery,
   useListAwsWorkloadsQuery,
-  useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
   type AWSConnectorAttrs,
   type AWSWorkloadAttrs,
@@ -95,7 +93,6 @@ import {
   WorkspaceScopeCaveat,
 } from "./AWSInventoryNotices";
 import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
-import { awsErrorCopy } from "./awsErrorCopy";
 
 type AttributionFilter = "all" | "attributed" | "unattributed";
 
@@ -219,21 +216,6 @@ export default function AWSComputePage() {
     : false;
 
   const connectorById = useMemo(() => new Map(connectors.map((c) => [c.id, c])), [connectors]);
-
-  const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
-
-  const handleScan = async (connectorId: string) => {
-    try {
-      await scanConnector(connectorId).unwrap();
-      toast.success("Scan queued — it runs in the background. Its results appear here when it finishes.");
-    } catch (err) {
-      const copy = awsErrorCopy(
-        (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
-        "Could not start the scan.",
-      );
-      toast.error(`${copy.title}. ${copy.body}`);
-    }
-  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -609,8 +591,6 @@ export default function AWSComputePage() {
             <InventoryEmptyState
               reason={emptyReason}
               surface="compute"
-              onScan={(id) => void handleScan(id)}
-              scanning={scanning}
             />
           ) : !filtered.length ? (
             <div className="px-6 py-14 text-center">

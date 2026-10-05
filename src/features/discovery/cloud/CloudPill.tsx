@@ -4,7 +4,7 @@
  * ── Why this exists rather than `StatusBadge` ───────────────────────────────
  *
  * The discovery section renders two pill styles side by side. The GitHub and
- * Kubernetes screens — Discovered Agents, Integrations, Integration detail —
+ * Kubernetes screens — Connections and Connection detail —
  * use an 11px medium-weight pill; the cloud screens used `StatusBadge`, which
  * is 12.5px semibold on a fixed 24px height. Adjacent pages in one sidebar
  * group reading at two different sizes and weights looks like two products

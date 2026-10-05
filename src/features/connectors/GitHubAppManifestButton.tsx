@@ -23,7 +23,7 @@ import { Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /** Where GitHub sends the operator back to. Must be an absolute URL. */
-export const MANIFEST_REDIRECT_PATH = "/iga/integrations";
+export const MANIFEST_REDIRECT_PATH = "/iga/connections";
 
 export function GitHubAppManifestButton({
   /** Personal account when null; an org slug creates the App under that org. */
