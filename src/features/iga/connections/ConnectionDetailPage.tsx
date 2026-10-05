@@ -27,13 +27,13 @@ import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { ScansTab } from "./ScansTab";
 import { ScopeTab } from "./ScopeTab";
 import {
-  PROVIDER_WORD,
-  TYPE_WORD,
   actionsOf,
   detailHref,
   discoveryLink,
   hasFriendlyName,
+  providerWord,
   tabsOf,
+  typeWord,
   type DetailTab,
 } from "./connectionModel";
 import { useCanAdminister } from "./permissions";
@@ -105,7 +105,7 @@ export default function ConnectionDetailPage() {
           <span className={hasFriendlyName(c) ? undefined : "font-mono"}>{c.name}</span>
         </span>
       }
-      description={`${TYPE_WORD[c.provider]}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""} · ${PROVIDER_WORD[c.provider]}`}
+      description={`${typeWord(c)}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""} · ${providerWord(c.provider)}`}
       actions={
         <>
           {busy ? <PendingWord kind={busy} /> : null}
@@ -158,7 +158,7 @@ export default function ConnectionDetailPage() {
       {active === null ? (
         tabParam === "rules" ? (
           <Panel title="Scan rules">
-            <p className="text-[13px] text-(--color-text-muted)">Scan rules apply to GitHub organisations. {PROVIDER_WORD[c.provider]} connections have none.</p>
+            <p className="text-[13px] text-(--color-text-muted)">Scan rules apply to GitHub organisations. {providerWord(c.provider)} connections have none.</p>
           </Panel>
         ) : (
           <LoadFailurePanel failure="not_found" subject="this view of the connection" onRetry={() => undefined} />

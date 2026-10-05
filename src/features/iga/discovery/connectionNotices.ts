@@ -7,6 +7,7 @@ import type { Connection } from "@/app/api/connectionsApi";
 import type { ConsoleTone } from "@/components/console/status";
 
 import { readableSurface } from "../coverage/surfaceNames";
+import { K8S_SWEEP_SURFACE, gapName, neverProven, primaryOf, reasonCopy } from "../connections/connectionModel";
 import { surfaceStateText } from "../shared/labels";
 import { K8S_COVERAGE_LABEL, type ClusterSweep } from "./k8s";
 
@@ -24,13 +25,25 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
     const href = `/iga/connections/${encodeURIComponent(c.id)}`;
     const name = c.name || c.native_id;
     if (c.connection.state === "revoked") {
-      out.push({ key: `${c.id}:revoked`, tone: "neutral", label: "Revoked", text: `${name}: its last results are kept and are no longer reconfirmed.`, href });
+      out.push({ key: `${c.id}:revoked`, tone: "neutral", label: primaryOf(c).label, text: `${name}: its last results are kept and are no longer reconfirmed.`, href });
       continue;
     }
     if (c.connection.state === "authentication_failed") {
       out.push({ key: `${c.id}:auth`, tone: "warning", label: "Authentication failed", text: `${name}: results from earlier scans remain.`, href });
     } else if (c.connection.state === "not_verified") {
-      out.push({ key: `${c.id}:verify`, tone: "info", label: "Not yet verified", text: `${name} has not been verified, so it may not have been read.`, href });
+      // The cause is the connection's own (a lost heartbeat, a throttled call, a pending installation): never "not verified" alone.
+      const never = neverProven(c);
+      const cause = reasonCopy(c).cause;
+      const remains = c.discovery.ready ? "what was read earlier remains" : "nothing has been read yet";
+      out.push({
+        key: `${c.id}:verify`,
+        tone: never ? "info" : "warning",
+        label: primaryOf(c).label,
+        text: `${name}: ${cause.charAt(0).toLowerCase()}${cause.slice(1)}; ${remains}.`,
+        href,
+      });
+    } else if (c.connection.state !== "connected") {
+      out.push({ key: `${c.id}:state`, tone: "neutral", label: "Status unknown", text: `${name}: AuthSec reports a state this console does not recognise.`, href });
     }
     if (c.scan.state === "failed") {
       out.push({ key: `${c.id}:scan`, tone: "warning", label: "Latest scan failed", text: `${name}: results from earlier scans remain.`, href });
@@ -44,7 +57,7 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
     }
     // On the published AWS lists the graph's own coverage summary says this, with its sheet.
     if (!opts.publishedView && !opts.skipCoverage && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
-      const gaps = c.coverage.gaps.slice(0, 3).map((g) => `${readableSurface(g.surface).service} ${surfaceStateText(g.state)}`);
+      const gaps = c.coverage.gaps.slice(0, 3).map((g) => (g.surface === K8S_SWEEP_SURFACE ? gapName(g) : `${readableSurface(g.surface).service} ${surfaceStateText(g.state)}`));
       out.push({
         key: `${c.id}:coverage`,
         tone: "warning",

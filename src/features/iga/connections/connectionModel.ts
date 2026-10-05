@@ -20,22 +20,44 @@ import type { StatusTone } from "@/components/ui/status-badge";
 import { readableSurface } from "@/features/iga/coverage/surfaceNames";
 import { discoveryHref, type DiscoveryLocation } from "@/features/iga/discovery/urlState";
 import { cloudConnectorReasonSummary } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
+import { K8S_COVERAGE_LABEL } from "@/features/iga/discovery/k8s";
 
 /* --------------------------------- words --------------------------------- */
 
-export const PROVIDER_WORD: Record<ConnectionProvider, string> = {
+const PROVIDER_WORDS: Record<ConnectionProvider, string> = {
   aws: "AWS",
   gcp: "Google Cloud",
   k8s: "Kubernetes",
   github: "GitHub",
 };
 
-export const TYPE_WORD: Record<ConnectionProvider, string> = {
-  aws: "AWS account",
-  gcp: "GCP project",
-  k8s: "Kubernetes cluster",
-  github: "GitHub organisation",
-};
+/** A provider in words. A provider this console does not know is said to be unknown, never given another's name. */
+export function providerWord(provider: string): string {
+  return (PROVIDER_WORDS as Record<string, string>)[provider] ?? "Unknown provider";
+}
+
+/**
+ * What the connection is: from its provider and its scope kind, so a Google
+ * Cloud organisation is not called a project. The backend reports a folder as
+ * scope kind `project` with the summary "1 folder"; the summary is the only
+ * place that says so.
+ */
+export function typeWord(c: Connection): string {
+  switch (c.provider) {
+    case "aws":
+      return "AWS account";
+    case "gcp":
+      if (c.scope_kind === "organisation") return "GCP organisation";
+      if (c.scope_kind === "project") return /\bfolder\b/i.test(c.scope_summary) ? "GCP folder" : "GCP project";
+      return "GCP scope";
+    case "k8s":
+      return "Kubernetes cluster";
+    case "github":
+      return "GitHub organisation";
+    default:
+      return "Unknown connection type";
+  }
+}
 
 export const PROVIDERS: ConnectionProvider[] = ["aws", "k8s", "gcp", "github"];
 
@@ -71,7 +93,8 @@ export type PrimaryKey =
   | "coverage_partial"
   | "scan_running"
   | "scan_queued"
-  | "connected";
+  | "connected"
+  | "unknown";
 
 export interface Primary {
   key: PrimaryKey;
@@ -90,7 +113,32 @@ const PRIMARY: Record<PrimaryKey, Primary> = {
   scan_running: { key: "scan_running", label: "Scan running", tone: "info" },
   scan_queued: { key: "scan_queued", label: "Scan queued", tone: "info" },
   connected: { key: "connected", label: "Connected", tone: "success" },
+  unknown: { key: "unknown", label: "Status unknown", tone: "muted" },
 };
+
+const SCAN_STATES = new Set(["never_run", "queued", "running", "finished", "failed"]);
+
+/** Reasons that mean nothing has gone wrong yet: the connection simply has not been proven. */
+const WAITING_REASONS = new Set(["no_heartbeat", "integration_unverified", "integration_pending"]);
+
+/** Not verified, and no failure is known: it has never been proven, as opposed to a proof that failed. */
+export function neverProven(c: Connection): boolean {
+  const r = c.connection.reason_code;
+  return r ? WAITING_REASONS.has(r) : !c.connection.verified_at;
+}
+
+/** The label for `not_verified`, by what the backend says is the cause. */
+function notVerifiedLabel(c: Connection): string {
+  const r = c.connection.reason_code;
+  switch (c.provider) {
+    case "k8s":
+      return r === "no_heartbeat" ? "Waiting for agent" : "Agent not reporting";
+    case "github":
+      return r === "integration_missing" ? "App not installed" : r === "integration_pending" ? "Installation pending" : "Not yet verified";
+    default:
+      return neverProven(c) ? "Not yet verified" : "Could not verify";
+  }
+}
 
 /**
  * The primary condition. Precedence, deterministic:
@@ -103,24 +151,40 @@ const PRIMARY: Record<PrimaryKey, Primary> = {
  * has proved AuthSec can read the source, which outranks any scan outcome.
  */
 export function primaryOf(c: Connection): Primary {
-  if (c.connection.state === "revoked") return PRIMARY.revoked;
-  if (c.connection.state === "authentication_failed") return PRIMARY.auth_failed;
-  if (c.connection.state === "not_verified") return PRIMARY.not_verified;
+  const state = c.connection.state;
+  if (state === "revoked") return c.connection.reason_code === "disabled" ? { ...PRIMARY.revoked, label: "Disabled" } : PRIMARY.revoked;
+  if (state === "authentication_failed") return PRIMARY.auth_failed;
+  if (state === "not_verified") return { ...PRIMARY.not_verified, label: notVerifiedLabel(c) };
+  // A state this console does not know is not "connected".
+  if (state !== "connected") return PRIMARY.unknown;
   if (c.scan.state === "failed") return PRIMARY.scan_failed;
   if (c.graph.state === "failed") return PRIMARY.publication_failed;
   if (c.coverage.state === "denied") return PRIMARY.coverage_denied;
   if (c.coverage.state === "partial") return PRIMARY.coverage_partial;
   if (c.scan.state === "running") return PRIMARY.scan_running;
   if (c.scan.state === "queued") return PRIMARY.scan_queued;
+  if (!SCAN_STATES.has(c.scan.state)) return PRIMARY.unknown;
   return PRIMARY.connected;
+}
+
+/** The one surface a Kubernetes cluster's gap names: the agent's whole sweep, not a collection surface. */
+export const K8S_SWEEP_SURFACE = "k8s_sweep";
+
+/** A sweep's coverage word as the reader sees it: "namespaces only", "sweep incomplete". */
+export function k8sSweepWord(state: string): string {
+  return (K8S_COVERAGE_LABEL[state] ?? state.replace(/_/g, " ")).toLowerCase();
+}
+
+/** One coverage gap, in words. The Kubernetes sweep is the cluster's, never an API surface called "k8s sweep". */
+export function gapName(g: { surface: string; state: string }): string {
+  if (g.surface === K8S_SWEEP_SURFACE) return `Cluster sweep: ${k8sSweepWord(g.state)}`;
+  const s = readableSurface(g.surface);
+  return s.region ? `${s.service} (${s.region})` : s.service;
 }
 
 /** The surfaces a coverage gap names, in words. */
 export function gapWords(c: Connection, max = 2): string {
-  const names = c.coverage.gaps.map((g) => {
-    const s = readableSurface(g.surface);
-    return s.region ? `${s.service} (${s.region})` : s.service;
-  });
+  const names = c.coverage.gaps.map(gapName);
   if (names.length === 0) return "";
   const shown = names.slice(0, max).join(", ");
   return names.length > max ? `${shown} and ${names.length - max} more` : shown;
@@ -132,8 +196,12 @@ export function coverageText(c: Connection): string {
   switch (c.coverage.state) {
     case "complete":
       return "Complete";
-    case "partial":
+    case "partial": {
+      if (c.provider === "k8s" && n === 1 && c.coverage.gaps[0].surface === K8S_SWEEP_SURFACE) {
+        return `Partial — ${k8sSweepWord(c.coverage.gaps[0].state)}`;
+      }
       return n > 0 ? `Partial — ${n} ${n === 1 ? "surface" : "surfaces"}` : "Partial";
+    }
     case "denied": {
       const denied = c.coverage.gaps.filter((g) => g.state === "denied");
       if (denied.length === 1) {
@@ -179,23 +247,56 @@ export function k8sHealthLine(c: Connection): string {
 
 /* --------------------------- reasons: what failed, what to do --------------------------- */
 
-/** The cause words and the next step for a stored connection reason code. */
-export function reasonCopy(c: Connection): { cause: string; action: string } {
-  const code = c.connection.reason_code;
-  const summary = cloudConnectorReasonSummary(code);
-  const action = reasonAction(c.provider, code);
-  if (summary) return { cause: summary, action };
-  if (code) return { cause: `Reported: ${code.replace(/_/g, " ")}`, action };
-  return { cause: "AuthSec could not confirm this connection", action };
+/** The cause of a reason code that is not a cloud connector's stored error code. */
+const CAUSE: Record<string, string> = {
+  no_heartbeat: "The agent has not reported yet",
+  heartbeat_lost: "The agent has stopped reporting",
+  disabled: "This source is disabled",
+  integration_missing: "No GitHub App installation is bound to this organisation",
+  integration_unverified: "The GitHub App installation has not been verified yet",
+  integration_pending: "The GitHub App installation is still pending",
+  integration_degraded: "The GitHub App installation is degraded",
+  integration_disconnected: "The GitHub App installation was disconnected",
+  integration_revoked: "The GitHub App installation was revoked",
+};
+
+function causeWithoutCode(c: Connection): string {
+  switch (c.connection.state) {
+    case "revoked":
+      return "AuthSec no longer reads this connection";
+    case "not_verified":
+      return c.connection.verified_at ? "AuthSec could not confirm this connection just now" : "Nothing has proved AuthSec can read it";
+    default:
+      return "AuthSec could not confirm this connection";
+  }
 }
 
-function reasonAction(provider: ConnectionProvider, code: string | null): string {
+/**
+ * The cause words and the next step for a connection's stored reason code,
+ * whatever its state: `not_verified` and `revoked` carry causes too (a lost
+ * heartbeat, a throttled call, a disconnected installation), and none of them
+ * is "never verified".
+ */
+export function reasonCopy(c: Connection): { cause: string; action: string } {
+  const code = c.connection.reason_code;
+  const action = reasonAction(c, code);
+  const cause = (code ? (CAUSE[code] ?? cloudConnectorReasonSummary(code)) : undefined) ?? (code ? `Reported: ${code.replace(/_/g, " ")}` : causeWithoutCode(c));
+  return { cause, action };
+}
+
+/** "<what to check>, then verify." — only where this provider has something to verify. */
+function checkThenVerify(c: Connection, check: string): string {
+  return c.capabilities.verify ? `${check}, then verify.` : `${check}.`;
+}
+
+function reasonAction(c: Connection, code: string | null): string {
+  const provider = c.provider;
   switch (code) {
     case "auth_refused":
       return provider === "gcp"
-        ? "Check that the reader service account still exists and its role grants are in place, then verify."
+        ? checkThenVerify(c, "Check that the reader service account still exists and its role grants are in place")
         : provider === "aws"
-          ? "Check the role ARN, the ExternalId in its trust policy and that it trusts AuthSec, then verify."
+          ? checkThenVerify(c, "Check the role ARN, the ExternalId in its trust policy and that it trusts AuthSec")
           : "Check the installation's permissions, then try again.";
     case "throttled":
       return "This is usually temporary. Try again in a moment.";
@@ -206,17 +307,33 @@ function reasonAction(provider: ConnectionProvider, code: string | null): string
     case "deployment_misconfigured":
       return "This is an AuthSec configuration problem, not yours. Contact support.";
     case "external_id_not_issued":
-      return "Use the ExternalId AuthSec issued for this workspace in the role's trust policy, then verify.";
+      return checkThenVerify(c, "Use the ExternalId AuthSec issued for this workspace in the role's trust policy");
     case "credential_invalid":
       return "Reconnect with a working credential.";
     case "scope_invalid":
       return "Reconnect with valid settings.";
+    case "no_heartbeat":
+      return "Install the agent in the cluster and it will appear here.";
+    case "heartbeat_lost":
+      return "Check that the agent is running in the cluster and can reach AuthSec.";
+    case "disabled":
+      return "It can be removed here.";
+    case "integration_missing":
+      return "Remove this connection and connect the organisation again.";
+    case "integration_unverified":
+      return "Check that the GitHub App is still installed on the organisation.";
+    case "integration_pending":
+      return "Finish installing the GitHub App on the organisation.";
+    case "integration_degraded":
+      return "Check the permissions the GitHub App holds on the organisation.";
+    case "integration_disconnected":
+    case "integration_revoked":
+      return "Remove this connection, and connect the organisation again to scan it.";
     default:
-      return provider === "k8s"
-        ? "Check that the agent is running in the cluster and can reach AuthSec."
-        : provider === "github"
-          ? "Check that the GitHub App is still installed on the organisation."
-          : "Verify the connection to see why.";
+      if (provider === "k8s") return "Check that the agent is running in the cluster and can reach AuthSec.";
+      if (provider === "github") return "Check that the GitHub App is still installed on the organisation.";
+      if (!c.capabilities.verify) return "Check the connection's settings with the provider.";
+      return c.connection.state === "not_verified" ? "Verify the connection to confirm AuthSec can read it." : "Verify the connection to see why.";
   }
 }
 
@@ -237,20 +354,22 @@ export interface StatusSummary extends Primary {
 export function statusOf(c: Connection): StatusSummary {
   const p = primaryOf(c);
   switch (p.key) {
-    case "revoked":
-      return { ...p, support: "Its last results are kept, and are no longer reconfirmed." };
+    case "revoked": {
+      // A cluster or an organisation that is switched off can still be removed; say so.
+      if (c.provider === "aws" || c.provider === "gcp") return { ...p, support: "Its last results are kept, and are no longer reconfirmed." };
+      return { ...p, support: `${reasonCopy(c).cause}. ${holdsLine(c)}. It can be removed.` };
+    }
     case "auth_failed": {
       const r = reasonCopy(c);
       return { ...p, support: `${r.cause} · ${holdsLine(c)}. ${r.action}` };
     }
-    case "not_verified":
-      return {
-        ...p,
-        support:
-          c.provider === "k8s"
-            ? "No agent has reported yet. Install the agent in the cluster and it will appear here."
-            : "Verify the connection to confirm AuthSec can read it.",
-      };
+    case "not_verified": {
+      const r = reasonCopy(c);
+      // Never proven: there is nothing that "still holds". A proof that failed or a heartbeat that stopped: say what remains.
+      return { ...p, support: neverProven(c) ? `${r.cause}. ${r.action}` : `${r.cause} · ${holdsLine(c)}. ${r.action}` };
+    }
+    case "unknown":
+      return { ...p, support: "AuthSec reports a state this console does not recognise. Open the connection for what is known." };
     case "scan_failed":
       return {
         ...p,
@@ -267,7 +386,7 @@ export function statusOf(c: Connection): StatusSummary {
     case "coverage_partial":
       return {
         ...p,
-        support: `${holdsLine(c)} with gaps${gapWords(c) ? ` — ${gapWords(c)}` : ""} · Open Coverage to see what to do.`,
+        support: `${holdsLine(c)} with gaps${gapWords(c) ? ` — ${gapWords(c)}` : ""} · Open Coverage to see ${c.provider === "k8s" ? "what it means" : "what to do"}.`,
       };
     case "scan_running":
     case "scan_queued":
@@ -304,8 +423,10 @@ export function lastScanText(c: Connection): string {
       return "Running";
     case "failed":
       return c.scan.at ? `Failed ${ago(c.scan.at)}` : "Failed";
-    default:
+    case "finished":
       return c.scan.at ? `Finished ${ago(c.scan.at)}` : "Finished";
+    default:
+      return "Unknown";
   }
 }
 
@@ -322,8 +443,10 @@ export function graphText(c: Connection): { text: string; note?: string } {
       return { text: "Not published" };
     case "unrevisioned":
       return { text: "No publication", note: "Written as swept" };
-    default:
+    case "not_applicable":
       return { text: "—", note: "Not part of the graph" };
+    default:
+      return { text: "Unknown" };
   }
 }
 
@@ -348,6 +471,7 @@ export function statusFilterOf(c: Connection): StatusFilterKey {
     case "not_verified":
     case "scan_failed":
     case "publication_failed":
+    case "unknown":
       return "attention";
     case "coverage_denied":
     case "coverage_partial":
@@ -388,13 +512,21 @@ export interface ActionSet {
 export function actionsOf(c: Connection, canAdminister: boolean): ActionSet {
   const live = c.connection.state !== "revoked";
   const cap = c.capabilities;
+  // A cluster's or an organisation's "revoke" is the source's DELETE, so a disabled or
+  // revoked one must stay removable. AWS and GCP revoke once: a revoked row keeps its history.
+  const removable = c.provider === "k8s" || c.provider === "github";
   return {
-    scan: canAdminister && live && cap.scan && c.provider !== "k8s",
-    verify: canAdminister && live && cap.verify && (c.provider === "aws" || c.provider === "gcp"),
+    scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github"),
+    verify: canAdminister && live && verifiable(c),
     editScope: canAdminister && live && cap.edit_scope && (c.provider === "aws" || c.provider === "github"),
     rules: cap.rules && c.provider === "github",
-    revoke: canAdminister && live && cap.revoke,
+    revoke: canAdminister && cap.revoke && (live || removable) && (removable || c.provider === "aws" || c.provider === "gcp"),
   };
+}
+
+/** Does this provider have a verify route that this console calls? GitHub has none. */
+function verifiable(c: Connection): boolean {
+  return c.capabilities.verify && (c.provider === "aws" || c.provider === "gcp");
 }
 
 /** The word for the destructive action: AWS and GCP are revoked, a cluster and an organisation are removed. */
@@ -456,7 +588,7 @@ export function discoveryLink(c: Connection): string {
 
 /** Why "Open in Discovery" is not offered yet — said, not just disabled. */
 export function discoveryWaitingFor(c: Connection): string {
-  if (c.connection.state === "revoked") return "This connection is revoked; what it found earlier is still in Discovery.";
+  if (c.connection.state === "revoked") return "This connection is revoked, so nothing new will be read from it.";
   switch (c.provider) {
     case "k8s":
       return "Waiting for a usable sweep from the agent.";
@@ -510,24 +642,29 @@ export function trackerOf(c: Connection, opts: { scopeChosen: boolean }): Step[]
     detail: `Connected ${day(c.created_at)}.`,
   });
 
-  // Verify (or, for a cluster, the agent's first report).
-  if (revoked) {
-    steps.push({ key: "verify", title: k8s ? "Agent reporting" : "Verify access", state: "failed", detail: "This connection is revoked." });
-  } else if (c.connection.state === "authentication_failed") {
+  // Verify (or, for a cluster, the agent's first report; for GitHub, the App installation, which has no verify route).
+  const verifyTitle = k8s ? "Agent reporting" : c.provider === "github" ? "GitHub App installation" : "Verify access";
+  const verifyAction = verifiable(c) ? ("verify" as const) : undefined;
+  const state = c.connection.state;
+  if (state === "revoked") {
+    steps.push({ key: "verify", title: verifyTitle, state: "failed", detail: `${reasonCopy(c).cause}.` });
+  } else if (state === "authentication_failed") {
     const r = reasonCopy(c);
-    steps.push({ key: "verify", title: k8s ? "Agent reporting" : "Verify access", state: "failed", detail: `${r.cause}. ${r.action}`, action: k8s ? undefined : "verify" });
-  } else if (c.connection.state === "not_verified") {
+    steps.push({ key: "verify", title: verifyTitle, state: "failed", detail: `${r.cause}. ${r.action}`, action: verifyAction });
+  } else if (state === "not_verified") {
+    const r = reasonCopy(c);
     steps.push({
       key: "verify",
-      title: k8s ? "Agent reporting" : "Verify access",
-      state: "next",
-      detail: k8s ? "Waiting for the agent's first report." : "Not yet verified.",
-      action: k8s ? undefined : "verify",
+      title: verifyTitle,
+      // Never proven is a step still to do; a failed proof or a lost heartbeat is a failure with a cause.
+      state: neverProven(c) ? "next" : "failed",
+      detail: k8s && c.connection.reason_code === "no_heartbeat" ? "Waiting for the agent's first report." : `${r.cause}. ${r.action}`,
+      action: verifyAction,
     });
-  } else {
+  } else if (state === "connected") {
     steps.push({
       key: "verify",
-      title: k8s ? "Agent reporting" : "Verify access",
+      title: verifyTitle,
       state: "done",
       detail: k8s
         ? `${k8sHealthLine(c)}.`
@@ -535,6 +672,8 @@ export function trackerOf(c: Connection, opts: { scopeChosen: boolean }): Step[]
           ? `Verified ${ago(c.connection.verified_at)}.`
           : "AuthSec can read it.",
     });
+  } else {
+    steps.push({ key: "verify", title: verifyTitle, state: "waiting", detail: "AuthSec reports a connection state this console does not recognise." });
   }
 
   // Scope.
