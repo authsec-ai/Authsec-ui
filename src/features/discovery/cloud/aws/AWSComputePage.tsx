@@ -6,7 +6,7 @@
  * runtimes and AgentCore gateways — and, prominently, the compute it could NOT
  * attribute to any role it discovered.
  *
- * Carries a second view, `?view=workload-identities`: AgentCore's own
+ * Carries a second section, `?section=workload-identities`: AgentCore's own
  * principals. They are compute-adjacent but are evidence rows with no subject
  * of any kind, so they cannot share this page's table — see
  * AWSWorkloadIdentitiesView for why they have nowhere else to live.
@@ -116,7 +116,7 @@ export default function AWSComputePage() {
   const [params, setParams] = useSearchParams();
 
   const view: ComputeView =
-    params.get("view") === "workload-identities" ? "workload-identities" : "compute";
+    params.get("section") === "workload-identities" ? "workload-identities" : "compute";
 
   const attribution = (() => {
     const raw = params.get("attribution");
@@ -183,11 +183,13 @@ export default function AWSComputePage() {
   // server-side would silently reduce all three to one page of rows, which is
   // the same class of lie as the truncation this replaced.
   // Skip-gated on the active view: the workload-identities view renders none of
-  // this, and landing straight on `?view=workload-identities` would otherwise
+  // this, and landing straight on `?section=workload-identities` would otherwise
   // fire two 500-row reads for a table that is not on screen.
   const computeActive = view === "compute";
+  // Discovery's Source facet arrives as `?source=<connector id>`.
+  const source = params.get("source") ?? undefined;
   const workloadsQuery = useListAwsWorkloadsQuery(
-    { limit: AWS_DISCOVERY_MAX_LIMIT, offset: 0 },
+    { limit: AWS_DISCOVERY_MAX_LIMIT, offset: 0, connector_id: source },
     { skip: !computeActive },
   );
   const rows = useMemo(() => workloadsQuery.data?.rows ?? [], [workloadsQuery.data]);
@@ -502,7 +504,7 @@ export default function AWSComputePage() {
             <button
               key={v.key}
               type="button"
-              onClick={() => setParam("view", v.key === "compute" ? null : v.key)}
+              onClick={() => setParam("section", v.key === "compute" ? null : v.key)}
               className={
                 active
                   ? "inline-flex h-7 items-center gap-1.5 rounded-md border border-transparent bg-(--color-primary-soft) px-2.5 text-[11px] font-semibold text-(--color-primary-text)"
@@ -542,7 +544,7 @@ export default function AWSComputePage() {
       />
 
       <StaleStackNotice connectors={connectors} />
-      <WorkspaceScopeCaveat accountCount={connectors.length} />
+      <WorkspaceScopeCaveat accountCount={source ? 1 : connectors.length} />
 
       {unattributed > 0 ? (
         <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2.5 text-xs leading-relaxed text-(--color-warning-text)">
@@ -572,7 +574,7 @@ export default function AWSComputePage() {
       <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, ARN or region"
+        searchPlaceholder={`Search the ${rows.length} loaded rows by name, ARN or region`}
         chips={
           <AWSFilterChips
             label="Runtime"

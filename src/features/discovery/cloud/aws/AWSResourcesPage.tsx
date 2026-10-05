@@ -65,7 +65,6 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import { toast } from "react-hot-toast";
 
-import { AWSAccountPicker } from "./AWSAccountPicker";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "./AWSFilterChips";
 import {
@@ -118,7 +117,7 @@ export default function AWSResourcesPage() {
 
   // URL-backed so an inventory view is shareable, the same as the sibling
   // AWS pages.
-  const account = params.get("account") ?? ALL_ACCOUNTS;
+  const account = params.get("source") ?? ALL_ACCOUNTS;
   // `kind` is free text server-side (the column is text, not an enum, so AWS
   // shipping a new service never needs a migration). Nothing is validated
   // against a fixed union here for the same reason — an unknown value simply
@@ -285,8 +284,8 @@ export default function AWSResourcesPage() {
       const c = connectors.find((x) => x.id === account);
       out.push({
         key: "account",
-        label: `Account: ${c?.scope_id ?? account}`,
-        onRemove: () => setParam("account", null),
+        label: `Source: ${c?.scope_id ?? account}`,
+        onRemove: () => setParam("source", null),
       });
     }
     return out;
@@ -300,7 +299,7 @@ export default function AWSResourcesPage() {
   const clearAllFilters = () => {
     const next = new URLSearchParams(params);
     next.delete("kind");
-    next.delete("account");
+    next.delete("source");
     setParams(next, { replace: true });
     setHighOnly(false);
   };
@@ -599,7 +598,7 @@ export default function AWSResourcesPage() {
           // Only the account picker is named: `/aws/resources` takes no `kind`
           // parameter, so the type pills narrow the loaded page and would not
           // bring a single extra row back.
-          narrowBy="Narrow by account first — that is the only filter this endpoint applies server-side. The type pills and search narrow the rows already loaded."
+          narrowBy="Narrow by Source first — that is the only filter this endpoint applies server-side. The type pills and search narrow the rows already loaded."
         />
       ) : null}
 
@@ -608,7 +607,7 @@ export default function AWSResourcesPage() {
       <InventoryToolbar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name or ARN"
+        searchPlaceholder={`Search the ${rows.length} loaded rows by name or ARN`}
         chips={
           <AWSFilterChips
             label="Resource type"
@@ -618,7 +617,7 @@ export default function AWSResourcesPage() {
           />
         }
         controls={
-          <AWSAccountPicker connectors={connectors} value={account} onChange={(next) => setParam("account", next)} />
+          null
         }
         applied={appliedFilters}
         onClearAll={() => {
@@ -687,7 +686,7 @@ export default function AWSResourcesPage() {
       {connectors.length > 1 && account === ALL_ACCOUNTS ? (
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
           <Info className="mt-px size-3.5 flex-none" aria-hidden />
-          {connectors.length} AWS accounts are connected. Resources can be narrowed to one account;
+          {connectors.length} AWS accounts are connected. Resources can be narrowed to one account with Source;
           the identities listed inside a row are already scoped to that resource&apos;s own account.
         </p>
       ) : null}

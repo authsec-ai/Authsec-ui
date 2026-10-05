@@ -434,6 +434,8 @@ export interface AgentFilters {
    */
   live?: boolean;
   runtime_status?: RuntimeStatus;
+  /** The connection's discovery source: "agents in this cluster / organisation". */
+  discovery_source_id?: string;
   limit?: number;
   offset?: number;
 }
@@ -630,6 +632,7 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.unowned ? { unowned: "true" } : {}),
           ...(f?.live ? { live: "true" } : {}),
           ...(f?.runtime_status ? { runtime_status: f.runtime_status } : {}),
+          ...(f?.discovery_source_id ? { discovery_source_id: f.discovery_source_id } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },
