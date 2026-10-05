@@ -18,7 +18,7 @@ export function GraphStatePanel({
   /** What the view shows, in the customer's words: "agents and workloads". */
   subject: string;
   onRetry?: () => void;
-  /** Re-pin to the current revision; offered when a newer scan published. */
+  /** Re-pin to the current revision; offered when a newer publication is current. */
   onRefresh?: () => void;
 }) {
   let title: string;
@@ -40,9 +40,10 @@ export function GraphStatePanel({
       body = "The link may be from another workspace, or the object was never discovered here.";
       break;
     case "revision_stale":
-      // A new read at the old revision: pause in place, never an empty list (§2.14.5).
-      title = "A newer scan published";
-      body = "This view needs the current graph. Refresh to load it; your filters are kept.";
+      // A new read at the old publication is refused by the server (409): say so
+      // in place of this panel only, never as an error or an empty list.
+      title = "A newer publication is current — refresh to continue";
+      body = "This view was not loaded before it changed, and the server no longer serves the earlier publication. What is already on screen is unchanged. Refresh re-reads the whole page together.";
       refresh = true;
       break;
     case "timeout":

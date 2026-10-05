@@ -122,6 +122,7 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
               first={data.members ?? none<GroupMember>()}
               loadMore={more("members")}
               onStale={onStale}
+              onRefresh={refresh}
               itemKey={(r) => r.claim}
               render={(r) => <MemberBody r={r} from={from} />}
               empty={empty("No user is a member of this group.")}
@@ -133,6 +134,7 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
                 first={data.workloads ?? none<UsedByWorkload>()}
                 loadMore={more("workloads")}
                 onStale={onStale}
+              onRefresh={refresh}
                 itemKey={(r) => r.claim}
                 render={(r) => <WorkloadBody r={r} from={from} />}
                 empty={empty("No workload is configured to run as this identity.")}
@@ -142,6 +144,7 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
                 first={data.principals ?? none<UsedByPrincipal>()}
                 loadMore={more("principals")}
                 onStale={onStale}
+              onRefresh={refresh}
                 itemKey={(r) => r.claim}
                 render={(r) => <PrincipalBody r={r} from={from} />}
                 empty={empty("Its trust policy names no principal we could resolve.")}

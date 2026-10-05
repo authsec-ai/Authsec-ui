@@ -85,7 +85,7 @@ export function CursorPager({
         {failure ? (
           <span role="alert" className="text-(--color-warning-text)">
             {stale
-              ? "A newer scan published. Refresh to keep paging."
+              ? "A newer publication is current. Refresh to keep paging."
               : previousPage
                 ? "Could not load the next page."
                 : "Could not refresh these results."}

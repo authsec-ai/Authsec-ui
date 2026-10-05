@@ -18,14 +18,14 @@ export function RevisionBanner({
   currentPublishedAt?: string;
   onRefresh: () => void;
 }) {
-  const at = currentPublishedAt ? format(new Date(currentPublishedAt), "HH:mm") : null;
-  const title = at ? `A newer scan published at ${at}` : "A newer scan published";
+  const at = currentPublishedAt ? format(new Date(currentPublishedAt), "d MMM HH:mm") : null;
+  const title = at ? `A newer publication is current (${at})` : "A newer publication is current";
   useAnnounce(title);
   return (
     <DecisionBanner
       tone="info"
       title={title}
-      body="You are viewing the previous result. Refresh to see the current graph; your view and filters are kept."
+      body="What is on screen is labelled with the publication it was read at, and nothing newer is mixed in. Refresh to re-read it all at the current publication; your view and filters are kept."
       actionLabel="Refresh"
       onAction={onRefresh}
     />

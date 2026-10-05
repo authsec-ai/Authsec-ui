@@ -20,6 +20,7 @@ export function SectionList<T>({
   first,
   loadMore,
   onStale,
+  onRefresh,
   itemKey,
   render,
   empty,
@@ -29,6 +30,8 @@ export function SectionList<T>({
   /** Fetch the page after `cursor` for this section only. */
   loadMore: (cursor: string) => Promise<PagedSection<T>>;
   onStale: (failure: Extract<GraphFailure, { kind: "revision_stale" }>) => void;
+  /** Re-pin the whole page; offered beside the refresh-required notice. */
+  onRefresh?: () => void;
   itemKey: (item: T) => string;
   render: (item: T) => ReactNode;
   /** The Empty answer; null hides the section when it has nothing. */
@@ -93,9 +96,14 @@ export function SectionList<T>({
           {failure ? (
             <span role="alert" className="text-(--color-warning-text)">
               {failure.kind === "revision_stale"
-                ? "A newer scan published. Refresh to see the rest."
+                ? "A newer publication is current. Refresh to see the rest."
                 : "Could not load more."}
             </span>
+          ) : null}
+          {failure?.kind === "revision_stale" && onRefresh ? (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              Refresh
+            </Button>
           ) : null}
           {cursor && failure?.kind !== "revision_stale" ? (
             <Button variant="outline" size="sm" onClick={() => void more()} disabled={loading}>

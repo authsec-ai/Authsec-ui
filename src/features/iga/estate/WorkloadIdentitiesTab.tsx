@@ -120,6 +120,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.execution ?? none}
             loadMore={more("execution")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={
@@ -131,6 +132,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.other ?? none}
             loadMore={more("other")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={null}
@@ -140,6 +142,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.groups ?? none}
             loadMore={more("groups")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={null}
@@ -149,6 +152,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.may_assume ?? none}
             loadMore={more("may_assume")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <AssumeBody rel={r} from={from} />}
             empty={null}
