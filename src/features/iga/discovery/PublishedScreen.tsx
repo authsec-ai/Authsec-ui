@@ -58,6 +58,7 @@ import { SortSelect } from "../shared/components/FacetSelect";
 import { PreviewLayout, type PreviewModel } from "../shared/components/ObjectPreview";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
+import { accountCoverageNote } from "../shared/lifecycle";
 import {
   CLASSIFICATION_MEANING,
   CLASSIFICATION_SHORT,
@@ -92,17 +93,22 @@ function valid<T extends string>(v: string | undefined, allowed: readonly T[]): 
 }
 
 const LIFECYCLE_OPTIONS = [
-  { value: "retired", label: "Ended" },
-  { value: "all", label: "Active and ended" },
+  { value: "retired", label: "Retired" },
+  { value: "all", label: "All (active and retired)" },
 ] as const;
 
-const LIFECYCLE_NOTE = "Active includes current and stale rows; a stale row says so and is never hidden or removed. Ended rows are objects no scan confirms any more.";
+const LIFECYCLE_NOTE = "Active includes current and stale rows; a stale row says so and is never hidden or removed. Retired rows are objects no scan confirms any more.";
 
 /** The chip that says where a row stands without needing the Last confirmed column. */
 function LifecycleCell({ lifecycle, state }: { lifecycle: "active" | "retired"; state: "current" | "stale" | "ended" }) {
-  if (lifecycle === "retired") return <StatusBadge tone="neutral">Ended</StatusBadge>;
+  if (lifecycle === "retired") return <StatusBadge tone="neutral">Retired</StatusBadge>;
   if (state === "stale") return <StatusBadge tone="warning">Stale</StatusBadge>;
   return <span className={`text-sm ${MUTED}`}>Current</span>;
+}
+
+/** Was this row's account not fully read? One test for every type, from the list's own coverage notes. */
+function accountHasGap(meta: GraphListMeta | undefined, account: { id: string } | null | undefined): boolean {
+  return accountCoverageNote(meta?.coverage, account?.id) !== null;
 }
 
 /* --------------------------------- shared --------------------------------- */
@@ -221,7 +227,6 @@ function PublishedBody<Row>(b: BodyProps<Row>) {
       url={p.url}
       searchPlaceholder={b.searchPlaceholder}
       searchHint={p.url.qTooShort ? "Type at least 2 characters to search." : undefined}
-      switcher={p.switcher}
       facets={b.facets}
       trailing={
         <>
@@ -486,8 +491,7 @@ function PublishedWorkloads(p: ScreenProps) {
         columnsMenu={chrome.menu}
         onColumnsLayout={chrome.setLayout}
         preview={(r, meta) => {
-          const gaps = meta?.coverage ?? [];
-          const acctGap = r.account ? gaps.some((g) => g.account_id === r.account!.id && g.state !== "reached" && g.state !== "revoked" && g.state !== "not_selected" && g.state !== "unsupported" && g.state !== "not_configured") : false;
+          const acctGap = accountHasGap(meta, r.account);
           const facts = [{ label: "Runs as", value: <WorkloadFact ws={p.ws} row={r} which="runs_as" /> }];
           if (r.runtime_kind === "ecs_task_definition") facts.push({ label: "ECS agent uses as task execution role", value: <WorkloadFact ws={p.ws} row={r} which="task_role" /> });
           return {
@@ -499,7 +503,7 @@ function PublishedWorkloads(p: ScreenProps) {
             facts,
             exception:
               r.lifecycle === "retired"
-                ? `Ended${r.retired_reason ? ` — ${r.retired_reason}` : ""}. Last confirmed ${r.last_confirmed_at ? new Date(r.last_confirmed_at).toLocaleDateString() : "at a time not known"}.`
+                ? `Retired${r.retired_reason ? ` — ${r.retired_reason}` : ""}. Last confirmed ${r.last_confirmed_at ? new Date(r.last_confirmed_at).toLocaleDateString() : "at a time not known"}.`
                 : r.state === "stale"
                   ? `Stale since ${r.stale_reason?.[0]?.since ? new Date(r.stale_reason[0].since).toLocaleDateString() : "an unknown date"}: not reconfirmed by the latest scan.`
                   : acctGap
@@ -662,7 +666,7 @@ function PublishedIdentities(p: ScreenProps) {
         columnsMenu={chrome.menu}
         onColumnsLayout={chrome.setLayout}
         preview={(r, meta) => {
-          const acctGap = r.account ? (meta?.coverage ?? []).some((g) => g.account_id === r.account!.id && ["partial", "denied", "throttled", "unknown", "stale", "constrained"].includes(g.state)) : false;
+          const acctGap = accountHasGap(meta, r.account);
           return {
             key: refId(r.ref),
             name: r.name,
@@ -677,7 +681,7 @@ function PublishedIdentities(p: ScreenProps) {
             ],
             exception:
               r.lifecycle === "retired"
-                ? `Ended${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
+                ? `Retired${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
                 : r.state === "stale"
                   ? `Stale since ${r.stale_reason?.[0]?.since ? new Date(r.stale_reason[0].since).toLocaleDateString() : "an unknown date"}: not reconfirmed by the latest scan.`
                   : acctGap
@@ -889,7 +893,7 @@ function PublishedResources(p: ScreenProps) {
           facts: [{ label: "Identities with declared access", value: <ResourceHolders ws={p.ws} id={refId(r.ref)} /> }],
           exception:
             r.lifecycle === "retired"
-              ? "Ended: no statement names it in the latest scan."
+              ? "Retired: no statement names it in the latest scan."
               : r.state === "stale"
                 ? `Stale since ${r.stale_reason?.[0]?.since ? new Date(r.stale_reason[0].since).toLocaleDateString() : "an unknown date"}: not reconfirmed by the latest scan.`
                 : r.kind === "external"

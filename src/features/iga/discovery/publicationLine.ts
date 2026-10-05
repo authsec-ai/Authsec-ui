@@ -3,9 +3,9 @@
  * by that provider's own rule (SPEC-console-revamp.md *Kubernetes in Discovery*):
  *
  *   AWS Published   the publication the lists are pinned to
- *   AWS Latest      the most recent scan
+ *   AWS Latest      the results of the most recent scan that produced any
  *   Kubernetes      the SWEEP behind the rows — never the agent heartbeat
- *   GitHub, Google  the most recent scan
+ *   GitHub, Google  the results of the most recent scan that produced any
  *
  * Refresh (AWS Published only) re-pins the lists to the current publication. It
  * never requests a scan: scanning is on Connections.
@@ -21,10 +21,25 @@ import type { DiscoveryProvider, DiscoveryView } from "./urlState";
 
 const fmt = (iso: string) => format(new Date(iso), "d MMM HH:mm");
 
-function latestScan(connections: Connection[]): string | null {
+/**
+ * When the results in scope are from: the latest `discovery.as_of` among the
+ * connections whose Discovery is ready. `scan.at` is the latest ATTEMPT, so it
+ * is never the time of the results — a failed attempt would be passed off as one.
+ */
+function resultsAsOf(connections: Connection[]): string | null {
   let best: string | null = null;
-  for (const c of connections) if (c.scan.at && (!best || c.scan.at > best)) best = c.scan.at;
+  for (const c of connections) {
+    const at = c.discovery?.ready ? c.discovery.as_of : null;
+    if (at && (!best || at > best)) best = at;
+  }
   return best;
+}
+
+/** Said plainly beside the time, so a stale result is not read as a fresh one. */
+function failedScans(connections: Connection[]): string | null {
+  const failed = connections.filter((c) => c.scan.state === "failed").length;
+  if (!failed) return null;
+  return connections.length === 1 ? "The latest scan failed" : `The latest scan failed for ${failed} of ${connections.length} sources`;
 }
 
 export function publicationText({
@@ -59,8 +74,10 @@ export function publicationText({
     const unswept = inScope(overview.sweeps ?? [], cluster).length - known.length;
     return unswept > 0 ? `${text} · ${unswept} ${unswept === 1 ? "cluster" : "clusters"} not yet swept` : text;
   }
-  const scan = latestScan(connections);
-  return scan ? `Latest scan ${fmt(scan)}` : "No scan has finished yet";
+  const asOf = resultsAsOf(connections);
+  const failed = failedScans(connections);
+  const results = asOf ? `Results as of ${fmt(asOf)}` : failed ? "No results yet" : "No scan has finished yet";
+  return failed ? `${results} · ${failed}` : results;
 }
 
 /** Kubernetes: the agent is reporting but its inventory is old — said, not smoothed over. */

@@ -28,7 +28,7 @@ import { RevisionBanner } from "../shared/components/RevisionBanner";
 import { useGraphRevision } from "../shared/revision";
 import { useSlashToSearch } from "../shared/useListFilters";
 import { FailurePanel, NotCollected } from "./ListStates";
-import { effectiveView, hasViews, planSwitch, supportsType, TYPES_BY_PROVIDER, type Scope } from "./model";
+import { countBasis, effectiveView, hasViews, planSwitch, supportsType, TYPES_BY_PROVIDER, type Scope } from "./model";
 import { ProviderControl } from "./ProviderControl";
 import { heartbeatDiscrepancy, publicationText } from "./publicationLine";
 import { Segmented } from "./Segmented";
@@ -63,7 +63,10 @@ export default function DiscoveryPage() {
   const provider = resolved;
   const type: DiscoveryType = url.type ?? (provider ? TYPES_BY_PROVIDER[provider][0] : "workloads");
   const view: DiscoveryView = provider ? effectiveView(provider, type, url.view) : "published";
-  const ready = !connQ.isLoading && !connQ.error;
+  // A failed refetch keeps the connections already read: only a read that has never
+  // succeeded replaces the page.
+  const connectionsFailed = connQ.isError && !connQ.data;
+  const ready = !connQ.isLoading && !connectionsFailed;
 
   const { normalise } = url;
   useEffect(() => {
@@ -119,7 +122,7 @@ export default function DiscoveryPage() {
           value: t,
           label: TYPE_LABEL[t],
           count: overview.counts[t] ?? COUNT_UNAVAILABLE,
-          title: `${TYPE_LABEL[t]}, counted with the current search and source`,
+          title: `${TYPE_LABEL[t]}, ${countBasis(viewFor(provider, t), t)}`,
         }))}
         onChange={switchType}
       />
@@ -153,7 +156,7 @@ export default function DiscoveryPage() {
   let body;
   if (connQ.isLoading) {
     body = <div className="h-40 animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading connections" />;
-  } else if (connQ.error) {
+  } else if (connectionsFailed) {
     const f = loadFailureOf(connQ.error);
     body = (
       <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
@@ -183,25 +186,26 @@ export default function DiscoveryPage() {
         </p>
       </div>
     );
-  } else if (!supportsType(provider, type)) {
+  } else {
+    // The switcher lives here, above whichever screen the type and view choose, so
+    // it is not remounted by a change of either and keeps the keyboard focus.
+    const props: ScreenProps = { ws, url, provider, type, view, sources, scope };
     body = (
       <div className="space-y-3">
         {switcher}
-        <NotCollected provider={provider} type={type} />
+        {!supportsType(provider, type) ? (
+          <NotCollected provider={provider} type={type} />
+        ) : view === "latest" ? (
+          <LatestScreen {...props} />
+        ) : provider === "aws" ? (
+          <PublishedScreen {...props} />
+        ) : type === "sightings" ? (
+          <SightingsScreen {...props} />
+        ) : (
+          <InventoryScreen {...props} />
+        )}
       </div>
     );
-  } else {
-    const props: ScreenProps = { ws, url, provider, type, view, sources, scope, switcher };
-    body =
-      view === "latest" ? (
-        <LatestScreen {...props} />
-      ) : provider === "aws" ? (
-        <PublishedScreen {...props} />
-      ) : type === "sightings" ? (
-        <SightingsScreen {...props} />
-      ) : (
-        <InventoryScreen {...props} />
-      );
   }
 
   return (
@@ -230,6 +234,11 @@ export default function DiscoveryPage() {
             </span>
           ) : null}
         </div>
+      ) : null}
+      {connQ.isError && connQ.data ? (
+        <p role="status" className="text-xs text-(--color-warning-text)">
+          Connections could not be refreshed, so the last read is shown.
+        </p>
       ) : null}
       {awsPublished && stale ? <RevisionBanner currentPublishedAt={stale.currentPublishedAt} onRefresh={refresh} /> : null}
       {ready ? <SourceNotices notices={notices} /> : null}

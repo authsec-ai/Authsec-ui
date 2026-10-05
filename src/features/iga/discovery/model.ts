@@ -28,6 +28,17 @@ export function supportsType(provider: DiscoveryProvider, type: DiscoveryType): 
   return TYPES_BY_PROVIDER[provider].includes(type);
 }
 
+/**
+ * What the count beside a type segment follows, said in its tooltip. It is not
+ * the same everywhere: Published and Kubernetes counts keep the search, the
+ * Latest collected and sightings counts are the source's own totals and do not.
+ */
+export function countBasis(view: DiscoveryView, type: DiscoveryType): string {
+  if (type === "sightings") return "counted for the current source. Search and filters do not change it";
+  if (view === "latest") return "counted for the current source. Search does not change it";
+  return "counted with the current search and source";
+}
+
 /** Why a combination is not collected: one sentence the reader can act on or accept. */
 export function notCollectedReason(provider: DiscoveryProvider, type: DiscoveryType): string {
   const what = TYPE_LABEL[type].toLowerCase();
