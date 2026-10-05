@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-import { DeclaredAccessNotice, EvidenceClaims, type ClaimContext } from "../evidence/EvidenceClaim";
+import { EvidenceClaims, type ClaimContext } from "../evidence/EvidenceClaim";
 import { EDGE_LABEL, KIND_LABEL, edgeVerb } from "./graphLabels";
 import type { VisualEdge } from "./types";
 
@@ -102,7 +102,6 @@ export function GraphInspector({
 
   const body = (
     <div ref={bodyRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-      <DeclaredAccessNotice />
       <EvidenceClaims ws={ws} claims={subject.claims} contextOf={contextOf} grants={grants} />
     </div>
   );
