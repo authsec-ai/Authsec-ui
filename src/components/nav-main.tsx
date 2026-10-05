@@ -48,7 +48,7 @@ export function NavMain({
         {items.map((item) => (
           <SidebarMenuItem key={item.title}>
             <SidebarMenuButton
-              tooltip={item.title}
+              tooltip={item.tag ? `${item.title} (${item.tag})` : item.title}
               isActive={item.isActive}
               onClick={item.onClick}
               className={ACTIVE_NAV}

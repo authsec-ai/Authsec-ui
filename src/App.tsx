@@ -823,6 +823,7 @@ function AppContent() {
                   <Route path="/iga/cloud/aws/identities" element={<DiscoveryRedirect from="cloud-identities" />} />
                   <Route path="/iga/cloud/aws/compute" element={<DiscoveryRedirect from="cloud-compute" />} />
                   <Route path="/iga/cloud/aws/resources" element={<DiscoveryRedirect from="cloud-resources" />} />
+                  <Route path="/iga/cloud/*" element={<DiscoveryRedirect from="cloud-identities" />} />
 
                   {/* The retired governance screens (SPEC-console-revamp.md
                       §Removal contract): a retirement state, never the old page. */}

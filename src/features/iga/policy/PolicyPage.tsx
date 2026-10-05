@@ -18,7 +18,7 @@ export default function PolicyPage() {
     <ConsolePage title="Policy" description="Decisions about what discovered objects may do.">
       <div role="note" className={cn("rounded-lg border px-4 py-3", toneClasses.neutral.banner)}>
         <p className="text-sm font-semibold text-(--color-text)">
-          Preview — sample data. Nothing here is evaluated or enforced.
+          Preview. Nothing here is evaluated or enforced.
         </p>
       </div>
 

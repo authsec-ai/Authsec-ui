@@ -7,7 +7,7 @@
  *
  * Category colour always comes with an icon and the kind in words; every node
  * is a link; at most MAX_NODES are drawn, and what is not drawn is said.
- * Below 32 rem of available width the sketch is not drawn at all (text
+ * Below 42 rem of available width the sketch is not drawn at all (text
  * would shrink below legibility); the summary beside it carries the same
  * facts as a list.
  */
@@ -44,10 +44,10 @@ export interface SketchEdge {
   label: string;
 }
 
-const NODE_W = 176;
+const NODE_W = 168;
 const NODE_H = 42;
 const GAP_Y = 14;
-const WIDTH = 640;
+const WIDTH = 760;
 
 const FILL: Record<NodeCategory, string> = {
   workload: "var(--color-object-workload-soft)",
@@ -111,9 +111,22 @@ export function NeighbourhoodSketch({
     c.forEach((n, j) => pos.set(n.id, { x: colX(i), y: (height - colH) / 2 + j * (NODE_H + GAP_Y), node: n }));
   });
 
+  const edgeGeometry = (e: SketchEdge) => {
+    const a = pos.get(e.from);
+    const b = pos.get(e.to);
+    if (!a || !b) return null;
+    const forward = b.x >= a.x;
+    const x1 = forward ? a.x + NODE_W : a.x;
+    const x2 = forward ? b.x : b.x + NODE_W;
+    const y1 = a.y + NODE_H / 2;
+    const y2 = b.y + NODE_H / 2;
+    const mx = (x1 + x2) / 2;
+    return { d: `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`, mx, my: (y1 + y2) / 2 };
+  };
+
   return (
     <div className={cn("@container", className)}>
-      <div className="hidden @lg:block">
+      <div className="hidden @2xl:block">
         <Panel title="Neighbourhood" description="Drawn only from what this page has loaded. A line is a declared relationship, not proven access.">
         <svg viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-label={label} className="h-auto w-full">
           <defs>
@@ -122,31 +135,10 @@ export function NeighbourhoodSketch({
             </marker>
           </defs>
           {edges.map((e) => {
-            const a = pos.get(e.from);
-            const b = pos.get(e.to);
-            if (!a || !b) return null;
-            const forward = b.x >= a.x;
-            const x1 = forward ? a.x + NODE_W : a.x;
-            const x2 = forward ? b.x : b.x + NODE_W;
-            const y1 = a.y + NODE_H / 2;
-            const y2 = b.y + NODE_H / 2;
-            const mx = (x1 + x2) / 2;
+            const g = edgeGeometry(e);
+            if (!g) return null;
             return (
-              <g key={`${e.from}>${e.to}>${e.label}`} aria-hidden="true">
-                <path d={`M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`} fill="none" stroke="var(--color-border-strong)" strokeWidth="1.25" markerEnd={`url(#${marker}-arrow)`} />
-                <text
-                  x={mx}
-                  y={(y1 + y2) / 2 - 5}
-                  textAnchor="middle"
-                  fontSize="11"
-                  fill="var(--color-text-muted)"
-                  stroke="var(--color-surface-raised)"
-                  strokeWidth="4"
-                  paintOrder="stroke"
-                >
-                  {e.label}
-                </text>
-              </g>
+              <path key={`${e.from}>${e.to}>${e.label}`} aria-hidden="true" d={g.d} fill="none" stroke="var(--color-border-strong)" strokeWidth="1.25" markerEnd={`url(#${marker}-arrow)`} />
             );
           })}
           {[...pos.values()].map(({ x, y, node }) => {
@@ -184,6 +176,27 @@ export function NeighbourhoodSketch({
                   </g>
                 )}
               </g>
+            );
+          })}
+          {/* Labels last, so a node never covers the word that says what the line means. */}
+          {edges.map((e) => {
+            const g = edgeGeometry(e);
+            if (!g) return null;
+            return (
+              <text
+                key={`${e.from}>${e.to}>${e.label}:label`}
+                aria-hidden="true"
+                x={g.mx}
+                y={g.my - 5}
+                textAnchor="middle"
+                fontSize="11"
+                fill="var(--color-text-muted)"
+                stroke="var(--color-surface-raised)"
+                strokeWidth="4"
+                paintOrder="stroke"
+              >
+                {e.label}
+              </text>
             );
           })}
         </svg>

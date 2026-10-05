@@ -274,8 +274,9 @@ function ObjectContext({ ws, object, compact, onRefresh }: { ws: string; object:
       ) : null}
       <PublicationStamp ws={ws} publishedAt={object.publishedAt} onRefresh={onRefresh} />
       {/* Said once per screen, here, never per row. The graph's status bar and an
-          open inspector each say it for themselves, so the header yields to them. */}
-      {!compact && !evidenceOpen ? (
+          open inspector each say it for themselves, so the header yields to them
+          while evidence is open; otherwise it is always on screen. */}
+      {!evidenceOpen ? (
         <span className="inline-flex items-center gap-1 text-(--color-text-muted)" title="What a policy declares is shown; whether a request would succeed is not evaluated.">
           <Info className="size-3.5" aria-hidden="true" /> Declared access — not evaluated
         </span>

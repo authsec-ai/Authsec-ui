@@ -16,7 +16,7 @@ export default function RetiredPage({ title }: { title: string }) {
       <Card>
         <CardContent className="space-y-3 py-5">
           <p className="text-[13px] leading-relaxed text-(--color-text)">
-            Nothing was deleted from your workspace. The records this screen showed are not available in the console now.
+            This screen no longer reads or changes any records, and the console does not show what it showed. Nothing on this page deletes anything.
           </p>
           <ul className="space-y-1.5 text-[13px]">
             <li>

@@ -139,6 +139,8 @@ function IdentitiesSummary({
                 })}
                 {other?.next_cursor ? <span className="text-xs text-(--color-text-muted)">More available — the Identities tab lists them.</span> : null}
               </span>
+            ) : !read.data ? (
+              <span className="text-(--color-text-muted)">Not read for this view.</span>
             ) : (
               <span className="text-(--color-text-muted)">None configured, or not resolved to a role in a connected account.</span>
             ),
@@ -168,7 +170,12 @@ function sketchOf(w: WorkloadDetail, ids: WorkloadIdentities | undefined, rows: 
     edges.push({ from: w.ref, to: er.identity, label: "runs as" });
   }
   for (const r of (ids?.other?.items ?? []).filter((x) => x.type === "task_execution_role").slice(0, 1)) {
-    if (roles.some((n) => n.id === r.identity.ref)) continue;
+    if (roles.some((n) => n.id === r.identity.ref)) {
+      // The same role is both what it runs as and what the ECS agent uses: one line, both words.
+      const same = edges.find((e) => e.to === r.identity.ref);
+      if (same) same.label = `${same.label} · ECS agent uses`;
+      continue;
+    }
     roles.push({ id: r.identity.ref, label: r.identity.name, kind: "IAM role", category: "identity", icon: "role", to: objectPath(r.identity.ref) ?? undefined });
     edges.push({ from: w.ref, to: r.identity.ref, label: "ECS agent uses" });
   }

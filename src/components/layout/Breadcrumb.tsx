@@ -97,6 +97,9 @@ export function Breadcrumb() {
         case "policy":
           label = "Policy";
           break;
+        case "agents":
+          label = "Agents Identities";
+          break;
         case "services":
           label = "Services";
           break;
