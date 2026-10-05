@@ -291,7 +291,7 @@ export function EvidenceClaim({
         </Section>
       ) : null}
 
-      <Section title="Collection source and freshness">
+      <Section title="Collection source and confirmation">
         <Facts>
           <Fact label="Source">
             {sources.length ? (

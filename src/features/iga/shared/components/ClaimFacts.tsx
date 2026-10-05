@@ -43,7 +43,7 @@ export function ClaimFacts({
       </span>,
     );
   if (state === "current") parts.push(<span key="state">Current</span>);
-  // Via `Timestamp` so this row's freshness reads the same as every other
+  // Via `Timestamp` so this row's confirmation time reads the same as every other
   // confirmation in the product and carries the exact instant on hover. It was
   // the one place that called formatDistanceToNow inline.
   if (confirmedAt)

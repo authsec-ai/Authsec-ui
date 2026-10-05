@@ -18,7 +18,7 @@
  * It is evidence, not inventory. These rows are not reconciled against a
  * generation the way `cloud_workload` is, so a name here means "AgentCore
  * reported this at the last scan that read the surface", not "this exists
- * now". The confirmation count is the honest freshness signal.
+ * now". The confirmation count is the honest signal of how current it is.
  */
 
 import { useMemo, useState } from "react";
@@ -130,7 +130,7 @@ export function AWSWorkloadIdentitiesView() {
         ),
       },
       {
-        // The freshness signal that replaces a reconciled last_seen: an
+        // The confirmation signal that replaces a reconciled last_seen: an
         // unchanged re-read bumps this instead of writing a duplicate row.
         id: "confirmed",
         header: "Last confirmed",

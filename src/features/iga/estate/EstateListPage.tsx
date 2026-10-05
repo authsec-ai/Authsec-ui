@@ -171,7 +171,7 @@ export default function EstateListPage() {
   ].filter(Boolean) as string[];
 
   // Priority: the name (always), then account, classification and
-  // freshness while they fit; region, ARN and instances in row details
+  // last confirmed while they fit; region, ARN and instances in row details
   // unless chosen. Runtime and region ride in the name's context line.
   const columns = useMemo<AdaptiveColumn<WorkloadRow>[]>(
     () => [
@@ -229,7 +229,7 @@ export default function EstateListPage() {
       {
         id: "confirmed",
         header: "Last confirmed",
-        label: "Freshness",
+        label: "Last confirmed",
         priority: 3,
         approxWidth: 150,
         cell: ({ row }) => (
