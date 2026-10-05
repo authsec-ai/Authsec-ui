@@ -20,19 +20,25 @@ export function SectionList<T>({
   first,
   loadMore,
   onStale,
+  onRefresh,
   itemKey,
   render,
   empty,
+  hideCount = false,
 }: {
   label: string;
   first: PagedSection<T>;
   /** Fetch the page after `cursor` for this section only. */
   loadMore: (cursor: string) => Promise<PagedSection<T>>;
   onStale: (failure: Extract<GraphFailure, { kind: "revision_stale" }>) => void;
+  /** Re-pin the whole page; offered beside the refresh-required notice. */
+  onRefresh?: () => void;
   itemKey: (item: T) => string;
   render: (item: T) => ReactNode;
   /** The Empty answer; null hides the section when it has nothing. */
   empty: ReactNode | null;
+  /** The section is not summarised by a number (an outgoing "may assume" has no verified count). */
+  hideCount?: boolean;
 }) {
   const [extra, setExtra] = useState<T[]>([]);
   const [cursor, setCursor] = useState(first.next_cursor);
@@ -72,8 +78,8 @@ export function SectionList<T>({
       title={label}
       flush
       count={
-        total !== undefined && items.length
-          ? `${items.length} of ${first.total_known ? total : `more than ${total?.toLocaleString()}`}`
+        !hideCount && total !== undefined && items.length
+          ? `${items.length} of ${first.total_known ? total : `at least ${total?.toLocaleString()}`}`
           : undefined
       }
     >
@@ -93,9 +99,14 @@ export function SectionList<T>({
           {failure ? (
             <span role="alert" className="text-(--color-warning-text)">
               {failure.kind === "revision_stale"
-                ? "A newer scan published. Refresh to see the rest."
+                ? "A newer publication is current. Refresh to see the rest."
                 : "Could not load more."}
             </span>
+          ) : null}
+          {failure?.kind === "revision_stale" && onRefresh ? (
+            <Button variant="outline" size="sm" onClick={onRefresh}>
+              Refresh
+            </Button>
           ) : null}
           {cursor && failure?.kind !== "revision_stale" ? (
             <Button variant="outline" size="sm" onClick={() => void more()} disabled={loading}>

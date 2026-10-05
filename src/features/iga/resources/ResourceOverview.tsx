@@ -5,16 +5,105 @@
  */
 
 
-import type { ResourceDetail } from "@/app/api/igaGraphApi";
+import { Link } from "react-router-dom";
+
+import {
+  igaGraphApi,
+  objectPath,
+  refId,
+  useGetGraphResourceAccessQuery,
+  type GraphCoverageGap,
+  type ResourceAccess,
+  type ResourceDetail,
+} from "@/app/api/igaGraphApi";
+import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, dayText, countText } from "../shared/labels";
-import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
+import { discoveryHref } from "../discovery/urlState";
+import { classifyGraphError } from "../shared/graphErrors";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, IDENTITY_KIND_LABEL, accountLabel, dayText, countText } from "../shared/labels";
+import { accountCoverageNote } from "../shared/lifecycle";
+import { viaLink } from "../shared/links";
+import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { shortResourceName } from "../shared/sketch";
+import { incompleteAccounts } from "../shared/listSummary";
+import { InlineState } from "../shared/components/InlineState";
+import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
+import { CopyValue, Fact, Facts, Meta, Panel } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 
+const SKETCH_HOLDERS = 5;
 
-export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) {
+/** The resource and the first identities whose declared access names it — only what the Access tab's first page holds. */
+function sketchOf(r: ResourceDetail, access: ResourceAccess | undefined, more: boolean) {
+  const root: SketchNode = {
+    id: r.ref,
+    label: shortResourceName(r.text),
+    kind: RESOURCE_KIND_LABEL[r.kind],
+    category: r.kind === "external" ? "external" : "resource",
+    icon: r.kind === "selector" ? "selector" : "resource",
+  };
+  const holders: SketchNode[] = [];
+  const edges: SketchEdge[] = [];
+  const seen = new Set<string>();
+  let drawable = 0;
+  for (const a of access?.access ?? []) {
+    if (seen.has(a.holder.ref)) continue;
+    seen.add(a.holder.ref);
+    drawable += 1;
+    if (holders.length >= SKETCH_HOLDERS) continue;
+    const viaGroupOnly = (access?.access ?? []).filter((x) => x.holder.ref === a.holder.ref).every((x) => x.via_group);
+    holders.push({
+      id: a.holder.ref,
+      label: a.holder.name,
+      kind: IDENTITY_KIND_LABEL[a.holder.kind] ?? a.holder.kind.replace(/_/g, " "),
+      category: "identity",
+      icon: a.holder.kind === "iam_user" ? "user" : a.holder.kind === "iam_group" ? "group" : "role",
+      to: objectPath(a.holder.ref) ?? undefined,
+    });
+    edges.push({ from: a.holder.ref, to: r.ref, label: viaGroupOnly ? "declares via group" : "declares" });
+  }
+  return {
+    columns: [holders, [root]],
+    edges,
+    rootId: r.ref,
+    note: drawable > holders.length || more ? `The first ${holders.length} identities with declared access are drawn; the Access tab lists the rest.` : null,
+  };
+}
+
+export function ResourceOverview({
+  ws,
+  resource: r,
+  gaps,
+  frozen = false,
+}: {
+  ws: string;
+  resource: ResourceDetail;
+  /** The detail's `meta.coverage`: stated on the account it bears on. */
+  gaps?: GraphCoverageGap[];
+  /** The object is not in the current publication: what is shown was loaded earlier, and nothing is fetched for it. */
+  frozen?: boolean;
+}) {
   const policy = r.resource_policy;
+  const dispatch = useAppDispatch();
+  const { rev, epoch, refresh } = useGraphRevision(ws);
+  // The Access tab's own first page: the same cache entry.
+  const args = { ws, rev, key: `${epoch}.0`, id: refId(r.ref), cursor: undefined };
+  const q = useGetGraphResourceAccessQuery(args, { skip: rev == null || frozen });
+  const failure = classifyGraphError(q.error);
+  useTrackRevision(ws, q.currentData, failure, (rv, d) =>
+    dispatch(igaGraphApi.util.upsertQueryData("getGraphResourceAccess", { ...args, rev: rv }, d)),
+  );
+  const first = q.currentData;
+  const holders = first ? [...new Map(first.data.access.map((a) => [a.holder.ref, a.holder])).values()] : [];
+  const meta = first?.meta;
+  const gap = incompleteAccounts(meta?.coverage ?? [], (id) => id);
+  // "n more" only with an exact total of holders; a cursor alone is "More available".
+  const remaining = meta?.total_known && meta.total !== undefined ? meta.total - holders.length : null;
+  const sketch = frozen ? null : sketchOf(r, first?.data, !!meta?.next_cursor);
+  const partial = accountCoverageNote(gaps, r.account?.id);
+  const from = { ref: r.ref, name: shortResourceName(r.text) };
+
   return (
     <div className="space-y-4">
       {r.lifecycle === "retired" ? (
@@ -23,6 +112,9 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
           title="No longer named by any current statement"
           body={`It was last confirmed ${dayText(r.last_confirmed_at)}.`}
         />
+      ) : null}
+      {sketch ? (
+        <NeighbourhoodSketch label={`Neighbourhood of ${shortResourceName(r.text)}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={from} note={sketch.note} />
       ) : null}
       {/* Panels flow into two balanced columns on a wide screen. */}
       <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
@@ -42,8 +134,9 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
                   r.account ? (
                     <>
                       {accountLabel(r.account)}
-                      <span className="ml-1 font-mono text-xs text-(--color-text-muted)">{r.account.id}</span>
+                      {r.account.label !== r.account.id ? <span className="ml-1 font-mono text-xs text-(--color-text-muted)">{r.account.id}</span> : null}
                       {!r.account.connected ? <span className="block text-xs text-(--color-warning-text)">Not a connected account</span> : null}
+                      {partial ? <span className="block text-xs text-(--color-warning-text)">{partial}</span> : null}
                     </>
                   ) : (
                     <>
@@ -56,17 +149,57 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
                 }</Fact>
               <Fact label="Region">{r.region ?? "Region not stated"}</Fact>
               <Fact label="Existence">Not verified. Nothing enumerates resources in this phase.</Fact>
-              <Fact label={r.kind === "selector" ? "Pattern" : "ARN"}><CopyValue value={r.text} /></Fact>
+              <Fact label={r.kind === "selector" ? "Pattern" : "ARN"}><CopyValue value={r.text} what={r.kind === "selector" ? "Pattern" : "ARN"} /></Fact>
             </Facts>
           </Panel>
 
-          <Panel title="Declared access">
+          <Panel
+            title="Declared access"
+            actions={
+              <Link to={`/iga/resources/${encodeURIComponent(refId(r.ref))}/access`} className="font-medium text-(--color-primary-text) hover:underline">
+                All on Access
+              </Link>
+            }
+          >
             <Facts>
               <Fact label="Named by">{countText(r.named_by_count, "statement", "statements")}</Fact>
               <Fact label="Excluded by">{
                   !r.excluded_by_count || r.excluded_by_count.value === 0
                     ? "No statement"
                     : countText(r.excluded_by_count, "statement (NotResource)", "statements (NotResource)")
+                }</Fact>
+              <Fact label="Identities">{
+                  frozen ? (
+                    <span className="text-(--color-text-muted)">Not loaded for a retired object.</span>
+                  ) : failure ? (
+                    <InlineState failure={failure} subject="the identities" onRetry={() => void q.refetch()} onRefresh={refresh} />
+                  ) : !first ? (
+                    <span className="text-(--color-text-muted)">Loading…</span>
+                  ) : holders.length ? (
+                    <span className="flex flex-col gap-0.5">
+                      {holders.slice(0, 3).map((h) => {
+                        const path = objectPath(h.ref);
+                        return path ? (
+                          <Link key={h.ref} {...viaLink(path, from)} className="w-fit font-medium text-(--color-primary-text) hover:underline">
+                            {h.name}
+                          </Link>
+                        ) : (
+                          <span key={h.ref} className="font-medium">{h.name}</span>
+                        );
+                      })}
+                      {remaining && remaining > 0 ? (
+                        <span className="text-xs text-(--color-text-muted)">{remaining} more</span>
+                      ) : meta?.next_cursor || holders.length > 3 ? (
+                        <span className="text-xs text-(--color-text-muted)">More available</span>
+                      ) : null}
+                      {gap.length ? <Meta>Collection is incomplete for {gap.join(", ")}, so this may not be every identity.</Meta> : null}
+                      <Meta>Identities whose declared access names it; whether a request would succeed is not evaluated.</Meta>
+                    </span>
+                  ) : (
+                    <span className="text-(--color-text-muted)">
+                      {gap.length ? `None found in what could be read; collection is incomplete for ${gap.join(", ")}.` : "No declared access names it as a target."}
+                    </span>
+                  )
                 }</Fact>
               <Fact label="Resource policy">{
                   !policy.read
@@ -80,7 +213,17 @@ export function ResourceOverview({ resource: r }: { resource: ResourceDetail }) 
             </Facts>
           </Panel>
 
-          <Panel title="How we know">
+          <Panel
+            title="How we know"
+            actions={
+              <Link
+                to={discoveryHref({ provider: "aws", type: "resources", view: "latest" })}
+                className="font-medium text-(--color-primary-text) hover:underline"
+              >
+                Latest collected
+              </Link>
+            }
+          >
             <Facts>
               <Fact label="Last confirmed"><Timestamp iso={r.last_confirmed_at} /></Fact>
               <Fact label="Found in">{

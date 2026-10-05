@@ -9,7 +9,8 @@
  *   without it still offers the way back, unnamed.
  * - `from=<published_at>` on a link shared before the graph was rescanned
  *   says that the page shows the graph as it is now.
- * - One revision banner, one live region, one evidence panel. A workspace tab
+ * - One publication notice (a banner on a list; the header row of an object
+ *   page), one live region, one evidence panel. A workspace tab
  *   (the graph) hosts evidence in its own inspector, so the page does not.
  */
 
@@ -32,7 +33,8 @@ export interface ObjectCrumb {
   /** The object's own URL. */
   path: string;
   label: string;
-  list: { label: string; href: string };
+  /** The Discovery list it belongs to, with the segment before it (Discovery). */
+  list: { label: string; href: string; parent?: { label: string; href: string } };
 }
 
 /** Content with the page-level evidence panel beside it (wide) or over it (narrow). */
@@ -130,7 +132,8 @@ export function IgaPage({
             is now.
           </p>
         ) : null}
-        {stale ? <RevisionBanner currentPublishedAt={stale.currentPublishedAt} onRefresh={refresh} /> : null}
+        {/* An object page says it in its header row (ObjectShell), so the graph keeps its height. */}
+        {stale && !objectPage ? <RevisionBanner currentPublishedAt={stale.currentPublishedAt} onRefresh={refresh} /> : null}
         {pageEvidence ? <EvidenceLayout ws={ws}>{children}</EvidenceLayout> : children}
       </ConsolePage>
     </div>

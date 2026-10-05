@@ -3,7 +3,6 @@
  * §2.14.12): Overview · Access · Graph · Changes.
  */
 
-import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { useParams } from "react-router-dom";
 
 import { igaGraphApi, useGetGraphResourceQuery } from "@/app/api/igaGraphApi";
@@ -12,10 +11,12 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
-import { StatusBadge } from "@/components/console/status";
 
 import { RESOURCE_KIND_LABEL, accountWithId } from "../shared/labels";
+import { lifecycleView } from "../shared/lifecycle";
+import { shortResourceName } from "../shared/sketch";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
 import { ObjectShell, RetiredTab, type ObjectTabDef } from "../shared/components/ObjectShell";
@@ -49,7 +50,7 @@ export default function ResourcePage() {
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
-  const retained = useRetainedDetail(`${ws}|${id}`, detail.currentData, failure);
+  const { value: retained, vanished } = useRetainedDetail(`${ws}|${id}`, detail.currentData, failure);
   const r = retained?.data;
   const meta = retained?.meta;
 
@@ -58,39 +59,53 @@ export default function ResourcePage() {
   // is the exception: it stays mounted through a Refresh, because it carries
   // the investigation's expansions across to the new revision (§2.14.5).
   let body = null;
-  if (r && (active === "overview" || active === "graph" || rev != null)) {
-    if (active === "overview") body = <ResourceOverview resource={r} />;
-    else if (r.lifecycle === "retired") body = <RetiredTab name={r.text} lastConfirmed={r.last_confirmed_at} />;
-    else if (active === "access") body = <ResourceAccessTab ws={ws} resource={r} />;
+  const gone = vanished || r?.lifecycle === "retired";
+  if (r) {
+    // Overview and Changes remain for a retired or vanished object; the other
+    // tabs say they have no current data (SPEC-console-revamp.md).
+    if (active === "overview") body = <ResourceOverview ws={ws} resource={r} gaps={meta?.coverage} frozen={vanished} />;
+    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="resources" id={id} /> : null;
+    else if (gone) body = <RetiredTab name={r.text} lastConfirmed={r.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={r.ref} rootName={r.text} />;
-    else if (active === "changes") body = <ChangesTab ws={ws} object="resources" id={id} />;
+    else if (rev != null && active === "access") body = <ResourceAccessTab ws={ws} resource={r} />;
   }
 
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Cloud Inventory · Resources", to: "/iga/cloud/resources" }}
+      listType="resources"
       kindLabel="Resource"
       base={`/iga/resources/${encodeURIComponent(id)}`}
       tabs={tabs}
       activeTab={activeTab}
-      failure={failure}
+      failure={vanished ? null : failure}
+      vanished={vanished}
       onRetry={() => void detail.refetch()}
       onRefresh={refresh}
       object={
         r
           ? {
-              name: r.text,
-              description: [
-                RESOURCE_KIND_LABEL[r.kind],
+              // The short name leads; the full reference is in Copy and the Overview, never forcing the header wide.
+              name: shortResourceName(r.text),
+              kind: {
+                label: RESOURCE_KIND_LABEL[r.kind],
+                category: r.kind === "external" ? "external" : "resource",
+                icon: r.kind === "selector" ? "selector" : "resource",
+              },
+              context: [
                 r.service,
-                accountWithId(r.account),
+                // The ARN may state no account; it is never assumed to be the grantor's.
+                accountWithId(r.account) ?? "Account not stated",
                 r.region ?? "Region not stated",
-              ]
-                .filter(Boolean)
-                .join(" · "),
-              status: r.lifecycle === "retired" ? <StatusBadge tone="neutral">Not in the latest scan</StatusBadge> : undefined,
+              ].filter((x): x is string => !!x),
+              lifecycle: lifecycleView(r),
               publishedAt: meta?.published_at,
+              copy:
+                r.kind === "selector"
+                  ? { value: r.text, label: "Copy pattern", what: "Pattern" }
+                  : r.text.startsWith("arn:")
+                    ? { value: r.text, label: "Copy ARN", what: "ARN" }
+                    : { value: r.text, label: "Copy reference", what: "Reference" },
             }
           : undefined
       }

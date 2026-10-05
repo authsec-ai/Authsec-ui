@@ -56,7 +56,7 @@ export function CursorPager({
   if (meta.total_known && meta.total !== undefined) {
     count = `${from}–${to} of ${meta.total.toLocaleString()} found`;
   } else if (meta.total_at_least !== undefined) {
-    count = `${from}–${to} of more than ${meta.total_at_least.toLocaleString()}`;
+    count = `${from}–${to} of at least ${meta.total_at_least.toLocaleString()}`;
   } else {
     count = meta.next_cursor ? `${from}–${to} · more available` : `${from}–${to}`;
   }
@@ -85,7 +85,7 @@ export function CursorPager({
         {failure ? (
           <span role="alert" className="text-(--color-warning-text)">
             {stale
-              ? "A newer scan published. Refresh to keep paging."
+              ? "A newer publication is current. Refresh to keep paging."
               : previousPage
                 ? "Could not load the next page."
                 : "Could not refresh these results."}

@@ -145,14 +145,26 @@ export function Breadcrumb() {
   };
 
   const breadcrumbs = getRouteSegments(location.pathname);
-  // An object page names itself: its list becomes a link and the object's
-  // own name follows it. The active tab is not repeated — the tabs say it.
+  // An object page names itself: its list becomes a link — to the list as the
+  // reader left it — and the object's own name follows. Every segment before
+  // the name is a real link. The active tab is not repeated; the tabs say it.
   if (tail && (location.pathname === tail.path || location.pathname.startsWith(`${tail.path}/`))) {
-    const last = breadcrumbs[breadcrumbs.length - 1];
-    if (last && last !== breadcrumbs[0]) {
-      breadcrumbs[breadcrumbs.length - 1] = tail.list
-        ? { label: tail.list.label, href: tail.list.href }
-        : { ...last, href: tail.path.slice(0, tail.path.lastIndexOf("/")), current: false };
+    if (tail.list?.parent) {
+      // Discovery › <list>: replaces the URL's own segments (IGA › Workloads),
+      // which name a route, not where the reader came from.
+      breadcrumbs.splice(
+        1,
+        breadcrumbs.length - 1,
+        { label: tail.list.parent.label, href: tail.list.parent.href },
+        { label: tail.list.label, href: tail.list.href },
+      );
+    } else {
+      const last = breadcrumbs[breadcrumbs.length - 1];
+      if (last && last !== breadcrumbs[0]) {
+        breadcrumbs[breadcrumbs.length - 1] = tail.list
+          ? { label: tail.list.label, href: tail.list.href }
+          : { ...last, href: tail.path.slice(0, tail.path.lastIndexOf("/")), current: false };
+      }
     }
     breadcrumbs.push({ label: tail.label, current: true });
   }

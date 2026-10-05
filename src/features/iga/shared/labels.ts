@@ -164,7 +164,7 @@ export function countText(c: ExactCount | null | undefined, one: string, many: s
 
 export const RELATIONSHIP_LABEL: Record<string, string> = {
   executes_as: "Runs as",
-  task_execution_role: "ECS task execution role",
+  task_execution_role: "ECS agent uses",
   member_of: "Member of",
   can_assume: "May assume",
 };

@@ -47,8 +47,8 @@ function RelationshipBody({ rel, from }: { rel: IdentityRelationship; from: From
       facts={<ClaimFacts claim={rel.claim} basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />}
     >
       {shared && usedBy ? (
-        <p className="text-xs text-(--color-info-text)">
-          {countText(shared, "workload", "workloads")} run as this identity. Changing it affects all of them.{" "}
+        <p className="text-xs text-(--color-info-text) first-letter:uppercase">
+          {countText(shared, "workload", "workloads")} directly bound to this identity (it is what they run as, or what their ECS agent uses). Changing it affects them.{" "}
           <Link {...viaLink(`${usedBy}/used-by`, from)} className="font-semibold hover:underline">
             See which
           </Link>
@@ -120,6 +120,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.execution ?? none}
             loadMore={more("execution")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={
@@ -131,6 +132,7 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.other ?? none}
             loadMore={more("other")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={null}
@@ -140,15 +142,18 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
             first={data.groups ?? none}
             loadMore={more("groups")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <RelationshipBody rel={r} from={from} />}
             empty={null}
           />
           <SectionList
             label="Roles its identity may assume"
+            hideCount
             first={data.may_assume ?? none}
             loadMore={more("may_assume")}
             onStale={onStale}
+              onRefresh={refresh}
             itemKey={(r) => r.claim}
             render={(r) => <AssumeBody rel={r} from={from} />}
             empty={null}

@@ -374,6 +374,14 @@ function GraphCanvasInner({
     return () => ro.disconnect();
   }, [bringIntoView, checkLost]);
 
+  // Something now covers (or no longer covers) the canvas's right edge — the
+  // card, the evidence drawer: keep the selected object out from under it.
+  // Keyed on the inset alone, so a layout change or a drag never pans.
+  useEffect(() => {
+    if (selectionRef.current) bringIntoView(selectionRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rightInset]);
+
   // A new selection made off-screen (from Paths, the inspector, a link) is
   // panned to; one made by clicking is already in view and nothing moves.
   const selectionKey = selection ? `${selection.kind}:${selection.id}` : null;

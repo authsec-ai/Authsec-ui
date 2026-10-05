@@ -30,11 +30,13 @@ import { resolvePagedView } from "../shared/listView";
 import { usePaging } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { accountWithId, dayText } from "../shared/labels";
+import { lifecycleView } from "../shared/lifecycle";
+import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { IdentityName } from "../shared/components/IdentityName";
-import { ObjectShell, type ObjectTabDef } from "../shared/components/ObjectShell";
+import { ObjectShell, RetiredTab, type ObjectTabDef } from "../shared/components/ObjectShell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { emptyGiven } from "../shared/listSummary";
 import { activeTabOf } from "../shared/links";
@@ -190,37 +192,48 @@ export default function ExternalPrincipalPage() {
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
-  const p = detail.currentData?.data;
+  const { value: retained, vanished } = useRetainedDetail(`${ws}|${id}`, detail.currentData, failure);
+  const p = retained?.data;
+  const gone = vanished || p?.lifecycle === "retired";
+
+  let body = null;
+  if (p) {
+    // Overview remains for a retired or vanished principal; the other tab says it has no current data.
+    if (active === "overview") body = <Overview p={p} />;
+    else if (gone) body = <RetiredTab name={p.name} lastConfirmed={p.last_confirmed_at} />;
+    else if (rev != null) body = <ReferencedBy ws={ws} p={p} />;
+  }
 
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Cloud Inventory · Identities", to: "/iga/cloud/identities" }}
+      listType="identities"
       kindLabel="External principal"
       base={`/iga/external-principals/${encodeURIComponent(id)}`}
       tabs={tabs}
       activeTab={activeTab}
-      failure={failure}
+      failure={vanished ? null : failure}
+      vanished={vanished}
       onRetry={() => void detail.refetch()}
       onRefresh={refresh}
       object={
         p
           ? {
               name: p.name,
-              description: [
-                "External principal",
+              kind: { label: "External principal", category: "external", icon: "external" },
+              context: [
                 p.mechanism.replace(/_/g, " "),
-                accountWithId(p.account),
+                accountWithId(p.account) ?? "No account of its own",
                 p.resolution ? p.resolution.state.replace(/_/g, " ") : "unresolved",
-              ]
-                .filter(Boolean)
-                .join(" · "),
-              publishedAt: detail.currentData?.meta.published_at,
+              ],
+              lifecycle: lifecycleView({ ...p, stale_reason: undefined }),
+              publishedAt: retained?.meta.published_at,
+              copy: { value: p.subject, label: "Copy principal", what: "Principal" },
             }
           : undefined
       }
     >
-      {p ? active === "overview" ? <Overview p={p} /> : rev != null ? <ReferencedBy ws={ws} p={p} /> : null : null}
+      {body}
     </ObjectShell>
   );
 }

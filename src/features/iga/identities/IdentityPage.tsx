@@ -4,7 +4,6 @@
  * is not a workload, so it does not borrow the workload's tabs.
  */
 
-import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { useParams } from "react-router-dom";
 
 import { igaGraphApi, useGetGraphIdentityQuery } from "@/app/api/igaGraphApi";
@@ -13,10 +12,11 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
-import { StatusBadge } from "@/components/console/status";
 
 import { IDENTITY_KIND_LABEL, accountWithId } from "../shared/labels";
+import { lifecycleView } from "../shared/lifecycle";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { ChangesTab } from "../changes/ChangesTab";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
 import { ObjectShell, RetiredTab, type ObjectTabDef } from "../shared/components/ObjectShell";
@@ -43,7 +43,7 @@ export default function IdentityPage() {
     dispatch(igaGraphApi.util.upsertQueryData("getGraphIdentity", { ...args, rev: r }, d)),
   );
 
-  const retained = useRetainedDetail(`${ws}|${id}`, detail.currentData, failure);
+  const { value: retained, vanished } = useRetainedDetail(`${ws}|${id}`, detail.currentData, failure);
   const i = retained?.data;
   const meta = retained?.meta;
   const tabs: ObjectTabDef[] = [
@@ -62,37 +62,43 @@ export default function IdentityPage() {
   // is the exception: it stays mounted through a Refresh, because it carries
   // the investigation's expansions across to the new revision (§2.14.5).
   let body = null;
-  if (i && (active === "overview" || active === "graph" || rev != null)) {
-    if (active === "overview") body = <IdentityOverview identity={i} />;
-    else if (i.lifecycle === "retired") body = <RetiredTab name={i.name} lastConfirmed={i.last_confirmed_at} />;
-    else if (active === "used-by") body = <IdentityUsedByTab ws={ws} identity={i} />;
-    else if (active === "permissions") body = <IdentityPermissionsTab ws={ws} identity={i} />;
+  const gone = vanished || i?.lifecycle === "retired";
+  if (i) {
+    // Overview and Changes remain for a retired or vanished object; the other
+    // tabs say they have no current data (SPEC-console-revamp.md).
+    if (active === "overview") body = <IdentityOverview ws={ws} identity={i} gaps={meta?.coverage} frozen={vanished} />;
+    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="identities" id={id} /> : null;
+    else if (gone) body = <RetiredTab name={i.name} lastConfirmed={i.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={i.ref} rootName={i.name} />;
-    else if (active === "changes") body = <ChangesTab ws={ws} object="identities" id={id} />;
+    else if (rev != null && active === "used-by") body = <IdentityUsedByTab ws={ws} identity={i} />;
+    else if (rev != null && active === "permissions") body = <IdentityPermissionsTab ws={ws} identity={i} />;
   }
 
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Cloud Inventory · Identities", to: "/iga/cloud/identities" }}
+      listType="identities"
       kindLabel="Identity"
       base={base}
       tabs={tabs}
       activeTab={activeTab}
-      failure={failure}
+      failure={vanished ? null : failure}
+      vanished={vanished}
       onRetry={() => void detail.refetch()}
       onRefresh={refresh}
       object={
         i
           ? {
               name: i.name,
-              description: [
-                IDENTITY_KIND_LABEL[i.kind],
-                accountWithId(i.account) ?? "Account not known",
-                "global",
-              ].join(" · "),
-              status: i.lifecycle === "retired" ? <StatusBadge tone="neutral">Not in the latest scan</StatusBadge> : undefined,
+              kind: {
+                label: IDENTITY_KIND_LABEL[i.kind],
+                category: "identity",
+                icon: i.kind === "iam_user" ? "user" : i.kind === "iam_group" ? "group" : "role",
+              },
+              context: [accountWithId(i.account) ?? "Account not known", "global"],
+              lifecycle: lifecycleView(i),
               publishedAt: meta?.published_at,
+              copy: { value: i.arn, label: "Copy ARN", what: "ARN" },
             }
           : undefined
       }

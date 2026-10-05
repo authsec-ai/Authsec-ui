@@ -1054,7 +1054,10 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           canLoadMore={canLoadMore}
           onClearSelection={clearAll}
           onMoveNode={(id, position) => dispatchModel({ type: "move", id, position })}
-          rightInset={card && !evidenceOpen ? 344 : 0}
+          // What covers the canvas's right edge: the selection card, or — when the
+          // evidence drawer floats over the canvas rather than beside it — the drawer.
+          // A narrow window's drawer is modal and covers everything; nothing is panned for it.
+          rightInset={card && !evidenceOpen ? 344 : evidenceOpen && !inline && !narrow ? inspectorWidth : 0}
           revealToken={revealToken}
           viewport={model.viewport}
           onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
