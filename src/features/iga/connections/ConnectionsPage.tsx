@@ -38,9 +38,7 @@ import {
 } from "./ConnectionParts";
 import {
   PROVIDERS,
-  PROVIDER_WORD,
   STATUS_FILTERS,
-  TYPE_WORD,
   actionsOf,
   detailHref,
   graphText,
@@ -48,12 +46,14 @@ import {
   isConnectionProvider,
   isFilterKey,
   lastScanText,
+  providerWord,
   revokeWord,
   scanInFlight,
   statusFilterOf,
+  typeWord,
   type StatusFilterKey,
 } from "./connectionModel";
-import { useCanAdminister } from "./permissions";
+import { useAdminAccess } from "./permissions";
 import { ProviderGlyph } from "./ProviderGlyph";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
@@ -61,14 +61,14 @@ import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 const POLL_MS = 5_000;
 
 function searchText(c: Connection): string {
-  return [c.name, c.native_id, PROVIDER_WORD[c.provider], TYPE_WORD[c.provider], c.scope_summary].join(" ").toLowerCase();
+  return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
 }
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
-  const canAdminister = useCanAdminister();
+  const { canAdminister, loading: adminLoading, unknown: adminUnknown } = useAdminAccess();
 
   // A scan in flight changes the row; follow it until it settles.
   const [poll, setPoll] = useState(0);
@@ -193,7 +193,7 @@ export default function ConnectionsPage() {
               <div className="min-w-0">
                 {/* With no friendly name the id is the name, in mono, once. */}
                 <NameLink to={detailHref(c.id)}>{friendly ? c.name : <span className="font-mono text-[13px]">{c.name}</span>}</NameLink>
-                <div className="truncate text-xs text-muted-foreground">{PROVIDER_WORD[c.provider]}</div>
+                <div className="truncate text-xs text-muted-foreground">{providerWord(c.provider)}</div>
               </div>
             </div>
           );
@@ -256,12 +256,12 @@ export default function ConnectionsPage() {
           const c = row.original;
           return (
             <div className="min-w-0">
-              <div className="truncate text-xs">{TYPE_WORD[c.provider]}</div>
+              <div className="truncate text-xs">{typeWord(c)}</div>
               {hasFriendlyName(c) ? <div className="truncate font-mono text-xs text-muted-foreground">{c.native_id}</div> : null}
             </div>
           );
         },
-        detail: (c) => `${TYPE_WORD[c.provider]}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""}`,
+        detail: (c) => `${typeWord(c)}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""}`,
       },
       {
         id: "actions",
@@ -316,10 +316,12 @@ export default function ConnectionsPage() {
         Connect an AWS account, a Google Cloud project, a Kubernetes cluster or a GitHub organisation. AuthSec scans it, and
         Discovery then shows what it found.
       </p>
-      {canAdminister ? (
-        <Button className="text-[length:var(--text-sm)] text-white" onClick={() => setPickerOpen(true)}>
+      {canAdminister || adminLoading ? (
+        <Button className="text-[length:var(--text-sm)] text-white" disabled={adminLoading} onClick={() => setPickerOpen(true)}>
           Add connection
         </Button>
+      ) : adminUnknown ? (
+        <p>Could not check whether you can add a connection. Reload to try again.</p>
       ) : (
         <p>An administrator can add a connection.</p>
       )}
@@ -331,8 +333,9 @@ export default function ConnectionsPage() {
       title="Connections"
       description="AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organisations: what is connected, whether it is reporting, and whether its data is usable."
       actions={
-        canAdminister ? (
-          <Button className="text-[length:var(--text-sm)] text-white" onClick={() => setPickerOpen(true)}>
+        canAdminister || adminLoading ? (
+          // Until the server has answered whether this reader can administer, the control is shown but cannot be used.
+          <Button className="text-[length:var(--text-sm)] text-white" disabled={adminLoading} onClick={() => setPickerOpen(true)}>
             Add connection
           </Button>
         ) : undefined
@@ -376,7 +379,7 @@ export default function ConnectionsPage() {
               </Chip>
               {PROVIDERS.map((p) => (
                 <Chip key={p} pressed={type === p} onClick={() => setParam("type", type === p ? null : p)}>
-                  {PROVIDER_WORD[p]}
+                  {providerWord(p)}
                   <span className="tabular-nums text-muted-foreground">{all.filter((c) => c.provider === p).length}</span>
                 </Chip>
               ))}

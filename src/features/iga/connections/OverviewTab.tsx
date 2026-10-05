@@ -62,9 +62,11 @@ function connectionPill(c: Connection) {
     case "authentication_failed":
       return <CloudPill tone="danger">Authentication failed</CloudPill>;
     case "revoked":
-      return <CloudPill tone="muted">Revoked</CloudPill>;
+      return <CloudPill tone="muted">{primaryOf(c).label}</CloudPill>;
+    case "not_verified":
+      return <CloudPill tone="warning">{primaryOf(c).label}</CloudPill>;
     default:
-      return <CloudPill tone="warning">Not yet verified</CloudPill>;
+      return <CloudPill tone="muted">Status unknown</CloudPill>;
   }
 }
 
@@ -80,12 +82,33 @@ function connectionSentence(c: Connection): string {
       const r = reasonCopy(c);
       return `${r.cause}. ${r.action}`;
     }
-    case "revoked":
-      return "AuthSec no longer reads it. Its last results are kept, and are no longer reconfirmed.";
+    case "revoked": {
+      if (c.provider === "aws" || c.provider === "gcp") return "AuthSec no longer reads it. Its last results are kept, and are no longer reconfirmed.";
+      const r = reasonCopy(c);
+      return `${r.cause}. AuthSec no longer reads it. Its last results are kept, and are no longer reconfirmed.`;
+    }
+    case "not_verified": {
+      const r = reasonCopy(c);
+      return `${r.cause}. ${r.action}`;
+    }
     default:
-      return c.provider === "k8s"
-        ? "No agent has reported yet."
-        : "Nothing has proved AuthSec can read it. Verify the connection.";
+      return "AuthSec reports a connection state this console does not recognise.";
+  }
+}
+
+/** What a revoked (or disabled) connection means, per provider: the removal paths differ. */
+function revokedConsequence(c: Connection): string {
+  switch (c.provider) {
+    case "aws":
+      return "What it found earlier is kept and still appears in Discovery, marked as no longer reconfirmed. Connect the same account again to reactivate it.";
+    case "gcp":
+      return "What it found earlier is kept and still appears in Discovery, marked as no longer reconfirmed. Connect the same scope again to reactivate it.";
+    case "k8s":
+      return "What earlier sweeps wrote to Discovery is kept and no longer reconfirmed. Removing the connection deletes the source and its sightings; the workloads and identities earlier sweeps wrote to the graph stay.";
+    case "github":
+      return "What earlier scans found is kept and no longer reconfirmed. Removing the connection deletes the source and the sightings it found.";
+    default:
+      return "What it found earlier is kept and no longer reconfirmed.";
   }
 }
 
@@ -99,8 +122,10 @@ function scanPill(c: Connection) {
       return <CloudPill tone="success">Finished</CloudPill>;
     case "failed":
       return <CloudPill tone="danger">Failed</CloudPill>;
-    default:
+    case "never_run":
       return <CloudPill tone="muted">Never run</CloudPill>;
+    default:
+      return <CloudPill tone="muted">Unknown</CloudPill>;
   }
 }
 
@@ -119,8 +144,10 @@ function scanSentence(c: Connection): string {
       return `Running. ${holdsLine(c)}.`;
     case "failed":
       return `${lastScanText(c)}. ${holdsLine(c)}.`;
-    default:
+    case "finished":
       return `${lastScanText(c)}.`;
+    default:
+      return "AuthSec reports a scan state this console does not recognise.";
   }
 }
 
@@ -150,8 +177,10 @@ function graphSentence(c: Connection): string {
       return "Nothing from this account is in a publication yet, so the Published view in Discovery is empty for it.";
     case "unrevisioned":
       return "Kubernetes inventory is written as each sweep arrives. It has no numbered publication, and Discovery labels it by its sweep.";
-    default:
+    case "not_applicable":
       return "This source is not part of the graph. Discovery reads its latest collected results.";
+    default:
+      return "AuthSec reports a graph state this console does not recognise.";
   }
 }
 
@@ -328,8 +357,7 @@ export function OverviewTab({
         <div className="flex items-start gap-2 rounded-md border-l-2 border-l-(--color-border-strong) bg-(--color-surface-subtle) px-3 py-2.5 text-xs">
           <AlertTriangle className="mt-px size-3.5 flex-none text-(--color-text-muted)" aria-hidden />
           <div>
-            <strong className="font-medium">This connection is revoked.</strong> What it found earlier is kept and still appears in Discovery,
-            marked as no longer reconfirmed. Connect the same {c.provider === "aws" ? "account" : "project"} again to reactivate it.
+            <strong className="font-medium">This connection is {primary.label.toLowerCase()}.</strong> {revokedConsequence(c)}
           </div>
         </div>
       ) : null}

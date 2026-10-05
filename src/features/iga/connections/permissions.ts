@@ -6,14 +6,14 @@
  * not reliably carry `discovery:admin`: the server decides from the token's
  * permission claims, its scopes, or a role binding in the database. So the
  * console asks the server (`GET /connections/can-administer`, behind the same
- * discovery:admin middleware as the administrative routes): 200 means offer
- * the controls, 403 means a read-only reader sees none of them.
+ * discovery:admin middleware as the administrative routes): only a 200 that
+ * says yes offers the controls.
  *
- * Until that answer arrives the controls are not shown (a read-only reader is
- * never offered a control that was never theirs). If the route does not exist
- * (an older backend) or cannot be reached, the earlier behaviour applies: the
- * controls are offered until the first 403 from an administrative request,
- * which hides them for the rest of the session and is answered *Your role
+ * It fails closed. While the answer is pending, and when it could not be had
+ * (a 500, a network failure, a route an older backend lacks), no control is
+ * offered; `loading` and `unknown` let a screen say which of those it is. A
+ * 403 is a definite no. After the server refuses an administrative request
+ * the controls stay hidden for the rest of the session, answered *Your role
  * cannot do this*, never as a failure. The server enforces regardless.
  */
 
@@ -43,19 +43,30 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 
-/** Offered when the server says this reader can administer, and not after it has refused one. */
-export function useCanAdminister(): boolean {
+export interface AdminAccess {
+  /** The server said yes, and has not since refused an administrative request. */
+  canAdminister: boolean;
+  /** The server has not answered yet. */
+  loading: boolean;
+  /** The question could not be answered (not a 403): administration is not offered, but nobody said no. */
+  unknown: boolean;
+}
+
+export function useAdminAccess(): AdminAccess {
   const refused = useSyncExternalStore(
     subscribe,
     () => denied.has(key()),
     () => false,
   );
   const probe = useGetCanAdministerQuery();
-  if (refused) return false;
-  if (probe.isLoading) return false;
-  if (probe.isSuccess) return probe.data.can_administer;
+  if (refused) return { canAdminister: false, loading: false, unknown: false };
+  if (probe.isSuccess) return { canAdminister: probe.data.can_administer === true, loading: false, unknown: false };
+  if (probe.isLoading || probe.isUninitialized) return { canAdminister: false, loading: true, unknown: false };
   const status = (probe.error as { status?: unknown } | undefined)?.status;
-  if (status === 403) return false;
-  // The route is absent or unreachable: offer, and let the first refusal hide them.
-  return true;
+  return { canAdminister: false, loading: false, unknown: status !== 403 };
+}
+
+/** Offered only when the server says this reader can administer. */
+export function useCanAdminister(): boolean {
+  return useAdminAccess().canAdminister;
 }

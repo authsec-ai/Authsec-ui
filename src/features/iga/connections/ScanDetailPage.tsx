@@ -197,7 +197,12 @@ function GitHubScan({ c, runId }: { c: Connection; runId: string }) {
 export default function ScanDetailPage() {
   const { id = "", runId = "" } = useParams<{ id?: string; runId?: string }>();
   const { connection: c, loading, failure, notFound, refetch } = useConnection(id);
-  useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Connections", href: "/iga/connections" });
+  // Connections › <connection> › Scan: the connection is a link back, not the current page.
+  useBreadcrumbTail(c ? detailHref(id) : null, c ? "Scan" : null, {
+    label: c?.name ?? "",
+    href: detailHref(id),
+    parent: { label: "Connections", href: "/iga/connections" },
+  });
   const back = useMemo(
     () => (
       <Button variant="outline" size="sm" asChild>

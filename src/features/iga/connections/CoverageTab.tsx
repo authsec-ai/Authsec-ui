@@ -22,7 +22,7 @@ import {
 import { Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
-import { buildCoverage, COVERAGE_TONE, COVERAGE_WORD, type CoverageRow, type RawSurface } from "./coverageView";
+import { buildCoverage, COVERAGE_TONE, COVERAGE_WORD, k8sCoverageRows, type CoverageRow, type RawSurface } from "./coverageView";
 import { coverageText, detailHref, scanHref } from "./connectionModel";
 import { gcpAttrs } from "./providerData";
 
@@ -46,8 +46,12 @@ function Row({ r }: { r: CoverageRow }) {
         <dl className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
           <dt className="text-(--color-text-muted)">Surface</dt>
           <dd className="break-all font-mono">{r.key}</dd>
-          <dt className="text-(--color-text-muted)">{r.state === "reached" ? "Found" : "Found at least"}</dt>
-          <dd>{r.count}</dd>
+          {r.count != null ? (
+            <>
+              <dt className="text-(--color-text-muted)">{r.state === "reached" ? "Found" : "Found at least"}</dt>
+              <dd>{r.count}</dd>
+            </>
+          ) : null}
           {r.api ? (
             <>
               <dt className="text-(--color-text-muted)">API call</dt>
@@ -277,7 +281,7 @@ function GcpReach({ c }: { c: Connection }) {
 }
 
 function K8sCoverage({ c }: { c: Connection }) {
-  const surfaces = useMemo(() => Object.fromEntries(c.coverage.gaps.map((g) => [g.surface, { state: g.state, count: 0 }])), [c.coverage.gaps]);
+  const rows = useMemo(() => k8sCoverageRows(c.coverage.gaps), [c.coverage.gaps]);
   return (
     <div className="space-y-4">
       <Summary
@@ -285,8 +289,14 @@ function K8sCoverage({ c }: { c: Connection }) {
         asOf={c.scan.at}
         note="The agent reports the parts of its latest sweep it could not read. Anything not listed below was not reported as a gap."
       />
-      {c.coverage.gaps.length ? (
-        <Groups c={c} surfaces={surfaces} />
+      {rows.length ? (
+        <Panel title="Latest sweep" count={`${rows.length} ${rows.length === 1 ? "gap" : "gaps"}`} flush>
+          <ul className="divide-y divide-(--color-border-subtle)">
+            {rows.map((r) => (
+              <Row key={r.key + r.state} r={r} />
+            ))}
+          </ul>
+        </Panel>
       ) : (
         <Panel title="Gaps">
           <p className="text-[13px] text-(--color-text-muted)">
