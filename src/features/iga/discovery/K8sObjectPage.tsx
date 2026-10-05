@@ -24,13 +24,16 @@ import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { useListK8sClustersQuery, useListK8sIdentitiesQuery, useListK8sWorkloadsQuery } from "@/app/api/k8sGraphApi";
 
+import { countWords } from "../shared/components/countValue";
 import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { FailurePanel } from "./ListStates";
 import { AccessChain } from "./K8sAccessChain";
 import { clusterSweeps, inScope, K8S_COVERAGE_LABEL } from "./k8s";
-import { discoveryListHref, typeCrumbLabel } from "./urlState";
+import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
+/** The access reads return at most this many; an answer at the cap is a lower bound. */
+const WORKLOAD_READ_LIMIT = 500;
 
 /** The global breadcrumb is the way back (it restores the list the reader left); the page carries no second trail. */
 function Shell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -59,16 +62,18 @@ export default function K8sObjectPage() {
   const isWorkload = kind === "workload";
   const isIdentity = kind === "identity";
 
-  const workloadsQ = useListK8sWorkloadsQuery({ limit: 500 }, { skip: !isWorkload && !isIdentity });
-  const identitiesQ = useListK8sIdentitiesQuery({ limit: 500 }, { skip: !isIdentity });
+  const workloadsQ = useListK8sWorkloadsQuery({ limit: WORKLOAD_READ_LIMIT }, { skip: !isWorkload && !isIdentity });
+  const identitiesQ = useListK8sIdentitiesQuery({ limit: WORKLOAD_READ_LIMIT }, { skip: !isIdentity });
   const clustersQ = useListK8sClustersQuery();
 
   const workload = isWorkload ? workloadsQ.data?.find((w) => w.id === id) : undefined;
   const identity = isIdentity ? identitiesQ.data?.find((i) => i.id === id) : undefined;
   const type = isWorkload ? "workloads" : "identities";
-  const back = discoveryListHref(type);
+  const back = discoveryListHref(type, "k8s");
   const name = workload?.display_name ?? identity?.anchor ?? (isWorkload ? "Kubernetes workload" : "Kubernetes ServiceAccount");
-  useBreadcrumbTail(name === "Kubernetes workload" || name === "Kubernetes ServiceAccount" ? null : `/iga/k8s/${kind}/${id}`, name, { label: typeCrumbLabel(type), href: back });
+  // Discovery › Workloads › name from the first render (a fallback name while loading, and
+  // in the not-found and error states), so no segment is a dead link. `/iga/k8s` has no route.
+  useBreadcrumbTail(`/iga/k8s/${kind}/${id}`, name, { label: TYPE_LABEL[type], href: back, parent: { label: "Discovery", href: DISCOVERY_PATH } });
 
   const sweeps = clusterSweeps(undefined, clustersQ.data?.clusters);
   // The sweep behind THIS cluster; without a cluster, the weakest one — an unknown
@@ -132,7 +137,7 @@ export default function K8sObjectPage() {
         {coverageBanner}
         <Panel title="Execution identity" description="The ServiceAccount this workload executes as. Its access is what the workload can reach in the cluster.">
           <Facts>
-            <Fact label="State">{workload.lifecycle === "retired" ? <StatusBadge tone="neutral">Ended</StatusBadge> : <span>{workload.lifecycle}</span>}</Fact>
+            <Fact label="State">{workload.lifecycle === "retired" ? <StatusBadge tone="neutral">Retired</StatusBadge> : <span>{workload.lifecycle}</span>}</Fact>
             <Fact label="Runs as" mono={!!workload.runs_as}>
               {workload.runs_as ? (
                 runsAsHref ? (
@@ -164,12 +169,14 @@ export default function K8sObjectPage() {
 
   const i = identity!;
   const runners = (workloadsQ.data ?? []).filter((w) => w.runs_as_id === i.id);
+  // The read is capped: at the cap the list is a lower bound, not the whole set.
+  const workloadsCapped = (workloadsQ.data?.length ?? 0) >= WORKLOAD_READ_LIMIT;
   return (
     <Shell title={i.anchor} description={["Kubernetes ServiceAccount", cluster ? `cluster ${cluster}` : null, i.namespace ? `namespace ${i.namespace}` : null].filter(Boolean).join(" · ")}>
       {coverageBanner}
       <Panel title="ServiceAccount">
         <Facts>
-          <Fact label="State">{i.lifecycle === "retired" ? <StatusBadge tone="neutral">Ended</StatusBadge> : <span>{i.lifecycle}</span>}</Fact>
+          <Fact label="State">{i.lifecycle === "retired" ? <StatusBadge tone="neutral">Retired</StatusBadge> : <span>{i.lifecycle}</span>}</Fact>
           <Fact label="Rules reaching it">
             {i.grants}
             {i.wildcard ? <span className="text-(--color-warning-text)"> · includes a wildcard</span> : null}
@@ -180,8 +187,8 @@ export default function K8sObjectPage() {
       <AccessChain identityId={i.id} anchor={i.anchor} sweep={sweep} />
       <Panel
         title="Workloads that run as it"
-        count={workloadsQ.data ? `${runners.length}` : undefined}
-        description="Among the first 500 workloads the cluster inventory returns."
+        count={workloadsQ.data ? countWords(workloadsCapped ? { kind: "at_least", value: runners.length } : { kind: "exact", value: runners.length }) : undefined}
+        description={workloadsCapped ? "The workload read stopped at its first 500, so there may be more that run as it." : "Among the workloads the cluster inventory returns."}
       >
         {workloadsQ.isLoading ? (
           <div className="h-12 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading workloads" />

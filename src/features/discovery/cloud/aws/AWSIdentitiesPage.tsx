@@ -47,13 +47,11 @@ import {
   useListGcpConnectorsQuery,
   useListAwsIdentityPageQuery,
   useListAwsUsageAllQuery,
-  useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
   type AWSConnectorAttrs,
   type CloudIdentity,
   type CloudIdentityKind,
 } from "@/app/api/cloudDiscoveryApi";
-import { toast } from "react-hot-toast";
 
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "./AWSFilterChips";
@@ -67,7 +65,6 @@ import {
   TruncationNotice,
 } from "./AWSInventoryNotices";
 import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
-import { awsErrorCopy } from "./awsErrorCopy";
 
 const KIND_FILTERS: ConsoleFilterOption[] = [
   { key: "all", label: "All" },
@@ -94,9 +91,10 @@ export default function AWSIdentitiesPage({
   excludeKinds?: CloudIdentityKind[];
 } = {}) {
   const [params, setParams] = useSearchParams();
+  const gcp = forcedKind === "gcp_service_account";
+  const provider = gcp ? "gcp" : "aws";
 
-  // URL-backed so an inventory view is shareable, the same way
-  // DiscoveryIntegrationsPage carries its own state.
+  // URL-backed so an inventory view is shareable, the same way Discovery carries its own state.
   const account = params.get("source") ?? ALL_ACCOUNTS;
   const kindParam = params.get("kind");
   // gcp_service_account belongs here too. Without it the GCP metric tile wrote
@@ -191,26 +189,16 @@ export default function AWSIdentitiesPage({
     () => (identitiesQuery.data?.rows ?? []).filter((i) => !excludeKinds?.includes(i.kind)),
     [identitiesQuery.data, excludeKinds],
   );
-  // Rows left out of this reading are not in its total either (those in hand; a
-  // capped page cannot say how many more there are, and the truncation notice
-  // already says the total is the server's).
-  const total = Math.max(0, (identitiesQuery.data?.total ?? 0) - ((identitiesQuery.data?.rows.length ?? 0) - rows.length));
-  const truncated = total > rows.length;
-
-  const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
-
-  const handleScan = async (connectorId: string) => {
-    try {
-      await scanConnector(connectorId).unwrap();
-      toast.success("Scan queued — it runs in the background. Its results appear here when it finishes.");
-    } catch (err) {
-      const copy = awsErrorCopy(
-        (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
-        "Could not start the scan.",
-      );
-      toast.error(`${copy.title}. ${copy.body}`);
-    }
-  };
+  // The server's total counts every kind it returned. When this reading leaves some out
+  // (Google Cloud's rows on the AWS list), the total of what remains is not the server's
+  // minus the ones in hand: a capped page cannot say how many it left out beyond it. So
+  // with nothing left out the total is the server's; otherwise it is what loaded, and a
+  // capped page says it is only that.
+  const loadedAll = identitiesQuery.data?.rows.length ?? 0;
+  const serverTotal = identitiesQuery.data?.total ?? 0;
+  const leftOut = loadedAll - rows.length;
+  const total = leftOut === 0 ? serverTotal : rows.length;
+  const truncated = leftOut === 0 ? serverTotal > rows.length : serverTotal > loadedAll;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -467,7 +455,7 @@ export default function AWSIdentitiesPage({
       {
         id: "created",
         accessorKey: "created_at",
-        header: "Created in AWS",
+        header: gcp ? "Created in Google Cloud" : "Created in AWS",
         priority: 5,
         approxWidth: 130,
         cell: ({ row }) => (
@@ -477,7 +465,7 @@ export default function AWSIdentitiesPage({
         ),
       },
     ],
-    [connectorById, usageByIdentity, usageQuery.isLoading, usageIncomplete],
+    [connectorById, usageByIdentity, usageQuery.isLoading, usageIncomplete, gcp],
   );
 
   const liveConnectors = useMemo(
@@ -488,7 +476,7 @@ export default function AWSIdentitiesPage({
     [connectors, account],
   );
 
-  const emptyReason = inventoryEmptyReason(liveConnectors, "identities");
+  const emptyReason = inventoryEmptyReason(liveConnectors, "identities", provider);
   const loading = identitiesQuery.isLoading || connectorsQuery.isLoading;
 
   return (
@@ -500,7 +488,7 @@ export default function AWSIdentitiesPage({
           <strong className="font-medium">Could not load the identity inventory.</strong>{" "}
           {(identitiesQuery.error as { status?: number })?.status === 403
             ? "Your role is missing the discovery:read permission."
-            : "The AWS discovery API returned an error."}{" "}
+            : `The ${gcp ? "Google Cloud" : "AWS"} discovery API returned an error.`}{" "}
           <button className="underline" onClick={() => void identitiesQuery.refetch()}>
             Retry
           </button>
@@ -574,8 +562,7 @@ export default function AWSIdentitiesPage({
             <InventoryEmptyState
               reason={emptyReason}
               surface="identities"
-              onScan={(id) => void handleScan(id)}
-              scanning={scanning}
+              provider={provider}
             />
           ) : !filtered.length ? (
             <div className="px-6 py-14 text-center">
@@ -614,7 +601,7 @@ export default function AWSIdentitiesPage({
         {connectors.length > 1 && account === ALL_ACCOUNTS ? (
           <p className="flex items-start gap-1.5">
             <Info className="mt-px size-3.5 flex-none" aria-hidden />
-            {connectors.length} AWS accounts are connected. Narrow to one with Source; each
+            {connectors.length} {gcp ? "Google Cloud projects" : "AWS accounts"} are connected. Narrow to one with Source; each
             identity's own tabs are already scoped to it.
           </p>
         ) : null}

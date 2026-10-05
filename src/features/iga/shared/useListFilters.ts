@@ -13,9 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
-
-import { SessionManager } from "@/utils/sessionManager";
+import { useSearchParams } from "react-router-dom";
 
 const SEARCH_DEBOUNCE_MS = 250;
 /** The server ignores shorter searches (§5.2), so the console does not send them. */
@@ -26,12 +24,6 @@ export type FilterSpec = Record<string, readonly string[] | null>;
 
 export function useListFilters<S extends FilterSpec>(spec: S) {
   const [params, setParams] = useSearchParams();
-  const location = useLocation();
-  // The list's own search, remembered so a breadcrumb back to it (from an
-  // object page) returns to the same filtered list, not the unfiltered one.
-  useEffect(() => {
-    rememberListSearch(location.pathname, location.search);
-  }, [location.pathname, location.search]);
 
   const value = (key: keyof S & string): string | undefined => {
     const v = params.get(key) ?? undefined;
@@ -114,21 +106,6 @@ export function useListFilters<S extends FilterSpec>(spec: S) {
     /** The search as the server receives it: trimmed, and only from two characters. */
     q: trimmed.length >= SEARCH_MIN ? trimmed : undefined,
   };
-}
-
-// Per signed-in user and workspace: a list's filters never follow a
-// workspace switch or a different sign-in.
-const lastListSearch = new Map<string, string>();
-function listKey(path: string): string {
-  const s = SessionManager.getSession();
-  return `${s?.user_id ?? "-"}:${s?.workspace_id ?? "-"}:${path}`;
-}
-function rememberListSearch(path: string, search: string) {
-  lastListSearch.set(listKey(path), search);
-}
-/** A list's URL with the filters it last had in this session: `/iga/estate?account=…`. */
-export function listHrefWithFilters(path: string): string {
-  return `${path}${lastListSearch.get(listKey(path)) ?? ""}`;
 }
 
 /** `/` focuses the search box inside the element marked `data-graph-search`. */

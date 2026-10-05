@@ -155,7 +155,7 @@ export default function InventoryScreen(p: ScreenProps) {
       cardSummary: true,
       cell: ({ row }) =>
         row.original.lifecycle === "retired" ? (
-          <StatusBadge tone="neutral">Ended</StatusBadge>
+          <StatusBadge tone="neutral">Retired</StatusBadge>
         ) : row.original.state === "stale" ? (
           <StatusBadge tone="warning">Stale</StatusBadge>
         ) : (
@@ -346,7 +346,7 @@ export default function InventoryScreen(p: ScreenProps) {
       facts,
       exception:
         r.lifecycle === "retired"
-          ? `Ended${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
+          ? `Retired${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
           : r.state === "stale"
             ? "Stale: the latest sweep could not confirm it. It is still believed, not gone."
             : sweep && sweep.state !== "complete"
@@ -366,7 +366,6 @@ export default function InventoryScreen(p: ScreenProps) {
       url={p.url}
       searchPlaceholder={type === "workloads" ? "Search workloads by name or namespace/name" : "Search ServiceAccounts by name or namespace/name"}
       searchHint={p.url.qTooShort ? "Type at least 2 characters to search." : undefined}
-      switcher={p.switcher}
       facets={specs}
       trailing={
         <>
@@ -418,8 +417,10 @@ export default function InventoryScreen(p: ScreenProps) {
                       <FilteredEmpty subject={type} narrowing={narrowing} onClear={() => p.url.patch({ q: null, kind: null, namespace: null, source: null })} />
                     ) : sweeps.length && sweeps.every((s) => s.state === "not_swept") ? (
                       <EmptyList subject={type} detail="No inventory received yet: the cluster has not completed a sweep. This is not a finding that it holds none." />
-                    ) : (
+                    ) : sweeps.some((s) => s.observedAt && s.state !== "not_swept") ? (
                       <EmptyList subject={type} detail="The latest sweep was read and recorded no Kubernetes objects of this type." />
+                    ) : (
+                      <EmptyList subject={type} detail="None are listed, and no sweep has been reported for this selection, so it is not known whether any exist. This is not a finding that there are none." />
                     )
                   }
                 />

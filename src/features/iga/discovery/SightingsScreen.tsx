@@ -10,7 +10,7 @@
  * kept in history state.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GitBranch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -23,6 +23,7 @@ import {
   type DiscoveredAgentStatus,
   type RuntimeStatus,
 } from "@/app/api/discoveryApi";
+import type { Connection } from "@/app/api/connectionsApi";
 import { ConsoleRowActions } from "@/components/console/iam-console";
 import type { AdaptiveColumn, AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
 import { CardContent } from "@/components/ui/card";
@@ -47,6 +48,8 @@ import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingPar
 
 const MUTED = "text-(--color-text-muted)";
 const PAGE = 50;
+/** `Connection.scope_summary` for a GitHub organisation with nothing selected: "no repositories", "0 repositories". */
+const NO_REPOSITORIES = /^\s*(no|0)\b/i;
 
 const STATUSES: DiscoveredAgentStatus[] = ["unregistered", "registered", "quarantined", "ignored"];
 const SORTS = [
@@ -56,6 +59,29 @@ const SORTS = [
 
 // Gone last, so a destroyed agent never sits at the top of the list.
 const RUNTIME_RANK: Record<RuntimeStatus, number> = { running: 0, unknown: 1, stopped: 2, gone: 3 };
+
+/**
+ * What an empty GitHub list may say. "Scanned" is claimed only for connections
+ * whose discovery result exists; a connection with no repositories selected or no
+ * finished scan says that instead — an empty list is not a finding then.
+ */
+function githubEmptyDetail(connections: Connection[]): ReactNode {
+  const scanned = connections.filter((c) => c.discovery.ready);
+  const noneSelected = connections.filter((c) => NO_REPOSITORIES.test(c.scope_summary));
+  const unscanned = connections.length - scanned.length;
+  if (noneSelected.length && noneSelected.length === connections.length) {
+    return "No repositories are selected for scanning, so nothing has been scanned. Choose repositories on the connection.";
+  }
+  if (!scanned.length) {
+    return "No scan has finished yet, so nothing is known about these repositories. This is not a finding that they hold no agents.";
+  }
+  return (
+    <>
+      The repositories in scope were scanned, and no agents were found. This is the result of the scan, not a failure.
+      {unscanned > 0 ? ` ${unscanned} of ${connections.length} ${connections.length === 1 ? "connection has" : "connections have"} not finished a scan, so ${unscanned === 1 ? "it is" : "they are"} not covered by this.` : ""}
+    </>
+  );
+}
 
 export default function SightingsScreen(p: ScreenProps) {
   const navigate = useNavigate();
@@ -255,14 +281,14 @@ export default function SightingsScreen(p: ScreenProps) {
 
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider={p.provider} onClear={() => p.url.patch({ source: null })} />;
 
+  const inScope = p.scope.kind === "one" ? [p.scope.source.connection] : p.sources.map((s) => s.connection);
   const narrowing = [needle && `search "${p.url.searchText.trim()}" (in the loaded rows)`, p.scope.kind === "one" && `source ${p.scope.source.label}`, status && `status ${STATUS_LABELS[status].toLowerCase()}`, live && "live only"].filter(Boolean) as string[];
 
   return (
     <ScreenFrame
       url={p.url}
-      searchPlaceholder={rows ? `Search the ${rows.length} loaded rows by name or fingerprint` : "Search the loaded rows by name or fingerprint"}
-      searchHint="Sightings have no server search: this narrows the rows loaded on this page."
-      switcher={p.switcher}
+      searchPlaceholder={rows ? `Search the ${rows.length} loaded sightings by name, fingerprint or source` : "Search the loaded sightings by name, fingerprint or source"}
+      searchHint="Sightings have no server search: this narrows the sightings loaded on this page, and does not look further."
       facets={specs}
       trailing={
         <>
@@ -308,14 +334,7 @@ export default function SightingsScreen(p: ScreenProps) {
                         }}
                       />
                     ) : (
-                      <EmptyList
-                        subject="sightings"
-                        detail={
-                          provider === "github"
-                            ? "The repositories in scope were scanned, and no agents were found. This is the result of the scan, not a failure."
-                            : "No agents have been sighted in the clusters that report here."
-                        }
-                      />
+                      <EmptyList subject="sightings" detail={provider === "github" ? githubEmptyDetail(inScope) : "No agents have been sighted in the clusters that report here."} />
                     )
                   }
                 />

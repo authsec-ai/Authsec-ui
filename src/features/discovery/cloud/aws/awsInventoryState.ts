@@ -92,6 +92,9 @@ export type InventorySurface =
   // — permissions that have nothing to do with bedrock-agentcore.
   | "workload_identities";
 
+/** Whose connections an inventory list reads. */
+export type InventoryProvider = "aws" | "gcp";
+
 export type InventoryEmptyReason =
   | { kind: "no_connectors" }
   | { kind: "never_scanned"; connectorId: string | null }
@@ -117,6 +120,7 @@ export type InventoryEmptyReason =
 export function inventoryEmptyReason(
   connectors: CloudConnector[],
   surface: InventorySurface,
+  provider: InventoryProvider = "aws",
 ): InventoryEmptyReason {
   const live = connectors.filter((c) => c.status !== "revoked");
   if (!live.length) return { kind: "no_connectors" };
@@ -139,6 +143,11 @@ export function inventoryEmptyReason(
   if (live.some((c) => c.coverage?.status === "partial" || c.coverage?.status === "failed")) {
     return { kind: "coverage_incomplete" };
   }
+
+  // Only AWS reports a coverage verdict per surface (the iam_* keys, the stack
+  // template version). Google Cloud does not, so its empty list is never
+  // asserted to be complete.
+  if (provider === "gcp") return { kind: "phase_unobservable" };
 
   if (surface === "compute") {
     const anyStale = live.some((c) =>

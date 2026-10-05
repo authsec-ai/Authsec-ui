@@ -38,7 +38,7 @@ import { AlertTriangle, ExternalLink, Info, Radar, ScanLine } from "lucide-react
 import { Button } from "@/components/ui/button";
 import type { AWSConnectorAttrs, CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { stackPredatesCompute, TEMPLATE_VERSION_WITH_COMPUTE } from "./awsInventoryLabels";
-import type { InventoryEmptyReason, InventorySurface, Truncation } from "./awsInventoryState";
+import type { InventoryEmptyReason, InventoryProvider, InventorySurface, Truncation } from "./awsInventoryState";
 
 /* ──────────────────────────── inline notices ────────────────────────────── */
 
@@ -222,16 +222,16 @@ const SURFACE_PHRASE: Record<InventorySurface, string> = {
 export function InventoryEmptyState({
   reason,
   surface,
-  onScan,
-  scanning = false,
+  provider = "aws",
 }: {
   reason: InventoryEmptyReason;
   surface: InventorySurface;
-  onScan?: (connectorId: string) => void;
-  scanning?: boolean;
+  /** Whose connection this list reads: the copy names it, and the scan verdicts differ. */
+  provider?: InventoryProvider;
 }) {
-  const noun = SURFACE_NOUN[surface];
-  const phrase = SURFACE_PHRASE[surface];
+  const gcp = provider === "gcp";
+  const noun = gcp && surface === "identities" ? "service accounts" : SURFACE_NOUN[surface];
+  const phrase = gcp && surface === "identities" ? "Service account discovery" : SURFACE_PHRASE[surface];
 
   let title: string;
   let body: string;
@@ -241,13 +241,14 @@ export function InventoryEmptyState({
   switch (reason.kind) {
     case "no_connectors":
       icon = <Radar />;
-      title = "No AWS account connected";
-      body =
-        "Connect an AWS account from Integrations to discover the IAM identities, permissions and compute in it. AuthSec connects through a read-only role you create and control.";
+      title = gcp ? "No Google Cloud project connected" : "No AWS account connected";
+      body = gcp
+        ? "Connect a Google Cloud project from Connections to discover the service accounts in it."
+        : "Connect an AWS account from Connections to discover the IAM identities, permissions and compute in it. AuthSec connects through a read-only role you create and control.";
       action = (
         <Button asChild size="sm" variant="outline">
           <Link to="/iga/connections">
-            Go to Integrations
+            Go to Connections
             <ExternalLink className="ml-1.5 size-3.5" />
           </Link>
         </Button>
@@ -256,17 +257,14 @@ export function InventoryEmptyState({
 
     case "never_scanned":
       title = "Not scanned yet";
-      body = `The connection is proven but nothing has been discovered — scanning is a separate step. Run a scan to find ${noun}.`;
-      action =
-        reason.connectorId && onScan ? (
-          <Button size="sm" disabled={scanning} onClick={() => onScan(reason.connectorId!)}>
-            {scanning ? "Starting…" : "Scan now"}
-          </Button>
-        ) : (
-          <Button asChild size="sm" variant="outline">
-            <Link to="/iga/connections">Scan from Connections</Link>
-          </Button>
-        );
+      body = `The connection is proven but nothing has been discovered — scanning is a separate step, started from Connections. Once a scan has finished, ${noun} appear here.`;
+      action = (
+        <Button asChild size="sm" variant="outline">
+          <Link to={reason.connectorId ? `/iga/connections/${encodeURIComponent(reason.connectorId)}` : "/iga/connections"}>
+            {reason.connectorId ? "View connection" : "Open Connections"}
+          </Link>
+        </Button>
+      );
       break;
 
     case "scanning":
@@ -277,8 +275,7 @@ export function InventoryEmptyState({
     case "coverage_incomplete":
       icon = <AlertTriangle />;
       title = "The last scan could not read everything";
-      body =
-        "At least one IAM surface was denied or throttled, so this list is a floor rather than a total. Nothing here means the account has none — it means the scan could not look everywhere. Check the connector's coverage report in Integrations.";
+      body = `At least one ${gcp ? "surface" : "IAM surface"} was denied or throttled, so this list is a floor rather than a total. Nothing here means the ${gcp ? "project" : "account"} has none — it means the scan could not look everywhere. Check the connection's coverage in Connections.`;
       break;
 
     case "stale_stack":
@@ -290,14 +287,15 @@ export function InventoryEmptyState({
     case "phase_unobservable":
       icon = <Info />;
       title = `No ${noun} recorded yet`;
-      body = `The last scan reported the IAM phase as complete, but ${phrase.toLowerCase()} runs afterwards and reports no status of its own. This may still be filling in, or the read may have failed without surfacing here. Refresh shortly; if it stays empty, check the connector.`;
+      body = gcp
+        ? `The latest scan finished, but Google Cloud collection does not report a result for ${noun}, so an empty list is not shown as a complete answer. It may still be filling in, or the read may have failed without surfacing here. Refresh shortly; if it stays empty, check the connection.`
+        : `The last scan reported the IAM phase as complete, but ${phrase.toLowerCase()} runs afterwards and reports no status of its own. This may still be filling in, or the read may have failed without surfacing here. Refresh shortly; if it stays empty, check the connection.`;
       break;
 
     case "genuinely_empty":
     default:
       title = `No ${noun} found`;
-      body =
-        "The last scan reached every IAM surface and found none. This is a complete answer, not a missing one.";
+      body = `The last scan reached every ${gcp ? "surface it reads" : "IAM surface"} and found none. This is a complete answer, not a missing one.`;
       break;
   }
 

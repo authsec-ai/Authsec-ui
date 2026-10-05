@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import AWSComputePage from "@/features/discovery/cloud/aws/AWSComputePage";
 import AWSIdentitiesPage from "@/features/discovery/cloud/aws/AWSIdentitiesPage";
@@ -34,7 +35,6 @@ export default function LatestScreen(p: ScreenProps) {
   const fo = sourceFacet(p.sources, undefined);
   return (
     <div className="space-y-3">
-      {p.switcher}
       <FacetBar
         facets={[
           {
@@ -52,7 +52,18 @@ export default function LatestScreen(p: ScreenProps) {
         onDismissRemoved={p.url.dismissRemoved}
         onClearAll={() => p.url.patch({ source: null })}
       />
-      <p className="text-xs text-(--color-text-muted)">{LATEST_NOTE}</p>
+      <p className="text-xs text-(--color-text-muted)">
+        {LATEST_NOTE}
+        {/* Discovery never requests a scan; they start from the connection. */}
+        {p.scope.kind === "one" || p.scope.kind === "no_rows" ? (
+          <>
+            {" "}
+            <Link to={`/iga/connections/${encodeURIComponent(p.scope.source.id)}`} className="font-semibold text-(--color-primary-text) hover:underline">
+              View connection
+            </Link>
+          </>
+        ) : null}
+      </p>
       {p.scope.kind === "no_rows" ? <SourceHasNoRows label={p.scope.source.label} onClear={() => p.url.patch({ source: null })} /> : body}
     </div>
   );

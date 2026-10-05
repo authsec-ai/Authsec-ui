@@ -5,7 +5,9 @@
  * `useRestoreScroll`).
  *
  * - A FILTER edit replaces the entry WITHOUT history state: paging restarts at
- *   page one, as it must.
+ *   page one, as it must. The exception is a search that only narrows the rows
+ *   already loaded (Sightings): the server's answer is the same, so the page and
+ *   the selection stay.
  * - A SELECTION replaces the entry WITH the history state it has now, so the
  *   page and scroll survive opening and closing a preview.
  * - A switch of provider, type or view PUSHES an entry, so Back returns to the
@@ -57,13 +59,23 @@ export function useDiscoveryUrl() {
     [navigate],
   );
 
-  /** A filter edit: one history write, no history state, so paging restarts. */
+  /**
+   * A filter edit: one history write, no history state, so paging restarts.
+   * `keepPosition` is for an edit that does not change what the server returns:
+   * the page, scroll and selection are kept (a selection that no longer matches
+   * is dropped by its list).
+   */
   const patch = useCallback(
-    (changes: Patch) => {
+    (changes: Patch, opts?: { keepPosition?: boolean }) => {
       const next = new URLSearchParams(latest.current.params);
       for (const [k, v] of Object.entries(changes)) {
         if (v === null || v === undefined || v === "") next.delete(k);
         else next.set(k, v);
+      }
+      if (opts?.keepPosition) {
+        const usr = currentUsr();
+        write(next, usr ? { ...usr, removed: undefined } : undefined);
+        return;
       }
       // A different list is a different selection.
       next.delete("sel");
@@ -119,14 +131,17 @@ export function useDiscoveryUrl() {
       setSearchText(urlQ);
     }
   }, [urlQ]);
+  // Sightings have no server search: the text only narrows the page already loaded,
+  // so typing must not send the reader back to page one or drop their selection.
+  const clientSearch = urlType === "sightings";
   useEffect(() => {
     if (searchText === written.current) return;
     const t = window.setTimeout(() => {
       written.current = searchText;
-      patch({ q: searchText });
+      patch({ q: searchText }, { keepPosition: clientSearch });
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(t);
-  }, [searchText, patch]);
+  }, [searchText, patch, clientSearch]);
   const trimmed = urlQ.trim();
 
   return {

@@ -58,12 +58,10 @@ import {
   useListAwsConnectorsQuery,
   useListAwsObservationsQuery,
   useListAwsResourcesQuery,
-  useScanAwsConnectorMutation,
   AWS_DISCOVERY_MAX_LIMIT,
   type AWSConnectorAttrs,
   type CloudResource,
 } from "@/app/api/cloudDiscoveryApi";
-import { toast } from "react-hot-toast";
 
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "./AWSFilterChips";
@@ -83,7 +81,6 @@ import {
   TruncationNotice,
 } from "./AWSInventoryNotices";
 import { inventoryEmptyReason, truncationOf } from "./awsInventoryState";
-import { awsErrorCopy } from "./awsErrorCopy";
 import {
   resourcePolicyFacts,
   SOURCE_KMS_KEY_POLICY,
@@ -235,21 +232,6 @@ export default function AWSResourcesPage() {
   // unknown, which is the bias this screen needs: missing evidence must not
   // be read as evidence of completeness.
   const truncated = resourcesQuery.data ? truncationOf(resourcesQuery.data).truncated : false;
-
-  const [scanConnector, { isLoading: scanning }] = useScanAwsConnectorMutation();
-
-  const handleScan = async (connectorId: string) => {
-    try {
-      await scanConnector(connectorId).unwrap();
-      toast.success("Scan queued — it runs in the background. Its results appear here when it finishes.");
-    } catch (err) {
-      const copy = awsErrorCopy(
-        (err as { data?: Parameters<typeof awsErrorCopy>[0] })?.data,
-        "Could not start the scan.",
-      );
-      toast.error(`${copy.title}. ${copy.body}`);
-    }
-  };
 
   // Built from the kinds actually present rather than a hard-coded list: the
   // backend types a resource by service (`s3_bucket`, `dynamodb_table`,
@@ -645,8 +627,6 @@ export default function AWSResourcesPage() {
             <InventoryEmptyState
               reason={emptyReason}
               surface="resources"
-              onScan={(id) => void handleScan(id)}
-              scanning={scanning}
             />
           ) : !filtered.length ? (
             <div className="px-6 py-14 text-center">

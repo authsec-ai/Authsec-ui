@@ -2,12 +2,14 @@
  * A segmented control: one choice of a few, always visible. Used for the
  * object type (with counts) and the Published | Latest collected view.
  *
- * A radio group — arrow keys move and choose, Tab enters and leaves it, and the
- * focused segment has a visible ring. Each segment's count is a `CountText`, so
- * its four states stay distinct.
+ * A group of toggle buttons with a roving tab stop. Arrow keys, Home and End
+ * MOVE FOCUS only; Enter or Space (or a click) chooses. So walking along the
+ * segments does not navigate, push history entries or remount anything, and the
+ * focus the reader moved stays where they put it. Each segment's count is a
+ * `CountText`, so its four states stay distinct.
  */
 
-import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -36,13 +38,15 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  // The group is one Tab stop: the chosen segment, or the first when none is.
-  const stop = Math.max(0, segments.findIndex((s) => s.value === value));
+  // The group is one Tab stop: the segment focus was moved to, else the chosen
+  // one, else the first.
+  const [focused, setFocused] = useState<number | null>(null);
+  const chosen = Math.max(0, segments.findIndex((s) => s.value === value));
+  const stop = focused !== null && focused < segments.length ? focused : chosen;
   const move = (index: number) => {
-    const n = segments.length;
-    const next = (index + n) % n;
+    const next = (index + segments.length) % segments.length;
+    setFocused(next);
     refs.current[next]?.focus();
-    onChange(segments[next].value);
   };
   const onKey = (e: KeyboardEvent, index: number) => {
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
@@ -60,7 +64,14 @@ export function Segmented<T extends string>({
     }
   };
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-subtle) p-0.5">
+    <div
+      role="group"
+      aria-label={label}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(null);
+      }}
+      className="inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-subtle) p-0.5"
+    >
       {segments.map((s, i) => {
         const on = s.value === value;
         return (
@@ -70,8 +81,7 @@ export function Segmented<T extends string>({
               refs.current[i] = el;
             }}
             type="button"
-            role="radio"
-            aria-checked={on}
+            aria-pressed={on}
             tabIndex={i === stop ? 0 : -1}
             title={s.title}
             onClick={() => onChange(s.value)}
