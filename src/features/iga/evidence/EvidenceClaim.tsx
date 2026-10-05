@@ -32,11 +32,18 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { ActionList } from "../shared/components/ActionList";
 import { Fact, Facts } from "../shared/components/Panel";
 
-/** The graph's own view of the claim, when it was opened from the canvas. */
+/**
+ * The graph's own view of the claim, when it was opened from the canvas.
+ * `relationship`, `source` and `target` are stated only when several claims
+ * share one inspector (to tell them apart); with one claim the header and the
+ * claim's own sentence already say them. `shown` lists identifiers the header
+ * already carries, so a fact is not repeated beneath it.
+ */
 export interface ClaimContext {
   relationship?: string;
   source?: string;
   target?: string;
+  shown?: string[];
 }
 
 /** Short names for limitation chips; the long text is `limitationText`. */
@@ -196,7 +203,7 @@ export function EvidenceClaim({
       // Say what did not survive; never silently close (§2.14.5, step 4).
       return (
         <p className="rounded-md border border-(--color-border-subtle) px-3 py-2 text-sm">
-          This claim is not in the graph at the revision you are viewing. It may have ended in a newer scan; the
+          This claim is not in the graph at the publication you are viewing. It may have ended in a newer one; the
           object's Changes tab records when.
         </p>
       );
@@ -206,6 +213,11 @@ export function EvidenceClaim({
   }
 
   const ex = excerptFacts(e.facts);
+  // The inspector's header already names the object(s): a resource it carries is not a fact again.
+  if (ex && context?.shown?.length) {
+    ex.resources = ex.resources.filter((r) => !context.shown!.includes(r));
+    ex.notResources = ex.notResources.filter((r) => !context.shown!.includes(r));
+  }
   const withPolicy = e.facts.find((f) => f.policy || f.statement);
   const sources = [...new Set(e.facts.map((f) => f.source_api).filter(Boolean))] as string[];
   const lifecycle = e.status.lifecycle;
@@ -236,7 +248,7 @@ export function EvidenceClaim({
             {e.status.collection !== "complete" ? <StatusBadge tone="warning">collection {e.status.collection}</StatusBadge> : null}
           </div>
         ) : null}
-        {context?.relationship || context?.source || context?.target ? (
+        {heading && (context?.relationship || context?.source || context?.target) ? (
           <Facts>
             {context?.relationship ? <Fact label="Relationship">{context.relationship}</Fact> : null}
             {context?.source || context?.target ? (

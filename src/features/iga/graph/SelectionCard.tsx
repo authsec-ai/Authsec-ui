@@ -9,6 +9,14 @@
  * replaces it — one layer at a time, never a drawer on a drawer. Escape
  * closes it and returns focus to the card or line it came from.
  *
+ * Order (SPEC-console-revamp.md *Graph inspector*): what was selected, what
+ * the relationship means (EDGE_MEANING), why AuthSec shows it (basis,
+ * confirmation), ONE qualification, then the way to the evidence, where the
+ * source API and the full records are. The ARN, the relationship sentence and
+ * the declared-access line each appear once: a name already in the title is
+ * not repeated as a fact, and the declared-access line belongs to the
+ * evidence layer and the status bar.
+ *
  * Every sentence is built from the loaded graph and says only what the
  * data says: a declared relationship is never "can access", an exact
  * reference is not proof a resource exists, a selector is not a list.
@@ -17,16 +25,15 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-import { objectPath, refType, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
+import { objectPath, refType, type Basis, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { accountWithId } from "../shared/labels";
+import { accountWithId, limitationText } from "../shared/labels";
+import { CategoryChip } from "../shared/components/CategoryChip";
 import { Timestamp } from "../shared/components/Timestamp";
-import { edgeVerb, frontierLabel, independentCount, markedLimitations } from "./graphLabels";
-import { NODE_ICON } from "./icons";
+import { EDGE_MEANING, edgeVerb, frontierLabel, independentCount, markedLimitations } from "./graphLabels";
 import { describeNode, type NodeCategory } from "./nodeView";
-import { limitationText } from "../shared/labels";
 import { frontierKey, type FrontierControl, type VisualEdge, type VisualNode } from "./types";
 
 export type SelectionSubject = { kind: "node"; visual: VisualNode } | { kind: "edge"; edge: VisualEdge };
@@ -47,12 +54,12 @@ export interface SelectionActions {
   canLoadMore: (f: GraphFrontier) => boolean;
 }
 
-const CHIP: Record<NodeCategory, string> = {
-  workload: "bg-(--color-object-workload-soft) text-(--color-object-workload-text)",
-  identity: "bg-(--color-object-identity-soft) text-(--color-object-identity-text)",
-  resource: "bg-(--color-object-resource-soft) text-(--color-object-resource-text)",
-  statement: "bg-(--color-object-statement-soft) text-(--color-object-statement-text)",
-  external: "bg-(--color-object-external-soft) text-(--color-object-external-text)",
+/** Why a relationship is shown, in a clause: where its claim came from (§2.14.9). */
+const BASIS_SHORT: Record<Basis, string> = {
+  declared: "Declared in configuration; not observed in use",
+  observed: "Observed in activity AWS reported",
+  derived: "Derived from other collected claims",
+  asserted: "Recorded by a person in AuthSec",
 };
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
@@ -76,6 +83,9 @@ function relatives(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Grap
 function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>, rootAccountId: string | null) {
   const first = v.members[0];
   const d = describeNode(v, rootAccountId);
+  // A reference already in the title is not stated again as a fact.
+  const refFact = (label: string): [string, ReactNode][] =>
+    first.text && first.text !== d.title ? [[label, <span className="break-all font-mono text-xs">{first.text}</span>]] : [];
   const { out, inn, name } = relatives(v, edges, nodes);
   const facts: [string, ReactNode][] = [];
   let sentence: string;
@@ -86,11 +96,11 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
       ? `What the ECS task execution role declares — ${n} loaded, folded as supporting infrastructure. The application does not run as this role.`
       : `${n} loaded relationships are folded to keep the view readable. Nothing is missing: each is listed below and in Paths.`;
     if (v.overflow.moreNotLoaded) facts.push(["Also", "More of these exist that are not loaded yet."]);
-    return { d, sentence, facts };
+    return { d, sentence, facts, why: null };
   }
   if (first.kind === "workload" && v.members.length > 1) {
     sentence = `${v.members.length} workloads are configured to run as the same identity. They share one card; each keeps its own evidence.`;
-    return { d, sentence, facts };
+    return { d, sentence, facts, why: null };
   }
 
   switch (first.kind) {
@@ -128,11 +138,11 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
       break;
     case "exact":
       sentence = "An exact reference named by a policy statement. That this resource exists has not been confirmed.";
-      if (first.text) facts.push(["Reference", <span className="break-all font-mono text-xs">{first.text}</span>]);
+      facts.push(...refFact("Reference"));
       break;
     case "selector":
       sentence = "A pattern that policy statements name. It is not a list of resources — what it matches was not enumerated.";
-      if (first.text) facts.push(["Pattern", <span className="break-all font-mono text-xs">{first.text}</span>]);
+      facts.push(...refFact("Pattern"));
       break;
     case "external":
       sentence = "A resource outside the connected accounts, or one that could not be resolved. Nothing about it was read.";
@@ -143,8 +153,7 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
         : "A principal outside AWS accounts, named by a trust policy.";
       if (first.resolution) facts.push(["Resolution", first.resolution.state.replace(/_/g, " ")]);
   }
-  facts.push(["Last confirmed", <Timestamp iso={first.last_confirmed_at} />]);
-  return { d, sentence, facts: facts.slice(0, 3) };
+  return { d, sentence, facts: facts.slice(0, 3), why: { basis: null as Basis | null, at: first.last_confirmed_at } };
 }
 
 function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
@@ -154,45 +163,32 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   // line itself ends at the resource.
   const toRef = (e.kind === "declares" ? e.to : m.to) as GraphRef;
   const to = nodes.get(toRef)?.label ?? "Target";
-  const target = nodes.get(toRef);
   const facts: [string, ReactNode][] = [];
-  let sentence: string;
-  switch (e.kind) {
-    case "declares": {
-      const statements = e.summary?.statements ?? [];
-      const policies = [...new Set(statements.flatMap((s) => s.members.map((x) => x.policy)).filter(Boolean))];
-      const actions = [...new Set(statements.flatMap((s) => s.members.map((x) => x.label)).filter(Boolean))];
-      const resTo = nodes.get(e.to as GraphRef);
-      const what = resTo?.kind === "selector" ? "resources matching this pattern" : resTo?.kind === "exact" ? "this exact reference" : "this resource";
-      const count = independentCount(e);
-      sentence = `${count === 1 ? "A statement" : `${count} statements`} in ${policies.length ? policies.join(", ") : "a policy"} ${e.summary?.effect === "deny" ? "deny" : "list"} ${actions.join("; ") || "actions"} for ${what}.`;
-      facts.push(["Holder", from]);
-      facts.push([resTo?.kind === "selector" ? "Pattern" : "Resource", <span className="break-all font-mono text-xs">{resTo?.text ?? to}</span>]);
-      if (e.summary?.exclusions.length)
-        facts.push(["Except", <span className="break-all font-mono text-xs">{e.summary.exclusions.join(", ")}</span>]);
-      break;
-    }
-    case "executes_as":
-      sentence = `${from} is configured to run as ${to}.`;
-      break;
-    case "task_execution_role":
-      sentence = `ECS uses ${to} to start ${from} — pulling images and writing logs. Its credentials are not available to the application.`;
-      break;
-    case "can_assume":
-      sentence = `${to}'s trust policy names ${from}. Whether ${from} may call sts:AssumeRole was not checked.`;
-      break;
-    case "member_of":
-      sentence = `${from} is a member of ${to}.`;
-      break;
-    case "grant":
-      sentence = `${from} has a policy containing this statement${e.members.length > 1 ? ` — ${e.members.length} independent grants` : ""}.`;
-      break;
-    case "target":
-      sentence = `The statement lists ${target?.kind === "selector" ? "this pattern" : "this reference"}.`;
-      break;
+  // What the line means is the relationship's definition; the title and the
+  // type chip already say which two objects and which verb.
+  const sentence = EDGE_MEANING[e.kind];
+  if (e.kind === "declares") {
+    const statements = e.summary?.statements ?? [];
+    const policies = [...new Set(statements.flatMap((s) => s.members.map((x) => x.policy)).filter(Boolean))];
+    const resTo = nodes.get(e.to as GraphRef);
+    const count = independentCount(e);
+    facts.push(["Statements", `${count} in ${policies.length ? policies.join(", ") : "a policy"}`]);
+    // The resource's own text, unless the title already carries it.
+    if (resTo?.text && resTo.text !== to)
+      facts.push([resTo.kind === "selector" ? "Pattern" : "Resource", <span className="break-all font-mono text-xs">{resTo.text}</span>]);
+    if (e.summary?.exclusions.length)
+      facts.push(["Except", <span className="break-all font-mono text-xs">{e.summary.exclusions.join(", ")}</span>]);
+  } else if (e.kind === "grant" && e.members.length > 1) {
+    facts.push(["Grants", `${e.members.length} independent grants`]);
   }
-  facts.push(["Last confirmed", <Timestamp iso={m.last_confirmed_at} />]);
-  return { sentence, facts: facts.slice(0, 3), title: `${from} → ${to}`, type: edgeVerb(e) };
+  const bases = [...new Set(e.members.map((x) => x.basis))];
+  return {
+    sentence,
+    facts: facts.slice(0, 3),
+    title: `${from} → ${to}`,
+    type: edgeVerb(e),
+    why: { basis: bases.length === 1 ? bases[0] : null, at: m.last_confirmed_at },
+  };
 }
 
 function LoadControls({ frontier, a }: { frontier: GraphFrontier[]; a: SelectionActions }) {
@@ -251,9 +247,10 @@ export function SelectionCard({
   let title: string;
   let type: string;
   let category: NodeCategory | null = null;
-  let Icon = NODE_ICON.statement;
+  let icon: Parameters<typeof CategoryChip>[0]["icon"] = "statement";
   let sentence: string;
   let facts: [string, ReactNode][];
+  let why: { basis: Basis | null; at: string | null } | null = null;
   let claims: GraphRef[] = [];
   let uncertainty: string[] = [];
   let open: GraphRef | null = null;
@@ -265,9 +262,10 @@ export function SelectionCard({
     title = s.d.title;
     type = s.d.type;
     category = s.d.category;
-    Icon = NODE_ICON[s.d.icon];
+    icon = s.d.icon;
     sentence = s.sentence;
     facts = s.facts;
+    why = s.why;
     uncertainty = s.d.notes.filter((n) => n.tone === "warning").map((n) => n.long);
     const first = v.members[0];
     if (!v.overflow && v.members.length === 1) {
@@ -323,6 +321,7 @@ export function SelectionCard({
     type = s.type;
     sentence = s.sentence;
     facts = s.facts;
+    why = s.why;
     // A declared relationship's evidence is each statement's claim that it
     // lists the resource (the target claims), one per independent statement.
     claims = e.kind === "declares" ? e.members.filter((m) => m.kind === "target").map((m) => m.claim) : e.members.map((m) => m.claim);
@@ -347,9 +346,8 @@ export function SelectionCard({
     >
       <header className="flex shrink-0 items-start gap-2 px-3.5 pt-3">
         <div className="min-w-0 flex-1">
-          <p className={cn("mb-1 inline-flex max-w-full items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold", category ? CHIP[category] : "bg-(--color-surface-subtle) text-(--color-text-muted)")}>
-            <Icon aria-hidden="true" className="size-3 shrink-0" />
-            <span className="truncate">{type}</span>
+          <p className="mb-1">
+            <CategoryChip category={category} icon={icon}>{type}</CategoryChip>
           </p>
           <h2 ref={headingRef} id="graph-selection-heading" tabIndex={-1} className="break-words text-sm font-semibold leading-snug text-(--color-text) outline-none">
             {title}
@@ -362,6 +360,12 @@ export function SelectionCard({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pb-3 pt-2">
         <p className="text-[13px] leading-relaxed text-(--color-text)">{sentence}</p>
         {facts.length ? <dl className="space-y-1.5">{facts.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}</dl> : null}
+        {why ? (
+          <dl className="space-y-1.5 border-t border-(--color-border-subtle) pt-2">
+            {why.basis ? <Fact label="Basis">{BASIS_SHORT[why.basis]}</Fact> : null}
+            <Fact label="Confirmed"><Timestamp iso={why.at} /></Fact>
+          </dl>
+        ) : null}
         {uncertainty.length ? (
           <p className="rounded-md bg-(--color-warning-soft) px-2.5 py-1.5 text-xs text-(--color-warning-text)">
             {uncertainty[0]}

@@ -73,7 +73,11 @@ export function GraphInspector({
   const contextOf = (claim: GraphRef): ClaimContext | undefined => {
     const m = subject.edge?.members.find((x) => x.claim === claim);
     if (!m) return undefined;
-    return { relationship: EDGE_LABEL[m.kind], source: nodes.get(m.from)?.label, target: nodes.get(m.to)?.label };
+    const ends = [m.from, m.to].map((r) => nodes.get(r));
+    const line = nodes.get(subject.edge!.to as GraphRef);
+    // What the header already carries: both ends' labels and, for a resource, its reference text.
+    const shown = [title, ...[...ends, line].flatMap((n) => [n?.label, n?.text, n?.arn])].filter((x): x is string => !!x);
+    return { relationship: EDGE_LABEL[m.kind], source: ends[0]?.label, target: ends[1]?.label, shown };
   };
   const grants = subject.edge?.kind === "grant" || subject.edge?.kind === "declares";
 

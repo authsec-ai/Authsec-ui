@@ -45,6 +45,11 @@
 [data-cr] .console-page--object .sh-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 2px; }
 [data-cr] .console-page--object .sh-title { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
 [data-cr] .console-page--object .sh-desc { font-size: 13px; line-height: 1.5; max-width: none; }
+/* Name, context and actions wrap rather than squeeze one another on a narrow window. */
+@media (max-width: 900px) {
+  [data-cr] .console-page--object .section-header { flex-wrap: wrap; }
+  [data-cr] .console-page--object .section-header > div:last-child { flex-wrap: wrap; }
+}
 [data-cr] .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-subtle); margin: 0 0 6px; }
 
 /* ---------- buttons ---------- */
