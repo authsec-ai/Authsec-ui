@@ -60,9 +60,9 @@ export function AccountCell({ account }: { account: GraphAccount | null }) {
           per ROW, so a revoked account painted every row of the table orange —
           and `GraphAccount` carries only `connected`, so this cannot tell a
           deliberate revocation from a broken connection and was warning-toned
-          for both. PipelineNotice already reports each at the top of the page
-          with the right severity: neutral "Revoked", warning "Connection
-          error". The fact still belongs on the row; the alarm does not. */}
+          for both. Discovery's source notices already report each at the top
+          of the page with the right severity: neutral "Revoked", warning
+          "Authentication failed". The fact still belongs on the row; the alarm does not. */}
       {!account.connected ? <p className="text-[11px] text-(--color-text-muted)">Not connected</p> : null}
     </div>
   );

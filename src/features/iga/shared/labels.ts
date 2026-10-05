@@ -132,9 +132,9 @@ export function surfaceStateText(state: string): string {
  * "Discovery is incomplete" banner, an "incomplete" badge in the pager, and a
  * qualified empty state, none of which named a problem they could fix.
  *
- * It is not silently dropped: `PipelineNotice` renders a row per revoked
- * account on every list page, in NEUTRAL tone, saying the last results are
- * kept and are no longer reconfirmed. That is the honest message and the right
+ * It is not silently dropped: Discovery's source notices render a row per
+ * revoked connection, in NEUTRAL tone, saying the last results are kept and are
+ * no longer reconfirmed. That is the honest message and the right
  * place for it, so this set does not repeat it as a warning.
  */
 export const INCOMPLETE_STATES: ReadonlySet<SurfaceState> = new Set<SurfaceState>([

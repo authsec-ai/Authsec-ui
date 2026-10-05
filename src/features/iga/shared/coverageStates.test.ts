@@ -12,8 +12,8 @@ const gap = (account_id: string, state: GraphCoverageGap["state"]): GraphCoverag
  * as a coverage gap put an orange "Discovery is incomplete" banner, an
  * "incomplete" pager badge and a qualified empty state in front of someone who
  * had deliberately disconnected an account — none of it naming a problem they
- * could act on. PipelineNotice reports revoked accounts separately, in neutral
- * tone, which is the honest place for it.
+ * could act on. Discovery's source notices report revoked connections separately,
+ * in neutral tone, which is the honest place for it.
  */
 describe("INCOMPLETE_STATES", () => {
   it("excludes revoked — a deliberate disconnection is not a collection gap", () => {
