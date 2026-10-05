@@ -59,30 +59,21 @@ import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage
 import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
 import AgentsPage from "./features/agents/AgentsPage";
 import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
-import DiscoveryIntegrationsPage from "./features/discovery/DiscoveryIntegrationsPage";
-import DiscoveredAgentsPage from "./features/discovery/DiscoveredAgentsPage";
-import EstateListPage from "./features/iga/estate/EstateListPage";
 import WorkloadPage from "./features/iga/estate/WorkloadPage";
+import ConnectionsPage from "./features/iga/connections/ConnectionsPage";
+import ConnectionDetailPage from "./features/iga/connections/ConnectionDetailPage";
+import ScanDetailPage from "./features/iga/connections/ScanDetailPage";
+import DiscoveryPage from "./features/iga/discovery/DiscoveryPage";
+import SightingDetailPage from "./features/iga/discovery/SightingDetailPage";
+import K8sObjectPage from "./features/iga/discovery/K8sObjectPage";
+import PolicyPage from "./features/iga/policy/PolicyPage";
+import LogsPage from "./features/iga/logs/LogsPage";
+import RetiredPage from "./features/iga/retired/RetiredPage";
+import { legacyToDiscovery, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
 import IdentityPage from "./features/iga/identities/IdentityPage";
 import ResourcePage from "./features/iga/resources/ResourcePage";
 import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
-import RuleCatalogPage from "./features/discovery/RuleCatalogPage";
-import IntegrationDetailPage from "./features/discovery/IntegrationDetailPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
-import AWSIdentitiesPage from "./features/discovery/cloud/aws/AWSIdentitiesPage";
-import AWSComputePage from "./features/discovery/cloud/aws/AWSComputePage";
-import AWSResourcesPage from "./features/discovery/cloud/aws/AWSResourcesPage";
-import CloudInventoryLayout from "./features/discovery/cloud/CloudInventoryLayout";
-import ProvenancePage from "./features/governance/ProvenancePage";
-import CertificationPage from "./features/governance/CertificationPage";
-import CampaignDetailPage from "./features/governance/CampaignDetailPage";
-import SoDPage from "./features/governance/SoDPage";
-import BirthrightsPage from "./features/governance/BirthrightsPage";
-import InstructionsPage from "./features/governance/InstructionsPage";
-import AgentPoliciesPage from "./features/governance/AgentPoliciesPage";
-import K8sAccessPage from "./features/discovery/K8sAccessPage";
-import UpcomingActionsPage from "./features/governance/UpcomingActionsPage";
-import PolicyWarningsPage from "./features/governance/PolicyWarningsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
@@ -143,17 +134,28 @@ function LegacyTrustDelegationPolicyEditRedirect() {
 }
 
 /**
- * Redirect that keeps the query string.
+ * Redirects that keep the query string.
  *
- * A bare `<Navigate to="/iga/cloud/identities" />` drops `?account=`, so a
- * bookmarked or shared single-account link would land on the all-accounts view
- * with nothing to say it had widened. Silently showing MORE than the link asked
- * for is the wrong direction for a security console to fail in, and it would
- * defeat the same carry-over rule `CARRIED_TAB_PARAMS` exists to enforce.
+ * A bare `<Navigate>` drops `?account=`, so a bookmarked or shared one-account
+ * link would land on the all-accounts view with nothing to say it had widened.
+ * Silently showing MORE than the link asked for is the wrong direction for a
+ * security console to fail in.
  */
-function CloudInventoryRedirect({ to }: { to: string }) {
+function LegacyRedirect({ to }: { to: string }) {
   const { search } = useLocation();
   return <Navigate to={{ pathname: to, search }} replace />;
+}
+
+function LegacyIdRedirect({ base }: { base: string }) {
+  const { id = "" } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: `${base}/${encodeURIComponent(id)}`, search }} replace />;
+}
+
+/** An earlier list route → Discovery, with its filters (`account` becomes `source`). */
+function DiscoveryRedirect({ from }: { from: LegacyDiscoveryRoute }) {
+  const { search } = useLocation();
+  return <Navigate to={legacyToDiscovery(from, search)} replace />;
 }
 
 function LegacyClientOnboardRedirect() {
@@ -595,30 +597,83 @@ function AppContent() {
                     }
                   />
 
-                  {/* ── Agentic IGA console (prototype) ──────────────────────
+                  {/* ── Agentic IGA console ──────────────────────────────────
                       A separate product from the authorization console above:
-                      its own shell (IgaLayout) and its own sidebar. Reached via
-                      the product switcher in the bottom-left user menu. */}
+                      its own shell (IgaLayout) and its own sidebar. Four
+                      destinations — Connections, Discovery, Policy, Logs — and
+                      the object pages Discovery opens (SPEC-console-revamp.md).
+                      Every earlier route redirects here WITH its query string. */}
+                  <Route path="/iga" element={<Navigate to="/iga/discovery" replace />} />
+
+                  {/* Connections */}
                   <Route
-                    path="/iga"
-                    element={<Navigate to="/iga/integrations" replace />}
-                  />
-                  <Route
-                    path="/iga/integrations"
+                    path="/iga/connections"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <DiscoveryIntegrationsPage />
+                          <ConnectionsPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
                   <Route
-                    path="/iga/integrations/:id"
+                    path="/iga/connections/:id"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <IntegrationDetailPage />
+                          <ConnectionDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/connections/:id/scans/:runId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ScanDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/connections/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ConnectionDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Discovery, and the object pages it opens */}
+                  <Route
+                    path="/iga/discovery"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <DiscoveryPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/sightings/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <SightingDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/k8s/:kind/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <K8sObjectPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -647,16 +702,6 @@ function AppContent() {
                     element={<GoogleOAuthCallbackPage />}
                   />
                   <Route
-                    path="/iga/estate"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <EstateListPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/iga/estate/:id"
                     element={
                       <ProtectedRoute requireProject>
@@ -677,29 +722,6 @@ function AppContent() {
                     }
                   />
                   <Route
-                    path="/iga/agents"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <DiscoveredAgentsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/detection-rules"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <RuleCatalogPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Cloud Inventory's tabs are the one list of identities and of
-                      resources; the graph pages below are their detail views. */}
-                  <Route path="/iga/identities" element={<Navigate to="/iga/cloud/identities" replace />} />
-                  <Route
                     path="/iga/identities/:id"
                     element={
                       <ProtectedRoute requireProject>
@@ -719,7 +741,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/iga/resources" element={<Navigate to="/iga/cloud/resources" replace />} />
                   <Route
                     path="/iga/resources/:id"
                     element={
@@ -760,150 +781,57 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  {/* ── Cloud inventory ─────────────────────────────────────
-                      The CONTENTS of a connected cloud account, as opposed to
-                      the connection itself — which stays where it is, as a row
-                      in the Integrations table with its own drawer.
 
-                      ONE shell with three tabs, not three sidebar items. The
-                      GCP build workflow's console row reads "Built for AWS,
-                      provider-filterable", and AS-215: "the AWS console views
-                      read provider-neutral tables, so GCP inherits them once
-                      the endpoints exist… Every other view reuses without
-                      change." A second provider therefore filters into these
-                      same three tabs rather than adding "GCP Identities"
-                      beside "AWS Identities" — which is why these paths carry
-                      no provider segment.
+                  {/* Policy and Logs: reserved, labelled previews */}
+                  <Route
+                    path="/iga/policy"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/logs"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <LogsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-                      Still real routes, not drawer tabs: AWSConnectorDrawer is
-                      560px and answers "is this connection healthy", while
-                      these need table width, search, paging and a shareable
-                      URL. The split follows the backend's own boundary between
-                      the connector endpoints and the seven list endpoints
-                      under /authsec/discovery/aws/*.
+                  {/* Earlier routes → Discovery and Connections. The query string
+                      is carried (account → source), never dropped: a bare
+                      redirect would widen a one-account link to every account
+                      without saying so. */}
+                  <Route path="/iga/integrations" element={<LegacyRedirect to="/iga/connections" />} />
+                  <Route path="/iga/integrations/:id" element={<LegacyIdRedirect base="/iga/connections" />} />
+                  <Route path="/iga/detection-rules" element={<Navigate to="/iga/connections?open=github-rules" replace />} />
+                  <Route path="/iga/estate" element={<DiscoveryRedirect from="estate" />} />
+                  <Route path="/iga/identities" element={<DiscoveryRedirect from="identities" />} />
+                  <Route path="/iga/resources" element={<DiscoveryRedirect from="resources" />} />
+                  <Route path="/iga/agents" element={<DiscoveryRedirect from="agents" />} />
+                  <Route path="/iga/k8s-access" element={<DiscoveryRedirect from="k8s-access" />} />
+                  <Route path="/iga/cloud" element={<DiscoveryRedirect from="cloud-identities" />} />
+                  <Route path="/iga/cloud/identities" element={<DiscoveryRedirect from="cloud-identities" />} />
+                  <Route path="/iga/cloud/compute" element={<DiscoveryRedirect from="cloud-compute" />} />
+                  <Route path="/iga/cloud/resources" element={<DiscoveryRedirect from="cloud-resources" />} />
+                  <Route path="/iga/cloud/aws/identities" element={<DiscoveryRedirect from="cloud-identities" />} />
+                  <Route path="/iga/cloud/aws/compute" element={<DiscoveryRedirect from="cloud-compute" />} />
+                  <Route path="/iga/cloud/aws/resources" element={<DiscoveryRedirect from="cloud-resources" />} />
 
-                      Kept apart from /iga/identities above: that is the
-                      identity graph's projected, revision-pinned list, and
-                      this is the raw collection view of every cloud_* row,
-                      including surfaces the graph does not project
-                      (SPEC-iga-phase2-graph.md §2.14.2). */}
-                  <Route
-                    path="/iga/cloud"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <CloudInventoryLayout />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route
-                      index
-                      element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
-                    />
-                    <Route path="identities" element={<AWSIdentitiesPage />} />
-                    <Route path="compute" element={<AWSComputePage />} />
-                    <Route path="resources" element={<AWSResourcesPage />} />
-                    <Route
-                      path="*"
-                      element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
-                    />
-                  </Route>
-
-                  {/* The pre-consolidation paths, kept as redirects rather than
-                      left to 404: AWSConnectorDrawer linked at them and they
-                      may be bookmarked. Declared as top-level siblings so they
-                      never mount the inventory shell just to leave it — and
-                      their static segments outrank the splat child above. */}
-                  <Route
-                    path="/iga/cloud/aws/identities"
-                    element={<CloudInventoryRedirect to="/iga/cloud/identities" />}
-                  />
-                  <Route
-                    path="/iga/cloud/aws/compute"
-                    element={<CloudInventoryRedirect to="/iga/cloud/compute" />}
-                  />
-                  <Route
-                    path="/iga/cloud/aws/resources"
-                    element={<CloudInventoryRedirect to="/iga/cloud/resources" />}
-                  />
-                  {/* ── Governance surfaces ── */}
-                  <Route
-                    path="/iga/provenance"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <ProvenancePage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/certification"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <CertificationPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/certification/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <CampaignDetailPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/sod"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <SoDPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/birthrights"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <BirthrightsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/enforcement"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <InstructionsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/k8s-access"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <K8sAccessPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
+                  {/* The retired governance screens (SPEC-console-revamp.md
+                      §Removal contract): a retirement state, never the old page. */}
                   <Route
                     path="/iga/policies"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <AgentPoliciesPage />
+                          <RetiredPage title="Agent policies" />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -913,7 +841,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <UpcomingActionsPage />
+                          <RetiredPage title="Scheduled actions" />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -923,14 +851,74 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <PolicyWarningsPage />
+                          <RetiredPage title="Policy warnings" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/provenance"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Provenance" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/certification"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Access Certification" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/certification/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Access Certification" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/sod"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Separation of Duties" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/birthrights"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Birthrights & Lifecycle" />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/enforcement"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <RetiredPage title="Enforcement queue" />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
                   {/* Old flat paths, before IGA became its own console */}
-                  <Route path="/discovery/integrations" element={<Navigate to="/iga/integrations" replace />} />
-                  <Route path="/discovery/agents" element={<Navigate to="/iga/agents" replace />} />
+                  <Route path="/discovery/integrations" element={<Navigate to="/iga/connections" replace />} />
+                  <Route path="/discovery/agents" element={<DiscoveryRedirect from="agents" />} />
 
                   {/* Redirects for legacy non-context routes */}
                   <Route

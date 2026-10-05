@@ -703,7 +703,7 @@ export const discoveryApi = baseApi.injectEndpoints({
     // render what came back rather than predicting it (an agent whose owner was
     // deleted comes back `unregistered`). A release may commit without being
     // enforced: quarantine_enforcement_error then carries the leftover-policy
-    // kubectl. Invalidates ProvisioningInstruction because a release queues one.
+    // kubectl.
     unquarantineAgent: builder.mutation<DiscoveredAgent, { id: string }>({
       query: ({ id }) => ({
         url: `/authsec/discovery/agents/${id}/unquarantine`,
@@ -713,7 +713,6 @@ export const discoveryApi = baseApi.injectEndpoints({
         { type: "DiscoveredAgent", id },
         "DiscoveredAgent",
         "AgentCoverage",
-        "ProvisioningInstruction",
       ],
     }),
 

@@ -5,27 +5,16 @@
  * from the AuthSec authorization console, not a section inside it (root
  * AGENTS.md, "Product transition"). Switching between them happens through the
  * product switcher in the bottom-left user menu.
+ *
+ * Four destinations, one per task (SPEC-console-revamp.md): connect, find,
+ * decide, review. Policy and Logs are previews and say so. Object pages
+ * (workloads, identities, resources, a connection's detail) belong to the
+ * destination that opens them, so it stays highlighted on them.
  */
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  Boxes,
-  Network,
-  Cloud,
-  SlidersHorizontal,
-  Radar,
-  ScanSearch,
-  FileText,
-  ShieldAlert,
-  ClipboardCheck,
-  UserPlus,
-  Zap,
-  Scale,
-  CalendarClock,
-  BellRing,
-  type LucideIcon,
-} from "lucide-react";
+import { Cable, Radar, Scale, ScrollText, type LucideIcon } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -40,64 +29,27 @@ import {
 } from "@/components/ui/sidebar";
 import { AuthSecLogo } from "@/components/ui/authsec-logo";
 import { cn } from "@/lib/utils";
-import { getWorkspaceId } from "@/utils/workspace";
-import { useGetGraphCapabilitiesQuery, type GraphFeature } from "@/app/api/igaGraphApi";
 
 interface IgaNavItem {
   title: string;
   url: string;
   icon: LucideIcon;
-  isActive?: boolean;
-  onClick?: () => void;
-  /** Other sections this entry owns: its detail pages that live elsewhere. */
+  /** Other sections this destination owns: the detail pages it opens. */
   activeFor?: string[];
-  /**
-   * An identity-graph view: shown only when the backend serves it
-   * (SPEC-iga-phase2-graph.md §2.14.14 *Unavailable features*). No teasers.
-   */
-  graphFeature?: GraphFeature;
+  /** A word beside the label: "Preview". */
+  tag?: string;
 }
 
-// Grouped by the customer's task (SPEC-iga-phase2-graph.md §2.14.2):
-// explore the estate, govern access, manage where the data comes from.
-// Every route is unchanged; only the grouping and two labels moved.
-const NAV_EXPLORE: IgaNavItem[] = [
-  // The identity graph's entry point. Identities and resources are reached
-  // from Cloud Inventory and from a workload's graph, so they have no entries
-  // of their own; their pages and links are unchanged.
-  { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
-  // What a workload can do INSIDE the cluster, through the ServiceAccount it
-  // runs as. It belongs here rather than under Governance: it is an
-  // observation of the estate, not a decision about it.
-  { title: "Kubernetes access", url: "/iga/k8s-access", icon: Network },
-];
-
-const NAV_DATA_SOURCES: IgaNavItem[] = [
-  { title: "Integrations", url: "/iga/integrations", icon: Radar },
-  // The discovered-agents workflow: sightings from repositories and clusters
-  // waiting for a decision (claim, provision, quarantine). Named for that
-  // purpose so it does not read as a second copy of Agents & workloads.
-  { title: "Agent sightings", url: "/iga/agents", icon: ScanSearch },
-  // The rows each scan collected, as collected — the graph's source. One
-  // entry with Identities / Compute / Resources tabs, not one per provider.
-  // Its Identities and Resources tabs are the lists; an identity's or a
-  // resource's graph page is their detail view, so this entry owns them.
-  { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud, activeFor: ["/iga/identities", "/iga/resources", "/iga/external-principals"] },
-  // Defines what a repository scan looks for, so it sits beside the scanning.
-  { title: "Detection Rules", url: "/iga/detection-rules", icon: SlidersHorizontal },
-];
-
-const NAV_GOVERNANCE: IgaNavItem[] = [
-  // Policies come before the queue they fill: you author intent here, and the
-  // queue below is what the cluster did about it.
-  { title: "Agent policies", url: "/iga/policies", icon: Scale },
-  { title: "Scheduled actions", url: "/iga/upcoming", icon: CalendarClock },
-  { title: "Policy warnings", url: "/iga/policy-warnings", icon: BellRing },
-  { title: "Provenance", url: "/iga/provenance", icon: FileText },
-  { title: "Access Certification", url: "/iga/certification", icon: ClipboardCheck },
-  { title: "Separation of Duties", url: "/iga/sod", icon: ShieldAlert },
-  { title: "Birthrights & Lifecycle", url: "/iga/birthrights", icon: UserPlus },
-  { title: "Enforcement queue", url: "/iga/enforcement", icon: Zap },
+const NAV: IgaNavItem[] = [
+  { title: "Connections", url: "/iga/connections", icon: Cable },
+  {
+    title: "Discovery",
+    url: "/iga/discovery",
+    icon: Radar,
+    activeFor: ["/iga/estate", "/iga/identities", "/iga/resources", "/iga/external-principals", "/iga/sightings", "/iga/k8s"],
+  },
+  { title: "Policy", url: "/iga/policy", icon: Scale, tag: "Preview" },
+  { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },
 ];
 
 export function IgaSidebar({
@@ -109,29 +61,18 @@ export function IgaSidebar({
   const navigate = useNavigate();
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
-  const caps = useGetGraphCapabilitiesQuery({ ws: getWorkspaceId() ?? "" }).data;
-  const serves = useCallback(
-    (f: GraphFeature | undefined) =>
-      f === undefined || (caps?.graph_projection === "on" && caps.features[f] === true),
-    [caps],
-  );
 
-  const decorate = useCallback(
-    (nav: IgaNavItem[]) =>
-      nav.filter((item) => serves(item.graphFeature)).map((item) => ({
+  const items = useMemo(
+    () =>
+      NAV.map((item) => ({
         ...item,
-        // Match the section root too, so /iga/certification/:id keeps the parent active.
         isActive: [item.url, ...(item.activeFor ?? [])].some(
           (url) => location.pathname === url || location.pathname.startsWith(`${url}/`),
         ),
         onClick: () => handleNavigation(item.url),
       })),
-    [location.pathname, handleNavigation, serves],
+    [location.pathname, handleNavigation],
   );
-
-  const exploreItems = useMemo(() => decorate(NAV_EXPLORE), [decorate]);
-  const governanceItems = useMemo(() => decorate(NAV_GOVERNANCE), [decorate]);
-  const sourceItems = useMemo(() => decorate(NAV_DATA_SOURCES), [decorate]);
 
   return (
     <Sidebar
@@ -154,7 +95,7 @@ export function IgaSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               className="h-auto min-h-10 items-center rounded-md px-2.5 py-1.5 group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 hover:bg-sidebar-accent/60"
-              onClick={() => handleNavigation("/iga/integrations")}
+              onClick={() => handleNavigation("/iga/discovery")}
             >
               <div className="flex w-full min-w-0 items-center gap-2 group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center">
                 <AuthSecLogo className="size-5 shrink-0" />
@@ -173,9 +114,7 @@ export function IgaSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        {exploreItems.length ? <NavMain title="Explore" items={exploreItems} /> : null}
-        <NavMain title="Governance" items={governanceItems} />
-        <NavMain title="Data sources" items={sourceItems} />
+        <NavMain items={items} />
       </SidebarContent>
 
       <SidebarFooter>

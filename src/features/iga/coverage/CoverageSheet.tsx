@@ -100,7 +100,7 @@ export function CoverageSheet({
   const answer = q.currentData;
   const account = answer?.data[0];
   const surfaces = (account?.surfaces ?? []).filter((s) => s.state !== "reached");
-  const href = connectorId ? `/iga/integrations?connector=${encodeURIComponent(connectorId)}` : undefined;
+  const href = connectorId ? `/iga/connections/${encodeURIComponent(connectorId)}/coverage` : undefined;
 
   return (
     <Sheet open={!!accountId} onOpenChange={(o) => !o && onClose()}>

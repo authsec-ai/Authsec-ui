@@ -79,28 +79,23 @@ export function Breadcrumb() {
         case "external-principals":
           label = "External principals";
           break;
+        case "connections":
+          label = "Connections";
+          break;
+        case "discovery":
+          label = "Discovery";
+          break;
         case "estate":
-          label = "Agents & workloads";
+          label = "Workloads";
           break;
-        case "agents":
-          // Outside IGA this is the legacy agent-identities page; under IGA it
-          // is the sightings workflow, named as the IGA sidebar names it.
-          label = pathname.startsWith("/iga/") ? "Agent sightings" : "Agents Identities";
+        case "sightings":
+          label = "Sightings";
           break;
-        case "cloud":
-          label = "Cloud Inventory";
+        case "k8s":
+          label = "Kubernetes";
           break;
-        case "certification":
-          label = "Access Certification";
-          break;
-        case "sod":
-          label = "Separation of Duties";
-          break;
-        case "birthrights":
-          label = "Birthrights & Lifecycle";
-          break;
-        case "enforcement":
-          label = "Enforcement queue";
+        case "policy":
+          label = "Policy";
           break;
         case "services":
           label = "Services";
@@ -109,7 +104,8 @@ export function Breadcrumb() {
           label = "Vault & Secrets";
           break;
         case "logs":
-          label = "Event Logs";
+          // The IGA console's Logs destination, versus the authorization console's.
+          label = pathname.startsWith("/iga/") ? "Logs" : "Event Logs";
           break;
         case "authentication":
           label = "Authentication Methods";

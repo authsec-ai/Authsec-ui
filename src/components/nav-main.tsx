@@ -36,6 +36,8 @@ export function NavMain({
     onClick?: () => void;
     /** Optional count badge. Shown as a small pill when > 0. Hidden in icon-only rail. */
     badge?: number;
+    /** Optional word beside the label ("Preview"). Hidden in the icon-only rail. */
+    tag?: string;
   }[];
   title?: string;
 }) {
@@ -53,6 +55,11 @@ export function NavMain({
             >
               {item.icon && <item.icon />}
               <span>{item.title}</span>
+              {item.tag ? (
+                <span className="ml-auto shrink-0 rounded border border-(--color-border-subtle) px-1.5 py-px text-[10px] font-medium text-(--color-text-muted) group-data-[collapsible=icon]:hidden">
+                  {item.tag}
+                </span>
+              ) : null}
               {item.badge != null && item.badge > 0 && (
                 <span
                   className="ml-auto shrink-0 rounded-full bg-[color:color-mix(in_oklch,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[var(--color-warning)] group-data-[collapsible=icon]:hidden"

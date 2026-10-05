@@ -246,7 +246,7 @@ export function InventoryEmptyState({
         "Connect an AWS account from Integrations to discover the IAM identities, permissions and compute in it. AuthSec connects through a read-only role you create and control.";
       action = (
         <Button asChild size="sm" variant="outline">
-          <Link to="/iga/integrations">
+          <Link to="/iga/connections">
             Go to Integrations
             <ExternalLink className="ml-1.5 size-3.5" />
           </Link>
@@ -264,7 +264,7 @@ export function InventoryEmptyState({
           </Button>
         ) : (
           <Button asChild size="sm" variant="outline">
-            <Link to="/iga/integrations">Scan from Integrations</Link>
+            <Link to="/iga/connections">Scan from Connections</Link>
           </Button>
         );
       break;

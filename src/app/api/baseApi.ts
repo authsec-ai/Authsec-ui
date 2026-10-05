@@ -185,24 +185,6 @@ export const baseApi = createApi({
     // The workspace's detection-rule overlay. Saving one changes what every
     // later scan looks for, so it also moves the staleness figures.
     "RuleCatalog",
-    // Governance + provisioning (see app/api/governanceApi.ts)
-    "Provenance",
-    "SoDRule",
-    "SoDViolation",
-    "CertificationCampaign",
-    "CertificationItem",
-    "ProvisioningInstruction",
-    "BirthrightPolicy",
-    "StaleBirthright",
-    "OrphanedAgent",
-    // Agent policy + enforcement. A policy is a standing instruction reconciled
-    // every five minutes, so a mutation invalidates the lookahead and the
-    // warnings as well as the policy list — all three are views of the same
-    // decision and going stale separately would show contradictory futures.
-    "AgentPolicy",
-    "UpcomingAction",
-    "PolicyWarning",
-    "EnforcementPlan",
     // Kubernetes access graph (provider 'k8s' in iga_*).
     "K8sCluster",
     "K8sIdentity",

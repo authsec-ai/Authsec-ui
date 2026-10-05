@@ -157,7 +157,7 @@ export function PipelineNotice({ pipeline }: { pipeline: Pipeline }) {
         title="Connect an AWS account"
         body="Connect an AWS account to discover its agents and workloads, the identities they run as, and what those identities are granted."
         actionLabel="Connect AWS"
-        actionHref="/iga/integrations"
+        actionHref="/iga/connections"
       />
     );
   }
@@ -188,7 +188,7 @@ export function PipelineNotice({ pipeline }: { pipeline: Pipeline }) {
             {state.action ? <AccountAction account={account} kind={state.action} /> : null}
             {state.action === "retry" ? (
               <Link
-                to={`/iga/integrations?connector=${encodeURIComponent(connectorId(account.integration))}`}
+                to={`/iga/connections/${encodeURIComponent(connectorId(account.integration))}`}
                 className="shrink-0 text-sm font-semibold text-(--color-primary-text) hover:underline"
               >
                 View details

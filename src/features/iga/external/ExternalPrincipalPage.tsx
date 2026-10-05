@@ -59,7 +59,7 @@ function Overview({ p }: { p: ExternalPrincipalDetail }) {
           title={p.account ? `Account ${p.account.id} is not connected` : "Its account could not be determined"}
           body="Nothing about this principal could be read, so what it is and what it can do are unknown. That is not the same as absent."
           actionLabel={p.account ? "Connect the account" : undefined}
-          actionHref={p.account ? "/iga/integrations" : undefined}
+          actionHref={p.account ? "/iga/connections" : undefined}
         />
       ) : null}
       <TableCard>

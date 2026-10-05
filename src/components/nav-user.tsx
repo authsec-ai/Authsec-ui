@@ -202,7 +202,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuGroup>
               <DropdownMenuItem
-                onClick={() => navigate(isIgaConsole ? "/dashboard" : "/iga/integrations")}
+                onClick={() => navigate(isIgaConsole ? "/dashboard" : "/iga/discovery")}
                 className="flex items-center gap-2"
               >
                 {isIgaConsole ? (

@@ -8,18 +8,16 @@
  * when present — never fabricated.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowLeft, ShieldCheck, ShieldAlert, KeyRound } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
-import { ActuationTokenDialog } from "../governance/ActuationTokenDialog";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
-import { EnforcementStatusCard } from "./EnforcementStatusCard";
 import { GitHubRepositoryPanel } from "./GitHubRepositoryPanel";
 import { GitHubScanPanel } from "./GitHubScanPanel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,7 +54,6 @@ export default function IntegrationDetailPage() {
   });
   const { data: agentsData, isError: agentsFailed } = useListDiscoveredAgentsQuery();
   useBreadcrumbTail(source ? `/iga/integrations/${id}` : null, source?.display_name ?? null, { label: "Integrations", href: "/iga/integrations" });
-  const [tokenOpen, setTokenOpen] = useState(false);
 
   const foundHere = useMemo(
     () => (agentsData?.agents ?? []).filter((a) => a.discovery_source_id === id),
@@ -178,53 +175,6 @@ export default function IntegrationDetailPage() {
             ) : null}
           </div>
 
-          {/* Actuation posture: whether quarantine decisions actually enforce here. */}
-          <div
-            className={`rounded-md border-l-2 px-4 py-3 text-xs ${
-              status.actuationEnabledAt
-                ? "border-l-(--color-success-text) bg-(--color-success-soft)"
-                : "border-l-(--color-warning-text) bg-(--color-warning-soft)"
-            }`}
-          >
-            {status.actuationEnabledAt ? (
-              <span className="inline-flex items-center gap-1.5 text-(--color-success-text)">
-                <ShieldCheck className="size-3.5" />
-                <span>
-                  <strong className="font-medium">Enforcement is live.</strong>{" "}
-                  <span className="text-foreground/80">
-                    Actuation was enabled{" "}
-                    {formatDistanceToNow(new Date(status.actuationEnabledAt), { addSuffix: true })}.
-                    Quarantine decisions become NetworkPolicies in this cluster.
-                  </span>
-                </span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-(--color-warning-text)">
-                <ShieldAlert className="size-3.5" />
-                <span>
-                  <strong className="font-medium">Quarantine is advisory here.</strong>{" "}
-                  <span className="text-foreground/80">
-                    Actuation is not enabled on this connector, so quarantine decisions are
-                    recorded but nothing in that cluster enforces them — a quarantined agent keeps
-                    full network access. Mint an actuation token and install the agent with the
-                    actuation role to change that.
-                  </span>
-                </span>
-              </span>
-            )}
-            <div className="mt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
-                onClick={() => setTokenOpen(true)}
-              >
-                <KeyRound className="size-3.5" />
-                {status.actuationEnabledAt ? "Re-mint actuation token" : "Mint actuation token"}
-              </Button>
-            </div>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Workloads scanned"
@@ -290,7 +240,6 @@ export default function IntegrationDetailPage() {
               </CardContent>
             </Card>
 
-            <EnforcementStatusCard connectorId={source.id} />
 
             <Card>
               <CardContent className="space-y-2 px-4 py-4">
@@ -309,12 +258,6 @@ export default function IntegrationDetailPage() {
         </>
       )}
 
-      <ActuationTokenDialog
-        connectorId={source.id}
-        connectorName={source.display_name}
-        open={tokenOpen}
-        onOpenChange={setTokenOpen}
-      />
     </ConsolePage>
   );
 }
