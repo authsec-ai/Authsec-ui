@@ -69,7 +69,7 @@ import K8sObjectPage from "./features/iga/discovery/K8sObjectPage";
 import PolicyPage from "./features/iga/policy/PolicyPage";
 import LogsPage from "./features/iga/logs/LogsPage";
 import RetiredPage from "./features/iga/retired/RetiredPage";
-import { legacyToDiscovery, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
+import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
 import IdentityPage from "./features/iga/identities/IdentityPage";
 import ResourcePage from "./features/iga/resources/ResourcePage";
 import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
@@ -155,7 +155,8 @@ function LegacyIdRedirect({ base }: { base: string }) {
 /** An earlier list route → Discovery, with its filters (`account` becomes `source`). */
 function DiscoveryRedirect({ from }: { from: LegacyDiscoveryRoute }) {
   const { search } = useLocation();
-  return <Navigate to={legacyToDiscovery(from, search)} replace />;
+  const r = legacyRedirect(from, search);
+  return <Navigate to={r.to} state={r.state} replace />;
 }
 
 function LegacyClientOnboardRedirect() {
