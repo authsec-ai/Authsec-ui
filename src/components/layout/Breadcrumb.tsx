@@ -159,6 +159,11 @@ export function Breadcrumb() {
         { label: tail.list.label, href: tail.list.href },
       );
     } else {
+      // The object's own segment, and anything after it (its tab, a sub-page),
+      // is replaced by the tail: keep only the segments that precede it. An
+      // object id that is not a UUID is still in the URL, so count, don't guess.
+      const depth = tail.path.split("/").filter(Boolean).length - 1;
+      if (depth >= 1 && breadcrumbs.length > depth + 1) breadcrumbs.length = depth + 1;
       const last = breadcrumbs[breadcrumbs.length - 1];
       if (last && last !== breadcrumbs[0]) {
         breadcrumbs[breadcrumbs.length - 1] = tail.list

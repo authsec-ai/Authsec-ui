@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
-import { connectionsApi, useListConnectionsQuery, type Connection, type ConnectionProvider } from "@/app/api/connectionsApi";
+import { connectionsApi, useListDiscoveryConnectionsQuery, type Connection, type ConnectionProvider } from "@/app/api/connectionsApi";
 import { useConvertGitHubAppManifestMutation } from "@/app/api/discoveryApi";
 import { useAppDispatch } from "@/app/hooks";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -72,7 +72,7 @@ export default function ConnectionsPage() {
 
   // A scan in flight changes the row; follow it until it settles.
   const [poll, setPoll] = useState(0);
-  const query = useListConnectionsQuery(undefined, { pollingInterval: poll, skipPollingIfUnfocused: true });
+  const query = useListDiscoveryConnectionsQuery(undefined, { pollingInterval: poll, skipPollingIfUnfocused: true });
   const all = useMemo(() => query.data ?? [], [query.data]);
   const inFlight = all.some(scanInFlight);
   useEffect(() => setPoll(inFlight ? POLL_MS : 0), [inFlight]);

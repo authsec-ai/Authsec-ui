@@ -13,7 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Link, useParams } from "react-router-dom";
 
 import { ARCHETYPE_LABELS, ORIGIN_LABELS, SOURCE_LABELS, evidenceModeOf, useGetDiscoveredAgentQuery } from "@/app/api/discoveryApi";
-import { useListConnectionsQuery } from "@/app/api/connectionsApi";
+import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
@@ -38,7 +38,7 @@ function ago(iso?: string | null): string {
 export default function SightingDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const q = useGetDiscoveredAgentQuery(id, { skip: !id });
-  const connections = useListConnectionsQuery();
+  const connections = useListDiscoveryConnectionsQuery();
   const clients = useClientsLookup();
   const a = q.data;
   const back = discoveryListHref("sightings");

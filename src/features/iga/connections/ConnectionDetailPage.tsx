@@ -39,7 +39,7 @@ import {
 import { useCanAdminister } from "./permissions";
 import { useConnection } from "./useConnection";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
-import { useListConnectionsQuery } from "@/app/api/connectionsApi";
+import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { ProviderGlyph } from "./ProviderGlyph";
 
 const BACK = (
@@ -54,7 +54,7 @@ export default function ConnectionDetailPage() {
   const location = useLocation();
   const canAdminister = useCanAdminister();
   const { connection: c, loading, failure, notFound, refetch, refreshFailed } = useConnection(id);
-  const all = useListConnectionsQuery().data ?? [];
+  const all = useListDiscoveryConnectionsQuery().data ?? [];
   const { pending, failures, run, dismiss } = useConnectionActions();
   const [revokeOpen, setRevokeOpen] = useState(false);
 

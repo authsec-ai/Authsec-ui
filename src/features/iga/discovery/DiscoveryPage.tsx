@@ -13,7 +13,7 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 
-import { useListConnectionsQuery } from "@/app/api/connectionsApi";
+import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { DecisionBanner } from "@/components/console/status";
 import { loadFailureOf } from "@/components/console/load-failure";
@@ -53,7 +53,7 @@ export default function DiscoveryPage() {
   const url = useDiscoveryUrl();
   useSlashToSearch();
 
-  const connQ = useListConnectionsQuery();
+  const connQ = useListDiscoveryConnectionsQuery();
   const connections = useMemo(() => connQ.data ?? [], [connQ.data]);
   const connected = useMemo(() => connectedProviders(connections), [connections]);
 

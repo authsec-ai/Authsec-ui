@@ -91,7 +91,7 @@ export const connectionsApi = baseApi.injectEndpoints({
     getCanAdminister: builder.query<{ can_administer: boolean }, void>({
       query: () => ({ url: "/authsec/discovery/connections/can-administer" }),
     }),
-    listConnections: builder.query<Connection[], void>({
+    listDiscoveryConnections: builder.query<Connection[], void>({
       query: () => ({ url: "/authsec/discovery/connections" }),
       transformResponse: (r: { connections?: Connection[] }) => r?.connections ?? [],
       providesTags: ["Connections"],
@@ -99,4 +99,4 @@ export const connectionsApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useListConnectionsQuery, useGetCanAdministerQuery } = connectionsApi;
+export const { useListDiscoveryConnectionsQuery, useGetCanAdministerQuery } = connectionsApi;
