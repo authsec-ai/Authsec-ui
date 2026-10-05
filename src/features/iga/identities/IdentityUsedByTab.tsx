@@ -130,24 +130,24 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
           ) : identity.kind === "iam_role" ? (
             <>
               <SectionList
-                label="Workloads configured to run as it"
+                label="Workloads bound directly"
                 first={data.workloads ?? none<UsedByWorkload>()}
                 loadMore={more("workloads")}
                 onStale={onStale}
               onRefresh={refresh}
                 itemKey={(r) => r.claim}
                 render={(r) => <WorkloadBody r={r} from={from} />}
-                empty={empty("No workload is configured to run as this identity.")}
+                empty={empty("No workload is directly bound to this identity.")}
               />
               <SectionList
-                label="Principals that may assume it"
+                label="Trusted principals (incoming)"
                 first={data.principals ?? none<UsedByPrincipal>()}
                 loadMore={more("principals")}
                 onStale={onStale}
               onRefresh={refresh}
                 itemKey={(r) => r.claim}
                 render={(r) => <PrincipalBody r={r} from={from} />}
-                empty={empty("Its trust policy names no principal we could resolve.")}
+                empty={empty("Its trust policy names no principal we could resolve. Declared trust only, not a proven assumption.")}
               />
               {data.principals?.limitations?.map((code) => (
                 <p key={code} className="text-xs text-(--color-text-muted)">

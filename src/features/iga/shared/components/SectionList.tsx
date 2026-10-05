@@ -24,6 +24,7 @@ export function SectionList<T>({
   itemKey,
   render,
   empty,
+  hideCount = false,
 }: {
   label: string;
   first: PagedSection<T>;
@@ -36,6 +37,8 @@ export function SectionList<T>({
   render: (item: T) => ReactNode;
   /** The Empty answer; null hides the section when it has nothing. */
   empty: ReactNode | null;
+  /** The section is not summarised by a number (an outgoing "may assume" has no verified count). */
+  hideCount?: boolean;
 }) {
   const [extra, setExtra] = useState<T[]>([]);
   const [cursor, setCursor] = useState(first.next_cursor);
@@ -75,8 +78,8 @@ export function SectionList<T>({
       title={label}
       flush
       count={
-        total !== undefined && items.length
-          ? `${items.length} of ${first.total_known ? total : `more than ${total?.toLocaleString()}`}`
+        !hideCount && total !== undefined && items.length
+          ? `${items.length} of ${first.total_known ? total : `at least ${total?.toLocaleString()}`}`
           : undefined
       }
     >

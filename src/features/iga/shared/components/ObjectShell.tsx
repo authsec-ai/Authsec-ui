@@ -163,7 +163,7 @@ export function ObjectShell({
           <DecisionBanner
             tone="neutral"
             title={`${object.name} is not in the current publication`}
-            body={`Overview shows what was loaded${object.publishedAt ? ` as of ${format(new Date(object.publishedAt), "d MMM HH:mm")}` : ""}. Changes stays available. The other tabs have no current data.`}
+            body={`Overview shows what was loaded${object.publishedAt ? ` as of ${format(new Date(object.publishedAt), "d MMM HH:mm")}` : ""}. Changes is still available; the other tabs have no current data.`}
           />
         ) : null}
         {failure && failure.kind !== "revision_stale" ? (
@@ -226,20 +226,18 @@ export function ObjectShell({
         ) : undefined
       }
       objectPage
-      objectCrumb={
-        object
-          ? {
-              path: base,
-              label: object.name,
-              list: {
-                label: TYPE_LABEL[listType],
-                // The segment returns to the list as the reader left it: filters, sort, page.
-                href: discoveryListHref(listType),
-                parent: { label: "Discovery", href: DISCOVERY_PATH },
-              },
-            }
-          : undefined
-      }
+      // The trail is Discovery > list > object from the first render, so a failed or
+      // missing object still returns to its list; the name replaces the kind once loaded.
+      objectCrumb={{
+        path: base,
+        label: object?.name ?? kindLabel,
+        list: {
+          label: TYPE_LABEL[listType],
+          // The segment returns to the list as the reader left it: filters, sort, page.
+          href: discoveryListHref(listType),
+          parent: { label: "Discovery", href: DISCOVERY_PATH },
+        },
+      }}
       publishedAt={object?.publishedAt}
       pageEvidence={false}
     >
