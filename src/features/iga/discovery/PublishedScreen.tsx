@@ -71,7 +71,6 @@ import {
   RUNTIME_SHORT,
   accountLabel,
   accountWithId,
-  countText,
 } from "../shared/labels";
 import { incompleteAccounts, unfilteredEmpty, useAccountNames } from "../shared/listSummary";
 import { resolvePagedView, useRestartOnListingChanged } from "../shared/listView";
@@ -79,7 +78,7 @@ import { usePaging, useRestoreScroll } from "../shared/paging";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { countOfExact, countWithNoun } from "../shared/components/countValue";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
-import { fixedFacet, reportedFacet, sourceFacet, type FacetOptions } from "./facets";
+import { facetSummary, fixedFacet, reportedFacet, sourceFacet, type FacetOptions } from "./facets";
 import type { FacetSpec } from "./FacetBar";
 import { EmptyList, FilteredEmpty, SourceHasNoRows, UnknownSource } from "./ListStates";
 import { ResourceHolders, WorkloadFact } from "./PublishedPreviewFacts";
@@ -160,7 +159,7 @@ function PublishedBody<Row>(b: BodyProps<Row>) {
   const narrowing = [
     p.url.q && `search "${p.url.q}"`,
     p.scope.kind === "one" && `source ${p.scope.source.label}`,
-    ...b.facets.filter((f) => f.key !== "source" && f.value !== undefined).map((f) => f.label),
+    ...b.facets.filter((f) => f.key !== "source" && f.value !== undefined).map(facetSummary),
   ].filter(Boolean) as string[];
 
   const selectedId = p.url.sel;

@@ -18,10 +18,10 @@
  * which is exactly why it deserves top billing. Burying those rows inside
  * per-identity views would hide the only rows nobody owns.
  *
- * Rendered as the Compute tab of CloudInventoryLayout, which owns the page
- * header and the tab strip — so this file begins at the body. That shell is
- * one level ABOVE any single identity or account, which is what keeps
- * unattributed rows visible.
+ * Rendered by Discovery as the Latest collected view of workloads, which owns
+ * the page header and the type switcher — so this file begins at the body.
+ * Discovery sits one level ABOVE any single identity or account, which is what
+ * keeps unattributed rows visible.
  *
  * ── Terminology ─────────────────────────────────────────────────────────────
  *
@@ -489,10 +489,10 @@ export default function AWSComputePage() {
   const unattributed = rows.filter((w) => !w.identity_id).length;
 
   return (
-    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // The page header and type switcher belong to Discovery; this is the
     // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
     <div className="space-y-4">
-      {/* A local view switch, not a fourth Cloud Inventory tab. AgentCore
+      {/* A local view switch, not a fourth type in Discovery. AgentCore
           workload identities are compute-adjacent — AgentCore's own principals
           — but they are evidence rows with no subject, so they cannot share
           this page's table. Styled as pills rather than a second `.tabbar`,

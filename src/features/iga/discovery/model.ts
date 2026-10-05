@@ -6,7 +6,7 @@
  * all answer from the same place.
  */
 
-import type { DiscoverySourceKind } from "@/app/api/discoveryApi";
+import type { DiscoveredAgent, DiscoverySourceKind } from "@/app/api/discoveryApi";
 
 import {
   PROVIDER_LABEL,
@@ -194,3 +194,11 @@ export function planSwitch(current: URLSearchParams, from: Scope, to: Scope): { 
 
 /** The collector kind each provider's sightings come from. */
 export const SIGHTING_SOURCE: Record<"k8s" | "github", DiscoverySourceKind> = { k8s: "k8s_webhook", github: "repo_scan" };
+
+/** The non-default ref a finding came from, or null on the default branch or off a repository scan. */
+export function nonDefaultBranch(agent: DiscoveredAgent): string | null {
+  const meta = (agent.metadata ?? {}) as Record<string, unknown>;
+  if (meta["is_default_branch"] !== false) return null;
+  const b = meta["branch"];
+  return typeof b === "string" && b !== "" ? b : null;
+}

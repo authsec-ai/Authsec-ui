@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export type GlyphProvider = "aws" | "gcp" | "k8s" | "github";
 
-export const GLYPH_PROVIDER_LABEL: Record<GlyphProvider, string> = {
+const GLYPH_PROVIDER_LABEL: Record<GlyphProvider, string> = {
   aws: "AWS",
   gcp: "Google Cloud",
   k8s: "Kubernetes",

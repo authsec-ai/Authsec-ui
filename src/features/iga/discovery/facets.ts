@@ -9,7 +9,7 @@
 import type { GraphFacetValue } from "@/app/api/igaGraphApi";
 
 import type { CountValue } from "../shared/components/countValue";
-import type { FacetOption } from "./FacetBar";
+import type { FacetOption, FacetSpec } from "./FacetBar";
 import type { Source } from "./sources";
 
 type Facets = Record<string, GraphFacetValue[] | null> | undefined;
@@ -60,4 +60,10 @@ export function sourceFacet(sources: Source[], reported: GraphFacetValue[] | nul
     })),
     countsUnavailable: reported === null,
   };
+}
+
+/** "Region: eu-west-1" — a facet in force, as the empty state names what narrows the list. */
+export function facetSummary(f: FacetSpec): string {
+  if (f.kind === "toggle" || f.value === undefined) return f.label;
+  return `${f.label}: ${f.options?.find((o) => o.value === f.value)?.label ?? f.value}`;
 }

@@ -20,9 +20,9 @@
  * resource in the connector purely to label one statement row — a lookup, not
  * a view.
  *
- * It IS a tab of CloudInventoryLayout, which is a different thing entirely:
- * that shell sits at account grain, not identity grain, and owns the page
- * header and tab strip — so this file begins at the body.
+ * It IS a type in Discovery, which is a different thing entirely: that shell
+ * sits at account grain, not identity grain, and owns the page header and type
+ * switcher — so this file begins at the body.
  *
  * ── How much data this page loads, and why ──────────────────────────────────
  *
@@ -574,7 +574,7 @@ export default function AWSResourcesPage() {
   const loading = resourcesQuery.isLoading || connectorsQuery.isLoading;
 
   return (
-    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // The page header and type switcher belong to Discovery; this is the
     // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
     <div className="space-y-4">
       {resourcesQuery.isError ? (

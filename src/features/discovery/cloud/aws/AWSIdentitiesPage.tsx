@@ -9,8 +9,8 @@
  * account", needs table width, search, paging and a deep link, and is where a
  * reader spends time. The drawer keeps the connection view; this owns contents.
  *
- * Rendered as the Identities tab of CloudInventoryLayout, which owns the page
- * header and the tab strip — so this file begins at the body. Everything below
+ * Rendered by Discovery as the Latest collected view of identities, which owns
+ * the page header and the type switcher — so this file begins at the body. Everything below
  * still follows the console table standard (AGENTS.md → "Console page
  * standard"): MetricStrip → ConsoleFilterBar → TableCard/flush → AdaptiveTable
  * → RightDrawer. Nothing here hand-rolls a page header.
@@ -492,7 +492,7 @@ export default function AWSIdentitiesPage({
   const loading = identitiesQuery.isLoading || connectorsQuery.isLoading;
 
   return (
-    // The page header and tab strip belong to CloudInventoryLayout; this is the
+    // The page header and type switcher belong to Discovery; this is the
     // tab body. Keeps ConsolePage's own body rhythm so spacing is unchanged.
     <div className="space-y-4">
       {identitiesQuery.isError ? (

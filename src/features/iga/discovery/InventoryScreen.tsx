@@ -110,16 +110,16 @@ export default function InventoryScreen(p: ScreenProps) {
   const sweeps = clusterSweeps(list.currentData?.meta.coverage, clustersQ.data?.clusters);
 
   // Namespace: the inventory has no such filter, so it narrows the loaded rows.
-  const loadedRows = rawView.kind === "rows" ? rawView.rows : [];
+  const loaded = list.currentData?.data;
   const namespaces = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of loadedRows) if (r.sub_scope) m.set(r.sub_scope, (m.get(r.sub_scope) ?? 0) + 1);
+    for (const r of loaded ?? []) if (r.sub_scope) m.set(r.sub_scope, (m.get(r.sub_scope) ?? 0) + 1);
     return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [loadedRows]);
-  const view: PagedView<InventoryRow, InventoryMeta> =
-    rawView.kind === "rows" && namespace ? { ...rawView, rows: rawView.rows.filter((r) => r.sub_scope === namespace) } : rawView;
+  }, [loaded]);
+  const view: PagedView<InventoryRow, InventoryMeta> = rawView;
+  const inNamespace = (r: InventoryRow) => !namespace || r.sub_scope === namespace;
 
-  const rows = view.kind === "rows" ? view.rows : [];
+  const rows = view.kind === "rows" ? view.rows.filter(inNamespace) : [];
   const selectedId = p.url.sel;
   const selected = selectedId ? rows.find((r) => refId(r.ref) === selectedId) : undefined;
   const dropSelection = view.kind === "rows" && !view.dim && !view.footerFailure && !!selectedId && !selected;
@@ -411,6 +411,8 @@ export default function InventoryScreen(p: ScreenProps) {
                   permission="iga:read"
                   chosenColumns={prefs.chosen}
                   onColumnsLayout={setLayout}
+                  rowFilter={namespace ? inNamespace : undefined}
+                  filterNote={(shown, loaded) => `Namespace ${namespace}: ${shown} of the ${loaded} loaded rows. The namespace filter acts on the page loaded, not on the whole inventory.`}
                   empty={
                     narrowing.length ? (
                       <FilteredEmpty subject={type} narrowing={narrowing} onClear={() => p.url.patch({ q: null, kind: null, namespace: null, source: null })} />

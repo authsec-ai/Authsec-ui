@@ -77,15 +77,17 @@ export default function DiscoveryPage() {
     if (url.provider && connected.includes(url.provider)) writeLastProvider(url.provider);
   }, [url.provider, connected]);
 
-  const sources = useMemo(() => (provider ? sourcesOf(connections, provider) : []), [connections, provider]);
-  const needsScopeId = (provider === "aws" && view === "published") || provider === "k8s";
+  // Nothing is read for a provider the workspace has no connection to.
+  const active: DiscoveryProvider | undefined = provider && connected.includes(provider) ? provider : undefined;
+  const sources = useMemo(() => (active ? sourcesOf(connections, active) : []), [connections, active]);
+  const needsScopeId = (active === "aws" && view === "published") || active === "k8s";
   const scope = resolveSource(sources, url.source, needsScopeId);
   const scoped = scope.kind === "one" || scope.kind === "no_rows" ? [scope.source.connection] : scope.kind === "all" ? sources.map((s) => s.connection) : [];
 
-  const awsPublished = provider === "aws" && view === "published";
+  const awsPublished = active === "aws" && view === "published";
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);
   usePipeline(ws, !awsPublished);
-  const overview = useDiscoveryOverview({ ws, provider, view, scope, q: url.q, rev, epoch });
+  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch });
 
   const current: Scope | undefined = provider ? { provider, type, view } : undefined;
   const switchTo = (to: Scope) => {

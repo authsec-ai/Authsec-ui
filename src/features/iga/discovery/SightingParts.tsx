@@ -69,11 +69,3 @@ export function SightingEvidence({ agent }: { agent: DiscoveredAgent }) {
     </span>
   );
 }
-
-/** The non-default ref a finding came from, or null on the default branch or off a repository scan. */
-export function nonDefaultBranch(agent: DiscoveredAgent): string | null {
-  const meta = (agent.metadata ?? {}) as Record<string, unknown>;
-  if (meta["is_default_branch"] !== false) return null;
-  const b = meta["branch"];
-  return typeof b === "string" && b !== "" ? b : null;
-}

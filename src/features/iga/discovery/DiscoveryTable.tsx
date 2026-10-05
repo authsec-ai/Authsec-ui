@@ -87,6 +87,8 @@ export function DiscoveryTable<T>({
   chosenColumns,
   onColumnsLayout,
   incompleteAccounts,
+  rowFilter,
+  filterNote,
 }: {
   tableId: string;
   view: PagedView<T, PagerMeta>;
@@ -106,6 +108,13 @@ export function DiscoveryTable<T>({
   chosenColumns?: string[];
   onColumnsLayout?: (layout: AdaptiveColumnsLayout) => void;
   incompleteAccounts?: string[];
+  /**
+   * A client-side narrowing of the rows LOADED (a search the server has no `q`
+   * for, a namespace). The pager still describes the server's page, so the
+   * counts under it stay the server's; `filterNote` says what was narrowed.
+   */
+  rowFilter?: (row: T) => boolean;
+  filterNote?: (shown: number, loaded: number) => string;
 }) {
   useAnnounce(
     view.kind === "failed"
@@ -163,7 +172,8 @@ export function DiscoveryTable<T>({
   if (view.kind === "failed") {
     return <FailurePanel failure={view.failure} subject={subject} permission={permission} onRetry={onRetry} onRefresh={onRefresh} />;
   }
-  if (!view.rows.length && !view.footerFailure) return <>{empty}</>;
+  const shown = rowFilter ? view.rows.filter(rowFilter) : view.rows;
+  if (!shown.length && !view.footerFailure) return <>{empty}</>;
 
   return (
     <>
@@ -171,7 +181,7 @@ export function DiscoveryTable<T>({
         <AdaptiveTable
           tableId={tableId}
           columns={columns}
-          data={view.rows}
+          data={shown}
           getRowId={getRowId}
           enableSelection={false}
           enableExpansion={false}
@@ -185,6 +195,11 @@ export function DiscoveryTable<T>({
           cardsBelow={640}
         />
       </div>
+      {rowFilter && filterNote ? (
+        <p role="status" className="border-t border-(--color-border-subtle) px-4 py-2 text-xs text-(--color-text-muted)">
+          {filterNote(shown.length, view.rows.length)}
+        </p>
+      ) : null}
       <CursorPager
         meta={view.meta}
         pageIndex={pageIndex}

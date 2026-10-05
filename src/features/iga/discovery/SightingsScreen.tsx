@@ -37,13 +37,13 @@ import type { PagedView } from "../shared/listView";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
-import { SIGHTING_SOURCE } from "./model";
+import { nonDefaultBranch, SIGHTING_SOURCE } from "./model";
 import { useClientsLookup } from "./useClientsLookup";
 import type { FacetSpec } from "./FacetBar";
 import { EmptyList, FilteredEmpty, UnknownSource } from "./ListStates";
 import { ScreenFrame } from "./ScreenFrame";
 import type { ScreenProps } from "./screenTypes";
-import { nonDefaultBranch, SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
+import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
 
 const MUTED = "text-(--color-text-muted)";
 const PAGE = 50;
@@ -82,17 +82,15 @@ export default function SightingsScreen(p: ScreenProps) {
 
   const needle = p.url.searchText.trim().toLowerCase();
   const loaded = q.currentData?.agents;
+  const matches = (a: DiscoveredAgent) => !needle || [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]].join(" ").toLowerCase().includes(needle);
   const rows = useMemo(() => {
     if (!loaded) return undefined;
-    const filtered = needle
-      ? loaded.filter((a) => [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]].join(" ").toLowerCase().includes(needle))
-      : loaded;
-    return [...filtered].sort((a, b) =>
+    return [...loaded].sort((a, b) =>
       sort === "name"
         ? (a.display_name || "").localeCompare(b.display_name || "")
         : RUNTIME_RANK[a.runtime_status] - RUNTIME_RANK[b.runtime_status] || new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
     );
-  }, [loaded, needle, sort]);
+  }, [loaded, sort]);
 
   const total = q.currentData?.total;
   const view: PagedView<DiscoveredAgent, { next_cursor: string | null; limit: number; total_known: boolean; total?: number }> = (() => {
@@ -107,7 +105,7 @@ export default function SightingsScreen(p: ScreenProps) {
 
   const clients = useClientsLookup();
   const selectedId = p.url.sel;
-  const selected = selectedId ? (rows ?? []).find((a) => a.id === selectedId) : undefined;
+  const selected = selectedId ? (rows ?? []).filter(matches).find((a) => a.id === selectedId) : undefined;
   const dropSelection = view.kind === "rows" && !view.dim && !view.footerFailure && !!selectedId && !selected;
   const { select } = p.url;
   useEffect(() => {
@@ -297,6 +295,8 @@ export default function SightingsScreen(p: ScreenProps) {
                   permission="discovery:read"
                   chosenColumns={prefs.chosen}
                   onColumnsLayout={setLayout}
+                  rowFilter={needle ? matches : undefined}
+                  filterNote={(shown, loadedCount) => `Search matches ${shown} of the ${loadedCount} loaded rows. The server has no search for sightings, so it cannot look further.`}
                   empty={
                     narrowing.length ? (
                       <FilteredEmpty
