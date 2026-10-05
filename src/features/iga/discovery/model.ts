@@ -184,6 +184,7 @@ export function planSwitch(current: URLSearchParams, from: Scope, to: Scope): { 
     }
     let reason: string;
     if (!sameProvider) reason = `belongs to ${PROVIDER_LABEL[from.provider]}`;
+    else if (allowed.has(fk)) reason = sameView ? "means something different for each type, so it is reset" : "means something different in each view, so it is reset";
     else if (!sameView) reason = to.view === "latest" ? "not a Latest collected filter" : "not a Published filter";
     else if (from.type !== to.type) reason = `not a ${NOUN[to.type]} filter`;
     else reason = "not available here";

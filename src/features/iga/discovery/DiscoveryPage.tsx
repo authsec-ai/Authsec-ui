@@ -55,7 +55,7 @@ export default function DiscoveryPage() {
 
   const connQ = useListConnectionsQuery();
   const connections = useMemo(() => connQ.data ?? [], [connQ.data]);
-  const connected = connectedProviders(connections);
+  const connected = useMemo(() => connectedProviders(connections), [connections]);
 
   // The default rule: the URL, then what was last used in this browser, else the
   // most recently available result, else the only connected provider.
@@ -83,6 +83,12 @@ export default function DiscoveryPage() {
   const needsScopeId = (active === "aws" && view === "published") || active === "k8s";
   const scope = resolveSource(sources, url.source, needsScopeId);
   const scoped = scope.kind === "one" || scope.kind === "no_rows" ? [scope.source.connection] : scope.kind === "all" ? sources.map((s) => s.connection) : [];
+
+  // A link that named the source by its account id is rewritten to the connection.
+  const canonicalSource = scope.kind === "one" && url.source !== scope.source.id ? scope.source.id : undefined;
+  useEffect(() => {
+    if (canonicalSource) normalise({ source: canonicalSource });
+  }, [canonicalSource, normalise]);
 
   const awsPublished = active === "aws" && view === "published";
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);

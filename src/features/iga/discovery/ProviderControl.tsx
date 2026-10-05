@@ -20,7 +20,7 @@ export function ProviderControl({
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs font-medium text-(--color-text-muted)">Provider</span>
-      <Select value={value} onValueChange={(v) => onChange(v as DiscoveryProvider)}>
+      <Select value={value ?? ""} onValueChange={(v) => onChange(v as DiscoveryProvider)}>
         <SelectTrigger className="h-9 w-[170px]" aria-label="Provider">
           <SelectValue placeholder="Choose a provider" />
         </SelectTrigger>

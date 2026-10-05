@@ -47,7 +47,9 @@ export type SourceScope =
 
 export function resolveSource(sources: Source[], id: string | undefined, needsScopeId: boolean): SourceScope {
   if (!id) return { kind: "all" };
-  const source = sources.find((s) => s.id === id);
+  // Earlier links named an AWS account by its account id (`/iga/estate?account=`),
+  // later ones by the connection; both resolve to the connection.
+  const source = sources.find((s) => s.id === id) ?? sources.find((s) => s.scopeId === id || s.connection.native_id === id);
   if (!source) return { kind: "unknown", id };
   if (needsScopeId && !source.scopeId) return { kind: "no_rows", source };
   return { kind: "one", source };
