@@ -48,9 +48,6 @@ export default function SightingDetailPage() {
   const failure = loadFailureOf(q.error);
   const shell = (children: React.ReactNode, description?: React.ReactNode) => (
     <ConsolePage title={name} description={description} variant="object">
-      <Link to={back} className="text-sm font-medium text-(--color-primary-text) hover:underline">
-        ← Back to Discovery
-      </Link>
       {children}
     </ConsolePage>
   );

@@ -32,12 +32,10 @@ import { discoveryListHref, typeCrumbLabel } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
 
-function Shell({ title, description, back, children }: { title: string; description?: string; back: string; children: React.ReactNode }) {
+/** The global breadcrumb is the way back (it restores the list the reader left); the page carries no second trail. */
+function Shell({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
     <ConsolePage title={title} description={description} variant="object">
-      <Link to={back} className="text-sm font-medium text-(--color-primary-text) hover:underline">
-        ← Back to Discovery
-      </Link>
       {children}
     </ConsolePage>
   );
@@ -81,7 +79,7 @@ export default function K8sObjectPage() {
 
   if (!isWorkload && !isIdentity) {
     return (
-      <Shell title="Not found" back={discoveryListHref("workloads")}>
+      <Shell title="Not found">
         <Notice title="This is not a Kubernetes object page">The address names an object kind Discovery does not have for Kubernetes. Workloads and ServiceAccounts do.</Notice>
       </Shell>
     );
@@ -91,14 +89,14 @@ export default function K8sObjectPage() {
   const failure = loadFailureOf(q.error);
   if (q.isLoading) {
     return (
-      <Shell title={name} back={back}>
+      <Shell title={name}>
         <div className="h-40 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading" />
       </Shell>
     );
   }
   if (failure) {
     return (
-      <Shell title={name} back={back}>
+      <Shell title={name}>
         <TableCard>
           <CardContent variant="flush">
             <FailurePanel failure={failure === "forbidden" ? { kind: "unauthorized" } : { kind: "failed" }} subject={`this ${isWorkload ? "workload" : "ServiceAccount"}`} permission="discovery:read" onRetry={() => void q.refetch()} />
@@ -109,7 +107,7 @@ export default function K8sObjectPage() {
   }
   if (!workload && !identity) {
     return (
-      <Shell title={name} back={back}>
+      <Shell title={name}>
         <Notice title={`Not among the first 500 ${isWorkload ? "workloads" : "ServiceAccounts"} the cluster inventory returns`}>
           It may have been removed, or the link may be from another workspace. The inventory read is capped, so an object beyond the cap cannot be opened here yet.
         </Notice>
@@ -130,7 +128,7 @@ export default function K8sObjectPage() {
   if (workload) {
     const runsAsHref = workload.runs_as_id ? `/iga/k8s/identity/${workload.runs_as_id}${cluster ? `?cluster=${encodeURIComponent(cluster)}` : ""}` : undefined;
     return (
-      <Shell title={workload.display_name} description={["Kubernetes workload", cluster ? `cluster ${cluster}` : null, workload.namespace ? `namespace ${workload.namespace}` : "cluster-wide"].filter(Boolean).join(" · ")} back={back}>
+      <Shell title={workload.display_name} description={["Kubernetes workload", cluster ? `cluster ${cluster}` : null, workload.namespace ? `namespace ${workload.namespace}` : "cluster-wide"].filter(Boolean).join(" · ")}>
         {coverageBanner}
         <Panel title="Execution identity" description="The ServiceAccount this workload executes as. Its access is what the workload can reach in the cluster.">
           <Facts>
@@ -167,7 +165,7 @@ export default function K8sObjectPage() {
   const i = identity!;
   const runners = (workloadsQ.data ?? []).filter((w) => w.runs_as_id === i.id);
   return (
-    <Shell title={i.anchor} description={["Kubernetes ServiceAccount", cluster ? `cluster ${cluster}` : null, i.namespace ? `namespace ${i.namespace}` : null].filter(Boolean).join(" · ")} back={back}>
+    <Shell title={i.anchor} description={["Kubernetes ServiceAccount", cluster ? `cluster ${cluster}` : null, i.namespace ? `namespace ${i.namespace}` : null].filter(Boolean).join(" · ")}>
       {coverageBanner}
       <Panel title="ServiceAccount">
         <Facts>
