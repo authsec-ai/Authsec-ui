@@ -173,10 +173,10 @@ export default function PublishedWorkloads(p: ScreenProps) {
           return (
             <RowActions
               items={[
-            { label: "Preview", onSelect: () => p.url.select(refId(row.original.ref)) },
-            { label: "Open details", onSelect: () => navigate(base) },
-            { label: "Copy ARN", onSelect: () => void copyToClipboard(row.original.arn, "ARN") },
-          ]}
+                { label: "Preview", onSelect: () => p.url.select(refId(row.original.ref)) },
+                { label: "Open details", onSelect: () => navigate(base) },
+                { label: "Copy ARN", onSelect: () => void copyToClipboard(row.original.arn, "ARN") },
+              ]}
             />
           );
         },

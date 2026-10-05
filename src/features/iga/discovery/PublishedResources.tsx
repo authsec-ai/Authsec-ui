@@ -148,10 +148,10 @@ export default function PublishedResources(p: ScreenProps) {
           return (
             <RowActions
               items={[
-            { label: "Preview", onSelect: () => p.url.select(refId(row.original.ref)) },
-            { label: "Open details", onSelect: () => navigate(base) },
-            { label: "Copy reference", onSelect: () => void copyToClipboard(row.original.text, "Reference") },
-          ]}
+                { label: "Preview", onSelect: () => p.url.select(refId(row.original.ref)) },
+                { label: "Open details", onSelect: () => navigate(base) },
+                { label: "Copy reference", onSelect: () => void copyToClipboard(row.original.text, "Reference") },
+              ]}
             />
           );
         },
