@@ -28,7 +28,7 @@ import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { FailurePanel } from "./ListStates";
 import { AccessChain } from "./K8sAccessChain";
 import { clusterSweeps, inScope, K8S_COVERAGE_LABEL } from "./k8s";
-import { discoveryListHref, typeCrumbLabel } from "./urlState";
+import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
 
@@ -66,9 +66,11 @@ export default function K8sObjectPage() {
   const workload = isWorkload ? workloadsQ.data?.find((w) => w.id === id) : undefined;
   const identity = isIdentity ? identitiesQ.data?.find((i) => i.id === id) : undefined;
   const type = isWorkload ? "workloads" : "identities";
-  const back = discoveryListHref(type);
+  const back = discoveryListHref(type, "k8s");
   const name = workload?.display_name ?? identity?.anchor ?? (isWorkload ? "Kubernetes workload" : "Kubernetes ServiceAccount");
-  useBreadcrumbTail(name === "Kubernetes workload" || name === "Kubernetes ServiceAccount" ? null : `/iga/k8s/${kind}/${id}`, name, { label: typeCrumbLabel(type), href: back });
+  // Discovery › Workloads › name from the first render (a fallback name while loading, and
+  // in the not-found and error states), so no segment is a dead link. `/iga/k8s` has no route.
+  useBreadcrumbTail(`/iga/k8s/${kind}/${id}`, name, { label: TYPE_LABEL[type], href: back, parent: { label: "Discovery", href: DISCOVERY_PATH } });
 
   const sweeps = clusterSweeps(undefined, clustersQ.data?.clusters);
   // The sweep behind THIS cluster; without a cluster, the weakest one — an unknown

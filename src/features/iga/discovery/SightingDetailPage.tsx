@@ -27,7 +27,8 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { FailurePanel } from "./ListStates";
 import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
 import { useClientsLookup } from "./useClientsLookup";
-import { discoveryListHref, typeCrumbLabel } from "./urlState";
+import { sightingProvider } from "./model";
+import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
 
@@ -41,9 +42,11 @@ export default function SightingDetailPage() {
   const connections = useListDiscoveryConnectionsQuery();
   const clients = useClientsLookup();
   const a = q.data;
-  const back = discoveryListHref("sightings");
+  // The trail is Discovery › Sightings from the first render, so a missing or failed
+  // sighting still returns to its list; the sighting's own name replaces "Sighting" once loaded.
+  const back = discoveryListHref("sightings", a ? sightingProvider(a.source) : undefined);
   const name = a?.display_name || "Sighting";
-  useBreadcrumbTail(a ? `/iga/sightings/${id}` : null, name, { label: typeCrumbLabel("sightings"), href: back });
+  useBreadcrumbTail(`/iga/sightings/${id}`, name, { label: TYPE_LABEL.sightings, href: back, parent: { label: "Discovery", href: DISCOVERY_PATH } });
 
   const failure = loadFailureOf(q.error);
   const shell = (children: React.ReactNode, description?: React.ReactNode) => (

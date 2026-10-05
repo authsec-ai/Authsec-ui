@@ -71,8 +71,8 @@ export default function DiscoveryPage() {
     if (ready && provider && (!url.provider || !url.type)) normalise({ provider, type });
   }, [ready, provider, type, url.provider, url.type, normalise]);
   useEffect(() => {
-    if (url.type) rememberDiscoverySearch(url.type, url.search);
-  }, [url.type, url.search]);
+    if (url.provider && url.type) rememberDiscoverySearch(url.provider, url.type, url.search);
+  }, [url.provider, url.type, url.search]);
   useEffect(() => {
     if (url.provider && connected.includes(url.provider)) writeLastProvider(url.provider);
   }, [url.provider, connected]);

@@ -67,7 +67,7 @@ function prefKey(): string {
 }
 
 /** The provider last used in this browser: a local preference, never required. */
-export function readLastProvider(): DiscoveryProvider | undefined {
+function readLastProvider(): DiscoveryProvider | undefined {
   try {
     const v = window.localStorage.getItem(prefKey());
     return DISCOVERY_PROVIDERS.find((p) => p === v);

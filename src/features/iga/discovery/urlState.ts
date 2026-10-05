@@ -20,12 +20,14 @@
 
 import { SessionManager } from "@/utils/sessionManager";
 
+import type { RemovedFilter } from "./model";
+
 export const DISCOVERY_PATH = "/iga/discovery";
 
 export const DISCOVERY_PROVIDERS = ["aws", "k8s", "gcp", "github"] as const;
 export type DiscoveryProvider = (typeof DISCOVERY_PROVIDERS)[number];
 
-export const DISCOVERY_TYPES = ["workloads", "identities", "resources", "sightings"] as const;
+const DISCOVERY_TYPES = ["workloads", "identities", "resources", "sightings"] as const;
 export type DiscoveryType = (typeof DISCOVERY_TYPES)[number];
 
 export const DISCOVERY_VIEWS = ["published", "latest"] as const;
@@ -44,11 +46,6 @@ export const TYPE_LABEL: Record<DiscoveryType, string> = {
   resources: "Resources",
   sightings: "Sightings",
 };
-
-/** What the reader sees in a breadcrumb for one list: *Discovery › Workloads*. */
-export function typeCrumbLabel(type: DiscoveryType): string {
-  return `Discovery › ${TYPE_LABEL[type]}`;
-}
 
 export function isProvider(v: string | null | undefined): v is DiscoveryProvider {
   return !!v && (DISCOVERY_PROVIDERS as readonly string[]).includes(v);
@@ -85,30 +82,40 @@ export function discoveryHref(loc: DiscoveryLocation = {}): string {
 
 /* ----------------------- returning to the list the reader left ---------------------- */
 
-// Per signed-in user, workspace and object type, so a workspace switch or a
-// different sign-in never inherits another's filters, and the identities list
-// is not restored when the reader left the workloads list. Memory only.
+// Per signed-in user, workspace, provider and object type, so a workspace switch
+// or a different sign-in never inherits another's filters, and the AWS workloads
+// list is not restored when the reader left the Kubernetes one. Memory only.
 const lastSearch = new Map<string, string>();
 
-function memoryKey(type: DiscoveryType): string {
+function memoryKey(type: DiscoveryType, provider: DiscoveryProvider | "*"): string {
   const s = SessionManager.getSession();
-  return `${s?.user_id ?? "-"}:${s?.workspace_id ?? "-"}:${type}`;
-}
-
-/** Called by Discovery on every change of its query string. */
-export function rememberDiscoverySearch(type: DiscoveryType, search: string): void {
-  lastSearch.set(memoryKey(type), search);
+  return `${s?.user_id ?? "-"}:${s?.workspace_id ?? "-"}:${provider}:${type}`;
 }
 
 /**
- * The URL that restores the list of `type` as the reader left it — filters,
- * sort, page — or its plain default when they have not been there this session.
- * A breadcrumb segment and a Back control use this.
+ * Called by Discovery on every change of its query string. The list is also
+ * remembered as the type's latest of any provider, for a caller that cannot yet
+ * say which provider an object belongs to.
  */
-export function discoveryListHref(type: DiscoveryType): string {
-  const remembered = lastSearch.get(memoryKey(type));
-  if (remembered && new URLSearchParams(remembered).get("type") === type) return `${DISCOVERY_PATH}${remembered}`;
-  return discoveryHref({ type });
+export function rememberDiscoverySearch(provider: DiscoveryProvider, type: DiscoveryType, search: string): void {
+  lastSearch.set(memoryKey(type, provider), search);
+  lastSearch.set(memoryKey(type, "*"), search);
+}
+
+/**
+ * The URL that restores the list of `type` for `provider` as the reader left
+ * it — filters, sort, page — or its plain default when they have not been there
+ * this session. A breadcrumb segment and a Back control use this. With no
+ * provider (the object has not loaded yet) it is the list of that type the
+ * reader was last on, whichever provider that was.
+ */
+export function discoveryListHref(type: DiscoveryType, provider?: DiscoveryProvider): string {
+  const remembered = lastSearch.get(memoryKey(type, provider ?? "*"));
+  if (remembered) {
+    const q = new URLSearchParams(remembered);
+    if (q.get("type") === type && (!provider || q.get("provider") === provider)) return `${DISCOVERY_PATH}${remembered}`;
+  }
+  return discoveryHref({ provider, type });
 }
 
 /* ------------------------------ earlier routes → here ------------------------------- */
@@ -134,19 +141,78 @@ const LEGACY_BASE: Record<LegacyDiscoveryRoute, DiscoveryLocation> = {
   "k8s-access": { provider: "k8s", type: "workloads" },
 };
 
+export interface LegacyRedirect {
+  to: string;
+  /** History state for the redirect: what could not be carried, shown once as chips. */
+  state?: { removed: RemovedFilter[] };
+}
+
 /**
  * An earlier route's query string, carried into the Discovery URL — never
  * dropped, so an `?account=` link does not silently widen to every account.
- * `account` is Discovery's `source`; every other parameter keeps its name.
+ * What an earlier page called something else is renamed to what Discovery reads:
+ *
+ *   account (repeatable)      → source: ONE connection. A link naming several is
+ *                               narrowed to the first, and the redirect's state
+ *                               says so (the source filter takes one value)
+ *   runtime_kind              → runtime
+ *   classification=agent      → classified_agent (the earlier "agent" was both
+ *                               agent classes; the other is named in the notice)
+ *   used_by=workloads         → bound=1
+ *   kind=exact|selector|external on Resources → representation / external=1
+ *   kind=gcp_service_account on Cloud identities → the Google Cloud list
+ *   view=workload-identities on Compute → section
+ *
+ * Everything else keeps its name. The earlier Compute page showed every account
+ * by design, so its `account` was never a scope and is not carried.
  */
-export function legacyToDiscovery(route: LegacyDiscoveryRoute, search: string): string {
+export function legacyRedirect(route: LegacyDiscoveryRoute, search: string): LegacyRedirect {
   const incoming = new URLSearchParams(search);
-  const base = LEGACY_BASE[route];
+  const removed: RemovedFilter[] = [];
+  let base = LEGACY_BASE[route];
+  if (route === "cloud-identities" && incoming.get("kind") === "gcp_service_account") {
+    base = { provider: "gcp", type: "identities", view: "latest" };
+  }
   const out = new URLSearchParams(discoveryHref(base).split("?")[1] ?? "");
+  const set = (key: string, value: string) => {
+    if (!out.has(key)) out.set(key, value);
+  };
+
+  const accounts = incoming.getAll("account").filter(Boolean);
+  if (route !== "cloud-compute" && accounts.length && !incoming.get("source")) {
+    out.set("source", accounts[0]);
+    if (accounts.length > 1) {
+      removed.push({
+        key: "account",
+        label: `${accounts.length - 1} more ${accounts.length === 2 ? "account" : "accounts"}`,
+        reason: "Discovery shows one source at a time, so the first is kept",
+      });
+    }
+  }
+
   incoming.forEach((value, key) => {
-    if (key === "account") out.set("source", value);
-    else if (!out.has(key)) out.set(key, value);
+    if (key === "account" || !value) return;
+    if (key === "runtime_kind") set("runtime", value);
+    else if (key === "classification" && value === "agent") {
+      set("classification", "classified_agent");
+      removed.push({ key, label: "Agents (both kinds)", reason: "now one kind at a time: classified by a person is kept, provider-native is its own option" });
+    } else if (key === "used_by") {
+      if (value === "workloads") set("bound", "1");
+    } else if (key === "kind" && route === "resources") {
+      if (value === "external") set("external", "1");
+      else if (value === "exact" || value === "selector") set("representation", value);
+    } else if (key === "kind" && base.provider === "gcp") {
+      // The Google Cloud list is service accounts only.
+    } else if (key === "view" && route === "cloud-compute") {
+      if (value === "workload-identities") set("section", value);
+    } else set(key, value);
   });
+
   const s = out.toString();
-  return s ? `${DISCOVERY_PATH}?${s}` : DISCOVERY_PATH;
+  return { to: s ? `${DISCOVERY_PATH}?${s}` : DISCOVERY_PATH, state: removed.length ? { removed } : undefined };
+}
+
+/** The Discovery URL for an earlier route. See `legacyRedirect`. */
+export function legacyToDiscovery(route: LegacyDiscoveryRoute, search: string): string {
+  return legacyRedirect(route, search).to;
 }

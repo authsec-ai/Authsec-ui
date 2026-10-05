@@ -30,7 +30,7 @@ import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
 import { useEvidence } from "../../evidence/useEvidence";
-import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref, type DiscoveryType } from "../../discovery/urlState";
+import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref, type DiscoveryProvider, type DiscoveryType } from "../../discovery/urlState";
 import type { NodeCategory, NodeIcon } from "../../graph/nodeView";
 import { useAnnounce } from "../announce";
 import type { GraphFailure } from "../graphErrors";
@@ -97,6 +97,7 @@ function PublicationStamp({ ws, publishedAt, onRefresh }: { ws: string; publishe
 export function ObjectShell({
   ws,
   listType,
+  provider = "aws",
   kindLabel,
   base,
   tabs,
@@ -111,6 +112,8 @@ export function ObjectShell({
   ws: string;
   /** The Discovery list this object belongs to: the breadcrumb returns to it as the reader left it. */
   listType: DiscoveryType;
+  /** The provider whose list this is (the published graph objects are AWS's). */
+  provider?: DiscoveryProvider;
   /** What the object is, for headers before it has loaded: "Identity". */
   kindLabel: string;
   /** The object's URL, e.g. `/iga/estate/<id>`. */
@@ -234,7 +237,7 @@ export function ObjectShell({
         list: {
           label: TYPE_LABEL[listType],
           // The segment returns to the list as the reader left it: filters, sort, page.
-          href: discoveryListHref(listType),
+          href: discoveryListHref(listType, provider),
           parent: { label: "Discovery", href: DISCOVERY_PATH },
         },
       }}

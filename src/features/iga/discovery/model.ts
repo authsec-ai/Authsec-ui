@@ -77,7 +77,7 @@ export type FilterKey =
   | "attribution"
   | "section";
 
-export const FILTER_LABEL: Record<FilterKey, string> = {
+const FILTER_LABEL: Record<FilterKey, string> = {
   region: "Region",
   lifecycle: "Lifecycle",
   classification: "Classification",
@@ -94,13 +94,11 @@ export const FILTER_LABEL: Record<FilterKey, string> = {
   section: "Section",
 };
 
-export const FILTER_KEYS = Object.keys(FILTER_LABEL) as FilterKey[];
-
 /** The URL parameters that are not type-specific filters. */
 export const NON_FILTER_PARAMS = ["provider", "type", "view", "q", "source", "sel", "sort", "evidence", "via"] as const;
 
 /** Server-side or client-side; the filters each list offers. Source is always offered and is not listed. */
-export function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: DiscoveryType): FilterKey[] {
+function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: DiscoveryType): FilterKey[] {
   if (provider === "aws" && view === "published") {
     if (type === "workloads") return ["region", "lifecycle", "classification", "runtime"];
     if (type === "identities") return ["lifecycle", "kind", "bound"];
@@ -195,6 +193,11 @@ export function planSwitch(current: URLSearchParams, from: Scope, to: Scope): { 
 
 /** The collector kind each provider's sightings come from. */
 export const SIGHTING_SOURCE: Record<"k8s" | "github", DiscoverySourceKind> = { k8s: "k8s_webhook", github: "repo_scan" };
+
+/** The provider whose Sightings list a finding of this collector kind belongs to. */
+export function sightingProvider(source: DiscoverySourceKind): "k8s" | "github" | undefined {
+  return source === "k8s_webhook" ? "k8s" : source === "repo_scan" ? "github" : undefined;
+}
 
 /** The non-default ref a finding came from, or null on the default branch or off a repository scan. */
 export function nonDefaultBranch(agent: DiscoveredAgent): string | null {
