@@ -67,6 +67,19 @@ export interface ObjectHeaderData {
   actions?: ReactNode;
   /** The identifier Copy puts on the clipboard: an ARN, a pattern, a principal. */
   copy?: { value: string; label: string; what: string } | null;
+  /**
+   * An object whose rows belong to no publication (Kubernetes). Its header says
+   * where it lives and which sweep its inventory comes from, in place of the
+   * publication stamp: there is no revision to pin and no "newer publication".
+   */
+  sweep?: {
+    /** Cluster and namespace: "cluster prod-eu", "namespace payments". */
+    context: string[];
+    /** "Inventory from the sweep at 5 Oct 09:12 · Fully swept". */
+    line: ReactNode;
+    /** Persistent: what the sweep did not read. */
+    warning?: ReactNode;
+  };
 }
 
 /**
@@ -107,6 +120,7 @@ export function ObjectShell({
   onRefresh,
   object,
   vanished = false,
+  permission,
   children,
 }: {
   ws: string;
@@ -130,6 +144,8 @@ export function ObjectShell({
    * tabs say they have no current data.
    */
   vanished?: boolean;
+  /** The permission a 403 on this page's own reads names (default iga:read, the graph's). */
+  permission?: string;
   children: ReactNode;
 }) {
   // A gated tab is offered only once the deployment is known to serve it.
@@ -138,11 +154,20 @@ export function ObjectShell({
   const tab = tabs.find((t) => t.key === key);
   const compact = !!tab?.workspace && activeTab.state === "ready";
   const graphTab = shown.find((t) => t.key === "graph");
+  // "this identity", but "this ServiceAccount": a provider's own CamelCase name keeps its capitals.
+  const noun = /[a-z][A-Z]/.test(kindLabel) ? kindLabel : kindLabel.toLowerCase();
 
   const panel = (f: GraphFailure) => (
     <TableCard>
       <CardContent variant="flush">
-        <GraphStatePanel failure={f} subject={`this ${kindLabel.toLowerCase()}`} onRetry={onRetry} onRefresh={onRefresh} />
+        <GraphStatePanel
+          failure={f}
+          subject={`this ${noun}`}
+          onRetry={onRetry}
+          onRefresh={onRefresh}
+          permission={permission}
+          source={provider === "k8s" ? "the identity graph" : undefined}
+        />
       </CardContent>
     </TableCard>
   );
@@ -190,7 +215,7 @@ export function ObjectShell({
             : (
               <TableCard>
                 <CardContent variant="flush">
-                  <GraphStatePanel failure={{ kind: "unavailable" }} subject={`this ${kindLabel.toLowerCase()}'s ${tab?.label.toLowerCase() ?? "view"}`} />
+                  <GraphStatePanel failure={{ kind: "unavailable" }} subject={`this ${noun}'s ${tab?.label.toLowerCase() ?? "view"}`} />
                 </CardContent>
               </TableCard>
             )}
@@ -270,6 +295,7 @@ export function ObjectShell({
 function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHeaderData; onRefresh: () => void }) {
   const { isOpen: evidenceOpen } = useEvidence();
   const lc = object.lifecycle;
+  const sweep = object.sweep;
   const exception = lc && lc.state !== "current" ? lc : null;
   // Account, region, "Current, confirmed …", classification and "As of …" are
   // no longer repeated here: the Overview states each of them (What it is /
@@ -283,7 +309,14 @@ function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHe
           <span className="text-(--color-text-muted)">{exception.since}</span>
         </span>
       ) : null}
-      <PublicationStamp ws={ws} onRefresh={onRefresh} />
+      {sweep ? (
+        <>
+          {sweep.context.length ? <span>{sweep.context.join(" · ")}</span> : null}
+          <span>{sweep.line}</span>
+        </>
+      ) : (
+        <PublicationStamp ws={ws} onRefresh={onRefresh} />
+      )}
       {/* Said once per screen, here, never per row. The graph's status bar and an
           open inspector each say it for themselves, so the header yields to them
           while evidence is open; otherwise it is always on screen. */}
@@ -292,6 +325,7 @@ function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHe
           <Info className="size-3.5" aria-hidden="true" /> Declared access — not evaluated
         </span>
       ) : null}
+      {sweep?.warning ? <span className="basis-full">{sweep.warning}</span> : null}
     </span>
   );
 }
