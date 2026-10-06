@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -159,16 +159,19 @@ export function FloatingHelp({
   const [activeSubTab, setActiveSubTab] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const resolveTabsForItem = (item: FloatingHelpItem): FloatingHelpLanguageTab[] => {
-    if (item.languageTabs && item.languageTabs.length > 0)
-      return item.languageTabs;
-    if (languageTabs && languageTabs.length > 0) return languageTabs;
-    if (!item.code) return [];
-    return Object.keys(item.code).map((key) => ({
-      key,
-      label: formatLanguageLabel(key),
-    }));
-  };
+  const resolveTabsForItem = useCallback(
+    (item: FloatingHelpItem): FloatingHelpLanguageTab[] => {
+      if (item.languageTabs && item.languageTabs.length > 0)
+        return item.languageTabs;
+      if (languageTabs && languageTabs.length > 0) return languageTabs;
+      if (!item.code) return [];
+      return Object.keys(item.code).map((key) => ({
+        key,
+        label: formatLanguageLabel(key),
+      }));
+    },
+    [languageTabs]
+  );
 
   const hasContent = (item: FloatingHelpItem, language: string) => {
     const value = item.code?.[language];
@@ -215,7 +218,7 @@ export function FloatingHelp({
   const resolvedTabs = useMemo(() => {
     if (!selectedItem) return languageTabs ?? [];
     return resolveTabsForItem(selectedItem);
-  }, [languageTabs, selectedItem]);
+  }, [languageTabs, selectedItem, resolveTabsForItem]);
 
   const showLanguageTabs = resolvedTabs.length > 1;
 

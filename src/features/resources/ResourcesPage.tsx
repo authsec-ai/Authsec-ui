@@ -114,7 +114,7 @@ export default function ResourcesPage() {
     : null;
 
   // Use resources directly from API (already transformed by transformResponse)
-  const processedResources = rawResources || [];
+  const processedResources = useMemo(() => rawResources || [], [rawResources]);
 
   // Apply client-side filtering based on filter state
   const filteredResources = useMemo<Resource[]>(() => {

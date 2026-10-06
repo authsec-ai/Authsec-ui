@@ -92,6 +92,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
     return () => {
       if (timer) clearTimeout(timer);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the timer is set by this effect; depending on it would re-run the check in a loop
   }, [domain, checkTenantDomain]);
 
   const handleSubmit = async () => {

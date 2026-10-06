@@ -5,7 +5,7 @@
  * and the Add Provider modal.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pencil,
@@ -100,7 +100,7 @@ export function AuthenticationPage() {
 
   const filtersActive = search.trim() !== "" || typeFilter !== "all" || statusFilter !== "all" || !!selectedClientId;
 
-  const handleToggleActive = async (providerId: string, isActive: boolean) => {
+  const handleToggleActive = useCallback(async (providerId: string, isActive: boolean) => {
     if (!workspaceId) return toast.error("Workspace context missing; please sign in again.");
     const provider = (unifiedProviders ?? []).find((item) => item.id === providerId);
     if (!provider) return toast.error("Provider not found.");
@@ -133,7 +133,7 @@ export function AuthenticationPage() {
     } catch (error: any) {
       toast.error(error?.data?.message || `Failed to update ${provider.display_name}`);
     }
-  };
+  }, [workspaceId, unifiedProviders, updateSamlProvider, sessionData, updateOidcProvider, refetchProviders]);
 
   const handleConfirmDelete = async () => {
     if (!workspaceId || !deleteTarget) {
@@ -169,7 +169,7 @@ export function AuthenticationPage() {
   };
 
   // ─── Type filter pills ──────────────────────────────────────────────────────
-  const allProviders = unifiedProviders ?? [];
+  const allProviders = useMemo(() => unifiedProviders ?? [], [unifiedProviders]);
   const typeFilters = useMemo(
     () => [
       { key: "all", label: "All", count: allProviders.length },

@@ -39,6 +39,7 @@ export function SyslogConfiguration({ config, onChange, onSave, onCancel, isLoad
     if (workspaceId && !config.workspace_id) {
       onChange({ ...config, workspace_id: workspaceId });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-fill runs once on mount
   }, []);
 
   return (

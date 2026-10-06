@@ -552,7 +552,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.workspaceId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch, callbackHandler]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch]);
 
   const authenticateWithWebAuthn = useCallback(async (): Promise<boolean> => {
     if (!adminWebauthn.email) {

@@ -110,6 +110,7 @@ export function GuidedTourProvider({ children }: GuidedTourProviderProps) {
       // No more steps, complete the tour
       completeTour();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeTour is declared later in this provider; it is resolved when the callback runs
   }, [currentStep, getCurrentTourConfig, getCurrentStepConfig]);
 
   /**

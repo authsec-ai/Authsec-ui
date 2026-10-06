@@ -70,7 +70,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
     if (open && hasPreselectedRoles) {
       setSelectedRoleId(preselectedRoles![0].id);
     }
-  }, [open, preselectedUsers, preselectedRoles]);
+  }, [open, preselectedUsers, preselectedRoles, hasPreselectedUsers, hasPreselectedRoles]);
 
   // ── Users API: admin vs endUser ──
   const {

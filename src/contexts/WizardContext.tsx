@@ -209,6 +209,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
     }
 
     previousLocation.current = location;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeStep identity changes with wizard state; re-running these navigation checks would double-complete steps
   }, [location, activeWizard, currentStep, wizardConfig, completedSteps]);
 
   useEffect(() => {
@@ -227,6 +228,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
         completeStep(currentStepConfig.id);
       }, 100);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeStep identity changes with wizard state; re-running these navigation checks would double-complete steps
   }, [
     activeWizard,
     currentStep,

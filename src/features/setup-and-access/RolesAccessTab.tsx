@@ -27,7 +27,7 @@ export function RolesAccessTab({ rsId, onChange }: Props) {
   const [createBinding, { isLoading: creating }] = useCreateRSBindingMutation();
   const [deleteBinding] = useDeleteRSBindingMutation();
 
-  const roles = rolesResp?.roles ?? [];
+  const roles = useMemo(() => rolesResp?.roles ?? [], [rolesResp?.roles]);
   const bindings = bindingsResp?.bindings ?? [];
   const eligibleUsers = usersResp?.users ?? [];
 

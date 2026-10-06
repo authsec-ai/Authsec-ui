@@ -105,6 +105,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.isFirstLogin, dispatch]);
 
   // Prefetch MFA methods when entering authentication or selection
+  const getAdminMFAMethods = adminWebauthn.getMFAMethods;
   useEffect(() => {
     if (!adminWebauthn.email || !adminWebauthn.workspaceId) return;
     if (
@@ -112,9 +113,9 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
       (!adminWebauthn.availableMFAMethods || adminWebauthn.availableMFAMethods.length === 0)
     ) {
       // Fire and forget; context handles errors/toasts
-      void adminWebauthn.getMFAMethods();
+      void getAdminMFAMethods();
     }
-  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.getMFAMethods, adminWebauthn.availableMFAMethods]);
+  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, getAdminMFAMethods, adminWebauthn.availableMFAMethods]);
 
   // Render lightweight loader if step is still 'login' to avoid blank screen during transition
   if (adminWebauthn.currentStep === "login") {

@@ -68,7 +68,7 @@ export default function ScopeCatalogPage() {
   const [createCatalogEntry, { isLoading: creating }] = useCreateScopeCatalogEntryMutation();
   const [attachCatalogEntry, { isLoading: attaching }] = useAttachScopeCatalogEntryMutation();
 
-  const scopes = data?.items ?? [];
+  const scopes = useMemo(() => data?.items ?? [], [data?.items]);
   const catalogEntries = useMemo(
     () => scopes.filter((scope) => scope.kind === "catalog"),
     [scopes],

@@ -27,6 +27,7 @@ export function useWizardStatus(wizardId: string) {
     } catch {
       return false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- isActive is an intentional cache-buster to re-read localStorage when a wizard starts or stops
   }, [wizardId, isActive]);
 
   const launch = useCallback(() => {

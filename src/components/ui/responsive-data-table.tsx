@@ -532,6 +532,7 @@ export function ResponsiveDataTable<TData>({
     }
 
     return cols;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- columns are rebuilt only when these inputs change; adding unstable props would rebuild them every render
   }, [columns, enabledFeatures, activeExpandedRows, renderExpandedRow, getRowId, JSON.stringify(visibleColumns), isExternalExpansion, onExpandedRowsChange]);
 
   // Optimized pagination logic with memoization

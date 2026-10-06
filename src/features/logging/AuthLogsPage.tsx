@@ -60,7 +60,7 @@ export function AuthLogsPage() {
       }
     );
 
-  const apiLogs = data?.logs ?? [];
+  const apiLogs = useMemo(() => data?.logs ?? [], [data?.logs]);
   const pagination = data?.pagination;
 
   // Client-side filter for user selection (multi-user not supported server-side)

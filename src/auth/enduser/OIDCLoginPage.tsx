@@ -396,6 +396,7 @@ const OIDCLoginPageInner: React.FC = () => {
     };
 
     handleSamlCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- should only re-run when the SAML callback parameters change
   }, [
     samlClientId,
     samlUserEmail,

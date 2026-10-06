@@ -68,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize auth state on mount
   useEffect(() => {
     initializeAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeAuth is recreated every render; this effect is intentionally mount-only
   }, []);
 
   // Listen for storage changes (cross-tab sync)
@@ -81,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeAuth is recreated every render; this effect is intentionally mount-only
   }, []);
 
   // Periodic session validation

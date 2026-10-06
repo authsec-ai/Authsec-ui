@@ -93,6 +93,7 @@ export function OIDCWebAuthnRouter({
     if (mfaPrefetchedRef.current) return;
     mfaPrefetchedRef.current = true;
     void oidcWebauthn.getMFAMethods();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prefetch runs once per step change, guarded by mfaPrefetchedRef
   }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.workspaceId]);
 
   // ── Loader while step is still "login" ──

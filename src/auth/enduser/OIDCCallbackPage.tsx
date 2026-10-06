@@ -96,11 +96,8 @@ const OIDCCallbackPageInner: React.FC = () => {
   );
 
   useEffect(() => {
-    console.log("Universal CallbackPage mounted");
-    console.log("URL params:", Object.fromEntries(urlParams.entries()));
-    console.log("Full URL:", window.location.href);
-
     processCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the callback must be processed exactly once on mount
   }, []);
 
   // Helper function to extract provider from state

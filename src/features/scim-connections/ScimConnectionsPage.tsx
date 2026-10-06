@@ -88,7 +88,10 @@ export default function ScimConnectionsPage() {
     toast.success("Copied to clipboard");
   };
 
-  const safeConnections: ScimConnection[] = Array.isArray(connections) ? connections : [];
+  const safeConnections = useMemo<ScimConnection[]>(
+    () => (Array.isArray(connections) ? connections : []),
+    [connections],
+  );
   const apiBase = config.VITE_API_URL || "";
 
   const rows = useMemo<ScimConnection[]>(() => {

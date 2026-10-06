@@ -148,6 +148,7 @@ export const AdminOIDCCallbackPage: React.FC = () => {
     };
 
     void runExchange();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the code exchange must run once per callback; the handlers are recreated every render
   }, [code, state, errorParam, errorDescription, exchangeCode]);
 
   const handleExistingUser = (data: Required<Pick<AdminOIDCExchangeSuccessResponse, "workspace_id" | "email" | "first_login">> & AdminOIDCExchangeSuccessResponse) => {
