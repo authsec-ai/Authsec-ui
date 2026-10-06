@@ -20,8 +20,9 @@ const GLYPH: Record<LogKind, { icon: LucideIcon; tone: ConsoleTone }> = {
   sign_in: { icon: LogIn, tone: "neutral" },
 };
 
-export function KindGlyph({ kind, className }: { kind: LogKind; className?: string }) {
-  const { icon: Icon, tone } = GLYPH[kind];
+export function KindGlyph({ kind, className, tone: toneOverride }: { kind: LogKind; className?: string; tone?: ConsoleTone }) {
+  const { icon: Icon, tone: kindTone } = GLYPH[kind];
+  const tone = toneOverride ?? kindTone;
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium text-(--color-text)", className)}>
       <Icon className={cn("size-4 shrink-0", toneClasses[tone].icon)} aria-hidden="true" />

@@ -151,6 +151,15 @@
      shadow:   none on cards (border only) · md on menus · lg on dialogs */
   --iga-radius-control: 6px;
   --iga-radius-card: 8px;
+
+  /* ---- buttons: lighter, one hierarchy (UI round 2026-10-06) ----------
+     primary = filled blue · secondary (outline) = hairline border on the
+     surface · ghost = no border. The shared Button reads these, so the
+     change stays inside IGA. */
+  --iga-radius-button: 8px;
+  --component-button-radius: var(--iga-radius-button);
+  --component-button-outline-border: var(--color-border-subtle);
+  --component-button-font-weight: 500;
   --iga-control-h: 36px;
   --iga-control-h-compact: 32px;
   --iga-shadow-menu: 0 4px 16px rgba(15, 23, 42, 0.08);
@@ -281,11 +290,11 @@
 }
 
 /* "Add integration" — the one primary action on the page. Position unchanged. */
-[data-shell="iga"] .section-header [data-slot="button"] {
+[data-shell="iga"] .section-header [data-slot="button"][data-variant="default"] {
   height: var(--iga-control-h);
   padding: 0 14px;
   gap: 6px;
-  border-radius: var(--iga-radius-control);
+  border-radius: var(--iga-radius-button);
   font-size: 14px;
   font-weight: 500;
   background: var(--component-button-primary-bg);
@@ -295,11 +304,11 @@
   transition: background-color 120ms ease;
 }
 
-[data-shell="iga"] .section-header [data-slot="button"]:hover {
+[data-shell="iga"] .section-header [data-slot="button"][data-variant="default"]:hover {
   background: var(--component-button-primary-hover-bg);
 }
 
-[data-shell="iga"] .section-header [data-slot="button"] svg {
+[data-shell="iga"] .section-header [data-slot="button"][data-variant="default"] svg {
   width: 16px;
   height: 16px;
   stroke-width: 2.25;
@@ -592,8 +601,27 @@
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"]:focus-within {
-  background: var(--component-table-row-hover);
+  /* A light wash of the primary blue, the same on every IGA table. */
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface-raised));
   box-shadow: none;
+}
+
+/* A clickable row says so before it is clicked: pointer, and an eased tint. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"] {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-shell="iga"]
+    [data-slot="card"][data-variant="table"]
+    [data-slot="table-body"]
+    [data-slot="table-row"][data-clickable="true"] {
+    transition: none;
+  }
 }
 
 [data-shell="iga"]
@@ -855,4 +883,22 @@
   [data-shell="iga"] .animate-spin {
     animation: none;
   }
+}
+
+/* ====================================================================
+   BUTTONS — lighter boxes, one hierarchy across the IGA pages
+   ==================================================================== */
+
+/* admin-shell.css (in @layer components) sets button corners and the outline
+   border with !important, and a layered !important cannot be overridden from
+   here. It reads them from variables, though, so the variables are set on
+   the buttons themselves: one 8px corner for every variant, a hairline
+   border on secondary (outline) buttons. Shadows are already none there. */
+[data-shell="iga"] [data-slot="button"] {
+  --admin-radius-control: var(--iga-radius-button);
+  --editorial-radius-sm: var(--iga-radius-button);
+}
+
+[data-shell="iga"] [data-slot="button"][data-variant="outline"] {
+  --admin-border-strong: var(--color-border-subtle);
 }

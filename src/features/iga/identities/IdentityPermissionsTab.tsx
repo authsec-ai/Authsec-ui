@@ -10,6 +10,7 @@
  *   attempts, never "last used", and absence is never a reason to revoke.
  */
 
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -23,7 +24,6 @@ import {
   type StatementDetail,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import { DrawerSection } from "@/components/console/detail";
 import { StatusBadge } from "@/components/console/status";
 
 import { classifyGraphError } from "../shared/graphErrors";
@@ -33,12 +33,28 @@ import { POLICY_KIND_LABEL, REL_STATE_TONE, agoText, statementLabel } from "../s
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { ActionList } from "../shared/components/ActionList";
-import { Fact, Facts } from "../shared/components/Panel";
+import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { WRAP_ID_CLASS, wrapId } from "../shared/components/wrapText";
 import { viaLink } from "../shared/links";
 import { TabBody } from "../shared/components/ObjectShell";
 
 type From = { ref: IdentityDetail["ref"]; name: string };
+
+/**
+ * A top-level section of the tab: a heading on the page, then its own
+ * cards. The tab is not itself a card, so each section reads as one group.
+ */
+function TabSection({ title, count, children }: { title: string; count?: string; children: ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <h2 className="flex items-baseline gap-2 text-sm font-semibold text-(--color-text)">
+        {title}
+        {count ? <span className="text-xs font-normal tabular-nums text-(--color-text-muted)">{count}</span> : null}
+      </h2>
+      {children}
+    </section>
+  );
+}
 
 function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; changesHref: string }) {
   const positive = s.targets.filter((t) => t.mode === "resource");
@@ -124,7 +140,7 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
 
 function Policy({ p, from, changesHref }: { p: PolicyGroup; from: From; changesHref: string }) {
   return (
-    <section className="rounded-lg border border-(--color-border-subtle)">
+    <section className="overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-(--color-border-subtle) bg-(--color-surface-subtle)/50 px-4 py-2.5">
         <span className="text-[13px] font-semibold text-(--color-text)">{p.name}</span>
         <span className="text-xs text-(--color-text-muted)">
@@ -158,22 +174,22 @@ const ACTIVITY_NOT_COLLECTED: Record<string, string> = {
 function Activity({ activity }: { activity: IdentityPermissions["activity"] }) {
   if (activity.state === "not_collected" || !activity.services) {
     return (
-      <DrawerSection label="Reported activity (Access Advisor)">
-        <p className="text-sm text-(--color-text-muted)">
+      <Panel title="Reported activity (Access Advisor)">
+        <p className="text-[13px] text-(--color-text-muted)">
           Not collected. {ACTIVITY_NOT_COLLECTED[activity.reason ?? ""] ?? "No activity was read for this identity."} This says
           nothing about whether it is used.
         </p>
-      </DrawerSection>
+      </Panel>
     );
   }
   return (
-    <DrawerSection label="Reported activity (Access Advisor)">
-      <p className="mb-2 text-xs text-(--color-text-muted)">
-        {activity.tracking_note} AWS reports authenticated attempts, including requests that were then denied, and only
-        for identity-based policies. No attempt reported is not a reason to revoke.
-      </p>
+    <Panel
+      title="Reported activity (Access Advisor)"
+      flush
+      description={`${activity.tracking_note} AWS reports authenticated attempts, including requests that were then denied, and only for identity-based policies. No attempt reported is not a reason to revoke.`}
+    >
       {activity.services.length ? (
-        <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
+        <ul className="divide-y divide-(--color-border-subtle)">
           {activity.services.map((sv) => (
             <li key={sv.namespace} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
               <span className="font-mono text-xs">{sv.namespace}</span>
@@ -186,9 +202,9 @@ function Activity({ activity }: { activity: IdentityPermissions["activity"] }) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-(--color-text-muted)">No attempt reported in the available tracking period.</p>
+        <p className="px-4 py-3 text-[13px] text-(--color-text-muted)">No attempt reported in the available tracking period.</p>
       )}
-    </DrawerSection>
+    </Panel>
   );
 }
 
@@ -214,7 +230,7 @@ export function IdentityPermissionsTab({ ws, identity }: { ws: string; identity:
               This identity has more statements than one page shows; the policies below are not the whole set.
             </p>
           ) : null}
-          <DrawerSection label="Policies">
+          <TabSection title="Policies" count={data.policies.length ? `${data.policies.length}` : undefined}>
             {data.policies.length ? (
               <div className="space-y-3">
                 {data.policies.map((p) => (
@@ -222,33 +238,35 @@ export function IdentityPermissionsTab({ ws, identity }: { ws: string; identity:
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-(--color-text-muted)">No policy is attached to or inline in this identity.</p>
+              <p className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-[13px] text-(--color-text-muted)">
+                No policy is attached to or inline in this identity.
+              </p>
             )}
-          </DrawerSection>
+          </TabSection>
 
           {data.inherited.map((g) => {
             const path = objectPath(g.group);
             return (
-              <DrawerSection key={g.group} label={`Through group ${g.name}`}>
-                <div className="mb-2">
+              <TabSection key={g.group} title={`Through group ${g.name}`} count={`${g.policies.length} ${g.policies.length === 1 ? "policy" : "policies"}`}>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                   <ClaimFacts claim={g.membership.claim} type="member of" state={g.membership.state} confirmedAt={g.membership.last_confirmed_at} />
+                  {path ? (
+                    <Link {...viaLink(path, from)} className="text-xs font-semibold text-(--color-primary-text) hover:underline">
+                      Open the group
+                    </Link>
+                  ) : null}
                 </div>
-                {path ? (
-                  <Link {...viaLink(path, from)} className="mb-2 inline-block text-xs font-semibold text-(--color-primary-text) hover:underline">
-                    Open the group
-                  </Link>
-                ) : null}
                 <div className="space-y-3">
                   {g.policies.map((p) => (
                     <Policy key={p.assignment.claim} p={p} from={from} changesHref={changesHref} />
                   ))}
                 </div>
-              </DrawerSection>
+              </TabSection>
             );
           })}
 
-          <DrawerSection label="Permissions boundary">
-            <p className="text-sm">
+          <Panel title="Permissions boundary">
+            <p className="text-[13px]">
               {data.boundary.policy ? (
                 <>
                   <span className="font-medium">{data.boundary.policy.name}</span>{" "}
@@ -260,7 +278,7 @@ export function IdentityPermissionsTab({ ws, identity }: { ws: string; identity:
                 <span className="text-(--color-text-muted)">None set.</span>
               )}
             </p>
-          </DrawerSection>
+          </Panel>
 
           <Activity activity={data.activity} />
         </div>

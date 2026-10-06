@@ -50,6 +50,7 @@ import { wrapId } from "../shared/components/wrapText";
 import { shortResourceName } from "../shared/sketch";
 import { discoveryHref } from "../discovery/urlState";
 import { AccessSummaryCard } from "./AccessSummaryCard";
+import { PurposeEditor } from "./PurposeEditor";
 import { isFullAdmin } from "../shared/access";
 
 
@@ -61,15 +62,14 @@ function ClassificationText({ w }: { w: WorkloadDetail }) {
   if (d) {
     return (
       <>
-        {d.purpose ? <span className="block text-(--color-text)">{d.purpose}</span> : null}
-        <span className="block text-(--color-text-muted)">
+        <span className="block text-xs text-(--color-text-muted)">
           {d.decision === "classified_agent" ? "Classified as agent" : "Recorded as unclassified"} by{" "}
           {d.decided_by.display} · {dayText(d.decided_at)} · "{d.reason}"
         </span>
       </>
     );
   }
-  return <>We found this workload, but no purpose is recorded for it.</>;
+  return null;
 }
 
 function RunsAs({ w }: { w: WorkloadDetail }) {
@@ -252,9 +252,12 @@ export function WorkloadOverview({
   gaps,
   frozen = false,
   publishedAt,
+  editable = false,
 }: {
   ws: string;
   workload: WorkloadDetail;
+  /** The reader may classify this workload (the header's Classify action shows). */
+  editable?: boolean;
   /** The detail's `meta.coverage`: stated on the account it bears on. */
   gaps?: GraphCoverageGap[];
   /** The object is not in the current publication: what is shown was loaded earlier, and nothing is fetched for it. */
@@ -368,6 +371,14 @@ export function WorkloadOverview({
             <div className="space-y-1.5 text-[13px] leading-5">
               {/* The classification is said here, once; the header no longer repeats it. */}
               <StatusBadge tone={classificationTone(w.classification)}>{classificationLabel(w.classification)}</StatusBadge>
+              {w.classification !== "provider_native_agent" ? (
+                <PurposeEditor
+                  ws={ws}
+                  w={w}
+                  editable={editable && !frozen}
+                  locked={frozen ? "This workload is not in the current publication, so its purpose cannot change." : w.lifecycle !== "active" ? "A retired workload's purpose can no longer change." : undefined}
+                />
+              ) : null}
               <div>
                 <ClassificationText w={w} />
               </div>

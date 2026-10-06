@@ -1,10 +1,11 @@
 /**
  * The one custom edge (SPEC-iga-phase2-graph.md §2.14.15 *Components*).
  *
- * A subtle directed connector by default. Its words — the relationship verb
- * from `EDGE_LABEL`, never "can access" — appear when the edge is selected,
- * hovered, keyboard-focused or on a highlighted path, so a dense graph is
- * not buried under repeated labels. What must stay visible stays visible as
+ * A subtle directed connector. Its words — the relationship verb from
+ * `EDGE_LABEL`, never "can access" — are printed on every line while edge
+ * labels are on (the default; the toolbar's Labels toggle turns them off for
+ * a dense graph), and otherwise appear when the edge is selected, hovered,
+ * keyboard-focused or on a highlighted path. Hover and focus only emphasise. What must stay visible stays visible as
  * a compact marker at the midpoint: several independent grants (×N), a
  * condition or other constraint that was recorded and not evaluated (!), a
  * cycle (↻), a crossing into another account (⇄); stale and ended are the
@@ -34,6 +35,8 @@ export interface GraphEdgeData extends Record<string, unknown> {
   onSelect: (id: string) => void;
   /** Offset, in pixels, from a sibling line between the same two cards. */
   spread: number;
+  /** Print the verb on the line even when it is not emphasised. */
+  showLabel: boolean;
 }
 
 export type RFGraphEdge = Edge<GraphEdgeData, "graphEdge">;
@@ -64,6 +67,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
   // Every line says what it is; hover and focus only emphasise it.
   const emphasised = data.isSelected || data.hovered || data.highlighted || focused;
   const deny = e.summary?.effect === "deny";
+  const labelled = emphasised || data.showLabel;
 
   const stroke = data.isSelected
     ? "var(--color-primary)"
@@ -136,12 +140,10 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
                   : "border-(--color-border-subtle) text-(--color-text-muted)",
             )}
           >
-            {/* The verb only when the line is in focus, as this file's header
-                always said: printed on every line, "declares" labels stacked
-                where lines fan out (G-04). Otherwise only what must stay
-                visible, or a dot to click. */}
-            {emphasised ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
-            {!emphasised && grants <= 1 && !marked.length && !e.closesCycle && !e.crossesAccount ? (
+            {/* The verb while labels are on, or when the line is in focus.
+                Otherwise only what must stay visible, or a dot to click. */}
+            {labelled ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
+            {!labelled && grants <= 1 && !marked.length && !e.closesCycle && !e.crossesAccount ? (
               <span aria-hidden="true" className="block size-1.5 rounded-full bg-current" />
             ) : null}
             {grants > 1 ? <span className="tabular-nums">×{grants}</span> : null}

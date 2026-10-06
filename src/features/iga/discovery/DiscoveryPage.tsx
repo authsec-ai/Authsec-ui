@@ -141,7 +141,13 @@ export default function DiscoveryPage() {
     switchType(tabTypes[next]);
   };
   const switcher = provider ? (
-    <div role="tablist" aria-label="Object type" className="flex gap-1 overflow-x-auto border-b border-(--color-border-subtle) px-3">
+    <div
+      role="tablist"
+      aria-label="Object type"
+      // The rule is an inset shadow, not a border the tabs overlap with -1px:
+      // that overlap made the strip 1px taller than its box, so it scrolled.
+      className="flex gap-1 overflow-x-auto overflow-y-hidden px-3 shadow-[inset_0_-1px_0_var(--color-border-subtle)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {tabTypes.map((t, i) => {
         const on = supportsType(provider, type) && type === t;
         return (
@@ -160,7 +166,7 @@ export default function DiscoveryPage() {
             title={`${TYPE_LABEL[t]}, ${countBasis(viewFor(provider, t), t)}`}
             onClick={() => switchType(t)}
             className={cn(
-              "-mb-px inline-flex h-12 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm",
+              "inline-flex h-12 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm",
               "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--color-focus-ring)",
               on ? "border-(--color-primary) font-semibold text-(--color-text)" : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
             )}
@@ -259,39 +265,38 @@ export default function DiscoveryPage() {
       description={DESCRIPTION}
       actions={
         connected.length ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <ProviderControl value={provider && connected.includes(provider) ? provider : undefined} providers={connected} onChange={switchProvider} />
-            {provider && connected.includes(provider) && ready && line ? (
-              // What the lists are read at, and the way to re-read them.
-              <div className="inline-flex min-h-9 max-w-[460px] items-center gap-2 rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) py-1 pl-3 pr-1 text-[13px] text-(--color-text)">
-                {/* Green only when there is a publication to read; otherwise a neutral dot. */}
-                <span
-                  aria-hidden="true"
-                  className={cn("size-1.5 shrink-0 rounded-full", overview.publication?.publishedAt || provider !== "aws" ? "bg-(--color-success)" : "bg-(--color-text-subtle)")}
-                />
-                <span role="status" className="min-w-0 truncate" title={line}>
-                  {line}
-                </span>
-                {onLatest && provider ? (
-                  <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2" onClick={() => switchTo({ provider, type, view: "published" })}>
-                    Back to Published
-                  </Button>
-                ) : null}
-                {awsPublished && overview.publication?.publishedAt ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={refresh}
-                    aria-label="Refresh"
-                    title="Re-read the lists at the current publication. This does not request a scan."
-                  >
-                    <RefreshCw className="size-3.5" aria-hidden="true" />
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+          // One summary card: the provider, and what its lists are read at.
+          <ProviderControl
+            value={provider && connected.includes(provider) ? provider : undefined}
+            providers={connected}
+            onChange={switchProvider}
+            // No "Published …" line (removed by request); only on Latest
+            // collected, so "Back to Published" has its context.
+            status={provider && connected.includes(provider) && ready && onLatest ? line : null}
+            actions={
+              provider && connected.includes(provider) && ready ? (
+                <>
+                  {onLatest ? (
+                    <Button variant="outline" size="sm" className="h-9 px-3" onClick={() => switchTo({ provider, type, view: "published" })}>
+                      Back to Published
+                    </Button>
+                  ) : null}
+                  {awsPublished && overview.publication?.publishedAt ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-9"
+                      onClick={refresh}
+                      aria-label="Refresh"
+                      title="Re-read the lists at the current publication. This does not request a scan."
+                    >
+                      <RefreshCw className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </>
+              ) : null
+            }
+          />
         ) : undefined
       }
     >

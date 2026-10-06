@@ -226,6 +226,8 @@ export interface ServiceAccess {
   grants: number;
   /** Grant lines that are broad. */
   broad: number;
+  /** Each distinct (level, scope) a broad grant has, so it can be described exactly. */
+  broadShapes?: { level: AccessLevel; scope: AccessScope }[];
 }
 
 export interface AccessSummary {
@@ -345,6 +347,8 @@ export function summarizeAccess(rows: WorkloadResourceRow[], opts: { partial?: b
         if (v.broad) {
           s.broad += 1;
           broad += 1;
+          const shapes = (s.broadShapes ??= []);
+          if (!shapes.some((x) => x.level === v.level && x.scope === v.scope)) shapes.push({ level: v.level, scope: v.scope });
         }
       }
     }
@@ -353,6 +357,53 @@ export function summarizeAccess(rows: WorkloadResourceRow[], opts: { partial?: b
   const services = [...by.values()].map(({ seen: _seen, ...s }) => s).sort(compareServices);
 
   return { services, paths: rows.length, broad, partial: !!opts.partial };
+}
+
+/** Where a broad grant reaches, in words. `any` is the service of a bare `*` action. */
+function reachText(service: string, scope: AccessScope): string {
+  const any = service === "any";
+  const svc = serviceLabel(service);
+  switch (scope) {
+    case "all":
+      return any ? "every resource" : `all ${svc} resources`;
+    case "pattern":
+      return any ? "resources matching a pattern" : `${svc} resources matching a pattern`;
+    case "specific":
+      return any ? "a named resource" : `a named ${svc} resource`;
+    default:
+      return "resources in another account, or not resolved";
+  }
+}
+
+function shapeText(service: string, shape: { level: AccessLevel; scope: AccessScope }): string {
+  const where = reachText(service, shape.scope);
+  switch (shape.level) {
+    // "Full" is also a NotAction ("everything except …"), so not "every action".
+    case "full":
+      return service === "any" ? `full access to ${where} in any service` : `full access to ${where}`;
+    case "write":
+      return `write access to ${where}`;
+    case "read":
+      return `read access to ${where}`;
+    default:
+      return `unclassified actions on ${where}`;
+  }
+}
+
+/**
+ * What a service's broad access amounts to, in words, one phrase per distinct
+ * kind of broad grant, widest reach first: "Write access to all CloudWatch
+ * Logs resources; full access to a named S3 resource". Null when nothing is broad.
+ */
+export function broadText(s: Pick<ServiceAccess, "service" | "broadShapes">): string | null {
+  const shapes = [...(s.broadShapes ?? [])].sort(
+    (a, b) => SCOPE_RANK[b.scope] - SCOPE_RANK[a.scope] || LEVEL_RANK[b.level] - LEVEL_RANK[a.level],
+  );
+  if (!shapes.length) return null;
+  const shown = shapes.slice(0, 2).map((x) => shapeText(s.service, x));
+  const more = shapes.length - shown.length;
+  const text = shown.join("; ") + (more > 0 ? `; and ${more} more` : "");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** "3", or "at least 3" when the read stopped at a page boundary. */

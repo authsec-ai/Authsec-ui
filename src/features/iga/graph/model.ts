@@ -67,6 +67,14 @@ export interface ModelState {
    * undone once).
    */
   manualPositions: Map<string, Position>;
+  /**
+   * The view (Summary "overview" or "detailed") the layout and the moved
+   * cards belong to. The two views draw different columns, so a card moved in
+   * one means nothing in the other: each view keeps its own.
+   */
+  layoutView: string;
+  /** Moved cards of the views not shown right now. */
+  manualByView: Map<string, Map<string, Position>>;
   /** The layout Reset layout replaced, for Restore previous layout. */
   previousLayout: { positions: Map<string, Position>; manualPositions: Map<string, Position> } | null;
   /** Set once, by the layout effect, so a second ELK run is never triggered implicitly. */
@@ -96,6 +104,8 @@ export function initialModelState(): ModelState {
     truncated: null,
     positions: new Map(),
     manualPositions: new Map(),
+    layoutView: "overview",
+    manualByView: new Map(),
     previousLayout: null,
     laidOut: false,
     revealedWorkloads: new Set(),
@@ -123,7 +133,8 @@ type Action =
   | { type: "restore-layout" }
   | { type: "reveal-branch"; id: string; shown: boolean }
   | { type: "trace"; claims: GraphRef[] | null }
-  | { type: "relayout" };
+  /** Summary ⇄ Detailed: lay out again, with the moved cards of the view shown (saved ones on a first visit). */
+  | { type: "switch-view"; to: string; saved: Map<string, Position> };
 
 function withOwner<K>(map: Map<K, Set<string>>, key: K, owner: string): Map<K, Set<string>> {
   const next = new Map(map);
@@ -341,12 +352,19 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
         laidOut: true,
       };
 
-    case "relayout":
-      // Arrange / a refresh to a new revision: ELK runs again over what is
-      // drawn (§2.14.15). Existing positions stay until the new ones land. A
-      // layout saved by Reset belongs to the arrangement being replaced, so
-      // Undo reset no longer applies.
-      return { ...state, laidOut: false, previousLayout: null };
+    case "switch-view": {
+      if (state.layoutView === action.to) return state;
+      const manualByView = new Map(state.manualByView);
+      manualByView.set(state.layoutView, state.manualPositions);
+      return {
+        ...state,
+        manualByView,
+        manualPositions: new Map(manualByView.get(action.to) ?? action.saved),
+        layoutView: action.to,
+        laidOut: false,
+        previousLayout: null,
+      };
+    }
 
     default:
       return state;

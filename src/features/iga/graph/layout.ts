@@ -33,10 +33,10 @@ export interface Size {
   height: number;
 }
 
-/** Horizontal room between layers: an arrowhead and a selected edge's label fit here. */
-export const LAYER_GAP = 120;
-/** Vertical room between cards in one layer. */
-export const NODE_GAP = 28;
+/** Horizontal room between columns: an arrowhead and an edge's label pill fit here, with air either side. */
+export const LAYER_GAP = 180;
+/** Vertical room between cards in one column. */
+export const NODE_GAP = 40;
 
 let elk: InstanceType<typeof ELK> | null = null;
 
