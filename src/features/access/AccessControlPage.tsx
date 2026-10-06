@@ -54,6 +54,7 @@ import {
   useGetAuthSecRolesQuery,
   useAddUserDefinedRolesMutation,
   useDeleteUserDefinedRolesMutation,
+  roleDeleteErrorMessage,
 } from "@/app/api/rolesApi";
 import {
   useListBindingsQuery,
@@ -181,7 +182,7 @@ function RolesTab({
         if (selectedRole?.id === role.id) setSelectedRole(null);
         setConfirmDelete(null);
       } catch (e: unknown) {
-        toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to delete role");
+        toast.error(roleDeleteErrorMessage(e));
       }
     },
     [deleteRoles, workspaceId, selectedRole],
