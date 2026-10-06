@@ -22,6 +22,8 @@ export interface ClusterSweep {
   state: string;
   observedAt: string | null;
   limitation?: string;
+  /** The sweep's own status (received | projected | failed): the rows come from the newest one that was applied. */
+  status?: string;
 }
 
 function isSweepNote(n: GraphCoverageGap | KubernetesCoverageNote): n is KubernetesCoverageNote {
@@ -45,12 +47,13 @@ export function clusterSweeps(
       state: c.last_sweep?.coverage ?? "not_swept",
       observedAt: c.last_sweep?.observed_at ?? null,
       limitation: c.last_sweep?.limitation || undefined,
+      status: c.last_sweep?.status,
     });
   }
   for (const n of notes ?? []) {
     if (!isSweepNote(n)) continue;
     const prior = out.get(n.account_id);
-    out.set(n.account_id, { cluster: n.account_id, state: n.state, observedAt: n.observed_at ?? prior?.observedAt ?? null, limitation: prior?.limitation });
+    out.set(n.account_id, { cluster: n.account_id, state: n.state, observedAt: n.observed_at ?? prior?.observedAt ?? null, limitation: prior?.limitation, status: prior?.status });
   }
   return [...out.values()];
 }
