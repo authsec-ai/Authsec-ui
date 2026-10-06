@@ -164,11 +164,12 @@ export const endUserUsersApi = baseApi.injectEndpoints({
       invalidatesTags: ['EndUser'],
     }),
 
-    // POST /uflow/enduser/active
-    // Activate/Deactivate user
+    // POST /authsec/uflow/admin/enduser/active
+    // Activate/Deactivate user. Body: { user_id, active }; the workspace comes
+    // from the token.
     setUserActive: builder.mutation<any, { user_id: string; active: boolean }>({
       query: ({ user_id, active }) => ({
-        url: '/authsec/uflow/enduser/active',
+        url: '/authsec/uflow/admin/enduser/active',
         method: 'POST',
         body: withSessionData({
           user_id,
@@ -178,11 +179,11 @@ export const endUserUsersApi = baseApi.injectEndpoints({
       invalidatesTags: ['EndUser'],
     }),
 
-    // POST /uflow/admin/reset-password
-    // Reset user password (admin)
+    // POST /authsec/uflow/user/admin/reset-password
+    // Reset user password (admin). Body: { workspace_id, email | user_id, send_email }
     resetUserPassword: builder.mutation<any, { email: string; send_email?: boolean }>({
       query: ({ email, send_email = true }) => ({
-        url: '/authsec/uflow/admin/reset-password',
+        url: '/authsec/uflow/user/admin/reset-password',
         method: 'POST',
         body: withSessionData({
           email,
@@ -194,11 +195,11 @@ export const endUserUsersApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // POST /uflow/admin/change-password
-    // Change user password (admin)
+    // POST /authsec/uflow/user/admin/change-password
+    // Change user password (admin). Body: { workspace_id, email | user_id, new_password }
     changeUserPassword: builder.mutation<any, { email: string; new_password: string }>({
       query: ({ email, new_password }) => ({
-        url: '/authsec/uflow/admin/change-password',
+        url: '/authsec/uflow/user/admin/change-password',
         method: 'POST',
         body: withSessionData({
           email,
