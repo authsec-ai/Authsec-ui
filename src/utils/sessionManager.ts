@@ -20,7 +20,43 @@ export interface SessionData {
   groups?: string[];
 }
 
-const SESSION_KEY = "authsec_session_v2";
+export const SESSION_KEY = "authsec_session_v2";
+
+/**
+ * The workspace and identity of a session are those in its token; the copies
+ * stored next to it are a cache that can be edited or go stale. The server
+ * checks the token on every request (ADR-0001 §8).
+ */
+function withTokenIdentity(data: SessionData): SessionData {
+  if (!data.token) return data;
+  const payload = decodeJWT(data.token);
+  if (!payload) return data;
+  return {
+    ...data,
+    jwtPayload: payload,
+    workspace_id: payload.workspace_id || data.workspace_id,
+    client_id: payload.client_id || data.client_id,
+    project_id: payload.project_id || data.project_id,
+    user_id: claimString(payload, "user_id") || claimString(payload, "sub") || data.user_id,
+  };
+}
+
+function claimString(payload: JWTPayload, key: string): string {
+  const value = (payload as unknown as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** Identity of the signed-in session: "workspace|user", or "" when signed out. */
+export function sessionIdentityFromStorage(raw: string | null): string {
+  if (!raw) return "";
+  try {
+    const data = withTokenIdentity(JSON.parse(raw) as SessionData);
+    if (!data.token) return "";
+    return `${data.workspace_id ?? ""}|${data.user_id ?? ""}`;
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Session Manager for handling JWT token storage and validation
@@ -49,7 +85,7 @@ export class SessionManager {
       if (!stored) return null;
 
       const data: SessionData = JSON.parse(stored);
-      return data;
+      return withTokenIdentity(data);
     } catch (error) {
       console.error("Failed to parse session data:", error);
       SessionManager.clearSession();
@@ -102,7 +138,6 @@ export class SessionManager {
       localStorage.removeItem("auth_token");
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
-      localStorage.removeItem("authsec-ui-theme"); // Clear theme preference on logout
 
       // Clear sessionStorage
       // Preserve OIDC flow values during OIDC login/callback so redirects don't break
@@ -133,6 +168,15 @@ export class SessionManager {
       }
       sessionStorage.removeItem("webauthn_callback_token");
       sessionStorage.removeItem("webauthn_callback_email");
+      sessionStorage.removeItem("authsec_verification_v2");
+      sessionStorage.removeItem("authsec_login_ticket");
+      // Per-sign-in flow state from admin OAuth, uflow and SAML pages.
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && /^(admin_oauth_|uflow_|saml_)/.test(key)) {
+          sessionStorage.removeItem(key);
+        }
+      }
 
       // Clear all cookies
       SessionManager.clearAllCookies();

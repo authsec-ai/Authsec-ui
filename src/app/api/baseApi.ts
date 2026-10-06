@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import config from '../../config';
 import { withLoginTicket } from "../../auth/loginTicket";
+import { SessionManager } from "../../utils/sessionManager";
 
 // Define base types for the API
 export interface ApiResponse<T> {
@@ -29,18 +30,9 @@ export interface FilterParams {
   [key: string]: string | number | boolean | undefined;
 }
 
-// Helper function to get session data
-const getSessionData = () => {
-  const sessionData = localStorage.getItem("authsec_session_v2");
-  if (sessionData) {
-    try {
-      return JSON.parse(sessionData);
-    } catch {
-      console.error("Session data parsing failed - invalid JSON format");
-    }
-  }
-  return null;
-};
+// Session data with the workspace and identity taken from the token
+// (SessionManager prefers its claims over the stored copies).
+const getSessionData = () => SessionManager.getSession();
 
 // Standard AuthSec API query function (clean, no auto-injection)
 const baseQuery = fetchBaseQuery({
@@ -60,13 +52,15 @@ const baseQuery = fetchBaseQuery({
 });
 
 // Helper function to inject session data when needed
+// Older endpoints still expect these in the body. They are filled from the
+// session token, and the server rejects any workspace other than the token's.
 export const withSessionData = (body: any) => {
   const session = getSessionData();
   return {
     ...body,
-    workspace_id: body.workspace_id || session?.workspace_id || "",
-    client_id: body.client_id || session?.client_id || "",
-    project_id: body.project_id || session?.project_id || "",
+    workspace_id: session?.workspace_id || body.workspace_id || "",
+    client_id: session?.client_id || body.client_id || "",
+    project_id: session?.project_id || body.project_id || "",
   };
 };
 

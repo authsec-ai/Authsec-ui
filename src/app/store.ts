@@ -29,8 +29,9 @@ import uiSlice from "./slices/uiSlice";
 // Import auth slices from new location
 import authSlice, { logout } from "../auth/slices/authSlice";
 import { resetGraphRevisions } from "../features/iga/shared/revision";
-import adminWebAuthnSlice from "../auth/slices/adminWebAuthnSlice";
-import oidcWebAuthnSlice from "../auth/slices/oidcWebAuthnSlice";
+import adminWebAuthnSlice, { resetAdminWebAuthnState } from "../auth/slices/adminWebAuthnSlice";
+import oidcWebAuthnSlice, { resetOIDCWebAuthnState } from "../auth/slices/oidcWebAuthnSlice";
+import { SESSION_KEY, sessionIdentityFromStorage } from "../utils/sessionManager";
 
 /**
  * Redux store configuration with RTK Query integration
@@ -59,10 +60,21 @@ sessionListener.startListening({
     logout.match(action) ||
     sessionIdentity(current) !== sessionIdentity(previous),
   effect: (_action, api) => {
-    api.dispatch(baseApi.util.resetApiState());
-    resetGraphRevisions();
+    resetSessionScopedState(api.dispatch);
   },
 });
+
+// Everything cached for one (workspace, user) is dropped when that changes:
+// every RTK Query cache and the sign-in flow slices (ADR-0001 §8).
+function resetSessionScopedState(dispatch: (action: unknown) => unknown) {
+  dispatch(baseApi.util.resetApiState());
+  dispatch(userAuthApi.util.resetApiState());
+  dispatch(oidcApi.util.resetApiState());
+  dispatch(deviceApi.util.resetApiState());
+  dispatch(resetAdminWebAuthnState());
+  dispatch(resetOIDCWebAuthnState());
+  resetGraphRevisions();
+}
 
 export const store = configureStore({
   reducer: {
@@ -104,6 +116,20 @@ export const store = configureStore({
 
 // Enable listener behavior for the store
 setupListeners(store.dispatch);
+
+// Another tab signing in, switching workspace or signing out changes the
+// shared session. This tab's caches belong to the previous identity, so it
+// reloads rather than mix one workspace's data with another's token.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== SESSION_KEY && event.key !== null) return;
+    const before = sessionIdentityFromStorage(event.oldValue);
+    const after = sessionIdentityFromStorage(event.key === null ? null : event.newValue);
+    if (before === after) return;
+    resetSessionScopedState(store.dispatch);
+    window.location.reload();
+  });
+}
 
 // Infer types from the store itself
 export type RootState = ReturnType<typeof store.getState>;

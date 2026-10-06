@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLoginMutation, useRegisterInitiateMutation } from "../../app/api/authApi";
 import { logout, checkSession, type AuthUser } from "../slices/authSlice";
+import { endServerSession } from "../endServerSession";
 import { setLoginData, setCurrentStep, setAuthenticationError } from "../slices/adminWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
@@ -215,6 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     try {
+      await endServerSession();
       dispatch(logout());
       toast.success("Successfully signed out!");
     } catch (error) {
