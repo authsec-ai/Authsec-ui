@@ -147,14 +147,16 @@ export const deviceApi = createApi({
       invalidatesTags: ["TOTPDevices"],
     }),
 
-    // Delete TOTP device
+    // Delete TOTP device: POST .../totp/devices/delete { device_id } (UI-018).
+    // The backend has no DELETE .../totp/devices/:id.
     deleteTOTPDevice: builder.mutation<TOTPDeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/authsec/uflow/auth/workspace/totp/devices/${deviceId}`,
-        method: "DELETE",
+        url: "/authsec/uflow/auth/workspace/totp/devices/delete",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        body: { device_id: deviceId },
       }),
       invalidatesTags: ["TOTPDevices"],
     }),
