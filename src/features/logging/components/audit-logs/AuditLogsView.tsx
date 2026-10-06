@@ -6,7 +6,6 @@ import {
   Pause,
   RotateCcw,
   Download,
-  Copy,
   Terminal,
   Info,
   AlertTriangle,

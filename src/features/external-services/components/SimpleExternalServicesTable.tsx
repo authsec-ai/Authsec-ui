@@ -24,9 +24,7 @@ import {
   Trash2,
   Server,
   Plus,
-  Check,
   Clock,
-  AlertCircle,
   CheckCircle,
 } from "lucide-react";
 import type { ExternalService } from "@/types/entities";

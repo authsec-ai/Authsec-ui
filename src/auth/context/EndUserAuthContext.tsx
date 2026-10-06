@@ -17,25 +17,21 @@ import {
   useConfirmTOTPSetupMutation,
   useVerifyTOTPMutation,
   useWebauthnEnduserCallbackMutation,
-  type WebAuthnCredential,
-  type MFAMethod,
-  type MFAStatusMethod
+  type MFAStatusMethod,
 } from "../../app/api/webauthnApi";
 import { useNotifyNewUserRegistrationMutation } from "../../app/api/authApi";
 import {
   setCurrentStep,
-  setLoginData,
   setClientId,
   setAvailableMFAMethods,
   setSelectedMFAMethod,
   setTOTPSecret,
   setTOTPSetupData,
-  setIsLoading,
   setAuthenticationError,
   setDisplayToken,
   setMFARequired,
   resetOIDCWebAuthnState,
-  type MFAMethod as OIDCMFAMethod
+  type MFAMethod as OIDCMFAMethod,
 } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";

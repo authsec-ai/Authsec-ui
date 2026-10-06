@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { SpotlightPosition, ContentPosition, TourContentPosition, TourStep } from '../types';
+import type { SpotlightPosition, ContentPosition, TourStep } from '../types';
 
 /**
  * Get the target element from a ref or selector

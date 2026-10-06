@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { CopyButton } from "../../../components/ui/copy-button";
 import {
@@ -13,13 +12,9 @@ import {
   MoreHorizontal,
   Edit,
   Trash2,
-  Code,
   Database,
-  Globe,
-  Copy,
   Calendar,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import type { Resource } from "../types";
 import type { ResponsiveColumnDef } from "../../../components/ui/responsive-data-table";
 

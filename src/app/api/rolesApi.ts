@@ -1,13 +1,11 @@
 import { baseApi, withSessionData } from './baseApi';
 import type {
   Role,
-  RoleWithStats,
   RoleFilters,
   RoleAnalytics,
   RolePermission,
   BulkUpdateResult,
   BulkDeleteResult,
-  ListParams
 } from '@/types/database';
 
 // AuthSec API types

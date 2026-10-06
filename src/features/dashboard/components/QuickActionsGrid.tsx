@@ -2,7 +2,6 @@ import React from "react";
 import { Users, Shield, Package, Activity } from "lucide-react";
 import { QuickActionCard } from "./QuickActionCard";
 import { useWizard } from "@/contexts/WizardContext";
-import { getWizardConfig } from "@/features/wizards";
 
 interface QuickActionsStatus {
   adSync?: {

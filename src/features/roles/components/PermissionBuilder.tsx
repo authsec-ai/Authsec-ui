@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit2, Trash2, ExternalLink, AlertTriangle, Shield } from "lucide-react";
+import { Plus, Edit2, Trash2, Shield } from "lucide-react";
 import type { RoleFormData, RoleGrant, ClientOption, ResourceOption } from "../types";
 import { mockClients } from "../utils/mock-data";
 

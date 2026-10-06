@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { CardContent } from "@/components/ui/card";
-import { Boxes, Plus, AlertTriangle, RefreshCw } from "lucide-react";
+import { Plus, AlertTriangle, RefreshCw } from "lucide-react";
 import EnhancedResourcesTable from "./components/EnhancedResourcesTable";
 import ResourcesFilterCard, { type ResourcesQueryParams } from "./components/ResourcesFilterCard";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Admin APIs
 import {
   useGetAdminResourcesQuery,

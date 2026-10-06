@@ -13,7 +13,7 @@
  * callback race condition that existed before.
  */
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
 import { setCurrentStep } from "../slices/oidcWebAuthnSlice";

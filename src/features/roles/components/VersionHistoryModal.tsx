@@ -18,8 +18,6 @@ import {
   Calendar,
   RotateCcw,
   Eye,
-  ChevronDown,
-  ChevronRight,
   Plus,
   Minus,
   ArrowRight,

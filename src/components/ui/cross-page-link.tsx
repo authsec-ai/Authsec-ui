@@ -1,18 +1,15 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import { Button } from "./button";
 import { Badge } from "./badge";
 import { cn } from "../../lib/utils";
-import { useCrossPageNavigation, NavigationUtils } from "../../lib/cross-page-navigation";
+import { useCrossPageNavigation } from "../../lib/cross-page-navigation";
 import type { NavigationRoute, NavigationContext } from "../../lib/cross-page-navigation";
 import {
   ExternalLink,
   Users,
   Shield,
   Building,
-  Server,
   ArrowRight,
-  Eye,
   Filter,
 } from "lucide-react";
 

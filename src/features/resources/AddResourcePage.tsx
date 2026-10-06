@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FormInput, FormTextarea } from "@form/index";
-import { ArrowLeft, Database, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Check, Copy, FileText } from "lucide-react";
+import { AlertCircle, Check, Copy } from "lucide-react";
 import type { RoleFormData } from "../types";
 import { toast } from "@/lib/toast";
 

@@ -3,7 +3,6 @@ import { useGetAuthSecRolesQuery } from "@/app/api/rolesApi";
 import { useGetAdminUsersQuery } from "@/app/api/admin/usersApi";
 import { useGetEndUsersQuery } from "@/app/api/enduser/usersApi";
 import { useCreateBindingMutation, type RbacAudience } from "@/app/api/bindingsApi";
-import { useListResourceServerScopesQuery } from "@/app/api/scopeMatrixApi";
 import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import {
   Dialog,

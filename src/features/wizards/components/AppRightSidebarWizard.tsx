@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import {
   GripVertical,
-  SkipForward,
   CheckCircle,
   ExternalLink,
   Eye,

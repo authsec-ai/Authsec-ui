@@ -33,7 +33,6 @@ import {
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
 import { completeWebAuthnAuthentication } from "../slices/authSlice";
-import { NIL } from "uuid";
 import type { MFAStatusMethod } from "../../app/api/webauthnApi";
 
 interface AdminAuthContextType {

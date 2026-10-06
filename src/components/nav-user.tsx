@@ -1,16 +1,9 @@
 import {
   ArrowLeftRight,
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
-  CreditCard,
   LogOut,
   Radar,
-  Sparkles,
   Building,
-  Users,
-  Settings,
-  Plus,
   Mic,
 } from "lucide-react";
 import { useAuth } from "@/auth/context/AuthContext";

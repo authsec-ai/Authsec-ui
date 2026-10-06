@@ -27,7 +27,6 @@ import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { useDispatch } from "react-redux";
 import { FilterCard as FilterShell } from "@/theme/components/cards";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ResponsiveDataTable,

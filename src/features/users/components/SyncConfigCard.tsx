@@ -8,7 +8,7 @@ import {
   useSyncAdminUsersActiveDirectoryMutation,
   useSyncAdminUsersEntraIDMutation,
 } from "@/app/api/enduser/invitesApi";
-import { RefreshCw, Pencil, Trash2, CheckCircle2, XCircle, Loader2, Copy, Check, Users, UserCog } from "lucide-react";
+import { Pencil, Trash2, CheckCircle2, XCircle, Loader2, Copy, Users, UserCog } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "@/lib/toast";
 import {

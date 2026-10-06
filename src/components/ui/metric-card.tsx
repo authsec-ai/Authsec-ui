@@ -4,7 +4,6 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import { Card, CardHeader, CardDescription, CardContent } from "./card";
-import { Badge } from "./badge";
 
 type ColorVariant = "default" | "blue" | "green" | "amber" | "purple" | "red" | "cyan";
 

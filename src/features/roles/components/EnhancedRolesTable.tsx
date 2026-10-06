@@ -4,9 +4,7 @@ import {
   type ResponsiveTableConfig,
 } from "@/components/ui/responsive-data-table";
 import { ResponsiveTableProvider } from "@/components/ui/responsive-table";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
-import { Plus } from "lucide-react";
 import type { EnhancedRole } from "@/types/entities";
 import {
   createRoleTableColumns,

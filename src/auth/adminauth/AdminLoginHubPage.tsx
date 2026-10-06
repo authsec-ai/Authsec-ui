@@ -46,7 +46,6 @@ import {
 } from "@/app/api/oidcApi";
 import { TenantDomainSelectionModal } from "../components/TenantDomainSelectionModal";
 import { encodeHandoff, decodeHandoff } from "@/utils/handoff";
-import config from "../../config";
 import { AuthSplitFrame } from "../components/AuthSplitFrame";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 import { AuthValuePanel } from "../components/AuthValuePanel";

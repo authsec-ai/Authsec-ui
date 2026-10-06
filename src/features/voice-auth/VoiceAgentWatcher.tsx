@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { PhoneCall, ShieldCheck, Clock3, AlertCircle } from "lucide-react";
+import { PhoneCall, Clock3 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/auth/context/AuthContext";

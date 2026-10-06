@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "./input";
-import { validatePassword, type PasswordRequirement } from "@/utils/passwordValidation";
+import { validatePassword } from "@/utils/passwordValidation";
 
 export interface PasswordInputWithValidationProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {

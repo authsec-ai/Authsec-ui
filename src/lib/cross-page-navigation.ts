@@ -1,6 +1,5 @@
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useMemo, useCallback } from "react";
-import type { CrossPageContext } from "../types/entities";
 
 // Navigation routes for different entity types
 export const NAVIGATION_ROUTES = {

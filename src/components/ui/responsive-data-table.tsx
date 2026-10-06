@@ -26,7 +26,6 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -41,7 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Button } from "./button";
 import { Checkbox } from "./checkbox";
 import { DataTablePagination } from "./table-pagination";
-import { ResponsiveTableProvider, useResponsiveTableContext } from "./responsive-table";
+import { useResponsiveTableContext } from "./responsive-table";
 
 // Enhanced column definition with responsive features
 export interface ResponsiveColumnDef<TData, TValue = unknown> {

@@ -1,5 +1,4 @@
-import { baseApi, withSessionData } from "./baseApi";
-import type { AdminUsersResponse } from "./admin/usersApi";
+import { baseApi } from "./baseApi";
 
 /**
  * Dashboard API Types

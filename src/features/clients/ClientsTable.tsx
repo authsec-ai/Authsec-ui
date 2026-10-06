@@ -3,8 +3,6 @@ import {
   Bot,
   Check,
   Copy,
-  Layers,
-  List,
   Loader2,
   Monitor,
   MoreHorizontal,
@@ -31,7 +29,6 @@ import {
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
