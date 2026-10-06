@@ -51,7 +51,6 @@ export function WizardProgress({
   // Sync wizardStepData to context whenever it changes
   useEffect(() => {
     if (Object.keys(wizardStepData).length > 0) {
-      console.log("[WizardProgress] Syncing wizardStepData to context:", wizardStepData);
       setWizardCompletionData(wizardStepData);
     }
   }, [wizardStepData, setWizardCompletionData]);
@@ -59,7 +58,6 @@ export function WizardProgress({
   // Helper to update step data and complete step
   const handleStepCompletion = (stepId: string, data: Record<string, any>) => {
     const updatedData = { ...wizardStepData, ...data };
-    console.log("[WizardProgress] Updating step data:", updatedData);
     setWizardStepData(updatedData);
     setWizardCompletionData(updatedData);
     onCompleteStep(stepId);

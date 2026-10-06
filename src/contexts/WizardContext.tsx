@@ -362,7 +362,6 @@ export function WizardProvider({ children }: WizardProviderProps) {
     };
 
     setWizardCompletionData(completionDataWithWizardId);
-    console.log("[Wizard] Stored completion data:", completionDataWithWizardId);
 
     WizardStorage.completeWizard(activeWizard);
 

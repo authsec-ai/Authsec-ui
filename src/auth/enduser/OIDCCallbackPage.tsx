@@ -302,13 +302,6 @@ const OIDCCallbackPageInner: React.FC = () => {
           const samlClientId = sessionStorage.getItem("saml_client_id");
           const samlUserEmail = sessionStorage.getItem("saml_user_email");
 
-          console.log("📋 SAML post-WebAuthn parameters:", {
-            login_challenge: samlLoginChallenge,
-            client_id: samlClientId,
-            email: samlUserEmail,
-            token_received: !!storedToken,
-          });
-
           if (storedToken && samlLoginChallenge) {
             setWebauthnCallbackToken(storedToken);
             setStatus("processing");
@@ -425,14 +418,6 @@ const OIDCCallbackPageInner: React.FC = () => {
         provider = extractProviderFromState(state);
         setDetectedProvider(provider);
       }
-
-      console.log("Universal OAuth callback parameters:", {
-        code: code ? `${code.substring(0, 10)}...` : null,
-        state: state ? `${state.substring(0, 10)}...` : null,
-        error,
-        errorDescription,
-        detectedProvider: provider,
-      });
 
       // Check for OAuth errors first
       if (error) {
@@ -606,7 +591,6 @@ const OIDCCallbackPageInner: React.FC = () => {
               }
             }
 
-            console.log("Token exchange successful:", normalizedTokens);
             sessionStorage.removeItem("login_challenge");
           }
         } catch (exchangeError) {
@@ -623,16 +607,6 @@ const OIDCCallbackPageInner: React.FC = () => {
         }
         return;
       } else {
-        console.log("State validation:", {
-          storedState: storedState
-            ? `${storedState.substring(0, 10)}...`
-            : null,
-          receivedState: state ? `${state.substring(0, 10)}...` : null,
-          stateMatch: storedState === state,
-          providerMatch: storedProvider === provider,
-          hasLoginChallenge: !!storedLoginChallenge,
-        });
-
         if (!storedState || storedState !== state) {
           setStatus("error");
           setMessage("Invalid state parameter - possible security issue");
@@ -678,8 +652,6 @@ const OIDCCallbackPageInner: React.FC = () => {
             state,
             error: error || undefined,
           }).unwrap();
-
-          console.log("API callback response:", response);
 
           if (response) {
             setStatus("processing");
@@ -821,8 +793,6 @@ const OIDCCallbackPageInner: React.FC = () => {
                   client_id: clientIdForSaml,
                   email: userEmail,
                 }).unwrap();
-
-                console.log("✅ SAML login check response:", samlLoginResponse);
 
                 // Check if WebAuthn is needed based on first_login
                 if (samlLoginResponse.first_login !== undefined) {

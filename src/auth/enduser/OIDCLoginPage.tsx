@@ -334,8 +334,6 @@ const OIDCLoginPageInner: React.FC = () => {
             email: samlUserEmail,
           }).unwrap();
 
-          console.log("✅ SAML login check response:", samlLoginResponse);
-
           // Check if WebAuthn is needed based on first_login
           if (samlLoginResponse.first_login !== undefined) {
             // Set up WebAuthn flow data

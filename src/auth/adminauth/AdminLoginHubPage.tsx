@@ -417,7 +417,6 @@ export function AdminLoginHubPage() {
   // Pre-fill email from URL params and handle verified redirects
   useEffect(() => {
     console.log("[AdminLogin/useEffect] 🚀 Effect triggered");
-    console.log("[AdminLogin/useEffect] 📍 Current URL:", window.location.href);
     console.log("[AdminLogin/useEffect] 📊 Current State:", {
       checkedEmail,
       flowStage,
@@ -428,12 +427,6 @@ export function AdminLoginHubPage() {
     const params = new URLSearchParams(location.search);
     const emailFromUrl = params.get("email");
     const verified = params.get("verified");
-
-    console.log("[AdminLogin/useEffect] 🔍 URL Params:", {
-      email: emailFromUrl,
-      verified,
-      allParams: Object.fromEntries(params.entries()),
-    });
 
     // Handle invalid email
     if (emailFromUrl && !isValidEmail(emailFromUrl)) {
@@ -613,15 +606,12 @@ export function AdminLoginHubPage() {
     const protocol = window.location.protocol; // Preserve http/https
     const url = `${protocol}//${targetDomain}${path}?${params.toString()}`;
 
-    console.log("[Redirect/buildUrl] 🎯 Final redirect URL:", url);
     return url;
   };
 
   const performRedirect = (url: string, delay: number = 800) => {
     console.log("[Redirect/perform] 🚀 Initiating redirect");
-    console.log("[Redirect/perform] 🎯 Target URL:", url);
     console.log("[Redirect/perform] ⏱️ Delay:", delay, "ms");
-    console.log("[Redirect/perform] 📍 Current URL:", window.location.href);
 
     if (!url) {
       console.error("[Redirect/perform] ❌ Empty URL provided");
@@ -1039,7 +1029,6 @@ export function AdminLoginHubPage() {
     client_id: string;
     workspace_domain: string;
   }) => {
-    console.log("Domain registration successful:", data);
 
     // Clear session storage
     sessionStorage.removeItem("uflow_user_email");
@@ -1103,15 +1092,11 @@ export function AdminLoginHubPage() {
 
     try {
       const payload = { email: emailInput.trim().toLowerCase() };
-      console.log("[ManualPrecheck] 📤 Calling API with payload:", payload);
 
       const response = await adminLoginPrecheck(payload).unwrap();
 
-      console.log("[ManualPrecheck] 📥 API Response:", response);
-
       // Validate response
       if (!response) {
-        console.log("[ManualPrecheck] ❌ Invalid response:", response);
         toast.error("Invalid response from server");
         return;
       }
