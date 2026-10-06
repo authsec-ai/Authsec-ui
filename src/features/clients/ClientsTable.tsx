@@ -1090,7 +1090,6 @@ export function ClientsTable({
         cell: ({ row }) => <GroupedRowActions group={row.original} />,
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [hasPending],
   );
 

@@ -688,7 +688,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dispatch(completeWebAuthnAuthentication({
             workspaceId: adminWebauthn.workspaceId!,
             email: adminWebauthn.email!,
-            token: token,
+            token,
           }));
 
           await notifyNewUserIfNeeded(token);

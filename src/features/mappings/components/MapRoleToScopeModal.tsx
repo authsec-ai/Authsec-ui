@@ -96,7 +96,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
     isFetching: isFetchingRoles,
   } = useGetAuthSecRolesQuery({
     workspace_id: workspaceId,
-    audience: audience,
+    audience,
   });
 
   // Fetch resource servers to get scopes across all RS
@@ -292,7 +292,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
               id: "*",
               type: selectedScope,
             },
-            audience: audience,
+            audience,
           }).unwrap()
         );
         await Promise.all(promises);
@@ -310,7 +310,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
               id: "*",
               type: selectedScope,
             },
-            audience: audience,
+            audience,
           }).unwrap()
         );
         await Promise.all(promises);
@@ -327,7 +327,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
             id: "*",
             type: selectedScope,
           },
-          audience: audience,
+          audience,
         }).unwrap();
         toast.success(`Role mapped to scope "${selectedScope}" successfully.`);
       }

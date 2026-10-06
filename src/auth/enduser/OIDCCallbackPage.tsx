@@ -257,7 +257,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                 workspaceId: webauthnFlowData.workspaceId,
                 email: webauthnFlowData.email,
                 isFirstLogin: webauthnFlowData.firstLogin,
-                clientId: clientId,
+                clientId,
               }),
             );
 

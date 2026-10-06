@@ -151,7 +151,7 @@ export class SessionManager {
       // Get all cookies and set them to expire
       const cookies = document.cookie.split(";");
 
-      for (let cookie of cookies) {
+      for (const cookie of cookies) {
         const eqPos = cookie.indexOf("=");
         const name =
           eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();

@@ -99,7 +99,7 @@ export function LogsConfigurationPage() {
         await configureLogService({
           host: hostString,
           workspace_id: config.workspace_id,
-          name: name,
+          name,
         }).unwrap();
 
         setBanner({
