@@ -65,7 +65,7 @@ import ConnectionDetailPage from "./features/iga/connections/ConnectionDetailPag
 import ScanDetailPage from "./features/iga/connections/ScanDetailPage";
 import DiscoveryPage from "./features/iga/discovery/DiscoveryPage";
 import SightingDetailPage from "./features/iga/discovery/SightingDetailPage";
-import K8sObjectPage from "./features/iga/discovery/K8sObjectPage";
+import K8sObjectPage from "./features/iga/k8s/K8sObjectPage";
 import PolicyPage from "./features/iga/policy/PolicyPage";
 import LogsPage from "./features/iga/logs/LogsPage";
 import RetiredPage from "./features/iga/retired/RetiredPage";
@@ -671,6 +671,16 @@ function AppContent() {
                   />
                   <Route
                     path="/iga/k8s/:kind/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <K8sObjectPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/k8s/:kind/:id/:tab"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>

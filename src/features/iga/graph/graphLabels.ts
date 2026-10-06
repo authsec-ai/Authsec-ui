@@ -12,6 +12,7 @@
 import type { EvidenceLimitation, GraphEdgeKind, GraphFrontier, GraphNodeKind, RelState } from "@/app/api/igaGraphApi";
 
 import { IDENTITY_KIND_LABEL, RESOURCE_KIND_LABEL } from "../shared/labels";
+import { bindingKindWord } from "../k8s/rules";
 import type { VisualEdge, VisualEdgeKind } from "./types";
 
 export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
@@ -36,6 +37,35 @@ export const EDGE_MEANING: Record<VisualEdgeKind, string> = {
   declares: "A policy statement attached to the identity lists actions on this resource or pattern.",
 };
 
+/**
+ * What the two Kubernetes relationships mean. The binding is the line's label
+ * and the role is the card it reaches, so the sentence names neither: it says
+ * what the line is, and what it is not.
+ */
+const K8S_EDGE_MEANING: Partial<Record<VisualEdgeKind, string>> = {
+  executes_as:
+    "The workload runs as this ServiceAccount: observed when the sweep saw the Pod's serviceAccountName, configured when only the workload's spec says so.",
+  grant:
+    "A rule of this role reaches the ServiceAccount through the binding. Kubernetes RBAC only allows; admission policies and token mounting are not evaluated.",
+};
+
+/** A line of a Kubernetes graph: its grants and executes_as edges say `provider: k8s`. */
+export function isK8sEdge(e: VisualEdge): boolean {
+  return e.members[0]?.provider === "k8s";
+}
+
+/** What a line means: the AWS definition, or the Kubernetes one for a Kubernetes line. */
+export function edgeMeaning(e: VisualEdge): string {
+  return (isK8sEdge(e) ? K8S_EDGE_MEANING[e.kind] : undefined) ?? EDGE_MEANING[e.kind];
+}
+
+/** The distinct bindings behind a Kubernetes grant line: `RoleBinding web-reader`. */
+export function k8sBindingNames(e: VisualEdge): string[] {
+  const names = new Set<string>();
+  for (const m of e.members) if (m.assignment) names.add(`${bindingKindWord(m.assignment.kind)} ${m.assignment.name || "(unnamed)"}`);
+  return [...names];
+}
+
 const NOUN: Partial<Record<VisualEdgeKind, [string, string]>> = {
   executes_as: ["workload", "workloads"],
   task_execution_role: ["workload", "workloads"],
@@ -58,8 +88,10 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
  * reverse through `executes_as` reads as the workloads that run as it; a
  * forward `can_assume` as the roles it may assume.
  */
-export function frontierLabel(f: GraphFrontier): string {
+export function frontierLabel(f: GraphFrontier, k8s = false): string {
   const n = f.more.exact && f.more.count != null ? f.more.count : null;
+  if (k8s && f.edge === "grant") return n != null ? `Load ${n} more ${n === 1 ? "rule" : "rules"}` : "Load more rules";
+  if (k8s && f.edge === "executes_as" && f.direction === "forward") return "Load the ServiceAccount it runs as";
   if (f.direction === "reverse" && f.edge === "executes_as") return n != null ? `Load ${n} ${noun(f.edge, n)} that run as it` : "Load workloads that run as it";
   if (f.direction === "reverse" && f.edge === "task_execution_role")
     return n != null ? `Load ${n} ECS ${noun(f.edge, n)} that use it for setup` : "Load ECS workloads that use it for setup";
@@ -68,8 +100,8 @@ export function frontierLabel(f: GraphFrontier): string {
   return n != null ? `Load ${n} more ${noun(f.edge, n)}` : `Load more ${noun(f.edge, null)}`;
 }
 
-export function frontierAriaLabel(f: GraphFrontier): string {
-  return `${frontierLabel(f)} (not loaded yet)`;
+export function frontierAriaLabel(f: GraphFrontier, k8s = false): string {
+  return `${frontierLabel(f, k8s)} (not loaded yet)`;
 }
 
 /**
@@ -105,6 +137,9 @@ export const KIND_LABEL: Record<GraphNodeKind, string> = {
   iam_role: IDENTITY_KIND_LABEL.iam_role,
   iam_user: IDENTITY_KIND_LABEL.iam_user,
   iam_group: IDENTITY_KIND_LABEL.iam_group,
+  k8s_service_account: "ServiceAccount",
+  k8s_user: "User",
+  k8s_group: "Group",
   external_principal: IDENTITY_KIND_LABEL.external_principal,
   statement: "Statement",
   exact: RESOURCE_KIND_LABEL.exact,
@@ -129,6 +164,7 @@ const MARKED: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitati
   "surface_stale",
   "surface_partial",
   "surface_denied",
+  "k8s_coverage_gap",
 ]);
 
 export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
@@ -144,6 +180,14 @@ export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
 }
 
 export function edgeVerb(e: VisualEdge): string {
+  if (isK8sEdge(e)) {
+    // The binding is the label: it is what decides where the role's rules apply.
+    if (e.kind === "executes_as") return e.members.every((m) => m.basis === "observed") ? "runs as" : "configured to run as";
+    if (e.kind === "grant") {
+      const names = k8sBindingNames(e);
+      return names.length === 1 ? names[0] : names.length ? `${names.length} bindings` : "binding";
+    }
+  }
   if (e.kind === "declares") {
     // The actions the statements behind the line list, never "can access".
     const actions = [...new Set((e.summary?.statements ?? []).flatMap((st) => st.members.map((m) => m.label)).filter(Boolean))];

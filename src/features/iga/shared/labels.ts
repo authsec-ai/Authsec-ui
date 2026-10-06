@@ -206,6 +206,9 @@ const LIMITATION_CODES: Record<LimitationCode, true> = {
   surface_partial: true,
   surface_denied: true,
   activity_attempts_not_outcomes: true,
+  k8s_coverage_gap: true,
+  k8s_unresolved_bindings: true,
+  k8s_observations_not_recorded: true,
 };
 
 export function isLimitationCode(code: string): code is LimitationCode {
@@ -252,6 +255,29 @@ export function limitationText(l: EvidenceLimitation): string {
     }
     case "activity_attempts_not_outcomes":
       return "AWS reports authenticated attempts, including requests that were then denied — not successful use.";
+    case "k8s_coverage_gap": {
+      const where = l.cluster ? `cluster ${l.cluster}` : "this cluster";
+      const at = l.observed_at ? ` (latest sweep ${format(new Date(l.observed_at), "d MMM HH:mm")})` : "";
+      switch (l.state) {
+        case "not_swept":
+          return `No sweep of ${where} has been applied, so nothing here has been confirmed.`;
+        case "incomplete":
+          return `A list failed in the latest sweep of ${where}${at}, so what is missing from it may simply not have been read.`;
+        case "namespaced_only":
+          return `The latest sweep of ${where}${at} could not read cluster-scoped objects, so ClusterRoles and ClusterRoleBindings are not covered.`;
+        case "namespace_not_swept":
+          return `The latest sweep of ${where}${at} did not read namespace ${l.namespace ?? "this one"}.`;
+        default:
+          return "No sweep stands behind this row, so it has not been confirmed.";
+      }
+    }
+    case "k8s_unresolved_bindings": {
+      const n = l.count ?? l.bindings?.length ?? 0;
+      const names = l.bindings?.length ? ` (${l.bindings.join(", ")}${l.truncated ? ", …" : ""})` : "";
+      return `${n} ${n === 1 ? "binding names" : "bindings name"} a role the sweep did not see${names}. What ${n === 1 ? "it grants" : "they grant"} is unresolved, not none.`;
+    }
+    case "k8s_observations_not_recorded":
+      return "Kubernetes claims are written from a sweep and no observation is stored for each, so there is no evidence record to open.";
     default:
       // A code newer than this console: name it rather than print nothing.
       return `A limitation this console does not describe yet (${String((l as { code: string }).code)}).`;

@@ -72,24 +72,37 @@ export interface K8sWorkload {
   grants: number;
 }
 
+/**
+ * One resolved step of what a ServiceAccount is granted: binding, role and
+ * rule in one row (k8sread.Grant).
+ *
+ * Three things the Go struct does not make obvious:
+ *  - `binding` is the assignment's raw source key (segments joined by U+001F),
+ *    not a name; `parseBindingKey` reads it.
+ *  - `namespace` is the ROLE's namespace (empty for a ClusterRole). Where the
+ *    grant applies is the binding's, which can narrow a ClusterRole to one.
+ *  - on a partial grant (the role was not in the sweep) the rule lists are
+ *    null, not empty, and the role may be unnamed.
+ */
 export interface K8sGrant {
   role_name: string;
+  /** k8s_role | k8s_cluster_role; empty when the role was not seen. */
   role_kind: string;
   binding: string;
+  /** k8s_role_binding | k8s_cluster_role_binding */
   binding_kind: string;
   namespace: string;
-  verbs: string[];
-  api_groups: string[];
-  resources: string[];
-  resource_names?: string[];
-  non_resource_urls?: string[];
+  verbs: string[] | null;
+  api_groups: string[] | null;
+  resources: string[] | null;
+  resource_names?: string[] | null;
+  non_resource_urls?: string[] | null;
   wildcard: boolean;
   /** Narrowed to named instances, so far weaker than the same rule without. */
   constrained: boolean;
   state: "current" | "stale";
   /** complete only when binding → role → rule all resolved. */
   calculation_state: string;
-  effective_conclusion: string;
 }
 
 export interface K8sAccessSummary {
@@ -97,8 +110,6 @@ export interface K8sAccessSummary {
   complete: number;
   partial: number;
   stale: number;
-  /** Why a resolved chain here may be called effective at all. Always present. */
-  note: string;
 }
 
 export const k8sGraphApi = baseApi.injectEndpoints({
@@ -128,10 +139,7 @@ export const k8sGraphApi = baseApi.injectEndpoints({
       providesTags: ["K8sWorkload"],
     }),
 
-    getK8sAccess: builder.query<
-      { grants: K8sGrant[]; summary: K8sAccessSummary },
-      string
-    >({
+    getK8sAccess: builder.query<{ grants: K8sGrant[]; summary: K8sAccessSummary }, string>({
       query: (id) => ({
         url: `/authsec/discovery/k8s/identities/${id}/access`,
         method: "GET",

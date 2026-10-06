@@ -13,6 +13,8 @@ export function GraphStatePanel({
   subject,
   onRetry,
   onRefresh,
+  source = "the AWS identity graph",
+  permission = "iga:read",
 }: {
   failure: GraphFailure;
   /** What the view shows, in the customer's words: "agents and workloads". */
@@ -20,6 +22,10 @@ export function GraphStatePanel({
   onRetry?: () => void;
   /** Re-pin to the current revision; offered when a newer publication is current. */
   onRefresh?: () => void;
+  /** Where the view reads from, for the "not available yet" answer. */
+  source?: string;
+  /** The permission a 403 names. */
+  permission?: string;
 }) {
   let title: string;
   let body: string;
@@ -29,11 +35,11 @@ export function GraphStatePanel({
   switch (failure.kind) {
     case "unavailable":
       title = "Not available yet";
-      body = `This view will show ${subject} from the AWS identity graph once it is enabled for this workspace.`;
+      body = `This view will show ${subject} from ${source} once it is enabled for this workspace.`;
       break;
     case "unauthorized":
-      title = "You need the IGA read permission";
-      body = "Ask a workspace administrator for iga:read to view the identity graph.";
+      title = permission === "iga:read" ? "You need the IGA read permission" : "Your role cannot see this";
+      body = `Ask a workspace administrator for ${permission} to view ${permission === "iga:read" ? "the identity graph" : subject}.`;
       break;
     case "not_found":
       title = "Not found in this workspace";

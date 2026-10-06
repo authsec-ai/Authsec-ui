@@ -65,6 +65,9 @@ const LIMITATION_SHORT: Record<EvidenceLimitation["code"], string> = {
   surface_partial: "Relevant coverage partial",
   surface_denied: "Relevant coverage missing",
   activity_attempts_not_outcomes: "Activity shows attempts, not outcomes",
+  k8s_coverage_gap: "Sweep coverage gap",
+  k8s_unresolved_bindings: "Binding to a role not in the sweep",
+  k8s_observations_not_recorded: "No observation recorded",
 };
 
 const WARN: ReadonlySet<EvidenceLimitation["code"]> = new Set<EvidenceLimitation["code"]>([
