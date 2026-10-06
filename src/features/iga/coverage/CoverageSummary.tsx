@@ -13,7 +13,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 
 import { refId, type GraphCoverageGap, type GraphRef, type Pipeline, type SurfaceState } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
@@ -96,11 +96,17 @@ export function CoverageSummary({
         role="status"
         className={
           incomplete.length
-            ? "flex flex-wrap items-center justify-between gap-2 rounded-md bg-(--color-warning-soft) px-3 py-2 text-sm text-(--color-warning-text)"
+            ? "flex flex-wrap items-center justify-between gap-2 rounded-md border border-(--color-warning-text)/25 border-l-2 border-l-(--color-warning-text) bg-(--color-warning-soft) px-3 py-2 text-sm text-(--color-warning-text)"
             : "flex flex-wrap items-center justify-between gap-2 rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle) px-3 py-2 text-sm text-(--color-text-muted)"
         }
       >
-        <span>{headline}</span>
+        {/* An icon and a left rule, so the warning does not depend on colour
+            alone (colour-blind readers), and a hairline border instead of a
+            flood of fill so it stops outshouting the list under it. */}
+        <span className="flex items-center gap-2">
+          {incomplete.length ? <AlertTriangle aria-hidden="true" className="size-4 shrink-0" /> : <Info aria-hidden="true" className="size-4 shrink-0" />}
+          {headline}
+        </span>
         <button type="button" onClick={() => setReview(true)} className="shrink-0 font-semibold text-(--color-primary-text) hover:underline">
           Review collection gaps
         </button>

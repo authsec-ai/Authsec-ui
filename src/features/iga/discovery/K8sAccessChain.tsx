@@ -31,7 +31,7 @@ const PILL = "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11
 function Step({ label, children, to }: { label: string; children: React.ReactNode; to?: string }) {
   return (
     <span className="inline-flex min-w-0 flex-col">
-      <span className="text-[10.5px] uppercase tracking-wide text-(--color-text-subtle)">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-(--color-text-subtle)">{label}</span>
       {to ? (
         <Link to={to} className="truncate font-mono text-[11px] font-medium text-(--color-text) hover:underline">
           {children}

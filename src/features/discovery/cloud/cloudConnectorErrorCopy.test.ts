@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cloudConnectorErrorSummary } from "./cloudConnectorErrorCopy";
+import { EXTERNAL_ID_UNREADABLE_PROSE, cloudConnectorErrorSummary, safeErrorProse } from "./cloudConnectorErrorCopy";
 
 /**
  * The codes are a contract with the backend, which stamps them in
@@ -17,6 +17,7 @@ const BACKEND_CODES = [
   "policy_blocked",
   "deployment_misconfigured",
   "external_id_not_issued",
+  "external_id_unreadable",
   "credential_invalid",
   "scope_invalid",
 ] as const;
@@ -52,5 +53,24 @@ describe("cloudConnectorErrorSummary", () => {
 
   it("trims prose so whitespace never counts as an error", () => {
     expect(cloudConnectorErrorSummary(undefined, "  boom  ")).toBe("boom");
+  });
+});
+
+describe("safeErrorProse", () => {
+  it("never shows a secrets-store path, workspace id or account", () => {
+    const leaked =
+      "iam scan: failed to read the external id: no secret found at path: kv/data/secret/workspaces/15a4672c-a601-4854-ad70-cab81f156ae5/cloud-discovery/aws/429418377036";
+    const got = safeErrorProse(leaked);
+    expect(got).toBe(EXTERNAL_ID_UNREADABLE_PROSE);
+    expect(got).not.toMatch(/kv\/|15a4672c|429418377036/);
+  });
+
+  it("passes other prose through, without a trailing full stop", () => {
+    expect(safeErrorProse("gave up after 3 attempts")).toBe("gave up after 3 attempts");
+    expect(safeErrorProse("The role could not be assumed.")).toBe("The role could not be assumed");
+  });
+
+  it("is applied to the summary's raw-prose fallback", () => {
+    expect(cloudConnectorErrorSummary(undefined, "failed: no secret found at path: kv/data/x")).toBe(EXTERNAL_ID_UNREADABLE_PROSE);
   });
 });

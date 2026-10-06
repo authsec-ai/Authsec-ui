@@ -23,6 +23,7 @@ export function ConsolePage({
   description,
   actions,
   variant = "default",
+  skin,
   children,
 }: {
   title: ReactNode;
@@ -35,10 +36,21 @@ export function ConsolePage({
    * full-height workspace tab (the identity graph) keeps its room.
    */
   variant?: "default" | "object";
+  /**
+   * Opt-in page-scoped visual skin, emitted as `data-skin` on the `[data-cr]`
+   * root so a feature can restyle the shared console chrome (header, filter
+   * bar, table card) for ONE page by re-declaring design tokens under its own
+   * selector, instead of editing components that ~38 pages render.
+   *
+   * Purely additive: left undefined, no attribute is emitted and the markup is
+   * byte-identical to before. Only pass it alongside a stylesheet that scopes
+   * itself to the same name.
+   */
+  skin?: string;
   children: ReactNode;
 }) {
   return (
-    <div data-cr>
+    <div data-cr data-skin={skin}>
       <div className={variant === "object" ? "console-page console-page--object" : "console-page"}>
         <header className="section-header">
           <div className={variant === "object" ? "sh-main min-w-0" : "min-w-0"}>

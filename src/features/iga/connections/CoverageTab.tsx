@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 
 import type { Connection } from "@/app/api/connectionsApi";
 import { useGetAwsConnectorQuery, useGetGcpConnectorQuery, useListAwsScanRunsQuery } from "@/app/api/cloudDiscoveryApi";
@@ -25,9 +26,56 @@ import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 import { buildCoverage, COVERAGE_TONE, COVERAGE_WORD, k8sCoverageRows, type CoverageRow, type RawSurface } from "./coverageView";
 import { coverageText, detailHref, scanHref } from "./connectionModel";
 import { gcpAttrs } from "./providerData";
+import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 function Skeleton({ label }: { label: string }) {
   return <div className="h-32 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label={label} />;
+}
+
+/**
+ * Everything deliberately outside the scan scope, said once: "16 regions not
+ * in scope · Edit scope". The regions themselves are chips behind an expand;
+ * the one explanation sits in the line's tooltip, not on every region.
+ */
+function NotInScope({ c, rows }: { c: Connection; rows: CoverageRow[] }) {
+  const [open, setOpen] = useState(false);
+  // One chip per region (or per surface, for the few that have no region).
+  const names = useMemo(() => [...new Set(rows.map((r) => r.region ?? r.service))].sort(), [rows]);
+  const regional = rows.every((r) => r.region);
+  const noun = regional ? (names.length === 1 ? "region" : "regions") : names.length === 1 ? "surface" : "surfaces";
+  return (
+    <section className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[13px]">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          title="Outside the scan scope by choice. Earlier results are kept and not reconfirmed."
+          className="-mx-1 inline-flex items-center gap-1.5 rounded px-1 font-medium text-(--color-text) hover:bg-(--color-surface-subtle) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--color-primary)"
+        >
+          <ChevronDown aria-hidden="true" className={`size-4 text-(--color-text-muted) transition-transform ${open ? "" : "-rotate-90"}`} />
+          <span className="tabular-nums">{names.length}</span> {noun} not in scope
+        </button>
+        {c.provider === "aws" ? (
+          <>
+            <span aria-hidden="true" className="text-(--color-text-muted)">·</span>
+            <Link to={detailHref(c.id, "scope")} className="font-medium text-(--color-primary-text) hover:underline">
+              Edit scope
+            </Link>
+          </>
+        ) : null}
+      </div>
+      {open ? (
+        <ul aria-label={`${noun} not in scope`} className="flex flex-wrap gap-1.5 border-t border-(--color-border-subtle) px-4 py-3">
+          {names.map((n) => (
+            <li key={n} className="rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle) px-2 py-0.5 font-mono text-xs text-(--color-text-secondary)">
+              {n}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
 }
 
 function Row({ r }: { r: CoverageRow }) {
@@ -67,7 +115,7 @@ function Row({ r }: { r: CoverageRow }) {
           {r.error ? (
             <>
               <dt className="text-(--color-text-muted)">Error</dt>
-              <dd className="break-words">{r.error}</dd>
+              <dd className="break-words">{safeErrorProse(r.error)}</dd>
             </>
           ) : null}
         </dl>
@@ -78,58 +126,61 @@ function Row({ r }: { r: CoverageRow }) {
 
 function Groups({ c, surfaces, gaps }: { c: Connection; surfaces: Record<string, RawSurface> | undefined; gaps?: Parameters<typeof buildCoverage>[2] }) {
   const { groups, notSelected } = useMemo(() => buildCoverage(c.provider, surfaces, gaps), [c.provider, surfaces, gaps]);
-  const [showUnselected, setShowUnselected] = useState(false);
   const everyUnchecked = groups.length > 0 && groups.every((g) => g.rows.every((r) => r.state === "unknown"));
 
   if (!groups.length && !notSelected.length) {
     return (
       <Panel title="Surfaces">
-        <p className="text-[13px] text-(--color-text-muted)">No coverage recorded. Nothing has scanned this connection yet.</p>
+        <p className="text-[13px] text-(--color-text-muted)">No scans yet.</p>
       </Panel>
     );
   }
   if (everyUnchecked) {
     return (
       <Panel title="Surfaces">
-        <p className="text-[13px] text-(--color-text-muted)">
-          Every surface is listed the moment a scope is connected, so this is the full set AuthSec would look at — not a result. Nothing here has been
-          read yet.
-        </p>
+        <p className="text-[13px] text-(--color-text-muted)">Nothing has been read yet. Run a scan to see what each surface holds.</p>
       </Panel>
     );
   }
   return (
     <>
-      {groups.map((g) => (
-        <Panel key={g.id} title={g.title} count={`${g.rows.length} ${g.rows.length === 1 ? "surface" : "surfaces"}`} flush>
-          <ul className="divide-y divide-(--color-border-subtle)">
-            {g.rows.map((r) => (
-              <Row key={r.key} r={r} />
-            ))}
-          </ul>
-        </Panel>
-      ))}
-      {notSelected.length ? (
-        <Panel
-          title="Not selected"
-          count={`${notSelected.length}`}
-          description="Deliberately outside the scan scope. Earlier results for these are kept and not reconfirmed."
-          actions={
-            <button type="button" className="font-medium text-(--color-primary-text) hover:underline" aria-expanded={showUnselected} onClick={() => setShowUnselected((v) => !v)}>
-              {showUnselected ? "Hide" : "Show"}
-            </button>
-          }
-          flush={showUnselected}
-        >
-          {showUnselected ? (
-            <ul className="divide-y divide-(--color-border-subtle)">
-              {notSelected.map((r) => (
-                <Row key={r.key} r={r} />
-              ))}
-            </ul>
-          ) : null}
-        </Panel>
-      ) : null}
+      {groups.map((g) => {
+        // A compact grid of what was read and how many were found (2026-10-06
+        // design); a surface that was not fully read keeps its full row below,
+        // with the cause and what to do.
+        const read = g.rows.filter((r) => r.state === "reached");
+        const problems = g.rows.filter((r) => r.state !== "reached");
+        const meta = `${g.rows.length} ${g.rows.length === 1 ? "surface" : "surfaces"} · ${problems.length ? `${problems.length} not fully read` : "all read"}`;
+        return (
+          <Panel key={g.id} title={g.title} count={meta} flush>
+            {read.length ? (
+              <dl className="grid sm:grid-cols-2">
+                {read.map((r, i) => (
+                  <div
+                    key={r.key}
+                    className={`flex items-baseline justify-between gap-3 px-4 py-2.5 ${i > 0 ? "border-t border-(--color-border-subtle)" : ""} ${i === 1 ? "sm:border-t-0" : ""} ${i % 2 ? "sm:border-l sm:border-(--color-border-subtle)" : ""}`}
+                  >
+                    <dt className="min-w-0 truncate text-[13px] text-(--color-text)" title={r.service}>
+                      {r.service}
+                    </dt>
+                    <dd className={`font-mono text-[13px] tabular-nums ${r.count === 0 ? "text-(--color-text-muted)" : "text-(--color-text)"}`}>
+                      {r.count != null ? r.count.toLocaleString() : "read"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {problems.length ? (
+              <ul className={`divide-y divide-(--color-border-subtle) ${read.length ? "border-t border-(--color-border-subtle)" : ""}`}>
+                {problems.map((r) => (
+                  <Row key={r.key} r={r} />
+                ))}
+              </ul>
+            ) : null}
+          </Panel>
+        );
+      })}
+      {notSelected.length ? <NotInScope c={c} rows={notSelected} /> : null}
     </>
   );
 }
@@ -168,7 +219,7 @@ function SurfaceCoverage({ c }: { c: Connection }) {
       <Summary
         c={c}
         asOf={cov?.finished_at}
-        note="It reports every phase of the last completed scan, and is written when that scan publishes. While a new scan runs, these are still the previous scan's results."
+        note="From the last completed scan. A scan in progress replaces this when it publishes."
       />
       {c.provider === "aws" && runs.isError && !runs.data ? (
         <p role="alert" className="text-xs text-(--color-warning-text)">
@@ -196,9 +247,9 @@ function GcpReach({ c }: { c: Connection }) {
   const unknown = Object.entries(enablement).filter(([, v]) => v === "unknown").map(([k]) => k);
   return (
     <>
-      <Panel title="What the reader can reach" description="Proved by a live permission check when the connection was verified — a different question from what the last scan read.">
+      <Panel title="What the reader can reach" description="From a live permission check at verification, not from the last scan.">
         {keys.length === 0 ? (
-          <p className="text-[13px] text-(--color-text-muted)">Never probed. Verify the connection to find out; nothing here means “no access”, only that nobody has checked.</p>
+          <p className="text-[13px] text-(--color-text-muted)">Not checked yet. Verify the connection to find out.</p>
         ) : (
           <ul className="divide-y divide-(--color-border-subtle)">
             {keys.map((k) => {
@@ -251,7 +302,7 @@ function GcpReach({ c }: { c: Connection }) {
             {unknown.length ? (
               <div>
                 <p className="font-medium">Unknown</p>
-                <p className="text-(--color-text-muted)">The reader cannot list services in the quota project, so these could not be checked. Unknown is not the same as off.</p>
+                <p className="text-(--color-text-muted)">The reader can't list services in the quota project, so these weren't checked.</p>
               </div>
             ) : null}
           </div>
@@ -272,7 +323,7 @@ function GcpReach({ c }: { c: Connection }) {
             </ul>
           </details>
           <Meta className="mt-2">
-            Proved by a live permission check, not read from the roles granted — a custom role can carry a permission, and a deny policy can remove one the role appears to give.
+            From a live permission check, not inferred from granted roles.
           </Meta>
         </Panel>
       ) : null}
@@ -320,7 +371,7 @@ function GitHubCoverage({ c }: { c: Connection }) {
         <Skeleton label="Loading the latest scan" />
       ) : !latest ? (
         <Panel title="Repositories">
-          <p className="text-[13px] text-(--color-text-muted)">No scan has run, so there is no coverage to report. Coverage is unknown, not complete.</p>
+          <p className="text-[13px] text-(--color-text-muted)">No scans yet, so coverage is unknown.</p>
         </Panel>
       ) : (
         <Panel

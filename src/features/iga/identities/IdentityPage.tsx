@@ -49,9 +49,11 @@ export default function IdentityPage() {
   const tabs: ObjectTabDef[] = [
     { key: "overview", label: "Overview", path: "" },
     { key: "used-by", label: i?.kind === "iam_group" ? "Members" : "Used by", path: "/used-by" },
+    // Same five questions as a workload, in the same words. Labels only: keys,
+    // paths and capability flags are unchanged.
     { key: "permissions", label: "Permissions", path: "/permissions" },
-    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
-    { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
+    { key: "graph", label: "Access Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "changes", label: "History", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -66,8 +68,8 @@ export default function IdentityPage() {
   if (i) {
     // Overview and Changes remain for a retired or vanished object; the other
     // tabs say they have no current data (SPEC-console-revamp.md).
-    if (active === "overview") body = <IdentityOverview ws={ws} identity={i} gaps={meta?.coverage} frozen={vanished} />;
-    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="identities" id={id} /> : null;
+    if (active === "overview") body = <IdentityOverview ws={ws} identity={i} gaps={meta?.coverage} frozen={vanished} publishedAt={meta?.published_at} />;
+    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="identities" id={id} lastConfirmedAt={i.last_confirmed_at} /> : null;
     else if (gone) body = <RetiredTab name={i.name} lastConfirmed={i.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={i.ref} rootName={i.name} />;
     else if (rev != null && active === "used-by") body = <IdentityUsedByTab ws={ws} identity={i} />;

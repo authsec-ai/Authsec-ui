@@ -350,7 +350,10 @@ export default function AWSIdentitiesPage({
         header: "Identity",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 300,
+        // 300 clipped the common case: a role name plus its kind badge on one
+        // line left ~210px for the name, and AWS's own service-linked role
+        // names run past that (UX proposal §4, "Full identity names").
+        approxWidth: 360,
         cell: ({ row }) => {
           const i = row.original;
           return (

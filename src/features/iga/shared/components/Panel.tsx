@@ -15,6 +15,8 @@ import { copyToClipboard } from "@/lib/clipboard";
 
 import { cn } from "@/lib/utils";
 
+import { WRAP_ID_CLASS, wrapId } from "./wrapText";
+
 export function Panel({
   title,
   count,
@@ -58,7 +60,9 @@ export function Fact({ label, children, mono = false }: { label: ReactNode; chil
   return (
     <>
       <dt className="text-xs text-(--color-text-muted)">{label}</dt>
-      <dd className={cn("min-w-0 break-words text-[13px] leading-5 text-(--color-text)", mono && "break-all font-mono text-xs")}>{children}</dd>
+      <dd className={cn("min-w-0 break-words text-[13px] leading-5 text-(--color-text)", mono && `${WRAP_ID_CLASS} font-mono text-xs`)}>
+        {mono && typeof children === "string" ? wrapId(children) : children}
+      </dd>
     </>
   );
 }
@@ -92,7 +96,7 @@ export function ClaimRow({ eyebrow, title, facts, children }: { eyebrow?: ReactN
 export function CopyValue({ value, what = "Value" }: { value: string; what?: string }) {
   return (
     <span className="flex items-start gap-2">
-      <span className="min-w-0 break-all font-mono text-xs leading-5">{value}</span>
+      <span className={`min-w-0 ${WRAP_ID_CLASS} font-mono text-xs leading-5`}>{wrapId(value)}</span>
       <button
         type="button"
         aria-label={`Copy the ${what.toLowerCase()}`}

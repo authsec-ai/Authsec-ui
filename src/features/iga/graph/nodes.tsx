@@ -15,15 +15,15 @@
  * opens the object's page, `+`/`-` load and collapse.
  */
 
-import { memo, type KeyboardEvent, type MouseEvent } from "react";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { memo, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Handle, Position, useStore, type Node, type NodeProps } from "@xyflow/react";
 
 import type { GraphFrontier, GraphNodeKind, GraphRef } from "@/app/api/igaGraphApi";
 import { cn } from "@/lib/utils";
 
 import { frontierAriaLabel, frontierLabel } from "./graphLabels";
 import { NODE_ICON } from "./icons";
-import { nodeAriaLabel, type NodeDescription } from "./nodeView";
+import { nodeAriaLabel, titleLines, type NodeDescription } from "./nodeView";
 import type { FrontierControl, VisualNode } from "./types";
 
 export type { FrontierControl };
@@ -139,12 +139,60 @@ const CATEGORY_CLASS: Record<NodeDescription["category"], { header: string; icon
   external: { header: "bg-(--color-object-external-soft) text-(--color-object-external-text)", icon: "text-(--color-object-external-accent)" },
 };
 
+/**
+ * Below this zoom a full card's small print is unreadable, so the card shows
+ * only its icon, type and name, larger. Above it the card is whole, with its
+ * expand controls: a fitted graph usually sits between this and 100%, and
+ * collapsing there hid the controls people use (review, 2026-10-05).
+ */
+const COMPACT_BELOW_ZOOM = 0.6;
+/** The collapsed card's name, in canvas pixels: big enough to read when zoomed out, never so big it truncates to a few letters. */
+const COMPACT_TITLE_MAX = 20;
+const COMPACT_TYPE_MAX = 15;
+
+/**
+ * The collapsed card, drawn only when zoomed far out: its icon, its type when
+ * there is room, and its name, larger than the full card's text.
+ */
+function CompactBody({ icon, type, title, height, headerClass }: { icon: ReactNode; type: string; title: string; height: number; headerClass: string }) {
+  const typeSize = COMPACT_TYPE_MAX;
+  const titleSize = COMPACT_TITLE_MAX;
+  const room = height - 12;
+  const showType = room >= (typeSize + titleSize) * 1.2;
+  const lines = room - (showType ? typeSize * 1.2 : 0) >= titleSize * 1.2 * 2 ? 2 : 1;
+  return (
+    <div className={cn("flex h-full items-center gap-2 px-3", headerClass)}>
+      {icon}
+      <span className="flex min-w-0 flex-col">
+        {showType ? (
+          <span className="truncate font-medium leading-[1.2] opacity-80" style={{ fontSize: typeSize }}>
+            {type}
+          </span>
+        ) : null}
+        <span
+          className={cn("min-w-0 font-semibold leading-[1.2] text-(--color-text) [overflow-wrap:anywhere]", lines === 2 ? "line-clamp-2" : "truncate")}
+          style={{ fontSize: titleSize }}
+        >
+          {title}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+const WILDCARD_HEADER = "bg-(--color-danger-soft) text-(--color-danger-text)";
+
 function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGraphNode>) {
   const { visual: v, description: d } = data;
   const first = v.members[0];
   const Icon = NODE_ICON[d.icon];
-  const cat = CATEGORY_CLASS[d.category];
+  const cat = d.wildcard ? { header: WILDCARD_HEADER, icon: "text-(--color-danger)" } : CATEGORY_CLASS[d.category];
   const dashed = d.category === "external" || !!v.overflow;
+  // Zoomed out past the point where the card's small print would render under
+  // 11px, the card collapses to its icon and name, set large enough that the
+  // name itself never does (G-05). Every detail stays in the selection card.
+  // A boolean selector: a card re-renders when the mode flips, not on every zoom frame.
+  const compact = useStore((s) => s.transform[2] < COMPACT_BELOW_ZOOM);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // A key press from a nested control (Retry, Collapse) is that control's.
@@ -188,21 +236,31 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
           ? "border-(--color-primary) shadow-[0_0_0_2px_var(--color-primary)]"
           : "border-(--color-border-subtle) shadow-(--shadow-xs) hover:border-(--color-border-strong)",
         dashed && !data.isSelected && "border-dashed border-(--color-border-strong)",
+        // An outline, not a thicker border: the card's height is fixed by the layout.
+        d.wildcard && !data.isSelected && "border-dashed border-(--color-danger) outline-1 outline-dashed outline-offset-[-2px] outline-(--color-danger)",
       )}
+      title={compact ? `${d.type}: ${d.title}` : undefined}
     >
       {/* Invisible anchors for the lines: nothing can be drawn from them. */}
       <Handle type="target" position={Position.Left} isConnectable={false} className="!pointer-events-none !opacity-0" />
       <Handle type="source" position={Position.Right} isConnectable={false} className="!pointer-events-none !opacity-0" />
 
-      <p className={cn("flex h-6 shrink-0 items-center gap-1.5 px-3 text-[11px] font-semibold", cat.header)}>
-        <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", cat.icon)} />
-        <span className="min-w-0 truncate" title={d.type}>
-          {d.type}
-        </span>
-        {data.isRoot ? <span className="ml-auto shrink-0 font-medium opacity-80">start</span> : null}
-      </p>
+      {compact ? (
+        <CompactBody icon={<Icon aria-hidden="true" className={cn("size-5 shrink-0", cat.icon)} />} type={data.isRoot ? `${d.type} · start` : d.type} title={d.title} height={height ?? 60} headerClass={cat.header} />
+      ) : (
+        <>
+        <p className={cn("flex h-6 shrink-0 items-center gap-1.5 px-3 text-[11px] font-semibold", cat.header)}>
+          <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", cat.icon)} />
+          <span className="min-w-0 truncate" title={d.type}>
+            {d.type}
+          </span>
+          {data.isRoot ? <span className="ml-auto shrink-0 font-medium opacity-80">start</span> : null}
+        </p>
       <div className="flex min-h-0 flex-1 flex-col px-3 pt-1.5 pb-2">
-        <p className="h-5 truncate text-[13px] font-semibold leading-5 text-(--color-text)" title={d.title}>
+        <p
+          className={cn("text-[13px] font-semibold leading-5 text-(--color-text) [overflow-wrap:anywhere]", titleLines(d.title) === 2 ? "line-clamp-2 h-10" : "h-5 truncate")}
+          title={`Name: ${d.title}`}
+        >
           {d.title}
         </p>
         {d.context ? (
@@ -234,6 +292,8 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
         ) : null}
         {d.frontier.length && d.frontierHidden ? <span className="sr-only">{d.frontierHidden} more to load in the selection card</span> : null}
       </div>
+        </>
+      )}
     </div>
   );
 }

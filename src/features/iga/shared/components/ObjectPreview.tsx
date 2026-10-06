@@ -43,6 +43,8 @@ export interface PreviewModel {
   exception?: ReactNode;
   detailsHref?: string;
   graphHref?: string;
+  /** An action the panel offers before its links: classifying a workload. */
+  actions?: ReactNode;
 }
 
 /** The list preview below this content width is a drawer (spec: *Responsive contract*). */
@@ -54,7 +56,7 @@ export function PreviewBody({ model, onClose }: { model: PreviewModel; onClose: 
     <div className="flex min-h-0 flex-col gap-4 p-4" data-preview>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h2 className="break-words text-[15px] font-semibold leading-tight text-(--color-text)">{model.name}</h2>
+          <h2 className="break-words text-sm font-semibold leading-tight text-(--color-text)">{model.name}</h2>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--color-text-muted)">
             <ProviderGlyph provider={model.provider} withName />
             <span aria-hidden="true">·</span>
@@ -95,6 +97,8 @@ export function PreviewBody({ model, onClose }: { model: PreviewModel; onClose: 
         <p className="rounded-md bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">{model.exception}</p>
       ) : null}
 
+      {model.actions}
+
       <div className="flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) pt-3">
         {model.detailsHref ? (
           <Button asChild size="sm" className="text-[length:var(--font-size-sm)] text-white">
@@ -106,7 +110,7 @@ export function PreviewBody({ model, onClose }: { model: PreviewModel; onClose: 
         {model.graphHref ? (
           <Button asChild size="sm" variant="outline">
             <Link to={model.graphHref}>
-              <Network className="size-3.5" /> Open graph
+              <Network className="size-3.5" /> Open Access Graph
             </Link>
           </Button>
         ) : null}

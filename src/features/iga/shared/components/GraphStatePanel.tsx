@@ -43,17 +43,17 @@ export function GraphStatePanel({
       // A new read at the old publication is refused by the server (409): say so
       // in place of this panel only, never as an error or an empty list.
       title = "A newer publication is current — refresh to continue";
-      body = "This view was not loaded before it changed, and the server no longer serves the earlier publication. What is already on screen is unchanged. Refresh re-reads the whole page together.";
+      body = "The earlier publication is no longer available. Refresh to load the latest.";
       refresh = true;
       break;
     case "timeout":
       title = `Could not load ${subject}`;
-      body = "The request ran out of time. Narrowing the filters makes it faster.";
+      body = "The request timed out. Try narrowing the filters.";
       retry = true;
       break;
     default:
       title = `Could not load ${subject}`;
-      body = "The request failed, so nothing is known about what it would have returned.";
+      body = "Something went wrong. Try again.";
       retry = true;
   }
 

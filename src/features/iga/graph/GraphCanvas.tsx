@@ -4,12 +4,12 @@
  * them and turns pointer and keyboard interaction into callbacks.
  *
  * Viewport rules:
- * - A graph seen for the first time, or just arranged, opens on its starting
- *   object at a readable scale (`revealStart`): the whole graph when it fits
- *   legibly, otherwise the start object near the left edge.
- * - A graph seen before reopens where the customer left it (`viewport`).
- *   Nothing refits it afterwards — not an expansion, not a selection, not
- *   the inspector opening. Fit graph is the customer's to press.
+ * - The graph is fitted whole, with 32px of room, on arrival, after Arrange
+ *   and on every view switch (`revealStart`). A saved viewport is no longer
+ *   restored: the same input always opens on the same picture. Nothing else
+ *   refits it — not an expansion, a selection or the inspector opening.
+ * - In the page the wheel scrolls the page and Ctrl + wheel or a pinch zooms;
+ *   in full screen the wheel zooms. Drag pans.
  * - When the canvas narrows (the inspector opens), the selected item is kept
  *   in view by panning, never by zooming out.
  * - When no loaded node is in view, the canvas says so and offers the way
@@ -68,9 +68,13 @@ const nodeTypes = {
 
 const edgeTypes = { graphEdge: GraphEdgeView };
 
-/** Below this, a fitted graph is too small to read; open on the start object instead. */
-const READABLE_ZOOM = 0.65;
-const START_ZOOM = 0.9;
+/** Room around a fitted graph, so no card touches the canvas edge (G-01). */
+const FIT_PADDING = "32px";
+/**
+ * How far out the canvas zooms. Cards collapse to their name below 100%, at a
+ * size that stays readable (nodes.tsx), so this only bounds how small that gets.
+ */
+const MIN_ZOOM = 0.55;
 
 function reducedMotionPreferred(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -80,6 +84,8 @@ function reducedMotionPreferred(): boolean {
 export interface CanvasApi {
   fitGraph: () => void;
   revealStart: () => void;
+  /** Centre the starting object, at a readable zoom. */
+  focusStart: () => void;
   /** Pan (not zoom) until this drawn node or edge is in view. */
   bringIntoView: (sel: GraphSelection) => void;
   zoomIn: () => void;
@@ -112,6 +118,8 @@ export interface GraphCanvasProps {
   onMoveNode: (id: string, position: Position) => void;
   /** Width covered by the selection card at the right edge: kept clear when bringing something into view. */
   rightInset?: number;
+  /** Full screen: no page behind the canvas to scroll, so the wheel zooms. */
+  expanded?: boolean;
   /** Bumped when the start object should be revealed: first layout, Arrange. */
   revealToken: number;
   /** Where the customer left this investigation, if they have been here before. */
@@ -154,6 +162,7 @@ function GraphCanvasInner({
   onClearSelection,
   onMoveNode,
   rightInset = 0,
+  expanded = false,
   revealToken,
   viewport,
   onViewportChange,
@@ -291,16 +300,20 @@ function GraphCanvasInner({
     return { x: -x / zoom, y: -y / zoom, w: el.clientWidth / zoom, h: el.clientHeight / zoom, zoom };
   }, [flow]);
 
+  // The whole graph, always (G-01). It used to zoom back in on the start
+  // object when the fit came out small, which cut the rest of the graph off;
+  // cards now collapse to a readable size instead (nodes.tsx).
   const revealStart = useCallback(async () => {
-    await flow.fitView({ padding: 0.12, maxZoom: 1, duration: 0 });
+    await flow.fitView({ padding: FIT_PADDING, maxZoom: 1, minZoom: MIN_ZOOM, duration: 0 });
+    // Too large to fit even at the smallest zoom: the fit centred the middle
+    // of the graph, which can leave the starting object off screen. Open on it,
+    // near the left edge, as before.
     const el = wrapperRef.current;
     const p = rootId ? positions.get(rootId) : undefined;
     const s = rootId ? sizes.get(rootId) : undefined;
-    if (flow.getZoom() >= READABLE_ZOOM || !el || !p || !s) return;
-    // Too large to read whole: open on the start object, near the left edge.
-    const cx = p.x + (el.clientWidth / 2 - 48) / START_ZOOM;
-    const cy = p.y + s.height / 2;
-    await flow.setCenter(cx, cy, { zoom: START_ZOOM, duration: 0 });
+    if (flow.getZoom() > MIN_ZOOM + 0.001 || !el || !p || !s) return;
+    const zoom = flow.getZoom();
+    await flow.setCenter(p.x + (el.clientWidth / 2 - 48) / zoom, p.y + s.height / 2, { zoom, duration: 0 });
   }, [flow, rootId, positions, sizes]);
 
   const bringIntoView = useCallback(
@@ -320,23 +333,30 @@ function GraphCanvasInner({
 
   const api = useMemo<CanvasApi>(
     () => ({
-      fitGraph: () => void flow.fitView({ padding: 0.12, maxZoom: 1, duration }),
+      fitGraph: () => void flow.fitView({ padding: FIT_PADDING, maxZoom: 1, minZoom: MIN_ZOOM, duration }),
       revealStart: () => void revealStart(),
+      focusStart: () => {
+        const p = rootId ? positions.get(rootId) : undefined;
+        const s = rootId ? sizes.get(rootId) : undefined;
+        if (p && s) void flow.setCenter(p.x + s.width / 2, p.y + s.height / 2, { zoom: Math.max(flow.getZoom(), 0.9), duration });
+      },
       bringIntoView,
       zoomIn: () => void flow.zoomIn({ duration }),
       zoomOut: () => void flow.zoomOut({ duration }),
     }),
-    [flow, duration, revealStart, bringIntoView],
+    [flow, duration, revealStart, bringIntoView, rootId, positions, sizes],
   );
   useEffect(() => {
     onApi(api);
     return () => onApi(null);
   }, [api, onApi]);
 
-  // First view (no saved viewport) and Arrange. Runs once React Flow knows
-  // the nodes — it queues fitView until they are initialised.
-  // A deep link's selection is then brought into view too.
-  const revealed = useRef(viewport ? revealToken : -1);
+  // Arrival, Arrange and every view switch (GraphTab bumps revealToken). Runs
+  // once React Flow knows the nodes — it queues fitView until they are
+  // initialised. A deep link's selection is then brought into view too.
+  // Always fitted on arrival, even with a saved viewport: the picture is the
+  // same for the same input (product decision, 2026-10-05).
+  const revealed = useRef(-1);
   useEffect(() => {
     if (revealToken === revealed.current || rfNodes.length === 0) return;
     revealed.current = revealToken;
@@ -451,6 +471,10 @@ function GraphCanvasInner({
         .${scopeClass} .react-flow__node.iga-graph-dim { opacity: 0.28; }
       `}</style>
       <ReactFlow
+        // A security console should not carry a third-party badge on its own
+        // graph. @xyflow/react is MIT, which permits this; its maintainers ask
+        // for a Pro subscription in return, which is a product call, not ours.
+        proOptions={{ hideAttribution: true }}
         defaultViewport={viewport}
         onMoveEnd={(_event, next) => {
           onViewportChange(next);
@@ -498,8 +522,17 @@ function GraphCanvasInner({
         onEdgeClick={(_event, edge) => onSelectEdge(edge.id)}
         onEdgeMouseEnter={(_event, edge) => setHoveredEdge(edge.id)}
         onEdgeMouseLeave={() => setHoveredEdge(null)}
-        panOnScroll
-        minZoom={0.2}
+        // The wheel scrolls the page; Ctrl + wheel or a pinch zooms; a drag
+        // pans (G-02). panOnScroll made the wheel drag the graph away.
+        // In the page, the wheel scrolls the page; Ctrl + wheel or a pinch
+        // zooms (a trackpad pinch arrives as Ctrl + wheel). Full screen has no
+        // page to scroll, so there the wheel zooms.
+        zoomOnScroll={expanded}
+        zoomActivationKeyCode="Control"
+        zoomOnPinch
+        panOnDrag
+        preventScrolling={expanded}
+        minZoom={MIN_ZOOM}
         maxZoom={1.5}
       >
         <Background gap={24} size={1} />

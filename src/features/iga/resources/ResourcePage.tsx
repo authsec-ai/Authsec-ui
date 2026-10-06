@@ -44,9 +44,12 @@ export default function ResourcePage() {
 
   const tabs: ObjectTabDef[] = [
     { key: "overview", label: "Overview", path: "" },
-    { key: "access", label: "Access", path: "/access" },
-    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
-    { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
+    // A resource's "Access" tab lists who can reach IT, the reverse of a
+    // workload's Access tab, so it says so. Labels only: keys, paths and
+    // capability flags are unchanged.
+    { key: "access", label: "Who can access", path: "/access" },
+    { key: "graph", label: "Access Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "changes", label: "History", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -63,8 +66,8 @@ export default function ResourcePage() {
   if (r) {
     // Overview and Changes remain for a retired or vanished object; the other
     // tabs say they have no current data (SPEC-console-revamp.md).
-    if (active === "overview") body = <ResourceOverview ws={ws} resource={r} gaps={meta?.coverage} frozen={vanished} />;
-    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="resources" id={id} /> : null;
+    if (active === "overview") body = <ResourceOverview ws={ws} resource={r} gaps={meta?.coverage} frozen={vanished} publishedAt={meta?.published_at} />;
+    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="resources" id={id} lastConfirmedAt={r.last_confirmed_at} /> : null;
     else if (gone) body = <RetiredTab name={r.text} lastConfirmed={r.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={r.ref} rootName={r.text} />;
     else if (rev != null && active === "access") body = <ResourceAccessTab ws={ws} resource={r} />;

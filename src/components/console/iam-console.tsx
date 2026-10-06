@@ -110,6 +110,11 @@ export function ConsoleFilterBar({
                   <button
                     key={filter.key}
                     type="button"
+                    // Inert here, and emitted for every pill so a page-scoped
+                    // skin can style a pill by its tally — CSS cannot match
+                    // the rendered number. Nothing in this file reads it.
+                    data-count={filter.count}
+                    data-filter={filter.key}
                     onClick={() => onFilterChange?.(filter.key)}
                     className={cn(
                       "inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold transition-colors",

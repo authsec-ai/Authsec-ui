@@ -41,7 +41,7 @@ export function OpenInGraph({ cloudRef }: { cloudRef: `cloud_identity:${string}`
 
   return (
     <Button variant="outline" size="sm" onClick={() => void open()} disabled={isFetching} className="no-row-click">
-      <Network className="size-3.5" /> Open in graph
+      <Network className="size-3.5" /> Open in Access Graph
     </Button>
   );
 }
@@ -74,7 +74,7 @@ export function OpenResourceInGraph({ arn }: { arn: string }) {
 
   return (
     <Button variant="outline" size="sm" onClick={() => void open()} disabled={isFetching} className="no-row-click">
-      <Network className="size-3.5" /> Open in graph
+      <Network className="size-3.5" /> Open in Access Graph
     </Button>
   );
 }

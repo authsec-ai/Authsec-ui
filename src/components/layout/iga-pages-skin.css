@@ -1,0 +1,858 @@
+/**
+ * Shared visual layer for every page in the Agentic IGA console.
+ *
+ * VISUAL ONLY. No layout, routes, data or behaviour. Scoped to
+ * `[data-shell="iga"]` on IgaLayout's root, so it reaches all ~28 /iga/*
+ * routes and nothing else. AppLayout carries no such attribute, so the
+ * legacy authorization console is untouched even though it renders the very
+ * same ConsolePage, AdaptiveTable, Card, Button and Input.
+ *
+ * ── Why this is one file and not nineteen ───────────────────────────────────
+ * All 19 IGA page components render through the same shared parts, and those
+ * parts already style themselves from design tokens. Re-declaring the tokens
+ * once on the shell scope restyles every page at once; the component
+ * treatments below are addressed by the `data-slot` attributes those same
+ * shared components already emit. No page file is edited to get this.
+ *
+ * ── Two cascade facts this file depends on ──────────────────────────────────
+ * 1. UNLAYERED ON PURPOSE. `admin-shell.css` is wholly inside
+ *    `@layer components` and owns table row/header painting at high
+ *    specificity; Tailwind's utilities sit in their own layer. Unlayered rules
+ *    outrank every layered rule regardless of specificity, so this file wins
+ *    without an `!important` arms race. Do not wrap it in `@layer`.
+ * 2. THE SHADCN ALIASES ARE RESTATED BELOW ON PURPOSE. `--muted-foreground:
+ *    var(--color-text-muted)` and friends are declared on `:root`, so they are
+ *    substituted against `:root`'s values and inherit down as already-computed
+ *    colours. Re-pointing `--color-text-muted` here would NOT move them.
+ *
+ * ── What is deliberately NOT here ───────────────────────────────────────────
+ * Anything true of one page only. Table ROW HEIGHT in particular stays with
+ * the page: Integrations has two-line cells and wants 68px rows, while a
+ * dense list would only lose rows on screen for it. Pages opt into their own
+ * extras through ConsolePage's `skin` prop.
+ */
+
+[data-shell="iga"] {
+  /* ---- ink -----------------------------------------------------------
+     UX proposal §2: "No light greys; dark grey or black." Body text is
+     #111418, everything secondary is #2F3540, and there is no third, lighter
+     step — `--color-text-subtle` resolves to the SAME dark grey as muted on
+     purpose, so a page cannot reach for a paler tone just by picking a
+     different token. The ramp is now two values, not four.
+
+     These are the proposal's exact hexes rather than the slate ramp that was
+     here (#0f172a / #475569 / #64748b). The old values were already legible;
+     the brief was to stop the product speaking in grey at all. --- */
+  --color-text: #111418;
+  --color-text-primary: #111418;
+  --color-text-secondary: #2f3540;
+  /* 2026-10-06 design review: a third, quieter ink for supporting detail
+     (counts, timestamps, zero values, helper lines). #5b6472 is 5.9:1 on
+     white — AA at every size — so it is still never "light grey" text, but a
+     page now has hierarchy: object, its metadata, then the detail. */
+  --color-text-muted: #5b6472;
+  --color-text-subtle: #5b6472;
+  /* Placeholders and the search magnifier are hints, not content: they keep
+     their own lighter grey so an empty field never reads as filled in. */
+  --iga-hint: #6b7280;
+
+  /* ---- surfaces + borders ------------------------------------------- */
+  --color-surface-base: #f8fafc;
+  --color-surface-raised: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-border-subtle: #d8e0ea;
+  --color-border-strong: #c3d0df;
+
+  /* ---- blue --------------------------------------------------------- */
+  --color-primary: #2563eb;
+  --color-primary-strong: #1d4ed8;
+  --color-primary-soft: #e8f1ff;
+  --color-primary-soft-strong: #d7e7ff;
+  /* #1D4ED8, not #2563EB: the darker blue is the readable one on the soft
+     blue fill it sits on (active pill, active nav item). */
+  --color-primary-text: #1d4ed8;
+  --color-focus-ring: rgba(37, 99, 235, 0.4);
+  --color-hover: rgba(15, 23, 42, 0.04);
+  --color-press: rgba(15, 23, 42, 0.07);
+
+  /* ---- status -------------------------------------------------------
+     `--color-info-*` is restated here for the same reason as the shadcn
+     aliases (header note 2): tokens.css declares
+     `--color-info-text: var(--color-primary-text)` on `:root`, so it is
+     substituted against :ROOT's primary and inherits down already computed.
+     Re-pointing `--color-primary-text` in this block does NOT move it.
+
+     Without these two lines every `info`-toned chip in the IGA console —
+     the "Agent" classification badge most visibly — is painted in the
+     AuthSec console's blue (#1a73e8 on brand-blue-50) instead of this
+     console's (#1d4ed8 on #e8f1ff). Readable either way, but the wrong
+     blue, and immune to anything this file says about primary. --- */
+  --color-info: #2563eb;
+  --color-info-soft: #e8f1ff;
+  --color-info-text: #1d4ed8;
+
+  --color-success: #15803d;
+  --color-success-soft: #dcfce7;
+  --color-success-text: #15803d;
+  --color-warning-soft: #fef3c7;
+  --color-warning-text: #b45309;
+  --color-danger-soft: #fee2e2;
+  --color-danger-text: #b91c1c;
+
+  /* ---- shadcn aliases (see header note 2) ---------------------------- */
+  --background: #f8fafc;
+  --foreground: #111418;
+  --card: #ffffff;
+  --card-foreground: #111418;
+  --popover: #ffffff;
+  --popover-foreground: #111418;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #111418;
+  --muted: #f1f5f9;
+  --muted-foreground: #2f3540;
+  --accent: #f1f5f9;
+  --accent-foreground: #111418;
+  --border: #d8e0ea;
+  --input: #d8e0ea;
+  --ring: #2563eb;
+
+  /* ---- cards -------------------------------------------------------- */
+  --component-card-background: #ffffff;
+  --component-card-border: #d8e0ea;
+  --component-card-variant-filter-background: #ffffff;
+  --component-card-variant-filter-border: #d8e0ea;
+  --component-card-variant-filter-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --component-card-variant-table-background: #ffffff;
+  --component-card-variant-table-border: #d8e0ea;
+  --component-card-variant-table-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+
+  /* ---- primary button ----------------------------------------------- */
+  --component-button-primary-bg: #2563eb;
+  --component-button-primary-hover-bg: #1d4ed8;
+
+  /* ---- table -------------------------------------------------------- */
+  --component-table-surface: #ffffff;
+  --component-table-border: #e8eef4;
+  --component-table-header-bg: #f4f7fb;
+  --component-table-header-fg: #111418;
+  --component-table-row-hover: #f5f9fe;
+  --component-table-row-selected: #e8f1ff;
+  --component-table-cell-padding-inline: 20px;
+  --component-table-cell-padding-block: 12px;
+  --component-table-header-height: 44px;
+
+  /* ---- one scale for the whole console (design review 2026-10-06) ----
+     radius:   6 controls · 8 cards, tables, menus · 999 pills
+     controls: 36 default · 32 compact (segmented, pagination, row actions)
+     type:     24 page title · 20 object title · 14 body · 13 table/meta ·
+               12 helper · 11 badge
+     shadow:   none on cards (border only) · md on menus · lg on dialogs */
+  --iga-radius-control: 6px;
+  --iga-radius-card: 8px;
+  --iga-control-h: 36px;
+  --iga-control-h-compact: 32px;
+  --iga-shadow-menu: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --iga-shadow-dialog: 0 12px 32px rgba(15, 23, 42, 0.16);
+
+  /* ---- spacing scale: 4 / 8 / 12 / 16 / 24 / 32 ---------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+}
+
+/* Dark mode keeps its own ramp — the palette above is the light theme only.
+   Without this guard the light surfaces would be forced onto the dark shell. */
+.dark [data-shell="iga"],
+[data-theme="dark"] [data-shell="iga"] {
+  /* §2 again, the dark half: secondary text goes from a dim #9AA0A6-class
+     grey to #D0D5DB, which the proposal names explicitly as the readable
+     one. Primary is #F3F5F7 per the §8 type table. Same two-step ramp as
+     light — subtle is not a third, dimmer value. */
+  --color-text: #f3f5f7;
+  --color-text-primary: #f3f5f7;
+  --color-text-secondary: #d0d5db;
+  --color-text-muted: #9aa4b2;
+  --color-text-subtle: #9aa4b2;
+  --iga-hint: #8b97a8;
+  --color-surface-base: #0f1318;
+  --color-surface-raised: #151a21;
+  --color-surface-subtle: #1b212a;
+  --color-border-subtle: rgba(255, 255, 255, 0.11);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+  --color-primary: #60a5fa;
+  --color-primary-strong: #93c5fd;
+  --color-primary-soft: rgba(96, 165, 250, 0.16);
+  --color-primary-text: #93c5fd;
+  --color-info: #60a5fa;
+  --color-info-soft: rgba(96, 165, 250, 0.16);
+  --color-info-text: #93c5fd;
+  --color-success-soft: rgba(34, 197, 94, 0.16);
+  --color-success-text: #4ade80;
+  --color-warning-soft: rgba(245, 158, 11, 0.16);
+  --color-warning-text: #fbbf24;
+  --color-danger-soft: rgba(239, 68, 68, 0.16);
+  --color-danger-text: #f87171;
+  --color-hover: rgba(255, 255, 255, 0.05);
+
+  --background: #0f1318;
+  --foreground: #f3f5f7;
+  --card: #151a21;
+  --card-foreground: #f3f5f7;
+  --popover: #151a21;
+  --popover-foreground: #f3f5f7;
+  --primary: #60a5fa;
+  --primary-foreground: #0f1318;
+  --secondary: #1b212a;
+  --secondary-foreground: #f3f5f7;
+  --muted: #1b212a;
+  --muted-foreground: #d0d5db;
+  --accent: #1b212a;
+  --accent-foreground: #f3f5f7;
+  --border: rgba(255, 255, 255, 0.11);
+  --input: rgba(255, 255, 255, 0.11);
+  --ring: #60a5fa;
+
+  --component-card-background: #151a21;
+  --component-card-border: rgba(255, 255, 255, 0.11);
+  --component-card-variant-filter-background: #151a21;
+  --component-card-variant-filter-border: rgba(255, 255, 255, 0.11);
+  --component-card-variant-table-background: #151a21;
+  --component-card-variant-table-border: rgba(255, 255, 255, 0.11);
+
+  --component-button-primary-bg: #2563eb;
+  --component-button-primary-hover-bg: #1d4ed8;
+
+  --component-table-surface: #151a21;
+  --component-table-border: rgba(255, 255, 255, 0.08);
+  --component-table-header-bg: #1b212a;
+  --component-table-header-fg: #f3f5f7;
+  --component-table-row-hover: rgba(96, 165, 250, 0.07);
+  --component-table-row-selected: rgba(96, 165, 250, 0.14);
+
+}
+
+
+/* The page canvas. `[data-cr]` is ConsolePage's root, which every IGA page
+   renders through (directly, or via IgaPage). Painted here rather than on the
+   shell so the sidebar and header keep their own surfaces. */
+[data-shell="iga"] [data-cr] {
+  background: #f8fafc;
+  min-height: 100%;
+}
+
+.dark [data-shell="iga"] [data-cr],
+[data-theme="dark"] [data-shell="iga"] [data-cr] {
+  background: #0f1318;
+}
+
+/* ====================================================================
+   PAGE HEADER  (spec §5)
+   ==================================================================== */
+
+[data-shell="iga"] .sh-title {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.018em;
+  color: var(--color-text);
+  margin: 0 0 4px;
+}
+
+/* One line of description: the copy is written to fit, and the cap keeps a
+   long one from pushing the page down. */
+[data-shell="iga"] .sh-desc {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--color-text-muted);
+  max-width: 80ch;
+}
+
+[data-shell="iga"] .section-header {
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+/* "Add integration" — the one primary action on the page. Position unchanged. */
+[data-shell="iga"] .section-header [data-slot="button"] {
+  height: var(--iga-control-h);
+  padding: 0 14px;
+  gap: 6px;
+  border-radius: var(--iga-radius-control);
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--component-button-primary-bg);
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: background-color 120ms ease;
+}
+
+[data-shell="iga"] .section-header [data-slot="button"]:hover {
+  background: var(--component-button-primary-hover-bg);
+}
+
+[data-shell="iga"] .section-header [data-slot="button"] svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.25;
+}
+
+/* Detail pages — ConsolePage variant="object", reached through IgaPage —
+   keep their deliberately compact header, because a full-height identity
+   graph sits directly under it and the 30px title above would eat its room.
+   Higher specificity than the rules above, and intentionally so. */
+[data-shell="iga"] .console-page--object .sh-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.014em;
+  margin: 0;
+}
+
+[data-shell="iga"] .console-page--object .sh-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: none;
+}
+
+[data-shell="iga"] .console-page--object .section-header {
+  margin-bottom: 6px;
+  gap: 16px;
+}
+
+/* ====================================================================
+   TOOLBAR — search + filter pills  (spec §6)
+   Same controls, same order, same row. Styled as a deliberate toolbar.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="card"][data-variant="filter"] {
+  border-radius: var(--iga-radius-card);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  box-shadow: none;
+}
+
+/* The page tightens this card's padding via a utility; restate it so the
+   search field is not crammed against the card edge. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  > [data-slot="card-content"] {
+  padding: 12px 16px;
+}
+
+/* ---- search -------------------------------------------------------- */
+[data-shell="iga"] [data-slot="input"] {
+  height: var(--iga-control-h);
+  padding-left: 36px;
+  padding-right: 12px;
+  border-radius: var(--iga-radius-control);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-text);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+[data-shell="iga"] [data-slot="input"]::placeholder {
+  color: var(--iga-hint);
+  font-weight: 400;
+}
+
+[data-shell="iga"] [data-slot="input"]:hover {
+  border-color: var(--color-border-strong);
+}
+
+[data-shell="iga"] [data-slot="input"]:focus,
+[data-shell="iga"] [data-slot="input"]:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+/* The magnifier sits in the field. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  .relative
+  > svg:first-child {
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--iga-hint);
+  stroke-width: 2;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  .relative:focus-within
+  > svg:first-child {
+  color: var(--color-primary);
+}
+
+/* ---- filter pills --------------------------------------------------
+   Four pills, declared as FILTERS in DiscoveryIntegrationsPage.tsx:
+   All, Enabled, Disabled, Needs attention. Each is addressed by its own
+   `data-filter` key rather than by position, so reordering FILTERS cannot
+   quietly move a treatment onto the wrong pill.
+   -------------------------------------------------------------------- */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"] {
+  height: var(--iga-control-h-compact);
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: var(--iga-radius-control);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background-color 130ms ease,
+    border-color 130ms ease,
+    color 130ms ease;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"]:hover {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/* the count that rides inside each pill */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"]
+  > span {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* selected — light blue fill, blue border, blue text */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"][class*="--color-primary-soft"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"][aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: color-mix(in srgb, var(--color-primary) 34%, transparent);
+  color: var(--color-primary-text);
+  font-weight: 600;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"][class*="--color-primary-soft"]
+  > span,
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[type="button"][aria-pressed="true"]
+  > span {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary-text);
+}
+
+/* "Needs attention" — subtle amber, but only when it is actually reporting
+   something and is not the active filter. At a tally of 0 the pill stays
+   neutral, so the loudest control on the page is never the one saying there
+   is nothing wrong. `data-filter`/`data-count` are emitted by
+   ConsoleFilterBar for every pill and read by nobody else; keying on them
+   beats :nth-child, which silently re-targets if FILTERS is reordered. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[data-filter="attention"]:not([data-count="0"]):not([class*="--color-primary-soft"]) {
+  border-color: color-mix(in srgb, var(--color-warning-text) 30%, transparent);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[data-filter="attention"]:not([data-count="0"]):not([class*="--color-primary-soft"]):hover {
+  border-color: color-mix(in srgb, var(--color-warning-text) 50%, transparent);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="filter"]
+  button[data-filter="attention"]:not([data-count="0"]):not([class*="--color-primary-soft"])
+  > span {
+  background: color-mix(in srgb, var(--color-warning-text) 14%, transparent);
+  color: var(--color-warning-text);
+}
+
+/* ====================================================================
+   TABLE  (spec §7)
+   Columns, order and behaviour are untouched — this is header/row/cell
+   presentation only.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="card"][data-variant="table"] {
+  border-radius: var(--iga-radius-card);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+/* ---- header -------------------------------------------------------- */
+/* responsive-data-table.tsx sets `bg-transparent` on the header and its row;
+   both are Tailwind utilities, so these unlayered rules take them. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-header"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-header"]
+  [data-slot="table-row"] {
+  background: var(--component-table-header-bg);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-header"]
+  [data-slot="table-row"]:hover {
+  background: var(--component-table-header-bg);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-head"] {
+  height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* admin-shell.css draws a 1px rule between every header cell. With a tinted
+   header band and comfortable column spacing it reads as clutter. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-head"]:not(:last-child)::after {
+  content: none;
+}
+
+/* ---- rows ---------------------------------------------------------- */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"] {
+  background: var(--color-surface-raised);
+  border-bottom: 1px solid var(--component-table-border);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"]:last-child {
+  border-bottom: 0;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-cell"] {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+/* admin-shell.css frames clickable rows with a full-bleed inset wash, a 1px
+   inset ring and per-cell edge shadows. Replaced here with one quiet tint,
+   per spec §7 ("very subtle blue/gray"). Hover BEHAVIOUR is unchanged. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:hover,
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:focus-within {
+  background: var(--component-table-row-hover);
+  box-shadow: none;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-row"][data-clickable="true"]:hover
+  > [data-slot="table-cell"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-row"][data-clickable="true"]:focus-within
+  > [data-slot="table-cell"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* the accent rail admin-shell paints on the first cell of a clickable row */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-row"][data-clickable="true"]
+  > [data-slot="table-cell"]:first-child::before {
+  background: var(--color-primary);
+  opacity: 0;
+  transition: opacity 130ms ease;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-row"][data-clickable="true"]:hover
+  > [data-slot="table-cell"]:first-child::before,
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-row"][data-clickable="true"]:focus-within
+  > [data-slot="table-cell"]:first-child::before {
+  opacity: 1;
+}
+
+/* ---- the Integration cell  (spec §8) ------------------------------- */
+/* EntityCell's label: the account id / integration name. */
+[data-shell="iga"]
+  [data-slot="table-cell"]
+  .truncate.font-medium {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+/* EntityCell's detail: "AWS account", the source kind. Secondary, readable. */
+[data-shell="iga"]
+  [data-slot="table-cell"]
+  .truncate.text-xs {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* The provider tile that fronts a cloud row. */
+/* ---- the quieter columns: Cadence, Last sync, Agents, Detail ------- */
+[data-shell="iga"] [data-slot="table-cell"] .text-xs {
+  font-size: 12px;
+}
+
+[data-shell="iga"]
+  [data-slot="table-cell"]
+  .text-xs.text-muted-foreground {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* "On demand" / a source's cadence — a quiet blue badge, not a loud pill. */
+/* ---- status badges ------------------------------------------------- */
+/* StatusPill / CloudStatusPill keep their markup, dot and colour tokens.
+   `.inline-flex` is load-bearing: the 6px state dot inside the pill is also
+   `.rounded-full`, so a bare `.rounded-full` here inflates the dot to the
+   pill's own height and padding. Match the pill only, then restate the dot. */
+[data-shell="iga"] [data-slot="table-cell"] span.inline-flex.rounded-full {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* `:first-child`, because the dot is always the pill's FIRST child. A bare
+   `> span` also matched the label of console/status `StatusBadge`
+   (`<span class="truncate">`), shrinking every table-cell badge's text to a
+   6px box — "Classification" showed a dot and no word. The pills this rule was
+   written for (StatusPill, CloudStatusPill) put a bare text label after the
+   dot, so they are unaffected. */
+[data-shell="iga"]
+  [data-slot="table-cell"]
+  span.inline-flex.rounded-full
+  > span:first-child {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  flex: none;
+  padding: 0;
+  border-radius: 999px;
+}
+
+/* ---- row actions (⋯)  (spec §9) ------------------------------------ */
+[data-shell="iga"] [aria-label="Open row actions"] {
+  width: var(--iga-control-h-compact);
+  height: var(--iga-control-h-compact);
+  border-radius: var(--iga-radius-control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition:
+    background-color 130ms ease,
+    border-color 130ms ease,
+    color 130ms ease;
+}
+
+[data-shell="iga"] [aria-label="Open row actions"]:hover {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border-subtle);
+  color: var(--color-text);
+}
+
+[data-shell="iga"] [aria-label="Open row actions"] svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---- the Enabled switch -------------------------------------------- */
+/* Radix's SwitchPrimitives.Root renders role="switch" and emits no
+   data-slot, so that is the hook. */
+[data-shell="iga"] [role="switch"][data-state="checked"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* ====================================================================
+   PAGINATION  (spec §10) — layout unchanged, controls made legible
+   ==================================================================== */
+
+/* The pagination row is NOT a child of [data-slot="responsive-data-table"] —
+   it sits inside [data-slot="responsive-data-table-shell"], below the
+   scroller. Addressed by its own card variant instead of by position. */
+[data-shell="iga"] [data-slot="card"][data-variant="pagination"] {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  border-top-color: var(--component-table-border);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="pagination"]
+  [data-slot="button"] {
+  height: var(--iga-control-h-compact);
+  min-width: var(--iga-control-h-compact);
+  border-radius: var(--iga-radius-control);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="pagination"]
+  [data-slot="button"]:hover:not(:disabled) {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="pagination"]
+  [data-slot="button"]:disabled {
+  opacity: 0.45;
+}
+
+/* ====================================================================
+   CARD MODE  (spec §14)
+   Below 640px AdaptiveTable swaps the table for stacked cards
+   (`cardsBelow={640}`). Same treatment, so the skin does not stop at the
+   breakpoint.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="card"][data-variant="table"] li {
+  border-color: var(--component-table-border);
+}
+
+[data-shell="iga"] [data-slot="card"][data-variant="table"] li dt {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+[data-shell="iga"] [data-slot="card"][data-variant="table"] li dd {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+/* ====================================================================
+   ERROR BANNER — the partial/failed-load notice above the toolbar
+   ==================================================================== */
+
+[data-shell="iga"] .border-l-2 {
+  border-radius: var(--iga-radius-card);
+  font-size: 13px;
+}
+
+/* The toolbar's dropdowns (Toolbar.tsx, below 1280px) sit in the same row as
+   the filter buttons above, so they take the same height and type size. */
+[data-shell="iga"] [data-slot="card"][data-variant="filter"] select {
+  height: var(--iga-control-h-compact);
+  font-size: 13px;
+  border-radius: var(--iga-radius-control);
+}
+
+/* Discovery is one card (2026-10-06 design): tabs, toolbar and table inside a
+   single border. The table's own card keeps its content but drops its frame. */
+[data-shell="iga"] [data-discovery-card] [data-slot="card"][data-variant="table"] {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* One-row toolbars (Connections, Discovery, Logs): the search box takes the
+   same height as the selects and buttons beside it. */
+[data-shell="iga"] [data-compact-toolbar] [data-slot="input"] {
+  height: var(--iga-control-h);
+}
+
+/* States drawn as their own bordered box sit flush in the Discovery card. */
+[data-shell="iga"] [data-discovery-card] [role="tabpanel"] > .rounded-lg.border,
+[data-shell="iga"] [data-discovery-card] [role="tabpanel"] > * > .rounded-lg.border {
+  border: 0;
+  border-radius: 0;
+}
+
+/* ====================================================================
+   STATES — one treatment for every page (design review 2026-10-06)
+   ==================================================================== */
+
+/* A visible focus ring on anything interactive that does not draw its own
+   (components that set a focus-visible ring or outline keep theirs). */
+[data-shell="iga"]
+  :is(a, button, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible:not([class*="focus-visible:ring"]):not([class*="focus-visible:outline"]):not([class*="focus:ring"]) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+[data-shell="iga"] summary {
+  cursor: pointer;
+}
+
+/* Digits line up in every table and count. */
+[data-shell="iga"] table,
+[data-shell="iga"] [data-slot="table"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeletons stay still for readers who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  [data-shell="iga"] .animate-pulse,
+  [data-shell="iga"] .animate-spin {
+    animation: none;
+  }
+}

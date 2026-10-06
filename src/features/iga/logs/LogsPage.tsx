@@ -7,21 +7,22 @@
  */
 
 import { useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { format, isToday, isYesterday } from "date-fns";
 
-import { AppliedFilters, ConsoleFilterBar, type AppliedFilter } from "@/components/console/iam-console";
+import { Search } from "lucide-react";
+
 import { ConsolePage } from "@/components/console/ConsolePage";
-import { toneClasses } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FacetCheckList } from "@/features/iga/shared/components/FacetSelect";
 import { useListFilters, useSlashToSearch } from "@/features/iga/shared/useListFilters";
-import { cn } from "@/lib/utils";
 import type { GraphFacetValue } from "@/app/api/igaGraphApi";
 
 import { EventDrawer } from "./EventDrawer";
 import { KindGlyph } from "./KindGlyph";
-import { KIND_LABEL, LOG_EVENTS, LOG_KINDS, SAMPLE_NOW, type LogEvent } from "./fixtures";
+import { KIND_LABEL, LOG_EVENTS, LOG_KINDS, SAMPLE_NOW, type LogEvent, type LogKind } from "./fixtures";
 
 const RANGES = [
   { value: "1h", label: "Last hour", ms: 60 * 60_000 },
@@ -43,6 +44,21 @@ const FILTER_SPEC = {
 const FILTER_KEYS = ["q", "kind", "source", "actor", "range"];
 
 type Facet = "kind" | "source" | "actor";
+
+/** The Kind dropdown's choices: each a set of kinds, "Failures" first after All. */
+const KIND_GROUPS: { key: string; label: string; kinds: LogKind[] }[] = [
+  { key: "all", label: "All events", kinds: [] },
+  { key: "failed", label: "Failures", kinds: ["scan_failed"] },
+  { key: "scan", label: "Scans", kinds: ["scan_queued", "scan_running", "scan_finished", "scan_failed"] },
+  { key: "published", label: "Publications", kinds: ["publication_published"] },
+  { key: "classified", label: "Classifications", kinds: ["classification_decided"] },
+  { key: "connection", label: "Connections", kinds: ["connection_added", "connection_revoked"] },
+  { key: "sighting", label: "Sightings", kinds: ["sighting_seen"] },
+  { key: "signin", label: "Sign-ins", kinds: ["sign_in"] },
+];
+
+const SELECT_CLASS =
+  "h-9 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-sm text-(--color-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)";
 
 function dayHeading(d: Date): string {
   if (isToday(d)) return "Today";
@@ -76,12 +92,19 @@ export default function LogsPage() {
     });
   };
 
-  const shown = matching();
+  // "Collapse scan steps": a scan that finished or failed is said by that one
+  // event; its queued and running steps are folded into it.
+  const [collapsed, setCollapsed] = useState(true);
+  const visible = matching();
+  const settled = new Set(visible.filter((e) => e.object.kind === "scan" && (e.kind === "scan_finished" || e.kind === "scan_failed")).map((e) => e.object.id));
+  const folded = (e: LogEvent) => collapsed && e.object.kind === "scan" && (e.kind === "scan_queued" || e.kind === "scan_running") && settled.has(e.object.id);
+  const shown = visible.filter((e) => !folded(e));
+  const failures = LOG_EVENTS.filter((e) => e.kind === "scan_failed");
+  const kindGroup = KIND_GROUPS.find((g) => g.kinds.length === kinds.length && g.kinds.every((k) => kinds.includes(k)))?.key ?? "custom";
   const facet = (skip: Facet, options: [string, string][], of: (e: LogEvent) => string): GraphFacetValue[] => {
     const rows = matching(skip);
     return options.map(([value, label]) => ({ value, label, count: rows.filter((e) => of(e) === value).length }));
   };
-  const kindOptions = facet("kind", LOG_KINDS.map((k) => [k, KIND_LABEL[k]]), (e) => e.kind);
   const sourceOptions = facet("source", SOURCES, (e) => e.source.id);
   const actorOptions = facet("actor", ACTORS, (e) => e.actor.id);
 
@@ -94,17 +117,18 @@ export default function LogsPage() {
     else days.push({ key, heading: dayHeading(d), events: [e] });
   }
 
-  const applied: AppliedFilter[] = [
-    ...kinds.map((k) => ({ key: `kind:${k}`, label: KIND_LABEL[k as keyof typeof KIND_LABEL], onRemove: () => f.setMany("kind", kinds.filter((v) => v !== k)) })),
-    ...sources.map((s) => ({ key: `source:${s}`, label: SOURCES.find(([id]) => id === s)?.[1] ?? s, onRemove: () => f.setMany("source", sources.filter((v) => v !== s)) })),
-    ...actors.map((a) => ({ key: `actor:${a}`, label: ACTORS.find(([id]) => id === a)?.[1] ?? a, onRemove: () => f.setMany("actor", actors.filter((v) => v !== a)) })),
-    ...(range ? [{ key: "range", label: RANGES.find((r) => r.value === range)!.label, onRemove: () => f.set("range", null) }] : []),
-    ...(f.q ? [{ key: "q", label: `Search: ${f.q}`, onRemove: () => { f.setSearchText(""); f.set("q", null); } }] : []),
-  ];
   const clearAll = () => {
     f.setSearchText("");
     f.clearKeys(FILTER_KEYS);
   };
+  // One URL write: two in the same tick both start from the old URL, and the
+  // second would bring back the filters the first cleared.
+  const [, setParams] = useSearchParams();
+  const showFailures = () => {
+    f.setSearchText("");
+    setParams(new URLSearchParams([["kind", "scan_failed"]]), { replace: true });
+  };
+  const filteredAny = !!(f.q || kinds.length || sources.length || actors.length || range);
 
   const open = (e: LogEvent) => {
     setSelected(e);
@@ -112,97 +136,133 @@ export default function LogsPage() {
   };
 
   return (
-    <ConsolePage title="Logs" description="Scans, publications, classifications, connections and sign-ins, newest first.">
-      <div role="note" className={cn("rounded-lg border px-4 py-3", toneClasses.neutral.banner)}>
-        <p className="text-sm font-semibold text-(--color-text)">Preview — sample events.</p>
-        <p className="mt-0.5 text-sm text-(--color-text-muted)">
-          These events are made up. No scan, connection or sign-in in your workspace produced them.
-        </p>
-      </div>
+    <ConsolePage
+      title={
+        <span className="inline-flex flex-wrap items-center gap-2.5">
+          Logs
+          <span
+            title="These events are made up. No scan, connection or sign-in in your workspace produced them."
+            className="rounded-full bg-(--color-warning-soft) px-2.5 py-0.5 text-xs font-medium text-(--color-warning-text)"
+          >
+            Sample events
+          </span>
+        </span>
+      }
+      description="Scans, publications, classifications and sign-ins, newest first."
+    >
+      {failures.length && kindGroup !== "failed" ? (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-(--color-danger)/30 bg-(--color-danger-soft) px-4 py-2.5">
+          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
+            <span className="text-sm font-semibold text-(--color-danger-text)">
+              {failures.length} sample {failures.length === 1 ? "scan failed" : "scans failed"}
+            </span>
+            <span className="text-[13px] text-(--color-danger-text)">Latest: {failures[0].reason ?? failures[0].sentence}</span>
+          </div>
+          <Button variant="outline" size="sm" className="h-9" onClick={showFailures}>
+            Show failures
+          </Button>
+        </div>
+      ) : null}
 
-      <div data-graph-search>
-        <ConsoleFilterBar
-          search={f.searchText}
-          onSearchChange={f.setSearchText}
-          searchPlaceholder="Search events"
-          trailing={
-            <>
-              <FacetPopover label="Kind" noun="kinds" value={kinds} options={kindOptions} onChange={(v) => f.setMany("kind", v)} />
-              <FacetPopover label="Source" noun="sources" value={sources} options={sourceOptions} onChange={(v) => f.setMany("source", v)} />
-              <FacetPopover label="Actor" noun="actors" value={actors} options={actorOptions} onChange={(v) => f.setMany("actor", v)} />
-              <div role="group" aria-label="Time range" className="inline-flex overflow-hidden rounded-md border border-(--color-border-strong)">
-                {[{ value: undefined, label: "All time" }, ...RANGES].map((r) => {
-                  const active = range === r.value;
-                  return (
-                    <button
-                      key={r.value ?? "all"}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => f.set("range", r.value ?? null)}
-                      className={cn(
-                        "h-9 border-r border-(--color-border-strong) px-2.5 text-xs font-semibold last:border-r-0 focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)",
-                        active
-                          ? "bg-(--color-primary-soft) text-(--color-primary-text)"
-                          : "bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)",
-                      )}
-                    >
-                      {r.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          }
-          below={<AppliedFilters filters={applied} onClearAll={clearAll} />}
-        />
-      </div>
-
-      <p role="status" className="text-sm tabular-nums text-(--color-text-muted)">
-        {shown.length} of {LOG_EVENTS.length} events
-      </p>
-
-      {LOG_EVENTS.length === 0 ? (
-        <EmptyState title="No events yet" body="Events appear here as scans run and connections change." />
-      ) : shown.length === 0 ? (
-        <EmptyState
-          title="No events match these filters"
-          body="Widen the time range or remove a filter to see more."
-          action={
-            <Button variant="outline" size="sm" onClick={clearAll}>
+      {/* overflow-clip, not hidden: hidden would stop the day headers sticking. */}
+      <section className="overflow-clip rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
+        <div data-graph-search data-compact-toolbar className="flex flex-wrap items-center gap-2.5 border-b border-(--color-border-subtle) px-4 py-3">
+          <label className="relative flex min-w-[220px] max-w-[340px] flex-1 basis-[240px] items-center">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+            <Input
+              type="search"
+              value={f.searchText}
+              onChange={(e) => f.setSearchText(e.target.value)}
+              placeholder="Search events, accounts, people"
+              aria-label="Search events"
+              className="h-9 pl-9"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          <select
+            aria-label="Event kind"
+            value={kindGroup}
+            onChange={(e) => f.setMany("kind", KIND_GROUPS.find((g) => g.key === e.target.value)?.kinds ?? [])}
+            className={SELECT_CLASS}
+          >
+            {kindGroup === "custom" ? <option value="custom">Custom selection</option> : null}
+            {KIND_GROUPS.map((g) => (
+              <option key={g.key} value={g.key}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <select aria-label="Time range" value={range ?? "all"} onChange={(e) => f.set("range", e.target.value === "all" ? null : e.target.value)} className={SELECT_CLASS}>
+            <option value="all">All time</option>
+            {RANGES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <FacetPopover label="Source" noun="sources" value={sources} options={sourceOptions} onChange={(v) => f.setMany("source", v)} />
+          <FacetPopover label="Actor" noun="actors" value={actors} options={actorOptions} onChange={(v) => f.setMany("actor", v)} />
+          <label className="flex min-h-9 cursor-pointer items-center gap-2 text-[13px] text-(--color-text)">
+            <input type="checkbox" checked={collapsed} onChange={() => setCollapsed((c) => !c)} className="size-4 accent-(--color-primary)" />
+            Collapse scan steps
+          </label>
+          <span className="flex-1" />
+          {filteredAny ? (
+            <button type="button" onClick={clearAll} className="h-9 rounded-md px-2.5 text-[13px] font-medium text-(--color-primary-text) hover:bg-(--color-surface-subtle)">
               Clear filters
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-5">
-          {days.map((day) => (
-            <section key={day.key} aria-labelledby={`logs-day-${day.key}`} className="space-y-2">
-              <h2 id={`logs-day-${day.key}`} className="flex items-baseline gap-2 text-[13px] font-semibold text-(--color-text)">
+            </button>
+          ) : null}
+          <span role="status" className="text-[13px] tabular-nums text-(--color-text-muted)">
+            {shown.length} shown{collapsed ? " (scan steps collapsed)" : ""}
+          </span>
+        </div>
+
+        {LOG_EVENTS.length === 0 ? (
+          <EmptyState title="No events yet" body="Events appear here as scans run and connections change." />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            title="No events match"
+            body="Widen the time range or remove a filter to see more."
+            action={
+              <Button variant="outline" size="sm" onClick={clearAll}>
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          days.map((day) => (
+            <section key={day.key} aria-labelledby={`logs-day-${day.key}`}>
+              <h2
+                id={`logs-day-${day.key}`}
+                className="sticky top-0 z-[1] flex items-baseline gap-2 border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-4 py-2.5 text-[13px] font-semibold text-(--color-text)"
+              >
                 {day.heading}
                 <span className="text-xs font-normal tabular-nums text-(--color-text-muted)">
                   {day.events.length} {day.events.length === 1 ? "event" : "events"}
                 </span>
               </h2>
-              <ol className="divide-y divide-(--color-border-subtle) overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
+              <ol>
                 {day.events.map((e) => (
-                  <li key={e.id}>
+                  <li key={e.id} className="border-b border-(--color-border-subtle) last:border-b-0">
                     <button
                       type="button"
                       data-event-id={e.id}
                       aria-haspopup="dialog"
                       onClick={() => open(e)}
-                      className="grid w-full gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-(--color-surface-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary) sm:grid-cols-[3rem_12.5rem_minmax(0,1fr)]"
+                      className="grid w-full grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-3 px-4 py-3 text-left hover:bg-(--color-surface-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--color-primary)"
                     >
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:contents">
-                        <time dateTime={e.at} className="text-xs tabular-nums leading-5 text-(--color-text-muted)">
-                          {format(new Date(e.at), "HH:mm")}
-                        </time>
-                        <KindGlyph kind={e.kind} />
-                      </div>
-                      <span className="min-w-0">
-                        <span className="block break-words text-[13px] leading-5 text-(--color-text)">{e.sentence}</span>
-                        <span className="block break-words text-xs leading-5 text-(--color-text-muted)">
+                      <time dateTime={e.at} className="pt-0.5 font-mono text-xs tabular-nums text-(--color-text-muted)">
+                        {format(new Date(e.at), "HH:mm")}
+                      </time>
+                      <span className="flex min-w-0 flex-col gap-1">
+                        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <KindGlyph kind={e.kind} className="font-semibold" />
+                          <span className="break-words text-sm leading-snug text-(--color-text)">{e.sentence}</span>
+                        </span>
+                        <span className="break-words text-xs text-(--color-text-muted)">
                           {e.source.label} · {e.actor.label}
+                          {collapsed && e.object.kind === "scan" && (e.kind === "scan_finished" || e.kind === "scan_failed") ? " · queued and ran before this" : ""}
                         </span>
                       </span>
                     </button>
@@ -210,9 +270,9 @@ export default function LogsPage() {
                 ))}
               </ol>
             </section>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </section>
 
       <EventDrawer event={selected} open={drawerOpen} onOpenChange={setDrawerOpen} />
     </ConsolePage>
@@ -242,7 +302,7 @@ function FacetPopover({ label, noun, value, options, onChange }: {
 
 function EmptyState({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-(--color-border-strong) px-6 py-10 text-center">
+    <div className="m-4 rounded-lg border border-dashed border-(--color-border-strong) px-6 py-10 text-center">
       <p className="text-sm font-semibold text-(--color-text)">{title}</p>
       <p className="mt-1 text-sm text-(--color-text-muted)">{body}</p>
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}

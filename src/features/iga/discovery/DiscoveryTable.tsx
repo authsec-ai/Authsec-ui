@@ -8,11 +8,11 @@
  * carries `aria-current`. Arrow keys walk the rows' links.
  */
 
-import type { KeyboardEvent, ReactNode } from "react";
+import { useContext, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { AdaptiveTable, type AdaptiveColumn, type AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
-import { useAdaptiveColumnShown } from "@/components/ui/adaptive-table-context";
+import { AdaptiveVisibleContext, useAdaptiveColumnShown } from "@/components/ui/adaptive-table-context";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,7 @@ export function RowName({
   selected,
   context,
   account,
+  lifecycle,
   badge,
 }: {
   to: string;
@@ -41,10 +42,15 @@ export function RowName({
   context: (string | null | undefined)[];
   /** The account or cluster, added to the line only while its column is hidden. */
   account?: string | null;
+  /** "Retired" or "Stale", put first on the line only while the Lifecycle column is hidden. */
+  lifecycle?: string | null;
   badge?: ReactNode;
 }) {
   const accountShown = useAdaptiveColumnShown("account");
-  const line = [...context, accountShown ? null : account].filter(Boolean).join(" · ");
+  // Card layout (an empty shown-set) draws lifecycle as a summary badge already.
+  const cardLayout = useContext(AdaptiveVisibleContext)?.size === 0;
+  const lifecycleShown = useAdaptiveColumnShown("lifecycle") || cardLayout;
+  const line = [lifecycleShown ? null : lifecycle, ...context, accountShown ? null : account].filter(Boolean).join(" · ");
   return (
     <div className="min-w-0">
       <div className="flex min-w-0 items-center gap-2">

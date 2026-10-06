@@ -127,8 +127,11 @@ export function NeighbourhoodSketch({
   return (
     <div className={cn("@container", className)}>
       <div className="hidden @2xl:block">
-        <Panel title="Neighbourhood" description="Drawn only from what this page has loaded. A line is a declared relationship, not proven access.">
-        <svg viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-label={label} className="h-auto w-full">
+        <Panel title="Access Graph" description="Drawn only from what this page has loaded. A line is a declared relationship, not proven access.">
+        {/* Drawn at its own size, never scaled up: stretched to a wide card the
+            text grew to ~2x and the names were cut off. It still shrinks to fit
+            a narrow one. */}
+        <svg viewBox={`0 0 ${WIDTH} ${height}`} role="group" aria-label={label} className="mx-auto block h-auto w-full" style={{ maxWidth: WIDTH }}>
           <defs>
             <marker id={`${marker}-arrow`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M0 0 L10 5 L0 10 z" fill="var(--color-border-strong)" />

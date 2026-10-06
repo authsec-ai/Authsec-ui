@@ -343,8 +343,10 @@ export function modelReducer(state: ModelState, action: Action): ModelState {
 
     case "relayout":
       // Arrange / a refresh to a new revision: ELK runs again over what is
-      // drawn (§2.14.15). Existing positions stay until the new ones land.
-      return { ...state, laidOut: false };
+      // drawn (§2.14.15). Existing positions stay until the new ones land. A
+      // layout saved by Reset belongs to the arrangement being replaced, so
+      // Undo reset no longer applies.
+      return { ...state, laidOut: false, previousLayout: null };
 
     default:
       return state;

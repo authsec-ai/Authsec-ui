@@ -31,6 +31,7 @@ import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { Timestamp } from "../shared/components/Timestamp";
 import { ActionList } from "../shared/components/ActionList";
 import { Fact, Facts } from "../shared/components/Panel";
+import { WRAP_ID_CLASS, wrapId } from "../shared/components/wrapText";
 
 /**
  * The graph's own view of the claim, when it was opened from the canvas.
@@ -133,12 +134,12 @@ function Codes({ items, max = 6 }: { items: string[]; max?: number }) {
   return (
     <span className="flex flex-wrap gap-1">
       {shown.map((a) => (
-        <code key={a} className="max-w-full break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-[11.5px]">
-          {a}
+        <code key={a} className={`max-w-full ${WRAP_ID_CLASS} rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs`}>
+          {wrapId(a)}
         </code>
       ))}
       {items.length > max ? (
-        <button type="button" onClick={() => setAll((v) => !v)} className="text-[11.5px] font-medium text-(--color-primary-text) hover:underline">
+        <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-(--color-primary-text) hover:underline">
           {all ? "Show fewer" : `+${items.length - max} more`}
         </button>
       ) : null}
@@ -204,7 +205,7 @@ export function EvidenceClaim({
       return (
         <p className="rounded-md border border-(--color-border-subtle) px-3 py-2 text-sm">
           This claim is not in the graph at the publication you are viewing. It may have ended in a newer one; the
-          object's Changes tab records when.
+          object's History tab records when.
         </p>
       );
     }
@@ -348,8 +349,8 @@ export function EvidenceClaim({
               {e.facts.map((f, i) => (
                 <li key={i} className="space-y-1 rounded-md border border-(--color-border-subtle) px-3 py-2">
                   <p className="text-[13px] leading-5 text-(--color-text)">{f.fact}</p>
-                  <p className="break-all font-mono text-[11px] text-(--color-text-muted)">
-                    {[f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · ")}
+                  <p className={`${WRAP_ID_CLASS} font-mono text-[11px] text-(--color-text-muted)`}>
+                    {wrapId([f.source_api, f.account_id, f.region, f.policy_version].filter(Boolean).join(" · "))}
                   </p>
                   {f.last_confirmed_at ? (
                     <p className="text-xs text-(--color-text-muted)">

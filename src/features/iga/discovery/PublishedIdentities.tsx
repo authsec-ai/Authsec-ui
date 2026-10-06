@@ -87,7 +87,8 @@ export default function PublishedIdentities(p: ScreenProps) {
     () => [
       {
         id: "name",
-        header: "Name",
+        header: "Identity",
+        label: "Identity",
         primary: true,
         minWidth: 240,
         cell: ({ row }) => (
@@ -98,12 +99,13 @@ export default function PublishedIdentities(p: ScreenProps) {
             selected={p.url.sel === refId(row.original.ref)}
             context={[IDENTITY_KIND_LABEL[row.original.kind]]}
             account={row.original.account ? accountLabel(row.original.account) : "Unknown account"}
+            lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
           />
         ),
       },
       {
         id: "used_by",
-        header: "Bindings",
+        header: "Bound to",
         label: DIRECT_BINDINGS_LABEL,
         priority: 1,
         approxWidth: 150,
@@ -116,16 +118,28 @@ export default function PublishedIdentities(p: ScreenProps) {
         detail: (r) => (r.kind === "iam_group" ? "Groups are not run as" : `${usedByText(r)} — ${DIRECT_BINDINGS_MEANING}`),
       },
       {
+        id: "type",
+        header: "Type",
+        label: "Type",
+        priority: 1,
+        approxWidth: 130,
+        cell: ({ row }) => <span className="text-sm">{IDENTITY_KIND_LABEL[row.original.kind]}</span>,
+      },
+      {
         id: "lifecycle",
+        defaultHidden: true,
+        // Shown whenever retired rows can be in the list, so they never look current.
+        alwaysVisible: lifecycle !== undefined,
         header: "Lifecycle",
         priority: 1,
         approxWidth: 100,
         cardSummary: true,
         cell: ({ row }) => <LifecycleCell lifecycle={row.original.lifecycle} state={row.original.state} />,
       },
-      { id: "account", header: "Account", priority: 2, approxWidth: 170, cell: ({ row }) => <AccountCell account={row.original.account} /> },
+      { id: "account", header: "Account", defaultHidden: true, priority: 2, approxWidth: 170, cell: ({ row }) => <AccountCell account={row.original.account} /> },
       {
         id: "confirmed",
+        defaultHidden: true,
         header: "Last confirmed",
         priority: 3,
         approxWidth: 150,
@@ -151,9 +165,9 @@ export default function PublishedIdentities(p: ScreenProps) {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [p.url.sel, navigate],
+    [p.url.sel, navigate, lifecycle],
   );
-  const chrome = useListChrome("discovery-published-identities", columns);
+  const chrome = useListChrome("discovery-published-identities-v2", columns);
 
   const specs: FacetSpec[] = [
     sourceSpec(p, sourceFacet(p.sources, facets?.account)),
@@ -185,7 +199,7 @@ export default function PublishedIdentities(p: ScreenProps) {
         p={p}
         c={c}
         list={list}
-        tableId="discovery-published-identities"
+        tableId="discovery-published-identities-v2"
         subject="identities"
         columns={columns}
         getRowId={(r) => refId(r.ref)}

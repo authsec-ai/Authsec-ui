@@ -19,6 +19,7 @@ import { classifyGraphError } from "../shared/graphErrors";
 import { INCOMPLETE_STATES, dayText, isLimitationCode, limitationText, surfaceStateText } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
+import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 
 function prevents(s: CoverageSurface): string | null {
@@ -43,13 +44,13 @@ function SurfaceRow({ s, connectorHref }: { s: CoverageSurface; connectorHref?: 
           {s.api ? ` for ${s.api}` : ""}.
         </p>
       ) : null}
-      {s.error ? <p className="break-words font-mono text-xs text-(--color-text-muted)">{s.error}</p> : null}
+      {s.error ? <p className="break-words font-mono text-xs text-(--color-text-muted)">{safeErrorProse(s.error)}</p> : null}
       {s.items?.length ? (
         <ul className="list-disc pl-5 text-xs text-(--color-text-muted)">
           {s.items.map((it) => (
             <li key={`${it.policy}:${it.version}`}>
               {it.policy}
-              {it.version ? ` (${it.version})` : ""}: {it.error}
+              {it.version ? ` (${it.version})` : ""}: {safeErrorProse(it.error)}
             </li>
           ))}
           {s.truncated ? <li>More documents could not be read; this list is not the whole set.</li> : null}

@@ -5,9 +5,14 @@
  * reads "connected" as "ready".
  */
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Circle, CircleDot, Loader2, XCircle } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Circle, CircleDot, Loader2, XCircle } from "lucide-react";
+import { format } from "date-fns";
+
+import { useListAwsScanRunsQuery } from "@/app/api/cloudDiscoveryApi";
+import { RUN_LABEL } from "@/features/discovery/cloud/aws/awsScanRunLabels";
+import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
@@ -38,22 +43,11 @@ import {
 import { AwsFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
 import { useSourceFacts } from "./providerData";
 import { PENDING_WORD, type ActionKind } from "./useConnectionActions";
+import { graphCell } from "./scanCells";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { loadFailureOf } from "@/components/console/load-failure";
 
 /* ------------------------------ the four conditions ------------------------------ */
-
-function Condition({ name, pill, children }: { name: string; pill: ReactNode; children: ReactNode }) {
-  return (
-    <div className="min-w-0 space-y-1.5 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <h4 className="text-xs font-medium text-(--color-text-muted)">{name}</h4>
-        {pill}
-      </div>
-      <div className="text-[13px] leading-snug text-(--color-text)">{children}</div>
-    </div>
-  );
-}
 
 function connectionPill(c: Connection) {
   switch (c.connection.state) {
@@ -100,15 +94,15 @@ function connectionSentence(c: Connection): string {
 function revokedConsequence(c: Connection): string {
   switch (c.provider) {
     case "aws":
-      return "What it found earlier is kept and still appears in Discovery, marked as no longer reconfirmed. Connect the same account again to reactivate it.";
+      return "Earlier results stay in Discovery, marked stale. Reconnect the account to resume.";
     case "gcp":
-      return "What it found earlier is kept and still appears in Discovery, marked as no longer reconfirmed. Connect the same scope again to reactivate it.";
+      return "Earlier results stay in Discovery, marked stale. Reconnect the project to resume.";
     case "k8s":
-      return "What earlier sweeps wrote to Discovery is kept and no longer reconfirmed. Removing the connection deletes the source and its sightings; the workloads and identities earlier sweeps wrote to the graph stay.";
+      return "Earlier results stay, marked stale. Removing the connection deletes its sightings; graph objects stay.";
     case "github":
-      return "What earlier scans found is kept and no longer reconfirmed. Removing the connection deletes the source and the sightings it found.";
+      return "Earlier results stay, marked stale. Removing the connection deletes its sightings.";
     default:
-      return "What it found earlier is kept and no longer reconfirmed.";
+      return "Earlier results stay, marked stale.";
   }
 }
 
@@ -184,35 +178,105 @@ function graphSentence(c: Connection): string {
   }
 }
 
-function Conditions({ c }: { c: Connection }) {
+/**
+ * The four conditions as one bordered row (2026-10-06 design), drawn by the
+ * page above every tab: Access, Latest scan, Coverage, Graph. Each says its
+ * state in a word and, under it, the one line that explains it.
+ */
+export function ReadinessStrip({ c }: { c: Connection }) {
   const gaps = gapWords(c, 3);
+  // The explanation is never clamped: it carries the cause, what to do, and links.
+  const cell = (name: string, pill: ReactNode, line: ReactNode) => (
+    <div className="min-w-0 space-y-1.5 px-4 py-3">
+      <p className="text-xs text-(--color-text-muted)">{name}</p>
+      <div>{pill}</div>
+      <p className="text-xs leading-snug text-(--color-text-muted)">{line}</p>
+    </div>
+  );
   return (
-    <Panel title="Readiness" description="Four independent conditions. A connection can be connected and still have no usable result." flush>
-      <div className="grid divide-y divide-(--color-border-subtle) sm:grid-cols-2 sm:divide-y-0 [&>*:nth-child(n+3)]:sm:border-t [&>*:nth-child(n+3)]:sm:border-(--color-border-subtle) [&>*:nth-child(even)]:sm:border-l [&>*:nth-child(even)]:sm:border-(--color-border-subtle)">
-        <Condition name="Connection" pill={connectionPill(c)}>
-          {connectionSentence(c)}
-        </Condition>
-        <Condition name={c.provider === "k8s" ? "Latest sweep" : "Latest scan"} pill={scanPill(c)}>
-          {scanSentence(c)}
-        </Condition>
-        <Condition name="Coverage" pill={coveragePill(c)}>
-          {c.coverage.state === "complete" ? (
-            "Every surface that was asked for was read."
-          ) : c.coverage.state === "unknown" ? (
-            "AuthSec has no coverage report for this connection. That is not the same as complete."
-          ) : (
-            <>
-              {gaps ? `Not fully read: ${gaps}. ` : ""}
-              <Link className="font-medium text-(--color-primary-text) hover:underline" to={detailHref(c.id, "coverage")}>
-                See what is missing and what to do
-              </Link>
-            </>
-          )}
-        </Condition>
-        <Condition name="Graph" pill={graphPill(c)}>
-          {graphSentence(c)}
-        </Condition>
-      </div>
+    <section
+      aria-label="Readiness"
+      className={cn(
+        "grid overflow-hidden rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) [&>*]:border-(--color-border-subtle)",
+        // One column: a line between each. Two: a cross. Four: a line between each.
+        "[&>*+*]:border-t sm:grid-cols-2 sm:[&>*:nth-child(2)]:border-t-0 sm:[&>*:nth-child(even)]:border-l lg:grid-cols-4 lg:[&>*+*]:border-t-0 lg:[&>*+*]:border-l",
+      )}
+    >
+      {cell("Access", connectionPill(c), connectionSentence(c))}
+      {cell(c.provider === "k8s" ? "Latest sweep" : "Latest scan", scanPill(c), scanSentence(c))}
+      {cell(
+        "Coverage",
+        coveragePill(c),
+        c.coverage.state === "complete" ? (
+          "Every requested surface was read."
+        ) : c.coverage.state === "unknown" ? (
+          "No coverage report yet."
+        ) : (
+          <>
+            {gaps ? `Not fully read: ${gaps}. ` : ""}
+            <Link className="font-medium text-(--color-primary-text) hover:underline" to={detailHref(c.id, "coverage")}>
+              See what is missing
+            </Link>
+          </>
+        ),
+      )}
+      {cell("Graph", graphPill(c), graphSentence(c))}
+    </section>
+  );
+}
+
+/** The last three scans, on the Overview; the Scans tab lists them all. AWS only: its runs are listed. */
+function RecentScans({ c }: { c: Connection }) {
+  // Follows a scan in flight, so it never contradicts the strip above it.
+  const live = c.scan.state === "queued" || c.scan.state === "running";
+  const q = useListAwsScanRunsQuery({ connectorId: c.id }, { pollingInterval: live ? 5_000 : 0, skipPollingIfUnfocused: true });
+  const lastState = useRef(c.scan.state);
+  useEffect(() => {
+    if (lastState.current !== c.scan.state) {
+      lastState.current = c.scan.state;
+      void q.refetch();
+    }
+  }, [c.scan.state, q]);
+  const runs = (q.currentData?.data ?? []).slice(0, 3);
+  return (
+    <Panel
+      title="Recent scans"
+      flush
+      actions={
+        <Link to={detailHref(c.id, "scans")} className="font-medium text-(--color-primary-text) hover:underline">
+          All scans
+        </Link>
+      }
+    >
+      {q.isLoading ? (
+        <p className="px-4 py-3 text-xs text-(--color-text-muted)">Loading…</p>
+      ) : q.isError && !q.currentData ? (
+        <p className="px-4 py-3 text-xs text-(--color-danger-text)">
+          Could not load the scans.{" "}
+          <button type="button" className="underline" onClick={() => void q.refetch()}>
+            Retry
+          </button>
+        </p>
+      ) : !runs.length ? (
+        <p className="px-4 py-3 text-xs text-(--color-text-muted)">No scan has run yet.</p>
+      ) : (
+        <ul className="divide-y divide-(--color-border-subtle)">
+          {runs.map((r) => {
+            const failed = r.status === "failed" || r.status === "abandoned";
+            return (
+              <li key={r.id} className="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-baseline gap-3 px-4 py-2.5 text-[13px]">
+                <span className="tabular-nums text-(--color-text-muted)">{r.queued_at ? format(new Date(r.queued_at), "d MMM, HH:mm") : "—"}</span>
+                <span className={failed ? "min-w-0 text-(--color-danger-text)" : "min-w-0 text-(--color-text)"}>
+                  {failed && r.last_error ? `Failed: ${safeErrorProse(r.last_error)}` : RUN_LABEL[r.status]}
+                </span>
+                <span className="text-xs text-(--color-text-muted)" title={graphCell(r).title}>
+                  {graphCell(r).text === "—" ? "" : graphCell(r).text}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Panel>
   );
 }
@@ -294,10 +358,40 @@ function Tracker({
   onRun: (kind: ActionKind) => void;
 }) {
   const steps = trackerOf(c, { scopeChosen });
+  const complete = steps.every((s) => s.state === "done");
+  const [open, setOpen] = useState(!complete);
+  // Setup finishing while the page is open folds the steps away, once.
+  const wasComplete = useRef(complete);
+  useEffect(() => {
+    if (complete && !wasComplete.current) setOpen(false);
+    wasComplete.current = complete;
+  }, [complete]);
+  if (complete && !open) {
+    return (
+      <section className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
+        <button type="button" onClick={() => setOpen(true)} aria-expanded={false} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-(--color-surface-subtle)">
+          <span className="grid size-6 place-items-center rounded-full bg-(--color-success-soft) text-(--color-success-text)">
+            <Check className="size-3.5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-(--color-text)">Setup complete</span>
+            <span className="block text-xs text-(--color-text-muted)">All {steps.length} steps done.</span>
+          </span>
+          <span className="text-xs font-medium text-(--color-primary-text)">Show steps</span>
+        </button>
+      </section>
+    );
+  }
   return (
     <Panel
-      title="From connected to your first result"
-      description="Each step says where it stands and what to do next, so readiness never has to be read off timestamps."
+      title={complete ? "Setup complete" : "Setup"}
+      actions={
+        complete ? (
+          <button type="button" onClick={() => setOpen(false)} aria-expanded className="font-medium text-(--color-primary-text) hover:underline">
+            Hide steps
+          </button>
+        ) : undefined
+      }
     >
       <ol className="divide-y divide-(--color-border-subtle)">
         {steps.map((s, i) => (
@@ -361,10 +455,14 @@ export function OverviewTab({
           </div>
         </div>
       ) : null}
-      <Conditions c={c} />
-      <Tracker c={c} scopeChosen={scopeChosen} actions={actions} pending={pending} onRun={onRun} />
-      {c.provider === "aws" ? <AwsFacts c={c} /> : null}
-      {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+        <div className="min-w-0 space-y-4">
+          {c.provider === "aws" ? <RecentScans c={c} /> : null}
+          <Tracker c={c} scopeChosen={scopeChosen} actions={actions} pending={pending} onRun={onRun} />
+        </div>
+        <div className="min-w-0 space-y-4">
+          {c.provider === "aws" ? <AwsFacts c={c} /> : null}
+          {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
       {c.provider === "k8s" || c.provider === "github" ? (
         source.isError && !source.data ? (
           <LoadFailurePanel
@@ -381,6 +479,8 @@ export function OverviewTab({
           )
         ) : null
       ) : null}
+        </div>
+      </div>
     </div>
   );
 }

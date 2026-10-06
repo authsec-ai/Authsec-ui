@@ -39,10 +39,12 @@ export function ClaimFacts({
   if (basis)
     parts.push(
       <span key="basis" title={BASIS_EXPLANATION[basis]} className="cursor-help underline decoration-dotted decoration-(--color-border-strong) underline-offset-2">
-        {sentence(basis)}
+        {basis === "declared" ? "Declared in AWS" : sentence(basis)}
       </span>,
     );
-  if (state === "current") parts.push(<span key="state">Current</span>);
+  // "Current" read as a status of AuthSec's own record; what it means is that
+  // the latest scan still found this in AWS.
+  if (state === "current") parts.push(<span key="state">Still present</span>);
   // Via `Timestamp` so this row's confirmation time reads the same as every other
   // confirmation in the product and carries the exact instant on hover. It was
   // the one place that called formatDistanceToNow inline.

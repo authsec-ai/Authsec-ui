@@ -1,0 +1,313 @@
+/**
+ * Visual skin for the Agentic IGA console chrome — the sidebar and the top
+ * header. Scoped to `[data-shell="iga"]`, set on IgaLayout's root.
+ *
+ * VISUAL ONLY. No navigation structure, no routes, no items, no widths, no
+ * collapse behaviour. The sidebar stays the same pattern at the same width
+ * (`--sidebar-width`, set by IgaLayout); this restyles how it reads.
+ *
+ * ── Blast radius, deliberately ──────────────────────────────────────────────
+ * `IgaLayout` is the shell for the ~46 `/iga/*` routes, so every rule here is
+ * visible on all of them. That is the point: chrome should not change page to
+ * page. The legacy authorization console (`AppLayout`) does NOT carry
+ * `data-shell="iga"` and is untouched, even though it renders the very same
+ * `AppHeader`, `Breadcrumb`, `NavMain` and sidebar primitives.
+ *
+ * Every selector below is confined to the sidebar or the header subtree.
+ * The palette itself is no longer declared here: it lives on
+ * `[data-shell="iga"]` in iga-pages-skin.css and inherits into this chrome
+ * as well as into every page, so the two cannot drift apart.
+ *
+ * UNLAYERED ON PURPOSE — `admin-shell.css` sits in `@layer components` and
+ * owns much of this chrome. Unlayered rules outrank it without `!important`.
+ * Do not wrap this file in `@layer`.
+ */
+
+/* ====================================================================
+   Sidebar-only tokens
+   The palette itself now lives on `[data-shell="iga"]` in
+   iga-pages-skin.css and inherits into both subtrees, so only the
+   `--sidebar-*` aliases — which nothing else sets — are declared here.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="sidebar-container"],
+[data-shell="iga"] [data-slot="sidebar-inner"] {
+  --sidebar-foreground: #0f172a;
+  --sidebar-accent: #eef3f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #dfe6ee;
+}
+
+.dark [data-shell="iga"] [data-slot="sidebar-container"],
+.dark [data-shell="iga"] [data-slot="sidebar-inner"],
+[data-theme="dark"] [data-shell="iga"] [data-slot="sidebar-container"],
+[data-theme="dark"] [data-shell="iga"] [data-slot="sidebar-inner"] {
+  --sidebar-foreground: #e8ecf3;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #e8ecf3;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+}
+
+/* ====================================================================
+   SIDEBAR  (spec §3)
+   Same structure, same width, same items, same order.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="sidebar-inner"] {
+  background: #fbfcfe;
+  border-right: 1px solid #dfe6ee;
+}
+
+.dark [data-shell="iga"] [data-slot="sidebar-inner"],
+[data-theme="dark"] [data-shell="iga"] [data-slot="sidebar-inner"] {
+  background: #12161c;
+  border-right-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ---- section headings: "Explore", "Data sources", … ---------------- */
+[data-shell="iga"] [data-slot="sidebar-group-label"] {
+  height: auto;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+[data-shell="iga"] [data-slot="sidebar-group"] {
+  padding: 8px 10px;
+  gap: 2px;
+}
+
+[data-shell="iga"] [data-slot="sidebar-group"] + [data-slot="sidebar-group"] {
+  margin-top: 8px;
+}
+
+/* ---- items --------------------------------------------------------- */
+[data-shell="iga"] [data-sidebar="menu-button"] {
+  height: 36px;
+  padding: 0 10px;
+  gap: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  /* §2: the nav reads in black, not slate. Token, not a hex, so the dark
+     ramp below is the only place a second value is stated. */
+  color: var(--color-text);
+  transition:
+    background-color 130ms ease,
+    color 130ms ease;
+}
+
+.dark [data-shell="iga"] [data-sidebar="menu-button"],
+[data-theme="dark"] [data-shell="iga"] [data-sidebar="menu-button"] {
+  /* §2 names #D0D5DB as the readable dark-theme grey; #b6c0ce was dimmer. */
+  color: #d0d5db;
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"] > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  stroke-width: 1.75;
+  /* Was #7b8798 — a mid grey that looked washed out beside a black label,
+     and had no dark-theme rule at all. The token carries both themes. */
+  color: var(--color-text-secondary);
+  transition: color 130ms ease;
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"]:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"]:hover > svg {
+  color: var(--color-text);
+}
+
+/* ---- the active item (Integrations, when you are on it) ------------ */
+/* NavMain already asks for a soft-primary fill, primary icon and semibold
+   label via `data-[active=true]:` utilities, and admin-shell.css draws the
+   left bar as a ::before. Both read from the primary tokens re-pointed
+   above, so this block only sharpens what is already there. */
+[data-shell="iga"] [data-sidebar="menu-button"][data-active="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-weight: 600;
+}
+
+.dark [data-shell="iga"] [data-sidebar="menu-button"][data-active="true"],
+[data-theme="dark"] [data-shell="iga"] [data-sidebar="menu-button"][data-active="true"] {
+  color: #bfd8ff;
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"][data-active="true"] > svg {
+  color: var(--color-primary);
+  stroke-width: 2;
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"][data-active="true"]::before {
+  background: var(--color-primary);
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+}
+
+[data-shell="iga"] [data-sidebar="menu-button"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+/* ---- header (logo) and footer (user menu) -------------------------- */
+[data-shell="iga"] [data-slot="sidebar-header"] {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.dark [data-shell="iga"] [data-slot="sidebar-header"],
+[data-theme="dark"] [data-shell="iga"] [data-slot="sidebar-header"] {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-shell="iga"] [data-slot="sidebar-footer"] {
+  padding: 10px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.dark [data-shell="iga"] [data-slot="sidebar-footer"],
+[data-theme="dark"] [data-shell="iga"] [data-slot="sidebar-footer"] {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+/* ====================================================================
+   TOP HEADER  (spec §4)
+   Structure unchanged: collapse icon → breadcrumb → search → theme.
+   ==================================================================== */
+
+[data-shell="iga"] [data-slot="admin-main-surface"] > header {
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.dark [data-shell="iga"] [data-slot="admin-main-surface"] > header,
+[data-theme="dark"] [data-shell="iga"] [data-slot="admin-main-surface"] > header {
+  border-bottom-color: rgba(255, 255, 255, 0.09);
+  background: rgba(18, 22, 28, 0.86);
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="sidebar-trigger"] {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="sidebar-trigger"]:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="sidebar-trigger"]
+  svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- breadcrumb: Home → IGA → Integrations  (spec §4) -------------- */
+/* Hierarchy, not a flat row: the trail is muted, the current page is the
+   strongest thing in the bar. */
+[data-shell="iga"] [data-slot="admin-main-surface"] > header nav {
+  gap: 2px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+[data-shell="iga"] [data-slot="admin-main-surface"] > header nav a {
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  transition:
+    color 130ms ease,
+    background-color 130ms ease;
+}
+
+[data-shell="iga"] [data-slot="admin-main-surface"] > header nav a:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+[data-shell="iga"] [data-slot="admin-main-surface"] > header nav a svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* the chevrons between crumbs */
+[data-shell="iga"] [data-slot="admin-main-surface"] > header nav > div > svg {
+  width: 14px;
+  height: 14px;
+  /* Not text, but it sat two steps lighter than anything around it. */
+  color: var(--color-text-secondary);
+}
+
+/* the current page — last crumb, rendered as a span, not a link */
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  nav
+  > div:last-child
+  > span {
+  padding: 3px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ---- the search / command-palette control -------------------------- */
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="button"] {
+  height: 32px;
+  border-radius: 6px;
+  border-color: var(--color-border-subtle);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="button"]:hover {
+  background: var(--color-hover);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="button"]
+  svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-shell="iga"]
+  [data-slot="admin-main-surface"]
+  > header
+  [data-slot="separator"] {
+  background: var(--color-border-subtle);
+}

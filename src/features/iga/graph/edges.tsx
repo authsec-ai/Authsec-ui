@@ -136,7 +136,14 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
                   : "border-(--color-border-subtle) text-(--color-text-muted)",
             )}
           >
-            <span className="whitespace-nowrap">{edgeVerb(e)}</span>
+            {/* The verb only when the line is in focus, as this file's header
+                always said: printed on every line, "declares" labels stacked
+                where lines fan out (G-04). Otherwise only what must stay
+                visible, or a dot to click. */}
+            {emphasised ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
+            {!emphasised && grants <= 1 && !marked.length && !e.closesCycle && !e.crossesAccount ? (
+              <span aria-hidden="true" className="block size-1.5 rounded-full bg-current" />
+            ) : null}
             {grants > 1 ? <span className="tabular-nums">×{grants}</span> : null}
             {marked.length ? <span className="text-(--color-warning-text)" aria-hidden="true">!</span> : null}
             {e.closesCycle ? <span aria-hidden="true">↻</span> : null}

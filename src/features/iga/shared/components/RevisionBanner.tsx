@@ -25,7 +25,7 @@ export function RevisionBanner({
     <DecisionBanner
       tone="info"
       title={title}
-      body="What is on screen is labelled with the publication it was read at, and nothing newer is mixed in. Refresh to re-read it all at the current publication; your view and filters are kept."
+      body="You are viewing an earlier publication. Refresh to load the latest; your filters are kept."
       actionLabel="Refresh"
       onAction={onRefresh}
     />

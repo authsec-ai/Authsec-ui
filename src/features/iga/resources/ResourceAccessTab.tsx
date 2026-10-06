@@ -136,7 +136,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
                           to={`${path}/graph?target=${encodeURIComponent(resource.ref)}`}
                           className="text-xs font-medium text-(--color-primary-text) hover:underline"
                         >
-                          View the path in graph
+                          View the path in Access Graph
                         </Link>
                       ) : null}
                     </span>

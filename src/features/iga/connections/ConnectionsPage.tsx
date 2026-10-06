@@ -10,17 +10,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { connectionsApi, useListDiscoveryConnectionsQuery, type Connection, type ConnectionProvider } from "@/app/api/connectionsApi";
 import { useConvertGitHubAppManifestMutation } from "@/app/api/discoveryApi";
 import { useAppDispatch } from "@/app/hooks";
 import { ConsolePage } from "@/components/console/ConsolePage";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  type ConsoleActionItem,
-} from "@/components/console/iam-console";
+import { ConsoleRowActions, type ConsoleActionItem } from "@/components/console/iam-console";
 import { tableFailure } from "@/components/console/load-failure";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { Button } from "@/components/ui/button";
@@ -30,17 +27,16 @@ import { TableCard } from "@/theme/components/cards";
 import { AddConnectionDialogs, type Wizard } from "./AddConnectionDialogs";
 import {
   ActionFailureList,
-  Chip,
-  ChipGroup,
   NameLink,
   PendingWord,
   StatusBlock,
 } from "./ConnectionParts";
+import { ConnectMoreSources, StatusTiles, TableToolbar, type StatusTileKey } from "./ConnectionsListParts";
 import {
   PROVIDERS,
-  STATUS_FILTERS,
   actionsOf,
   detailHref,
+  discoveryLink,
   graphText,
   hasFriendlyName,
   isConnectionProvider,
@@ -55,14 +51,30 @@ import {
 } from "./connectionModel";
 import { useAdminAccess } from "./permissions";
 import { ProviderGlyph } from "./ProviderGlyph";
+import { TruncatedId } from "../shared/components/TruncatedId";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 
 const POLL_MS = 5_000;
 
+/** What the search box matches: the name, the account/project/cluster id, the provider and the scope. */
 function searchText(c: Connection): string {
   return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
 }
+
+/** The design's four status tiles; partial coverage counts as needing attention. */
+const TILES: { key: StatusTileKey; label: string }[] = [
+  { key: "connected", label: "Connected" },
+  { key: "attention", label: "Needs attention" },
+  { key: "running", label: "Scanning" },
+  { key: "revoked", label: "Revoked" },
+];
+
+function tileOf(c: Connection): StatusTileKey | null {
+  const f = statusFilterOf(c);
+  return f === "partial" ? "attention" : f === "all" ? null : (f as StatusTileKey);
+}
+
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
@@ -165,35 +177,42 @@ export default function ConnectionsPage() {
   };
 
   // ── Rows ───────────────────────────────────────────────────────────────
+  // An old link's ?status=partial selects the tile it now belongs to.
+  const tile: StatusTileKey | null = status === "all" ? null : status === "partial" ? "attention" : (status as StatusTileKey);
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return all.filter(
-      (c) => (!type || c.provider === type) && (status === "all" || statusFilterOf(c) === status) && (!q || searchText(c).includes(q)),
-    );
-  }, [all, search, type, status]);
+    return all.filter((c) => (!type || c.provider === type) && (!tile || tileOf(c) === tile) && (!q || searchText(c).includes(q)));
+  }, [all, type, tile, search]);
 
   const filtered = !!search.trim() || type !== null || status !== "all";
+  const tiles = TILES.map((t) => ({ ...t, count: all.filter((c) => tileOf(c) === t.key).length }));
+  const unconnected = PROVIDERS.filter((p) => !all.some((c) => c.provider === p));
   const clearFilters = () => setSearchParams({}, { replace: true });
 
   const columns = useMemo<AdaptiveColumn<Connection>[]>(
     () => [
       {
         id: "name",
-        header: "Name",
-        label: "Name",
+        header: "Connection",
+        label: "Connection",
         primary: true,
         alwaysVisible: true,
         minWidth: 220,
         cell: ({ row }) => {
           const c = row.original;
-          const friendly = hasFriendlyName(c);
+          // A name first, the id under it in mono (C-09): with no friendly
+          // name of its own, the connection is named for what it is.
+          const name = hasFriendlyName(c) ? c.name : typeWord(c);
           return (
-            <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-3">
               <ProviderGlyph provider={c.provider} />
-              <div className="min-w-0">
-                {/* With no friendly name the id is the name, in mono, once. */}
-                <NameLink to={detailHref(c.id)}>{friendly ? c.name : <span className="font-mono text-[13px]">{c.name}</span>}</NameLink>
-                <div className="truncate text-xs text-muted-foreground">{providerWord(c.provider)}</div>
+              <div className="min-w-0 space-y-0.5">
+                <NameLink to={detailHref(c.id)}>{name}</NameLink>
+                {name !== c.native_id ? (
+                  <div className="flex min-w-0">
+                    <TruncatedId value={c.native_id} what={c.provider === "aws" ? "Account ID" : "ID"} max={32} />
+                  </div>
+                ) : null}
               </div>
             </div>
           );
@@ -204,7 +223,7 @@ export default function ConnectionsPage() {
         header: "Status",
         label: "Status",
         priority: 1,
-        approxWidth: 320,
+        approxWidth: 280,
         cell: ({ row }) => <StatusBlock c={row.original} />,
         detail: (c) => <StatusBlock c={c} clamp={false} />,
       },
@@ -213,71 +232,48 @@ export default function ConnectionsPage() {
         header: "Last scan",
         label: "Last scan",
         priority: 2,
-        approxWidth: 150,
-        cell: ({ row }) => <span className="text-xs">{lastScanText(row.original)}</span>,
-        detail: (c) => lastScanText(c),
-      },
-      {
-        id: "graph",
-        header: "Graph",
-        label: "Graph",
-        priority: 3,
-        approxWidth: 150,
+        approxWidth: 200,
+        // The scan, and under it what the graph made of it.
         cell: ({ row }) => {
           const g = graphText(row.original);
           return (
-            <div className="min-w-0">
-              <div className="truncate text-xs">{g.text}</div>
-              {g.note ? <div className="truncate text-xs text-muted-foreground">{g.note}</div> : null}
+            <div className="min-w-0 space-y-0.5 whitespace-normal">
+              <div className="text-[13px]">{lastScanText(row.original)}</div>
+              <div className="text-xs text-muted-foreground">{g.note ? `${g.text} · ${g.note}` : g.text}</div>
             </div>
           );
         },
         detail: (c) => {
           const g = graphText(c);
-          return g.note ? `${g.text} · ${g.note}` : g.text;
+          return `${lastScanText(c)} · ${g.note ? `${g.text} · ${g.note}` : g.text}`;
         },
       },
       {
-        id: "scope",
-        header: "Scope",
-        label: "Scope",
-        priority: 4,
-        approxWidth: 140,
-        cell: ({ row }) => <span className="block truncate text-xs">{row.original.scope_summary || "—"}</span>,
+        id: "coverage",
+        header: "Coverage",
+        label: "Coverage",
+        priority: 3,
+        approxWidth: 150,
+        cell: ({ row }) => <span className="block truncate text-[13px]">{row.original.scope_summary || "—"}</span>,
         detail: (c) => c.scope_summary || "—",
       },
       {
-        id: "type",
-        header: "Type",
-        label: "Type",
-        priority: 5,
-        approxWidth: 170,
-        cell: ({ row }) => {
-          const c = row.original;
-          return (
-            <div className="min-w-0">
-              <div className="truncate text-xs">{typeWord(c)}</div>
-              {hasFriendlyName(c) ? <div className="truncate font-mono text-xs text-muted-foreground">{c.native_id}</div> : null}
-            </div>
-          );
-        },
-        detail: (c) => `${typeWord(c)}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""}`,
-      },
-      {
         id: "actions",
-        header: "",
+        // Named for screen readers; the buttons say what they do (C-08).
+        header: () => <span className="sr-only">Actions</span>,
         label: "Actions",
         alwaysVisible: true,
-        approxWidth: 210,
+        approxWidth: 110,
         className: "pr-4",
         cellClassName: "pr-4 text-right",
         cell: ({ row }) => {
           const c = row.original;
           const a = actionsOf(c, canAdminister);
           const busy: ActionKind | undefined = pending[c.id];
-          const items: ConsoleActionItem[] = [{ label: "Open details", onSelect: () => navigate(detailHref(c.id)) }];
+          const items: ConsoleActionItem[] = [{ label: "View details", onSelect: () => navigate(detailHref(c.id)) }];
+          if (c.discovery.ready) items.push({ label: "Open in Discovery", onSelect: () => navigate(discoveryLink(c)) });
           if (a.verify) items.push({ label: "Verify", onSelect: () => void run(c, "verify") });
-          if (a.editScope) items.push({ label: "Edit scope", onSelect: () => navigate(detailHref(c.id, "scope"), { state: { editScope: true } }) });
+          if (a.editScope) items.push({ label: "Edit scope", onSelect: () => navigate(detailHref(c.id, "scope")) });
           if (a.rules) items.push({ label: "Scan rules", onSelect: () => navigate(detailHref(c.id, "rules")) });
           if (a.revoke) items.push({ label: `${revokeWord(c).verb}…`, destructive: true, onSelect: () => setRevokeTarget(c) });
           return (
@@ -289,8 +285,8 @@ export default function ConnectionsPage() {
                   Reports every {Math.max(1, Math.round(c.scan.reports_every_seconds / 60))} min
                 </span>
               ) : a.scan ? (
-                <Button variant="outline" size="sm" onClick={() => void run(c, "scan")}>
-                  Scan now
+                <Button variant="ghost" size="icon" className="size-9" aria-label={`Scan ${c.name} now`} title="Scan now" onClick={() => void run(c, "scan")}>
+                  <RefreshCw className="size-4" aria-hidden="true" />
                 </Button>
               ) : null}
               <ConsoleRowActions items={items} label={`Actions for ${c.name}`} />
@@ -331,7 +327,7 @@ export default function ConnectionsPage() {
   return (
     <ConsolePage
       title="Connections"
-      description="AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organisations: what is connected, whether it is reporting, and whether its data is usable."
+      description="The cloud accounts, clusters and code hosts AuthSec scans."
       actions={
         canAdminister || adminLoading ? (
           // Until the server has answered whether this reader can administer, the control is shown but cannot be used.
@@ -366,40 +362,36 @@ export default function ConnectionsPage() {
         onDismiss={dismiss}
       />
 
-      <ConsoleFilterBar
-        className="[&>[data-slot=card-content]]:py-2.5"
-        search={search}
-        onSearchChange={(v) => setParam("q", v || null)}
-        searchPlaceholder="Search by name, account, project, cluster or organisation"
-        trailing={
-          <>
-            <ChipGroup label="Type">
-              <Chip pressed={type === null} onClick={() => setParam("type", null)}>
-                All types
-              </Chip>
-              {PROVIDERS.map((p) => (
-                <Chip key={p} pressed={type === p} onClick={() => setParam("type", type === p ? null : p)}>
-                  {providerWord(p)}
-                  <span className="tabular-nums text-muted-foreground">{all.filter((c) => c.provider === p).length}</span>
-                </Chip>
-              ))}
-            </ChipGroup>
-            <ChipGroup label="Status">
-              {STATUS_FILTERS.map((f) => (
-                <Chip key={f.key} pressed={status === f.key} onClick={() => setParam("status", f.key === "all" ? null : f.key)}>
-                  {f.label}
-                  {f.key !== "all" ? (
-                    <span className="tabular-nums text-muted-foreground">{all.filter((c) => statusFilterOf(c) === f.key).length}</span>
-                  ) : null}
-                </Chip>
-              ))}
-            </ChipGroup>
-          </>
-        }
-      />
+      {/* Doubles as the status filter. */}
+      {/* Only from a list that loaded: never zeros while loading or after a failure. */}
+      {query.data ? <StatusTiles tiles={tiles} active={tile} onPick={(k) => setParam("status", k)} /> : null}
 
       <TableCard>
         <CardContent variant="flush">
+          <TableToolbar
+            search={search}
+            onSearch={(v) => setParam("q", v || null)}
+            filtered={filtered}
+            onClear={clearFilters}
+            countLabel={`${rows.length} of ${all.length} ${all.length === 1 ? "connection" : "connections"}`}
+            typeControl={
+              <label className="flex items-center gap-2 text-[13px] text-(--color-text-muted)">
+                Type
+                <select
+                  value={type ?? "all"}
+                  onChange={(e) => setParam("type", e.target.value === "all" ? null : e.target.value)}
+                  className="h-9 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-sm text-(--color-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
+                >
+                  <option value="all">All types</option>
+                  {PROVIDERS.map((p) => (
+                    <option key={p} value={p}>
+                      {providerWord(p)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            }
+          />
           <AdaptiveTable
             tableId="iga-connections"
             sizing="fit"
@@ -420,6 +412,8 @@ export default function ConnectionsPage() {
           />
         </CardContent>
       </TableCard>
+
+      {canAdminister && query.data ? <ConnectMoreSources providers={unconnected} onAdd={(p) => setWizard(p)} /> : null}
 
       <AddConnectionDialogs
         pickerOpen={pickerOpen}

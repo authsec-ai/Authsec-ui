@@ -4,6 +4,7 @@ import { objectPath, type GraphRef, type IdentitySummary } from "@/app/api/igaGr
 
 import { IDENTITY_KIND_LABEL, accountLabel } from "../labels";
 import { viaLink } from "../links";
+import { WRAP_ID_CLASS, wrapId } from "./wrapText";
 
 type From = { ref: GraphRef; name: string };
 
@@ -24,7 +25,7 @@ export function IdentityName({ identity, from }: { identity: IdentitySummary; fr
         {identity.account || identity.kind.startsWith("iam_") ? ` · ${accountLabel(identity.account)}` : ""}
         {identity.account && !identity.account.connected ? " · account not connected" : ""}
       </span>
-      <p className="mt-0.5 break-all font-mono text-[11.5px] leading-5 text-(--color-text-muted)">{identity.arn}</p>
+      <p className={`mt-0.5 ${WRAP_ID_CLASS} font-mono text-xs leading-5 text-(--color-text-muted)`}>{identity.arn ? wrapId(identity.arn) : null}</p>
     </div>
   );
 }

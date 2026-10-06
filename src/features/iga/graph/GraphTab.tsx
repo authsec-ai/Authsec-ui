@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Expand, LayoutGrid, Maximize2, Minimize } from "lucide-react";
+import { Expand, LayoutGrid, LocateFixed, Maximize2, Minimize, Undo2 } from "lucide-react";
 
 import {
   igaGraphApi,
@@ -39,7 +39,6 @@ import {
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import { viaLink } from "../shared/links";
@@ -51,7 +50,7 @@ import { graphSessionGeneration, useGraphRevision, useTrackRevision } from "../s
 import { GraphCanvas, type CanvasApi } from "./GraphCanvas";
 import { GraphInspector } from "./GraphInspector";
 import { edgeVerb } from "./graphLabels";
-import { computeLayout, placeNewNodes, rectsOverlap, terminateLayoutWorker, type Position, type Size } from "./layout";
+import { columnOfKind, computeLayout, placeNewNodes, rectsOverlap, terminateLayoutWorker, type Position, type Size } from "./layout";
 import {
   buildVisual,
   boundVisual,
@@ -600,7 +599,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
         if (drawn.some((o) => o.id !== n.id && settled(o.id) && usable.has(o.id) && rectsOverlap(p, n.size, usable.get(o.id)!, o.size))) usable.delete(n.id);
       }
     }
-    const added = placeNewNodes(drawn, visual.edges, usable);
+    const columns = new Map(visual.nodes.map((v) => [v.id, columnOfKind(v.members[0].kind)]));
+    // A card the user moved does not say where its column is: only laid-out cards do.
+    const added = placeNewNodes(drawn, visual.edges, usable, (id) => (manualPositions.has(id) ? undefined : columns.get(id)));
     const out = new Map<string, Position>();
     for (const n of drawn) {
       const p = added.get(n.id) ?? usable.get(n.id);
@@ -625,6 +626,19 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // for a layout that has since been superseded — a newer reset, another
   // root, workspace or publication — is dropped.
   const [revealToken, setRevealToken] = useState(0);
+  // Every view switch lays the graph out again in its columns, then fits it
+  // (the layout's own reveal) — Summary and Detailed draw different cards, and
+  // placing the new ones beside the old layout overlapped them (G-01, G-03).
+  // The first render is the initial layout's, so only a change counts.
+  const shownView = useRef(view);
+  useEffect(() => {
+    if (shownView.current === view) return;
+    shownView.current = view;
+    // "relayout", not "reset-layout": every card is laid out again in its
+    // columns, and the cards the user moved are put back where they left them.
+    // Only the Reset layout button discards those.
+    if (view !== "paths") dispatchModel({ type: "relayout" });
+  }, [view, dispatchModel]);
   const layoutRun = useRef(0);
   const layoutSig = model.laidOut || !rootReadyForLayout(model, currentKey)
     ? ""
@@ -634,7 +648,12 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     const run = ++layoutRun.current;
     const key = currentKey;
     const layer: "first" | "last" | undefined = refType(root) === "workload" ? "first" : refType(root) === "resource" ? "last" : undefined;
-    const nodes = visual.nodes.map((v) => ({ id: v.id, size: sizes.get(v.id)!, layer: v.id === rootId ? layer : undefined }));
+    const nodes = visual.nodes.map((v) => ({
+      id: v.id,
+      size: sizes.get(v.id)!,
+      layer: v.id === rootId ? layer : undefined,
+      column: columnOfKind(v.members[0].kind),
+    }));
     const edges = visual.edges.map((e) => ({ id: e.id, from: e.from, to: e.to }));
     void computeLayout(nodes, edges).then((positions) => {
       if (!mounted.current || run !== layoutRun.current || currentKeyRef.current !== key) return;
@@ -650,10 +669,13 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   }, [layoutSig]);
 
   const resetLayout = useCallback(() => {
-    pendingAnnounceRef.current = "Layout reset. Restore previous layout undoes it.";
+    pendingAnnounceRef.current = "Layout reset. Undo reset puts the moved cards back.";
     dispatchModel({ type: "reset-layout" });
   }, [dispatchModel]);
   const restoreLayout = useCallback(() => {
+    // Drop an ELK run still in flight from the reset, so it cannot land on top.
+    layoutRun.current++;
+    pendingAnnounceRef.current = null;
     dispatchModel({ type: "restore-layout" });
     announce("Previous layout restored");
   }, [dispatchModel]);
@@ -1058,6 +1080,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           // evidence drawer floats over the canvas rather than beside it — the drawer.
           // A narrow window's drawer is modal and covers everything; nothing is panned for it.
           rightInset={card && !evidenceOpen ? 344 : evidenceOpen && !inline && !narrow ? inspectorWidth : 0}
+          expanded={expanded}
           revealToken={revealToken}
           viewport={model.viewport}
           onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
@@ -1095,17 +1118,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
         expanded ? "fixed inset-0 z-50" : "rounded-lg border border-(--color-border-subtle)",
       )}
       role={expanded ? "dialog" : undefined}
-      aria-label={expanded ? `Graph of ${rootName}` : undefined}
+      aria-label={expanded ? `Access Graph of ${rootName}` : undefined}
     >
-      <div role="toolbar" aria-label="Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
+      <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title="Workload → identity → what it declares">
-            Overview
+          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title="The short answer: who it acts as and what it declares access to">
+            Summary
           </button>
           <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title="Every policy statement drawn">
             Detailed
           </button>
-          <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="Every loaded path as a list">
+          <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="How it reaches each thing, as a list of paths">
             Paths
           </button>
         </div>
@@ -1122,37 +1145,62 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
             </div>
           </div>
         ) : null}
-        <div className="ml-auto flex items-center gap-0.5">
-          {canvasControls ? (
-            <>
-              <Button variant="ghost" size="icon" className="size-8" onClick={() => canvasApi.current?.fitGraph()} aria-label="Fit everything in view" title="Fit everything in view">
-                <Maximize2 className="size-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative size-8" aria-label="Layout" title="Layout">
-                    <LayoutGrid className="size-4" />
-                    {manualPositions.size ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-(--color-primary)" /> : null}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => canvasApi.current?.revealStart()}>Go to the starting object</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={resetLayout}>Reset layout{manualPositions.size ? ` (discards ${manualPositions.size} moved)` : ""}</DropdownMenuItem>
-                  <DropdownMenuItem disabled={!model.previousLayout} onSelect={restoreLayout}>Restore previous layout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+        {/* Labelled, and the same in every view; the canvas ones are disabled
+            in Paths rather than hidden (G-07). Zoom is in the status bar. */}
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-xs"
+            disabled={!canvasControls}
+            onClick={() => canvasApi.current?.fitGraph()}
+            title="Fit the whole graph in view"
+          >
+            <Maximize2 className="size-3.5" aria-hidden="true" /> Fit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-xs"
+            disabled={!canvasControls}
+            onClick={() => canvasApi.current?.focusStart()}
+            title="Bring the starting object back into view"
+          >
+            <LocateFixed className="size-3.5" aria-hidden="true" /> Start
+          </Button>
+          {manualPositions.size ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs"
+              disabled={!canvasControls}
+              onClick={resetLayout}
+              title={`Put the ${manualPositions.size} moved ${manualPositions.size === 1 ? "card" : "cards"} back in their columns`}
+            >
+              <LayoutGrid className="size-3.5" aria-hidden="true" /> Reset layout
+            </Button>
+          ) : model.previousLayout?.manualPositions.size ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs"
+              disabled={!canvasControls}
+              onClick={restoreLayout}
+              title="Put the moved cards back where you had them"
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" /> Undo reset
+            </Button>
           ) : null}
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8"
+            size="sm"
+            className="h-8 gap-1.5 px-2 text-xs"
             onClick={() => setExpanded((v) => !v)}
             aria-pressed={expanded}
-            aria-label={expanded ? "Exit expanded view (Esc)" : "Expand to the window"}
-            title={expanded ? "Exit expanded view (Esc)" : "Expand to the window"}
+            title={expanded ? "Exit full screen (Esc)" : "Fill the window with the graph"}
           >
-            {expanded ? <Minimize className="size-4" /> : <Expand className="size-4" />}
+            {expanded ? <Minimize className="size-3.5" aria-hidden="true" /> : <Expand className="size-3.5" aria-hidden="true" />}
+            {expanded ? "Exit full screen" : "Full screen"}
           </Button>
         </div>
       </div>

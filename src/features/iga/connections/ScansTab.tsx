@@ -16,18 +16,19 @@ import { useListScanRunsQuery } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { CloudPill } from "@/features/discovery/cloud/CloudPill";
-import { AWSScanHistory } from "@/features/discovery/cloud/aws/AWSScanHistory";
 import { GitHubScanPanel, StatusPill as GitHubRunPill } from "@/features/discovery/GitHubScanPanel";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
 import { ago, day, inventoryLagsHeartbeat, heartbeatRecent, scanHref } from "./connectionModel";
+import { AwsScansTable } from "./AwsScansTable";
+import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 function K8sScans({ c }: { c: Connection }) {
   return (
     <Panel
       title="Heartbeat and inventory"
-      description="The agent scans on its own schedule; there is no scan to start from here. Two different things are reported, and they are not the same date."
+      description="The agent reports on its own schedule. Health and inventory dates can differ."
     >
       <Facts>
         <Fact label="Connection health">
@@ -78,7 +79,7 @@ function GcpScans({ c }: { c: Connection }) {
           <Fact label="Started">{cov.started_at ? <Timestamp iso={cov.started_at} /> : "—"}</Fact>
           <Fact label="Finished">{cov.finished_at ? <Timestamp iso={cov.finished_at} /> : cov.status === "running" ? "Still running" : "—"}</Fact>
           <Fact label="Scan generation">{q.data.scan_generation}</Fact>
-          {cov.error ? <Fact label="Error">{cov.error}</Fact> : null}
+          {cov.error ? <Fact label="Error">{safeErrorProse(cov.error)}</Fact> : null}
         </Facts>
       ) : (
         <p className="text-[13px] text-(--color-text-muted)">This project has not been scanned yet.</p>
@@ -134,11 +135,7 @@ function GitHubScans({ c }: { c: Connection }) {
 export function ScansTab({ c }: { c: Connection }) {
   switch (c.provider) {
     case "aws":
-      return (
-        <Panel title="Scan history" description="How each scan ended, what it could read, and whether it reached the graph. A failed scan keeps the earlier results.">
-          <AWSScanHistory connectorId={c.id} runHref={(runId) => scanHref(c.id, runId)} />
-        </Panel>
-      );
+      return <AwsScansTable connectionId={c.id} />;
     case "gcp":
       return <GcpScans c={c} />;
     case "k8s":
