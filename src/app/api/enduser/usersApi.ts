@@ -7,7 +7,6 @@
  *
  * Available Endpoints:
  * - POST /uflow/enduser/list - List all end-users for a tenant
- * - GET  /uflow/enduser/:id - Get specific end-user
  * - POST /uflow/enduser/delete - Delete end-user
  * - POST /uflow/enduser/active - Activate/deactivate end-user
  */
@@ -120,13 +119,6 @@ export const endUserUsersApi = baseApi.injectEndpoints({
       providesTags: ['EndUser'],
     }),
 
-    // GET /uflow/enduser/:id
-    // Get single user by ID
-    getUser: builder.query<any, string>({
-      query: (id) => `/authsec/uflow/enduser/${id}`,
-      providesTags: (result, error, id) => [{ type: 'EndUser', id }],
-    }),
-
     // POST /uflow/admin/enduser/ad/status
     // Check Active Directory configuration status for end users
     checkADConfigStatus: builder.query<ConfigStatus, void>({
@@ -216,7 +208,6 @@ export const endUserUsersApi = baseApi.injectEndpoints({
 
 export const {
   useGetEndUsersQuery,
-  useGetUserQuery,
   useCheckADConfigStatusQuery,
   useCheckEntraConfigStatusQuery,
   useDeleteUserMutation,

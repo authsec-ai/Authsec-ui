@@ -7,7 +7,6 @@
  *
  * Available Endpoints:
  * - POST /uflow/admin/users/list - List all admin users for a tenant
- * - GET  /uflow/admin/users/:user_id - Get specific admin user
  */
 
 import { baseApi, withSessionData } from "../baseApi";
@@ -149,12 +148,8 @@ export const adminUsersApi = baseApi.injectEndpoints({
       providesTags: ["AdminUser"],
     }),
 
-    // GET /uflow/admin/users/:user_id
-    // Get a specific admin user by ID
-    getAdminUser: builder.query<AdminUser, string>({
-      query: (user_id) => `authsec/uflow/admin/users/${user_id}`,
-      providesTags: (result, error, id) => [{ type: "AdminUser", id }],
-    }),
+    // There is no GET /uflow/admin/users/:user_id on the backend, so the
+    // admin user details come from the list row.
 
     // POST /uflow/admin/users/ad/status
     // Check Active Directory configuration status for admin users
@@ -253,7 +248,6 @@ export const adminUsersApi = baseApi.injectEndpoints({
 
 export const {
   useGetAdminUsersQuery,
-  useGetAdminUserQuery,
   useCheckADConfigStatusQuery,
   useCheckEntraConfigStatusQuery,
   useDeleteAdminUserMutation,

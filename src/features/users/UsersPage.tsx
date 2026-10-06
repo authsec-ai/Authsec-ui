@@ -23,6 +23,7 @@ import {
 import { useListSyncConfigsQuery } from "@/app/api/syncConfigsApi";
 import { useCrossPageNavigation } from "@/lib/cross-page-navigation";
 import { toast } from "@/lib/toast.ts";
+import { isNotFoundError } from "@/lib/error-utils";
 import { BulkActionsBar, UsersTableSkeleton } from "./components/index.ts";
 import { MapRoleToScopeModal } from "@/features/mappings/components/MapRoleToScopeModal";
 import { AdminUsersTable } from "./components/AdminUsersTable";
@@ -527,6 +528,19 @@ export function UsersPage() {
     });
   }, [contextKey, usersLoading, usersError, enhancedUsersCount]);
 
+  // A 404 from a user action means the row is stale: the user was removed,
+  // or (for password actions) is not an active password user. Say so and
+  // refresh the list rather than reporting a generic failure.
+  const handleUserNotFound = (error: unknown, message: string): boolean => {
+    if (!isNotFoundError(error)) return false;
+    toast.error(message);
+    refetchUsers();
+    return true;
+  };
+  const USER_GONE = "This user no longer exists in this workspace. The list has been refreshed.";
+  const NO_PASSWORD_USER =
+    "No active password-based user with this email was found. The list has been refreshed.";
+
   // Handle user actions
   const handleDeleteUser = async (userId: string) => {
     try {
@@ -542,6 +556,7 @@ export function UsersPage() {
       toast.success("User deletion requested; changes may take a moment to reflect.");
       refetchUsers();
     } catch (error) {
+      if (handleUserNotFound(error, USER_GONE)) return;
       console.error("Failed to delete user:", error);
       toast.error("Failed to delete user");
     }
@@ -553,6 +568,7 @@ export function UsersPage() {
       toast.success(`User ${active ? 'activated' : 'deactivated'} successfully`);
       refetchUsers();
     } catch (error) {
+      if (handleUserNotFound(error, USER_GONE)) return;
       console.error("Failed to update user status:", error);
       toast.error("Failed to update user status");
     }
@@ -563,6 +579,7 @@ export function UsersPage() {
       await resetUserPassword({ email }).unwrap();
       toast.success("Password reset email sent");
     } catch (error) {
+      if (handleUserNotFound(error, NO_PASSWORD_USER)) return;
       console.error("Failed to reset password:", error);
       toast.error("Failed to reset password");
     }
@@ -577,6 +594,7 @@ export function UsersPage() {
       await changeUserPassword({ email, new_password: newPassword }).unwrap();
       toast.success("Password changed successfully");
     } catch (error: any) {
+      if (handleUserNotFound(error, NO_PASSWORD_USER)) return;
       console.error("Change password error:", error);
       toast.error(`Failed to change password: ${error.data?.message || error.message}`);
     }

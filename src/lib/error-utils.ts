@@ -39,3 +39,13 @@ export function getErrorName(error: unknown) {
   const errorLike = asErrorLike(error);
   return typeof errorLike?.name === "string" ? errorLike.name : undefined;
 }
+
+/**
+ * True when an RTK Query error is an HTTP 404: the thing asked for by id does
+ * not exist (deleted, or never in this workspace). Pages show a "not found"
+ * state for it instead of a generic failure or an endless loader.
+ */
+export function isNotFoundError(error: unknown): boolean {
+  const status = (asErrorLike(error) as { status?: unknown } | null)?.status;
+  return status === 404 || status === "404";
+}
