@@ -5,6 +5,7 @@
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import config from '../../config';
+import { withUnauthorizedHandler } from "../../auth/unauthorized";
 
 // ============ TOTP Device Types ============
 export interface TOTPDevice {
@@ -89,7 +90,9 @@ export interface CIBADeleteResponse {
 // ============ API Definition ============
 export const deviceApi = createApi({
   reducerPath: "deviceApi",
-  baseQuery: fetchBaseQuery({
+  // The device pages pass the hosted-login token explicitly; the 401 handler
+  // ignores requests that do not carry the admin session token.
+  baseQuery: withUnauthorizedHandler(fetchBaseQuery({
     baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
@@ -98,7 +101,7 @@ export const deviceApi = createApi({
       headers.set("Content-Type", "application/json");
       return headers;
     },
-  }),
+  })),
   tagTypes: ["TOTPDevices", "CIBADevices"],
   endpoints: (builder) => ({
     // ============ TOTP Endpoints ============

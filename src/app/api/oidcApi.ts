@@ -5,6 +5,7 @@
  */
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { withUnauthorizedHandler } from "../../auth/unauthorized";
 import { withLoginTicket } from "../../auth/loginTicket";
 import config from "../../config";
 
@@ -285,7 +286,7 @@ const getSessionData = () => {
 // RTK Query API for OIDC/OAuth operations
 export const oidcApi = createApi({
   reducerPath: "oidcApi",
-  baseQuery: withLoginTicket(fetchBaseQuery({
+  baseQuery: withLoginTicket(withUnauthorizedHandler(fetchBaseQuery({
     baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
@@ -299,7 +300,7 @@ export const oidcApi = createApi({
       }
       return headers;
     },
-  })),
+  }))),
   tagTypes: ["OIDC", "Token"],
   endpoints: (builder) => ({
     // Exchange OAuth code for tokens (Hydra flow)
