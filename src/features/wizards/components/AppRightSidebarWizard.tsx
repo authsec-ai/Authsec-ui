@@ -122,7 +122,7 @@ function RbacCompletionView({ onClose }: { onClose: () => void }) {
 // User Auth Wizard Completion View
 function UserAuthCompletionView({
   clientId,
-  authMethodType,
+  authMethodType: _authMethodType,
   onClose,
 }: {
   clientId: string | undefined;
@@ -262,7 +262,6 @@ export function AppRightSidebarWizard({
     currentStep,
     completedSteps,
     isCompleted,
-    skipWizard,
     dismissWizard,
     completeStep,
     getStepStatus,
@@ -309,11 +308,6 @@ export function AppRightSidebarWizard({
     if (!isCompleted) {
       dismissWizard();
     }
-    onClose();
-  };
-
-  const handleSkip = () => {
-    skipWizard();
     onClose();
   };
 

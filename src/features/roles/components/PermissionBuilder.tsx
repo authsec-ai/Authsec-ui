@@ -94,12 +94,6 @@ export function PermissionBuilder({ formData, onUpdate }: PermissionBuilderProps
     return mockClients.find((c) => c.id === clientId)?.name || "Unknown Client";
   };
 
-  const getResourceLabel = (resourcePath: string, clientId?: string) => {
-    const client = mockClients.find((c) => c.id === clientId);
-    const resource = client?.resources.find((r) => r.path === resourcePath);
-    return resource?.label || resourcePath;
-  };
-
   const canAddGrant = selectedResource && selectedScopes.length > 0;
 
   return (

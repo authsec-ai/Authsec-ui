@@ -38,7 +38,6 @@ export function EnhancedExternalServicesTable({
   selectedServices: externalSelected = [],
   onSelectService,
   onSelectAll,
-  onCreateService,
 }: EnhancedExternalServicesTableProps) {
   // If parent controls selection use that, otherwise maintain internal state
   const [internalSelected, setInternalSelected] = React.useState<string[]>([]);
@@ -100,7 +99,7 @@ export function EnhancedExternalServicesTable({
       await Promise.all(selectedRowIds.map((id) => deleteService(id).unwrap()));
       toast.success(`${selectedRowIds.length} service(s) deleted successfully`);
       setInternalSelected((prev) => prev.filter((id) => !selectedRowIds.includes(id)));
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete some services");
     } finally {
       setIsBulkDeleting(false);

@@ -134,7 +134,7 @@ export function useCrossPageNavigation() {
   const hasActiveFilters = (filters: Record<string, any>): boolean => {
     if (!filters) return false;
     
-    return Object.entries(filters).some(([key, value]) => {
+    return Object.entries(filters).some(([, value]) => {
       if (Array.isArray(value)) return value.length > 0;
       if (typeof value === 'string') return value !== '' && value !== 'all';
       if (typeof value === 'boolean') return value === true; // Only include true boolean values

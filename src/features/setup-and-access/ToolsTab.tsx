@@ -59,6 +59,12 @@ export function ToolsTab({ rsId, onChange }: Props) {
     );
   }, [allTools, filter]);
 
+  const scopeByID = useMemo(() => {
+    const m = new Map<string, (typeof scopes)[number]>();
+    for (const s of scopes) m.set(s.id, s);
+    return m;
+  }, [scopes]);
+
   // When there are 0 tools, mapping is moot — surface the three ingestion
   // paths instead. This catches both the wizard-step-2 case and the
   // post-activation drift where an RS reaches ready before tools are loaded.
@@ -84,12 +90,6 @@ export function ToolsTab({ rsId, onChange }: Props) {
       </div>
     );
   }
-
-  const scopeByID = useMemo(() => {
-    const m = new Map<string, (typeof scopes)[number]>();
-    for (const s of scopes) m.set(s.id, s);
-    return m;
-  }, [scopes]);
 
   const handleToggleScope = async (tool: MCPToolResponse, scopeID: string, on: boolean) => {
     try {

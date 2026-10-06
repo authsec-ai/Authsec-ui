@@ -159,7 +159,7 @@ export function UsersPage() {
     }
   }, [isAdmin]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const audienceCopy = useMemo(
     () =>
       isAdmin
@@ -479,14 +479,6 @@ export function UsersPage() {
   const enhancedUsersCount = enhancedUsers.length;
 
   const totalItems = (usersResponse as any)?.total ?? enhancedUsersCount;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + enhancedUsersCount, totalItems);
-
-  const handlePageSizeChange = useCallback((size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-  }, []);
 
   // Calculate counts for each source
   const adCount = useMemo(() => {
@@ -534,41 +526,6 @@ export function UsersPage() {
       error: Boolean(usersError),
     });
   }, [contextKey, usersLoading, usersError, enhancedUsersCount]);
-
-  const selectedUserDetails = useMemo(() => {
-    if (selectedUsers.length === 0) return [];
-    const userMap = new Map(enhancedUsers.map((user: any) => [user.id, user]));
-    return selectedUsers
-      .map((id) => userMap.get(id))
-      .filter(Boolean) as any[];
-  }, [selectedUsers, enhancedUsers]);
-
-  const suggestGroupName = useCallback(() => {
-    const suffix = "group";
-    if (selectedUserDetails.length === 1) {
-      const primary = selectedUserDetails[0];
-      const baseSource = primary.name || primary.email || primary.id;
-      if (baseSource) {
-        const slug = baseSource
-          .toString()
-          .split("@")[0]
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/-+/g, "-")
-          .replace(/^-|-$/g, "");
-        if (slug) {
-          return `${slug}-${suffix}`;
-        }
-      }
-      return isAdmin ? "new-admin-group" : "new-user-group";
-    }
-
-    if (selectedUserDetails.length > 1) {
-      return `${isAdmin ? "admin-group" : "user-group"}-${selectedUserDetails.length}`;
-    }
-
-    return isAdmin ? "new-admin-group" : "new-user-group";
-  }, [selectedUserDetails, isAdmin]);
 
   // Handle user actions
   const handleDeleteUser = async (userId: string) => {

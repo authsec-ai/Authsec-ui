@@ -133,7 +133,7 @@ const OIDCLoginPageInner: React.FC = () => {
   };
 
   // WebAuthn state
-  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
 
   // Forgot Password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);

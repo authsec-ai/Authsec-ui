@@ -223,7 +223,7 @@ function DraggableRow<TData>({
   rowClassName,
   rowParity,
 }: DraggableRowProps<TData>) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
     disabled: isDragDisabled,
   });
@@ -468,7 +468,7 @@ export function ResponsiveDataTable<TData>({
     const visibleUserColumns = columns.filter((column) => {
       const columnId = column.id;
       // Check if this column should be visible based on responsive settings
-      if (columnId && visibleColumns.hasOwnProperty(columnId)) {
+      if (columnId && Object.prototype.hasOwnProperty.call(visibleColumns, columnId)) {
         return visibleColumns[columnId as keyof typeof visibleColumns];
       }
       // If not in responsive config, assume it should be visible

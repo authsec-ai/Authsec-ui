@@ -38,7 +38,7 @@ export function WizardProgress({
   const navigate = useNavigate();
   const contextualNavigate = useContextualNavigate();
   const location = useLocation();
-  const { activeWizard, setWizardCompletionData, completeWizard, setIsAwaitingPlatformAction } = useWizard();
+  const { setWizardCompletionData, setIsAwaitingPlatformAction } = useWizard();
   const [sdkDialogOpen, setSdkDialogOpen] = useState(false);
   const [wizardStepData, setWizardStepData] = useState<Record<string, any>>({});
   const [actionTakenForStep, setActionTakenForStep] = useState<string | null>(null);
@@ -171,7 +171,6 @@ export function WizardProgress({
             const isCompleted = completedSteps.includes(step.id);
             const isCurrent = index === currentStep;
             const isPending = !isCompleted && !isCurrent;
-            const stepStatus = getStepStatus(step.id);
 
             return (
               <div key={step.id} className="relative flex gap-4 pb-8 last:pb-4">

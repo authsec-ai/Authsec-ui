@@ -20,7 +20,7 @@ export function RawEditor({ formData, onUpdate, isOpen, onToggle }: RawEditorPro
   const [format, setFormat] = useState<"json" | "yaml">("json");
   const [rawValue, setRawValue] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
-  const [isValidJson, setIsValidJson] = useState(true);
+  const [, setIsValidJson] = useState(true);
 
   // Convert form data to JSON/YAML
   useEffect(() => {
@@ -101,7 +101,7 @@ export function RawEditor({ formData, onUpdate, isOpen, onToggle }: RawEditorPro
     try {
       await navigator.clipboard.writeText(rawValue);
       toast.success("Raw data copied to clipboard");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy data");
     }
   };

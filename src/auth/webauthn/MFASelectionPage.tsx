@@ -23,11 +23,9 @@ interface MFASelectionPageProps {
  * Shown when: first_login: true and currentStep: "mfa_selection"
  */
 export function MFASelectionPage({ 
-  contextType,
   availableMethods,
   onMethodSelect,
   onGetMethods,
-  email,
   isLoading = false
 }: MFASelectionPageProps) {
   const [selectedMethod, setSelectedMethod] = useState<"webauthn" | "totp" | null>(null);

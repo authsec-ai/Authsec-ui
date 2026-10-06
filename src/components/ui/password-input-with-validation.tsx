@@ -39,15 +39,6 @@ export const PasswordInputWithValidation = React.forwardRef<
     return "bg-green-500";
   };
 
-  const getStrengthText = () => {
-    const metCount = validation.requirements.filter(req => req.met).length;
-    if (metCount <= 1) return "Very Weak";
-    if (metCount <= 2) return "Weak";
-    if (metCount <= 3) return "Fair";
-    if (metCount <= 4) return "Good";
-    return "Strong";
-  };
-
   return (
     <div className="space-y-2">
       <div className="relative">

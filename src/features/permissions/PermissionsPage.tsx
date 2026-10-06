@@ -18,7 +18,6 @@ import { PermissionsFilterCard } from "./components/PermissionsFilterCard";
 import { BulkActionsBar } from "./components/BulkActionsBar";
 import { CreatePermissionModal } from "./components/CreatePermissionModal";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -59,7 +58,6 @@ interface SimpleResource {
  * - Real-time data from AuthSec API
  */
 export function PermissionsPage() {
-  const contextualNavigate = useContextualNavigate();
   const standardNavigate = useNavigate();
   const { isAdmin, audience } = useRbacAudience();
   const location = useLocation();

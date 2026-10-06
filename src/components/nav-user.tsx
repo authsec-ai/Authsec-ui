@@ -48,7 +48,6 @@ export function NavUser({
     await signOut();
   };
 
-  const displayUser = authUser || user;
   const displayName = authUser
     ? authUser.first_name && authUser.last_name
       ? `${authUser.first_name} ${authUser.last_name}`

@@ -32,8 +32,6 @@ const actors = [
   },
 ];
 
-const actions: Array<AuditLog["action"]> = ["created", "updated", "deleted", "enabled", "disabled"];
-
 const resourceTypes: Array<AuditLog["resourceType"]> = [
   "user",
   "group",
@@ -43,8 +41,6 @@ const resourceTypes: Array<AuditLog["resourceType"]> = [
   "auth_method",
   "config",
 ];
-
-const severities: Array<AuditLog["severity"]> = ["low", "medium", "high", "critical"];
 
 const categories: Array<AuditLog["category"]> = [
   "identity",
@@ -145,7 +141,7 @@ function generateAuditLog(index: number, minutesAgo: number): AuditLog {
   return log;
 }
 
-function generateResourceName(type: AuditLog["resourceType"], action: AuditLog["action"]): string {
+function generateResourceName(type: AuditLog["resourceType"], _action: AuditLog["action"]): string {
   const names: Record<AuditLog["resourceType"], string[]> = {
     user: [
       "Alice Johnson <alice.johnson@company.com>",

@@ -223,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const createProject = async (name: string, description?: string): Promise<boolean> => {
+  const createProject = async (_name: string, _description?: string): Promise<boolean> => {
     setIsLoading(true);
     try {
       // For now, project creation is not implemented with the new API
@@ -237,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchProject = async (projectId: string): Promise<boolean> => {
+  const switchProject = async (_projectId: string): Promise<boolean> => {
     try {
       // For now, project switching is not implemented with the new API
       toast.error("Project switching not yet implemented with the new API");

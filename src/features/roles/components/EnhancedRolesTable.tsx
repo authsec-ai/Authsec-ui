@@ -34,7 +34,7 @@ export function EnhancedRolesTable({
   selectedRoles: externalSelected = [],
   onSelectRole,
   onSelectAll,
-  onCreateRole,
+  onCreateRole: _onCreateRole,
   onOpenDrawer,
   onEditRole,
   onDuplicateRole,

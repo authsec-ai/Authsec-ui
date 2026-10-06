@@ -55,12 +55,6 @@ function EffectIcon({ effect }: { effect: string }) {
 }
 
 function EffectBadge({ value, label }: { value: string; label?: string }) {
-  const cls =
-    value === "permit"
-      ? "badge--success"
-      : value === "deny"
-      ? "badge--danger"
-      : "badge--warning";
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${

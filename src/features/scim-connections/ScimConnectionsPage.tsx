@@ -60,7 +60,7 @@ export default function ScimConnectionsPage() {
     try { return localStorage.getItem(INFO_KEY) === "1"; } catch { return false; }
   });
 
-  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(INFO_KEY, "1"); } catch {} };
+  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(INFO_KEY, "1"); } catch { /* storage unavailable; ignore */ } };
 
   const handleCreate = async () => {
     try {

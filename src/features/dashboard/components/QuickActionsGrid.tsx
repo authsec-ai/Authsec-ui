@@ -32,8 +32,7 @@ export function QuickActionsGrid({
   status,
   isLoading = false,
 }: QuickActionsGridProps) {
-  const { startWizard, isActive } = useWizard();
-  const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
+  useWizard();
 
   const getAuthMethodsBadge = () => {
     const count = status?.authMethods?.count || 0;

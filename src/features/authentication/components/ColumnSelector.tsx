@@ -27,7 +27,6 @@ interface ColumnSelectorProps {
 }
 
 export function ColumnSelector({ 
-  availableColumns,
   selectedColumns, 
   onColumnsChange, 
   onReset 

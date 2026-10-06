@@ -74,8 +74,6 @@ const authMethods: Array<AuthLog["authMethod"]> = [
   "sms",
 ];
 
-const statuses: Array<AuthLog["status"]> = ["success", "failure", "denied", "suspicious"];
-
 const resources = [
   "/api/v1/users",
   "/api/v1/admin/config",

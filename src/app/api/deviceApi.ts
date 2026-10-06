@@ -93,7 +93,7 @@ export const deviceApi = createApi({
     baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
-    prepareHeaders: (headers, { getState }) => {
+    prepareHeaders: (headers) => {
       // Token will be passed dynamically via endpoint args
       headers.set("Content-Type", "application/json");
       return headers;

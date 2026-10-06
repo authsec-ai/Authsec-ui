@@ -6,7 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { WizardStorage } from "@/features/wizards/utils/wizardStorage";
 import { getWizardConfig } from "@/features/wizards/configs";
 import type { WizardConfig, WizardStep } from "@/features/wizards/types";
@@ -48,7 +48,6 @@ interface WizardProviderProps {
 
 export function WizardProvider({ children }: WizardProviderProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const previousLocation = useRef(location);
 
   const [activeWizard, setActiveWizard] = useState<string | null>(null);

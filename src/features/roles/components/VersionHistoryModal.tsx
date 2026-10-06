@@ -97,7 +97,6 @@ export function VersionHistoryModal({
   const roleVersion = role.version ?? 0;
 
   const versions = getMockVersionHistory(role);
-  const currentVersion = versions.find((v) => v.version === roleVersion);
   const selectedVersionData = selectedVersion
     ? versions.find((v) => v.version === selectedVersion)
     : null;

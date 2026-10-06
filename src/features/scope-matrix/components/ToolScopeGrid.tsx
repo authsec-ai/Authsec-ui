@@ -27,7 +27,7 @@ const riskLevelColors: Record<RiskLevel, string> = {
 };
 
 export function ToolScopeGrid({ rsId, tools, allScopes, onScopeClick }: ToolScopeGridProps) {
-  const [updateToolScopeMap, { isLoading }] = useUpdateToolScopeMapMutation();
+  const [updateToolScopeMap] = useUpdateToolScopeMapMutation();
   const [loadingToolId, setLoadingToolId] = useState<string | null>(null);
 
   const handleAddScope = async (toolId: string, scopeId: string) => {

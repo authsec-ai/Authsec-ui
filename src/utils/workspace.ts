@@ -28,7 +28,6 @@ export function getWorkspaceId(): string | null {
  * @returns The current workspace or null if no workspace is selected
  */
 export function getCurrentWorkspace() {
-  const session = SessionManager.getSession();
   const workspaceId = getWorkspaceId();
   if (!workspaceId) return null;
   

@@ -257,7 +257,7 @@ export function MapRoleToScopeModal({ open, onOpenChange, onSuccess, preselected
       }
       setFormError("Conditions must be a valid JSON object.");
       return null;
-    } catch (error) {
+    } catch {
       setFormError("Conditions must be valid JSON.");
       return null;
     }

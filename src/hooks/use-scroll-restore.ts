@@ -20,7 +20,7 @@ export function useScrollRestore<T extends HTMLElement>(
         if (!Number.isNaN(pos)) {
           node.scrollTop = pos;
         }
-      } catch (_) {}
+      } catch { /* malformed stored position; ignore */ }
     }
 
     const handle = () => {

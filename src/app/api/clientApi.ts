@@ -508,7 +508,7 @@ export const clientApi = baseApi.injectEndpoints({
       DeleteClientResponse,
       DeleteClientRequest
     >({
-      query: ({ workspace_id, client_id }) => ({
+      query: ({ client_id }) => ({
         url: `/authsec/applications/${client_id}`,
         method: "DELETE",
       }),

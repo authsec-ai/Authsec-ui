@@ -17,7 +17,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(520);
-  const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion, isAwaitingPlatformAction } = useWizard();
+  const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion } = useWizard();
   const { density } = useDensity();
 
   const handleRightSidebarToggle = () => {

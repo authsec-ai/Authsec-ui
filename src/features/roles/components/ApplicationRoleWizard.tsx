@@ -90,7 +90,6 @@ export function ApplicationRoleWizard({
     );
   }, [eligibleUsers?.users, userQuery]);
 
-  const selectedApplication = applications.find((app) => app.id === applicationId);
   const canContinue =
     (step === 0 && name.trim().length > 0) ||
     (step === 1 && Boolean(applicationId)) ||

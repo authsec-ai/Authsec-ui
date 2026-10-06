@@ -519,7 +519,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                   access_token: accessToken,
                   expires_in: normalizedTokens?.expires_in || 3600,
                 }).unwrap();
-              } catch (e) {
+              } catch {
                 console.warn(
                   "OIDC login endpoint returned no body or non-standard shape",
                 );

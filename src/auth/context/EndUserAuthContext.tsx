@@ -301,7 +301,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
 
       return true;
-    } catch (e) {
+    } catch {
       toast.error("Failed to get MFA methods");
       return false;
     }

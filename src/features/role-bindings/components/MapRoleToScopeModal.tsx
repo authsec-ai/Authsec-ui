@@ -273,7 +273,7 @@ export function MapRoleToScopeModal({
       }
       setFormError("Conditions must be a valid JSON object.");
       return null;
-    } catch (error) {
+    } catch {
       setFormError("Conditions must be valid JSON.");
       return null;
     }
