@@ -51,7 +51,7 @@ export const useUnifiedProviders = ({
       client_id: oidc.client_ids || oidc.client_id || '',
       is_active: oidc.is_active,
       sort_order: oidc.sort_order,
-      status: oidc.status,
+      status: oidc.status ?? '',
       callback_url: oidc.callback_url,
       hydra_client_id: oidc.hydra_client_id,
       endpoints: oidc.endpoints,

@@ -195,17 +195,19 @@ export type ProviderType = 'oidc' | 'saml';
 export interface ApiOidcProvider {
   provider_name: string;
   display_name: string;
-  client_id: string;
+  client_id?: string;
+  client_ids?: string;
+  provider_type?: string;
   hydra_client_id?: string;
-  callback_url: string;
-  endpoints: {
+  callback_url?: string;
+  endpoints?: {
     auth_url: string;
     token_url: string;
     user_info_url?: string;
   };
   is_active: boolean;
   sort_order: number;
-  status: string;
+  status?: string;
 }
 
 // API SAML Provider (from ListSamlProviders endpoint)
@@ -246,6 +248,7 @@ export interface UnifiedAuthProvider {
   status: string;
 
   // OIDC-specific fields (optional)
+  client_ids?: string;
   callback_url?: string;
   hydra_client_id?: string;
   endpoints?: {
