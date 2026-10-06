@@ -46,7 +46,9 @@ export function VoiceAgentWatcher() {
     { clientId },
     {
       skip: !shouldPoll,
-      pollingInterval: 3000,
+      // Every 10s, and not while the tab is in the background.
+      pollingInterval: 10000,
+      skipPollingIfUnfocused: true,
       refetchOnFocus: true,
       refetchOnReconnect: true,
     }
