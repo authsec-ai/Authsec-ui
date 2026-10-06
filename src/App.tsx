@@ -79,9 +79,6 @@ import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage"
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
 import { AuditLogsPage } from "./features/logging/AuditLogsPage";
 import { M2MLogsPage } from "./features/logging/M2MLogsPage";
-import { VaultPage } from "./features/vault/VaultPage";
-
-import { ImportSecretsPage } from "./features/vault/ImportSecretsPage";
 import ScimConnectionsPage from "./features/scim-connections/ScimConnectionsPage";
 import DirectorySyncPage from "./features/directory-sync/DirectorySyncPage";
 import { RolesPage } from "./features/roles/RolesPage";
@@ -1312,28 +1309,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <DirectorySyncPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/vault"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <VaultPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/vault/import"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ImportSecretsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
