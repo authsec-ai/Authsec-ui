@@ -7,6 +7,10 @@ import { store } from "./app/store.ts";
 import { ThemeProvider } from "./components/theme-provider.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { TooltipProvider } from "./components/ui/tooltip.tsx";
+import { captureLoginTicketFromUrl } from "./auth/loginTicket.ts";
+
+// A SAML sign-in hands its login ticket over in the redirect URL.
+captureLoginTicketFromUrl();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

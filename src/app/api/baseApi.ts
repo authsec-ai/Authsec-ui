@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import config from '../../config';
+import { withLoginTicket } from "../../auth/loginTicket";
 
 // Define base types for the API
 export interface ApiResponse<T> {
@@ -72,7 +73,8 @@ export const withSessionData = (body: any) => {
 // Create the base API using the configured runtime origin.
 export const baseApi = createApi({
   reducerPath: "baseApi",
-  baseQuery,
+  // Sign-in steps carry the login ticket from the first-factor response.
+  baseQuery: withLoginTicket(baseQuery),
   tagTypes: [
     "Auth",
     "AdminAuth",
