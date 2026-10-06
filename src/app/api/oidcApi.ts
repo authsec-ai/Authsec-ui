@@ -332,17 +332,6 @@ export const oidcApi = createApi({
       },
     }),
 
-    // UPDATED: Universal callback handler - no provider in URL path
-    // Provider information is extracted from the state parameter on the backend
-    handleCallback: builder.mutation<CallbackResponse, CallbackRequest>({
-      query: (data) => ({
-        url: "/authsec/hmgr/auth/callback", // Universal callback URL - no provider parameter
-        method: "POST",
-        body: data,
-        credentials: "include",
-      }),
-    }),
-
     // Get login page data
     getLoginPageData: builder.query<
       LoginPageData,
@@ -653,7 +642,6 @@ export const oidcApi = createApi({
 
 export const {
   useExchangeCodeForTokensMutation,
-  useHandleCallbackMutation,
   useLazyGetLoginPageDataQuery,
   useCompleteLocalLoginMutation,
   useInitiateAuthMutation,
