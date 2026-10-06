@@ -35,7 +35,7 @@ export const voiceAgentApi = baseApi.injectEndpoints({
     getPendingVoiceRequests: builder.query<VoicePendingResponse, { clientId: string }>({
       /* Original implementation commented out at request.
       query: ({ clientId }) => ({
-        url: "/uflow/auth/voice/device-pending",
+        url: "/authsec/uflow/auth/voice/device-pending",
         method: "GET",
         params: { client_id: clientId },
       }),
@@ -58,7 +58,7 @@ export const voiceAgentApi = baseApi.injectEndpoints({
     approveVoiceRequest: builder.mutation<{ message?: string }, VoiceApproveRequest>({
       /* Original implementation commented out at request.
       query: (payload) => ({
-        url: "/uflow/auth/voice/device-approve",
+        url: "/authsec/uflow/auth/voice/device-approve",
         method: "POST",
         body: payload,
       }),

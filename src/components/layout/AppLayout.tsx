@@ -5,7 +5,6 @@ import { AppHeader } from "./AppHeader";
 import { AppRightSidebar } from "./AppRightSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ResponsiveSidebarController } from "./ResponsiveSidebarController";
-import { VoiceAgentWatcher } from "@/features/voice-auth/VoiceAgentWatcher";
 import { useWizard } from "@/contexts/WizardContext";
 import { useDensity } from "@/contexts/DensityContext";
 import "../../theme/admin-shell.css";
@@ -107,7 +106,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </div>
       </SidebarProvider>
-      <VoiceAgentWatcher />
+      {/* VoiceAgentWatcher (features/voice-auth) is not mounted: it polled
+          /uflow/auth/voice/device-pending every 3s on every page, without the
+          /authsec prefix, and the backend voice-auth tables do not exist yet
+          (UI-017, AS-047). Mount it again here once voice auth works. */}
     </>
   );
 }
