@@ -1,5 +1,7 @@
 /**
- * Identities — what the workload runs as, and who else does (§2.14.6).
+ * Identity — "who does this workload act as?" (§2.14.6): the role it runs as,
+ * who may assume that role, what the role grants, and any further roles in the
+ * chain.
  *
  * An empty execution section is read from `execution_role_state`, never
  * inferred from a missing relationship: "no role configured", "a role we do
@@ -7,6 +9,7 @@
  * (§2.14.7).
  */
 
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import {
@@ -27,6 +30,8 @@ import { classifyGraphError } from "../shared/graphErrors";
 import { RELATIONSHIP_LABEL, countText } from "../shared/labels";
 import { emptyGiven } from "../shared/listSummary";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { summarizeAccess } from "../shared/access";
+import { useWorkloadAccess, type WorkloadAccess } from "../shared/useWorkloadAccess";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { viaLink } from "../shared/links";
 import { IdentityName } from "../shared/components/IdentityName";
@@ -34,6 +39,8 @@ import { ClaimRow } from "../shared/components/Panel";
 import { TabBody } from "../shared/components/ObjectShell";
 import { CoverageSummary } from "../coverage/CoverageSummary";
 import { SectionList } from "../shared/components/SectionList";
+import { AccessSummaryCard } from "./AccessSummaryCard";
+import { TrustCard } from "./TrustCard";
 
 type From = { ref: WorkloadDetail["ref"]; name: string };
 
@@ -110,13 +117,35 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
   const none = { items: [], next_cursor: null, total_known: true, total: 0 };
   const coverage = q.currentData?.meta.coverage ?? [];
 
+  // The identity the trust and grant cards speak about: the role the workload
+  // runs as, when it resolved to one in a connected account.
+  const role = workload.execution_role.state === "resolved" ? workload.execution_role.identity : null;
+  const workloadAccess = useWorkloadAccess(ws, workload);
+  // The card beside the role's trust says what THAT role grants, so only its
+  // own grants count — not the ECS task execution role's, nor another
+  // configured role's, which the workload-wide summary includes.
+  const access = useMemo<WorkloadAccess>(() => {
+    if (!role) return workloadAccess;
+    const rows = workloadAccess.rows
+      .map((row) => ({ ...row, grants: row.grants.filter((g) => g.via_identity === role) }))
+      .filter((row) => row.grants.length > 0);
+    return {
+      ...workloadAccess,
+      rows,
+      summary: workloadAccess.summary ? summarizeAccess(rows, { partial: workloadAccess.summary.partial }) : null,
+    };
+  }, [workloadAccess, role]);
+  const base = `/iga/estate/${encodeURIComponent(refId(workload.ref))}`;
+  const hasMore = !!(data?.other?.items.length || data?.groups?.items.length || data?.may_assume?.items.length);
+
   return (
     <TabBody ready={!!data} failure={failure} subject="identities" onRetry={() => void q.refetch()} onRefresh={refresh}>
       {data ? (
         <div className="space-y-4">
           {coverage.length ? <CoverageSummary subject="identities" ws={ws} gaps={coverage} accountName={(id) => id} /> : null}
+          {/* Who does it act as? */}
           <SectionList
-            label="Execution identity"
+            label="Acts as"
             first={data.execution ?? none}
             loadMore={more("execution")}
             onStale={onStale}
@@ -127,41 +156,50 @@ export function WorkloadIdentitiesTab({ ws, workload }: { ws: string; workload: 
               <span className="text-(--color-text)">{executionEmpty(data)}</span>
             }
           />
-          <SectionList
-            label="Other roles it is configured with"
-            first={data.other ?? none}
-            loadMore={more("other")}
-            onStale={onStale}
-              onRefresh={refresh}
-            itemKey={(r) => r.claim}
-            render={(r) => <RelationshipBody rel={r} from={from} />}
-            empty={null}
-          />
-          <SectionList
-            label="Groups its identity is a member of"
-            first={data.groups ?? none}
-            loadMore={more("groups")}
-            onStale={onStale}
-              onRefresh={refresh}
-            itemKey={(r) => r.claim}
-            render={(r) => <RelationshipBody rel={r} from={from} />}
-            empty={null}
-          />
-          <SectionList
-            label="Roles its identity may assume"
-            hideCount
-            first={data.may_assume ?? none}
-            loadMore={more("may_assume")}
-            onStale={onStale}
-              onRefresh={refresh}
-            itemKey={(r) => r.claim}
-            render={(r) => <AssumeBody rel={r} from={from} />}
-            empty={null}
-          />
-          {data.execution?.items.length &&
-          !data.other?.items.length &&
-          !data.groups?.items.length &&
-          !data.may_assume?.items.length ? (
+          {/* Who can use that identity?   ·   What does it give the workload? */}
+          {role ? (
+            <div className="grid items-start gap-4 lg:grid-cols-2">
+              <TrustCard ws={ws} identity={role} from={from} />
+              <AccessSummaryCard title="What this identity grants" access={access} allAccessTo={`${base}/resources`} />
+            </div>
+          ) : null}
+          {/* The rest of the identity chain, only when there is some. */}
+          {hasMore ? (
+            <>
+              <SectionList
+                label="Other roles it is configured with"
+                first={data.other ?? none}
+                loadMore={more("other")}
+                onStale={onStale}
+                onRefresh={refresh}
+                itemKey={(r) => r.claim}
+                render={(r) => <RelationshipBody rel={r} from={from} />}
+                empty={null}
+              />
+              <SectionList
+                label="Groups its identity is a member of"
+                first={data.groups ?? none}
+                loadMore={more("groups")}
+                onStale={onStale}
+                onRefresh={refresh}
+                itemKey={(r) => r.claim}
+                render={(r) => <RelationshipBody rel={r} from={from} />}
+                empty={null}
+              />
+              <SectionList
+                label="Roles its identity may assume"
+                hideCount
+                first={data.may_assume ?? none}
+                loadMore={more("may_assume")}
+                onStale={onStale}
+                onRefresh={refresh}
+                itemKey={(r) => r.claim}
+                render={(r) => <AssumeBody rel={r} from={from} />}
+                empty={null}
+              />
+            </>
+          ) : data.execution?.items.length ? (
+            // Said, with the coverage caveat, rather than left as silence.
             <p className="text-xs text-(--color-text-muted)">
               {emptyGiven("No other role, group or assumable role is declared for this workload's identity.", coverage)}
             </p>

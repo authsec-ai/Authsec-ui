@@ -51,7 +51,7 @@ const UNRESOLVED_REASON: Record<string, string> = {
   not_in_inventory: "It matches no identity in any connected account.",
 };
 
-function Overview({ p }: { p: ExternalPrincipalDetail }) {
+function Overview({ p, publishedAt }: { p: ExternalPrincipalDetail; publishedAt?: string | null }) {
   const res = p.resolution;
   return (
     <div className="space-y-4">
@@ -92,6 +92,8 @@ function Overview({ p }: { p: ExternalPrincipalDetail }) {
             <DetailGrid>
               <DetailRow label="First named" value={dayText(p.first_seen_at)} />
               <DetailRow label="Last confirmed" value={<Timestamp iso={p.last_confirmed_at} />} />
+              {/* The header no longer repeats the publication; it is said here. */}
+              {publishedAt ? <DetailRow label="Published" value={<Timestamp iso={publishedAt} />} /> : null}
             </DetailGrid>
           </DrawerSection>
         </CardContent>
@@ -199,7 +201,7 @@ export default function ExternalPrincipalPage() {
   let body = null;
   if (p) {
     // Overview remains for a retired or vanished principal; the other tab says it has no current data.
-    if (active === "overview") body = <Overview p={p} />;
+    if (active === "overview") body = <Overview p={p} publishedAt={retained?.meta.published_at} />;
     else if (gone) body = <RetiredTab name={p.name} lastConfirmed={p.last_confirmed_at} />;
     else if (rev != null) body = <ReferencedBy ws={ws} p={p} />;
   }

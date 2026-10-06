@@ -3,12 +3,12 @@
  * replace a tab when there is nothing to render (SPEC-iga-phase2-graph.md
  * §2.14.5).
  *
- * - The global breadcrumb is Discovery › <list> › <object>; the header is the
- *   detail header (SPEC-console-revamp.md *Summaries*): kind, name, context,
- *   lifecycle with since-when, classification with who decided, the
- *   publication it is read at, and the page's actions. No portrait. On a
- *   workspace tab (the graph) it is its one-row form so the canvas keeps
- *   its height.
+ * - The global breadcrumb is IGA › Discovery › <list> › <object>; the header
+ *   is the detail header (SPEC-console-revamp.md *Summaries*): kind, name,
+ *   context, lifecycle with since-when, classification with who decided, the
+ *   publication it is read at, and the page's actions. No portrait. It is the
+ *   same on every tab, the graph included, so switching tabs never moves or
+ *   truncates it (X-02).
  * - Tabs are routes; a tab whose backend is not deployed is not offered.
  *   The browser URL is the shareable link — investigation state and the
  *   revision rules live in it, so there is no separate Copy link control.
@@ -75,13 +75,13 @@ export interface ObjectHeaderData {
  * with this time; nothing newer is mixed in (SPEC-console-revamp.md
  * *Investigation-context contract*).
  */
-function PublicationStamp({ ws, publishedAt, onRefresh }: { ws: string; publishedAt?: string | null; onRefresh: () => void }) {
+/** Shown only when a newer publication is current: the one header fact that asks for an action. */
+function PublicationStamp({ ws, onRefresh }: { ws: string; onRefresh: () => void }) {
   const { stale } = useGraphRevision(ws);
   useAnnounce(stale ? "A newer publication is current. Refresh to load it." : null);
-  if (!publishedAt && !stale) return null;
+  if (!stale) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-      {publishedAt ? <span className="whitespace-nowrap text-(--color-text-muted)">As of {format(new Date(publishedAt), "d MMM HH:mm")}</span> : null}
       {stale ? (
         <span className="inline-flex items-center gap-2 rounded-md bg-(--color-info-soft) py-0.5 pl-2 pr-0.5 text-(--color-info-text)">
           A newer publication is current
@@ -166,7 +166,7 @@ export function ObjectShell({
           <DecisionBanner
             tone="neutral"
             title={`${object.name} is not in the current publication`}
-            body={`Overview shows what was loaded${object.publishedAt ? ` as of ${format(new Date(object.publishedAt), "d MMM HH:mm")}` : ""}. Changes is still available; the other tabs have no current data.`}
+            body={`Overview shows what was loaded${object.publishedAt ? ` as of ${format(new Date(object.publishedAt), "d MMM HH:mm")}` : ""}. History is still available; the other tabs have no current data.`}
           />
         ) : null}
         {failure && failure.kind !== "revision_stale" ? (
@@ -212,17 +212,30 @@ export function ObjectShell({
           kindLabel
         )
       }
-      description={object ? <ObjectContext ws={ws} object={object} compact={compact} onRefresh={onRefresh} /> : undefined}
+      description={object ? <ObjectContext ws={ws} object={object} onRefresh={onRefresh} /> : undefined}
       actions={
         object ? (
           <>
             {object.actions}
-            {graphTab && !compact ? (
-              <Button asChild variant="outline" size="sm">
-                <Link to={`${base}${graphTab.path}`}>
-                  <Network className="size-3.5" aria-hidden="true" /> Open graph
-                </Link>
-              </Button>
+            {/* Shown on every tab, so the header never shifts (X-02); on the
+                graph tab itself it marks where the reader is. */}
+            {graphTab ? (
+              compact ? (
+                // Where the reader is, not a control: a quiet label in the same
+                // place and size, never a greyed-out button that looks broken.
+                <span
+                  aria-current="page"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-(--color-primary-soft) px-3 text-xs font-medium text-(--color-primary-text)"
+                >
+                  <Network className="size-3.5" aria-hidden="true" /> Viewing Access Graph
+                </span>
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`${base}${graphTab.path}`}>
+                    <Network className="size-3.5" aria-hidden="true" /> Open Access Graph
+                  </Link>
+                </Button>
+              )
             ) : null}
             {object.copy ? <CopyButton value={object.copy.value} label={object.copy.label} what={object.copy.what} /> : null}
           </>
@@ -251,31 +264,26 @@ export function ObjectShell({
 
 /**
  * The header's second line: where it is, whether it is current and since when,
- * who classified it, the publication it is read at. One row on the graph tab.
+ * who classified it, the publication it is read at. The same on every tab, and
+ * it wraps rather than truncating (X-02).
  */
-function ObjectContext({ ws, object, compact, onRefresh }: { ws: string; object: ObjectHeaderData; compact: boolean; onRefresh: () => void }) {
+function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHeaderData; onRefresh: () => void }) {
   const { isOpen: evidenceOpen } = useEvidence();
   const lc = object.lifecycle;
   const exception = lc && lc.state !== "current" ? lc : null;
-  const cls = object.classification;
+  // Account, region, "Current, confirmed …", classification and "As of …" are
+  // no longer repeated here: the Overview states each of them (What it is /
+  // Evidence / Purpose). What stays is what needs attention — a lifecycle that
+  // is not current, and a newer publication to refresh to.
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-      {object.context.length ? <span className={compact ? "max-w-[28ch] truncate" : undefined}>{object.context.join(" · ")}</span> : null}
       {exception ? (
         <span className="inline-flex items-center gap-1.5">
           <StatusBadge tone={exception.tone}>{exception.label}</StatusBadge>
           <span className="text-(--color-text-muted)">{exception.since}</span>
         </span>
-      ) : lc && !compact ? (
-        <span className="text-(--color-text-muted)">{lc.label}, {lc.since}</span>
       ) : null}
-      {cls ? (
-        <span className="inline-flex items-center gap-1.5">
-          <StatusBadge tone={cls.tone}>{cls.label}</StatusBadge>
-          {cls.by && !compact ? <span className="text-(--color-text-muted)">{cls.by}</span> : null}
-        </span>
-      ) : null}
-      <PublicationStamp ws={ws} publishedAt={object.publishedAt} onRefresh={onRefresh} />
+      <PublicationStamp ws={ws} onRefresh={onRefresh} />
       {/* Said once per screen, here, never per row. The graph's status bar and an
           open inspector each say it for themselves, so the header yields to them
           while evidence is open; otherwise it is always on screen. */}

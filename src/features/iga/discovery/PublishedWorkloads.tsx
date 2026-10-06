@@ -14,7 +14,6 @@ import {
   type WorkloadRow,
   type WorkloadSort,
 } from "@/app/api/igaGraphApi";
-import { StatusBadge } from "@/components/console/status";
 import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { HelpTooltip } from "@/components/ui/tooltip";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -25,14 +24,15 @@ import { SortSelect } from "../shared/components/FacetSelect";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
-  CLASSIFICATION_MEANING,
-  CLASSIFICATION_SHORT,
-  CLASSIFICATION_TONE,
+  classificationMeaning,
+  classificationShort,
+  classificationTone,
   RUNTIME_LABEL,
   RUNTIME_SHORT,
   accountLabel,
   accountWithId,
 } from "../shared/labels";
+import { IgaBadge } from "../shared/components/IgaBadge";
 import { useRestartOnListingChanged } from "../shared/listView";
 import { useTrackRevision } from "../shared/revision";
 import { RowName } from "./DiscoveryTable";
@@ -50,6 +50,7 @@ import {
   valid,
 } from "./publishedCommon";
 import { LifecycleCell, PublishedBody, RowActions, SourceGate } from "./PublishedBody";
+import { QuickClassify } from "../classification/QuickClassify";
 
 const MUTED = "text-(--color-text-muted)";
 
@@ -62,9 +63,9 @@ const WORKLOAD_SORTS: { value: WorkloadSort; label: string }[] = [
   { value: "last_confirmed", label: "Last confirmed" },
 ];
 const CLASSIFICATION_VALUES: { value: string; label: string }[] = [
-  { value: "classified_agent", label: "Agent — classified by a person" },
-  { value: "provider_native_agent", label: "Agent — provider-native" },
-  { value: "unclassified", label: "Unclassified" },
+  { value: "unclassified", label: "Unclassified (not yet reviewed)" },
+  { value: "classified_agent", label: "Agent · classified by a person" },
+  { value: "provider_native_agent", label: "Agent · provider-native" },
 ];
 
 export default function PublishedWorkloads(p: ScreenProps) {
@@ -102,7 +103,8 @@ export default function PublishedWorkloads(p: ScreenProps) {
     () => [
       {
         id: "name",
-        header: "Name",
+        header: "Workload",
+        label: "Workload",
         primary: true,
         minWidth: 240,
         cell: ({ row }) => (
@@ -113,6 +115,7 @@ export default function PublishedWorkloads(p: ScreenProps) {
             selected={p.url.sel === refId(row.original.ref)}
             context={[RUNTIME_SHORT[row.original.runtime_kind], row.original.region]}
             account={row.original.account ? accountLabel(row.original.account) : "Unknown account"}
+            lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
           />
         ),
       },
@@ -121,35 +124,47 @@ export default function PublishedWorkloads(p: ScreenProps) {
         header: () => (
           <span className="inline-flex items-center gap-1.5">
             Classification
-            <HelpTooltip content="Whether this workload is recorded as an agent. Provider-native agents are agents by what they are; anything else stays unclassified until someone records a decision. Unclassified is not a problem." />
+            <HelpTooltip content="Whether this workload is recorded as an agent. Provider-native agents are agents by type. Everything else stays unclassified until someone reviews it." />
           </span>
         ),
         label: "Classification",
         priority: 1,
-        approxWidth: 128,
+        approxWidth: 150,
         cardSummary: true,
         cell: ({ row }) => (
-          <span title={CLASSIFICATION_MEANING[row.original.classification]}>
-            <StatusBadge tone={CLASSIFICATION_TONE[row.original.classification]}>{CLASSIFICATION_SHORT[row.original.classification]}</StatusBadge>
-          </span>
+          <IgaBadge tone={classificationTone(row.original.classification)} title={classificationMeaning(row.original.classification)}>
+            {classificationShort(row.original.classification)}
+          </IgaBadge>
         ),
         detail: (r) => (
           <span>
-            {CLASSIFICATION_SHORT[r.classification]} <span className={MUTED}>— {CLASSIFICATION_MEANING[r.classification]}</span>
+            {classificationShort(r.classification)} <span className={MUTED}>— {classificationMeaning(r.classification)}</span>
           </span>
         ),
       },
       {
+        id: "runtime",
+        header: "Runtime",
+        label: "Runtime",
+        priority: 1,
+        approxWidth: 150,
+        cell: ({ row }) => <span className="text-sm">{RUNTIME_LABEL[row.original.runtime_kind]}</span>,
+      },
+      {
         id: "lifecycle",
+        defaultHidden: true,
+        // Shown whenever retired rows can be in the list, so they never look current.
+        alwaysVisible: lifecycle !== undefined,
         header: "Lifecycle",
         priority: 1,
         approxWidth: 100,
         cardSummary: true,
         cell: ({ row }) => <LifecycleCell lifecycle={row.original.lifecycle} state={row.original.state} />,
       },
-      { id: "account", header: "Account", priority: 2, approxWidth: 170, cell: ({ row }) => <AccountCell account={row.original.account} /> },
+      { id: "account", header: "Account", defaultHidden: true, priority: 2, approxWidth: 170, cell: ({ row }) => <AccountCell account={row.original.account} /> },
       {
         id: "region",
+        defaultHidden: true,
         header: "Region",
         priority: 3,
         approxWidth: 120,
@@ -157,6 +172,7 @@ export default function PublishedWorkloads(p: ScreenProps) {
       },
       {
         id: "confirmed",
+        defaultHidden: true,
         header: "Last confirmed",
         priority: 3,
         approxWidth: 150,
@@ -183,9 +199,9 @@ export default function PublishedWorkloads(p: ScreenProps) {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [p.url.sel, navigate],
+    [p.url.sel, navigate, lifecycle],
   );
-  const chrome = useListChrome("discovery-published-workloads", columns);
+  const chrome = useListChrome("discovery-published-workloads-v2", columns);
 
   const specs: FacetSpec[] = [
     sourceSpec(p, sourceFacet(p.sources, facets?.account)),
@@ -206,7 +222,6 @@ export default function PublishedWorkloads(p: ScreenProps) {
       kind: "choice",
       value: classification,
       anyLabel: "Any classification",
-      note: "Each workload is in exactly one of these; they never overlap.",
       ...fixedFacet(facets, "classification", CLASSIFICATION_VALUES),
       onChange: (v) => p.url.patch({ classification: v }),
     },
@@ -227,7 +242,7 @@ export default function PublishedWorkloads(p: ScreenProps) {
         p={p}
         c={c}
         list={list}
-        tableId="discovery-published-workloads"
+        tableId="discovery-published-workloads-v2"
         subject="workloads"
         columns={columns}
         getRowId={(r) => refId(r.ref)}
@@ -259,6 +274,8 @@ export default function PublishedWorkloads(p: ScreenProps) {
                     : undefined,
             detailsHref: `/iga/estate/${refId(r.ref)}`,
             graphHref: `/iga/estate/${refId(r.ref)}/graph`,
+            // Keyed by the workload, so one workload's message never shows on the next.
+            actions: <QuickClassify key={refId(r.ref)} ws={p.ws} workloadRef={r.ref} name={r.name} />,
           };
         }}
       />

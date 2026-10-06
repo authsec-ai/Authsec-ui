@@ -88,7 +88,13 @@ export function CopyableId({ value, label = "ARN" }: { value: string; label?: st
           event.stopPropagation();
           void copyToClipboard(value, label);
         }}
-        className="no-row-click grid size-5 flex-none place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus-ring) group-hover:opacity-100"
+        // Visible at rest, not only on hover (UX proposal §4, Cloud Inventory:
+        // "ARN with copy button"). The button was already here and already
+        // worked — at `opacity-0` nobody could tell, so the ARN read as
+        // un-copyable text and people selected it by hand. Quiet enough at 60%
+        // that a long list does not turn into a column of icons, and it still
+        // comes fully forward on hover and focus.
+        className="no-row-click grid size-5 flex-none place-items-center rounded text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-focus-ring) group-hover:opacity-100"
       >
         <Copy className="size-3" />
       </button>

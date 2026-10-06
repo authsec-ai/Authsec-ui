@@ -17,6 +17,8 @@ import type { GraphAccount } from "@/app/api/igaGraphApi";
 import { useAdaptiveColumnShown } from "@/components/ui/adaptive-table-context";
 
 import { accountLabel } from "../labels";
+import { formatAccountId } from "../ids";
+import { WRAP_ID_CLASS, wrapId } from "./wrapText";
 
 export function NameCell({
   to,
@@ -53,9 +55,9 @@ export function AccountCell({ account }: { account: GraphAccount | null }) {
   return (
     <div className="min-w-0">
       <p className="truncate text-sm" title={named ? `${account.label} (${account.id})` : account.id}>
-        {named ? account.label : <span className="font-mono text-xs">{account.id}</span>}
+        {named ? account.label : <span className="font-mono text-xs">{formatAccountId(account.id)}</span>}
       </p>
-      {named ? <p className="truncate font-mono text-[11px] text-(--color-text-muted)">{account.id}</p> : null}
+      {named ? <p className="truncate font-mono text-xs text-(--color-text-muted)">{formatAccountId(account.id)}</p> : null}
       {/* Muted, not warning. This is an ACCOUNT-level condition rendered once
           per ROW, so a revoked account painted every row of the table orange —
           and `GraphAccount` carries only `connected`, so this cannot tell a
@@ -63,10 +65,11 @@ export function AccountCell({ account }: { account: GraphAccount | null }) {
           for both. Discovery's source notices already report each at the top
           of the page with the right severity: neutral "Revoked", warning
           "Authentication failed". The fact still belongs on the row; the alarm does not. */}
-      {!account.connected ? <p className="text-[11px] text-(--color-text-muted)">Not connected</p> : null}
+      {!account.connected ? <p className="text-xs text-(--color-text-muted)">Not connected</p> : null}
     </div>
   );
 }
+
 
 /** A long identifier: clipped in a column, whole in details, always copyable. */
 export function CopyValue({ value, label = "Copy" }: { value: string; label?: ReactNode }) {
@@ -99,7 +102,7 @@ export function CopyValue({ value, label = "Copy" }: { value: string; label?: Re
 export function CopyValueWrapped({ value }: { value: string }) {
   return (
     <span className="flex items-start gap-1.5">
-      <span className="min-w-0 flex-1 break-all font-mono text-[13px] leading-5 text-(--color-text)">{value}</span>
+      <span className={`min-w-0 flex-1 ${WRAP_ID_CLASS} font-mono text-[13px] leading-5 text-(--color-text)`}>{wrapId(value)}</span>
       <button
         type="button"
         aria-label={`Copy ${value}`}

@@ -17,6 +17,7 @@ const SUMMARY: Record<string, string> = {
   policy_blocked: "Blocked by a policy",
   deployment_misconfigured: "AuthSec configuration problem",
   external_id_not_issued: "External ID does not match",
+  external_id_unreadable: "External ID could not be read",
   credential_invalid: "Credential is unusable",
   scope_invalid: "Connection settings are invalid",
 };
@@ -39,7 +40,23 @@ export function cloudConnectorErrorSummary(
   if (!raw) return undefined;
   const code = lastErrorCode?.trim();
   if (code && SUMMARY[code]) return SUMMARY[code];
-  return raw;
+  return safeErrorProse(raw);
+}
+
+/** What the console says when the stored external ID could not be read. */
+export const EXTERNAL_ID_UNREADABLE_PROSE =
+  "AuthSec could not read the external ID for this role. Try again shortly, and reconnect the account if it persists";
+
+/**
+ * Backend error prose made safe to show. Rows written before the backend
+ * stopped doing so can carry a secrets-store error that names the secret's
+ * path (workspace id and account included). Those are replaced with the plain
+ * cause; anything else passes through unchanged. Returned without a trailing
+ * full stop, so callers can append their own sentence.
+ */
+export function safeErrorProse(raw: string): string {
+  if (/no secret found at path|kv\/data\/|\/cloud-discovery\//i.test(raw)) return EXTERNAL_ID_UNREADABLE_PROSE;
+  return raw.replace(/\.\s*$/, "");
 }
 
 /**

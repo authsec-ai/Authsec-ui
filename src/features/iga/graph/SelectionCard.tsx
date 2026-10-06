@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { accountWithId, limitationText } from "../shared/labels";
 import { CategoryChip } from "../shared/components/CategoryChip";
 import { Timestamp } from "../shared/components/Timestamp";
+import { WrapId } from "../shared/components/WrapId";
 import { EDGE_MEANING, edgeVerb, frontierLabel, independentCount, markedLimitations } from "./graphLabels";
 import { describeNode, type NodeCategory } from "./nodeView";
 import { frontierKey, type FrontierControl, type VisualEdge, type VisualNode } from "./types";
@@ -85,7 +86,7 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
   const d = describeNode(v, rootAccountId);
   // A reference already in the title is not stated again as a fact.
   const refFact = (label: string): [string, ReactNode][] =>
-    first.text && first.text !== d.title ? [[label, <span className="break-all font-mono text-xs">{first.text}</span>]] : [];
+    first.text && first.text !== d.title ? [[label, <WrapId className="font-mono text-xs">{first.text}</WrapId>]] : [];
   const { out, inn, name } = relatives(v, edges, nodes);
   const facts: [string, ReactNode][] = [];
   let sentence: string;
@@ -125,7 +126,7 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
       const direct = first.used_by_count;
       if (direct && first.kind !== "iam_group")
         facts.push([
-          "Direct bindings",
+          "Used by",
           direct.value == null ? "Not known" : `${direct.exact ? "" : "at least "}${direct.value} workload${direct.value === 1 ? "" : "s"} directly`,
         ]);
       const trusts = inn("can_assume").length;
@@ -175,9 +176,9 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
     facts.push(["Statements", `${count} in ${policies.length ? policies.join(", ") : "a policy"}`]);
     // The resource's own text, unless the title already carries it.
     if (resTo?.text && resTo.text !== to)
-      facts.push([resTo.kind === "selector" ? "Pattern" : "Resource", <span className="break-all font-mono text-xs">{resTo.text}</span>]);
+      facts.push([resTo.kind === "selector" ? "Pattern" : "Resource", <WrapId className="font-mono text-xs">{resTo.text}</WrapId>]);
     if (e.summary?.exclusions.length)
-      facts.push(["Except", <span className="break-all font-mono text-xs">{e.summary.exclusions.join(", ")}</span>]);
+      facts.push(["Except", <WrapId className="font-mono text-xs">{e.summary.exclusions.join(", ")}</WrapId>]);
   } else if (e.kind === "grant" && e.members.length > 1) {
     facts.push(["Grants", `${e.members.length} independent grants`]);
   }

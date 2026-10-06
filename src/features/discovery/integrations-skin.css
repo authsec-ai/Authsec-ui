@@ -1,0 +1,58 @@
+/**
+ * What is true of Discovery → Integrations and of no other page.
+ *
+ * Everything this page shares with the rest of the console — palette, cards,
+ * toolbar, filter pills, table header and rows, status badges, pagination,
+ * row actions — now lives in components/layout/iga-pages-skin.css and applies
+ * to every /iga/* route. Only page-unique rules belong here.
+ *
+ * Scope: `[data-skin="integrations-v2"]`, set by ConsolePage's `skin` prop.
+ * Unlayered, for the same reason the shared file is.
+ */
+
+/* Row height. This page's Integration cell is two lines (account id over
+   account kind), which 68px rows suit. It is deliberately NOT in the shared
+   layer: a dense single-line list would only lose rows on screen for it. */
+[data-skin="integrations-v2"] [data-slot="table-cell"] {
+  height: 68px;
+}
+
+[data-skin="integrations-v2"] .integration-logo {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-subtle);
+  background: #ffffff;
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, 0.05);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+
+[data-skin="integrations-v2"] .cadence-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  background: #eff5ff;
+  border: 1px solid #d9e6fb;
+  color: #1d4ed8;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+
+.dark [data-skin="integrations-v2"] .cadence-badge,
+[data-theme="dark"] [data-skin="integrations-v2"] .cadence-badge {
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(96, 165, 250, 0.26);
+  color: #93c5fd;
+}
+

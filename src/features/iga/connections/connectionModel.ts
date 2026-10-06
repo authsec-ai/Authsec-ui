@@ -306,6 +306,10 @@ function reasonAction(c: Connection, code: string | null): string {
       return "A policy refused the read. Whoever owns the policy has to allow AuthSec through it.";
     case "deployment_misconfigured":
       return "This is an AuthSec configuration problem, not yours. Contact support.";
+    case "external_id_unreadable":
+      return c.capabilities.verify
+        ? "AuthSec could not read this connection's stored ExternalId. Verify the connection; if that fails, reconnect the account."
+        : "AuthSec could not read this connection's stored ExternalId. Reconnect the account.";
     case "external_id_not_issued":
       return checkThenVerify(c, "Use the ExternalId AuthSec issued for this workspace in the role's trust policy");
     case "credential_invalid":

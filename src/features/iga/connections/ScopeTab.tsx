@@ -6,14 +6,12 @@
  * when it is connected.
  */
 
-import { useState } from "react";
 
 import type { Connection } from "@/app/api/connectionsApi";
 import { useGetAwsConnectorQuery, useGetGcpConnectorQuery } from "@/app/api/cloudDiscoveryApi";
 import { collectorConfigFromSource } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
-import { Button } from "@/components/ui/button";
 import { GitHubRepositoryPanel } from "@/features/discovery/GitHubRepositoryPanel";
 import { AWSRegionEditor } from "@/features/discovery/cloud/aws/AWSRegionEditor";
 import { CopyValue, Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
@@ -21,35 +19,30 @@ import { CopyValue, Fact, Facts, Meta, Panel } from "@/features/iga/shared/compo
 import type { ActionSet } from "./connectionModel";
 import { awsAttrs, gcpScopeRows, useSourceFacts } from "./providerData";
 
-function AwsScope({ c, actions, startEditing }: { c: Connection; actions: ActionSet; startEditing: boolean }) {
+function AwsScope({ c, actions, onScan }: { c: Connection; actions: ActionSet; onScan?: () => Promise<boolean> }) {
   const q = useGetAwsConnectorQuery(c.id);
-  const [editing, setEditing] = useState(startEditing && actions.editScope);
   if (q.isError && !q.data) {
     return <LoadFailurePanel failure={loadFailureOf(q.error) ?? "failed"} subject="this account's regions" permission="discovery:read" onRetry={() => void q.refetch()} />;
   }
   const regions = awsAttrs(q.data)?.regions ?? [];
   return (
     <Panel
-      title="Regions"
-      description="The AWS regions whose workloads are scanned. IAM identities, policies and resources are account-wide."
-      actions={
-        actions.editScope && !editing ? (
-          <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={!q.data}>
-            Edit regions
-          </Button>
-        ) : undefined
-      }
+      title="Regions to scan"
+      description="Workloads are regional. IAM is always read account-wide."
     >
       {!q.data ? (
         <div className="h-12 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading regions" />
-      ) : editing ? (
-        <AWSRegionEditor connectorId={c.id} onDone={() => setEditing(false)} />
+      ) : actions.editScope ? (
+        // The checklist is the view (2026-10-06 design): nothing to open first.
+        <AWSRegionEditor inline connectorId={c.id} current={regions} onDone={() => undefined} // No scan to request while one is queued or running: the save applies to the next one.
+          onSaved={actions.scan && c.scan.state !== "queued" && c.scan.state !== "running" ? onScan : undefined}
+        />
       ) : (
         <Facts>
           <Fact label="Scanned">{regions.length ? <span className="font-mono text-xs">{regions.join(", ")}</span> : "No regions recorded"}</Fact>
         </Facts>
       )}
-      {!actions.editScope && !editing ? <Meta className="mt-3">An administrator can change the regions.</Meta> : null}
+      {!actions.editScope ? <Meta className="mt-3">An administrator can change the regions.</Meta> : null}
     </Panel>
   );
 }
@@ -133,10 +126,10 @@ function GitHubScope({ c, actions }: { c: Connection; actions: ActionSet }) {
   );
 }
 
-export function ScopeTab({ c, actions, startEditing }: { c: Connection; actions: ActionSet; startEditing: boolean }) {
+export function ScopeTab({ c, actions, onScan }: { c: Connection; actions: ActionSet; onScan?: () => Promise<boolean> }) {
   switch (c.provider) {
     case "aws":
-      return <AwsScope c={c} actions={actions} startEditing={startEditing} />;
+      return <AwsScope c={c} actions={actions} onScan={onScan} />;
     case "gcp":
       return <GcpScope c={c} />;
     case "k8s":

@@ -8,7 +8,7 @@ import { format } from "date-fns";
 
 import { useGetWorkloadClassificationHistoryQuery } from "@/app/api/igaGraphApi";
 
-import { CLASSIFICATION_LABEL } from "../shared/labels";
+import { classificationLabel } from "../shared/labels";
 
 export function ClassificationHistory({ ws, id }: { ws: string; id: string }) {
   const q = useGetWorkloadClassificationHistoryQuery({ ws, id });
@@ -29,7 +29,7 @@ export function ClassificationHistory({ ws, id }: { ws: string; id: string }) {
     <ol className="space-y-2">
       {rows.map((d, i) => (
         <li key={d.id ?? i} className="text-sm">
-          <span className="font-medium">{d.undoes_decision_id ? "Undone" : CLASSIFICATION_LABEL[d.decision]}</span>
+          <span className="font-medium">{d.undoes_decision_id ? "Undone" : classificationLabel(d.decision)}</span>
           <span className="text-(--color-text-muted)">
             {" "}
             by {d.decided_by.display}{d.decided_at ? ` · ${format(new Date(d.decided_at), "d MMM yyyy, HH:mm")}` : ""}

@@ -13,7 +13,6 @@ import {
   type ResourceRow,
   type ResourceSort,
 } from "@/app/api/igaGraphApi";
-import { StatusBadge } from "@/components/console/status";
 import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -23,6 +22,7 @@ import { SortSelect } from "../shared/components/FacetSelect";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId } from "../shared/labels";
+import { IgaBadge } from "../shared/components/IgaBadge";
 import { useRestartOnListingChanged } from "../shared/listView";
 import { useTrackRevision } from "../shared/revision";
 import { RowName } from "./DiscoveryTable";
@@ -84,7 +84,8 @@ export default function PublishedResources(p: ScreenProps) {
     () => [
       {
         id: "text",
-        header: "Resource or selector",
+        header: "Resource",
+        label: "Resource",
         primary: true,
         minWidth: 240,
         cell: ({ row }) => (
@@ -95,19 +96,21 @@ export default function PublishedResources(p: ScreenProps) {
             selected={p.url.sel === refId(row.original.ref)}
             context={[row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service, row.original.region]}
             account={row.original.account ? accountLabel(row.original.account) : "Unknown account"}
+            lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
           />
         ),
       },
       {
         id: "kind",
-        header: "Representation",
+        header: "Reference",
+        label: "Reference",
         priority: 1,
         approxWidth: 150,
         cardSummary: true,
         cell: ({ row }) => (
-          <span title={RESOURCE_KIND_NOTE[row.original.kind]}>
-            <StatusBadge tone={row.original.kind === "external" ? "warning" : "neutral"}>{RESOURCE_KIND_LABEL[row.original.kind]}</StatusBadge>
-          </span>
+          <IgaBadge tone={row.original.kind === "external" ? "warning" : "neutral"} title={RESOURCE_KIND_NOTE[row.original.kind]}>
+            {RESOURCE_KIND_LABEL[row.original.kind]}
+          </IgaBadge>
         ),
         detail: (r) => (
           <span>
@@ -116,16 +119,31 @@ export default function PublishedResources(p: ScreenProps) {
         ),
       },
       {
+        id: "resource_type",
+        header: "Kind",
+        label: "Kind",
+        priority: 1,
+        approxWidth: 160,
+        cell: ({ row }) => {
+          const t = row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service;
+          return <span className="text-sm">{t ? t.charAt(0).toUpperCase() + t.slice(1) : "Not stated"}</span>;
+        },
+      },
+      {
         id: "lifecycle",
+        defaultHidden: true,
+        // Shown whenever retired rows can be in the list, so they never look current.
+        alwaysVisible: lifecycle !== undefined,
         header: "Lifecycle",
         priority: 1,
         approxWidth: 100,
         cardSummary: true,
         cell: ({ row }) => <LifecycleCell lifecycle={row.original.lifecycle} state={row.original.state} />,
       },
-      { id: "account", header: "Account", priority: 2, approxWidth: 160, cell: ({ row }) => <AccountCell account={row.original.account} /> },
+      { id: "account", header: "Account", defaultHidden: true, priority: 2, approxWidth: 160, cell: ({ row }) => <AccountCell account={row.original.account} /> },
       {
         id: "region",
+        defaultHidden: true,
         header: "Region",
         priority: 3,
         approxWidth: 120,
@@ -133,6 +151,7 @@ export default function PublishedResources(p: ScreenProps) {
       },
       {
         id: "confirmed",
+        defaultHidden: true,
         header: "Last confirmed",
         priority: 3,
         approxWidth: 150,
@@ -158,9 +177,9 @@ export default function PublishedResources(p: ScreenProps) {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [p.url.sel, navigate],
+    [p.url.sel, navigate, lifecycle],
   );
-  const chrome = useListChrome("discovery-published-resources", columns);
+  const chrome = useListChrome("discovery-published-resources-v2", columns);
 
   const kindFacet = fixedFacet(facets, "kind", [
     { value: "exact", label: RESOURCE_KIND_LABEL.exact },
@@ -219,7 +238,7 @@ export default function PublishedResources(p: ScreenProps) {
         p={p}
         c={c}
         list={list}
-        tableId="discovery-published-resources"
+        tableId="discovery-published-resources-v2"
         subject="resources"
         columns={columns}
         getRowId={(r) => refId(r.ref)}

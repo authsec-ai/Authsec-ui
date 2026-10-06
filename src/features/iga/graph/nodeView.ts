@@ -48,7 +48,7 @@ export interface Indicator {
   tone: IndicatorTone;
 }
 
-export type NodeIcon = "workload" | "role" | "user" | "group" | "external" | "statement" | "resource" | "selector" | "more";
+export type NodeIcon = "workload" | "role" | "user" | "group" | "external" | "statement" | "resource" | "selector" | "wildcard" | "more";
 
 /**
  * What KIND of thing a card is — drawn with the `--color-object-*` tokens.
@@ -73,6 +73,38 @@ export interface NodeDescription {
   frontier: GraphFrontier[];
   /** Expansion entries not drawn on the card (offered in the inspector). */
   frontierHidden: number;
+  /** A selector that matches everything (`*`): drawn as a red, dashed "All resources" card (G-06). */
+  wildcard?: boolean;
+}
+
+const SERVICE_NAME: Record<string, string> = {
+  s3: "S3", ec2: "EC2", iam: "IAM", lambda: "Lambda", dynamodb: "DynamoDB", sqs: "SQS", sns: "SNS",
+  kms: "KMS", secretsmanager: "Secrets Manager", ssm: "Systems Manager", ecs: "ECS", ecr: "ECR",
+  rds: "RDS", logs: "CloudWatch Logs", bedrock: "Bedrock", sts: "STS", states: "Step Functions",
+};
+
+/**
+ * The card title for a wildcard: "All resources" only for a bare `*`. An ARN
+ * wildcard is bounded by its service, so it says which ("All S3 resources").
+ */
+export function wildcardTitle(text: string): string {
+  const svc = text.trim().split(":")[2];
+  if (!svc || svc === "*") return "All resources";
+  return `All ${SERVICE_NAME[svc] ?? svc} resources`;
+}
+
+/** A selector whose pattern matches every resource: `*`, or an ARN whose resource part is only `*`. */
+export function isWildcardPattern(text: string): boolean {
+  const t = text.trim();
+  return t === "*" || /^arn:[^:]*:[^:]*:[^:]*:[^:]*:\*$/.test(t) || /^arn:[^:]*:[^:]*:::\*$/.test(t);
+}
+
+/** Characters of the card title that fit on one line (13px semibold in a 240px card). */
+const TITLE_CHARS_PER_LINE = 28;
+
+/** How many lines the card title takes: two at most, so a long name is never cut to one (G-05). */
+export function titleLines(title: string): 1 | 2 {
+  return title.length > TITLE_CHARS_PER_LINE ? 2 : 1;
 }
 
 const ICON_OF: Record<GraphNodeKind, NodeIcon> = {
@@ -100,12 +132,14 @@ const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
 };
 
 const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
-  iam_role: "Identity · Role",
-  iam_user: "Identity · User",
-  iam_group: "Identity · Group",
-  exact: "Resource · Exact reference",
-  selector: "Resource · Selector",
-  external: "External resource",
+  // The header names the kind of thing in AWS's own words, so the name under
+  // it reads as "this IAM role is called …".
+  iam_role: "Identity · IAM role",
+  iam_user: "Identity · IAM user",
+  iam_group: "Identity · IAM group",
+  exact: "Resource · Specific resource",
+  selector: "Resource · Pattern",
+  external: "Resource · Outside connected accounts",
 };
 
 const NOUN_OF: Partial<Record<GraphNodeKind, [string, string]>> = {
@@ -141,23 +175,38 @@ function accountIndicator(node: GraphNode, rootAccountId: string | null): Indica
 }
 
 /** The line of context under the type, or null when none applies. */
+/** "AWS account prod (4294…)" — the line says what the number is. */
+function accountLine(node: GraphNode): string {
+  return node.account ? `AWS account ${accountLabel(node.account)}` : "AWS account not known";
+}
+
+/** "lambda_function" → "Lambda function". */
+function typeWords(type: string): string {
+  const t = type.replace(/_/g, " ").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * The card's second line, every value named for what it is: an account is
+ * "AWS account …", a statement's policy is "Policy …". A bare 12-digit number
+ * under a name left the reader to guess what it was.
+ */
 function contextOf(node: GraphNode): string | null {
   switch (node.kind) {
     case "workload":
-      return node.account ? accountLabel(node.account) : "Account not known";
     case "iam_role":
     case "iam_user":
     case "iam_group":
-      return node.account ? accountLabel(node.account) : "Account not known";
+      return accountLine(node);
     case "external_principal":
       // Only AWS principals have an account; for a service or an identity
       // provider the issuer or subject is the context, not "Unknown account".
-      return node.account ? accountLabel(node.account) : node.issuer ?? node.subject ?? null;
+      return node.account ? accountLine(node) : node.issuer ? `Issuer ${node.issuer}` : node.subject ? `Subject ${node.subject}` : null;
     case "statement":
-      return [node.policy, node.sid ? `Sid ${node.sid}` : null].filter(Boolean).join(" · ") || null;
+      return [node.policy ? `Policy ${node.policy}` : null, node.sid ? `Sid ${node.sid}` : null].filter(Boolean).join(" · ") || null;
     default:
       // A resource's account is stated only when the reference names one.
-      return [node.type && node.type !== "unknown" ? node.type.replace(/_/g, " ") : null, node.account ? accountLabel(node.account) : null]
+      return [node.type && node.type !== "unknown" ? typeWords(node.type) : null, node.account ? accountLine(node) : null]
         .filter(Boolean)
         .join(" · ") || null;
   }
@@ -263,11 +312,13 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
     .filter((i) => BADGE_ORDER.includes(i.key))
     .sort((a, b) => BADGE_ORDER.indexOf(a.key) - BADGE_ORDER.indexOf(b.key))
     .slice(0, MAX_BADGES);
+  const wildcard = first.kind === "selector" && v.members.length === 1 && isWildcardPattern(first.text ?? first.label);
   return {
-    icon: ICON_OF[first.kind],
+    icon: wildcard ? "wildcard" : ICON_OF[first.kind],
     category: CATEGORY_OF[first.kind],
-    title: first.label,
-    type: typeOf(v),
+    title: wildcard ? wildcardTitle(first.text ?? first.label) : first.label,
+    type: wildcard ? `Resource · Wildcard (${first.text ?? first.label})` : typeOf(v),
+    wildcard,
     context: v.members.length > 1 && first.kind === "statement"
       ? [...new Set(v.members.map((m) => m.policy).filter(Boolean))].join(", ") || null
       : contextOf(first),
@@ -280,7 +331,7 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
 
 /** The card's exact size: the layout reserves this, and the card is drawn at it. */
 export function nodeSize(d: NodeDescription): { width: number; height: number } {
-  let h = BORDER + HEADER + BODY_PAD_TOP + TITLE + BODY_PAD_BOTTOM;
+  let h = BORDER + HEADER + BODY_PAD_TOP + TITLE * titleLines(d.title) + BODY_PAD_BOTTOM;
   if (d.context) h += LINE;
   if (d.indicators.length) h += INDICATORS;
   if (d.frontier.length || d.frontierHidden) h += FRONTIER_ROW;

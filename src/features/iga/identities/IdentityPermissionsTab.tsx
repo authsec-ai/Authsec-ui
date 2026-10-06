@@ -27,11 +27,14 @@ import { DrawerSection } from "@/components/console/detail";
 import { StatusBadge } from "@/components/console/status";
 
 import { classifyGraphError } from "../shared/graphErrors";
-import { POLICY_KIND_LABEL, REL_STATE_TONE, RESOURCE_KIND_LABEL, agoText, statementLabel } from "../shared/labels";
+import { SCOPE_LABEL, accessScope, isFullAdmin } from "../shared/access";
+import { IgaBadge } from "../shared/components/IgaBadge";
+import { POLICY_KIND_LABEL, REL_STATE_TONE, agoText, statementLabel } from "../shared/labels";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { ActionList } from "../shared/components/ActionList";
 import { Fact, Facts } from "../shared/components/Panel";
+import { WRAP_ID_CLASS, wrapId } from "../shared/components/wrapText";
 import { viaLink } from "../shared/links";
 import { TabBody } from "../shared/components/ObjectShell";
 
@@ -44,6 +47,18 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
     <li className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge tone={s.effect === "deny" ? "warning" : "neutral"}>{s.effect === "deny" ? "Deny" : "Allow"}</StatusBadge>
+        {isFullAdmin({
+          effect: s.effect,
+          actions: s.actions,
+          resources: positive.map((t) => t.text),
+          conditional: s.condition != null,
+          excluded: excluded.length > 0,
+          current: s.state === "current",
+        }) ? (
+          <IgaBadge tone="danger" title="Allows every action on every resource. No condition or exclusion narrows it; Deny statements and permissions boundaries are not evaluated.">
+            Full access
+          </IgaBadge>
+        ) : null}
         <span className="text-[13px] font-medium text-(--color-text)">{statementLabel(s)}</span>
         {s.state !== "current" ? <StatusBadge tone={REL_STATE_TONE[s.state]}>{s.state}</StatusBadge> : null}
         {(s.revision_count ?? 0) > 1 ? (
@@ -71,13 +86,13 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
                 return (
                   <span key={t.ref} className="flex flex-wrap items-center gap-2">
                     {path ? (
-                      <Link {...viaLink(path, from)} className="break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs text-(--color-primary-text) hover:underline">
-                        {t.text}
+                      <Link {...viaLink(path, from)} className={`${WRAP_ID_CLASS} rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs text-(--color-primary-text) hover:underline`}>
+                        {wrapId(t.text)}
                       </Link>
                     ) : (
-                      <code className="break-all rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs">{t.text}</code>
+                      <code className={`${WRAP_ID_CLASS} rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs`}>{wrapId(t.text)}</code>
                     )}
-                    <span className="text-xs text-(--color-text-muted)">{RESOURCE_KIND_LABEL[t.kind]}</span>
+                    <span className="text-xs text-(--color-text-muted)">{SCOPE_LABEL[accessScope(t)]}</span>
                   </span>
                 );
               })}

@@ -154,10 +154,13 @@ export function Breadcrumb() {
   if (tail && (location.pathname === tail.path || location.pathname.startsWith(`${tail.path}/`))) {
     if (tail.list?.parent) {
       // Discovery › <list>: replaces the URL's own segments (IGA › Workloads),
-      // which name a route, not where the reader came from.
+      // which name a route, not where the reader came from. The console's own
+      // "IGA" crumb stays, so an object page reads Home › IGA › Discovery ›
+      // <list> › <object> like every other IGA page (X-01).
+      const keep = breadcrumbs[1]?.label === "IGA" ? 2 : 1;
       breadcrumbs.splice(
-        1,
-        breadcrumbs.length - 1,
+        keep,
+        breadcrumbs.length - keep,
         { label: tail.list.parent.label, href: tail.list.parent.href },
         { label: tail.list.label, href: tail.list.href },
       );

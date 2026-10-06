@@ -1,6 +1,12 @@
 /**
- * Overview — "what is this, and how much do we know?" (§2.14.6). Plain words
- * first; the ARN and the raw evidence are one click away, not the headline.
+ * Overview — "what is this, and should I care?"
+ *
+ * Not an inventory record: it leads with what the workload can reach, then who
+ * it acts as, its purpose, and how we know. Everything else — continuity, the
+ * ARN's provenance, raw evidence — is one click away rather than the headline.
+ *
+ * Nothing here is a verdict. The access card says what it is made of: declared
+ * in AWS, inferred from action names, not evaluated.
  */
 
 import { useState, type ReactNode } from "react";
@@ -25,19 +31,26 @@ import {
   RUNTIME_LABEL,
   accountLabel,
   dayText,
+  classificationLabel,
+  classificationTone,
 } from "../shared/labels";
 import { classifyGraphError } from "../shared/graphErrors";
 import { accountCoverageNote } from "../shared/lifecycle";
 import { viaLink } from "../shared/links";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
+import { useEvidence } from "../evidence/useEvidence";
+import { useWorkloadAccess } from "../shared/useWorkloadAccess";
 import { ClassificationHistory } from "../classification/ClassificationHistory";
 import { CopyValue, Fact, Facts, Meta, Panel } from "../shared/components/Panel";
 import { DeclaredExamples, type ExampleLine } from "../shared/components/DeclaredExamples";
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
 import { Timestamp } from "../shared/components/Timestamp";
+import { wrapId } from "../shared/components/wrapText";
 import { shortResourceName } from "../shared/sketch";
 import { discoveryHref } from "../discovery/urlState";
+import { AccessSummaryCard } from "./AccessSummaryCard";
+import { isFullAdmin } from "../shared/access";
 
 
 function ClassificationText({ w }: { w: WorkloadDetail }) {
@@ -48,7 +61,7 @@ function ClassificationText({ w }: { w: WorkloadDetail }) {
   if (d) {
     return (
       <>
-        {d.purpose ? <span className="block">{d.purpose}</span> : null}
+        {d.purpose ? <span className="block text-(--color-text)">{d.purpose}</span> : null}
         <span className="block text-(--color-text-muted)">
           {d.decision === "classified_agent" ? "Classified as agent" : "Recorded as unclassified"} by{" "}
           {d.decided_by.display} · {dayText(d.decided_at)} · "{d.reason}"
@@ -56,7 +69,7 @@ function ClassificationText({ w }: { w: WorkloadDetail }) {
       </>
     );
   }
-  return <>No purpose has been recorded for this workload.</>;
+  return <>We found this workload, but no purpose is recorded for it.</>;
 }
 
 function RunsAs({ w }: { w: WorkloadDetail }) {
@@ -75,14 +88,14 @@ function RunsAs({ w }: { w: WorkloadDetail }) {
     case "not_in_scan":
       return (
         <>
-          <span className="break-all font-mono text-xs">{r.execution_role_arn}</span>
+          <span className="font-mono text-xs [overflow-wrap:anywhere]">{wrapId(r.execution_role_arn)}</span>
           <span className="block text-(--color-text-muted)">Not read in the latest scan.</span>
         </>
       );
     case "not_in_inventory":
       return (
         <>
-          <span className="break-all font-mono text-xs">{r.execution_role_arn}</span>
+          <span className="font-mono text-xs [overflow-wrap:anywhere]">{wrapId(r.execution_role_arn)}</span>
           <span className="block text-(--color-text-muted)">Matches no identity in any connected account.</span>
         </>
       );
@@ -107,6 +120,8 @@ function IdentitiesSummary({
   const ecs = w.runtime_kind === "ecs_task_definition";
   const other = read.data?.other;
   const infra = (other?.items ?? []).filter((r) => r.type === "task_execution_role");
+  // Workloads running as the execution identity, when the server counted them.
+  const usedBy = read.data?.execution?.items.find((r) => r.type === "executes_as")?.used_by_count?.value ?? null;
   const from = { ref: w.ref, name: w.name };
   const row = (label: string, value: ReactNode, meaning?: string) => (
     <li className="space-y-0.5 px-4 py-3">
@@ -118,6 +133,9 @@ function IdentitiesSummary({
   return (
     <ul className="divide-y divide-(--color-border-subtle)">
       {row(ecs ? "Runs as · task role" : "Runs as", <RunsAs w={w} />, ecs ? "What the application code in the task runs as." : undefined)}
+      {usedBy != null && usedBy > 1
+        ? row("Used by", `${usedBy} workloads run as this identity`, "Changing the role changes what all of them can do.")
+        : null}
       {ecs
         ? row(
             "ECS agent uses · task execution role",
@@ -137,7 +155,7 @@ function IdentitiesSummary({
                     <span key={r.claim} className="font-medium">{r.identity.name}</span>
                   );
                 })}
-                {other?.next_cursor ? <span className="text-xs text-(--color-text-muted)">More available — the Identities tab lists them.</span> : null}
+                {other?.next_cursor ? <span className="text-xs text-(--color-text-muted)">More available — the Identity tab lists them.</span> : null}
               </span>
             ) : !read.data ? (
               <span className="text-(--color-text-muted)">Not read for this view.</span>
@@ -233,6 +251,7 @@ export function WorkloadOverview({
   workload: w,
   gaps,
   frozen = false,
+  publishedAt,
 }: {
   ws: string;
   workload: WorkloadDetail;
@@ -240,8 +259,12 @@ export function WorkloadOverview({
   gaps?: GraphCoverageGap[];
   /** The object is not in the current publication: what is shown was loaded earlier, and nothing is fetched for it. */
   frozen?: boolean;
+  /** The publication this page reads, said here now that the header no longer repeats it. */
+  publishedAt?: string | null;
 }) {
+  const { open: openEvidence } = useEvidence();
   const [history, setHistory] = useState(false);
+  const [details, setDetails] = useState(false);
   const runtime = RUNTIME_LABEL[w.runtime_kind];
   const attrs = w.provider_attrs;
   const dispatch = useAppDispatch();
@@ -263,6 +286,22 @@ export function WorkloadOverview({
     dispatch(igaGraphApi.util.upsertQueryData("listGraphWorkloadResources", { ...resArgs, rev: r }, d)),
   );
   const resRows = resQ.currentData?.data;
+  // Same first page as resQ above (one cache entry), summarised for the access card.
+  const access = useWorkloadAccess(ws, w, frozen);
+  const base = `/iga/estate/${encodeURIComponent(id)}`;
+  // Allow * on * through any identity it acts as, in what was read (X-06).
+  const fullAdmin = (resRows ?? []).some((row) =>
+    row.grants.some((g) =>
+      isFullAdmin({
+        effect: "allow",
+        actions: g.statement.actions,
+        resources: [row.resource.text],
+        conditional: g.statement.conditional,
+        excluded: g.exclusions.length > 0,
+        current: g.state === "current",
+      }),
+    ),
+  );
   const sketch = frozen ? null : sketchOf(w, idQ.currentData?.data, resRows, !!resQ.currentData?.meta.next_cursor);
 
   return (
@@ -281,54 +320,34 @@ export function WorkloadOverview({
         />
       ) : null}
 
+      {fullAdmin && !frozen && w.lifecycle !== "retired" ? (
+        <DecisionBanner
+          tone="danger"
+          title="Full administrator access"
+          body={`An identity ${w.name} acts as is allowed every action on every resource (Allow * on *). No condition or exclusion narrows it; Deny statements and permissions boundaries are listed, not evaluated.`}
+          actionLabel="Review resources"
+          actionHref={`${base}/resources`}
+        />
+      ) : null}
+
+      {/* What can it reach? */}
+      {!frozen && w.lifecycle !== "retired" ? (
+        <AccessSummaryCard access={access} allAccessTo={`${base}/resources`} noIdentity={w.execution_role.state !== "resolved"} />
+      ) : null}
+
       {sketch ? (
-        <NeighbourhoodSketch label={`Neighbourhood of ${w.name}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={{ ref: w.ref, name: w.name }} note={sketch.note} />
+        <NeighbourhoodSketch label={`Access Graph of ${w.name}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={{ ref: w.ref, name: w.name }} note={sketch.note} />
       ) : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
-          <Panel title="What it is">
-            <Facts>
-              <Fact label="Classification">
-                <span className="flex flex-col items-start gap-1.5">
-                  <span>
-                    <ClassificationText w={w} />
-                  </span>
-                  {w.classification !== "provider_native_agent" ? (
-                    <button
-                      type="button"
-                      onClick={() => setHistory((h) => !h)}
-                      aria-expanded={history}
-                      className="text-xs font-medium text-(--color-primary-text) hover:underline"
-                    >
-                      {history ? "Hide decision history" : "Decision history"}
-                    </button>
-                  ) : null}
-                </span>
-              </Fact>
-              {w.instances?.state === "not_collected" ? (
-                <Fact label="Instances">
-                  <span className="text-(--color-text-muted)">
-                    {w.runtime_kind === "bedrock_agent"
-                      ? "Not collected. Aliases, which separate a live agent from a canary, are not read yet."
-                      : "Not collected."}
-                  </span>
-                </Fact>
-              ) : null}
-            </Facts>
-            {history ? (
-              <div className="mt-3">
-                <ClassificationHistory ws={ws} id={refId(w.ref)} />
-              </div>
-            ) : null}
-          </Panel>
-
+          {/* Who does it act as? */}
           <Panel
-            title="Identities"
+            title="Identity"
             flush
             actions={
-              <Link to={`/iga/estate/${encodeURIComponent(refId(w.ref))}/identities`} className="font-medium text-(--color-primary-text) hover:underline">
-                All identities
+              <Link to={`${base}/identities`} className="font-medium text-(--color-primary-text) hover:underline">
+                Open identity
               </Link>
             }
           >
@@ -344,7 +363,36 @@ export function WorkloadOverview({
             />
           </Panel>
 
-          {frozen ? null : resFailure ? (
+          {/* Purpose. Classify / Undo live in the header (ObjectShell actions). */}
+          <Panel title="Purpose">
+            <div className="space-y-1.5 text-[13px] leading-5">
+              {/* The classification is said here, once; the header no longer repeats it. */}
+              <StatusBadge tone={classificationTone(w.classification)}>{classificationLabel(w.classification)}</StatusBadge>
+              <div>
+                <ClassificationText w={w} />
+              </div>
+              {w.classification !== "provider_native_agent" ? (
+                <button
+                  type="button"
+                  onClick={() => setHistory((h) => !h)}
+                  aria-expanded={history}
+                  className="text-xs font-medium text-(--color-primary-text) hover:underline"
+                >
+                  {history ? "Hide decision history" : "Decision history"}
+                </button>
+              ) : null}
+            </div>
+            {history ? (
+              <div className="mt-3">
+                <ClassificationHistory ws={ws} id={refId(w.ref)} />
+              </div>
+            ) : null}
+          </Panel>
+
+          {/* The access card above already summarises this; the examples
+              would say it a third time. They stay for a retired workload,
+              which has no card. */}
+          {frozen || w.lifecycle !== "retired" ? null : resFailure ? (
             <Panel title="Declared permissions — examples">
               <p className="text-[13px]">
                 <InlineState failure={resFailure} subject="declared permissions" onRetry={() => void resQ.refetch()} onRefresh={refresh} />
@@ -358,7 +406,7 @@ export function WorkloadOverview({
             <DeclaredExamples
               lines={examplesOf(resRows)}
               more={resRows.reduce((n, r) => n + r.grants.length, 0) > 3 || !!resQ.currentData?.meta.next_cursor}
-              all={{ to: `/iga/estate/${encodeURIComponent(refId(w.ref))}/resources`, label: "All on Resources" }}
+              all={{ to: `/iga/estate/${encodeURIComponent(refId(w.ref))}/resources`, label: "All resources" }}
               empty={
                 w.execution_role.state === "resolved"
                   ? "No declared access names any resource in what was read."
@@ -370,24 +418,31 @@ export function WorkloadOverview({
 
         <div className="space-y-4">
           <Panel
-            title="How we know"
+            title="Evidence"
             actions={
-              <Link to={discoveryHref({ provider: "aws", type: "workloads", view: "latest" })} className="font-medium text-(--color-primary-text) hover:underline">
-                Latest collected
-              </Link>
+              <>
+                <button type="button" onClick={() => openEvidence(w.ref)} className="font-medium text-(--color-primary-text) hover:underline">
+                  View evidence
+                </button>
+                <Link to={discoveryHref({ provider: "aws", type: "workloads", view: "latest" })} className="font-medium text-(--color-primary-text) hover:underline">
+                  Latest collected
+                </Link>
+              </>
             }
           >
             <Facts>
               <Fact label="ARN"><CopyValue value={w.arn} what="ARN" /></Fact>
               <Fact label="First seen">{dayText(w.first_seen_at)}</Fact>
               <Fact label="Last confirmed"><Timestamp iso={w.last_confirmed_at} /></Fact>
+              <Fact label="Region">{w.region ?? "Not stated"}</Fact>
+              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
               <Fact label="Found by">
                 {w.sources.length ? (
                   <span className="flex flex-col gap-1">
                     {w.sources.map((s) => (
                       <span key={s.presence} className="flex flex-wrap items-center gap-2">
                         <span>
-                          {accountLabel(s.account)}
+                          AWS account: {accountLabel(s.account)}
                           {s.account && s.account.label !== s.account.id ? <span className="ml-1.5 font-mono text-xs text-(--color-text-muted)">{s.account.id}</span> : null}
                         </span>
                         {s.state !== "current" ? <StatusBadge tone="warning">{s.state}</StatusBadge> : null}
@@ -399,14 +454,35 @@ export function WorkloadOverview({
                   <span className="text-(--color-text-muted)">No current source</span>
                 )}
               </Fact>
-              <Fact label="Continuity">
-                <span className="text-(--color-text-muted)">
-                  {w.continuity === "immutable"
-                    ? `Tracked by the id AWS assigns at creation, so a ${runtime} deleted and recreated under the same name is a new workload.`
-                    : `Same name only. AWS gives this ${runtime} no creation id we can read, so one deleted and recreated under this name looks the same to us.`}
-                </span>
-              </Fact>
             </Facts>
+            <button
+              type="button"
+              onClick={() => setDetails((d) => !d)}
+              aria-expanded={details}
+              className="mt-2.5 text-xs font-medium text-(--color-primary-text) hover:underline"
+            >
+              {details ? "Hide details" : "Details"}
+            </button>
+            {details ? (
+              <Facts className="mt-2.5 border-t border-(--color-border-subtle) pt-2.5">
+                  <Fact label="Continuity">
+                    <span className="text-(--color-text-muted)">
+                      {w.continuity === "immutable"
+                        ? `Tracked by the id AWS assigns at creation, so a ${runtime} deleted and recreated under the same name is a new workload.`
+                        : `Same name only. AWS gives this ${runtime} no creation id we can read, so one deleted and recreated under this name looks the same to us.`}
+                    </span>
+                  </Fact>
+                {w.instances?.state === "not_collected" ? (
+                  <Fact label="Instances">
+                    <span className="text-(--color-text-muted)">
+                      {w.runtime_kind === "bedrock_agent"
+                        ? "Not collected. Aliases, which separate a live agent from a canary, are not read yet."
+                        : "Not collected."}
+                    </span>
+                  </Fact>
+                ) : null}
+              </Facts>
+            ) : null}
           </Panel>
 
           {attrs.status || attrs.foundation_model || attrs.env_var_names?.length || attrs.gateway_targets?.length ? (

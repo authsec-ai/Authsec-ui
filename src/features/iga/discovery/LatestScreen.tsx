@@ -34,7 +34,7 @@ export default function LatestScreen(p: ScreenProps) {
 
   const fo = sourceFacet(p.sources, undefined);
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-4">
       <FacetBar
         facets={[
           {

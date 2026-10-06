@@ -21,9 +21,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 interface AppHeaderProps {
   onRightSidebarToggle?: () => void;
   isRightSidebarOpen?: boolean;
+  /** Hide the "Search… ⌘K" trigger. The IGA console has no use for it; the rest of the app keeps it. */
+  hideSearch?: boolean;
 }
 
-export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRightSidebarOpen: _isRightSidebarOpen = false }: AppHeaderProps) {
+export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRightSidebarOpen: _isRightSidebarOpen = false, hideSearch = false }: AppHeaderProps) {
   const { shouldAutoCollapseSidebar } = useResponsiveLayout();
   const { open: sidebarOpen } = useSidebar();
   const [showAutoCollapseIndicator, setShowAutoCollapseIndicator] = useState(false);
@@ -87,7 +89,7 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <CommandSearchButton onClick={() => setPaletteOpen(true)} />
+          {hideSearch ? null : <CommandSearchButton onClick={() => setPaletteOpen(true)} />}
 
           {/* Hidden for now: notifications */}
           {/* <Popover>
@@ -125,14 +127,16 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
             </PopoverContent>
           </Popover> */}
 
-          <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />
+          {/* Divides search from the theme toggle; with no search there is nothing to divide. */}
+          {hideSearch ? null : <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-6" />}
 
           {/* Theme toggle */}
           <ModeToggle />
         </div>
       </div>
 
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      {/* Hidden search means no ⌘K palette either. */}
+      {hideSearch ? null : <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />}
     </header>
   );
 }

@@ -159,7 +159,7 @@ export default function SightingsScreen(p: ScreenProps) {
               account={sourceLabel(row.original)}
               badge={
                 branch ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-(--color-surface-subtle) px-1.5 py-0.5 text-[10.5px] text-(--color-text-muted)">
+                  <span className="inline-flex items-center gap-1 rounded bg-(--color-surface-subtle) px-1.5 py-0.5 text-[11px] text-(--color-text-muted)">
                     <GitBranch className="size-2.5" aria-hidden="true" />
                     {branch}
                   </span>

@@ -142,6 +142,7 @@ export function FacetBar({
   removed,
   onDismissRemoved,
   onClearAll,
+  part = "all",
 }: {
   facets: FacetSpec[];
   /** The screen's measured content width (0 until measured). */
@@ -149,6 +150,12 @@ export function FacetBar({
   removed: { key: string; label: string; reason: string }[];
   onDismissRemoved: () => void;
   onClearAll: () => void;
+  /**
+   * "button": only a "More filters" button and its sheet, for a one-row
+   * toolbar (the 2026-10-06 Discovery design). "status": only what is applied
+   * or was removed, for the line under that toolbar. "all": both, as before.
+   */
+  part?: "all" | "button" | "status";
 }) {
   const [sheet, setSheet] = useState(false);
   const active = facets.filter((f) => f.value !== undefined);
@@ -157,14 +164,16 @@ export function FacetBar({
     label: f.kind === "toggle" ? f.label : `${f.label}: ${selectedLabel(f)}`,
     onRemove: () => f.onChange(undefined),
   }));
-  const collapsed = width > 0 && width < FACET_SHEET_BELOW;
+  const collapsed = part === "button" || (width > 0 && width < FACET_SHEET_BELOW);
+  const controls = part !== "status";
+  const status = part !== "button";
 
   return (
-    <div className="space-y-2">
-      {facets.length ? (
+    <div className={part === "button" ? "contents" : "space-y-2"}>
+      {controls && facets.length ? (
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
           {collapsed ? (
-            <Button variant="outline" size="sm" className="h-8" onClick={() => setSheet(true)} aria-label={active.length ? `Filters, ${active.length} applied` : "Filters"}>
+            <Button variant="outline" size="sm" className={part === "button" ? "h-9" : "h-8"} onClick={() => setSheet(true)} aria-label={active.length ? `Filters, ${active.length} applied` : "Filters"}>
               <SlidersHorizontal aria-hidden="true" className="size-4" /> Filters
               {active.length ? (
                 <span className="rounded bg-(--color-primary-soft) px-1.5 text-[11px] font-semibold tabular-nums text-(--color-primary-text)">{active.length}</span>
@@ -176,7 +185,7 @@ export function FacetBar({
         </div>
       ) : null}
 
-      {removed.length ? (
+      {status && removed.length ? (
         <div className="flex flex-wrap items-center gap-1.5" role="status" aria-label="Filters removed by the last switch">
           {removed.map((r) => (
             <span
@@ -197,7 +206,7 @@ export function FacetBar({
         </div>
       ) : null}
 
-      <AppliedFilters filters={applied} onClearAll={onClearAll} />
+      {status ? <AppliedFilters filters={applied} onClearAll={onClearAll} /> : null}
 
       <Sheet open={sheet} onOpenChange={setSheet}>
         <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-[380px]">

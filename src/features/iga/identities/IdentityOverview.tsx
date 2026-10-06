@@ -18,6 +18,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
 import { discoveryHref } from "../discovery/urlState";
+import { isFullAdmin } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
   DIRECT_BINDINGS_LABEL,
@@ -169,6 +170,7 @@ export function IdentityOverview({
   identity: i,
   gaps,
   frozen = false,
+  publishedAt,
 }: {
   ws: string;
   identity: IdentityDetail;
@@ -176,6 +178,8 @@ export function IdentityOverview({
   gaps?: GraphCoverageGap[];
   /** The object is not in the current publication: what is shown was loaded earlier, and nothing is fetched for it. */
   frozen?: boolean;
+  /** The publication this page reads, said here now that the header no longer repeats it. */
+  publishedAt?: string | null;
 }) {
   const kind = IDENTITY_KIND_LABEL[i.kind];
   const attrs = i.provider_attrs;
@@ -201,6 +205,21 @@ export function IdentityOverview({
   );
   const perms = permQ.currentData?.data;
   const sketch = frozen ? null : sketchOf(i, usedQ.currentData?.data, perms);
+  // Allow * on * anywhere in what it holds, its groups' policies included (X-06).
+  const fullAdmin = perms
+    ? [...perms.policies, ...perms.inherited.flatMap((g) => g.policies)]
+        .flatMap((p) => p.statements)
+        .filter((s) =>
+          isFullAdmin({
+            effect: s.effect,
+            actions: s.actions,
+            resources: s.targets.filter((t) => t.mode === "resource").map((t) => t.text),
+            conditional: s.condition != null,
+            excluded: s.targets.some((t) => t.mode === "not_resource"),
+            current: s.state === "current",
+          }),
+        ).length
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -218,8 +237,18 @@ export function IdentityOverview({
         />
       ) : null}
 
+      {fullAdmin && !frozen && i.lifecycle !== "retired" ? (
+        <DecisionBanner
+          tone="danger"
+          title="Full administrator access"
+          body={`${fullAdmin === 1 ? "A statement allows" : `${fullAdmin} statements allow`} every action on every resource (Allow * on *). No condition or exclusion narrows it; Deny statements and permissions boundaries are listed, not evaluated. Check whether ${i.name} needs this.`}
+          actionLabel="Review permissions"
+          actionHref={`/iga/identities/${encodeURIComponent(id)}/permissions`}
+        />
+      ) : null}
+
       {sketch ? (
-        <NeighbourhoodSketch label={`Neighbourhood of ${i.name}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={{ ref: i.ref, name: i.name }} note={sketch.note} />
+        <NeighbourhoodSketch label={`Access Graph of ${i.name}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={{ ref: i.ref, name: i.name }} note={sketch.note} />
       ) : null}
 
       {/* Panels flow into two balanced columns on a wide screen. */}
@@ -278,7 +307,7 @@ export function IdentityOverview({
             <DeclaredExamples
               lines={examplesOf(perms)}
               more={perms.truncated || perms.policies.reduce((n, p) => n + p.statements.length, 0) > 3}
-              all={{ to: `/iga/identities/${encodeURIComponent(id)}/permissions`, label: "All on Permissions" }}
+              all={{ to: `/iga/identities/${encodeURIComponent(id)}/permissions`, label: "All permissions" }}
               empty="No policy is attached to or inline in this identity."
             />
           )}
@@ -328,6 +357,7 @@ export function IdentityOverview({
             <Facts>
               <Fact label="First seen">{dayText(i.first_seen_at)}</Fact>
               <Fact label="Last confirmed"><Timestamp iso={i.last_confirmed_at} /></Fact>
+              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
               <Fact label="Identity continuity">{
                   i.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation${i.immutable_key ? ` (${i.immutable_key})` : ""}, so an ${kind} deleted and recreated under the same name is a new identity.`

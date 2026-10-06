@@ -4,8 +4,8 @@
  * failed and not-found kept apart — a failed request is never "Not found".
  */
 
-import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -22,13 +22,17 @@ import {
   StatusBlock,
 } from "./ConnectionParts";
 import { CoverageTab } from "./CoverageTab";
-import { OverviewTab } from "./OverviewTab";
+import { OverviewTab, ReadinessStrip } from "./OverviewTab";
+import { CloudPill } from "@/features/discovery/cloud/CloudPill";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { ScansTab } from "./ScansTab";
 import { ScopeTab } from "./ScopeTab";
 import {
   actionsOf,
+  ago,
+  day,
   detailHref,
+  statusOf,
   discoveryLink,
   hasFriendlyName,
   providerWord,
@@ -40,6 +44,7 @@ import { useCanAdminister } from "./permissions";
 import { useConnection } from "./useConnection";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
+import { cloudDiscoveryApi } from "@/app/api/cloudDiscoveryApi";
 import { ProviderGlyph } from "./ProviderGlyph";
 
 const BACK = (
@@ -51,7 +56,6 @@ const BACK = (
 export default function ConnectionDetailPage() {
   const { id = "", tab: tabParam } = useParams<{ id?: string; tab?: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const canAdminister = useCanAdminister();
   const { connection: c, loading, failure, notFound, refetch, refreshFailed } = useConnection(id);
   const all = useListDiscoveryConnectionsQuery().data ?? [];
@@ -59,6 +63,14 @@ export default function ConnectionDetailPage() {
   const [revokeOpen, setRevokeOpen] = useState(false);
 
   useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Connections", href: "/iga/connections" });
+
+  // The Scope tab's region list is a live AWS call that takes seconds; start
+  // it as soon as an AWS connection opens so the tab is ready when clicked.
+  const prefetchRegions = cloudDiscoveryApi.usePrefetch("getAwsConnectorRegions", { ifOlderThan: 30 * 60 });
+  const awsId = c?.provider === "aws" && c.connection.state !== "revoked" ? c.id : null;
+  useEffect(() => {
+    if (awsId && canAdminister) prefetchRegions(awsId);
+  }, [awsId, canAdminister, prefetchRegions]);
 
   if (loading) {
     return (
@@ -80,6 +92,7 @@ export default function ConnectionDetailPage() {
   const active: DetailTab | null = !tabParam ? "overview" : (tabs.find((t) => t.key === tabParam)?.key ?? null);
   const actions = actionsOf(c, canAdminister);
   const busy: ActionKind | undefined = pending[c.id];
+  const status = statusOf(c);
   const revokeError = failures.find((f) => f.id === c.id && f.kind === "revoke")?.message;
   const lastGitHubOrg = c.provider === "github" && all.filter((x) => x.provider === "github").length === 1;
 
@@ -103,9 +116,16 @@ export default function ConnectionDetailPage() {
         <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
           <ProviderGlyph provider={c.provider} size="size-8" />
           <span className={hasFriendlyName(c) ? undefined : "font-mono"}>{c.name}</span>
+          <CloudPill tone={status.tone}>{status.label}</CloudPill>
         </span>
       }
-      description={`${typeWord(c)}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""} · ${providerWord(c.provider)}`}
+      description={[
+        `${typeWord(c)}${hasFriendlyName(c) ? ` · ${c.native_id}` : ""}`,
+        c.created_at ? `connected ${day(c.created_at)}` : null,
+        c.scan.at ? `last scanned ${ago(c.scan.at)}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
       actions={
         <>
           {busy ? <PendingWord kind={busy} /> : null}
@@ -114,17 +134,19 @@ export default function ConnectionDetailPage() {
             canAdminister={canAdminister}
             pending={busy}
             onRun={onRun}
-            onEditScope={() => navigate(detailHref(c.id, "scope"), { state: { editScope: true } })}
+            onEditScope={() => navigate(detailHref(c.id, "scope"))}
+            primary={
+              c.discovery.ready ? (
+                <Button className="text-[length:var(--text-sm)] text-white" size="sm" asChild>
+                  <Link to={discoveryLink(c)}>Open in Discovery</Link>
+                </Button>
+              ) : (
+                <Button className="text-[length:var(--text-sm)] text-white" size="sm" disabled title="Discovery has no result for this connection yet. The Overview says what it is waiting for.">
+                  Open in Discovery
+                </Button>
+              )
+            }
           />
-          {c.discovery.ready ? (
-            <Button className="text-[length:var(--text-sm)] text-white" size="sm" asChild>
-              <Link to={discoveryLink(c)}>Open in Discovery</Link>
-            </Button>
-          ) : (
-            <Button className="text-[length:var(--text-sm)] text-white" size="sm" disabled title="Discovery has no result for this connection yet. The Overview says what it is waiting for.">
-              Open in Discovery
-            </Button>
-          )}
         </>
       }
     >
@@ -137,9 +159,14 @@ export default function ConnectionDetailPage() {
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3">
-        <StatusBlock c={c} clamp={false} />
-      </div>
+      {/* The status is in the title; its explanation only when it asks for something. */}
+      {status.tone !== "success" ? (
+        <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3">
+          <StatusBlock c={c} clamp={false} pill={false} />
+        </div>
+      ) : null}
+
+      <ReadinessStrip c={c} />
 
       <ActionFailureList
         failures={failures.filter((f) => !(f.kind === "revoke" && revokeOpen))}
@@ -153,7 +180,7 @@ export default function ConnectionDetailPage() {
       {active === "overview" ? <OverviewTab c={c} actions={actions} pending={busy} onRun={onRun} /> : null}
       {active === "scans" ? <ScansTab c={c} /> : null}
       {active === "coverage" ? <CoverageTab c={c} /> : null}
-      {active === "scope" ? <ScopeTab c={c} actions={actions} startEditing={(location.state as { editScope?: boolean } | null)?.editScope === true} /> : null}
+      {active === "scope" ? <ScopeTab c={c} actions={actions} onScan={() => run(c, "scan")} /> : null}
       {active === "rules" ? <RuleCatalogPanel scansHref={detailHref(c.id, "scans")} /> : null}
       {active === null ? (
         tabParam === "rules" ? (

@@ -53,7 +53,7 @@ export const CLASSIFICATION_LABEL: Record<Classification, string> = {
  * number from the server, so it is labelled as both. Workloads that reach it
  * through another role are not in it.
  */
-export const DIRECT_BINDINGS_LABEL = "Direct workload bindings";
+export const DIRECT_BINDINGS_LABEL = "Used by";
 export const DIRECT_BINDINGS_MEANING =
   "Workloads that run as it, or whose ECS agent uses it as the task execution role. Workloads reaching it through another role are not counted.";
 
@@ -295,4 +295,62 @@ export const RESOURCE_KIND_NOTE: Record<ResourceKind, string> = {
 export function statementLabel(s: { sid: string; index: number | null }): string {
   if (s.sid) return s.sid;
   return s.index != null ? `statement ${s.index}` : "a statement without a Sid";
+}
+
+/* ------------------------------------------------------------------ *
+ * Classification, read defensively.
+ *
+ * The four maps above are keyed on `Classification`, the three values the
+ * contract declares. TypeScript believes that is exhaustive; the wire does
+ * not have to agree. A row whose `classification` is "" — the column's zero
+ * value, which a workload projected before the field was populated still
+ * carries — indexes to `undefined`, and `StatusBadge` renders `undefined`
+ * children as a coloured dot with NO WORD beside it. The Classification
+ * column then reads as blank, which looks like a broken renderer rather than
+ * missing data, and there is nothing on screen to say which it is.
+ *
+ * `CLASSIFICATION_TONE[""]` is `undefined` too, which silently falls back to
+ * StatusBadge's default `neutral` rather than throwing — so the failure is
+ * invisible in the console as well as on the page.
+ *
+ * These four read through the maps when the value is one the contract knows,
+ * and otherwise say what was actually received. An unrecognised value is
+ * shown, not swallowed: if the backend starts sending a fourth kind, the
+ * column names it instead of going quiet.
+ * ------------------------------------------------------------------ */
+
+function knownClassification(c: string | null | undefined): Classification | null {
+  return c && c in CLASSIFICATION_SHORT ? (c as Classification) : null;
+}
+
+/** Turn an unrecognised wire value into something readable: "foo_bar" → "Foo bar". */
+function humanise(c: string): string {
+  const s = c.replace(/_/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+export function classificationShort(c: string | null | undefined): string {
+  const k = knownClassification(c);
+  if (k) return CLASSIFICATION_SHORT[k];
+  return c ? humanise(c) : "Not recorded";
+}
+
+export function classificationLabel(c: string | null | undefined): string {
+  const k = knownClassification(c);
+  if (k) return CLASSIFICATION_LABEL[k];
+  return c ? humanise(c) : "Classification not recorded";
+}
+
+export function classificationTone(c: string | null | undefined): ConsoleTone {
+  const k = knownClassification(c);
+  return k ? CLASSIFICATION_TONE[k] : "neutral";
+}
+
+export function classificationMeaning(c: string | null | undefined): string {
+  const k = knownClassification(c);
+  if (k) return CLASSIFICATION_MEANING[k];
+  if (!c) {
+    return "No classification has been recorded for this workload. It is not a negative finding — the scan simply carries no value for it.";
+  }
+  return `The scan reported "${c}", which this console does not recognise. It is shown as received.`;
 }

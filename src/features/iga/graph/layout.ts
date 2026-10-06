@@ -54,6 +54,30 @@ export interface LayoutNodeInput {
   size: Size;
   /** Pin to the first layer (a workload the graph starts at) or the last (a resource). */
   layer?: "first" | "last";
+  /**
+   * The node's column: 0 workloads and outside principals, 1 identities,
+   * 2 policy statements, 3 resources. Every node of a column is laid out left
+   * of every node of the next, so a Detailed view's statements sit between
+   * identities and resources instead of on top of them (G-03).
+   */
+  column?: number;
+}
+
+/** The fixed left-to-right column for a node kind (Access Graph spec, point 1). */
+export function columnOfKind(kind: string): number {
+  switch (kind) {
+    case "workload":
+    case "external_principal":
+      return 0;
+    case "iam_role":
+    case "iam_user":
+    case "iam_group":
+      return 1;
+    case "statement":
+      return 2;
+    default:
+      return 3;
+  }
 }
 
 export interface LayoutEdgeInput {
@@ -62,10 +86,18 @@ export interface LayoutEdgeInput {
   to: string;
 }
 
+/** One node's ELK options: its column when columns are in use, else its first/last pin. */
+function nodeOptions(n: LayoutNodeInput, columns: boolean): Record<string, string> | undefined {
+  if (columns && n.column !== undefined) return { "elk.partitioning.partition": String(n.column) };
+  if (n.layer) return { "elk.layered.layering.layerConstraint": n.layer === "first" ? "FIRST" : "LAST" };
+  return undefined;
+}
+
 /** Full ELK layout of the drawn graph, at each node's real size. */
 export async function computeLayout(nodes: LayoutNodeInput[], edges: LayoutEdgeInput[]): Promise<Map<string, Position>> {
   if (nodes.length === 0) return new Map();
   const ids = new Set(nodes.map((n) => n.id));
+  const columns = nodes.some((n) => n.column !== undefined);
 
   const graph: ElkNode = {
     id: "root",
@@ -80,16 +112,18 @@ export async function computeLayout(nodes: LayoutNodeInput[], edges: LayoutEdgeI
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       // Disconnected pieces (an unresolved principal, say) stack below the
       // main graph instead of beside it.
-      "elk.separateConnectedComponents": "true",
+      // Off when columns are in use: each disconnected piece would otherwise be
+      // given its own columns and drawn above the main graph, out of line.
+      "elk.separateConnectedComponents": columns ? "false" : "true",
       "elk.layered.compaction.connectedComponents": "true",
+      ...(columns ? { "elk.partitioning.activate": "true" } : {}),
     },
     children: nodes.map((n) => ({
       id: n.id,
       width: n.size.width,
       height: n.size.height,
-      layoutOptions: n.layer
-        ? { "elk.layered.layering.layerConstraint": n.layer === "first" ? "FIRST" : "LAST" }
-        : undefined,
+      // Columns, when given, decide the order; a first/last pin would fight them.
+      layoutOptions: nodeOptions(n, columns),
     })),
     edges: edges
       .filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to)
@@ -109,6 +143,22 @@ export async function computeLayout(nodes: LayoutNodeInput[], edges: LayoutEdgeI
 }
 
 function fallbackLayout(nodes: LayoutNodeInput[], edges: LayoutEdgeInput[]): Map<string, Position> {
+  if (nodes.every((n) => n.column !== undefined)) {
+    // Columns known: one per column, stacked, never overlapping.
+    const out = new Map<string, Position>();
+    const widest = Math.max(...nodes.map((n) => n.size.width));
+    const columnY = new Map<number, number>();
+    // Only the columns in use, side by side: Summary has no statement column,
+    // and leaving its slot empty doubled the gap before the resources.
+    const used = [...new Set(nodes.map((n) => n.column!))].sort((a, b) => a - b);
+    for (const n of nodes) {
+      const c = used.indexOf(n.column!);
+      const y = columnY.get(c) ?? 0;
+      out.set(n.id, { x: c * (widest + LAYER_GAP), y });
+      columnY.set(c, y + n.size.height + NODE_GAP);
+    }
+    return out;
+  }
   const depth = new Map<string, number>();
   const incoming = new Set(edges.map((e) => e.to));
   const queue = nodes.filter((n) => n.layer === "first" || !incoming.has(n.id)).map((n) => n.id);
@@ -163,6 +213,13 @@ export function placeNewNodes(
   drawn: { id: string; size: Size }[],
   edges: { from: string; to: string }[],
   positions: Map<string, Position>,
+  /**
+   * The node's fixed column (`columnOfKind`), when the graph uses columns. A
+   * new node then goes to the x its column already has — an expanded role's
+   * statements land in the statement column, its resources in the resource
+   * column — instead of one layer beside whatever revealed it.
+   */
+  columnOf?: (id: string) => number | undefined,
 ): Map<string, Position> {
   const placed = new Map<string, Rect>();
   const missing: { id: string; size: Size }[] = [];
@@ -172,6 +229,15 @@ export function placeNewNodes(
     else missing.push(n);
   }
   if (missing.length === 0) return new Map();
+
+  // Where each column already stands: the leftmost card placed in it.
+  const columnX = new Map<number, number>();
+  if (columnOf) {
+    for (const [id, r] of placed) {
+      const c = columnOf(id);
+      if (c !== undefined && (!columnX.has(c) || r.x < columnX.get(c)!)) columnX.set(c, r.x);
+    }
+  }
 
   // Re-check remembered positions of nodes that reappeared: keep only the
   // ones nothing else has taken since.
@@ -194,7 +260,10 @@ export function placeNewNodes(
       }
       const anchorId = anchorEdge.to === n.id ? anchorEdge.from : anchorEdge.to;
       const a = placed.get(anchorId)!;
-      const x = anchorEdge.to === n.id ? a.x + a.w + LAYER_GAP : a.x - n.size.width - LAYER_GAP;
+      const col = columnOf?.(n.id);
+      const x = col !== undefined && columnX.has(col)
+        ? columnX.get(col)!
+        : anchorEdge.to === n.id ? a.x + a.w + LAYER_GAP : a.x - n.size.width - LAYER_GAP;
       const rect = { x, y: a.y, w: n.size.width, h: n.size.height };
       const step = 12;
       let found: Rect | null = null;
@@ -209,6 +278,8 @@ export function placeNewNodes(
       // No free space near the anchor: below everything drawn, which is free.
       const r = found ?? { ...rect, y: Math.max(...[...placed.values()].map((o) => o.y + o.h)) + NODE_GAP };
       placed.set(n.id, r);
+      const placedCol = columnOf?.(n.id);
+      if (placedCol !== undefined && !columnX.has(placedCol)) columnX.set(placedCol, r.x);
       out.set(n.id, { x: r.x, y: r.y });
     }
     if (next.length === pending.length) break;

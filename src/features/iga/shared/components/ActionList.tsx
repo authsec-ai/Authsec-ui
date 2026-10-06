@@ -10,6 +10,8 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { WRAP_ID_CLASS, wrapId } from "./wrapText";
+
 const INLINE_MAX = 8;
 
 const chip = "rounded bg-(--color-surface-subtle) px-1.5 py-px font-mono text-xs leading-5 text-(--color-text)";
@@ -21,8 +23,8 @@ export function ActionList({ actions, className }: { actions: string[]; classNam
     return (
       <span className={cn("flex flex-wrap gap-1", className)}>
         {actions.map((a) => (
-          <code key={a} className={cn(chip, "break-all")}>
-            {a}
+          <code key={a} className={cn(chip, WRAP_ID_CLASS)}>
+            {wrapId(a)}
           </code>
         ))}
       </span>

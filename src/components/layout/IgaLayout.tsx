@@ -12,6 +12,8 @@ import { IgaSidebar } from "./IgaSidebar";
 import { AppHeader } from "./AppHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import "../../theme/admin-shell.css";
+import "./iga-pages-skin.css";
+import "./iga-shell-skin.css";
 
 export function IgaLayout({ children }: { children: ReactNode }) {
   return (
@@ -28,8 +30,13 @@ export function IgaLayout({ children }: { children: ReactNode }) {
         } as React.CSSProperties
       }
     >
+      {/* `data-shell="iga"` scopes iga-shell-skin.css to this console's
+          chrome. AppLayout renders the same AppHeader, Breadcrumb and sidebar
+          primitives and deliberately carries no such attribute, so the
+          authorization console is unaffected by it. */}
       <div
         data-ui-scope="admin-shell"
+        data-shell="iga"
         className="flex h-screen w-screen overflow-hidden bg-background"
       >
         <div>
@@ -37,7 +44,7 @@ export function IgaLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div data-slot="admin-main-surface" className="flex min-w-0 flex-1 flex-col">
-          <AppHeader />
+          <AppHeader hideSearch />
           <div className="flex-1 overflow-hidden">
             <div
               className="h-full w-full overflow-y-auto scrollbar-hide"

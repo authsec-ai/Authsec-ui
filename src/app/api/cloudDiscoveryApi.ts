@@ -1027,6 +1027,23 @@ export interface CloudUsageAll {
   partialError?: FetchBaseQueryError;
 }
 
+/** One identity's activity totals, from `GET /aws/usage/summary`: the server's
+ * per-identity aggregate, exact where `listAwsUsageAll` reports floors past its
+ * cap. An identity with no usage rows is ABSENT, never present with zeroes. */
+export interface CloudUsageSummaryRow {
+  identity_id: string;
+  /** How many (identity, service) rows exist for this identity. */
+  services: number;
+  /** How many of those AWS reports were never accessed in its tracking window. */
+  never_used: number;
+}
+
+export interface CloudUsageSummary {
+  rows: CloudUsageSummaryRow[];
+  /** Identities with at least one usage row — the server's own count. */
+  identities: number;
+}
+
 // ── GCP onboarding (the only GCP surface that exists) ───────────────────────
 
 export type GCPScopeKind = "org" | "folder" | "project";
@@ -1319,10 +1336,18 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /**
+     * Live on the server: every call assumes the discovery role and asks EC2
+     * (DescribeRegions), which takes seconds. The answer changes only when the
+     * account opts in or out of a region, so it is cached for 30 minutes and
+     * under its own tag — a scan or verify (which invalidate the connector)
+     * must not throw it away. Saving the regions does invalidate it.
+     */
     getAwsConnectorRegions: builder.query<AWSConnectorRegions, string>({
       query: (id) => ({ url: `/authsec/discovery/aws/connectors/${id}/regions` }),
       transformResponse: (r: AWSConnectorRegions) => ({ data: r.data, meta: r.meta }),
-      providesTags: (_r, _e, id) => [{ type: "CloudConnector" as const, id }],
+      keepUnusedDataFor: 30 * 60,
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector" as const, id: `${id}:regions` }],
     }),
 
     /** Applies from the next scan. `422 invalid_region` names the offenders in
@@ -1336,6 +1361,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       transformResponse: (r: ConnectorEnvelope) => r.data,
       invalidatesTags: (_r, _e, { id }) => [
         { type: "CloudConnector", id },
+        { type: "CloudConnector", id: `${id}:regions` },
         { type: "CloudConnector", id: "AWS_LIST" },
         "Connections",
       ],
@@ -1531,6 +1557,23 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       transformResponse: (r: CloudListEnvelope<CloudUsage>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
         ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.id })),
+        { type: "CloudUsage" as const, id: "ALL" },
+      ],
+    }),
+
+    // Per-identity totals aggregated on the server (one request, exact counts).
+    listAwsUsageSummary: builder.query<CloudUsageSummary, { connector_id?: string }>({
+      query: (params) => ({
+        url: "/authsec/discovery/aws/usage/summary",
+        method: "GET",
+        params,
+      }),
+      transformResponse: (r: { data?: CloudUsageSummaryRow[]; meta?: { identities?: number } }) => ({
+        rows: r.data ?? [],
+        identities: r.meta?.identities ?? (r.data ?? []).length,
+      }),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((u) => ({ type: "CloudUsage" as const, id: u.identity_id })),
         { type: "CloudUsage" as const, id: "ALL" },
       ],
     }),
@@ -1737,6 +1780,7 @@ export const {
   useListAwsWorkloadsQuery,
   useListAwsUsageQuery,
   useListAwsUsageAllQuery,
+  useListAwsUsageSummaryQuery,
   useLazyGetGcpOnboardingPackageQuery,
   useCreateGcpConnectorMutation,
   useGetGcpConnectorQuery,

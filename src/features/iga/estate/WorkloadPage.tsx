@@ -17,7 +17,7 @@ import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 import { Button } from "@/components/ui/button";
 
-import { CLASSIFICATION_LABEL, CLASSIFICATION_TONE, RUNTIME_LABEL, accountWithId, dayText } from "../shared/labels";
+import { RUNTIME_LABEL, accountWithId, classificationLabel, classificationTone, dayText } from "../shared/labels";
 import { lifecycleView } from "../shared/lifecycle";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useRetainedDetail } from "../shared/useRetainedDetail";
@@ -49,11 +49,20 @@ export default function WorkloadPage() {
   );
 
   const tabs: ObjectTabDef[] = [
+    // Each tab answers ONE question: Overview — what is this and should I care;
+    // Identity — who does it act as; Resources — what can it reach; Access Graph
+    // — how is it connected; History — what changed. The labels are the
+    // question's words, not the scanner's.
+    //
+    // LABELS ONLY. The keys, the URL paths (`/identities`, `/resources`,
+    // `/graph`, `/changes`) and the capability flags are the API's words and
+    // are untouched, so no deep link (`?evidence=`, `?target=`, `?as=`), route
+    // or feature gate moves with the rename.
     { key: "overview", label: "Overview", path: "" },
-    { key: "identities", label: "Identities", path: "/identities" },
+    { key: "identities", label: "Identity", path: "/identities" },
     { key: "resources", label: "Resources", path: "/resources" },
-    { key: "graph", label: "Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
-    { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
+    { key: "graph", label: "Access Graph", path: "/graph", workspace: true, gated: true, available: feature.loading ? undefined : feature.features.graph === true },
+    { key: "changes", label: "History", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -72,8 +81,8 @@ export default function WorkloadPage() {
   if (w) {
     // Overview and Changes remain for a retired or vanished object; the other
     // tabs say they have no current data (SPEC-console-revamp.md).
-    if (active === "overview") body = <WorkloadOverview ws={ws} workload={w} gaps={meta?.coverage} frozen={vanished} />;
-    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="workloads" id={id} /> : null;
+    if (active === "overview") body = <WorkloadOverview ws={ws} workload={w} gaps={meta?.coverage} frozen={vanished} publishedAt={meta?.published_at} />;
+    else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="workloads" id={id} lastConfirmedAt={w.last_confirmed_at} /> : null;
     else if (gone) body = <RetiredTab name={w.name} lastConfirmed={w.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={w.ref} rootName={w.name} />;
     else if (rev != null && active === "identities") body = <WorkloadIdentitiesTab ws={ws} workload={w} />;
@@ -105,8 +114,8 @@ export default function WorkloadPage() {
                 context: [accountWithId(w.account) ?? "Account not known", w.region ?? "Region not stated"],
                 lifecycle: lifecycleView(w),
                 classification: {
-                  label: CLASSIFICATION_LABEL[w.classification],
-                  tone: CLASSIFICATION_TONE[w.classification],
+                  label: classificationLabel(w.classification),
+                  tone: classificationTone(w.classification),
                   by:
                     w.classification === "provider_native_agent"
                       ? "by what AWS runs it as"

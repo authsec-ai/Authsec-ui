@@ -10,14 +10,16 @@
  * restores it.
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { DecisionBanner } from "@/components/console/status";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { usePipeline } from "../pipeline/usePipeline";
@@ -32,7 +34,6 @@ import { FailurePanel, NotCollected } from "./ListStates";
 import { countBasis, effectiveView, hasViews, planSwitch, supportsType, TYPES_BY_PROVIDER, type Scope } from "./model";
 import { ProviderControl } from "./ProviderControl";
 import { heartbeatDiscrepancy, publicationText } from "./publicationLine";
-import { Segmented } from "./Segmented";
 import { connectionNotices, sweepNotices } from "./connectionNotices";
 import { SourceNotices } from "./SourceNotices";
 import { connectedProviders, defaultProvider, resolveSource, sourcesOf, writeLastProvider } from "./sources";
@@ -45,12 +46,18 @@ import LatestScreen from "./LatestScreen";
 import InventoryScreen from "./InventoryScreen";
 import PublishedScreen from "./PublishedScreen";
 import SightingsScreen from "./SightingsScreen";
+import { InfoTip } from "../shared/components/InfoTip";
 
-const DESCRIPTION =
-  "What has been found in your connected sources. Declared access — not evaluated: nothing here tests whether a request would succeed.";
+const DESCRIPTION = (
+  <span className="inline-flex items-center gap-1">
+    Workloads, identities and resources found in your connected sources.
+    <InfoTip label="About access shown here">Access is declared, not evaluated: nothing here tests whether a request would succeed.</InfoTip>
+  </span>
+);
 
 export default function DiscoveryPage() {
   const ws = getWorkspaceId() ?? "";
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const url = useDiscoveryUrl();
   useSlashToSearch();
 
@@ -110,44 +117,75 @@ export default function DiscoveryPage() {
     url.go(params, removed);
   };
   const viewFor = (p: DiscoveryProvider, t: DiscoveryType): DiscoveryView => effectiveView(p, t, p === provider && hasViews(p, t) ? view : undefined);
-  const switchType = (t: DiscoveryType) => provider && switchTo({ provider, type: t, view: viewFor(provider, t) });
-  const switchView = (v: DiscoveryView) => provider && switchTo({ provider, type, view: v });
+  // With no Published | Latest switch on the page, a tab change always lands on
+  // the default view: once on Latest (from a connection's link) the reader
+  // would otherwise have no way back to Published.
+  const switchType = (t: DiscoveryType) => provider && switchTo({ provider, type: t, view: effectiveView(provider, t, undefined) });
   const switchProvider = (p: DiscoveryProvider) => {
     writeLastProvider(p);
     const t = supportsType(p, type) ? type : TYPES_BY_PROVIDER[p][0];
     switchTo({ provider: p, type: t, view: effectiveView(p, t, undefined) });
   };
 
+  // The object types as tabs along the top of the one card (2026-10-06 design).
+  // The Published | Latest collected switch is gone from here by decision; a
+  // link that names view=latest (a connection's "Open in Discovery") still works.
+  const tabTypes = provider ? TYPES_BY_PROVIDER[provider] : [];
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    // Arrows, Home and End move between tabs and choose, as a tablist does.
+    const last = tabTypes.length - 1;
+    const next = e.key === "ArrowRight" ? (i === last ? 0 : i + 1) : e.key === "ArrowLeft" ? (i === 0 ? last : i - 1) : e.key === "Home" ? 0 : e.key === "End" ? last : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    tabRefs.current[next]?.focus();
+    switchType(tabTypes[next]);
+  };
   const switcher = provider ? (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <Segmented<DiscoveryType>
-        label="Object type"
-        value={supportsType(provider, type) ? type : undefined}
-        segments={TYPES_BY_PROVIDER[provider].map((t) => ({
-          value: t,
-          label: TYPE_LABEL[t],
-          count: overview.counts[t] ?? COUNT_UNAVAILABLE,
-          title: `${TYPE_LABEL[t]}, ${countBasis(viewFor(provider, t), t)}`,
-        }))}
-        onChange={switchType}
-      />
-      {hasViews(provider, type) ? (
-        <Segmented<DiscoveryView>
-          label="View"
-          value={view}
-          segments={[
-            { value: "published", label: "Published", title: "What AuthSec concluded, at one publication" },
-            { value: "latest", label: "Latest collected", title: "Normalised rows from the latest scan, including rows not yet published" },
-          ]}
-          onChange={switchView}
-        />
-      ) : null}
+    <div role="tablist" aria-label="Object type" className="flex gap-1 overflow-x-auto border-b border-(--color-border-subtle) px-3">
+      {tabTypes.map((t, i) => {
+        const on = supportsType(provider, type) && type === t;
+        return (
+          <button
+            key={t}
+            ref={(el) => {
+              tabRefs.current[i] = el;
+            }}
+            id={`discovery-tab-${t}`}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            aria-controls="discovery-tabpanel"
+            tabIndex={on || (!supportsType(provider, type) && i === 0) ? 0 : -1}
+            onKeyDown={(e) => onTabKey(e, i)}
+            title={`${TYPE_LABEL[t]}, ${countBasis(viewFor(provider, t), t)}`}
+            onClick={() => switchType(t)}
+            className={cn(
+              "-mb-px inline-flex h-12 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm",
+              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--color-focus-ring)",
+              on ? "border-(--color-primary) font-semibold text-(--color-text)" : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
+            )}
+          >
+            {TYPE_LABEL[t]}
+            <CountText
+              count={overview.counts[t] ?? COUNT_UNAVAILABLE}
+              className={cn(
+                "rounded-full px-2 py-px text-xs font-medium",
+                on ? "bg-(--color-primary-soft) text-(--color-primary-text)" : "bg-(--color-surface-subtle) text-(--color-text-muted)",
+              )}
+            />
+          </button>
+        );
+      })}
     </div>
   ) : null;
 
   /* ------------------------------ header state ------------------------------ */
   const cluster = scope.kind === "one" ? scope.source.scopeId : undefined;
-  const line = provider ? publicationText({ provider, view, overview, connections: scoped, cluster }) : null;
+  // Reached on Latest collected only by a link (no switch on the page): say so,
+  // and offer the way back to Published.
+  const onLatest = !!provider && hasViews(provider, type) && view === "latest";
+  const published = provider ? publicationText({ provider, view, overview, connections: scoped, cluster }) : null;
+  const line = onLatest ? ["Latest collected", published].filter(Boolean).join(" · ") : published;
   const discrepancy =
     provider === "k8s" && scope.kind === "one"
       ? heartbeatDiscrepancy(scope.source.connection, inScope(overview.sweeps ?? [], cluster).find((s) => s.observedAt)?.observedAt ?? undefined)
@@ -173,7 +211,7 @@ export default function DiscoveryPage() {
       <DecisionBanner
         tone="info"
         title="Connect a source to start"
-        body="Discovery lists what your connected AWS accounts, Kubernetes clusters, Google Cloud projects and GitHub organisations contain. Nothing is connected yet, so there is nothing to show."
+        body="Connect an AWS account, Google Cloud project, Kubernetes cluster or GitHub organization to see what it contains."
         actionLabel="Open Connections"
         actionHref="/iga/connections"
       />
@@ -183,7 +221,7 @@ export default function DiscoveryPage() {
       <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-6 py-14 text-center" role="status">
         <p className="text-sm font-semibold text-(--color-text)">{provider ? `${PROVIDER_LABEL[provider]} is not connected` : "No provider chosen"}</p>
         <p className="mx-auto mt-1 max-w-md text-xs text-(--color-text-muted)">
-          Discovery lists a provider only once it has a connection. Choose a connected provider above, or{" "}
+          Choose a connected provider above, or{" "}
           <Link to="/iga/connections" className="font-semibold text-(--color-primary-text) hover:underline">
             connect {provider ? PROVIDER_LABEL[provider] : "one"}
           </Link>
@@ -196,8 +234,9 @@ export default function DiscoveryPage() {
     // it is not remounted by a change of either and keeps the keyboard focus.
     const props: ScreenProps = { ws, url, provider, type, view, sources, scope };
     body = (
-      <div className="space-y-3">
+      <div data-discovery-card className="overflow-clip rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
         {switcher}
+        <div id="discovery-tabpanel" role="tabpanel" aria-labelledby={`discovery-tab-${type}`}>
         {!supportsType(provider, type) ? (
           <NotCollected provider={provider} type={type} />
         ) : view === "latest" ? (
@@ -209,6 +248,7 @@ export default function DiscoveryPage() {
         ) : (
           <InventoryScreen {...props} />
         )}
+        </div>
       </div>
     );
   }
@@ -217,22 +257,48 @@ export default function DiscoveryPage() {
     <ConsolePage
       title="Discovery"
       description={DESCRIPTION}
-      actions={connected.length ? <ProviderControl value={provider && connected.includes(provider) ? provider : undefined} providers={connected} onChange={switchProvider} /> : undefined}
+      actions={
+        connected.length ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ProviderControl value={provider && connected.includes(provider) ? provider : undefined} providers={connected} onChange={switchProvider} />
+            {provider && connected.includes(provider) && ready && line ? (
+              // What the lists are read at, and the way to re-read them.
+              <div className="inline-flex min-h-9 max-w-[460px] items-center gap-2 rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) py-1 pl-3 pr-1 text-[13px] text-(--color-text)">
+                {/* Green only when there is a publication to read; otherwise a neutral dot. */}
+                <span
+                  aria-hidden="true"
+                  className={cn("size-1.5 shrink-0 rounded-full", overview.publication?.publishedAt || provider !== "aws" ? "bg-(--color-success)" : "bg-(--color-text-subtle)")}
+                />
+                <span role="status" className="min-w-0 truncate" title={line}>
+                  {line}
+                </span>
+                {onLatest && provider ? (
+                  <Button variant="ghost" size="sm" className="h-7 shrink-0 px-2" onClick={() => switchTo({ provider, type, view: "published" })}>
+                    Back to Published
+                  </Button>
+                ) : null}
+                {awsPublished && overview.publication?.publishedAt ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={refresh}
+                    aria-label="Refresh"
+                    title="Re-read the lists at the current publication. This does not request a scan."
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden="true" />
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : undefined
+      }
     >
       <LiveRegion />
-      {provider && connected.includes(provider) && ready ? (
+      {provider && connected.includes(provider) && ready && (discrepancy || (provider === "k8s" && overview.counts.sightings)) ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          {line ? (
-            <p className="font-medium text-(--color-text)" role="status">
-              {line}
-            </p>
-          ) : null}
           {discrepancy ? <p className="text-(--color-warning-text)">{discrepancy}</p> : null}
-          {awsPublished && overview.publication?.publishedAt ? (
-            <Button variant="outline" size="sm" onClick={refresh} title="Re-read the lists at the current publication. This does not request a scan.">
-              Refresh
-            </Button>
-          ) : null}
           {provider === "k8s" && overview.counts.sightings ? (
             <span className="text-xs text-(--color-text-muted)">
               Cluster sightings: <CountText count={overview.counts.sightings} />

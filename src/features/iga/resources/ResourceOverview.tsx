@@ -20,6 +20,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
 import { discoveryHref } from "../discovery/urlState";
+import { SCOPE_LABEL, accessScope } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, IDENTITY_KIND_LABEL, accountLabel, dayText, countText } from "../shared/labels";
 import { accountCoverageNote } from "../shared/lifecycle";
@@ -67,7 +68,7 @@ function sketchOf(r: ResourceDetail, access: ResourceAccess | undefined, more: b
     columns: [holders, [root]],
     edges,
     rootId: r.ref,
-    note: drawable > holders.length || more ? `The first ${holders.length} identities with declared access are drawn; the Access tab lists the rest.` : null,
+    note: drawable > holders.length || more ? `The first ${holders.length} identities with declared access are drawn; the Who can access tab lists the rest.` : null,
   };
 }
 
@@ -76,6 +77,7 @@ export function ResourceOverview({
   resource: r,
   gaps,
   frozen = false,
+  publishedAt,
 }: {
   ws: string;
   resource: ResourceDetail;
@@ -83,6 +85,8 @@ export function ResourceOverview({
   gaps?: GraphCoverageGap[];
   /** The object is not in the current publication: what is shown was loaded earlier, and nothing is fetched for it. */
   frozen?: boolean;
+  /** The publication this page reads, said here now that the header no longer repeats it. */
+  publishedAt?: string | null;
 }) {
   const policy = r.resource_policy;
   const dispatch = useAppDispatch();
@@ -102,6 +106,7 @@ export function ResourceOverview({
   const remaining = meta?.total_known && meta.total !== undefined ? meta.total - holders.length : null;
   const sketch = frozen ? null : sketchOf(r, first?.data, !!meta?.next_cursor);
   const partial = accountCoverageNote(gaps, r.account?.id);
+  const scope = accessScope(r);
   const from = { ref: r.ref, name: shortResourceName(r.text) };
 
   return (
@@ -114,7 +119,7 @@ export function ResourceOverview({
         />
       ) : null}
       {sketch ? (
-        <NeighbourhoodSketch label={`Neighbourhood of ${shortResourceName(r.text)}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={from} note={sketch.note} />
+        <NeighbourhoodSketch label={`Access Graph of ${shortResourceName(r.text)}`} columns={sketch.columns} edges={sketch.edges} rootId={sketch.rootId} from={from} note={sketch.note} />
       ) : null}
       {/* Panels flow into two balanced columns on a wide screen. */}
       <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
@@ -123,7 +128,7 @@ export function ResourceOverview({
               <Fact label="Kind">{
                   <span className="flex flex-col gap-1">
                     <span>
-                      <StatusBadge tone={r.kind === "external" ? "warning" : "neutral"}>{RESOURCE_KIND_LABEL[r.kind]}</StatusBadge>
+                      <StatusBadge tone={r.kind === "external" || scope === "all" ? "warning" : "neutral"}>{SCOPE_LABEL[scope]}</StatusBadge>
                     </span>
                     <span className="text-(--color-text-muted)">{RESOURCE_KIND_NOTE[r.kind]}</span>
                   </span>
@@ -157,7 +162,7 @@ export function ResourceOverview({
             title="Declared access"
             actions={
               <Link to={`/iga/resources/${encodeURIComponent(refId(r.ref))}/access`} className="font-medium text-(--color-primary-text) hover:underline">
-                All on Access
+                See who can access
               </Link>
             }
           >
@@ -226,6 +231,7 @@ export function ResourceOverview({
           >
             <Facts>
               <Fact label="Last confirmed"><Timestamp iso={r.last_confirmed_at} /></Fact>
+              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
               <Fact label="Found in">{
                   r.sources.length
                     ? r.sources.map((s) => `${accountLabel(s.account)}${s.state !== "current" ? ` (${s.state})` : ""}`).join(", ")

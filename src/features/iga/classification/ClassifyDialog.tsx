@@ -43,7 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { getWorkspaceId } from "@/utils/workspace";
 import { graphSessionGeneration, onGraphSessionReset } from "../shared/revision";
-import { CLASSIFICATION_LABEL } from "../shared/labels";
+import { classificationLabel } from "../shared/labels";
 
 type Mode = "classify" | "undo";
 // Closing an uncertain request must not give its retry a new operation id.
@@ -199,7 +199,7 @@ export function ClassifyDialog({
           <div className="space-y-2 rounded-md border border-(--color-border-subtle) px-3 py-3 text-sm" role="alert">
             <p className="font-medium">Someone else decided first</p>
             <p className="text-(--color-text-muted)">
-              It is now "{CLASSIFICATION_LABEL[conflict.classification]}"
+              It is now "{classificationLabel(conflict.classification)}"
               {conflict.decided_by ? `, recorded by ${conflict.decided_by.display}` : ""}
               {conflict.decided_at ? ` on ${format(new Date(conflict.decided_at), "d MMM, HH:mm")}` : ""}
               {conflict.reason ? `: ${conflict.reason}` : "."}

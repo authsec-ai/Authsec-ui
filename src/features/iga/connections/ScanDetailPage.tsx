@@ -31,6 +31,7 @@ import { detailHref } from "./connectionModel";
 import { useConnection } from "./useConnection";
 import { readableSurface } from "@/features/iga/coverage/surfaceNames";
 import type { CloudCoverageState } from "@/app/api/cloudDiscoveryApi";
+import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 function duration(a?: string | null, b?: string | null): string | null {
   if (!a || !b) return null;
@@ -95,7 +96,7 @@ function AwsScan({ c, runId }: { c: Connection; runId: string }) {
         </Facts>
         {data.last_error && (data.status === "failed" || data.status === "abandoned") ? (
           <p role="alert" className="mt-3 rounded-md bg-(--color-danger-soft) px-3 py-2 text-xs text-(--color-danger-text)">
-            {data.last_error}. Earlier results are still shown, and marked stale where affected.
+            {safeErrorProse(data.last_error)}. Earlier results are still shown, and marked stale where affected.
           </p>
         ) : null}
         {live ? <Meta className="mt-3">This page updates while the scan runs. Scans in a workspace run one at a time, so a queued scan may wait for another.</Meta> : null}
