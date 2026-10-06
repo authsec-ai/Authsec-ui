@@ -39,7 +39,6 @@ const DevBypassPage = import.meta.env.DEV
   : null;
 import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
 // import { GroupsPage } from "./features/groups/GroupsPage";
-// import ResourcesPage from "./features/resources/ResourcesPage";
 
 // Resource server is now a backend/API term. User-facing legacy
 // `/resource-servers/*` URLs redirect into the Applications console.
@@ -109,7 +108,6 @@ import {
 
 // New pages
 // import CreateGroupPage from "./features/groups/CreateGroupPage";
-// import { AddResourcePage } from "./features/resources/AddResourcePage";
 
 // RBAC pages
 import { PermissionsPage } from "./features/permissions/PermissionsPage";

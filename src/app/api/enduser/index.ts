@@ -7,5 +7,4 @@
 
 export * from './rolesApi';
 export * from './permissionsApi';
-export * from './resourcesApi';
 export * from './usersApi';
