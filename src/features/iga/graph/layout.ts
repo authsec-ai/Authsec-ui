@@ -72,6 +72,9 @@ export function columnOfKind(kind: string): number {
     case "iam_role":
     case "iam_user":
     case "iam_group":
+    case "k8s_service_account":
+    case "k8s_user":
+    case "k8s_group":
       return 1;
     case "statement":
       return 2;

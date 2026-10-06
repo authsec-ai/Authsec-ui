@@ -41,6 +41,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { k8sNodePath } from "../k8s/links";
 import { viaLink } from "../shared/links";
 import { useEvidence, withoutMark } from "../evidence/useEvidence";
 import { announce } from "../shared/announce";
@@ -91,7 +92,19 @@ const CANVAS_MIN = 560;
 const INSPECTOR_MIN = 360;
 const INSPECTOR_MAX = 420;
 
-type GraphTabProps = { ws: string; root: GraphRef; rootName: string };
+type GraphTabProps = {
+  ws: string;
+  root: GraphRef;
+  rootName: string;
+  /**
+   * `k8s`: a Kubernetes root. Its answers are unrevisioned — the rows belong to
+   * no publication — so this investigation never pins a revision, never sends
+   * `rev`, never marks the workspace's pin stale and never shows "newer
+   * publication"; `meta.rev` on its answers (the AWS publication current in the
+   * snapshot) is ignored. Paths to a resource are not offered. Default `aws`.
+   */
+  provider?: "aws" | "k8s";
+};
 
 /**
  * The claims that name a line in `edge=`: a drawn relationship's first
@@ -127,9 +140,10 @@ const DENSE_EDGES = 40;
 export default function GraphTab(props: GraphTabProps) {
   const [params] = useSearchParams();
   const direction = refType(props.root) === "resource" ? "reverse" : params.get("direction") === "reverse" && refType(props.root) === "identity" ? "reverse" : "forward";
-  return <GraphInvestigation key={`${graphSessionGeneration()}|${props.ws}|${props.root}|${direction}`} {...props} direction={direction} />;
+  return <GraphInvestigation key={`${graphSessionGeneration()}|${props.ws}|${props.provider ?? "aws"}|${props.root}|${direction}`} {...props} direction={direction} />;
 }
-function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & { direction: GraphDirection }) {
+function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }: GraphTabProps & { direction: GraphDirection }) {
+  const k8s = provider === "k8s";
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   // Selection edits replace the entry and keep its history state: the
@@ -137,7 +151,18 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const location = useLocation();
   const dispatch = useAppDispatch();
   const evidence = useEvidence();
-  const { rev, epoch, stale, refresh, markStale } = useGraphRevision(ws);
+  const pinned = useGraphRevision(ws);
+  // A Kubernetes answer is unrevisioned: it neither reads nor moves the workspace's pin. Its own
+  // Refresh is a local epoch, which re-reads and replays the expansions exactly as an AWS one does.
+  const [k8sEpoch, setK8sEpoch] = useState(0);
+  const rev = k8s ? null : pinned.rev;
+  const epoch = k8s ? k8sEpoch : pinned.epoch;
+  const stale = k8s ? null : pinned.stale;
+  const markStale = pinned.markStale;
+  const awsRefresh = pinned.refresh;
+  // Whether a read may go out: an AWS investigation waits for its revision to be pinned; a Kubernetes one has none.
+  const readable = k8s || rev != null;
+  const refresh = useCallback(() => (k8s ? setK8sEpoch((e) => e + 1) : awsRefresh()), [k8s, awsRefresh]);
   const narrow = useMediaQuery("(max-width: 767px)");
 
   const isIdentity = refType(root) === "identity";
@@ -167,7 +192,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const rootArgs = { ws, rev, key: String(epoch), root, direction, assume_hops: 2 };
   const rootQuery = useGetGraphNeighbourhoodQuery(rootArgs);
   const rootFailure = classifyGraphError(rootQuery.error);
-  useTrackRevision(ws, rootQuery.currentData, rootFailure, (r, d) =>
+  // A Kubernetes answer carries the AWS publication current in its snapshot as meta.rev: it must not pin or move the workspace's.
+  useTrackRevision(ws, k8s ? undefined : rootQuery.currentData, k8s ? null : rootFailure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphNeighbourhood", { ...rootArgs, rev: r }, d)),
   );
 
@@ -242,7 +268,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     if (replayQueueRef.current.length === 0) return;
     // Wait for the new revision to be pinned: a replay sent unpinned could be
     // answered from a later publication than the root it is merged into.
-    if (!model.root || rootQuery.isFetching || rev == null || stale || modelRef.current.generationKey !== currentKey) return;
+    if (!model.root || rootQuery.isFetching || !readable || stale || modelRef.current.generationKey !== currentKey) return;
     let cancelled = false;
     const queue = replayQueueRef.current;
     const cancelledKeys = cancelledReplayKeys.current;
@@ -278,7 +304,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           }).unwrap();
           if (cancelled) return;
           if (cancelledReplayKeys.current.has(item.key)) break;
-          if (res.meta.rev !== rev) { markStale({ currentRev: res.meta.rev ?? undefined }); replayQueueRef.current = queue.slice(next); next = queue.length; return; }
+          if (!k8s && res.meta.rev !== rev) { markStale({ currentRev: res.meta.rev ?? undefined }); replayQueueRef.current = queue.slice(next); next = queue.length; return; }
           dispatchModel({ type: "expand-success", key: item.key, data: res.data });
           for (const node of res.data.nodes) replayNodes.add(node.ref);
           const nextCursor = res.data.next_cursor;
@@ -309,7 +335,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
       cancelled = true;
       if (next < queue.length) replayQueueRef.current = [...queue.slice(next), ...replayQueueRef.current].filter((item) => !cancelledKeys.has(item.key));
     };
-  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
+  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, readable, k8s, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
 
 
   /* -------------------------------- expansion -------------------------------- */
@@ -319,7 +345,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     (f: GraphFrontier, cursor?: string) => {
       if (stale || modelRef.current.generationKey !== currentKey) return; // paused: the control shows "Refresh" instead (§2.14.5)
       const key = frontierKey(f);
-      if (modelRef.current.loading.has(key) || rev == null) return;
+      if (modelRef.current.loading.has(key) || !readable) return;
       const attempt = (expansionAttempts.current.get(key) ?? 0) + 1;
       expansionAttempts.current.set(key, attempt);
       const requestKey = currentKey;
@@ -330,7 +356,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           // The investigation has moved to a different root, direction or
           // revision since this was requested: drop it (review item 3).
           if (!mounted.current || currentKeyRef.current !== requestKey || expansionAttempts.current.get(key) !== attempt) return;
-          if (res.meta.rev != null && rev != null && res.meta.rev > rev) {
+          if (!k8s && res.meta.rev != null && rev != null && res.meta.rev > rev) {
             // Answered at a newer revision than the one pinned: never merged
             // (review item 2) — mark stale and clear the read in flight, so
             // the control reads "paused" rather than "Could not load".
@@ -353,7 +379,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           announce("Could not load. Retry");
         });
     },
-    [stale, ws, rev, epoch, currentKey, triggerExpand, dispatchModel, markStale],
+    [stale, ws, rev, readable, k8s, epoch, currentKey, triggerExpand, dispatchModel, markStale],
   );
 
   const handleLoadMore = useCallback(
@@ -396,7 +422,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
 
   /* ---------------------------------- path ----------------------------------- */
 
-  const targetRef = params.get("target") as GraphRef | null;
+  // Paths to a resource are not offered for Kubernetes: a rule names resource types, never an instance.
+  const targetRef = k8s ? null : (params.get("target") as GraphRef | null);
   const lastGoodPathTargetRef = useRef<string | null>(null);
   const sameTargetAsShown = targetRef !== null && lastGoodPathTargetRef.current === `${root}|${targetRef}`;
   const pathArgs = { ws, rev, key: String(epoch), from: root, to: targetRef ?? root };
@@ -467,8 +494,15 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // default), Detailed (every statement drawn) or Paths. `as=canvas` from an
   // older link means Overview.
   const asParam = params.get("as");
-  const view: "overview" | "detailed" | "paths" =
-    asParam === "paths" || (narrow && !asParam) ? "paths" : asParam === "detailed" ? "detailed" : "overview";
+  const view: "overview" | "detailed" | "paths" = k8s
+    ? asParam === "detailed"
+      ? "detailed"
+      : "overview"
+    : asParam === "paths" || (narrow && !asParam)
+      ? "paths"
+      : asParam === "detailed"
+        ? "detailed"
+        : "overview";
   const showPaths = view === "paths";
   const setView = (mode: "overview" | "detailed" | "paths") => {
     const next = new URLSearchParams(params);
@@ -520,10 +554,11 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   const { nodes: mNodes, edges: mEdges, nodeOwners, edgeOwners, frontierEntries, expanded: mExpanded, cursors: mCursors, loading: mLoading, failed: mFailed } = model;
   const grouped = useMemo(() => {
     const ungrouped = new Set([...revealedWorkloads, ...pathRefs]);
-    return buildVisual(modelRef.current, ungrouped);
+    // Kubernetes Summary: the rules of one role are one card, titled by the role.
+    return buildVisual(modelRef.current, ungrouped, k8s && view === "overview");
     // modelRef.current is the model of this render; its view fields are the deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mNodes, mEdges, nodeOwners, edgeOwners, frontierEntries, model.root, revealedWorkloads, pathRefs]);
+  }, [mNodes, mEdges, nodeOwners, edgeOwners, frontierEntries, model.root, revealedWorkloads, pathRefs, k8s, view]);
   // Only Overview summarises; Paths lists and selects the claims themselves.
   const projected = useMemo(() => (view === "overview" ? summarizeStatements(grouped) : grouped), [grouped, view]);
   // A folded branch says whether its parent still has relationships of that
@@ -839,31 +874,42 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
         dispatchModel({ type: "reveal-workloads", refs: [...model.revealedWorkloads, ...group.members.map((n) => n.ref)] });
         return;
       }
+      if (k8s) {
+        // A Kubernetes object has its own page; the AWS detour (`via`) names AWS routes.
+        const path = k8sNodePath(modelRef.current.nodes.get(ref));
+        if (path) navigate(path);
+        return;
+      }
       const path = objectPath(ref);
       if (path) {
         const link = viaLink(path, { ref: root, name: rootName });
         navigate(link.to, { state: link.state });
       }
     },
-    [navigate, root, rootName, visual.nodes, model.revealedWorkloads, dispatchModel],
+    [navigate, k8s, root, rootName, visual.nodes, model.revealedWorkloads, dispatchModel],
   );
 
   const focusHere = useCallback(
     (ref: GraphRef) => {
+      if (k8s) {
+        const path = k8sNodePath(modelRef.current.nodes.get(ref), "graph");
+        if (path) navigate(path);
+        return;
+      }
       const path = objectPath(ref);
       if (path && refType(ref) !== "external_principal") {
         const link = viaLink(`${path}/graph`, { ref: root, name: rootName });
         navigate(link.to, { state: link.state });
       }
     },
-    [navigate, root, rootName],
+    [navigate, k8s, root, rootName],
   );
 
   const generationKey = model.generationKey;
   const stateOf = useCallback(
-    (f: GraphFrontier) => expandStateOf(modelRef.current, frontierKey(f), !!stale || rev == null || generationKey !== currentKey),
+    (f: GraphFrontier) => expandStateOf(modelRef.current, frontierKey(f), !!stale || !readable || generationKey !== currentKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mExpanded, mLoading, mFailed, stale, rev, generationKey, currentKey],
+    [mExpanded, mLoading, mFailed, stale, readable, generationKey, currentKey],
   );
   const canLoadMore = useCallback(
     (f: GraphFrontier) => canLoadMoreOf(modelRef.current, frontierKey(f)),
@@ -1034,7 +1080,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   if (hardFailure || (firstLoad && rootFailure)) {
     body = (
       <div className="p-4">
-        <GraphStatePanel failure={rootFailure!} subject="this graph" onRetry={() => void rootQuery.refetch()} onRefresh={refresh} />
+        <GraphStatePanel failure={rootFailure!} subject="this graph" onRetry={() => void rootQuery.refetch()} onRefresh={refresh} source={k8s ? "the identity graph" : undefined} />
       </div>
     );
   } else if (firstLoad) {
@@ -1130,7 +1176,9 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           <div role="status" className="absolute inset-x-0 top-6 mx-auto w-fit max-w-md rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-center text-sm shadow-(--shadow-xs)">
             {rootFrontier.length
               ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
-              : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
+              : k8s
+                ? `The latest sweep recorded no relationships for ${rootName}. That is what the sweep read — where it was partial, some may be missing, and that is not the same as having none.`
+                : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
           </div>
         ) : null}
       </div>
@@ -1150,15 +1198,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     >
       <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title="The short answer: who it acts as and what it declares access to">
+          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
             Summary
           </button>
-          <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title="Every policy statement drawn">
+          <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title={k8s ? "Every rule drawn" : "Every policy statement drawn"}>
             Detailed
           </button>
-          <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="How it reaches each thing, as a list of paths">
-            Paths
-          </button>
+          {k8s ? null : (
+            <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="How it reaches each thing, as a list of paths">
+              Paths
+            </button>
+          )}
         </div>
         {isIdentity ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
@@ -1274,6 +1324,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           onZoomIn={() => canvasApi.current?.zoomIn()}
           onZoomOut={() => canvasApi.current?.zoomOut()}
           canvas={!showPaths}
+          k8s={k8s}
         />
       ) : null}
       {evidencePanel && !inline ? evidencePanel : null}

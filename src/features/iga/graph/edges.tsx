@@ -22,7 +22,7 @@ import { BaseEdge, EdgeLabelRenderer, Position, getBezierPath, type Edge, type E
 import { cn } from "@/lib/utils";
 
 import { limitationText } from "../shared/labels";
-import { EDGE_MEANING, edgeVerb, independentCount, markedLimitations, mixedStateText } from "./graphLabels";
+import { edgeMeaning, edgeVerb, independentCount, isK8sEdge, markedLimitations, mixedStateText } from "./graphLabels";
 import type { VisualEdge } from "./types";
 
 export interface GraphEdgeData extends Record<string, unknown> {
@@ -83,7 +83,15 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
 
   const description = [
     edgeVerb(e),
-    grants > 1 ? (e.kind === "grant" ? `${grants} independent grants` : e.kind === "declares" ? `${grants} statements` : `${grants} relationships`) : null,
+    grants > 1
+      ? e.kind === "grant"
+        ? isK8sEdge(e)
+          ? `${grants} rules`
+          : `${grants} independent grants`
+        : e.kind === "declares"
+          ? `${grants} statements`
+          : `${grants} relationships`
+      : null,
     e.state !== "current" ? e.state : null,
     mixed,
     e.closesCycle ? "closes a cycle" : null,
@@ -127,7 +135,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
             aria-pressed={data.isSelected}
             // The label says the verb; hovering says what it means (the
             // legend for lines lives here, on the line itself).
-            title={[description !== edgeVerb(e) ? description : null, EDGE_MEANING[e.kind]].filter(Boolean).join(" — ")}
+            title={[description !== edgeVerb(e) ? description : null, edgeMeaning(e)].filter(Boolean).join(" — ")}
             className={cn(
               "group flex items-center gap-1 rounded-full text-[11px] font-medium outline-none",
               "focus-visible:ring-2 focus-visible:ring-(--color-primary)",

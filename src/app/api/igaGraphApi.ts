@@ -680,9 +680,40 @@ export interface ResourceAccess {
 export type GraphNodeKind =
   | "workload"
   | IdentityKind
+  | K8sIdentityKind
   | "external_principal"
   | "statement"
   | ResourceKind;
+
+/** A Kubernetes identity node: a ServiceAccount, or a User or Group a binding names. */
+export type K8sIdentityKind = "k8s_service_account" | "k8s_user" | "k8s_group";
+
+/** A Kubernetes workload's `runtime_kind`: `k8s_` and the workload kind (`k8s_deployment`). */
+export type K8sRuntimeKind = `k8s_${string}`;
+
+/** A Kubernetes rule as the projection stored it; `*` stays `*` (internal/igaread GraphK8sRule). */
+export interface K8sRule {
+  verbs: string[];
+  api_groups: string[];
+  resources: string[];
+  resource_names: string[];
+  non_resource_urls: string[];
+}
+
+/** A Kubernetes node's scope: its cluster (internal/igaread GraphScope). */
+export interface K8sScope {
+  kind: "k8s_cluster";
+  id: string;
+  label: string;
+}
+
+/** The binding a Kubernetes grant comes through; `namespace` is null for a ClusterRoleBinding. */
+export interface K8sAssignment {
+  ref: GraphRef;
+  kind: "k8s_role_binding" | "k8s_cluster_role_binding";
+  name: string;
+  namespace: string | null;
+}
 
 export type GraphEdgeKind =
   | "executes_as"
@@ -703,7 +734,7 @@ export interface GraphNode {
   last_confirmed_at: string | null;
   stale_reason?: StaleReason[];
   arn?: string;
-  runtime_kind?: RuntimeKind;
+  runtime_kind?: RuntimeKind | K8sRuntimeKind;
   restrictions?: Restrictions;
   used_by_count?: ExactCount;
   mechanism?: string;
@@ -721,6 +752,17 @@ export interface GraphNode {
   exclusions?: Exclusion[];
   text?: string;
   type?: string;
+  /**
+   * Kubernetes nodes only (internal/igaread traverse_k8s.go), absent on every
+   * AWS node. A Kubernetes node has no `account` and no `arn`. `sub_scope` is
+   * the namespace, null for a cluster-scoped object; `native_id` is
+   * `namespace/name`; `k8s_rule` is a rule node's PolicyRule.
+   */
+  provider?: "k8s";
+  scope?: K8sScope;
+  sub_scope?: string | null;
+  native_id?: string;
+  k8s_rule?: K8sRule;
   limitations: EvidenceLimitation[];
 }
 
@@ -739,6 +781,15 @@ export interface GraphEdge {
   crosses_account: boolean;
   last_confirmed_at: string | null;
   stale_reason?: StaleReason[];
+  /**
+   * Kubernetes grants only, absent on every AWS edge: the binding the rule
+   * reaches the identity through, and the role it belongs to (`policy_ref`,
+   * `policy_kind` k8s_role | k8s_cluster_role).
+   */
+  provider?: "k8s";
+  policy_ref?: GraphRef;
+  policy_kind?: "k8s_role" | "k8s_cluster_role";
+  assignment?: K8sAssignment;
   limitations: EvidenceLimitation[];
 }
 
@@ -775,9 +826,11 @@ export interface GraphBudgets {
 }
 
 export interface GraphMeta {
+  /** On a Kubernetes answer this is the AWS publication current in the snapshot, not one the rows belong to. */
   rev: number | null;
   published_at: string | null;
-  graph_state?: GraphState;
+  /** `unrevisioned` on a Kubernetes answer: its rows belong to no publication. */
+  graph_state?: GraphState | "unrevisioned";
   budgets?: GraphBudgets;
   /** Stated once for every element of the response. */
   limitations?: EvidenceLimitation[];
@@ -834,7 +887,10 @@ export type LimitationCode =
   | "surface_stale"
   | "surface_partial"
   | "surface_denied"
-  | "activity_attempts_not_outcomes";
+  | "activity_attempts_not_outcomes"
+  | "k8s_coverage_gap"
+  | "k8s_unresolved_bindings"
+  | "k8s_observations_not_recorded";
 
 /** `{code, ...that code's own fields}` (§5.3 *Evidence*). */
 export interface EvidenceLimitation {
@@ -854,6 +910,12 @@ export interface EvidenceLimitation {
   surface?: string;
   state?: string;
   since?: string | null;
+  /** k8s_coverage_gap: the cluster and namespace (null: the cluster-scoped part) whose sweep could not read it, and when. */
+  cluster?: string | null;
+  namespace?: string | null;
+  observed_at?: string | null;
+  /** k8s_unresolved_bindings: `count` of them, the first named as `namespace/name` or `name`. */
+  bindings?: string[];
 }
 
 export interface EvidenceFact {
