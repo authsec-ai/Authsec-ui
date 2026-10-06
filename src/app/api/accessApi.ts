@@ -146,7 +146,7 @@ export interface CreateScopeCatalogEntryRequest {
   risk_level?: string;
 }
 
-function toQueryString(params?: Record<string, string | number | boolean | undefined>) {
+function toQueryString(params?: object | void) {
   if (!params) return "";
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

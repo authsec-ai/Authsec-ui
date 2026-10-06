@@ -830,7 +830,7 @@ const OIDCLoginPageInner: React.FC = () => {
               workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
-              clientId, // Include client_id in Redux state
+              clientId: clientId ?? undefined, // Include client_id in Redux state
             })
           );
 
@@ -852,7 +852,7 @@ const OIDCLoginPageInner: React.FC = () => {
               workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
-              clientId, // Include client_id in Redux state
+              clientId: clientId ?? undefined, // Include client_id in Redux state
             })
           );
 

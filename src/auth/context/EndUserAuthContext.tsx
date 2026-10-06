@@ -399,7 +399,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
         credential: {
           id: credential.id,
           rawId: arrayBufferToBase64Url(publicKeyCredential.rawId),
-          type: "public-key",
+          type: "public-key" as const,
           response: {
             attestationObject: arrayBufferToBase64Url(response.attestationObject),
             clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
@@ -565,7 +565,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
         credential: {
           id: credential.id,
           rawId: arrayBufferToBase64Url(publicKeyCredential.rawId),
-          type: "public-key",
+          type: "public-key" as const,
           response: {
             clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
             authenticatorData: arrayBufferToBase64Url(response.authenticatorData),

@@ -1,7 +1,7 @@
 import { baseApi } from './baseApi';
 
 // Placeholder API for vault/secrets feature - will be implemented when backend is ready
-export const vaultApi = baseApi.injectEndpoints({
+export const vaultApi = baseApi.enhanceEndpoints({ addTagTypes: ['Secret'] }).injectEndpoints({
   endpoints: (builder) => ({
     // Placeholder endpoints that return mock data for now
     getSecrets: builder.query<any[], any>({

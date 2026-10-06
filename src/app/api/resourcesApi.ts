@@ -1,46 +1,12 @@
-import { baseApi, withSessionData } from './baseApi';
+import { baseApi } from './baseApi';
 import type {
   Resource,
-  ResourceWithStats,
   ResourceFilters,
   ResourceAnalytics,
   Scope,
   BulkUpdateResult,
   BulkDeleteResult,
-  ListParams
 } from '@/types/database';
-
-// AuthSec API types
-interface AuthSecResource {
-  id: string;
-  name: string;
-  description?: string;
-  workspace_id?: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-interface UserDefinedResourceInput {
-  name: string;
-  description?: string;
-}
-
-interface UserDefinedResourcesRequest {
-  workspace_id: string;
-  resources: UserDefinedResourceInput[];
-}
-
-interface DeleteResourcesRequest {
-  workspace_id: string;
-  resource_ids: string[];
-}
-
-interface MapResourcesRequest {
-  workspace_id: string;
-  project_id?: string;
-  client_id?: string;
-  resource_ids: string[];
-}
 
 export const resourcesApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({

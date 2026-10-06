@@ -159,7 +159,7 @@ export function FloatingHelp({
   const [activeSubTab, setActiveSubTab] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const resolveTabsForItem = (item: FloatingHelpItem) => {
+  const resolveTabsForItem = (item: FloatingHelpItem): FloatingHelpLanguageTab[] => {
     if (item.languageTabs && item.languageTabs.length > 0)
       return item.languageTabs;
     if (languageTabs && languageTabs.length > 0) return languageTabs;
@@ -476,7 +476,7 @@ export function FloatingHelp({
                                       step.code
                                         ? () =>
                                             handleCopy(
-                                              step.code,
+                                              step.code ?? "",
                                               `${tab.key}-${methodIdx}-${stepIdx}`
                                             )
                                         : undefined
@@ -503,7 +503,7 @@ export function FloatingHelp({
                                   step.code
                                     ? () =>
                                         handleCopy(
-                                          step.code,
+                                          step.code ?? "",
                                           `${tab.key}-${index}`
                                         )
                                     : undefined

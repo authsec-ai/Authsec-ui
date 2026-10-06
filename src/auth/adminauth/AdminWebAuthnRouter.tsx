@@ -53,12 +53,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
     const handoff = params.get("handoff");
     if (!handoff) return;
 
-    const payload = decodeHandoff<{
-      email?: string;
-      workspace_id?: string;
-      first_login?: boolean;
-      target?: "login" | "webauthn";
-    }>(handoff);
+    const payload = decodeHandoff(handoff);
 
     if (payload?.email && payload?.workspace_id) {
       dispatch(

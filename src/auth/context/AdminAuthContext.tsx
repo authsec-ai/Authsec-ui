@@ -500,7 +500,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Admin uses "Login" TOTP endpoints
       const result = await totpBeginLoginSetup({
         email: adminWebauthn.email,
-        workspace_id: adminWebauthn.workspaceId
+        workspace_id: adminWebauthn.workspaceId!
       });
 
       if ('data' in result && result.data) {
