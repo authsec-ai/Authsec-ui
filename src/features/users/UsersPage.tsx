@@ -27,7 +27,7 @@ import { BulkActionsBar, UsersTableSkeleton } from "./components/index.ts";
 import { MapRoleToScopeModal } from "@/features/mappings/components/MapRoleToScopeModal";
 import { AdminUsersTable } from "./components/AdminUsersTable";
 import { EndUserUsersTable } from "./components/EndUserUsersTable";
-import UsersFilterCard from "./components/UsersFilterCard.tsx";
+import UsersFilterCard, { type UserData } from "./components/UsersFilterCard.tsx";
 import AdminUsersFilterCard, { type AdminUsersFilterState } from "./components/AdminUsersFilterCard";
 import { UserSourceTabs, type UserSource } from "./components/UserSourceTabs";
 import { AddUsersModal } from "./components/AddUsersModal";
@@ -272,7 +272,7 @@ export function UsersPage() {
 
   // Configuration status - check if sync configs exist
   const { data: syncConfigsData } = useListSyncConfigsQuery();
-  const configs = syncConfigsData?.configs || [];
+  const configs = syncConfigsData ?? [];
   const adConfigured = configs.some((c) => c.sync_type === 'active_directory');
   const entraConfigured = configs.some((c) => c.sync_type === 'entra_id');
 
@@ -347,7 +347,7 @@ export function UsersPage() {
     if (!usersResponse) return [];
     
     // Handle AuthSec API response structure
-    let userData = [];
+    let userData: UserData[] = [];
     if (Array.isArray(usersResponse)) {
       userData = usersResponse;
     } else if (usersResponse.users && Array.isArray(usersResponse.users)) {

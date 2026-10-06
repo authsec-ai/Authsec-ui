@@ -53,6 +53,7 @@ export interface SyncConfig {
   last_sync_at?: string;
   last_sync_status?: string;
   last_sync_users_count?: number;
+  entra_client_id?: string;
 }
 
 export interface CreateSyncConfigRequest {

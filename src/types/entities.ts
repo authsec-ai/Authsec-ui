@@ -591,6 +591,14 @@ export interface EnhancedUser {
   is_synced?: boolean;
   accepted_invite?: boolean;
   MFAEnrolledAt?: string;
+  // Raw snake_case MFA/sync fields carried through from the API payload
+  mfa_enabled?: boolean;
+  mfa_method?: string[] | string | null;
+  mfa_default_method?: string;
+  mfa_enrolled_at?: string;
+  provider_name?: string;
+  sync_provider?: string;
+  sync_status?: string;
   scopes?: any[];
   resources?: any[];
 }
