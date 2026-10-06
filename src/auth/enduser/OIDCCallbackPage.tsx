@@ -169,6 +169,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           sessionStorage.setItem("uflow_user_picture", picture || "");
           sessionStorage.setItem("uflow_provider", provider);
           sessionStorage.setItem("uflow_provider_user_id", providerUserId);
+          // Registration is refused without the discover step's state token.
+          const stateToken = urlParams.get("state_token");
+          if (stateToken) sessionStorage.setItem("uflow_state_token", stateToken);
 
           // Clean up OAuth session data
           sessionStorage.removeItem("uflow_oauth_type");

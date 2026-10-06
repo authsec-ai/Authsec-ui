@@ -208,6 +208,7 @@ export interface UFlowOIDCCallbackData {
   provider: string;
   provider_user_id: string;
   success: boolean;
+  state_token?: string;
   // For existing users
   client_id?: string;
   workspace_domain?: string;
@@ -227,6 +228,9 @@ export interface CompleteUFlowOIDCRegistrationRequest {
   name: string;
   picture: string;
   provider_user_id: string;
+  // Single-use token from the discover step, bound server-side to the
+  // identity the IdP verified; registration is refused without it.
+  state_token?: string;
 }
 
 export interface CompleteUFlowOIDCRegistrationResponse {

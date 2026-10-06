@@ -333,6 +333,7 @@ export function AdminLoginHubPage() {
             picture: storedPicture || "",
             provider: storedProvider,
             provider_user_id: storedProviderUserId,
+            state_token: sessionStorage.getItem("uflow_state_token") || undefined,
             needs_domain: true,
             success: false,
           });
@@ -2044,6 +2045,7 @@ export function AdminLoginHubPage() {
             picture: uflowCallbackData.picture,
             provider: uflowCallbackData.provider,
             provider_user_id: uflowCallbackData.provider_user_id,
+            state_token: uflowCallbackData.state_token,
           }}
           onSuccess={handleDomainModalSuccess}
         />

@@ -24,6 +24,7 @@ interface TenantDomainSelectionModalProps {
     picture: string;
     provider: string;
     provider_user_id: string;
+    state_token?: string;
   };
   onSuccess: (data: {
     workspace_id: string;
@@ -108,6 +109,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
         name: userData.name,
         picture: userData.picture,
         provider_user_id: userData.provider_user_id,
+        state_token: userData.state_token,
       }).unwrap();
 
       if (result.success) {
