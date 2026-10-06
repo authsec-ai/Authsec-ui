@@ -120,6 +120,8 @@ export interface GraphCanvasProps {
   rightInset?: number;
   /** Full screen: no page behind the canvas to scroll, so the wheel zooms. */
   expanded?: boolean;
+  /** Print every line's relationship verb, not only on hover or selection. */
+  showEdgeLabels?: boolean;
   /** Bumped when the start object should be revealed: first layout, Arrange. */
   revealToken: number;
   /** Where the customer left this investigation, if they have been here before. */
@@ -163,6 +165,7 @@ function GraphCanvasInner({
   onMoveNode,
   rightInset = 0,
   expanded = false,
+  showEdgeLabels = true,
   revealToken,
   viewport,
   onViewportChange,
@@ -248,10 +251,11 @@ function GraphCanvasInner({
     }
     return drawn.map((e) => {
           const siblings = pairs.get([e.from, e.to].sort().join("\u0000")) ?? [e.id];
-          const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * 14;
+          // Wider apart while labels are on, so two labels between the same cards do not overlap.
+          const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * (showEdgeLabels ? 24 : 14);
           const selected = selection?.kind === "edge" && selection.id === e.id;
           const highlighted = highlightedEdgeIds?.has(e.id) ?? false;
-          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread };
+          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels };
           return {
             id: e.id,
             type: "graphEdge",
@@ -269,7 +273,7 @@ function GraphCanvasInner({
             },
           } satisfies RFGraphEdge;
         });
-  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge]);
+  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge, showEdgeLabels]);
 
   /* ------------------------------- viewport ------------------------------- */
 

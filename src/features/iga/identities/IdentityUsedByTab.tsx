@@ -156,7 +156,7 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
               ))}
             </>
           ) : (
-            <p className="text-sm text-(--color-text-muted)">
+            <p className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-[13px] text-(--color-text-muted)">
               An IAM user is not run as by a workload or assumed through a trust policy. What it may do is on its
               Permissions tab.
             </p>

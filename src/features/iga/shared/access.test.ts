@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { GrantLine, ResourceSummary, WorkloadResourceRow } from "@/app/api/igaGraphApi";
 
-import { accessLevel, accessScope, countWord, grantViews, isBroad, isFullAdmin, matchesFilter, parseAccessFilter, summarizeAccess } from "./access";
+import { accessLevel, accessScope, broadText, countWord, grantViews, isBroad, isFullAdmin, matchesFilter, parseAccessFilter, summarizeAccess } from "./access";
 
 const res = (text: string, kind: ResourceSummary["kind"], service: string | null = null): ResourceSummary => ({
   ref: `resource:${text}` as ResourceSummary["ref"],
@@ -212,5 +212,22 @@ describe("isFullAdmin narrowing", () => {
     expect(isFullAdmin({ ...base, excluded: true })).toBe(false);
     expect(isFullAdmin({ ...base, current: false })).toBe(false);
     expect(isFullAdmin({ ...base, conditional: false, excluded: false, current: true })).toBe(true);
+  });
+});
+
+describe("broadText", () => {
+  it("is null when nothing is broad", () => {
+    expect(broadText({ service: "s3" })).toBeNull();
+  });
+  it("names the service and the reach", () => {
+    expect(broadText({ service: "logs", broadShapes: [{ level: "write", scope: "all" }] })).toBe("Write access to all CloudWatch Logs resources");
+  });
+  it("says Allow * on * without a made-up service name", () => {
+    expect(broadText({ service: "any", broadShapes: [{ level: "full", scope: "all" }] })).toBe("Full access to every resource in any service");
+  });
+  it("puts the widest reach first and lists both", () => {
+    expect(
+      broadText({ service: "s3", broadShapes: [{ level: "full", scope: "specific" }, { level: "read", scope: "all" }] }),
+    ).toBe("Read access to all S3 resources; full access to a named S3 resource");
   });
 });

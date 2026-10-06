@@ -51,6 +51,7 @@ import {
 } from "./connectionModel";
 import { useAdminAccess } from "./permissions";
 import { ProviderGlyph } from "./ProviderGlyph";
+import { InfoTip } from "../shared/components/InfoTip";
 import { TruncatedId } from "../shared/components/TruncatedId";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
@@ -327,7 +328,17 @@ export default function ConnectionsPage() {
   return (
     <ConsolePage
       title="Connections"
-      description="The cloud accounts, clusters and code hosts AuthSec scans."
+      description={
+        <span className="inline-flex flex-wrap items-center gap-1">
+          Connect your AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organizations so AuthSec can
+          discover the identities, agents and permissions inside them.
+          <InfoTip label="What discovery reads">
+            Discovery is read-only. AuthSec reads metadata: identities, roles, policies and the workloads that use them. It
+            does not change anything in a connected source, and it does not read secret values or the data stored in your
+            resources.
+          </InfoTip>
+        </span>
+      }
       actions={
         canAdminister || adminLoading ? (
           // Until the server has answered whether this reader can administer, the control is shown but cannot be used.

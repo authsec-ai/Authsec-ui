@@ -71,6 +71,7 @@ export default function WorkloadPage() {
   const meta = retained?.meta;
   const base = `/iga/estate/${encodeURIComponent(id)}`;
   const [dialog, setDialog] = useState<"classify" | "undo" | null>(null);
+  const editable = !!meta?.capabilities?.can_classify && !!w && w.classification !== "provider_native_agent" && w.lifecycle === "active" && !vanished;
 
   // Tabs read at the pinned revision: until the header's answer has pinned it,
   // a tab would request unpinned and have its answer discarded. The Graph tab
@@ -81,7 +82,7 @@ export default function WorkloadPage() {
   if (w) {
     // Overview and Changes remain for a retired or vanished object; the other
     // tabs say they have no current data (SPEC-console-revamp.md).
-    if (active === "overview") body = <WorkloadOverview ws={ws} workload={w} gaps={meta?.coverage} frozen={vanished} publishedAt={meta?.published_at} />;
+    if (active === "overview") body = <WorkloadOverview ws={ws} workload={w} gaps={meta?.coverage} frozen={vanished} publishedAt={meta?.published_at} editable={editable} />;
     else if (active === "changes") body = rev != null || gone ? <ChangesTab ws={ws} object="workloads" id={id} lastConfirmedAt={w.last_confirmed_at} /> : null;
     else if (gone) body = <RetiredTab name={w.name} lastConfirmed={w.last_confirmed_at} />;
     else if (active === "graph") body = <LazyGraphTab ws={ws} root={w.ref} rootName={w.name} />;
@@ -90,7 +91,6 @@ export default function WorkloadPage() {
       body = <WorkloadResourcesTab ws={ws} workload={w} graphAvailable={feature.features.graph === true} />;
   }
 
-  const editable = !!meta?.capabilities?.can_classify && !!w && w.classification !== "provider_native_agent" && w.lifecycle === "active" && !vanished;
   const decision = w?.decision;
 
   return (

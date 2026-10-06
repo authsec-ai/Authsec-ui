@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Expand, LayoutGrid, LocateFixed, Maximize2, Minimize, Undo2 } from "lucide-react";
+import { Expand, LayoutGrid, LocateFixed, Maximize2, Minimize, Tags, Undo2 } from "lucide-react";
 
 import {
   igaGraphApi,
@@ -104,6 +104,25 @@ function lineKey(e: VisualEdge): GraphRef[] {
   const grant = e.members.find((m) => m.kind === "grant" && m.to === target?.from);
   return grant && target ? [grant.claim, target.claim] : [e.members[0].claim];
 }
+
+
+/** Where a view's moved cards are saved: Summary keeps the original key, so earlier saves still apply. */
+function layoutKeyOf(direction: string, view: string): string {
+  return view === "detailed" ? `${direction}:detailed` : direction;
+}
+
+/** The reader's Labels choice, kept per browser. Null: not chosen, so density decides. */
+const EDGE_LABELS_KEY = "iga.graph.edgeLabels";
+function readEdgeLabels(): boolean | null {
+  try {
+    const v = localStorage.getItem(EDGE_LABELS_KEY);
+    return v === "on" ? true : v === "off" ? false : null;
+  } catch {
+    return null;
+  }
+}
+/** Above this many drawn lines, labels start off: printed on every line they would crowd the canvas. */
+const DENSE_EDGES = 40;
 
 export default function GraphTab(props: GraphTabProps) {
   const [params] = useSearchParams();
@@ -564,7 +583,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // Positions the customer set on an earlier visit to this graph.
   useEffect(() => {
     if (!model.root || model.generationKey !== currentKey || model.manualPositions.size) return;
-    const saved = readSavedLayout(ws, root, direction);
+    const saved = readSavedLayout(ws, root, layoutKeyOf(direction, model.layoutView));
     if (saved.size) dispatchModel({ type: "seed-manual", positions: saved });
     // Once per investigation (and again after a refresh reset the model).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -575,8 +594,8 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
     // Nothing to write until the customer has moved something or reset.
     if (!savedOnce.current && !manualPositions.size) return;
     savedOnce.current = true;
-    writeSavedLayout(ws, root, direction, manualPositions);
-  }, [manualPositions, ws, root, direction]);
+    writeSavedLayout(ws, root, layoutKeyOf(direction, model.layoutView), manualPositions);
+  }, [manualPositions, ws, root, direction, model.layoutView]);
 
   // What is drawn now, and what was drawn last render: a node shown again
   // keeps its old place only if nothing drawn meanwhile has taken it.
@@ -629,16 +648,13 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // Every view switch lays the graph out again in its columns, then fits it
   // (the layout's own reveal) — Summary and Detailed draw different cards, and
   // placing the new ones beside the old layout overlapped them (G-01, G-03).
-  // The first render is the initial layout's, so only a change counts.
-  const shownView = useRef(view);
+  // Moved cards are kept per view: Detailed adds a statement column, so a card
+  // moved in Summary would land on top of Detailed's cards. Opening a graph
+  // straight on Detailed switches the model to it the same way.
   useEffect(() => {
-    if (shownView.current === view) return;
-    shownView.current = view;
-    // "relayout", not "reset-layout": every card is laid out again in its
-    // columns, and the cards the user moved are put back where they left them.
-    // Only the Reset layout button discards those.
-    if (view !== "paths") dispatchModel({ type: "relayout" });
-  }, [view, dispatchModel]);
+    if (view === "paths" || !model.root || model.layoutView === view) return;
+    dispatchModel({ type: "switch-view", to: view, saved: readSavedLayout(ws, root, layoutKeyOf(direction, view)) });
+  }, [view, model.root, model.layoutView, ws, root, direction, dispatchModel]);
   const layoutRun = useRef(0);
   const layoutSig = model.laidOut || !rootReadyForLayout(model, currentKey)
     ? ""
@@ -891,6 +907,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
   // the page. Escape leaves it once nothing is selected — the first Escape
   // still steps back out of a selection.
   const [expanded, setExpanded] = useState(false);
+  const [edgeLabelsChoice, setEdgeLabelsChoice] = useState<boolean | null>(readEdgeLabels);
+  const showEdgeLabels = edgeLabelsChoice ?? visual.edges.length <= DENSE_EDGES;
+  const toggleEdgeLabels = () => {
+    const next = !showEdgeLabels;
+    setEdgeLabelsChoice(next);
+    try {
+      localStorage.setItem(EDGE_LABELS_KEY, next ? "on" : "off");
+    } catch {
+      // Storage unavailable: the choice holds for this visit only.
+    }
+  };
   const hasSelection = params.has("node") || params.has("edge") || params.has("evidence");
   useEffect(() => {
     if (!expanded) return;
@@ -1081,6 +1108,7 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
           // A narrow window's drawer is modal and covers everything; nothing is panned for it.
           rightInset={card && !evidenceOpen ? 344 : evidenceOpen && !inline && !narrow ? inspectorWidth : 0}
           expanded={expanded}
+          showEdgeLabels={showEdgeLabels}
           revealToken={revealToken}
           viewport={model.viewport}
           onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
@@ -1167,6 +1195,17 @@ function GraphInvestigation({ ws, root, rootName, direction }: GraphTabProps & {
             title="Bring the starting object back into view"
           >
             <LocateFixed className="size-3.5" aria-hidden="true" /> Start
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            // Pressed reads as pressed: the same soft blue as a chosen filter.
+            className={cn("h-8 gap-1.5 px-2 text-xs", showEdgeLabels && "bg-(--color-primary-soft) text-(--color-primary-text) hover:bg-(--color-primary-soft)")}
+            aria-pressed={showEdgeLabels}
+            onClick={toggleEdgeLabels}
+            title={showEdgeLabels ? "Hide the relationship on every line (hover or select a line to see it)" : "Show the relationship on every line"}
+          >
+            <Tags className="size-3.5" aria-hidden="true" /> Labels
           </Button>
           {manualPositions.size ? (
             <Button

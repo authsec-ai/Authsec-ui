@@ -53,7 +53,7 @@ export function Panel({
 
 /** Label beside value, aligned in one column of labels. */
 export function Facts({ children, className }: { children: ReactNode; className?: string }) {
-  return <dl className={cn("grid grid-cols-[minmax(96px,max-content)_minmax(0,1fr)] items-baseline gap-x-6 gap-y-2.5", className)}>{children}</dl>;
+  return <dl className={cn("grid grid-cols-[minmax(96px,10rem)_minmax(0,1fr)] items-baseline gap-x-6 gap-y-2.5", className)}>{children}</dl>;
 }
 
 export function Fact({ label, children, mono = false }: { label: ReactNode; children: ReactNode; mono?: boolean }) {

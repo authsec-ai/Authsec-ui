@@ -20,9 +20,15 @@ import { FacetCheckList } from "@/features/iga/shared/components/FacetSelect";
 import { useListFilters, useSlashToSearch } from "@/features/iga/shared/useListFilters";
 import type { GraphFacetValue } from "@/app/api/igaGraphApi";
 
+import { IgaBadge } from "@/features/iga/shared/components/IgaBadge";
+
 import { EventDrawer } from "./EventDrawer";
 import { KindGlyph } from "./KindGlyph";
 import { KIND_LABEL, LOG_EVENTS, LOG_KINDS, SAMPLE_NOW, type LogEvent, type LogKind } from "./fixtures";
+import { linkRetries } from "./retries";
+
+/** Which failures a later scan recovered: fixed for the sample set. */
+const RETRIES = linkRetries(LOG_EVENTS);
 
 const RANGES = [
   { value: "1h", label: "Last hour", ms: 60 * 60_000 },
@@ -98,8 +104,12 @@ export default function LogsPage() {
   const visible = matching();
   const settled = new Set(visible.filter((e) => e.object.kind === "scan" && (e.kind === "scan_finished" || e.kind === "scan_failed")).map((e) => e.object.id));
   const folded = (e: LogEvent) => collapsed && e.object.kind === "scan" && (e.kind === "scan_queued" || e.kind === "scan_running") && settled.has(e.object.id);
-  const shown = visible.filter((e) => !folded(e));
-  const failures = LOG_EVENTS.filter((e) => e.kind === "scan_failed");
+  // Newest first, always: a later success sits above the failure it recovered.
+  const shown = visible.filter((e) => !folded(e)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  // Only failures nothing has recovered since are worth a callout.
+  const failures = LOG_EVENTS.filter((e) => e.kind === "scan_failed" && !RETRIES.recoveredBy.has(e.id)).sort(
+    (a, b) => Date.parse(b.at) - Date.parse(a.at),
+  );
   const kindGroup = KIND_GROUPS.find((g) => g.kinds.length === kinds.length && g.kinds.every((k) => kinds.includes(k)))?.key ?? "custom";
   const facet = (skip: Facet, options: [string, string][], of: (e: LogEvent) => string): GraphFacetValue[] => {
     const rows = matching(skip);
@@ -151,15 +161,16 @@ export default function LogsPage() {
       description="Scans, publications, classifications and sign-ins, newest first."
     >
       {failures.length && kindGroup !== "failed" ? (
-        <div role="status" className="flex flex-wrap items-center gap-3 rounded-lg border border-(--color-danger)/30 bg-(--color-danger-soft) px-4 py-2.5">
-          <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-0.5">
-            <span className="text-sm font-semibold text-(--color-danger-text)">
-              {failures.length} sample {failures.length === 1 ? "scan failed" : "scans failed"}
-            </span>
-            <span className="text-[13px] text-(--color-danger-text)">Latest: {failures[0].reason ?? failures[0].sentence}</span>
-          </div>
-          <Button variant="outline" size="sm" className="h-9" onClick={showFailures}>
-            Show failures
+        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-2">
+          <IgaBadge tone="warning">
+            {failures.length} sample {failures.length === 1 ? "scan" : "scans"} not recovered
+          </IgaBadge>
+          <span className="min-w-0 flex-[1_1_280px] truncate text-[13px] text-(--color-text-muted)" title={failures[0].reason ?? failures[0].sentence}>
+            Failed and no later scan of the same source has succeeded. Latest: {failures[0].reason ?? failures[0].sentence}
+          </span>
+          {/* Lists every failure, recovered ones too (each says which). */}
+          <Button variant="ghost" size="sm" className="h-8" onClick={showFailures}>
+            Show all failures
           </Button>
         </div>
       ) : null}
@@ -257,9 +268,14 @@ export default function LogsPage() {
                       </time>
                       <span className="flex min-w-0 flex-col gap-1">
                         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                          <KindGlyph kind={e.kind} className="font-semibold" />
+                          {/* A failure a later scan recovered is history, not an alarm: amber, not red. */}
+                          <KindGlyph kind={e.kind} className="font-semibold" tone={e.kind === "scan_failed" && RETRIES.recoveredBy.has(e.id) ? "warning" : undefined} />
                           <span className="break-words text-sm leading-snug text-(--color-text)">{e.sentence}</span>
+                          {e.kind === "scan_failed" ? (
+                            RETRIES.recoveredBy.has(e.id) ? <IgaBadge tone="success">Recovered</IgaBadge> : <IgaBadge tone="danger">Not recovered</IgaBadge>
+                          ) : null}
                         </span>
+                        <RetryNote e={e} />
                         <span className="break-words text-xs text-(--color-text-muted)">
                           {e.source.label} · {e.actor.label}
                           {collapsed && e.object.kind === "scan" && (e.kind === "scan_finished" || e.kind === "scan_failed") ? " · queued and ran before this" : ""}
@@ -298,6 +314,20 @@ function FacetPopover({ label, noun, value, options, onChange }: {
       </PopoverContent>
     </Popover>
   );
+}
+
+/** The other half of a failure and its retry, so the two read as one story. */
+function RetryNote({ e }: { e: LogEvent }) {
+  const time = (x: LogEvent) => `${isToday(new Date(x.at)) ? "" : `${format(new Date(x.at), "d MMM")} `}${format(new Date(x.at), "HH:mm")}`;
+  if (e.kind === "scan_failed") {
+    const ok = RETRIES.recoveredBy.get(e.id);
+    return ok ? <span className="text-xs text-(--color-success-text)">Retried successfully at {time(ok)} ({ok.object.name})</span> : null;
+  }
+  if (e.kind === "scan_finished") {
+    const failed = RETRIES.retryOf.get(e.id);
+    return failed ? <span className="text-xs text-(--color-text-muted)">Recovered the failed scan at {time(failed)} ({failed.object.name})</span> : null;
+  }
+  return null;
 }
 
 function EmptyState({ title, body, action }: { title: string; body: string; action?: ReactNode }) {

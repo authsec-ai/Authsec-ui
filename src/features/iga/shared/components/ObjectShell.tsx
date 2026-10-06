@@ -318,6 +318,7 @@ export function TabBody({
   onRetry,
   onRefresh,
   flush,
+  bare = true,
   children,
 }: {
   failure: GraphFailure | null;
@@ -327,6 +328,8 @@ export function TabBody({
   onRetry: () => void;
   onRefresh: () => void;
   flush?: boolean;
+  /** The content brings its own panels: no outer card (the default). */
+  bare?: boolean;
   children: ReactNode;
 }) {
   if (!ready && !failure) {
@@ -347,6 +350,9 @@ export function TabBody({
       </TableCard>
     );
   }
+  // Every tab body is a set of its own panels (Panel, SectionList, policy
+  // sections). Wrapping them in another card drew a card inside a card.
+  if (bare) return <>{children}</>;
   return (
     <TableCard>
       <CardContent variant={flush ? "flush" : "default"}>{children}</CardContent>

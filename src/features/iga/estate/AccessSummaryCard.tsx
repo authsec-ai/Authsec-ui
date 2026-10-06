@@ -11,7 +11,7 @@
 
 import { Link } from "react-router-dom";
 
-import { LEVEL_LABEL, LEVEL_MEANING, countWord, serviceLabel, type AccessLevel, type ServiceAccess } from "../shared/access";
+import { LEVEL_LABEL, LEVEL_MEANING, broadText, countWord, serviceLabel, type AccessLevel, type ServiceAccess } from "../shared/access";
 import { IgaBadge } from "../shared/components/IgaBadge";
 import { InfoTip } from "../shared/components/InfoTip";
 import { Panel } from "../shared/components/Panel";
@@ -20,20 +20,36 @@ import type { WorkloadAccess } from "../shared/useWorkloadAccess";
 /** "Full access" reads as a sentence; in a "Service · Level" line it is "Full". */
 const SHORT_LEVEL: Record<AccessLevel, string> = { ...LEVEL_LABEL, full: "Full" };
 
+const BROAD_MEANING = "Not limited to a named resource (a wildcard over every resource of a type), or every action of the service.";
+
+/** The levels, defined once: the title's tooltip is the card's legend. */
+const LEGEND: { term: string; meaning: string }[] = [
+  { term: LEVEL_LABEL.read, meaning: LEVEL_MEANING.read },
+  { term: LEVEL_LABEL.write, meaning: LEVEL_MEANING.write },
+  { term: LEVEL_LABEL.full, meaning: LEVEL_MEANING.full },
+  { term: LEVEL_LABEL.other, meaning: LEVEL_MEANING.other },
+  { term: "Broad", meaning: BROAD_MEANING },
+];
+
 function Row({ s }: { s: ServiceAccess }) {
+  const broad = s.broad ? broadText(s) : null;
   return (
     <li className="flex min-h-10 items-center gap-3 px-4 py-2">
-      <span className="min-w-0 flex-1 truncate text-[13px] text-(--color-text)">
-        <span className="font-medium">{serviceLabel(s.service)}</span>
-        <span aria-hidden="true" className="px-1.5 text-(--color-text-muted)">
-          ·
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] text-(--color-text)">
+          <span className="font-medium">{serviceLabel(s.service)}</span>
+          <span aria-hidden="true" className="px-1.5 text-(--color-text-muted)">
+            ·
+          </span>
+          <span className="text-(--color-text-secondary)" title={LEVEL_MEANING[s.level]}>
+            {SHORT_LEVEL[s.level]}
+          </span>
         </span>
-        <span className="text-(--color-text-secondary)" title={LEVEL_MEANING[s.level]}>
-          {SHORT_LEVEL[s.level]}
-        </span>
+        {/* What "Broad" means here, said rather than left to a badge. */}
+        {broad ? <span className="text-xs leading-5 text-(--color-warning-text)">Broad: {broad}</span> : null}
       </span>
       {s.broad ? (
-        <IgaBadge tone="warning" title="Not limited to a named resource: a wildcard, or every action of the service.">
+        <IgaBadge tone="warning" title={BROAD_MEANING}>
           Broad
         </IgaBadge>
       ) : null}
@@ -64,9 +80,19 @@ export function AccessSummaryCard({
       title={
         <span className="inline-flex items-center gap-1">
           {title}
-          <InfoTip label="How this is worked out">
-            Declared in AWS and inferred from action names. Conditions, Deny statements and permissions boundaries are not evaluated.
-            {summary?.partial ? " Counts are from the first page, so they are a minimum." : ""}
+          <InfoTip label="What the access levels mean">
+            <dl className="space-y-1">
+              {LEGEND.map((l) => (
+                <div key={l.term}>
+                  <dt className="inline font-semibold">{l.term}: </dt>
+                  <dd className="inline">{l.meaning}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-2">
+              Declared in AWS and inferred from action names. Conditions, Deny statements and permissions boundaries are not evaluated.
+              {summary?.partial ? " Counts are from the first page, so they are a minimum." : ""}
+            </p>
           </InfoTip>
         </span>
       }
