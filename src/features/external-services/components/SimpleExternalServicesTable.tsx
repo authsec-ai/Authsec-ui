@@ -146,7 +146,6 @@ export function SimpleExternalServicesTable({
             <TableHead className="w-12">
               <Checkbox
                 checked={selectedServices.length === data.length && data.length > 0}
-                indeterminate={selectedServices.length > 0 && selectedServices.length < data.length}
                 onCheckedChange={onSelectAll}
                 aria-label="Select all services"
               />

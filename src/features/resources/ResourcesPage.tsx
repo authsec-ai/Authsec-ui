@@ -119,7 +119,7 @@ export default function ResourcesPage() {
 
   // Apply client-side filtering based on filter state
   const filteredResources = useMemo<Resource[]>(() => {
-    let result = processedResources;
+    let result: Resource[] = processedResources;
 
     // Apply search filter
     if (filters.searchQuery) {

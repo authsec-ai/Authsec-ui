@@ -59,7 +59,7 @@ const deriveProviderFromUrl = (url?: string): string => {
   }
 };
 
-const mapRawToExternalService = (raw: RawExternalService): ExternalService => {
+export const mapRawToExternalService = (raw: RawExternalService): ExternalService => {
   const provider = deriveProviderFromUrl(raw.url);
   const status: ExternalService["status"] =
     raw.auth_type === "none"

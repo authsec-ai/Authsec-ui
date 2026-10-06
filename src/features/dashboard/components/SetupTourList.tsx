@@ -100,19 +100,14 @@ export function SetupTourList() {
                 ? "accent"
                 : tour.color === "purple"
                   ? "accent"
-                  : tour.color === "amber"
-                    ? "warning"
-                    : "success"
+                  : "success"
             }
             title={tour.title}
             description={tour.description}
             isCompleted={tour.isCompleted}
             statusLabel={tour.isCompleted ? "Complete" : "Ready"}
             statusTone={tour.isCompleted ? "success" : "neutral"}
-            primaryActionLabel={tour.primaryActionLabel}
             onPrimaryAction={tour.onPrimaryAction}
-            secondaryActionLabel={tour.secondaryActionLabel}
-            onSecondaryAction={tour.onSecondaryAction}
             framed={false}
             primaryActionStyle="inline"
             revealActionsOnHover

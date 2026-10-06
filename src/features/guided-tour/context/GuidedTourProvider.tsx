@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useCallback, type ReactNode } from 'react';
 import type { GuidedTourContextValue, TourConfig, TourStep } from '../types';
 import { TourStorage } from '../utils/tourStorage';
 import { TOUR_REGISTRY } from '../utils/tourConfig';

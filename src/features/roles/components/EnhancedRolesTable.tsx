@@ -143,7 +143,7 @@ export function EnhancedRolesTable({
     renderExpandedRow: (row) => <RoleExpandedRow role={row.original} />,
     getRowId: (row) => row.id,
     expandedRowIds: Array.from(expandedRows),
-    onRowExpansionChange: (ids) => {
+    onExpandedRowsChange: (ids) => {
       setExpandedRows(new Set(ids));
     },
     onRowClick: (row) => onOpenDrawer?.(row.id),

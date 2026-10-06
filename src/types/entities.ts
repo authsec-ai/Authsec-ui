@@ -352,6 +352,7 @@ export interface AuditLog {
   reason?: string;
   ipAddress: string;
   userAgent: string;
+  correlationId?: string;
   status: 'success' | 'failed' | 'pending';
   rollbackAvailable?: boolean;
   metadata: Record<string, any>;

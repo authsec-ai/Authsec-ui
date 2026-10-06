@@ -397,7 +397,7 @@ export default function ScimConnectionsPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.id}
-              rowClassName={(row) => row.original?.status !== "active" ? "opacity-50" : undefined}
+              rowClassName={(row) => row.status !== "active" ? "opacity-50" : undefined}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}

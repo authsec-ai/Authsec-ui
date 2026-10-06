@@ -123,7 +123,7 @@ export function CreateClientWizard({
   const [createdToken, setCreatedToken] = useState<string | null>(null);
 
   const { data: applications = [], isLoading: appsLoading } =
-    useListApplicationsQuery({} as void);
+    useListApplicationsQuery();
 
   const [preRegister, { isLoading: isSaving }] =
     usePreRegisterResourceServerClientMutation();

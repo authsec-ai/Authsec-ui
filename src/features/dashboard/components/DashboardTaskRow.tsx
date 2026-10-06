@@ -13,7 +13,7 @@ interface DashboardTaskRowProps {
   isCompleted?: boolean;
   statusLabel: string;
   statusTone: DashboardStatusTone;
-  primaryActionLabel: string;
+  primaryActionLabel?: string;
   onPrimaryAction: () => void;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;

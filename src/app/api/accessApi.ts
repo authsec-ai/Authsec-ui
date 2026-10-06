@@ -33,6 +33,7 @@ export interface ApplicationRole {
   id: string;
   name: string;
   label: string;
+  display_name?: string;
   description?: string;
   application: AccessApplicationRef;
   is_default: boolean;
