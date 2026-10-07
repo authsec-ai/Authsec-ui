@@ -10,7 +10,6 @@ import {
   useListGraphIdentitiesQuery,
   type IdentityKind,
   type IdentityRow,
-  type IdentitySort,
   type ListIdentitiesArgs,
 } from "@/app/api/igaGraphApi";
 import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -18,8 +17,8 @@ import { copyToClipboard } from "@/lib/clipboard";
 
 import { useLoadFirstPublication } from "../pipeline/usePipeline";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
+import { ConfirmedValue } from "../shared/components/ObjectPreview";
 import { CountText } from "../shared/components/CountText";
-import { SortSelect } from "../shared/components/FacetSelect";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
@@ -49,13 +48,6 @@ import { LifecycleCell, PublishedBody, RowActions, SourceGate } from "./Publishe
 
 const MUTED = "text-(--color-text-muted)";
 
-const IDENTITY_SORTS: { value: IdentitySort; label: string }[] = [
-  { value: "name", label: "Name A–Z" },
-  { value: "-name", label: "Name Z–A" },
-  { value: "kind", label: "Kind" },
-  { value: "account", label: "Account" },
-  { value: "last_confirmed", label: "Last confirmed" },
-];
 const IDENTITY_KINDS: IdentityKind[] = ["iam_role", "iam_user", "iam_group"];
 
 function usedByText(r: IdentityRow): string {
@@ -72,9 +64,8 @@ export default function PublishedIdentities(p: ScreenProps) {
   const kind = valid(p.url.get("kind"), IDENTITY_KINDS);
   const bound = p.url.get("bound") ? ("workloads" as const) : undefined;
   const lifecycle = valid(p.url.get("lifecycle"), ["retired", "all"] as const);
-  const sort = valid(p.url.get("sort"), IDENTITY_SORTS.map((s) => s.value)) ?? "name";
 
-  const args: ListIdentitiesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, kind, used_by: bound, lifecycle, sort, cursor: c.paging.cursor };
+  const args: ListIdentitiesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, kind, used_by: bound, lifecycle, cursor: c.paging.cursor };
   const list = useListGraphIdentitiesQuery(args, { skip: c.gate.off || c.blocked });
   useTrackRevision(p.ws, list.currentData, classifyGraphError(list.error), (r, d) =>
     c.dispatch(igaGraphApi.util.upsertQueryData("listGraphIdentities", { ...args, rev: r }, d)),
@@ -204,7 +195,6 @@ export default function PublishedIdentities(p: ScreenProps) {
         columns={columns}
         getRowId={(r) => refId(r.ref)}
         facets={specs}
-        sortControl={<SortSelect value={sort} options={IDENTITY_SORTS} onChange={(v) => p.url.patch({ sort: v === "name" ? null : v })} />}
         searchPlaceholder="Search identities by name, ARN or account"
         clearKeys={["lifecycle", "kind", "bound", "source"]}
         describeEmpty="IAM roles, users or groups"
@@ -217,12 +207,16 @@ export default function PublishedIdentities(p: ScreenProps) {
             name: r.name,
             kindLabel: IDENTITY_KIND_LABEL[r.kind],
             provider: "aws",
-            context: [accountWithId(r.account) ?? "Account not stated", "Global (IAM has no region)"],
+            context: [],
             facts: [
+              { label: "Account", value: accountWithId(r.account) ?? "Account not stated", copy: r.account?.id },
+              { label: "Region", value: "Global (IAM has no region)" },
+              { label: "ARN", value: r.arn, mono: true, copy: r.arn },
               {
                 label: "Workloads bound",
                 value: r.kind === "iam_group" ? <span className={MUTED}>Groups are not run as</span> : <CountText count={countOfExact(r.used_by_count)} />,
               },
+              { label: "Last confirmed", value: <ConfirmedValue iso={r.last_confirmed_at} /> },
             ],
             exception:
               r.lifecycle === "retired"

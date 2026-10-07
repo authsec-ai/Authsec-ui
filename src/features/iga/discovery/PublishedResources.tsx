@@ -11,14 +11,13 @@ import {
   type ListResourcesArgs,
   type ResourceKind,
   type ResourceRow,
-  type ResourceSort,
 } from "@/app/api/igaGraphApi";
 import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { copyToClipboard } from "@/lib/clipboard";
 
 import { useLoadFirstPublication } from "../pipeline/usePipeline";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
-import { SortSelect } from "../shared/components/FacetSelect";
+import { ConfirmedValue } from "../shared/components/ObjectPreview";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId } from "../shared/labels";
@@ -42,12 +41,6 @@ import { LifecycleCell, PublishedBody, RowActions, SourceGate } from "./Publishe
 
 const MUTED = "text-(--color-text-muted)";
 
-const RESOURCE_SORTS: { value: ResourceSort; label: string }[] = [
-  { value: "kind", label: "Kind" },
-  { value: "name", label: "Name" },
-  { value: "service", label: "Service" },
-  { value: "account", label: "Account" },
-];
 
 /** A reference's readable part: an ARN's resource segment; anything else as written. */
 function referenceName(text: string): string {
@@ -65,13 +58,12 @@ export default function PublishedResources(p: ScreenProps) {
   const lifecycle = valid(p.url.get("lifecycle"), ["retired", "all"] as const);
   const representation = valid(p.url.get("representation"), ["exact", "selector"] as const);
   const external = p.url.get("external") ? true : false;
-  const sort = valid(p.url.get("sort"), RESOURCE_SORTS.map((s) => s.value)) ?? "kind";
   // The server has one `kind` — exact, selector or external — and an external
   // reference is neither of the first two, so the two facets share it: External
   // only overrides Representation, and says so.
   const kind: ResourceKind | undefined = external ? "external" : representation;
 
-  const args: ListResourcesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, region, kind, service, lifecycle, sort, cursor: c.paging.cursor };
+  const args: ListResourcesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, region, kind, service, lifecycle, cursor: c.paging.cursor };
   const list = useListGraphResourcesQuery(args, { skip: c.gate.off || c.blocked });
   useTrackRevision(p.ws, list.currentData, classifyGraphError(list.error), (r, d) =>
     c.dispatch(igaGraphApi.util.upsertQueryData("listGraphResources", { ...args, rev: r }, d)),
@@ -243,7 +235,6 @@ export default function PublishedResources(p: ScreenProps) {
         columns={columns}
         getRowId={(r) => refId(r.ref)}
         facets={specs}
-        sortControl={<SortSelect value={sort} options={RESOURCE_SORTS} onChange={(v) => p.url.patch({ sort: v === "kind" ? null : v })} />}
         searchPlaceholder="Search resources by ARN, pattern or account"
         clearKeys={["region", "lifecycle", "representation", "external", "service", "source"]}
         describeEmpty="resources named by declared access"
@@ -254,8 +245,14 @@ export default function PublishedResources(p: ScreenProps) {
           name: referenceName(r.text),
           kindLabel: `${RESOURCE_KIND_LABEL[r.kind]}${r.type !== "unknown" ? ` · ${r.type.replace(/_/g, " ")}` : ""}`,
           provider: "aws",
-          context: [accountWithId(r.account) ?? "Account not stated by the reference", r.region ?? "Region not stated"],
-          facts: [{ label: "Identities with declared access", value: <ResourceHolders ws={p.ws} id={refId(r.ref)} /> }],
+          context: [],
+          facts: [
+            { label: "Account", value: accountWithId(r.account) ?? "Account not stated by the reference", copy: r.account?.id },
+            { label: "Region", value: r.region ?? "Region not stated" },
+            { label: "Reference", value: r.text, mono: true, copy: r.text },
+            { label: "Identities with declared access", value: <ResourceHolders ws={p.ws} id={refId(r.ref)} /> },
+            { label: "Last confirmed", value: <ConfirmedValue iso={r.last_confirmed_at} /> },
+          ],
           exception:
             r.lifecycle === "retired"
               ? "Retired: no statement names it in the latest scan."
