@@ -601,9 +601,46 @@
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"]:focus-within {
-  /* A light wash of the primary blue, the same on every IGA table. */
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface-raised));
+  background: var(--component-table-row-hover);
   box-shadow: none;
+}
+
+/* The name in a list's first column is a link, and looks like one: always
+   link blue. The second selector outranks the table-cell `.truncate.font-medium`
+   rule further down, which would paint it in body ink. */
+[data-shell="iga"] :is(a[data-row-link], a[data-name-link]),
+[data-shell="iga"]
+  [data-slot="table-row"]
+  [data-slot="table-cell"]
+  :is(a[data-row-link], a[data-name-link]) {
+  color: var(--color-primary-text);
+}
+
+/* A clickable row says so before it is clicked: its text turns link blue
+   under the pointer (or keyboard focus), and the name is underlined. Only
+   ink in the console's text colours changes; a badge keeps its own tone. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"]
+  :is(a, [class*="text-(--color-text"]) {
+  color: var(--color-primary-text);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"]
+  :is(a[data-row-link], a[data-name-link]) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* A clickable row says so before it is clicked: pointer, and an eased tint. */
@@ -612,7 +649,7 @@
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"] {
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

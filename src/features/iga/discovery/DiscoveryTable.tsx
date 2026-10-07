@@ -59,7 +59,7 @@ export function RowName({
           state={state}
           data-row-link={rowKey}
           aria-current={selected ? "true" : undefined}
-          className="block min-w-0 truncate font-medium text-(--color-text) hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)"
+          className="block min-w-0 truncate font-medium text-(--color-primary-text) hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)"
           title={name}
         >
           {name}

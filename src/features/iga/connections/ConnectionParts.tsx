@@ -152,7 +152,8 @@ export function NameLink({ to, children }: { to: string; children: ReactNode }) 
   return (
     <Link
       to={to}
-      className="block truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
+      data-name-link
+      className="block truncate font-medium text-(--color-primary-text) hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
     >
       {children}
     </Link>
