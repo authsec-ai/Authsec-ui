@@ -5,8 +5,8 @@
  * *Sightings actions*; the capability remains in the backend, untouched).
  *
  * Status, Live only and Source are the server's filters and its `total` is
- * exact. The server has no `q` and no sort for this list, so the search box and
- * the sort control act on the page LOADED and say so. Paging is by offset,
+ * exact. The server has no `q` and no sort for this list, so the search box acts
+ * on the page LOADED and says so, and the rows are ordered on the page. Paging is by offset,
  * kept in history state.
  */
 
@@ -31,7 +31,6 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { TableCard } from "@/theme/components/cards";
 
-import { SortSelect } from "../shared/components/FacetSelect";
 import { PreviewLayout, type PreviewModel } from "../shared/components/ObjectPreview";
 import { Timestamp } from "../shared/components/Timestamp";
 import type { PagedView } from "../shared/listView";
@@ -52,10 +51,6 @@ const PAGE = 50;
 const NO_REPOSITORIES = /^\s*(no|0)\b/i;
 
 const STATUSES: DiscoveredAgentStatus[] = ["unregistered", "registered", "quarantined", "ignored"];
-const SORTS = [
-  { value: "last_seen", label: "Last seen (loaded rows)" },
-  { value: "name", label: "Name A–Z (loaded rows)" },
-] as const;
 
 // Gone last, so a destroyed agent never sits at the top of the list.
 const RUNTIME_RANK: Record<RuntimeStatus, number> = { running: 0, unknown: 1, stopped: 2, gone: 3 };
@@ -89,7 +84,6 @@ export default function SightingsScreen(p: ScreenProps) {
   const paging = usePaging("discovery-sightings", 0);
   const status = (STATUSES as string[]).includes(p.url.get("status") ?? "") ? (p.url.get("status") as DiscoveredAgentStatus) : undefined;
   const live = !!p.url.get("live");
-  const sort = p.url.sort === "name" ? "name" : "last_seen";
   const blocked = p.scope.kind === "unknown";
   const offset = Number(paging.cursor ?? 0) || 0;
 
@@ -111,12 +105,11 @@ export default function SightingsScreen(p: ScreenProps) {
   const matches = (a: DiscoveredAgent) => !needle || [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]].join(" ").toLowerCase().includes(needle);
   const rows = useMemo(() => {
     if (!loaded) return undefined;
-    return [...loaded].sort((a, b) =>
-      sort === "name"
-        ? (a.display_name || "").localeCompare(b.display_name || "")
-        : RUNTIME_RANK[a.runtime_status] - RUNTIME_RANK[b.runtime_status] || new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
+    // One order: running first, then the most recently seen.
+    return [...loaded].sort(
+      (a, b) => RUNTIME_RANK[a.runtime_status] - RUNTIME_RANK[b.runtime_status] || new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
     );
-  }, [loaded, sort]);
+  }, [loaded]);
 
   const total = q.currentData?.total;
   const view: PagedView<DiscoveredAgent, { next_cursor: string | null; limit: number; total_known: boolean; total?: number }> = (() => {
@@ -292,7 +285,6 @@ export default function SightingsScreen(p: ScreenProps) {
       facets={specs}
       trailing={
         <>
-          <SortSelect value={sort} options={[...SORTS]} onChange={(v) => p.url.patch({ sort: v === "last_seen" ? null : v })} />
           <ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={layout} />
         </>
       }

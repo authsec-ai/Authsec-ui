@@ -14,14 +14,32 @@ import { actionsOf, statusOf, type ActionSet } from "./connectionModel";
 import { PENDING_WORD, type ActionFailure, type ActionKind } from "./useConnectionActions";
 
 /** The primary condition in words, with a dot: colour is never the only signal. */
-export function StatusBlock({ c, clamp = true, pill = true }: { c: Connection; clamp?: boolean; pill?: boolean }) {
+/** States the Last scan column already explains: in a list they need only their pill. */
+const SAID_BY_LAST_SCAN = new Set(["connected", "scan_running", "scan_queued"]);
+
+export function StatusBlock({
+  c,
+  clamp = true,
+  pill = true,
+  brief = false,
+}: {
+  c: Connection;
+  clamp?: boolean;
+  pill?: boolean;
+  /** A list cell: the pill alone when all is well, else one line (full text on hover). */
+  brief?: boolean;
+}) {
   const s = statusOf(c);
+  const support = brief && SAID_BY_LAST_SCAN.has(s.key) ? "" : s.support;
   return (
     <div className="min-w-0 space-y-1">
       {pill ? <CloudPill tone={s.tone}>{s.label}</CloudPill> : null}
-      {s.support ? (
-        <p className={cn("text-xs leading-snug text-muted-foreground", clamp && "line-clamp-2")} title={clamp ? s.support : undefined}>
-          {s.support}
+      {support ? (
+        <p
+          className={cn("text-xs leading-snug text-muted-foreground", brief ? "line-clamp-1" : clamp && "line-clamp-2")}
+          title={brief || clamp ? support : undefined}
+        >
+          {support}
         </p>
       ) : null}
     </div>
@@ -153,7 +171,7 @@ export function NameLink({ to, children }: { to: string; children: ReactNode }) 
     <Link
       to={to}
       data-name-link
-      className="block truncate font-medium text-(--color-primary-text) hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
+      className="block truncate font-medium text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
     >
       {children}
     </Link>

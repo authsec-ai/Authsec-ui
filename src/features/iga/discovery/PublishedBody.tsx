@@ -56,7 +56,6 @@ export interface BodyProps<Row> {
   columns: AdaptiveColumn<Row>[];
   getRowId: (r: Row) => string;
   facets: FacetSpec[];
-  sortControl: ReactNode;
   searchPlaceholder: string;
   preview: (row: Row, meta: GraphListMeta | undefined) => PreviewModel;
   clearKeys: string[];
@@ -144,7 +143,6 @@ export function PublishedBody<Row>(b: BodyProps<Row>) {
       facets={b.facets}
       trailing={
         <>
-          {b.sortControl}
           <ColumnsMenu optional={b.chrome.prefs.optional} chosen={b.chrome.prefs.chosen} onChange={b.chrome.prefs.setChosen} onReset={b.chrome.prefs.reset} layout={b.chrome.layout} />
         </>
       }

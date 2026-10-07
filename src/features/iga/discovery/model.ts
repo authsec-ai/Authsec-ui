@@ -77,6 +77,7 @@ export type FilterKey =
   | "lifecycle"
   | "classification"
   | "runtime"
+  | "runs_as"
   | "kind"
   | "bound"
   | "representation"
@@ -93,6 +94,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   lifecycle: "Lifecycle",
   classification: "Classification",
   runtime: "Runtime",
+  runs_as: "Runs as",
   kind: "Kind",
   bound: "Bound to a workload",
   representation: "Representation",
@@ -111,7 +113,7 @@ export const NON_FILTER_PARAMS = ["provider", "type", "view", "q", "source", "se
 /** Server-side or client-side; the filters each list offers. Source is always offered and is not listed. */
 function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: DiscoveryType): FilterKey[] {
   if (provider === "aws" && view === "published") {
-    if (type === "workloads") return ["region", "lifecycle", "classification", "runtime"];
+    if (type === "workloads") return ["region", "lifecycle", "classification", "runtime", "runs_as"];
     if (type === "identities") return ["lifecycle", "kind", "bound"];
     if (type === "resources") return ["region", "lifecycle", "representation", "external", "service"];
   }
