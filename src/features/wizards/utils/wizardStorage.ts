@@ -1,6 +1,7 @@
 import type { WizardStorageData } from "../types";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
-const STORAGE_KEY = "authsec_wizards";
+const storageKey = () => scopedStorageKey("authsec_wizards");
 
 /**
  * Default wizard storage state
@@ -21,7 +22,7 @@ export const WizardStorage = {
    */
   get(): WizardStorageData {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey());
       if (!stored) return defaultStorage;
 
       const parsed = JSON.parse(stored);
@@ -39,7 +40,7 @@ export const WizardStorage = {
     try {
       const current = this.get();
       const updated = { ...current, ...data };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(storageKey(), JSON.stringify(updated));
     } catch (error) {
       console.error("[WizardStorage] Error saving storage:", error);
     }
@@ -158,7 +159,7 @@ export const WizardStorage = {
    */
   clear(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey());
     } catch (error) {
       console.error("[WizardStorage] Error clearing storage:", error);
     }

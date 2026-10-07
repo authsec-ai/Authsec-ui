@@ -34,8 +34,9 @@ import {
   useRevokeScimConnectionMutation,
 } from "@/app/api/scimConnectionsApi";
 import config from "@/config";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
-const INFO_KEY = "scim_connections_info_dismissed_v1";
+const infoKey = () => scopedStorageKey("scim_connections_info_dismissed_v1");
 
 type ScimConnection = {
   id: string;
@@ -57,10 +58,10 @@ export default function ScimConnectionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
   const [query, setQuery] = useState("");
   const [infoDismissed, setInfoDismissed] = useState(() => {
-    try { return localStorage.getItem(INFO_KEY) === "1"; } catch { return false; }
+    try { return localStorage.getItem(infoKey()) === "1"; } catch { return false; }
   });
 
-  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(INFO_KEY, "1"); } catch { /* storage unavailable; ignore */ } };
+  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(infoKey(), "1"); } catch { /* storage unavailable; ignore */ } };
 
   const handleCreate = async () => {
     try {

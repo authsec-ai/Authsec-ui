@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { DashboardHero } from "./DashboardHero";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 interface ActivationSectionProps {
   step1Done: boolean;
   step2Done: boolean;
@@ -14,7 +15,7 @@ export function ActivationSection({
   onStart,
   isWizardActive,
 }: ActivationSectionProps) {
-  const DISMISS_KEY = "activationCard_dismissed";
+  const DISMISS_KEY = scopedStorageKey("activationCard_dismissed");
   const [isDismissed, setIsDismissed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(DISMISS_KEY) === "true";
