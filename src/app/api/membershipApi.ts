@@ -122,7 +122,7 @@ export const membershipApi = baseApi.injectEndpoints({
         return { url: `authsec/uflow/v2/tenants/${workspaceId}/memberships${qs}` };
       },
       providesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.workspaceId },
+        { type: "WorkspaceMembership", id: arg.workspaceId },
       ],
     }),
 
@@ -143,7 +143,7 @@ export const membershipApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.workspaceId },
+        { type: "WorkspaceMembership", id: arg.workspaceId },
       ],
     }),
 
@@ -163,7 +163,7 @@ export const membershipApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.workspaceId },
+        { type: "WorkspaceMembership", id: arg.workspaceId },
       ],
     }),
 
@@ -176,7 +176,7 @@ export const membershipApi = baseApi.injectEndpoints({
         method: "DELETE",
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantMembership", id: arg.workspaceId },
+        { type: "WorkspaceMembership", id: arg.workspaceId },
       ],
     }),
 
@@ -199,7 +199,7 @@ export const membershipApi = baseApi.injectEndpoints({
         return { url: `authsec/uflow/v2/tenants/${workspaceId}/end-users${qs}` };
       },
       providesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.workspaceId },
+        { type: "WorkspaceEndUserState", id: arg.workspaceId },
       ],
     }),
 
@@ -211,7 +211,7 @@ export const membershipApi = baseApi.injectEndpoints({
         url: `authsec/uflow/v2/tenants/${workspaceId}/end-users/${userId}`,
       }),
       providesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
+        { type: "WorkspaceEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
       ],
     }),
 
@@ -231,8 +231,8 @@ export const membershipApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.workspaceId },
-        { type: "TenantEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
+        { type: "WorkspaceEndUserState", id: arg.workspaceId },
+        { type: "WorkspaceEndUserState", id: `${arg.workspaceId}:${arg.userId}` },
       ],
     }),
 
@@ -246,7 +246,7 @@ export const membershipApi = baseApi.injectEndpoints({
         body: { reason: reason ?? "" },
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.workspaceId },
+        { type: "WorkspaceEndUserState", id: arg.workspaceId },
       ],
     }),
 
@@ -259,7 +259,7 @@ export const membershipApi = baseApi.injectEndpoints({
         method: "POST",
       }),
       invalidatesTags: (_, __, arg) => [
-        { type: "TenantEndUserState", id: arg.workspaceId },
+        { type: "WorkspaceEndUserState", id: arg.workspaceId },
       ],
     }),
 

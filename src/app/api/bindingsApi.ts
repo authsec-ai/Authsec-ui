@@ -93,7 +93,7 @@ export const bindingsApi = baseApi.injectEndpoints({
         "AdminRBACScope",
         "RoleBinding",
         "EffectiveAccess",
-        "TenantEndUserState",
+        "WorkspaceEndUserState",
       ],
     }),
 
@@ -112,7 +112,7 @@ export const bindingsApi = baseApi.injectEndpoints({
         "AdminRBACScope",
         "RoleBinding",
         "EffectiveAccess",
-        "TenantEndUserState",
+        "WorkspaceEndUserState",
       ],
     }),
   }),

@@ -111,7 +111,7 @@ export const baseApi = createApi({
     "IdentityProvider",
     "ApplicationIDPPolicy",
     "ClientAuthMethods",
-    "AuthSecTenant",
+    "AuthSecWorkspace",
     "User",
     "Resource",
     "Scope",
@@ -157,8 +157,8 @@ export const baseApi = createApi({
     "ResourceServer",
     "ResourceServerClient",
     // Phase A: v2 membership + end-user state
-    "TenantMembership",
-    "TenantEndUserState",
+    "WorkspaceMembership",
+    "WorkspaceEndUserState",
     "RoleBinding",
     "MCPClient",
     // Agent Identity — Wave 1
