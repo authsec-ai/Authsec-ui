@@ -17,6 +17,7 @@ export interface AdminWebAuthnRequest {
 
 export interface AdminMFAStatusRequest {
   email: string;
+  workspace_id?: string;
 }
 
 export interface MFAStatusForLoginRequest {

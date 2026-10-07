@@ -240,7 +240,9 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     try {
       const res = await mfaStatusCheck({
-        email: adminWebauthn.email
+        email: adminWebauthn.email,
+        // The same email may be an admin in more than one workspace (AS-078).
+        ...(adminWebauthn.workspaceId ? { workspace_id: adminWebauthn.workspaceId } : {}),
       });
       
       if (!('data' in res) || !res.data) {
@@ -358,7 +360,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       dispatch(setAuthenticationError(errorMsg));
       return false;
     }
-  }, [adminWebauthn.email, mfaStatusCheck, dispatch]);
+  }, [adminWebauthn.email, adminWebauthn.workspaceId, mfaStatusCheck, dispatch]);
 
   const selectMFAMethod = useCallback((method: "webauthn" | "totp") => {
     console.log("🔄 Admin method selected:", method);
