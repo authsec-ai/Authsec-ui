@@ -25,6 +25,18 @@ const CATEGORIES: { key: NodeCategory; icon: NodeIcon; label: string; meaning: s
   { key: "external", icon: "external", label: "External", meaning: "An external or unresolved principal — dashed outline", chip: "bg-(--color-object-external-soft) text-(--color-object-external-text)" },
 ];
 
+/** The same categories as a Kubernetes graph draws them: a cluster has no resources or external principals, and its statements are rules. */
+const K8S_CATEGORIES: { key: NodeCategory; icon: NodeIcon; label: string; meaning: string }[] = [
+  { key: "workload", icon: "workload", label: "Workload", meaning: "A Kubernetes workload that runs as a ServiceAccount" },
+  { key: "identity", icon: "service_account", label: "ServiceAccount", meaning: "The identity RBAC bindings name" },
+  { key: "statement", icon: "rule", label: "Rule", meaning: "A Role or ClusterRole's rules, one card per role in Summary" },
+];
+
+const K8S_LINE_MEANING = {
+  stale: "Unconfirmed by the latest sweep, and still believed",
+  ended: "The sweep no longer sees it",
+};
+
 const LINE_STYLES: { key: "stale" | "ended" | "deny"; dash: string; label: string; meaning: string }[] = [
   { key: "stale", dash: "6 4", label: "Stale", meaning: "Not reconfirmed by the latest scan" },
   { key: "ended", dash: "2 4", label: "Ended", meaning: "No longer present" },
@@ -41,6 +53,7 @@ export function StatusBar({
   onZoomIn,
   onZoomOut,
   canvas,
+  k8s = false,
 }: {
   nodes: VisualNode[];
   edges: VisualEdge[];
@@ -52,6 +65,8 @@ export function StatusBar({
   onZoomOut: () => void;
   /** false in Paths: no cards to dim, no zoom. */
   canvas: boolean;
+  /** A Kubernetes graph: its own words for the categories and for what is not evaluated. */
+  k8s?: boolean;
 }) {
   const counts = new Map<NodeCategory, number>();
   let folded = 0;
@@ -67,14 +82,17 @@ export function StatusBar({
     edges.some((e) => (s.key === "deny" ? e.summary?.effect === "deny" : e.state === s.key)),
   );
   const marks: [string, string][] = [];
-  if (edges.some((e) => markedLimitations(e).length)) marks.push(["!", "A condition or other constraint was recorded, not evaluated"]);
+  if (edges.some((e) => markedLimitations(e).length))
+    marks.push(["!", k8s ? "Part of the cluster this line stands on was not read by the sweep" : "A condition or other constraint was recorded, not evaluated"]);
   if (edges.some((e) => e.crossesAccount)) marks.push(["⇄", "Crosses into another account"]);
   if (edges.some((e) => e.closesCycle)) marks.push(["↻", "Closes a cycle of role assumptions"]);
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-(--color-border-subtle) px-3 py-1.5 text-[11px] text-(--color-text-muted)">
       <ul className="flex flex-wrap items-center gap-1" aria-label="Drawn objects" onMouseLeave={() => onFocusCategory(null)}>
-        {CATEGORIES.filter((c) => counts.has(c.key)).map((c) => {
+        {CATEGORIES.filter((c) => counts.has(c.key))
+          .map((c) => (k8s ? { ...c, ...K8S_CATEGORIES.find((k) => k.key === c.key) } : c))
+          .map((c) => {
           const Icon = NODE_ICON[c.icon];
           const active = focusCategory === c.key;
           return (
@@ -113,7 +131,7 @@ export function StatusBar({
       {styles.length || marks.length ? (
         <ul className="flex flex-wrap items-center gap-3" aria-label="Line styles in view">
           {styles.map((s) => (
-            <li key={s.key} className="inline-flex items-center gap-1.5" title={s.meaning}>
+            <li key={s.key} className="inline-flex items-center gap-1.5" title={k8s && s.key !== "deny" ? K8S_LINE_MEANING[s.key] : s.meaning}>
               <svg width="18" height="6" aria-hidden="true">
                 <line x1="0" y1="3" x2="18" y2="3" stroke="currentColor" strokeWidth="1.5" strokeDasharray={s.dash} />
               </svg>
@@ -132,10 +150,14 @@ export function StatusBar({
       <div className="ml-auto flex items-center gap-3">
         <span
           className="inline-flex items-center gap-1"
-          title="Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated: conditions, boundaries, Deny statements and resource policies are recorded, not applied."
+          title={
+            k8s
+              ? "Everything here is declared by Roles, ClusterRoles and their bindings as the sweep read them. Whether a request would succeed has not been evaluated: admission policies and webhooks, token mounting, grants through groups and cloud identity links are not read here."
+              : "Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated: conditions, boundaries, Deny statements and resource policies are recorded, not applied."
+          }
         >
           <Info aria-hidden="true" className="size-3" />
-          Declared access · not evaluated
+          {k8s ? "Declared by RBAC · admission policies and token mounting not evaluated" : "Declared access · not evaluated"}
         </span>
         {canvas ? (
           <span className="inline-flex items-center rounded border border-(--color-border-subtle)" role="group" aria-label="Zoom">

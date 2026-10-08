@@ -30,10 +30,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { accountWithId, limitationText } from "../shared/labels";
+import { bindingKindWord, groupWords, parseAnchor, roleKindWord, ruleFlags, scopeBadge, scopeOfBinding, workloadKindWord } from "../k8s/rules";
 import { CategoryChip } from "../shared/components/CategoryChip";
 import { Timestamp } from "../shared/components/Timestamp";
 import { WrapId } from "../shared/components/WrapId";
-import { EDGE_MEANING, edgeVerb, frontierLabel, independentCount, markedLimitations } from "./graphLabels";
+import { edgeMeaning, edgeVerb, frontierLabel, independentCount, isK8sEdge, markedLimitations } from "./graphLabels";
 import { describeNode, type NodeCategory } from "./nodeView";
 import { frontierKey, type FrontierControl, type VisualEdge, type VisualNode } from "./types";
 
@@ -63,6 +64,12 @@ const BASIS_SHORT: Record<Basis, string> = {
   asserted: "Recorded by a person in AuthSec",
 };
 
+/** Why a Kubernetes relationship is shown: the sweep's own basis, never an AWS one. */
+const K8S_BASIS_SHORT: Partial<Record<Basis, string>> = {
+  declared: "Declared in the cluster's RBAC or the workload's spec; not seen in use",
+  observed: "Observed: the sweep saw the Pod run as this ServiceAccount",
+};
+
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 gap-3 text-[13px]">
@@ -79,6 +86,65 @@ function relatives(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Grap
   const inn = (kind: VisualEdge["kind"]) => edges.filter((e) => e.kind === kind && e.members.some((m) => m.to === ref));
   const name = (r: GraphRef) => nodes.get(r)?.label ?? "an object not loaded";
   return { out, inn, name };
+}
+
+/**
+ * A Kubernetes card, in the sentence the inspector reads: for a rule, "Rule in
+ * ClusterRole X, bound to this ServiceAccount by RoleBinding Y in namespace Z".
+ * What was not evaluated is the status bar's and the page's to say once.
+ */
+function k8sNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>) {
+  const first = v.members[0];
+  const ref = first.ref;
+  const facts: [string, ReactNode][] = [];
+  let sentence: string;
+  const where = (n: GraphNode) => (n.sub_scope ? ` in namespace ${n.sub_scope}` : "");
+
+  if (first.kind === "workload") {
+    const runs = edges.find((e) => e.kind === "executes_as" && e.members.some((m) => m.from === ref))?.members[0];
+    const sa = runs ? nodes.get(runs.to) : undefined;
+    const saName = sa ? parseAnchor(sa.label)?.name ?? sa.label : null;
+    const kind = workloadKindWord(first.runtime_kind) ?? "workload";
+    sentence = `A Kubernetes ${kind}${where(first)}${first.scope ? `, cluster ${first.scope.label}` : ""}. ${
+      saName && runs ? `It ${runs.basis === "observed" ? "runs as" : "is configured to run as"} ServiceAccount ${saName}.` : "The ServiceAccount it runs as is not loaded."
+    }`;
+  } else if (first.kind === "statement") {
+    const n = v.members.length;
+    const roleKind = roleKindWord(v.k8s?.roleKind);
+    const role = `${roleKind ?? "a role"}${v.k8s?.role ? ` ${v.k8s.role}` : ""}`;
+    const holderRef = edges.find((e) => e.kind === "grant" && e.members.some((m) => m.to === ref))?.members[0].from;
+    const holder = holderRef ? nodes.get(holderRef) : undefined;
+    const noun = holder?.kind === "k8s_group" ? "this group" : holder?.kind === "k8s_user" ? "this user" : "this ServiceAccount";
+    const bound = (v.k8s?.bindings ?? []).map((b) => {
+      const scope = scopeOfBinding(b);
+      return `${bindingKindWord(b.kind)} ${b.name || "(unnamed)"} ${scope?.kind === "namespace" ? `in namespace ${scope.namespace}` : "(cluster-wide)"}`;
+    });
+    sentence = `${n === 1 ? "Rule" : `${n} rules`} in ${role}${bound.length ? `, bound to ${noun} by ${bound.join(" and ")}` : ". The binding that applies it is not loaded"}.`;
+    if (n === 1) {
+      const rule = first.k8s_rule;
+      if (rule) {
+        facts.push(["Verbs", rule.verbs.join(", ") || "none"]);
+        facts.push(["On", [...rule.resources, ...rule.non_resource_urls].join(", ") || "none stated"]);
+        facts.push(["API group", groupWords(rule.api_groups)]);
+        const f = ruleFlags(rule);
+        const notes = [
+          f.wildcard ? "Wildcard" : null,
+          f.escalation ? `Privilege escalation: ${f.escalation}` : null,
+          f.named ? `Named instances only (${rule.resource_names.join(", ")}); names do not constrain list, watch or create` : null,
+        ].filter(Boolean);
+        if (notes.length) facts.push(["Note", notes.join(" · ")]);
+      }
+    }
+  } else {
+    const kind = first.kind === "k8s_service_account" ? "ServiceAccount" : first.kind === "k8s_group" ? "group" : "user";
+    sentence =
+      first.kind === "k8s_service_account"
+        ? `A Kubernetes ServiceAccount${where(first)}${first.scope ? `, cluster ${first.scope.label}` : ""}. Rules reach it through RoleBindings and ClusterRoleBindings.`
+        : `A Kubernetes ${kind} that a binding names${first.scope ? ` in cluster ${first.scope.label}` : ""}. The cluster holds no object for it; it is known only from the binding.`;
+    const direct = first.used_by_count;
+    if (direct) facts.push(["Used by", direct.value == null ? "Not known" : `${direct.exact ? "" : "at least "}${direct.value} workload${direct.value === 1 ? "" : "s"} directly`]);
+  }
+  return { d, sentence, facts, why: { basis: null as Basis | null, at: first.last_confirmed_at } };
 }
 
 function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>, rootAccountId: string | null) {
@@ -103,6 +169,8 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
     sentence = `${v.members.length} workloads are configured to run as the same identity. They share one card; each keeps its own evidence.`;
     return { d, sentence, facts, why: null };
   }
+
+  if (first.provider === "k8s") return k8sNodeSummary(v, d, edges, nodes);
 
   switch (first.kind) {
     case "workload": {
@@ -157,8 +225,40 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
   return { d, sentence, facts: facts.slice(0, 3), why: { basis: null as Basis | null, at: first.last_confirmed_at } };
 }
 
+/** A Kubernetes line: a workload running as a ServiceAccount, or the binding that applies a role's rules to it. */
+function k8sEdgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
+  const m = e.members[0];
+  const nameOf = (r: GraphRef) => {
+    const n = nodes.get(r);
+    return n ? (n.kind === "k8s_service_account" ? parseAnchor(n.label)?.name ?? n.label : n.label) : "an object not loaded";
+  };
+  const facts: [string, ReactNode][] = [];
+  let title = `${nameOf(m.from)} → ${nameOf(m.to)}`;
+  if (e.kind === "grant") {
+    const rules = new Set(e.members.map((x) => x.to));
+    const to = nodes.get(m.to);
+    title = `${nameOf(m.from)} → ${roleKindWord(m.policy_kind) ?? "Role"} ${to?.policy ?? ""}`.trim();
+    const bindings = e.members.flatMap((x) => (x.assignment ? [x.assignment] : []));
+    const distinct = [...new Map(bindings.map((b) => [b.ref, b])).values()];
+    for (const b of distinct.slice(0, 2)) {
+      const scope = scopeOfBinding(b);
+      facts.push([bindingKindWord(b.kind), `${b.name || "(unnamed)"}${scope ? ` · ${scopeBadge(scope)}` : ""}`]);
+    }
+    facts.push(["Rules", `${rules.size} in this role reach it through ${distinct.length === 1 ? "this binding" : `${distinct.length} bindings`}`]);
+  }
+  const bases = [...new Set(e.members.map((x) => x.basis))];
+  return {
+    sentence: edgeMeaning(e),
+    facts: facts.slice(0, 3),
+    title,
+    type: edgeVerb(e),
+    why: { basis: bases.length === 1 ? bases[0] : null, at: m.last_confirmed_at },
+  };
+}
+
 function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   const m = e.members[0];
+  if (isK8sEdge(e)) return k8sEdgeSummary(e, nodes);
   const from = nodes.get(m.from)?.label ?? "Source";
   // A `declares` line's first member is a grant into the statement; the
   // line itself ends at the resource.
@@ -167,7 +267,7 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   const facts: [string, ReactNode][] = [];
   // What the line means is the relationship's definition; the title and the
   // type chip already say which two objects and which verb.
-  const sentence = EDGE_MEANING[e.kind];
+  const sentence = edgeMeaning(e);
   if (e.kind === "declares") {
     const statements = e.summary?.statements ?? [];
     const policies = [...new Set(statements.flatMap((s) => s.members.map((x) => x.policy)).filter(Boolean))];
@@ -192,7 +292,7 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   };
 }
 
-function LoadControls({ frontier, a }: { frontier: GraphFrontier[]; a: SelectionActions }) {
+function LoadControls({ frontier, a, k8s }: { frontier: GraphFrontier[]; a: SelectionActions; k8s: boolean }) {
   if (!frontier.length) return null;
   return (
     <ul className="space-y-1 border-t border-(--color-border-subtle) pt-2 text-xs">
@@ -200,7 +300,7 @@ function LoadControls({ frontier, a }: { frontier: GraphFrontier[]; a: Selection
         const c = a.stateOf(f);
         return (
           <li key={frontierKey(f)} className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-(--color-text-muted)">{frontierLabel(f)}</span>
+            <span className="min-w-0 truncate text-(--color-text-muted)">{frontierLabel(f, k8s)}</span>
             {c.pending === "paused" ? (
               <button type="button" onClick={a.onRefresh} className="shrink-0 font-medium text-(--color-primary-text) hover:underline">Refresh first</button>
             ) : c.pending === "loading" ? (
@@ -257,6 +357,8 @@ export function SelectionCard({
   let open: GraphRef | null = null;
   let body: ReactNode = null;
 
+  const k8s = subject.kind === "node" ? subject.visual.members[0].provider === "k8s" : isK8sEdge(subject.edge);
+
   if (subject.kind === "node") {
     const v = subject.visual;
     const s = nodeSummary(v, edges, nodes, rootAccountId);
@@ -267,10 +369,13 @@ export function SelectionCard({
     sentence = s.sentence;
     facts = s.facts;
     why = s.why;
-    uncertainty = s.d.notes.filter((n) => n.tone === "warning").map((n) => n.long);
+    // A Kubernetes card's uncertainty is what the sweep could not confirm or read; its scope and
+    // wildcard are facts about the grant, said in the sentence and the badges.
+    uncertainty = s.d.notes.filter((n) => n.tone === "warning" && (!k8s || ["state", "unresolved", "coverage"].includes(n.key))).map((n) => n.long);
     const first = v.members[0];
     if (!v.overflow && v.members.length === 1) {
-      claims = [first.ref];
+      // Kubernetes claims are written from a sweep and have no evidence record: nothing to open.
+      claims = k8s ? [] : [first.ref];
       open = objectPath(first.ref) ? first.ref : null;
     }
     if (v.overflow) {
@@ -298,10 +403,12 @@ export function SelectionCard({
           <ul className="max-h-40 divide-y divide-(--color-border-subtle) overflow-y-auto rounded-md border border-(--color-border-subtle)">
             {v.members.map((m) => (
               <li key={m.ref} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs">
-                <span className="min-w-0 truncate">{workloads ? m.label : [m.policy, m.sid ? `Sid ${m.sid}` : null].filter(Boolean).join(" · ") || "Statement"}</span>
-                <button type="button" onClick={() => (workloads ? actions.onOpenObject(m.ref) : actions.onEvidence([m.ref]))} className="shrink-0 font-medium text-(--color-primary-text) hover:underline">
-                  {workloads ? "Open" : "Evidence"}
-                </button>
+                <span className="min-w-0 truncate" title={m.label}>{workloads || k8s ? m.label : [m.policy, m.sid ? `Sid ${m.sid}` : null].filter(Boolean).join(" · ") || "Statement"}</span>
+                {k8s && !workloads ? null : (
+                  <button type="button" onClick={() => (workloads ? actions.onOpenObject(m.ref) : actions.onEvidence([m.ref]))} className="shrink-0 font-medium text-(--color-primary-text) hover:underline">
+                    {workloads ? "Open" : "Evidence"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -312,7 +419,7 @@ export function SelectionCard({
     body = (
       <>
         {body}
-        <LoadControls frontier={v.frontier} a={actions} />
+        <LoadControls frontier={v.frontier} a={actions} k8s={k8s} />
       </>
     );
   } else {
@@ -325,9 +432,10 @@ export function SelectionCard({
     why = s.why;
     // A declared relationship's evidence is each statement's claim that it
     // lists the resource (the target claims), one per independent statement.
-    claims = e.kind === "declares" ? e.members.filter((m) => m.kind === "target").map((m) => m.claim) : e.members.map((m) => m.claim);
+    claims = k8s ? [] : e.kind === "declares" ? e.members.filter((m) => m.kind === "target").map((m) => m.claim) : e.members.map((m) => m.claim);
     uncertainty = markedLimitations(e).map(limitationText);
-    if (e.state === "stale") uncertainty.unshift("Not reconfirmed by the latest scan.");
+    if (e.state === "stale") uncertainty.unshift(k8s ? "Unconfirmed by the latest sweep, and still believed." : "Not reconfirmed by the latest scan.");
+    if (k8s && e.state === "ended") uncertainty.unshift("The sweep no longer sees it.");
     if (e.summary?.effect === "deny") uncertainty.unshift("A Deny statement. It was recorded, not evaluated against any Allow.");
   }
 
@@ -363,7 +471,7 @@ export function SelectionCard({
         {facts.length ? <dl className="space-y-1.5">{facts.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}</dl> : null}
         {why ? (
           <dl className="space-y-1.5 border-t border-(--color-border-subtle) pt-2">
-            {why.basis ? <Fact label="Basis">{BASIS_SHORT[why.basis]}</Fact> : null}
+            {why.basis ? <Fact label="Basis">{(k8s ? K8S_BASIS_SHORT[why.basis] : undefined) ?? BASIS_SHORT[why.basis]}</Fact> : null}
             <Fact label="Confirmed"><Timestamp iso={why.at} /></Fact>
           </dl>
         ) : null}

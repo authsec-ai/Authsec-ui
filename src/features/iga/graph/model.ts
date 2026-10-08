@@ -436,7 +436,17 @@ function visibleEdgeList(state: ModelState, visible: Set<GraphRef>): GraphEdge[]
  * action names alone never group. The grouping is visual only — every
  * member statement and grant claim is kept, for the evidence panel.
  */
-export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Set()): { nodes: VisualNode[]; edges: VisualEdge[] } {
+export function buildVisual(
+  state: ModelState,
+  ungrouped: Set<GraphRef> = new Set(),
+  /**
+   * Kubernetes only: draw the rules of one role, reached through the same
+   * bindings, as one card. `group_key` cannot do this — it names a rule's verbs
+   * and targets, so rules of ONE role never share one, and the same rule in two
+   * roles would. false (Detailed, and every AWS graph): `group_key` as before.
+   */
+  byRole = false,
+): { nodes: VisualNode[]; edges: VisualEdge[] } {
   const visible = visibleNodeRefs(state);
   const edges = visibleEdgeList(state, visible);
 
@@ -444,11 +454,20 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
   // grouping keys on the full sorted set (review item 8), so the bucket a
   // statement lands in never depends on Map iteration order.
   const sourcesOfStatement = new Map<GraphRef, Set<GraphRef>>();
+  // Kubernetes: the bindings each rule is reached through. Two rules of one
+  // role reached through different bindings apply in different places, so they
+  // are not one card.
+  const bindingsOfStatement = new Map<GraphRef, Map<GraphRef, GraphEdge>>();
   for (const e of edges) {
     if (e.kind !== "grant") continue;
     const set = sourcesOfStatement.get(e.to) ?? new Set<GraphRef>();
     set.add(e.from);
     sourcesOfStatement.set(e.to, set);
+    if (e.assignment) {
+      const bindings = bindingsOfStatement.get(e.to) ?? new Map<GraphRef, GraphEdge>();
+      bindings.set(e.assignment.ref, e);
+      bindingsOfStatement.set(e.to, bindings);
+    }
   }
 
   const membersOfBucket = new Map<string, GraphRef[]>();
@@ -457,7 +476,10 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
     if (!n || n.kind !== "statement" || !n.group_key) continue;
     const sources = [...(sourcesOfStatement.get(ref) ?? [])].sort();
     if (sources.length === 0) continue;
-    const bucketKey = `${sources.join(",")}::${n.group_key}::${n.state ?? "current"}`;
+    const bucketKey =
+      byRole && n.provider === "k8s"
+        ? `k8s-role::${sources.join(",")}::${n.policy_ref ?? n.policy ?? ""}::${[...(bindingsOfStatement.get(ref)?.keys() ?? [])].sort().join(",")}::${n.state ?? "current"}`
+        : `${sources.join(",")}::${n.group_key}::${n.state ?? "current"}`;
     const list = membersOfBucket.get(bucketKey) ?? [];
     list.push(ref);
     membersOfBucket.set(bucketKey, list);
@@ -499,6 +521,21 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
       nodesById.set(id, vn);
     }
     vn.members.push(n);
+  }
+  // A Kubernetes rule card says which role it is in and which bindings apply
+  // it, read off the grants that reach it.
+  for (const vn of nodesById.values()) {
+    const first = vn.members[0];
+    if (first.kind !== "statement" || first.provider !== "k8s") continue;
+    const grants = new Map<GraphRef, GraphEdge>();
+    for (const m of vn.members) for (const [ref, e] of bindingsOfStatement.get(m.ref) ?? []) grants.set(ref, e);
+    const via = [...grants.values()];
+    vn.k8s = {
+      roleCard: byRole,
+      role: first.policy ?? "",
+      roleKind: via.find((e) => e.policy_kind)?.policy_kind ?? null,
+      bindings: via.map((e) => e.assignment!),
+    };
   }
   // Attach frontier entries: any entry whose `.node` is a member of this visual node.
   const visualIdOfRef = new Map<GraphRef, string>();

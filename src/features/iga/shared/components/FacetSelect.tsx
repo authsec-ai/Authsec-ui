@@ -54,31 +54,6 @@ export function FacetSelect({
   );
 }
 
-/** Sort choice for a graph list; the server sorts, never the loaded page. */
-export function SortSelect<S extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: S;
-  options: { value: S; label: string }[];
-  onChange: (value: S) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={(v) => onChange(v as S)}>
-      <SelectTrigger className="h-9 w-[160px]" aria-label="Sort">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((s) => (
-          <SelectItem key={s.value} value={s.value}>
-            {s.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 /** Repeated account URL parameters are ORed by the server; zero selections means all. */
 export function MultiFacetSelect({ label, allLabel, value, options, onChange, labelFor }: {

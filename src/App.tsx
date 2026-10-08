@@ -64,7 +64,7 @@ const ConnectionDetailPage = React.lazy(() => import("./features/iga/connections
 const ScanDetailPage = React.lazy(() => import("./features/iga/connections/ScanDetailPage"));
 const DiscoveryPage = React.lazy(() => import("./features/iga/discovery/DiscoveryPage"));
 const SightingDetailPage = React.lazy(() => import("./features/iga/discovery/SightingDetailPage"));
-const K8sObjectPage = React.lazy(() => import("./features/iga/discovery/K8sObjectPage"));
+const K8sObjectPage = React.lazy(() => import("./features/iga/k8s/K8sObjectPage"));
 const PolicyPage = React.lazy(() => import("./features/iga/policy/PolicyPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
@@ -667,6 +667,16 @@ function AppContent() {
                   />
                   <Route
                     path="/iga/k8s/:kind/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <K8sObjectPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/k8s/:kind/:id/:tab"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>

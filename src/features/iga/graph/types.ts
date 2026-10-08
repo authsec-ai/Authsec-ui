@@ -14,6 +14,7 @@ import type {
   GraphNode,
   GraphNodeKind,
   GraphRef,
+  K8sAssignment,
   RelState,
 } from "@/app/api/igaGraphApi";
 
@@ -51,6 +52,20 @@ export interface OverflowInfo {
   infrastructure?: boolean;
 }
 
+/**
+ * What a Kubernetes rule card knows about where its rules come from, read off
+ * the grant edges that reach it: the role, and the bindings that apply it
+ * (the binding, not the role, decides the scope).
+ */
+export interface K8sCardInfo {
+  /** Summary draws the rules of one role as one card titled by the role; Detailed draws each rule. */
+  roleCard: boolean;
+  role: string;
+  /** k8s_role | k8s_cluster_role, from the grant; null when no grant is loaded. */
+  roleKind: string | null;
+  bindings: K8sAssignment[];
+}
+
 /** One drawn node. `members.length > 1` for equivalent statements or workloads sharing one execution identity (§2.14.11 *Grouped edges*). */
 export interface VisualNode {
   id: string;
@@ -60,6 +75,8 @@ export interface VisualNode {
   frontier: GraphFrontier[];
   /** Set on the one node standing in for a hidden branch. */
   overflow?: OverflowInfo;
+  /** Kubernetes rule cards only. */
+  k8s?: K8sCardInfo;
 }
 
 /**

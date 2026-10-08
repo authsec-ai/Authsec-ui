@@ -56,6 +56,7 @@ const TONE_CLASS = {
 
 function FrontierRow({
   frontier,
+  k8s,
   control,
   canLoadMore,
   onExpand,
@@ -64,6 +65,7 @@ function FrontierRow({
   onRefresh,
 }: {
   frontier: GraphFrontier;
+  k8s: boolean;
   control: FrontierControl;
   canLoadMore: boolean;
   onExpand: () => void;
@@ -99,8 +101,8 @@ function FrontierRow({
         </button>
       );
     return (
-      <button type="button" onClick={stop(onExpand)} aria-label={frontierAriaLabel(frontier)} className={cn(row, link, "text-(--color-primary-text)")}>
-        {frontierLabel(frontier)}
+      <button type="button" onClick={stop(onExpand)} aria-label={frontierAriaLabel(frontier, k8s)} className={cn(row, link, "text-(--color-primary-text)")}>
+        {frontierLabel(frontier, k8s)}
       </button>
     );
   }
@@ -280,6 +282,7 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
         {d.frontier.length ? (
           <FrontierRow
             frontier={d.frontier[0]}
+            k8s={!!d.k8s}
             control={data.stateOf(d.frontier[0])}
             canLoadMore={data.canLoadMore(d.frontier[0])}
             onExpand={() => data.onExpand(d.frontier[0])}
