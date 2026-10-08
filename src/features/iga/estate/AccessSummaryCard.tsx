@@ -1,7 +1,6 @@
 /**
  * "What it can do": a workload's declared access, one line per service —
- * "CloudWatch Logs · Write", with a Broad badge where the grant is not limited
- * to anything named.
+ * "CloudWatch Logs · Write".
  *
  * The same card is the Overview's answer to "what can it reach?" and the
  * Identity tab's "what this identity grants". How the levels are inferred
@@ -11,8 +10,7 @@
 
 import { Link } from "react-router-dom";
 
-import { LEVEL_LABEL, LEVEL_MEANING, broadText, countWord, serviceLabel, type AccessLevel, type ServiceAccess } from "../shared/access";
-import { IgaBadge } from "../shared/components/IgaBadge";
+import { LEVEL_LABEL, LEVEL_MEANING, countWord, serviceLabel, type AccessLevel, type ServiceAccess } from "../shared/access";
 import { InfoTip } from "../shared/components/InfoTip";
 import { Panel } from "../shared/components/Panel";
 import type { WorkloadAccess } from "../shared/useWorkloadAccess";
@@ -20,19 +18,15 @@ import type { WorkloadAccess } from "../shared/useWorkloadAccess";
 /** "Full access" reads as a sentence; in a "Service · Level" line it is "Full". */
 const SHORT_LEVEL: Record<AccessLevel, string> = { ...LEVEL_LABEL, full: "Full" };
 
-const BROAD_MEANING = "Not limited to a named resource (a wildcard over every resource of a type), or every action of the service.";
-
 /** The levels, defined once: the title's tooltip is the card's legend. */
 const LEGEND: { term: string; meaning: string }[] = [
   { term: LEVEL_LABEL.read, meaning: LEVEL_MEANING.read },
   { term: LEVEL_LABEL.write, meaning: LEVEL_MEANING.write },
   { term: LEVEL_LABEL.full, meaning: LEVEL_MEANING.full },
   { term: LEVEL_LABEL.other, meaning: LEVEL_MEANING.other },
-  { term: "Broad", meaning: BROAD_MEANING },
 ];
 
 function Row({ s }: { s: ServiceAccess }) {
-  const broad = s.broad ? broadText(s) : null;
   return (
     <li className="flex min-h-10 items-center gap-3 px-4 py-2">
       <span className="flex min-w-0 flex-1 flex-col">
@@ -45,14 +39,7 @@ function Row({ s }: { s: ServiceAccess }) {
             {SHORT_LEVEL[s.level]}
           </span>
         </span>
-        {/* What "Broad" means here, said rather than left to a badge. */}
-        {broad ? <span className="text-xs leading-5 text-(--color-warning-text)">Broad: {broad}</span> : null}
       </span>
-      {s.broad ? (
-        <IgaBadge tone="warning" title={BROAD_MEANING}>
-          Broad
-        </IgaBadge>
-      ) : null}
       <span className="w-24 shrink-0 text-right text-xs tabular-nums text-(--color-text-muted)">
         {s.resources} {s.resources === 1 ? "resource" : "resources"}
       </span>
