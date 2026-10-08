@@ -8,7 +8,7 @@ import {
   TabsTrigger,
   TabsContent,
 } from "../../components/ui/tabs";
-import { ArrowLeft, CheckCircle, X } from "lucide-react";
+import { CheckCircle, X } from "lucide-react";
 import {
   useConfigureLogServiceMutation,
   useGetLogConfigurationStatusQuery,
@@ -99,7 +99,7 @@ export function LogsConfigurationPage() {
         await configureLogService({
           host: hostString,
           workspace_id: config.workspace_id,
-          name: name,
+          name,
         }).unwrap();
 
         setBanner({

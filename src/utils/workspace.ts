@@ -6,15 +6,20 @@ import { getTenantFromUrl } from "./subdomainUtils";
  * @returns The current workspace ID or null if no workspace is selected
  */
 export function getWorkspaceId(): string | null {
+  // getSession() already prefers the token's claims over stored copies.
   const session = SessionManager.getSession();
+  if (session?.jwtPayload?.workspace_id) {
+    return session.jwtPayload.workspace_id;
+  }
+  if (session?.token) {
+    // A token without a workspace claim names no workspace; never guess.
+    return null;
+  }
   if (session?.workspace_id) {
     return session.workspace_id;
   }
 
-  if (session?.jwtPayload?.workspace_id) {
-    return session.jwtPayload.workspace_id;
-  }
-
+  // Before sign-in only: a workspace UUID in the host name selects branding.
   const slug = getTenantFromUrl();
   if (slug && isLikelyTenantId(slug)) {
     return slug;
@@ -28,7 +33,6 @@ export function getWorkspaceId(): string | null {
  * @returns The current workspace or null if no workspace is selected
  */
 export function getCurrentWorkspace() {
-  const session = SessionManager.getSession();
   const workspaceId = getWorkspaceId();
   if (!workspaceId) return null;
   

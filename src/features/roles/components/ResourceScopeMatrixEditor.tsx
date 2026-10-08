@@ -24,7 +24,7 @@ import {
   AlertCircle,
   CloudCog,
 } from "lucide-react";
-import { useGetExternalServicesQuery } from "@/app/api/externalServiceApi";
+import { mapRawToExternalService, useGetExternalServicesQuery } from "@/app/api/externalServiceApi";
 import {
   injectExternalServicesIntoResources,
   isExternalServiceResource,
@@ -53,11 +53,14 @@ export function ResourceScopeMatrixEditor({
   const { data: externalServices = [] } = useGetExternalServicesQuery();
 
   // Combine internal and external resources
-  const allResources = injectExternalServicesIntoResources([], externalServices);
+  const allResources = injectExternalServicesIntoResources(
+    [],
+    externalServices.map(mapRawToExternalService)
+  );
 
   useEffect(() => {
     if (role) {
-      setPermissions(role.permissions);
+      setPermissions(role.permissions ?? []);
     }
   }, [role]);
 
@@ -439,7 +442,7 @@ export function ResourceScopeMatrixEditor({
             {getTotalScopeCount() > 0 && (
               <div className="flex items-center gap-1">
                 <AlertCircle className="h-4 w-4 text-amber-500" />
-                <span>Will create version {role.version + 1}</span>
+                <span>Will create version {(role.version ?? 0) + 1}</span>
               </div>
             )}
           </div>

@@ -54,6 +54,7 @@ import {
   useGetAuthSecRolesQuery,
   useAddUserDefinedRolesMutation,
   useDeleteUserDefinedRolesMutation,
+  roleDeleteErrorMessage,
 } from "@/app/api/rolesApi";
 import {
   useListBindingsQuery,
@@ -181,7 +182,7 @@ function RolesTab({
         if (selectedRole?.id === role.id) setSelectedRole(null);
         setConfirmDelete(null);
       } catch (e: unknown) {
-        toast.error((e as { data?: { error?: string } })?.data?.error ?? "Failed to delete role");
+        toast.error(roleDeleteErrorMessage(e));
       }
     },
     [deleteRoles, workspaceId, selectedRole],
@@ -331,7 +332,7 @@ function RolesTab({
       <Sheet open={!!selectedRole} onOpenChange={(o) => !o && setSelectedRole(null)}>
         <SheetContent side="right" hideClose data-cr className="flex h-full flex-col overflow-hidden p-0 sm:max-w-110">
           <SheetTitle className="sr-only">
-            {selectedFmt ? `${selectedFmt.displayName} — role details` : "Role details"}
+            {selectedFmt ? `${selectedFmt.primary} — role details` : "Role details"}
           </SheetTitle>
           <SheetDescription className="sr-only">Inspect this role's scopes and bindings.</SheetDescription>
           {selectedRole && selectedFmt && (

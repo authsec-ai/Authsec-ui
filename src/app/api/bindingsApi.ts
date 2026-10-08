@@ -62,12 +62,11 @@ export const bindingsApi = baseApi.injectEndpoints({
     // List all role bindings with optional filters
     listBindings: builder.query<RoleBinding[], ListBindingsParams>({
       query: (params) => {
-        const { audience: _audience, ...restParams } = params;
         const queryParams = new URLSearchParams();
 
-        if (restParams.user_id) queryParams.append("user_id", restParams.user_id);
-        if (restParams.role_id) queryParams.append("role_id", restParams.role_id);
-        if (restParams.scope_type) queryParams.append("scope_type", restParams.scope_type);
+        if (params.user_id) queryParams.append("user_id", params.user_id);
+        if (params.role_id) queryParams.append("role_id", params.role_id);
+        if (params.scope_type) queryParams.append("scope_type", params.scope_type);
 
         const queryString = queryParams.toString();
 
@@ -94,7 +93,7 @@ export const bindingsApi = baseApi.injectEndpoints({
         "AdminRBACScope",
         "RoleBinding",
         "EffectiveAccess",
-        "TenantEndUserState",
+        "WorkspaceEndUserState",
       ],
     }),
 
@@ -113,7 +112,7 @@ export const bindingsApi = baseApi.injectEndpoints({
         "AdminRBACScope",
         "RoleBinding",
         "EffectiveAccess",
-        "TenantEndUserState",
+        "WorkspaceEndUserState",
       ],
     }),
   }),

@@ -1,9 +1,10 @@
 import type { TourStorageData, CompletedTourInfo } from '../types';
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
 /**
  * LocalStorage key for storing guided tour data
  */
-const STORAGE_KEY = 'authsec_guided_tours';
+const storageKey = () => scopedStorageKey('authsec_guided_tours');
 
 /**
  * Current version of tour data structure (for migrations)
@@ -33,7 +34,7 @@ export class TourStorage {
    */
   static load(): TourStorageData {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey());
       if (!stored) {
         return getDefaultStorageData();
       }
@@ -60,7 +61,7 @@ export class TourStorage {
    */
   static save(data: TourStorageData): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(storageKey(), JSON.stringify(data));
     } catch (error) {
       console.error('[GuidedTour] Failed to save tour data to localStorage:', error);
     }
@@ -204,7 +205,7 @@ export class TourStorage {
    */
   static clear(): void {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKey());
     } catch (error) {
       console.error('[GuidedTour] Failed to clear tour data:', error);
     }

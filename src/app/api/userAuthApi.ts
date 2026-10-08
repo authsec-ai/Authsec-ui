@@ -4,6 +4,8 @@
  */
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { withUnauthorizedHandler } from "../../auth/unauthorized";
+import { withLoginTicket } from "../../auth/loginTicket";
 import config from '../../config';
 
 export interface CustomLoginRequest {
@@ -28,9 +30,9 @@ export interface CustomLoginResponse {
 // RTK Query API for direct user authentication
 export const userAuthApi = createApi({
   reducerPath: 'userAuthApi',
-  baseQuery: fetchBaseQuery({
+  baseQuery: withLoginTicket(withUnauthorizedHandler(fetchBaseQuery({
     baseUrl: `${config.VITE_API_URL}`,
-  }),
+  }))),
   tagTypes: ['UserAuth'],
   endpoints: (builder) => ({
     // Custom login for OIDC flow

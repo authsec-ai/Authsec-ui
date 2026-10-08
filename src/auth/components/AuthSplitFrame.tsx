@@ -36,6 +36,7 @@ export function AuthSplitFrame({
         setTheme(previousThemeRef.current);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- captures the theme only on mount so it can be restored on unmount
   }, [setTheme]);
 
   return (

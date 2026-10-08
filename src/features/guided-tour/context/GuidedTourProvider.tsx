@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useCallback, type ReactNode } from 'react';
 import type { GuidedTourContextValue, TourConfig, TourStep } from '../types';
 import { TourStorage } from '../utils/tourStorage';
 import { TOUR_REGISTRY } from '../utils/tourConfig';
@@ -110,6 +110,7 @@ export function GuidedTourProvider({ children }: GuidedTourProviderProps) {
       // No more steps, complete the tour
       completeTour();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeTour is declared later in this provider; it is resolved when the callback runs
   }, [currentStep, getCurrentTourConfig, getCurrentStepConfig]);
 
   /**

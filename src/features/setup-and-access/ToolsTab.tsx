@@ -40,14 +40,15 @@ function pendingSuggestions(tool: MCPToolResponse): ScopeMapEntry[] {
 export function ToolsTab({ rsId, onChange }: Props) {
   const { data: matrix, isLoading, refetch: refetchMatrix } = useGetScopeMatrixQuery(rsId);
   const { data: scopesData } = useListResourceServerScopesQuery(rsId);
-  const scopes = scopesData ?? [];
+  const scopes = useMemo(() => scopesData ?? [], [scopesData]);
   const [updateMap, { isLoading: saving }] = useUpdateToolScopeMapMutation();
   const [markToolPublic] = useMarkToolPublicMutation();
 
   // Search filter for the tool list — useful when the RS exposes many tools.
   const [filter, setFilter] = useState("");
 
-  const allTools = matrix?.tools ?? []; // matrix.tools may be JSON null on empty
+  // matrix.tools may be JSON null on empty
+  const allTools = useMemo(() => matrix?.tools ?? [], [matrix?.tools]);
   const tools = useMemo(() => {
     if (!filter.trim()) return allTools;
     const q = filter.toLowerCase();
@@ -58,6 +59,12 @@ export function ToolsTab({ rsId, onChange }: Props) {
         (t.description ?? "").toLowerCase().includes(q),
     );
   }, [allTools, filter]);
+
+  const scopeByID = useMemo(() => {
+    const m = new Map<string, (typeof scopes)[number]>();
+    for (const s of scopes) m.set(s.id, s);
+    return m;
+  }, [scopes]);
 
   // When there are 0 tools, mapping is moot — surface the three ingestion
   // paths instead. This catches both the wizard-step-2 case and the
@@ -84,12 +91,6 @@ export function ToolsTab({ rsId, onChange }: Props) {
       </div>
     );
   }
-
-  const scopeByID = useMemo(() => {
-    const m = new Map<string, (typeof scopes)[number]>();
-    for (const s of scopes) m.set(s.id, s);
-    return m;
-  }, [scopes]);
 
   const handleToggleScope = async (tool: MCPToolResponse, scopeID: string, on: boolean) => {
     try {

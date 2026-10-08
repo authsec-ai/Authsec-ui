@@ -1,4 +1,4 @@
-import { RefObject } from 'react';
+import type { RefObject } from 'react';
 
 /**
  * Position where the content card should appear relative to the target element

@@ -38,7 +38,6 @@ export function EnhancedExternalServicesTable({
   selectedServices: externalSelected = [],
   onSelectService,
   onSelectAll,
-  onCreateService,
 }: EnhancedExternalServicesTableProps) {
   // If parent controls selection use that, otherwise maintain internal state
   const [internalSelected, setInternalSelected] = React.useState<string[]>([]);
@@ -51,24 +50,24 @@ export function EnhancedExternalServicesTable({
   const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
 
   // Action handlers
-  const handleEdit = (service: RawExternalService) => {
+  const handleEdit = React.useCallback((service: RawExternalService) => {
     toast.info(`Edit service: ${service.name}`);
     // TODO: Navigate to edit page or open edit modal
-  };
+  }, []);
 
-  const handleDelete = (service: RawExternalService) => {
+  const handleDelete = React.useCallback((service: RawExternalService) => {
     setServiceToDelete(service);
-  };
+  }, []);
 
-  const handleViewSDK = (_service: RawExternalService) => {
+  const handleViewSDK = React.useCallback((_service: RawExternalService) => {
     // Open external SDK docs in a new tab
     window.open("https://docs.authsec.dev/getting-started", "_blank");
-  };
+  }, []);
 
-  const handleViewSecret = (service: RawExternalService) => {
+  const handleViewSecret = React.useCallback((service: RawExternalService) => {
     // Find the row and expand it to show secrets
     toast.info(`Expand the row to view secrets for ${service.name}`);
-  };
+  }, []);
 
   const handleBulkDelete = () => {
     if (selectedRowIds.length === 0) return;
@@ -100,7 +99,7 @@ export function EnhancedExternalServicesTable({
       await Promise.all(selectedRowIds.map((id) => deleteService(id).unwrap()));
       toast.success(`${selectedRowIds.length} service(s) deleted successfully`);
       setInternalSelected((prev) => prev.filter((id) => !selectedRowIds.includes(id)));
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete some services");
     } finally {
       setIsBulkDeleting(false);

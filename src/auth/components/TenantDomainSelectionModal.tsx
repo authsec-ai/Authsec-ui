@@ -24,6 +24,7 @@ interface TenantDomainSelectionModalProps {
     picture: string;
     provider: string;
     provider_user_id: string;
+    state_token?: string;
   };
   onSuccess: (data: {
     workspace_id: string;
@@ -92,6 +93,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
     return () => {
       if (timer) clearTimeout(timer);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the timer is set by this effect; depending on it would re-run the check in a loop
   }, [domain, checkTenantDomain]);
 
   const handleSubmit = async () => {
@@ -107,6 +109,7 @@ export const TenantDomainSelectionModal: React.FC<TenantDomainSelectionModalProp
         name: userData.name,
         picture: userData.picture,
         provider_user_id: userData.provider_user_id,
+        state_token: userData.state_token,
       }).unwrap();
 
       if (result.success) {

@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   AlertTriangle,
-  Globe,
   Shield,
   CheckCircle,
   Sparkles,

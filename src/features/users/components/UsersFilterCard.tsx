@@ -38,7 +38,7 @@ const STATUS_OPTIONS = [
   { value: "blocked", label: "Blocked" },
 ];
 
-interface UserData {
+export interface UserData {
   provider?: string;
   [key: string]: any;
 }

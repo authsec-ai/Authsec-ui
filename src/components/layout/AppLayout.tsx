@@ -5,10 +5,10 @@ import { AppHeader } from "./AppHeader";
 import { AppRightSidebar } from "./AppRightSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ResponsiveSidebarController } from "./ResponsiveSidebarController";
-import { VoiceAgentWatcher } from "@/features/voice-auth/VoiceAgentWatcher";
 import { useWizard } from "@/contexts/WizardContext";
 import { useDensity } from "@/contexts/DensityContext";
 import "../../theme/admin-shell.css";
+import { VoiceAgentWatcher } from "@/features/voice-auth/VoiceAgentWatcher";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -17,7 +17,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(520);
-  const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion, isAwaitingPlatformAction } = useWizard();
+  const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion } = useWizard();
   const { density } = useDensity();
 
   const handleRightSidebarToggle = () => {
@@ -107,6 +107,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </div>
       </SidebarProvider>
+      {/* Voice-auth approvals: backend voice auth works again (AS-047). */}
       <VoiceAgentWatcher />
     </>
   );

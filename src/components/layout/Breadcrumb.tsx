@@ -103,9 +103,6 @@ export function Breadcrumb() {
         case "services":
           label = "Services";
           break;
-        case "vault":
-          label = "Vault & Secrets";
-          break;
         case "logs":
           // The IGA console's Logs destination, versus the authorization console's.
           label = pathname.startsWith("/iga/") ? "Logs" : "Event Logs";

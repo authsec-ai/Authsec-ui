@@ -7,7 +7,6 @@
  *
  * Available Endpoints:
  * - POST /uflow/admin/users/list - List all admin users for a tenant
- * - GET  /uflow/admin/users/:user_id - Get specific admin user
  */
 
 import { baseApi, withSessionData } from "../baseApi";
@@ -149,12 +148,8 @@ export const adminUsersApi = baseApi.injectEndpoints({
       providesTags: ["AdminUser"],
     }),
 
-    // GET /uflow/admin/users/:user_id
-    // Get a specific admin user by ID
-    getAdminUser: builder.query<AdminUser, string>({
-      query: (user_id) => `authsec/uflow/admin/users/${user_id}`,
-      providesTags: (result, error, id) => [{ type: "AdminUser", id }],
-    }),
+    // There is no GET /uflow/admin/users/:user_id on the backend, so the
+    // admin user details come from the list row.
 
     // POST /uflow/admin/users/ad/status
     // Check Active Directory configuration status for admin users
@@ -210,14 +205,15 @@ export const adminUsersApi = baseApi.injectEndpoints({
       invalidatesTags: ["AdminUser"],
     }),
 
-    // POST /uflow/admin/reset-password
-    // Reset admin user password
+    // POST /authsec/uflow/user/admin/reset-password
+    // Admin users live in the same users table as end users, so the backend
+    // has one admin reset handler for both (UI-013).
     resetAdminUserPassword: builder.mutation<
       any,
       { email: string; send_email?: boolean }
     >({
       query: ({ email, send_email = true }) => ({
-        url: "authsec/uflow/admin/reset-password",
+        url: "/authsec/uflow/user/admin/reset-password",
         method: "POST",
         body: withSessionData({
           email,
@@ -229,14 +225,14 @@ export const adminUsersApi = baseApi.injectEndpoints({
       ],
     }),
 
-    // POST /uflow/admin/change-password
-    // Change admin user password
+    // POST /authsec/uflow/user/admin/change-password
+    // Shared with end users, as above.
     changeAdminUserPassword: builder.mutation<
       any,
       { email: string; new_password: string }
     >({
       query: ({ email, new_password }) => ({
-        url: "authsec/uflow/admin/change-password",
+        url: "/authsec/uflow/user/admin/change-password",
         method: "POST",
         body: withSessionData({
           email,
@@ -252,7 +248,6 @@ export const adminUsersApi = baseApi.injectEndpoints({
 
 export const {
   useGetAdminUsersQuery,
-  useGetAdminUserQuery,
   useCheckADConfigStatusQuery,
   useCheckEntraConfigStatusQuery,
   useDeleteAdminUserMutation,

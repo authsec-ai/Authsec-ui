@@ -15,8 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, UserPlus, Shield, User } from "lucide-react";
 import { toast } from "@/lib/toast";
-import { resolveWorkspaceId } from "@/utils/workspace";
-import { SessionManager } from "@/utils/sessionManager";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
 type UserOption = {
@@ -44,14 +42,7 @@ export function AssignUsersToRoleModal({
   selectedRoles,
   onSuccess,
 }: AssignUsersToRoleModalProps) {
-  const { isAdmin, audience } = useRbacAudience();
-  const sessionData = SessionManager.getSession();
-  const workspaceId =
-    resolveWorkspaceId() ??
-    sessionData?.workspace_id ??
-    (sessionData as any)?.workspaceId ??
-    sessionData?.jwtPayload?.workspace_id ??
-    "";
+  const { audience } = useRbacAudience();
 
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);

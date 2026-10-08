@@ -8,6 +8,8 @@
  * Available Endpoints:
  * - POST /uflow/invite - Invite an end-user
  * - POST /uflow/admin/ad/sync - Sync Active Directory for end-users
+ *   (syncActiveDirectory / syncEntraID route to the admin-users variants
+ *   when called with audience "admin")
  * - POST /uflow/admin/entra/sync - Sync Azure Entra ID for end-users
  * - POST /uflow/admin/admin-users/ad/sync - Sync Active Directory for admin users
  * - POST /uflow/admin/admin-users/entra/sync - Sync Azure Entra ID for admin users
@@ -69,6 +71,52 @@ export interface SyncResult {
 }
 
 // ============================================================================
+// DIRECTORY SYNC ROUTING
+// ============================================================================
+
+/**
+ * The backend has one sync route per (directory, audience), and the two
+ * audiences bind different bodies (routes.go adminPlatform group):
+ *
+ *   end users:   POST /authsec/uflow/admin/{ad,entra}/sync
+ *                { workspace_id, client_id, project_id, config_id | config, dry_run }
+ *   admin users: POST /authsec/uflow/admin/admin-users/{ad,entra}/sync
+ *                { workspace_id, sync_type: "ad" | "entra_id",
+ *                  config_id | ad_config | entra_config, dry_run }
+ */
+export function directorySyncRequest(kind: "ad" | "entra", data: DirectorySync) {
+  const dryRun = data.dry_run || false;
+  const ids = {
+    workspace_id: data.workspace_id,
+    client_id: data.client_id,
+    project_id: data.project_id,
+  };
+  if (data.audience === "admin") {
+    return {
+      url: `/authsec/uflow/admin/admin-users/${kind}/sync`,
+      method: "POST",
+      body: withSessionData({
+        ...ids,
+        sync_type: kind === "ad" ? "ad" : "entra_id",
+        config_id: data.config_id,
+        ...(kind === "ad" ? { ad_config: data.config } : { entra_config: data.config }),
+        dry_run: dryRun,
+      }),
+    };
+  }
+  return {
+    url: `/authsec/uflow/admin/${kind}/sync`,
+    method: "POST",
+    body: withSessionData({
+      ...ids,
+      config_id: data.config_id,
+      config: data.config,
+      dry_run: dryRun,
+    }),
+  };
+}
+
+// ============================================================================
 // API
 // ============================================================================
 
@@ -96,79 +144,33 @@ export const endUserInvitesApi = baseApi.injectEndpoints({
       invalidatesTags: ["EndUser"],
     }),
 
-    // POST /uflow/admin/ad/sync
-    // Active Directory sync for end-users
+    // Active Directory sync. End users (default): POST /uflow/admin/ad/sync;
+    // audience "admin": POST /uflow/admin/admin-users/ad/sync (UI-016).
     syncActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => ({
-        url: "/authsec/uflow/admin/ad/sync",
-        method: "POST",
-        body: withSessionData({
-          config_id: data.config_id,
-          config: data.config,
-          dry_run: data.dry_run || false,
-          sync_type: data.sync_type || "ad",
-          workspace_id: data.workspace_id,
-          client_id: data.client_id,
-          project_id: data.project_id,
-        }),
-      }),
-      invalidatesTags: ["EndUser", "AdminUser", "SyncConfig"],
+      query: (data) => directorySyncRequest("ad", data),
+      invalidatesTags: (_r, _e, data) =>
+        data.audience === "admin" ? ["AdminUser", "SyncConfig"] : ["EndUser", "SyncConfig"],
     }),
 
-    // POST /uflow/admin/entra/sync
-    // Azure Entra ID sync for end-users
+    // Azure Entra ID sync. End users (default): POST /uflow/admin/entra/sync;
+    // audience "admin": POST /uflow/admin/admin-users/entra/sync.
     syncEntraID: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => ({
-        url: "/authsec/uflow/admin/entra/sync",
-        method: "POST",
-        body: withSessionData({
-          config_id: data.config_id,
-          config: data.config,
-          dry_run: data.dry_run || false,
-          sync_type: data.sync_type || "entra_id",
-          workspace_id: data.workspace_id,
-          client_id: data.client_id,
-          project_id: data.project_id,
-        }),
-      }),
-      invalidatesTags: ["EndUser", "AdminUser", "SyncConfig"],
+      query: (data) => directorySyncRequest("entra", data),
+      invalidatesTags: (_r, _e, data) =>
+        data.audience === "admin" ? ["AdminUser", "SyncConfig"] : ["EndUser", "SyncConfig"],
     }),
 
     // POST /uflow/admin/admin-users/ad/sync
     // Active Directory sync to Admin Users list
     syncAdminUsersActiveDirectory: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => ({
-        url: "/authsec/uflow/admin/admin-users/ad/sync",
-        method: "POST",
-        body: withSessionData({
-          config_id: data.config_id,
-          config: data.config,
-          dry_run: data.dry_run || false,
-          sync_type: data.sync_type || "ad",
-          workspace_id: data.workspace_id,
-          client_id: data.client_id,
-          project_id: data.project_id,
-        }),
-      }),
+      query: (data) => directorySyncRequest("ad", { ...data, audience: "admin" }),
       invalidatesTags: ["AdminUser", "SyncConfig"],
     }),
 
     // POST /uflow/admin/admin-users/entra/sync
     // Azure Entra ID sync to Admin Users list
     syncAdminUsersEntraID: builder.mutation<SyncResult, DirectorySync>({
-      query: (data) => ({
-        url: "/authsec/uflow/admin/admin-users/entra/sync",
-        method: "POST",
-        body: withSessionData({
-          config_id: data.config_id,
-          config: data.config,
-          dry_run: data.dry_run || false,
-          sync_type: data.sync_type || "entra_id",
-          workspace_id: data.workspace_id,
-          client_id: data.client_id,
-          project_id: data.project_id,
-        }),
-      }),
+      query: (data) => directorySyncRequest("entra", { ...data, audience: "admin" }),
       invalidatesTags: ["AdminUser", "SyncConfig"],
     }),
   }),

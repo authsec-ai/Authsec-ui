@@ -1,4 +1,3 @@
-import { useState } from "react";
 import toast from "react-hot-toast";
 
 import { useTestLoginMutation } from "../../app/api/setupWizardApi";

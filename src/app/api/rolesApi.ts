@@ -1,13 +1,12 @@
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { baseApi, withSessionData } from './baseApi';
 import type {
   Role,
-  RoleWithStats,
   RoleFilters,
   RoleAnalytics,
   RolePermission,
   BulkUpdateResult,
   BulkDeleteResult,
-  ListParams
 } from '@/types/database';
 
 // AuthSec API types
@@ -54,6 +53,19 @@ interface DeleteRolesRequest {
   workspace_id: string;
   role_ids: string[];
   audience?: 'admin' | 'endUser';
+}
+
+export interface DeleteRolesResult {
+  success: true;
+  deleted: string[];
+}
+
+/** Error payload of a deleteUserDefinedRoles call that stopped part-way. */
+export interface DeleteRolesErrorData {
+  error: string;
+  deleted: string[];
+  failed: string;
+  total: number;
 }
 
 interface MapRolesRequest {
@@ -270,12 +282,36 @@ export const authSecRolesApi = baseApi.injectEndpoints({
     }),
 
     // Delete user-defined roles
-    deleteUserDefinedRoles: builder.mutation<{ message?: string; success?: boolean }, DeleteRolesRequest>({
-      query: ({ audience: _audience, ...data }) => ({
-        url: '/authsec/uflow/admin/roles',
-        method: 'DELETE',
-        body: withSessionData(data),
-      }),
+    // The backend deletes one role per request (DELETE /admin/roles/:role_id);
+    // there is no bulk route (UI-015). Roles are deleted one after another and
+    // the loop stops at the first failure. The error carries which roles were
+    // already deleted so the page can report a partial result.
+    deleteUserDefinedRoles: builder.mutation<DeleteRolesResult, DeleteRolesRequest>({
+      async queryFn({ role_ids }, _api, _extraOptions, baseQuery) {
+        const deleted: string[] = [];
+        for (const id of role_ids) {
+          const result = await baseQuery({
+            url: `/authsec/uflow/admin/roles/${encodeURIComponent(id)}`,
+            method: 'DELETE',
+          });
+          if (result.error) {
+            const err = result.error as FetchBaseQueryError;
+            const data = (err as { data?: unknown }).data;
+            const message =
+              (data && typeof data === 'object' && 'error' in data && typeof (data as { error: unknown }).error === 'string'
+                ? (data as { error: string }).error
+                : undefined) ?? 'Failed to delete role';
+            return {
+              error: {
+                status: err.status,
+                data: { error: message, deleted, failed: id, total: role_ids.length },
+              } as FetchBaseQueryError,
+            };
+          }
+          deleted.push(id);
+        }
+        return { data: { success: true, deleted } };
+      },
       invalidatesTags: ['UnifiedRBACRole'],
     }),
 
@@ -302,3 +338,14 @@ export const {
   useDeleteUserDefinedRolesMutation,
   useMapRolesToClientMutation,
 } = authSecRolesApi;
+
+/** A toast message for a failed (possibly partial) deleteUserDefinedRoles call. */
+export function roleDeleteErrorMessage(e: unknown): string {
+  const data = (e as { data?: Partial<DeleteRolesErrorData> } | undefined)?.data;
+  const reason = data?.error ?? 'Failed to delete role';
+  const done = data?.deleted?.length ?? 0;
+  if (done > 0 && data?.total) {
+    return `Deleted ${done} of ${data.total} roles, then stopped: ${reason}`;
+  }
+  return reason;
+}

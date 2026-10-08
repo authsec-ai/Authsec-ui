@@ -80,7 +80,7 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
     }
 
     try {
-      const result = await createDomain({
+      await createDomain({
         workspace_id: session.workspace_id,
         domain: domain.trim().toLowerCase(),
         is_primary: isPrimary,

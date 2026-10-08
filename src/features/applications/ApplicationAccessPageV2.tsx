@@ -7,6 +7,8 @@
  *   "Add access ▾" dropdown that collapses the three former Add buttons.
  */
 
+import { NotFoundState } from "@/components/shared/NotFoundState";
+import { isNotFoundError } from "@/lib/error-utils";
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronDown, ChevronUp, Cpu, Loader2, MoreVertical, Plus, ShieldOff, Star, UserPlus, Users } from "lucide-react";
@@ -425,6 +427,7 @@ function ThreeColumnMatrix({
   const {
     data: selectedRoleDetail,
     isFetching: roleDetailLoading,
+    error: roleDetailError,
     refetch: refetchSelectedRoleDetail,
   } = useGetAuthSecRoleDetailQuery(selectedRoleId ?? "", {
     skip: !selectedRoleId,
@@ -853,6 +856,10 @@ function ThreeColumnMatrix({
                 <Loader2 className="mr-2 inline size-4 animate-spin" />
                 Loading grants…
               </p>
+            ) : isNotFoundError(roleDetailError) ? (
+              <NotFoundState subject="role">
+                It may have been deleted. Pick another role to manage its scopes.
+              </NotFoundState>
             ) : visibleScopes.length === 0 ? (
               <p className="text-sm text-muted-foreground">No scopes match this search.</p>
             ) : (

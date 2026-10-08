@@ -18,8 +18,6 @@ import {
   Calendar,
   RotateCcw,
   Eye,
-  ChevronDown,
-  ChevronRight,
   Plus,
   Minus,
   ArrowRight,
@@ -35,23 +33,26 @@ interface VersionHistoryModalProps {
 
 // Mock version history data - in real app this would come from API
 const getMockVersionHistory = (role: EnhancedRole): RoleVersion[] => {
+  const roleVersion = role.version ?? 0;
+  const rolePermissions = role.permissions ?? [];
+  const updatedAt = role.updatedAt ?? "";
   const baseVersions: RoleVersion[] = [
     {
-      version: role.version,
-      timestamp: role.updatedAt,
+      version: roleVersion,
+      timestamp: updatedAt,
       author: role.createdBy || "system",
       changes: ["Current version"],
       changeType: "update",
-      permissions: role.permissions,
+      permissions: rolePermissions,
       changedBy: role.createdBy || "system",
-      changedAt: role.updatedAt,
+      changedAt: updatedAt,
     },
   ];
 
   // Generate previous versions
-  if (role.version > 1) {
+  if (roleVersion > 1) {
     baseVersions.unshift({
-      version: role.version - 1,
+      version: roleVersion - 1,
       timestamp: "2024-01-20T10:30:00Z",
       author: "admin",
       changes: [
@@ -59,20 +60,20 @@ const getMockVersionHistory = (role: EnhancedRole): RoleVersion[] => {
         "Removed User Management delete permissions",
       ],
       changeType: "permissions",
-      permissions: role.permissions.slice(0, -1), // Simulate different permissions
+      permissions: rolePermissions.slice(0, -1), // Simulate different permissions
       changedBy: "admin",
       changedAt: "2024-01-20T10:30:00Z",
     });
   }
 
-  if (role.version > 2) {
+  if (roleVersion > 2) {
     baseVersions.unshift({
-      version: role.version - 2,
+      version: roleVersion - 2,
       timestamp: "2024-01-15T14:15:00Z",
       author: "admin",
       changes: ["Updated role description", "Added File Storage write permissions"],
       changeType: "update",
-      permissions: role.permissions.slice(0, -2),
+      permissions: rolePermissions.slice(0, -2),
       changedBy: "admin",
       changedAt: "2024-01-15T14:15:00Z",
     });
@@ -93,8 +94,9 @@ export function VersionHistoryModal({
 
   if (!role) return null;
 
+  const roleVersion = role.version ?? 0;
+
   const versions = getMockVersionHistory(role);
-  const currentVersion = versions.find((v) => v.version === role.version);
   const selectedVersionData = selectedVersion
     ? versions.find((v) => v.version === selectedVersion)
     : null;
@@ -190,7 +192,7 @@ export function VersionHistoryModal({
                 {versions.map((version) => {
                   const isSelected = selectedVersion === version.version;
                   const isCompared = compareVersion === version.version;
-                  const isCurrent = version.version === role.version;
+                  const isCurrent = version.version === roleVersion;
 
                   return (
                     <div
@@ -340,7 +342,7 @@ export function VersionHistoryModal({
                       <Eye className="h-4 w-4" />
                       Version {selectedVersionData.version} Details
                     </h3>
-                    {selectedVersionData.version !== role.version && (
+                    {selectedVersionData.version !== roleVersion && (
                       <Button
                         variant="outline"
                         size="sm"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { CardContent } from "@/components/ui/card";
 import { FilterCard } from "@/theme/components/cards";
 import { Input } from "@/components/ui/input";
@@ -55,9 +55,6 @@ interface ExternalServiceFiltersCardProps {
 
 const ExternalServiceFiltersCard = React.memo(
   ({
-    // New props
-    onFiltersChange,
-    initialFilters = {},
     // Legacy props
     searchTerm = "",
     onSearchTermChange,
@@ -65,20 +62,12 @@ const ExternalServiceFiltersCard = React.memo(
     onProviderFilterChange,
     statusFilter = "all",
     onStatusFilterChange,
-    showAdvancedFilters,
-    onToggleAdvancedFilters,
-    clientFilter,
-    onClientFilterChange,
-    clients = [],
     onResetFilters,
   }: ExternalServiceFiltersCardProps) => {
     // Use legacy props for now to maintain compatibility
     const [searchQuery, setSearchQuery] = useState(searchTerm);
     const [provider, setProvider] = useState(providerFilter);
     const [status, setStatus] = useState(statusFilter);
-
-    // Track last emitted filters to avoid emitting duplicates and loops
-    const lastEmittedFiltersRef = useRef<string>("");
 
     // Sync with legacy props when they change
     useEffect(() => {

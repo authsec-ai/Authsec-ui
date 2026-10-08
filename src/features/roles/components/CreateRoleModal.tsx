@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { X, Plus, Shield } from "lucide-react";
+import { Plus, Shield } from "lucide-react";
 import {
   Dialog,
   DialogContent,

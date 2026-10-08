@@ -6,7 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { WizardStorage } from "@/features/wizards/utils/wizardStorage";
 import { getWizardConfig } from "@/features/wizards/configs";
 import type { WizardConfig, WizardStep } from "@/features/wizards/types";
@@ -48,7 +48,6 @@ interface WizardProviderProps {
 
 export function WizardProvider({ children }: WizardProviderProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const previousLocation = useRef(location);
 
   const [activeWizard, setActiveWizard] = useState<string | null>(null);
@@ -210,6 +209,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
     }
 
     previousLocation.current = location;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeStep identity changes with wizard state; re-running these navigation checks would double-complete steps
   }, [location, activeWizard, currentStep, wizardConfig, completedSteps]);
 
   useEffect(() => {
@@ -228,6 +228,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
         completeStep(currentStepConfig.id);
       }, 100);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- completeStep identity changes with wizard state; re-running these navigation checks would double-complete steps
   }, [
     activeWizard,
     currentStep,
@@ -361,7 +362,6 @@ export function WizardProvider({ children }: WizardProviderProps) {
     };
 
     setWizardCompletionData(completionDataWithWizardId);
-    console.log("[Wizard] Stored completion data:", completionDataWithWizardId);
 
     WizardStorage.completeWizard(activeWizard);
 

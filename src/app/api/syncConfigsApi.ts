@@ -53,6 +53,7 @@ export interface SyncConfig {
   last_sync_at?: string;
   last_sync_status?: string;
   last_sync_users_count?: number;
+  entra_client_id?: string;
 }
 
 export interface CreateSyncConfigRequest {
@@ -139,11 +140,11 @@ export const syncConfigsApi = baseApi.injectEndpoints({
     // POST /uflow/admin/sync-configs/list
     // List all sync configurations
     listSyncConfigs: builder.query<SyncConfig[], ListSyncConfigsRequest | void>({
-      query: (data = {}) => ({
+      query: (data) => ({
         url: '/authsec/uflow/admin/sync-configs/list',
         method: 'POST',
         body: withSessionData({
-          sync_type: data.sync_type,
+          sync_type: data ? data.sync_type : undefined,
         }),
       }),
       transformResponse: (response: ListSyncConfigsResponse) =>
@@ -191,19 +192,3 @@ export const {
   useUpdateSyncConfigMutation,
   useDeleteSyncConfigMutation,
 } = syncConfigsApi;
-
-// Re-export types for better module resolution
-export type {
-  SyncType,
-  ADConfig,
-  EntraConfig,
-  SyncConfig,
-  CreateSyncConfigRequest,
-  CreateSyncConfigResponse,
-  ListSyncConfigsRequest,
-  ListSyncConfigsResponse,
-  UpdateSyncConfigRequest,
-  UpdateSyncConfigResponse,
-  DeleteSyncConfigRequest,
-  DeleteSyncConfigResponse,
-};

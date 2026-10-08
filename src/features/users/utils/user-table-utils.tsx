@@ -45,7 +45,7 @@ const formatIdentifier = (value?: string | null) => {
 // User-specific utility functions
 export const UserTableUtils = {
   // Status badge variant mapping
-  getStatusVariant: (active: boolean) => {
+  getStatusVariant: (active?: boolean) => {
     return active ? "default" : "secondary";
   },
 
@@ -57,7 +57,7 @@ export const UserTableUtils = {
     return "bg-blue-100 text-blue-800 border-blue-200";
   },
 
-  formatProvider: (provider: string) => {
+  formatProvider: (provider?: string) => {
     const providerMap: Record<string, string> = {
       entra_id: "Microsoft Entra ID",
       azure_ad: "Azure AD",
@@ -66,7 +66,7 @@ export const UserTableUtils = {
       auth0: "Auth0",
       okta: "Okta",
     };
-    return providerMap[provider] || provider;
+    return (provider && providerMap[provider]) || provider;
   },
 
   getMfaStatusVariant: (mfaEnabled: boolean) => {
@@ -222,7 +222,7 @@ export function RolesCell({ user }: { user: EnhancedUser }) {
           {user.roles.slice(0, 2).map((role: any, index) => (
             <span key={index}>
               {typeof role === 'string' ? role : role.name || 'Role'}
-              {index < Math.min(user.roles.length, 2) - 1 && <span className="text-foreground/40">, </span>}
+              {index < Math.min(user.roles?.length ?? 0, 2) - 1 && <span className="text-foreground/40">, </span>}
             </span>
           ))}
           {user.roles.length > 2 && (

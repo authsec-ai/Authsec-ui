@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { DashboardHero } from "./DashboardHero";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 interface ActivationSectionProps {
   step1Done: boolean;
   step2Done: boolean;
@@ -14,7 +15,7 @@ export function ActivationSection({
   onStart,
   isWizardActive,
 }: ActivationSectionProps) {
-  const DISMISS_KEY = "activationCard_dismissed";
+  const DISMISS_KEY = scopedStorageKey("activationCard_dismissed");
   const [isDismissed, setIsDismissed] = useState<boolean>(() => {
     try {
       return localStorage.getItem(DISMISS_KEY) === "true";
@@ -29,7 +30,7 @@ export function ActivationSection({
     setIsDismissed(true);
     try {
       localStorage.setItem(DISMISS_KEY, "true");
-    } catch {}
+    } catch { /* storage unavailable; ignore */ }
   };
   const CONFETTI_KEY = "activationCard_confettiFired";
   const hasFiredConfetti = useRef<boolean>(
@@ -47,7 +48,7 @@ export function ActivationSection({
       hasFiredConfetti.current = true;
       try {
         sessionStorage.setItem(CONFETTI_KEY, "true");
-      } catch {}
+      } catch { /* storage unavailable; ignore */ }
 
       const defaults = {
         spread: 55,
@@ -67,7 +68,7 @@ export function ActivationSection({
       hasFiredConfetti.current = false;
       try {
         sessionStorage.removeItem(CONFETTI_KEY);
-      } catch {}
+      } catch { /* storage unavailable; ignore */ }
     }
   }, [isComplete, isDismissed]);
 

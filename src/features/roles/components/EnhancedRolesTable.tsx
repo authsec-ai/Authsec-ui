@@ -4,9 +4,7 @@ import {
   type ResponsiveTableConfig,
 } from "@/components/ui/responsive-data-table";
 import { ResponsiveTableProvider } from "@/components/ui/responsive-table";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
-import { Plus } from "lucide-react";
 import type { EnhancedRole } from "@/types/entities";
 import {
   createRoleTableColumns,
@@ -36,7 +34,7 @@ export function EnhancedRolesTable({
   selectedRoles: externalSelected = [],
   onSelectRole,
   onSelectAll,
-  onCreateRole,
+  onCreateRole: _onCreateRole,
   onOpenDrawer,
   onEditRole,
   onDuplicateRole,
@@ -143,7 +141,7 @@ export function EnhancedRolesTable({
     renderExpandedRow: (row) => <RoleExpandedRow role={row.original} />,
     getRowId: (row) => row.id,
     expandedRowIds: Array.from(expandedRows),
-    onRowExpansionChange: (ids) => {
+    onExpandedRowsChange: (ids) => {
       setExpandedRows(new Set(ids));
     },
     onRowClick: (row) => onOpenDrawer?.(row.id),

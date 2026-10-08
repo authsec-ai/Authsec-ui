@@ -106,11 +106,15 @@ const authSlice = createSlice({
       let actualProjectId = workspaceId; // fallback to workspaceId
       let actualClientId = workspaceId; // fallback to workspaceId
       
+      // The token decides the workspace; the value passed in only names
+      // the workspace the sign-in started from.
+      let sessionWorkspaceId = workspaceId;
       if (token) {
         jwtPayload = decodeJWT(token);
         if (jwtPayload) {
-          actualProjectId = jwtPayload.project_id || workspaceId;
-          actualClientId = jwtPayload.client_id || workspaceId;
+          sessionWorkspaceId = jwtPayload.workspace_id || workspaceId;
+          actualProjectId = jwtPayload.project_id || sessionWorkspaceId;
+          actualClientId = jwtPayload.client_id || sessionWorkspaceId;
         }
       }
 
@@ -147,7 +151,7 @@ const authSlice = createSlice({
         user,
         projects: [project],
         currentProject: project,
-        workspace_id: workspaceId,
+        workspace_id: sessionWorkspaceId,
         workspace_domain: jwtPayload?.workspace_domain,
         project_id: actualProjectId, // Use project_id from JWT
         client_id: actualClientId, // Use client_id from JWT

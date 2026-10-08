@@ -79,12 +79,12 @@ export interface OidcProviderTableActions {
 }
 
 // Reusable provider cell component
-export function ProviderCell({
+export function ProviderCell<T extends UnifiedAuthProvider | ApiOidcProvider>({
   provider,
   onSelect,
 }: {
-  provider: UnifiedAuthProvider | ApiOidcProvider;
-  onSelect?: (provider: UnifiedAuthProvider | ApiOidcProvider) => void;
+  provider: T;
+  onSelect?: (provider: T) => void;
 }) {
   return (
     <div className="min-w-0 space-y-1">

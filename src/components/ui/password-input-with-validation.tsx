@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "./input";
-import { validatePassword, type PasswordRequirement } from "@/utils/passwordValidation";
+import { validatePassword } from "@/utils/passwordValidation";
 
 export interface PasswordInputWithValidationProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {
@@ -37,15 +37,6 @@ export const PasswordInputWithValidation = React.forwardRef<
     if (metCount <= 3) return "bg-yellow-500";
     if (metCount <= 4) return "bg-blue-500";
     return "bg-green-500";
-  };
-
-  const getStrengthText = () => {
-    const metCount = validation.requirements.filter(req => req.met).length;
-    if (metCount <= 1) return "Very Weak";
-    if (metCount <= 2) return "Weak";
-    if (metCount <= 3) return "Fair";
-    if (metCount <= 4) return "Good";
-    return "Strong";
   };
 
   return (

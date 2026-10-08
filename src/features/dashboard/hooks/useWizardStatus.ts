@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer } from "react";
 import { useWizard } from "@/contexts/WizardContext";
 import { getWizardConfig, WizardStorage } from "@/features/wizards";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
 /**
  * Reusable hook for checking wizard completion status and launching wizards.
@@ -19,7 +20,7 @@ export function useWizardStatus(wizardId: string) {
 
   const isCompleted = useMemo(() => {
     try {
-      const raw = localStorage.getItem("authsec_wizards");
+      const raw = localStorage.getItem(scopedStorageKey("authsec_wizards"));
       if (!raw) return false;
       const data = JSON.parse(raw) as { completedWizards?: unknown };
       if (!Array.isArray(data.completedWizards)) return false;
@@ -27,6 +28,7 @@ export function useWizardStatus(wizardId: string) {
     } catch {
       return false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- isActive is an intentional cache-buster to re-read localStorage when a wizard starts or stops
   }, [wizardId, isActive]);
 
   const launch = useCallback(() => {

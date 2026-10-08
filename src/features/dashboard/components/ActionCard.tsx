@@ -1,17 +1,6 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "../../../components/ui/card";
-import { Badge } from "../../../components/ui/badge";
-
-const badgeVariants = {
-  success:
-    "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-300",
-  warning:
-    "bg-amber-500/10 text-amber-700 dark:bg-amber-400/20 dark:text-amber-300",
-  info: "bg-blue-500/10 text-blue-700 dark:bg-blue-400/20 dark:text-blue-300",
-  default:
-    "bg-slate-500/10 text-slate-700 dark:bg-slate-400/20 dark:text-slate-300",
-};
 
 const iconColors = {
   purple:
@@ -40,8 +29,6 @@ export function ActionCard({
   title,
   description,
   onClick,
-  badge,
-  badgeColor = "default",
   color = "neutral",
   disabled = false,
 }: ActionCardProps) {

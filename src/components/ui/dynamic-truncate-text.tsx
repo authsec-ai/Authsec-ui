@@ -53,7 +53,7 @@ export function DynamicTruncateText({
 
       while (left <= right) {
         const mid = Math.floor((left + right) / 2);
-        const truncated = text.slice(0, mid) + "...";
+        const truncated = `${text.slice(0, mid)}...`;
         tempElement.textContent = truncated;
 
         if (tempElement.offsetWidth <= containerWidth) {
@@ -64,7 +64,7 @@ export function DynamicTruncateText({
         }
       }
 
-      const finalText = bestFit > 0 ? text.slice(0, bestFit) + "..." : "...";
+      const finalText = bestFit > 0 ? `${text.slice(0, bestFit)}...` : "...";
       setDisplayText(finalText);
       setIsTruncated(finalText !== text);
       document.body.removeChild(tempElement);

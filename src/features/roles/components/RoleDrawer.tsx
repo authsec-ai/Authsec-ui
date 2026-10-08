@@ -39,7 +39,7 @@ export function RoleDrawer({
           <div className="space-y-1">
             <DrawerTitle className="flex items-center gap-2 text-xl font-bold">
               <Shield className="h-5 w-5" /> {role.name}
-              {role.version > 1 && <Badge variant="outline">v{role.version}</Badge>}
+              {(role.version ?? 0) > 1 && <Badge variant="outline">v{role.version}</Badge>}
             </DrawerTitle>
             {role.description && <DrawerDescription>{role.description}</DrawerDescription>}
           </div>

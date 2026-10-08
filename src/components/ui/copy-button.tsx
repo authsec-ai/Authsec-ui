@@ -7,7 +7,7 @@ import { cn } from "../../lib/utils";
 interface CopyButtonProps {
   text: string;
   label?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "lg";
   variant?: "outline" | "ghost" | "secondary";
   className?: string;
   showLabel?: boolean;
@@ -34,7 +34,7 @@ export function CopyButton({
       setTimeout(() => {
         setCopied(false);
       }, 2000);
-    } catch (err) {
+    } catch {
       toast.error("Failed to copy to clipboard");
     }
   };

@@ -150,19 +150,6 @@ export async function generateOAuth2AuthorizationUrl(
 
   const generatedUrl = authUrl.toString();
 
-  // Log the generated OAuth2 authorization URL for debugging
-  // eslint-disable-next-line no-console
-  console.log("[OAuth2] 🔐 Generated Authorization URL:", {
-    url: generatedUrl,
-    clientId: oauthClientId,
-    tenantDomain: tenantDomain || "(none - using current hostname)",
-    redirectUri: finalRedirectUri,
-    scopes: scopes.join(" "),
-    state,
-    codeChallenge,
-    codeChallengeMethod: "S256",
-  });
-
   return {
     authorizationUrl: generatedUrl,
     state,

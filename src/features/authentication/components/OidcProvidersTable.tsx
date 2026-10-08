@@ -77,7 +77,7 @@ export function OidcProvidersTable({
             <span className="text-sm font-mono truncate" title={row.original.client_id}>
               {row.original.client_id}
             </span>
-            <CopyButton text={row.original.client_id} label="Client ID" size="sm" variant="ghost" />
+            <CopyButton text={row.original.client_id ?? ""} label="Client ID" size="sm" variant="ghost" />
           </div>
         ),
       },
@@ -94,7 +94,7 @@ export function OidcProvidersTable({
             <span className="truncate text-sm" title={row.original.callback_url}>
               {row.original.callback_url}
             </span>
-            <CopyButton text={row.original.callback_url} label="Callback URL" size="sm" variant="ghost" />
+            <CopyButton text={row.original.callback_url ?? ""} label="Callback URL" size="sm" variant="ghost" />
           </div>
         ),
       },
@@ -141,7 +141,7 @@ export function OidcProvidersTable({
       onSelectAll={onSelectAll}
       enableExpansion
       renderExpandedRow={renderExpandedRow}
-      getRowId={(provider) => provider.client_id}
+      getRowId={(provider) => provider.client_id ?? ""}
       enableSorting
       enablePagination
       pagination={{

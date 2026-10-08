@@ -11,7 +11,7 @@ export function SetupTourList() {
   const rbac = useWizardStatus("rbac-wizard");
   const userAuth = useWizardStatus("user-auth-wizard");
 
-  const toursConfig = [
+  const toursConfig = React.useMemo(() => [
     {
       id: "m2m-auth",
       icon: Server,
@@ -48,7 +48,7 @@ export function SetupTourList() {
       color: "green" as const,
       sortOrder: 4,
     },
-  ];
+  ], [audience, m2m, rbac, userAuth]);
 
   // Sort: incomplete first, completed last (maintain order within groups)
   const sortedTours = React.useMemo(() => {
@@ -58,17 +58,7 @@ export function SetupTourList() {
       }
       return a.sortOrder - b.sortOrder; // maintain order
     });
-  }, [
-    m2m.isCompleted,
-    rbac.isCompleted,
-    userAuth.isCompleted,
-  ]);
-
-  const tourIdToEventName: Record<string, string> = {
-    "m2m-auth": "m2m_auth",
-    rbac: "rbac_setup",
-    "user-auth": "user_auth",
-  };
+  }, [toursConfig]);
 
   // Map to card props
   const tours = sortedTours.map((config) => ({
@@ -100,19 +90,14 @@ export function SetupTourList() {
                 ? "accent"
                 : tour.color === "purple"
                   ? "accent"
-                  : tour.color === "amber"
-                    ? "warning"
-                    : "success"
+                  : "success"
             }
             title={tour.title}
             description={tour.description}
             isCompleted={tour.isCompleted}
             statusLabel={tour.isCompleted ? "Complete" : "Ready"}
             statusTone={tour.isCompleted ? "success" : "neutral"}
-            primaryActionLabel={tour.primaryActionLabel}
             onPrimaryAction={tour.onPrimaryAction}
-            secondaryActionLabel={tour.secondaryActionLabel}
-            onSecondaryAction={tour.onSecondaryAction}
             framed={false}
             primaryActionStyle="inline"
             revealActionsOnHover

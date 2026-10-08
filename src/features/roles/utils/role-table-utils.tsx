@@ -9,17 +9,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   MoreHorizontal,
-  Edit,
-  Copy,
   Trash2,
-  Key,
   UserPlus,
-  History,
-  Lock,
 } from "lucide-react";
 import type { EnhancedRole } from "@/types/entities";
 import type { ResponsiveColumnDef } from "@/components/ui/responsive-data-table";
-import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,

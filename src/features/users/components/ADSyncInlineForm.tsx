@@ -6,7 +6,7 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import { FormDivider, FormSectionHeader } from "@/theme";
 import { ADConfigForm, type ADConfigFormData } from "./ADConfigForm";
-import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
+import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig, type ADConfig } from "@/app/api/syncConfigsApi";
 import { useSyncActiveDirectoryMutation } from "@/app/api/enduser/invitesApi";
 
 const WIZARD_STEPS = [
@@ -66,7 +66,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
 
   const hydrateConfig = useCallback((source: SyncConfig): ADConfigFormData => {
     const defaults = createDefaultConfig();
-    const ad = source.ad_config ?? {};
+    const ad: Partial<ADConfig> = source.ad_config ?? {};
     const fallback: ADSyncFallback = source;
 
     return {

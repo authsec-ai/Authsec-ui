@@ -27,7 +27,7 @@ export function GuidedTourContent({
   position,
   onNext,
   onSkip,
-  onClose,
+  onClose: _onClose,
   showPrevious = false,
   onPrevious,
 }: GuidedTourContentProps) {

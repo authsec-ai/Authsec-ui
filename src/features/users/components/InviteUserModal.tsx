@@ -84,7 +84,7 @@ export function InviteUserModal({ isOpen, onClose, audience, onSuccess }: Invite
     }
 
     const normalized = rolesResponse
-      .map((role: any, index: number) => {
+      .map((role: any, index: number): SearchableSelectOption | null => {
         const rawId =
           role?.id ??
           role?.role_id ??

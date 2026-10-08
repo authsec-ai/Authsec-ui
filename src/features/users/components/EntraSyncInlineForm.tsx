@@ -15,7 +15,7 @@ import { toast } from "@/lib/toast";
 import { getErrorMessage } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import { EntraConfigForm, type EntraConfigFormData } from "./EntraConfigForm";
-import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
+import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig, type EntraConfig } from "@/app/api/syncConfigsApi";
 import { useSyncEntraIDMutation } from "@/app/api/enduser/invitesApi";
 
 const WIZARD_STEPS = [
@@ -68,7 +68,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
 
   const hydrateConfig = useCallback((source: SyncConfig): EntraConfigFormData => {
     const defaults = createDefaultConfig();
-    const entra = source.entra_config ?? {};
+    const entra: Partial<EntraConfig> = source.entra_config ?? {};
     const fallback: EntraSyncFallback = source;
 
     return {

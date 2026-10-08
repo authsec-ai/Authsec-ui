@@ -24,9 +24,7 @@ import {
   Trash2,
   Server,
   Plus,
-  Check,
   Clock,
-  AlertCircle,
   CheckCircle,
 } from "lucide-react";
 import type { ExternalService } from "@/types/entities";
@@ -146,7 +144,6 @@ export function SimpleExternalServicesTable({
             <TableHead className="w-12">
               <Checkbox
                 checked={selectedServices.length === data.length && data.length > 0}
-                indeterminate={selectedServices.length > 0 && selectedServices.length < data.length}
                 onCheckedChange={onSelectAll}
                 aria-label="Select all services"
               />
