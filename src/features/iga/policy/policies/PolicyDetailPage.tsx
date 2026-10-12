@@ -24,7 +24,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 import { PolicyDeploymentsTab } from "../deployments/PolicyDeploymentsTab";
 import { PlanView } from "../plans/PlanView";
 import { RolloutTab } from "../rollout/RolloutTab";
-import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, delivery, lifecycle, rolloutStage, usePolicyPermission, versionStatus } from "../shared";
+import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, delivery, lifecycle, rolloutStage, usePolicyPermission, useWorkspaceMemberSession, versionStatus } from "../shared";
 import { EventsTab } from "./EventsTab";
 import { OverviewTab } from "./OverviewTab";
 import { OwnersTab } from "./OwnersTab";
@@ -48,6 +48,8 @@ const TAB_LABEL: Record<PolicyTab, string> = {
 export default function PolicyDetailPage() {
   const { id = "", tab } = useParams();
   const ws = getWorkspaceId() ?? "";
+  // Ensure a workspace-member session before member-gated actions (approve/reject/propose).
+  useWorkspaceMemberSession();
   const active = parseTab(tab);
   const [params] = useSearchParams();
   const [renaming, setRenaming] = useState(false);

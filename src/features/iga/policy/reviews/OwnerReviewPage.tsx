@@ -34,6 +34,7 @@ import {
   plural,
   relTime,
   serviceList,
+  useWorkspaceMemberSession,
   versionStatus,
 } from "../shared";
 import { ReviewAdminControls } from "./ReviewAdminControls";
@@ -76,6 +77,8 @@ function subjectOf(review: GovReviewView, mineOf: (id: string) => boolean): stri
 export default function OwnerReviewPage() {
   const { id = "" } = useParams();
   const ws = getWorkspaceId() ?? "";
+  // Ensure a workspace-member session before the member-gated respond action.
+  useWorkspaceMemberSession();
   const [outcome, setOutcome] = useState<RespondOutcome | null>(null);
   const q = useGetGovReviewQuery({ ws, id }, { skip: !id });
   const review = q.data;

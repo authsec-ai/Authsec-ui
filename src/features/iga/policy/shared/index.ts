@@ -4,6 +4,7 @@ export * from "./policyAccess";
 export * from "./policyErrors";
 export * from "./usePolicyAction";
 export * from "./usePolicyCapabilities";
+export * from "./workspaceMemberSession";
 export { PolicyActionError, PolicyLoadFailure } from "./PolicyErrorPanel";
 export * from "./remedy";
 export { PolicyCheckFailed, PolicyNav, PolicyShell, PolicyUnavailable } from "./PolicyShell";

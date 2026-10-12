@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, plural } from "../shared";
+import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, plural, useWorkspaceMemberSession } from "../shared";
 import { POLICIES_PATH } from "../policies/policyModel";
 import { dueLine, dayText, responseLabel, reviewStatus } from "./reviewCopy";
 
@@ -85,7 +85,9 @@ export default function ReviewsPage() {
   const stack = paging.key === filterKey ? paging.stack : [];
   const cursor = stack[stack.length - 1];
 
-  const query = useListGovReviewsQuery({ ws, mine: scope === "mine", status: statusesOf(status), limit: PAGE, cursor });
+  // Upgrade to a workspace-member session before the member-gated (mine) list runs.
+  const { ready } = useWorkspaceMemberSession();
+  const query = useListGovReviewsQuery({ ws, mine: scope === "mine", status: statusesOf(status), limit: PAGE, cursor }, { skip: !ready });
   const failure = classifyPolicyError(query.error);
   const next = query.currentData?.meta.next_cursor ?? null;
   const rows = useMemo(() => arrange(query.currentData?.data ?? []), [query.currentData]);

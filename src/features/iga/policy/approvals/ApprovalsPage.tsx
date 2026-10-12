@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, markPolicyDenied, plural, versionStatus } from "../shared";
+import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, markPolicyDenied, plural, useWorkspaceMemberSession, versionStatus } from "../shared";
 import { policyHref } from "../policies/policyModel";
 import { useMemberNames } from "../policies/useMemberNames";
 
@@ -47,7 +47,9 @@ export default function ApprovalsPage() {
   const stack = paging.key === status ? paging.stack : [];
   const cursor = stack[stack.length - 1];
 
-  const query = useListGovApprovalsQuery({ ws, status, limit: PAGE, cursor });
+  // Upgrade to a workspace-member session before the member-gated list runs.
+  const { ready } = useWorkspaceMemberSession();
+  const query = useListGovApprovalsQuery({ ws, status, limit: PAGE, cursor }, { skip: !ready });
   const failure = classifyPolicyError(query.error);
   const refused = failure?.kind === "forbidden";
   useEffect(() => {
