@@ -65,7 +65,19 @@ const ScanDetailPage = React.lazy(() => import("./features/iga/connections/ScanD
 const DiscoveryPage = React.lazy(() => import("./features/iga/discovery/DiscoveryPage"));
 const SightingDetailPage = React.lazy(() => import("./features/iga/discovery/SightingDetailPage"));
 const K8sObjectPage = React.lazy(() => import("./features/iga/k8s/K8sObjectPage"));
-const PolicyPage = React.lazy(() => import("./features/iga/policy/PolicyPage"));
+const PolicyHome = React.lazy(() => import("./features/iga/policy/PolicyHome"));
+import GatedRedirect from "./features/iga/policy/GatedRedirect";
+const FindingsPage = React.lazy(() => import("./features/iga/policy/findings/FindingsPage"));
+const PoliciesPage = React.lazy(() => import("./features/iga/policy/policies/PoliciesPage"));
+const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/policies/PolicyDetailPage"));
+const NewPolicyPage = React.lazy(() => import("./features/iga/policy/new/NewPolicyPage"));
+const ApprovalsPage = React.lazy(() => import("./features/iga/policy/approvals/ApprovalsPage"));
+const ReviewsPage = React.lazy(() => import("./features/iga/policy/reviews/ReviewsPage"));
+const OwnerReviewPage = React.lazy(() => import("./features/iga/policy/reviews/OwnerReviewPage"));
+const DeploymentsPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentsPage"));
+const DeploymentDetailPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentDetailPage"));
+const PolicySetupPage = React.lazy(() => import("./features/iga/policy/setup/SetupPage"));
+const LegacyPoliciesPage = React.lazy(() => import("./features/iga/policy/legacy/LegacyPoliciesPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
@@ -790,13 +802,145 @@ function AppContent() {
                     }
                   />
 
-                  {/* Policy and Logs: reserved, labelled previews */}
+                  {/* Policy (SPEC-iga-phase3-policy.md §9): the Overview and its secondary views when the
+                      policy product is on; the reference preview while it is off. Logs: recorded events
+                      when on, the labelled preview while off. */}
                   <Route
                     path="/iga/policy"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <PolicyPage />
+                          <PolicyHome />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/findings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <FindingsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/policies"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PoliciesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/policies/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/policies/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <NewPolicyPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/approvals"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ApprovalsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/reviews"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ReviewsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/reviews/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <OwnerReviewPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/deployments"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <DeploymentsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/deployments/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <DeploymentDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/setup"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicySetupPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/setup/:section"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicySetupPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/legacy"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <LegacyPoliciesPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -840,7 +984,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Agent policies" />
+                          <GatedRedirect to="/iga/policy/policies" retired={<RetiredPage title="Agent policies" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -850,7 +994,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Scheduled actions" />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Scheduled actions" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -860,7 +1004,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Policy warnings" />
+                          <GatedRedirect to="/iga/policy/deployments?attention=1" retired={<RetiredPage title="Policy warnings" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -920,7 +1064,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Enforcement queue" />
+                          <GatedRedirect to="/iga/policy/deployments" retired={<RetiredPage title="Enforcement queue" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

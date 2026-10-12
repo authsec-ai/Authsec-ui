@@ -220,6 +220,24 @@ export const baseApi = createApi({
     // is pinned to a published revision, so a refresh re-requests everything
     // at the new revision rather than invalidating objects one by one.
     "IgaGraph",
+    // Phase 3 policy product (SPEC-iga-phase3-policy.md §7). One tag per object
+    // family, each with an `ALL` list id and per-object ids, so a mutation
+    // refreshes exactly what it changed. Everything is workspace-scoped by the
+    // token on the server; the client adds `ws` to cache keys only.
+    "IgaGovFinding",
+    "IgaGovReadiness",
+    "IgaGovOwner",
+    "IgaGovPolicy",
+    "IgaGovVersion",
+    "IgaGovReview",
+    "IgaGovApproval",
+    "IgaGovRollout",
+    "IgaGovDeployment",
+    "IgaGovEvent",
+    "IgaGovSettings",
+    "IgaGovMetrics",
+    "IgaGovSetup",
+    "IgaGovLegacy",
   ],
   endpoints: () => ({}),
 });

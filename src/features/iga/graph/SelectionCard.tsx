@@ -140,7 +140,7 @@ function k8sNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edges
     sentence =
       first.kind === "k8s_service_account"
         ? `A Kubernetes ServiceAccount${where(first)}${first.scope ? `, cluster ${first.scope.label}` : ""}. Rules reach it through RoleBindings and ClusterRoleBindings.`
-        : `A Kubernetes ${kind} that a binding names${first.scope ? ` in cluster ${first.scope.label}` : ""}. The cluster holds no object for it; it is known only from the binding.`;
+        : `A Kubernetes ${kind} that a binding names${first.scope ? ` in cluster ${first.scope.label}` : ""}. The cluster holds no object for it, it is known only from the binding.`;
     const direct = first.used_by_count;
     if (direct) facts.push(["Used by", direct.value == null ? "Not known" : `${direct.exact ? "" : "at least "}${direct.value} workload${direct.value === 1 ? "" : "s"} directly`]);
   }

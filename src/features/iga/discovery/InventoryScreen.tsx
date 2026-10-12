@@ -409,7 +409,7 @@ export default function InventoryScreen(p: ScreenProps) {
                     narrowing.length ? (
                       <FilteredEmpty subject={type} narrowing={narrowing} onClear={() => p.url.patch({ q: null, kind: null, namespace: null, source: null })} />
                     ) : sweeps.length && sweeps.every((s) => s.state === "not_swept") ? (
-                      <EmptyList subject={type} detail="No inventory received yet: the cluster has not completed a sweep. This is not a finding that it holds none." />
+                      <EmptyList subject={type} detail="No inventory received yet: the cluster has not completed a sweep. This is not a finding that it holds none. Agents the cluster agent has already sighted are listed under Sightings." />
                     ) : sweeps.some((s) => s.observedAt && s.state !== "not_swept") ? (
                       <EmptyList subject={type} detail="The latest sweep was read and recorded no Kubernetes objects of this type." />
                     ) : (

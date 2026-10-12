@@ -18,6 +18,7 @@ import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
 import { CloudPill } from "@/features/discovery/cloud/CloudPill";
 import { Panel } from "@/features/iga/shared/components/Panel";
+import { EnforcementLine } from "@/features/iga/policy/setup/EnforcementLine";
 import { cn } from "@/lib/utils";
 
 import {
@@ -462,6 +463,7 @@ export function OverviewTab({
         </div>
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <AwsFacts c={c} /> : null}
+          {c.provider === "aws" ? <EnforcementLine connectionId={c.id} /> : null}
           {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
       {c.provider === "k8s" || c.provider === "github" ? (
         source.isError && !source.data ? (

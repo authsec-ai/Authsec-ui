@@ -7,7 +7,8 @@
  * product switcher in the bottom-left user menu.
  *
  * Four destinations, one per task (SPEC-console-revamp.md): connect, find,
- * decide, review. Policy and Logs are previews and say so. Object pages
+ * decide, review. Policy and Logs are previews and say so — until the policy
+ * product is on (SPEC-iga-phase3-policy.md §9): then both are real and drop the tag. Object pages
  * (workloads, identities, resources, a connection's detail) belong to the
  * destination that opens them, so it stays highlighted on them.
  */
@@ -28,7 +29,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { AuthSecLogo } from "@/components/ui/authsec-logo";
+import { usePolicyCapabilities } from "@/features/iga/policy/shared/usePolicyCapabilities";
 import { cn } from "@/lib/utils";
+import { getWorkspaceId } from "@/utils/workspace";
 
 interface IgaNavItem {
   title: string;
@@ -61,17 +64,22 @@ export function IgaSidebar({
   const navigate = useNavigate();
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
+  // Policy and Logs are previews only while the policy product is off. The tag stays while
+  // the capability loads; a failed check drops it (it says nothing about the product being off).
+  const policyState = usePolicyCapabilities(getWorkspaceId() ?? "").state;
+  const policyOn = policyState === "on" || policyState === "error";
 
   const items = useMemo(
     () =>
       NAV.map((item) => ({
         ...item,
+        tag: policyOn && (item.url === "/iga/policy" || item.url === "/iga/logs") ? undefined : item.tag,
         isActive: [item.url, ...(item.activeFor ?? [])].some(
           (url) => location.pathname === url || location.pathname.startsWith(`${url}/`),
         ),
         onClick: () => handleNavigation(item.url),
       })),
-    [location.pathname, handleNavigation],
+    [location.pathname, handleNavigation, policyOn],
   );
 
   return (
