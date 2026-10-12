@@ -6,6 +6,8 @@
  */
 
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { syncConfigTarget } from "@/features/users/components/syncConfigForm";
 import {
   Edit2,
   FolderSync,
@@ -97,8 +99,7 @@ export default function DirectorySyncPage() {
       (r) =>
         r.config_name?.toLowerCase().includes(q) ||
         r.typeLabel.toLowerCase().includes(q) ||
-        r.ad_config?.server?.toLowerCase().includes(q) ||
-        r.entra_config?.workspace_id?.toLowerCase().includes(q),
+        syncConfigTarget(r).toLowerCase().includes(q),
     );
   }, [allRows, query]);
 
@@ -207,10 +208,7 @@ export default function DirectorySyncPage() {
         approxWidth: 280,
         cell: ({ row }) => {
           const cfg = row.original;
-          const value =
-            cfg.ad_config?.server ||
-            cfg.entra_config?.workspace_id ||
-            "—";
+          const value = syncConfigTarget(cfg) || "—";
           return (
             <span
               className="ctx-uri"
@@ -266,7 +264,14 @@ export default function DirectorySyncPage() {
   return (
     <ConsolePage
       title="Directory Sync"
-      description="Active Directory and Entra ID synchronization. Synced users are automatically provisioned with workspace memberships."
+      description={
+        <>
+          Imports users from Active Directory or Entra ID into this workspace
+          and keeps them in step. It does not sign anyone in: for &ldquo;Sign
+          in with Microsoft&rdquo;, add an{" "}
+          <Link to="/identity-providers" className="underline">identity provider</Link>.
+        </>
+      }
       actions={
         <>
           <Button variant="outline" onClick={handleRefresh}>

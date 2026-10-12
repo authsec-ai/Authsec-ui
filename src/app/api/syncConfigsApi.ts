@@ -53,6 +53,16 @@ export interface SyncConfig {
   last_sync_at?: string;
   last_sync_status?: string;
   last_sync_users_count?: number;
+  // The list and create responses carry the stored row's flat columns; the
+  // secrets (ad_password, entra_client_secret) come back masked or not at all.
+  ad_server?: string;
+  ad_username?: string;
+  ad_base_dn?: string;
+  ad_filter?: string;
+  ad_use_ssl?: boolean;
+  ad_skip_verify?: boolean;
+  /** The Microsoft Entra directory (tenant) id. */
+  entra_tenant_id?: string;
   entra_client_id?: string;
 }
 
