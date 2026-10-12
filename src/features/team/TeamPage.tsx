@@ -11,9 +11,11 @@ import {
   ShieldOff,
   Trash2,
   UserCog,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
+import { InviteUserModal } from "@/features/users/components/InviteUserModal";
 
 import {
   useListMembersQuery,
@@ -127,7 +129,8 @@ export function TeamPage() {
   const [selected, setSelected] = useState<TenantMembership | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<TenantMembership | null>(null);
 
-  const { data, isLoading } = useListMembersQuery(
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const { data, isLoading, refetch } = useListMembersQuery(
     { workspaceId: workspaceId ?? "", status: statusFilter === "all" ? undefined : statusFilter },
     { skip: !workspaceId },
   );
@@ -331,8 +334,22 @@ export function TeamPage() {
   return (
     <ConsolePage
       title="Team"
-      description="Workspace operators and their access. To invite a new member, use the Invite Users flow."
+      description="Workspace operators and their access."
+      actions={
+        <Button className="text-white" onClick={() => setInviteOpen(true)}>
+          <UserPlus className="mr-1.5 size-3.5" /> Invite member
+        </Button>
+      }
     >
+      <InviteUserModal
+        isOpen={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        audience="admin"
+        onSuccess={() => {
+          setInviteOpen(false);
+          refetch();
+        }}
+      />
       <ConsoleFilterBar
         search={search}
         onSearchChange={(v) => setSearch(v)}
