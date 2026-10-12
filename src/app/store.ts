@@ -59,20 +59,30 @@ sessionListener.startListening({
   predicate: (action, current, previous) =>
     logout.match(action) ||
     sessionIdentity(current) !== sessionIdentity(previous),
-  effect: (_action, api) => {
-    resetSessionScopedState(api.dispatch);
+  effect: (action, api) => {
+    // Signing in is the sign-in flow's own last step: its slice still drives
+    // the redirect that follows (it holds the step and the token), so only a
+    // session that ends or changes takes the flow state with it.
+    const signingIn = !logout.match(action) && sessionIdentity(api.getOriginalState()) === "signed-out";
+    resetSessionScopedState(api.dispatch, { keepSignInFlow: signingIn });
   },
 });
 
 // Everything cached for one (workspace, user) is dropped when that changes:
-// every RTK Query cache and the sign-in flow slices (ADR-0001 §8).
-function resetSessionScopedState(dispatch: (action: unknown) => unknown) {
+// every RTK Query cache and, unless the change is the sign-in itself, the
+// sign-in flow slices (ADR-0001 §8).
+export function resetSessionScopedState(
+  dispatch: (action: unknown) => unknown,
+  { keepSignInFlow = false }: { keepSignInFlow?: boolean } = {},
+) {
   dispatch(baseApi.util.resetApiState());
   dispatch(userAuthApi.util.resetApiState());
   dispatch(oidcApi.util.resetApiState());
   dispatch(deviceApi.util.resetApiState());
-  dispatch(resetAdminWebAuthnState());
-  dispatch(resetOIDCWebAuthnState());
+  if (!keepSignInFlow) {
+    dispatch(resetAdminWebAuthnState());
+    dispatch(resetOIDCWebAuthnState());
+  }
   resetGraphRevisions();
 }
 
