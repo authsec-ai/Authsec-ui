@@ -76,7 +76,9 @@ function NeedsADecision({ ws }: { ws: string }) {
   const deployments = useListGovDeploymentsQuery({ ws, limit: 200 });
 
   const approvalsFailure = classifyPolicyError(approvals.error);
-  // A 403 is "your role cannot approve", not a failure; the nav hides Approvals once it is marked.
+  // A 403 permission denial is "your role cannot approve", not a failure; the nav hides Approvals once it is marked.
+  // A member-session 403 (kind `member_session`: the login token carries no workspace membership) is a session
+  // problem, not a role problem, so it stays visible as a failure below instead of being hidden here.
   const approvalsForbidden = approvalsFailure?.kind === "forbidden";
   const reviewsFailure = classifyPolicyError(reviews.error);
   const deploymentsFailure = classifyPolicyError(deployments.error);
