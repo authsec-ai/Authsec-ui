@@ -80,6 +80,10 @@ interface AuthSecRole {
   users_assigned?: number;
 }
 
+/** The built-in roles carry operator access; the backend refuses to delete
+ *  them (409), so the console does not offer it. */
+const isBuiltInRole = (r: Pick<AuthSecRole, "name">) => ["owner", "admin"].includes(r.name.toLowerCase());
+
 export interface AccessControlPageProps {
   initialTab?: "roles" | "scopes" | "assignments";
 }
@@ -261,7 +265,13 @@ function RolesTab({
               items={[
                 { label: "View details", icon: <KeyRound className="size-4" />, onSelect: () => setSelectedRole(row.original) },
                 { label: "Assign users", icon: <UserPlus className="size-4" />, onSelect: () => onAssignUsers(row.original.id) },
-                { label: "Delete role", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setConfirmDelete(row.original) },
+                {
+                  label: isBuiltInRole(row.original) ? "Built-in role" : "Delete role",
+                  icon: <Trash2 className="size-4" />,
+                  destructive: true,
+                  disabled: isBuiltInRole(row.original),
+                  onSelect: () => setConfirmDelete(row.original),
+                },
               ]}
             />
           </div>
@@ -388,7 +398,13 @@ function RolesTab({
                 <Button className="text-white" style={{ flex: 1 }} onClick={() => onAssignUsers(selectedRole.id)}>
                   <UserPlus className="mr-1.5 size-3.5" /> Assign users
                 </Button>
-                <Button variant="outline" aria-label="Delete role" onClick={() => setConfirmDelete(selectedRole)}>
+                <Button
+                  variant="outline"
+                  aria-label="Delete role"
+                  disabled={isBuiltInRole(selectedRole)}
+                  title={isBuiltInRole(selectedRole) ? "Built-in roles can't be deleted" : undefined}
+                  onClick={() => setConfirmDelete(selectedRole)}
+                >
                   <Trash2 className="size-3.5" />
                 </Button>
               </div>
