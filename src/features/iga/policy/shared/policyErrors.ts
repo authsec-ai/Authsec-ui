@@ -18,14 +18,6 @@ export type PolicyFailureKind =
   | "unavailable"
   /** 403: the role lacks the permission. */
   | "forbidden"
-  /**
-   * 403 with code `forbidden` whose message requires a verified workspace
-   * member session: the login token, not the role. The membership is active
-   * but this session carries no workspace_membership_id (the workspace switch
-   * never ran), so the backend cannot tell the request is the member's. Never
-   * reported as a permission, and never remembered as a refused permission.
-   */
-  | "member_session"
   /** 401. */
   | "unauthenticated"
   /** 404 not_found: absent, or another workspace's. */
@@ -69,15 +61,6 @@ export function classifyPolicyError(error: FetchBaseQueryError | SerializedError
     case 401:
       return { ...base, kind: "unauthenticated" };
     case 403:
-      // humanActor / mutationActor / policyActor refuse a token without a
-      // live workspace membership with code `forbidden` and a message about
-      // a "verified workspace member session". That is a session problem, not
-      // a role problem: classifying it as `forbidden` would hide controls via
-      // markPolicyDenied and tell the user an administrator must grant a
-      // permission they may already have.
-      if (code === "forbidden" && /verified workspace member session/i.test(base.message)) {
-        return { ...base, kind: "member_session" };
-      }
       return { ...base, kind: "forbidden" };
     case 404:
       // A policy 404 always carries `{error: {code: "not_found"}}`. A 404
@@ -186,14 +169,6 @@ export const POLICY_ERROR_COPY: Record<string, { title: string; fix?: string }> 
 
 /** The words for a failure: the code's copy, else the backend's message, else a plain fallback. */
 export function describeFailure(f: PolicyFailure): { title: string; fix?: string } {
-  // Checked before the code table: a member-session 403 carries code
-  // `forbidden`, whose entry would misreport it as a missing permission.
-  if (f.kind === "member_session") {
-    return {
-      title: "Your workspace session needs refresh",
-      fix: "Sign out and sign in again, then re-open this page. Your membership is active, but this login is missing its workspace membership, so AuthSec cannot tell the request is yours.",
-    };
-  }
   const known = POLICY_ERROR_COPY[f.code];
   if (known) return known;
   switch (f.kind) {

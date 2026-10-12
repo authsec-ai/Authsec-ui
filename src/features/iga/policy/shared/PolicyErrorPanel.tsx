@@ -27,7 +27,7 @@ export function PolicyLoadFailure({
   const words = describeFailure(failure);
   const remedy = remedyFor(failure);
   const reason = failure.kind === "unavailable" ? unavailableReason(failure) : undefined;
-  const tone = failure.kind === "forbidden" || failure.kind === "member_session" || failure.kind === "unavailable" || failure.kind === "not_found" ? "warning" : "danger";
+  const tone = failure.kind === "forbidden" || failure.kind === "unavailable" || failure.kind === "not_found" ? "warning" : "danger";
   const title =
     failure.kind === "failed" || failure.kind === "timeout" ? `Could not load ${subject}` : words.title;
   const body = (

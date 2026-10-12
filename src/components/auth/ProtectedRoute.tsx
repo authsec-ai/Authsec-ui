@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/context/AuthContext";
-import { ensureWorkspaceMemberSession } from "../../utils/workspaceSession";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -13,25 +12,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-  // Member-gated reads (Policy approvals, owner reviews, every policy
-  // mutation) need the workspace-scoped token: upgrade the login token once
-  // before any authenticated query mounts, so the first paint never fires
-  // with a token the backend must refuse. Best-effort — when the upgrade
-  // fails the old token stays and those reads render the workspace-session
-  // copy instead of failing silently.
-  const [sessionReady, setSessionReady] = useState(false);
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    let live = true;
-    ensureWorkspaceMemberSession().finally(() => {
-      if (live) setSessionReady(true);
-    });
-    return () => {
-      live = false;
-    };
-  }, [isAuthenticated]);
 
-  if (isLoading || (isAuthenticated && !sessionReady)) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center space-y-4">
