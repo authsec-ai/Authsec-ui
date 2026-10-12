@@ -44,9 +44,17 @@ interface ProviderTemplate {
   consoleName: string;
   consoleUrl: string;
   setupSteps: string[];
+  /** The provider's own names for the credential fields, when they differ
+   *  from the generic OAuth ones. */
+  fields?: {
+    clientId: string;
+    clientIdHelp: string;
+    clientSecret: string;
+    clientSecretHelp: string;
+  };
 }
 
-const OIDC_TEMPLATES: ProviderTemplate[] = [
+export const OIDC_TEMPLATES: ProviderTemplate[] = [
   {
     id: "google",
     name: "Google",
@@ -113,8 +121,15 @@ const OIDC_TEMPLATES: ProviderTemplate[] = [
       "Copy the Directory (tenant) ID or verified tenant domain",
       "Set the platform to Web and paste the Callback URL below as the redirect URI",
       "Under Certificates & secrets, create a new client secret",
-      "Copy the Application (client) ID and client secret value here",
+      "Copy the Application (client) ID and the client secret's Value here",
     ],
+    fields: {
+      clientId: "Application (client) ID",
+      clientIdHelp: "App registrations → your app → Overview.",
+      clientSecret: "Client secret value",
+      clientSecretHelp:
+        "Certificates & secrets → the Value column (not the Secret ID); Entra shows it only once.",
+    },
   },
   {
     id: "github",
@@ -142,12 +157,25 @@ const OIDC_TEMPLATES: ProviderTemplate[] = [
     consoleUrl: "https://github.com/settings/developers",
     setupSteps: [
       "Open GitHub → Settings → Developer settings → OAuth Apps → New",
-      "Set the Authorization callback URL to the Callback URL below",
+      "Homepage URL: your application's public address (the Homepage URL shown below works). GitHub only displays it; it is not used for sign-in",
+      "Authorization callback URL: paste the Callback URL below exactly (GitHub allows one per OAuth App)",
       "Generate a client secret",
       "Copy the Client ID and Client Secret here",
     ],
   },
 ];
+
+/** The credential field labels for a provider: its own names, or the
+ *  generic OAuth ones. */
+const GENERIC_FIELDS: NonNullable<ProviderTemplate["fields"]> = {
+  clientId: "Client ID",
+  clientIdHelp: "",
+  clientSecret: "Client Secret",
+  clientSecretHelp: "",
+};
+export function providerFieldLabels(t?: ProviderTemplate) {
+  return t?.fields ?? GENERIC_FIELDS;
+}
 
 // Wizard steps
 const WIZARD_STEPS = [
@@ -295,6 +323,7 @@ export function CreateAuthMethodPage() {
     [selectedTemplate],
   );
   const SelectedProviderIcon = selectedProviderTemplate?.icon;
+  const fieldLabels = providerFieldLabels(selectedProviderTemplate);
 
   const handleTemplateSelect = (template: ProviderTemplate) => {
     setSelectedTemplate(template.id);
@@ -328,21 +357,22 @@ export function CreateAuthMethodPage() {
 
   const handleBack = useCallback(() => {
     if (currentStepIndex > 0) setCurrentStepIndex(currentStepIndex - 1);
-    else navigate("/authentication");
+    else navigate("/identity-providers");
   }, [currentStepIndex, navigate]);
 
   const handleNext = useCallback(() => {
     if (currentStepIndex === 0) {
       const nextErrors: Record<string, string> = {};
       if (!selectedTemplate) nextErrors.template = "Pick a provider";
-      if (!form.clientId.trim()) nextErrors.clientId = "Client ID is required";
+      if (!form.clientId.trim())
+        nextErrors.clientId = `${fieldLabels.clientId} is required`;
       if (!form.clientSecret.trim())
-        nextErrors.clientSecret = "Client Secret is required";
+        nextErrors.clientSecret = `${fieldLabels.clientSecret} is required`;
       if (
         selectedTemplate === "microsoft" &&
         !normalizeMicrosoftTenant(form.microsoftTenant)
       ) {
-        nextErrors.microsoftTenant = "Microsoft tenant ID/domain is required";
+        nextErrors.microsoftTenant = "Directory (tenant) ID is required";
       }
 
       if (Object.keys(nextErrors).length > 0) {
@@ -355,7 +385,7 @@ export function CreateAuthMethodPage() {
     if (currentStepIndex < WIZARD_STEPS.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
     }
-  }, [currentStepIndex, selectedTemplate, form]);
+  }, [currentStepIndex, selectedTemplate, form, fieldLabels]);
 
   const canProceed = () =>
     currentStepIndex === 0
@@ -405,7 +435,7 @@ export function CreateAuthMethodPage() {
         },
       }).unwrap();
       toast.success("Identity provider created!");
-      navigate("/authentication", {
+      navigate("/identity-providers", {
         state: { authProviderCreated: true, from: "/authentication/create" },
       });
     } catch (error: any) {
@@ -435,7 +465,7 @@ export function CreateAuthMethodPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/authentication")}
+            onClick={() => navigate("/identity-providers")}
             className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
@@ -522,6 +552,20 @@ export function CreateAuthMethodPage() {
                       list — it must match byte-for-byte.
                     </p>
                   </FormField>
+                  {selectedTemplate === "github" && (
+                    <FormField label="Homepage URL">
+                      <FormCopyField
+                        value={window.location.origin}
+                        onCopy={() => toast.success("Homepage URL copied!")}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        GitHub requires a Homepage URL but only shows it to
+                        users; any public address of your application works.
+                        It is separate from the callback URL above.
+                      </p>
+                    </FormField>
+                  )}
                 </div>
               )}
 
@@ -551,7 +595,7 @@ export function CreateAuthMethodPage() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <FormField
-                      label="Client ID"
+                      label={fieldLabels.clientId}
                       htmlFor="providerClientId"
                       required
                     >
@@ -565,6 +609,11 @@ export function CreateAuthMethodPage() {
                         }}
                         className="h-9 font-mono"
                       />
+                      {fieldLabels.clientIdHelp && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          {fieldLabels.clientIdHelp}
+                        </p>
+                      )}
                       {errors.clientId && (
                         <p className="text-xs text-destructive mt-1">
                           {errors.clientId}
@@ -573,7 +622,7 @@ export function CreateAuthMethodPage() {
                     </FormField>
 
                     <FormField
-                      label="Client Secret"
+                      label={fieldLabels.clientSecret}
                       htmlFor="clientSecret"
                       required
                     >
@@ -611,6 +660,8 @@ export function CreateAuthMethodPage() {
                         </p>
                       )}
                       <p className="text-[11px] text-muted-foreground mt-1">
+                        {fieldLabels.clientSecretHelp &&
+                          `${fieldLabels.clientSecretHelp} `}
                         Stored in Vault, never persisted to the database.
                       </p>
                     </FormField>
@@ -619,7 +670,7 @@ export function CreateAuthMethodPage() {
                   {selectedTemplate === "microsoft" && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <FormField
-                        label="Microsoft tenant ID/domain"
+                        label="Directory (tenant) ID"
                         htmlFor="microsoftTenant"
                         required
                       >
@@ -638,8 +689,8 @@ export function CreateAuthMethodPage() {
                           </p>
                         )}
                         <p className="text-[11px] text-muted-foreground mt-1">
-                          Use the Entra Directory tenant ID or verified tenant
-                          domain for this workspace provider.
+                          App registrations → your app → Overview. A verified
+                          domain such as contoso.onmicrosoft.com also works.
                         </p>
                       </FormField>
                     </div>
@@ -678,14 +729,14 @@ export function CreateAuthMethodPage() {
                   </h4>
                   <div className="space-y-0.5 text-[11px] text-muted-foreground">
                     <div className="flex justify-between gap-4">
-                      <span>Client ID:</span>
+                      <span>{fieldLabels.clientId}:</span>
                       <span className="font-mono truncate">
                         {form.clientId || "—"}
                       </span>
                     </div>
                     {selectedTemplate === "microsoft" && (
                       <div className="flex justify-between gap-4">
-                        <span>Microsoft tenant:</span>
+                        <span>Directory (tenant) ID:</span>
                         <span className="font-mono truncate text-right">
                           {normalizeMicrosoftTenant(form.microsoftTenant) ||
                             "—"}

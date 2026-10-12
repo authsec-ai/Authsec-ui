@@ -15,14 +15,12 @@ import { Globe, Loader2, AlertCircle } from "lucide-react";
 import { useCreateDomainMutation } from "@/app/api/domainApi";
 import { SessionManager } from "@/utils/sessionManager";
 import { toast } from "@/lib/toast";
+import { domainNameError } from "../domainValidation";
 
 interface AddDomainModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// Domain name validation regex
-const DOMAIN_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*(\.[a-zA-Z0-9][a-zA-Z0-9-]*)+$/;
 
 export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
   const [domain, setDomain] = useState("");
@@ -31,37 +29,12 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
 
   const [createDomain, { isLoading }] = useCreateDomainMutation();
 
-  const validateDomain = (value: string): string | null => {
-    const trimmed = value.trim().toLowerCase();
-
-    if (!trimmed) {
-      return "Domain name is required";
-    }
-
-    if (trimmed.length < 3 || trimmed.length > 253) {
-      return "Domain must be 3-253 characters";
-    }
-
-    if (trimmed.includes("*") || trimmed.includes("%")) {
-      return "Wildcards are not allowed";
-    }
-
-    if (trimmed.includes("localhost") || /^\d+\.\d+\.\d+\.\d+$/.test(trimmed)) {
-      return "Localhost and IP addresses are not allowed";
-    }
-
-    if (!DOMAIN_REGEX.test(trimmed)) {
-      return "Invalid domain format (e.g., auth.example.com)";
-    }
-
-    return null;
-  };
+  const validateDomain = domainNameError;
+  const liveError = domain.trim() ? validateDomain(domain) : null;
 
   const handleDomainChange = (value: string) => {
     setDomain(value);
-    if (validationError) {
-      setValidationError(validateDomain(value));
-    }
+    setValidationError(value.trim() ? validateDomain(value) : null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,7 +53,7 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
     }
 
     try {
-      const result = await createDomain({
+      await createDomain({
         workspace_id: session.workspace_id,
         domain: domain.trim().toLowerCase(),
         is_primary: isPrimary,
@@ -183,7 +156,7 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || !domain.trim()}>
+            <Button type="submit" disabled={isLoading || !domain.trim() || !!liveError}>
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

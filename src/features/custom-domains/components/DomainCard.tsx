@@ -35,6 +35,7 @@ import {
 import { SessionManager } from "@/utils/sessionManager";
 import { toast } from "@/lib/toast";
 import type { CustomDomain } from "@/app/api/domainApi";
+import { verifyFailureMessage } from "../domainValidation";
 
 interface DomainCardProps {
   domain: CustomDomain;
@@ -92,13 +93,8 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
       }).unwrap();
 
       toast.success("Domain verified successfully!");
-    } catch (error: any) {
-      const message =
-        error?.data?.error ||
-        error?.data?.details ||
-        error?.data?.message ||
-        "DNS verification failed. Please check your DNS records and try again.";
-      toast.error(message);
+    } catch (error: unknown) {
+      toast.error(verifyFailureMessage(error));
     }
   };
 

@@ -5,6 +5,7 @@
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import config from '../../config';
+import { withUnauthorizedHandler } from "../../auth/unauthorized";
 
 // ============ TOTP Device Types ============
 export interface TOTPDevice {
@@ -89,16 +90,18 @@ export interface CIBADeleteResponse {
 // ============ API Definition ============
 export const deviceApi = createApi({
   reducerPath: "deviceApi",
-  baseQuery: fetchBaseQuery({
+  // The device pages pass the hosted-login token explicitly; the 401 handler
+  // ignores requests that do not carry the admin session token.
+  baseQuery: withUnauthorizedHandler(fetchBaseQuery({
     baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
-    prepareHeaders: (headers, { getState }) => {
+    prepareHeaders: (headers) => {
       // Token will be passed dynamically via endpoint args
       headers.set("Content-Type", "application/json");
       return headers;
     },
-  }),
+  })),
   tagTypes: ["TOTPDevices", "CIBADevices"],
   endpoints: (builder) => ({
     // ============ TOTP Endpoints ============
@@ -147,14 +150,16 @@ export const deviceApi = createApi({
       invalidatesTags: ["TOTPDevices"],
     }),
 
-    // Delete TOTP device
+    // Delete TOTP device: POST .../totp/devices/delete { device_id } (UI-018).
+    // The backend has no DELETE .../totp/devices/:id.
     deleteTOTPDevice: builder.mutation<TOTPDeleteResponse, { token: string; deviceId: string }>({
       query: ({ token, deviceId }) => ({
-        url: `/authsec/uflow/auth/workspace/totp/devices/${deviceId}`,
-        method: "DELETE",
+        url: "/authsec/uflow/auth/workspace/totp/devices/delete",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        body: { device_id: deviceId },
       }),
       invalidatesTags: ["TOTPDevices"],
     }),

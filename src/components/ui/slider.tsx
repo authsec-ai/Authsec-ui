@@ -11,7 +11,7 @@ interface SliderProps {
 }
 
 const Slider = React.forwardRef<HTMLDivElement, SliderProps>(
-  ({ className, value = [0, 100], onValueChange, max = 100, min = 0, step = 1, ...props }, ref) => {
+  ({ className, value = [0, 100], onValueChange, max = 100, min = 0, step = 1 }, ref) => {
     const [minValue, setMinValue] = React.useState(value[0] || min);
     const [maxValue, setMaxValue] = React.useState(value[1] || max);
 

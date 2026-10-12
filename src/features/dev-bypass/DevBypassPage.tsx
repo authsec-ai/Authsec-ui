@@ -76,8 +76,8 @@ export function DevBypassPage() {
     }
 
     const tenantId =
-      payload.tenant_id ||
-      (payload.workspace_id as string | undefined) ||
+      (typeof payload.tenant_id === "string" ? payload.tenant_id : "") ||
+      payload.workspace_id ||
       "";
 
     const project = payload.project_id
@@ -96,7 +96,7 @@ export function DevBypassPage() {
       projects: project ? [project] : [],
       currentProject: project,
       jwtPayload: { ...payload, tenant_id: tenantId },
-      tenant_id: tenantId,
+      workspace_id: tenantId,
       workspace_domain: payload.workspace_domain,
       project_id: payload.project_id || "",
       client_id: payload.client_id,

@@ -3,6 +3,7 @@ import { Shield } from "lucide-react";
 import { QuickActionCard } from "./QuickActionCard";
 import { useWizard } from "@/contexts/WizardContext";
 import { getWizardConfig } from "@/features/wizards";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
 interface IntegrationGuideGridProps {
   isLoading?: boolean;
@@ -23,12 +24,12 @@ export function IntegrationGuideGrid({
 
   // Helper to clear wizard completion state
   const clearWizardCompletion = (wizardId: string) => {
-    const stored = localStorage.getItem("authsec_wizards");
+    const stored = localStorage.getItem(scopedStorageKey("authsec_wizards"));
     if (stored) {
       const data = JSON.parse(stored);
       data.completedWizards =
         data.completedWizards?.filter((id: string) => id !== wizardId) || [];
-      localStorage.setItem("authsec_wizards", JSON.stringify(data));
+      localStorage.setItem(scopedStorageKey("authsec_wizards"), JSON.stringify(data));
     }
   };
 
@@ -48,7 +49,7 @@ export function IntegrationGuideGrid({
   // Check if User Auth wizard is completed
   const isUserAuthWizardCompleted = () => {
     try {
-      const stored = localStorage.getItem("authsec_wizards");
+      const stored = localStorage.getItem(scopedStorageKey("authsec_wizards"));
       if (!stored) return false;
       const data = JSON.parse(stored);
       return data.completedWizards?.includes("user-auth-wizard") || false;
@@ -82,7 +83,7 @@ export function IntegrationGuideGrid({
   // Check if M2M wizard is completed
   const isM2MWizardCompleted = () => {
     try {
-      const stored = localStorage.getItem("authsec_wizards");
+      const stored = localStorage.getItem(scopedStorageKey("authsec_wizards"));
       if (!stored) return false;
       const data = JSON.parse(stored);
       return data.completedWizards?.includes("m2m-workload-wizard") || false;
@@ -117,7 +118,7 @@ export function IntegrationGuideGrid({
   // Check if RBAC wizard is completed
   const isRBACWizardCompleted = () => {
     try {
-      const stored = localStorage.getItem("authsec_wizards");
+      const stored = localStorage.getItem(scopedStorageKey("authsec_wizards"));
       if (!stored) return false;
       const data = JSON.parse(stored);
       return data.completedWizards?.includes("rbac-wizard") || false;

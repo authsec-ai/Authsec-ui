@@ -19,7 +19,6 @@ export function BulkActionsBar({
   // Check if all selected providers are active or inactive
   const allActive = selectedProviders.every((p) => p.is_active);
   const allInactive = selectedProviders.every((p) => !p.is_active);
-  const hasActiveAndInactive = !allActive && !allInactive;
 
   return (
     <div className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2">

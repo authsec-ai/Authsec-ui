@@ -6,7 +6,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -20,7 +19,6 @@ import {
   Edit,
   Trash2,
   Code,
-  Eye,
   Copy,
   Check,
   Lock,

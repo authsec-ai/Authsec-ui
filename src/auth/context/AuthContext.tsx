@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useLoginMutation, useRegisterInitiateMutation } from "../../app/api/authApi";
 import { logout, checkSession, type AuthUser } from "../slices/authSlice";
+import { endServerSession } from "../endServerSession";
 import { setLoginData, setCurrentStep, setAuthenticationError } from "../slices/adminWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
@@ -68,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize auth state on mount
   useEffect(() => {
     initializeAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeAuth is recreated every render; this effect is intentionally mount-only
   }, []);
 
   // Listen for storage changes (cross-tab sync)
@@ -81,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeAuth is recreated every render; this effect is intentionally mount-only
   }, []);
 
   // Periodic session validation
@@ -213,6 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async (): Promise<void> => {
     setIsLoading(true);
     try {
+      await endServerSession();
       dispatch(logout());
       toast.success("Successfully signed out!");
     } catch (error) {
@@ -223,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const createProject = async (name: string, description?: string): Promise<boolean> => {
+  const createProject = async (_name: string, _description?: string): Promise<boolean> => {
     setIsLoading(true);
     try {
       // For now, project creation is not implemented with the new API
@@ -237,7 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchProject = async (projectId: string): Promise<boolean> => {
+  const switchProject = async (_projectId: string): Promise<boolean> => {
     try {
       // For now, project switching is not implemented with the new API
       toast.error("Project switching not yet implemented with the new API");

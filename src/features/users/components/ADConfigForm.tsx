@@ -23,14 +23,17 @@ interface ADConfigFormProps {
   touched?: Partial<Record<keyof ADConfigFormData, boolean>>;
   onBlur?: (field: keyof ADConfigFormData) => void;
   errors?: Partial<Record<keyof ADConfigFormData, string>>;
+  /** Editing a stored configuration: the password is write-only. */
+  isEditing?: boolean;
 }
 
 export function ADConfigForm({
   config,
   onChange,
-  touched = {},
+  touched,
   onBlur,
   errors = {},
+  isEditing = false,
 }: ADConfigFormProps) {
   const updateField = <K extends keyof ADConfigFormData>(
     field: K,
@@ -39,7 +42,8 @@ export function ADConfigForm({
     onChange({ ...config, [field]: value });
   };
 
-  const isErr = (k: keyof ADConfigFormData) => touched[k] && errors[k];
+  // Without touched tracking, a field's error shows as soon as it is set.
+  const isErr = (k: keyof ADConfigFormData) => (!touched || touched[k]) && errors[k];
 
   return (
     <div className="space-y-3">
@@ -131,14 +135,19 @@ export function ADConfigForm({
           <Label htmlFor="ldap-username" className="text-sm font-medium">
             Authentication Username <span className="text-destructive">*</span>
           </Label>
+          {/* Not the console login: keep the browser's saved AuthSec
+              credentials out of the service-account fields. */}
           <Input
             id="ldap-username"
+            name="ldap-bind-dn"
+            data-1p-ignore
+            data-lpignore="true"
             value={config.username}
             onChange={(e) => updateField("username", e.target.value)}
             onBlur={() => onBlur?.("username")}
             aria-invalid={!!isErr("username")}
-            placeholder="goyaladitya2504@gmail.com"
-            autoComplete="username"
+            placeholder="svc-authsec@company.com or CN=svc-authsec,OU=Service,DC=company,DC=com"
+            autoComplete="off"
             className="h-9"
           />
           <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -151,16 +160,19 @@ export function ADConfigForm({
 
         <div className="space-y-1">
           <Label htmlFor="ldap-password" className="text-sm font-medium">
-            Authentication Password <span className="text-destructive">*</span>
+            Authentication Password {!isEditing && <span className="text-destructive">*</span>}
           </Label>
           <PasswordInput
             id="ldap-password"
+            name="ldap-bind-password"
+            data-1p-ignore
+            data-lpignore="true"
             value={config.password}
             onChange={(e) => updateField("password", e.target.value)}
             onBlur={() => onBlur?.("password")}
             aria-invalid={!!isErr("password")}
-            placeholder="••••••••••••"
-            autoComplete="current-password"
+            placeholder={isEditing ? "Leave empty to keep the stored password" : "Service account password"}
+            autoComplete="new-password"
             className="h-9"
           />
           {isErr("password") && (
@@ -254,6 +266,20 @@ export function ADConfigForm({
           </Label>
         </div>
       </div>
+      {!config.use_ssl && (
+        <p role="alert" className="text-xs text-destructive">
+          Without LDAPS the service account&apos;s password and directory data
+          cross the network unencrypted. Use LDAPS (port 636) unless the link is
+          otherwise protected.
+        </p>
+      )}
+      {config.use_ssl && config.skip_verify && (
+        <p role="alert" className="text-xs text-destructive">
+          Skipping certificate verification lets anyone in the network path
+          impersonate the directory server. For testing only; production
+          deployments refuse it.
+        </p>
+      )}
     </div>
   );
 }

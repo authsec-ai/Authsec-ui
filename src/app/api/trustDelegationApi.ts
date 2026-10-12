@@ -131,7 +131,8 @@ function extractSinglePolicyRecord(response: DelegationPolicyEnvelope): Delegati
       return response.data as DelegationPolicyRecord;
     }
 
-    if (typeof response.id === "string" && response.id) {
+    const recordId = (response as UnknownRecord).id;
+    if (typeof recordId === "string" && recordId) {
       return response as DelegationPolicyRecord;
     }
   }
@@ -139,7 +140,7 @@ function extractSinglePolicyRecord(response: DelegationPolicyEnvelope): Delegati
   throw new Error("Server returned an unreadable response.");
 }
 
-function buildQueryString(params: Record<string, unknown>) {
+function buildQueryString(params: object) {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;

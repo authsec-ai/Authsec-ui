@@ -38,7 +38,7 @@ export function WizardProgress({
   const navigate = useNavigate();
   const contextualNavigate = useContextualNavigate();
   const location = useLocation();
-  const { activeWizard, setWizardCompletionData, completeWizard, setIsAwaitingPlatformAction } = useWizard();
+  const { setWizardCompletionData, setIsAwaitingPlatformAction } = useWizard();
   const [sdkDialogOpen, setSdkDialogOpen] = useState(false);
   const [wizardStepData, setWizardStepData] = useState<Record<string, any>>({});
   const [actionTakenForStep, setActionTakenForStep] = useState<string | null>(null);
@@ -51,7 +51,6 @@ export function WizardProgress({
   // Sync wizardStepData to context whenever it changes
   useEffect(() => {
     if (Object.keys(wizardStepData).length > 0) {
-      console.log("[WizardProgress] Syncing wizardStepData to context:", wizardStepData);
       setWizardCompletionData(wizardStepData);
     }
   }, [wizardStepData, setWizardCompletionData]);
@@ -59,7 +58,6 @@ export function WizardProgress({
   // Helper to update step data and complete step
   const handleStepCompletion = (stepId: string, data: Record<string, any>) => {
     const updatedData = { ...wizardStepData, ...data };
-    console.log("[WizardProgress] Updating step data:", updatedData);
     setWizardStepData(updatedData);
     setWizardCompletionData(updatedData);
     onCompleteStep(stepId);
@@ -171,7 +169,6 @@ export function WizardProgress({
             const isCompleted = completedSteps.includes(step.id);
             const isCurrent = index === currentStep;
             const isPending = !isCompleted && !isCurrent;
-            const stepStatus = getStepStatus(step.id);
 
             return (
               <div key={step.id} className="relative flex gap-4 pb-8 last:pb-4">

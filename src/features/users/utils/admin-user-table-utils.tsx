@@ -21,7 +21,6 @@ import type { EnhancedUser } from "../../../types/entities";
 import type { ResponsiveColumnDef } from "../../../components/ui/responsive-data-table";
 import { CopyButton } from "../../../components/ui/copy-button";
 import { UserTableUtils } from "./user-table-utils";
-import { useGetAdminUserQuery } from "@/app/api/admin/usersApi";
 
 // Admin table action handlers interface
 export interface AdminUserTableActions {
@@ -284,15 +283,9 @@ export function AdminActionsCell({
 
 // Admin User Expanded Row Component - Following ClientsPage pattern
 export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
-  const { data: serverUser, isFetching: isFetchingDetails } = useGetAdminUserQuery(
-    user.id ?? "",
-    { skip: !user?.id }
-  );
-
-  const mergedUser = React.useMemo(() => {
-    if (!serverUser) return user;
-    return { ...user, ...serverUser };
-  }, [user, serverUser]);
+  // The list row is the whole record: the backend has no by-id read for
+  // admin users (GET /uflow/admin/users/:user_id was always a 404).
+  const mergedUser = user;
 
   const InfoLine = ({
     label,
@@ -330,7 +323,7 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
   };
 
   const lastLoginText = UserTableUtils.formatLastLogin(
-    mergedUser.last_login || (serverUser as any)?.last_login
+    mergedUser.last_login
   );
   const lastSyncText = formatDateTime(mergedUser.last_sync_at);
   const updatedAtText = formatDateTime(
@@ -353,9 +346,6 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <User className="h-4 w-4" />
             User Details
-            {isFetchingDetails && (
-              <RefreshCw className="h-3 w-3 animate-spin text-foreground" />
-            )}
           </div>
           <div className="space-y-3 text-sm">
             <InfoLine label="Name" value={mergedUser.name || "Unnamed user"} />
@@ -392,9 +382,6 @@ export function AdminUserExpandedRow({ user }: { user: EnhancedUser }) {
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Shield className="h-4 w-4" />
             Access & Membership
-            {isFetchingDetails && resolvedRoles.length === 0 && (
-              <RefreshCw className="h-3 w-3 animate-spin text-foreground" />
-            )}
           </h4>
           <div className="space-y-4 text-sm">
             <div>

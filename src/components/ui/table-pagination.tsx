@@ -21,7 +21,7 @@ interface TablePaginationProps {
 export function DataTablePagination({
   currentPage,
   totalPages,
-  pageSize,
+  pageSize: _pageSize,
   totalItems,
   startIndex,
   endIndex,

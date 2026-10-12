@@ -403,7 +403,7 @@ interface FormCopyFieldProps extends Omit<InputProps, "readOnly"> {
 }
 
 export const FormCopyField = forwardRef<HTMLInputElement, FormCopyFieldProps>(
-  ({ value, onCopy, label, className, ...props }, ref) => {
+  ({ value, onCopy, label: _label, className, ...props }, ref) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {

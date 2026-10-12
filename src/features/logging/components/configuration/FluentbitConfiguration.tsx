@@ -39,6 +39,7 @@ export function FluentbitConfiguration({ config, onChange, onSave, onCancel, isL
     if (workspaceId && !config.workspace_id) {
       onChange({ ...config, workspace_id: workspaceId });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-fill runs once on mount
   }, []);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

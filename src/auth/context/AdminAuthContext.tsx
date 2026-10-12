@@ -33,7 +33,6 @@ import {
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
 import { completeWebAuthnAuthentication } from "../slices/authSlice";
-import { NIL } from "uuid";
 import type { MFAStatusMethod } from "../../app/api/webauthnApi";
 
 interface AdminAuthContextType {
@@ -241,7 +240,9 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     try {
       const res = await mfaStatusCheck({
-        email: adminWebauthn.email
+        email: adminWebauthn.email,
+        // The same email may be an admin in more than one workspace (AS-078).
+        ...(adminWebauthn.workspaceId ? { workspace_id: adminWebauthn.workspaceId } : {}),
       });
       
       if (!('data' in res) || !res.data) {
@@ -359,7 +360,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       dispatch(setAuthenticationError(errorMsg));
       return false;
     }
-  }, [adminWebauthn.email, mfaStatusCheck, dispatch]);
+  }, [adminWebauthn.email, adminWebauthn.workspaceId, mfaStatusCheck, dispatch]);
 
   const selectMFAMethod = useCallback((method: "webauthn" | "totp") => {
     console.log("🔄 Admin method selected:", method);
@@ -500,7 +501,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Admin uses "Login" TOTP endpoints
       const result = await totpBeginLoginSetup({
         email: adminWebauthn.email,
-        workspace_id: adminWebauthn.workspaceId
+        workspace_id: adminWebauthn.workspaceId!
       });
 
       if ('data' in result && result.data) {
@@ -553,7 +554,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toast.error(errorMsg);
       return false;
     }
-  }, [adminWebauthn.workspaceId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch, callbackHandler]);
+  }, [adminWebauthn.workspaceId, adminWebauthn.email, adminWebauthn.totpSecret, totpConfirmLoginSetup, dispatch]);
 
   const authenticateWithWebAuthn = useCallback(async (): Promise<boolean> => {
     if (!adminWebauthn.email) {
@@ -688,7 +689,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dispatch(completeWebAuthnAuthentication({
             workspaceId: adminWebauthn.workspaceId!,
             email: adminWebauthn.email!,
-            token: token,
+            token,
           }));
 
           await notifyNewUserIfNeeded(token);

@@ -53,7 +53,8 @@ export const decodeJWT = (token: string): JWTPayload | null => {
       client_id: decoded.client_id || decoded.sub || "",
       email_id: decoded.email_id || decoded.email || "",
       project_id: decoded.project_id || "",
-      workspace_id: decoded.workspace_id || decoded.tenant_id || "",
+      // The backend issues workspace_id only; the old tenant_id claim is not read (UI-033).
+      workspace_id: decoded.workspace_id || "",
       token_type: decoded.token_type || "",
       scopes,
       roles: Array.isArray(decoded.roles) ? decoded.roles : [],

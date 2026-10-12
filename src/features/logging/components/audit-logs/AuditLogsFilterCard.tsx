@@ -53,7 +53,7 @@ export function AuditLogsFilterCard({
 
   const activeFiltersCount = Object.keys(filters).filter((key) => {
     const value = filters[key as keyof AuditLogsFilterParams];
-    return value && value !== "all" && value !== false;
+    return value && value !== "all";
   }).length;
 
   return (

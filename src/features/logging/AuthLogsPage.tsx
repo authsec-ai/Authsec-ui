@@ -25,26 +25,6 @@ interface UserSelection {
   values: string[];
 }
 
-// Helper function to convert timeRange to RFC3339 timestamps
-function getTimeRangeTimestamps(timeRange?: string): {
-  start_time?: string;
-  end_time?: string;
-} {
-  if (!timeRange || timeRange === "all") return {};
-
-  const now = new Date();
-  const end_time = now.toISOString();
-  const offsets: Record<string, number> = {
-    "5m": 5 * 60 * 1000,
-    "1h": 60 * 60 * 1000,
-    "24h": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-  };
-  const ms = offsets[timeRange];
-  if (!ms) return {};
-  return { start_time: new Date(now.getTime() - ms).toISOString(), end_time };
-}
-
 export function AuthLogsPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<AuthLogsFilterParams>({});
@@ -80,7 +60,7 @@ export function AuthLogsPage() {
       }
     );
 
-  const apiLogs = data?.logs ?? [];
+  const apiLogs = useMemo(() => data?.logs ?? [], [data?.logs]);
   const pagination = data?.pagination;
 
   // Client-side filter for user selection (multi-user not supported server-side)

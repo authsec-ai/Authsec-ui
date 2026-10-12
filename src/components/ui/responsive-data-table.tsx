@@ -26,7 +26,6 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -41,7 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Button } from "./button";
 import { Checkbox } from "./checkbox";
 import { DataTablePagination } from "./table-pagination";
-import { ResponsiveTableProvider, useResponsiveTableContext } from "./responsive-table";
+import { useResponsiveTableContext } from "./responsive-table";
 
 // Enhanced column definition with responsive features
 export interface ResponsiveColumnDef<TData, TValue = unknown> {
@@ -224,7 +223,7 @@ function DraggableRow<TData>({
   rowClassName,
   rowParity,
 }: DraggableRowProps<TData>) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
     disabled: isDragDisabled,
   });
@@ -469,7 +468,7 @@ export function ResponsiveDataTable<TData>({
     const visibleUserColumns = columns.filter((column) => {
       const columnId = column.id;
       // Check if this column should be visible based on responsive settings
-      if (columnId && visibleColumns.hasOwnProperty(columnId)) {
+      if (columnId && Object.prototype.hasOwnProperty.call(visibleColumns, columnId)) {
         return visibleColumns[columnId as keyof typeof visibleColumns];
       }
       // If not in responsive config, assume it should be visible
@@ -533,6 +532,7 @@ export function ResponsiveDataTable<TData>({
     }
 
     return cols;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- columns are rebuilt only when these inputs change; adding unstable props would rebuild them every render
   }, [columns, enabledFeatures, activeExpandedRows, renderExpandedRow, getRowId, JSON.stringify(visibleColumns), isExternalExpansion, onExpandedRowsChange]);
 
   // Optimized pagination logic with memoization

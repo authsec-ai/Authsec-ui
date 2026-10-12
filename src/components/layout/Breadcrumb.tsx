@@ -17,6 +17,19 @@ interface BreadcrumbItem {
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** "Edit SAML provider" for /identity-providers/saml/edit/:id and the like;
+ *  null for any other path. */
+export function identityProviderCrumb(segments: string[]): string | null {
+  if (segments[0] !== "identity-providers") return null;
+  const [, kind, action] = segments;
+  if (kind === "create" && segments.length === 2) return "New OIDC provider";
+  if (kind !== "saml" && kind !== "oidc") return null;
+  const protocol = kind.toUpperCase();
+  if (action === "create") return `New ${protocol} provider`;
+  if (action === "edit") return `Edit ${protocol} provider`;
+  return null;
+}
+
 export function Breadcrumb() {
   const location = useLocation();
   const tail = useBreadcrumbTailValue();
@@ -30,6 +43,15 @@ export function Breadcrumb() {
     const breadcrumbs: BreadcrumbItem[] = [
       { label: "Dashboard", href: "/", current: pathname === "/" },
     ];
+
+    // An identity provider's create/edit pages sit under a protocol segment
+    // that has no page of its own, and end in an id: name the page instead.
+    const idp = identityProviderCrumb(all);
+    if (idp) {
+      breadcrumbs.push({ label: "Identity Providers", href: "/identity-providers" });
+      breadcrumbs.push({ label: idp, current: true });
+      return breadcrumbs;
+    }
 
     let currentPath = "";
 
@@ -103,15 +125,15 @@ export function Breadcrumb() {
         case "services":
           label = "Services";
           break;
-        case "vault":
-          label = "Vault & Secrets";
-          break;
         case "logs":
           // The IGA console's Logs destination, versus the authorization console's.
           label = pathname.startsWith("/iga/") ? "Logs" : "Event Logs";
           break;
         case "authentication":
           label = "Authentication Methods";
+          break;
+        case "identity-providers":
+          label = "Identity Providers";
           break;
         case "create":
           label = "Create";

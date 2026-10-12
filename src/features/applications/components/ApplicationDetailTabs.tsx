@@ -39,19 +39,17 @@ const DOT_TONE: Record<ReadinessState, string> = {
 export function ApplicationDetailTabs({
   applicationId,
   readiness,
-  pendingRequestCount,
   pendingClientCount,
 }: ApplicationDetailTabsProps) {
   return (
     <nav className="tabbar" role="tablist" aria-label="Application sections">
       {TABS.map((tab) => {
         const area = tab.readinessKey ? readiness?.[tab.readinessKey] : undefined;
+        // No tab is keyed "requests" yet, so pendingRequestCount is not shown.
         const badge =
-          tab.key === "requests" && (pendingRequestCount ?? 0) > 0
-            ? pendingRequestCount
-            : tab.key === "clients" && (pendingClientCount ?? 0) > 0
-              ? pendingClientCount
-              : undefined;
+          tab.key === "clients" && (pendingClientCount ?? 0) > 0
+            ? pendingClientCount
+            : undefined;
         return (
           <NavLink
             key={tab.key}

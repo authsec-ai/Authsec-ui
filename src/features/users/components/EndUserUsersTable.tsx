@@ -26,12 +26,6 @@ import {
 } from "lucide-react";
 import { UserTableUtils, type UserTableActions } from "../utils/user-table-utils";
 
-const formatIdentifier = (value?: string | null) => {
-  if (!value) return "";
-  if (value.length <= 16) return value;
-  return `${value.slice(0, 8)}…${value.slice(-4)}`;
-};
-
 interface EndUserUsersTableProps {
   users: EnhancedUser[];
   selectedUserIds: string[];

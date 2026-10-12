@@ -72,7 +72,7 @@ export function ProviderDistributionChart({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {data.map((item, index) => (
+          {data.map((item) => (
             <div key={item.provider} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">

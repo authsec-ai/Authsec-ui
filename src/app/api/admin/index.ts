@@ -10,5 +10,4 @@
  * endpoints in setupWizardApi / scopeMatrixApi.
  */
 
-export * from './resourcesApi';
 export * from './usersApi';

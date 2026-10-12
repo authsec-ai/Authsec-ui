@@ -1,6 +1,5 @@
 import { baseApi } from "./baseApi";
 import type { ExternalService } from "@/types/entities";
-import { endUserResourcesApi } from "./enduser/resourcesApi";
 
 // Raw backend service shape (from /exsvc/services endpoints)
 export interface RawExternalService {
@@ -59,7 +58,7 @@ const deriveProviderFromUrl = (url?: string): string => {
   }
 };
 
-const mapRawToExternalService = (raw: RawExternalService): ExternalService => {
+export const mapRawToExternalService = (raw: RawExternalService): ExternalService => {
   const provider = deriveProviderFromUrl(raw.url);
   const status: ExternalService["status"] =
     raw.auth_type === "none"
@@ -115,65 +114,21 @@ export const externalServiceApi = baseApi.injectEndpoints({
     }),
 
     // POST /exsvc/services
-    createExternalService: builder.mutation<
-      ExternalService,
-      ExternalServiceRequest & { workspace_id?: string; auto_create_resource?: boolean }
-    >({
-      queryFn: async (arg, api, _extraOptions, baseQuery) => {
-        const { workspace_id, auto_create_resource = true, ...body } = arg;
-
-        // If auto_create_resource is true and workspace_id is provided, create the resource first
-        if (auto_create_resource && workspace_id) {
-          try {
-            const resourceResult = await api.dispatch(
-              endUserResourcesApi.endpoints.createEndUserResource.initiate({
-                workspace_id,
-                data: {
-                  name: `${body.name} Resource`,
-                  description: `Auto-generated resource for external service: ${body.name}`,
-                },
-              })
-            );
-
-            if ("error" in resourceResult) {
-              return { error: resourceResult.error as any };
-            }
-
-            // Get the created resource ID
-            const createdResource = resourceResult.data?.resources?.[0];
-            if (createdResource) {
-              body.resource_id = parseInt(createdResource.id);
-            }
-          } catch (error) {
-            console.error("Failed to auto-create resource:", error);
-            // Continue with service creation even if resource creation fails
-          }
-        }
-
-        // Create the external service
-        const result = await baseQuery({
-          url: "/authsec/exsvc/services",
-          method: "POST",
-          body,
-        });
-
-        if (result.error) {
-          return { error: result.error as any };
-        }
-
-        return {
-          data: mapRawToExternalService(result.data as RawExternalService),
-        };
-      },
-      invalidatesTags: [{ type: "ExternalService", id: "LIST" }, "EndUserRBACResource"],
+    // This used to create an RBAC "resource" first through
+    // /uflow/admin/endusers/:ws/resources, a route the backend does not have
+    // (UI-014). No caller passed a workspace, so that step never ran.
+    createExternalService: builder.mutation<ExternalService, ExternalServiceRequest>({
+      query: (body) => ({ url: "/authsec/exsvc/services", method: "POST", body }),
+      transformResponse: (raw: RawExternalService) => mapRawToExternalService(raw),
+      invalidatesTags: [{ type: "ExternalService", id: "LIST" }],
     }),
 
-    // PATCH /exsvc/services/{id}
+    // PUT /exsvc/services/{id} (the backend registers PUT, not PATCH)
     updateExternalService: builder.mutation<
       ExternalService,
       { id: string; body: ExternalServiceUpdateRequest }
     >({
-      query: ({ id, body }) => ({ url: `/authsec/exsvc/services/${id}`, method: "PATCH", body }),
+      query: ({ id, body }) => ({ url: `/authsec/exsvc/services/${id}`, method: "PUT", body }),
       transformResponse: (raw: RawExternalService) => mapRawToExternalService(raw),
       invalidatesTags: (_r, _e, arg) => [
         { type: "ExternalService", id: arg.id },
@@ -182,54 +137,13 @@ export const externalServiceApi = baseApi.injectEndpoints({
     }),
 
     // DELETE /exsvc/services/{id}
-    deleteExternalService: builder.mutation<
-      { success: boolean; id: string },
-      string | { id: string; workspace_id?: string; resource_id?: number; auto_delete_resource?: boolean }
-    >({
-      queryFn: async (arg, api, _extraOptions, baseQuery) => {
-        // Handle both string ID and object with options
-        const id = typeof arg === "string" ? arg : arg.id;
-        const workspace_id = typeof arg === "object" ? arg.workspace_id : undefined;
-        const resource_id = typeof arg === "object" ? arg.resource_id : undefined;
-        const auto_delete_resource = typeof arg === "object" ? arg.auto_delete_resource !== false : true;
-
-        // Delete the external service first
-        const result = await baseQuery({
-          url: `/authsec/exsvc/services/${id}`,
-          method: "DELETE",
-        });
-
-        if (result.error) {
-          return { error: result.error as any };
-        }
-
-        // If auto_delete_resource is true and we have workspace_id and resource_id, delete the resource
-        if (auto_delete_resource && workspace_id && resource_id) {
-          try {
-            await api.dispatch(
-              endUserResourcesApi.endpoints.deleteEndUserResource.initiate({
-                workspace_id,
-                resource_id: String(resource_id),
-              })
-            );
-          } catch (error) {
-            console.error("Failed to auto-delete resource:", error);
-            // Service is already deleted, so we consider this a success
-          }
-        }
-
-        return {
-          data: { success: true, id },
-        };
-      },
-      invalidatesTags: (_r, _e, arg) => {
-        const id = typeof arg === "string" ? arg : arg.id;
-        return [
-          { type: "ExternalService", id },
-          { type: "ExternalService", id: "LIST" },
-          "EndUserRBACResource",
-        ];
-      },
+    deleteExternalService: builder.mutation<{ success: boolean; id: string }, string>({
+      query: (id) => ({ url: `/authsec/exsvc/services/${id}`, method: "DELETE" }),
+      transformResponse: (_raw: unknown, _meta, id) => ({ success: true, id }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "ExternalService", id },
+        { type: "ExternalService", id: "LIST" },
+      ],
     }),
   }),
   overrideExisting: true,

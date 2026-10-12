@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { FormDivider, FormSectionHeader } from "@/theme";
 import { ADConfigForm, type ADConfigFormData } from "./ADConfigForm";
 import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
+import { AD_DEFAULTS, hydrateADForm } from "./syncConfigForm";
 import { useSyncActiveDirectoryMutation } from "@/app/api/enduser/invitesApi";
 
 const WIZARD_STEPS = [
@@ -33,55 +34,11 @@ interface ADSyncInlineFormProps {
   editConfig?: SyncConfig | null;
 }
 
-type ADSyncFallback = SyncConfig & {
-  server?: string;
-  ad_server?: string;
-  username?: string;
-  ad_username?: string;
-  password?: string;
-  base_dn?: string;
-  ad_base_dn?: string;
-  filter?: string;
-  use_ssl?: boolean;
-  skip_verify?: boolean;
-};
-
 export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlineFormProps) {
   const isEditing = !!editConfig;
 
-  const createDefaultConfig = useCallback(
-    (): ADConfigFormData => ({
-    config_name: '',
-    description: '',
-    server: '',
-    username: '',
-    password: '',
-    base_dn: 'CN=Users,DC=company,DC=com',
-    filter: '(&(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
-    use_ssl: false,
-    skip_verify: true,
-    }),
-    []
-  );
-
-  const hydrateConfig = useCallback((source: SyncConfig): ADConfigFormData => {
-    const defaults = createDefaultConfig();
-    const ad = source.ad_config ?? {};
-    const fallback: ADSyncFallback = source;
-
-    return {
-      ...defaults,
-      config_name: source.config_name || defaults.config_name,
-      description: source.description || '',
-      server: ad.server || fallback.server || fallback.ad_server || defaults.server,
-      username: ad.username || fallback.username || fallback.ad_username || defaults.username,
-      password: ad.password || fallback.password || defaults.password,
-      base_dn: ad.base_dn || fallback.base_dn || fallback.ad_base_dn || defaults.base_dn,
-      filter: ad.filter || fallback.filter || defaults.filter,
-      use_ssl: ad.use_ssl ?? fallback.use_ssl ?? defaults.use_ssl,
-      skip_verify: ad.skip_verify ?? fallback.skip_verify ?? defaults.skip_verify,
-    };
-  }, [createDefaultConfig]);
+  const createDefaultConfig = useCallback((): ADConfigFormData => ({ ...AD_DEFAULTS }), []);
+  const hydrateConfig = useCallback((source: SyncConfig): ADConfigFormData => hydrateADForm(source), []);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [adConfig, setAdConfig] = useState<ADConfigFormData>(() =>
@@ -115,7 +72,8 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     if (!adConfig.config_name.trim()) newErrors.config_name = 'Configuration name is required';
     if (!adConfig.server.trim()) newErrors.server = 'Server address is required';
     if (!adConfig.username.trim()) newErrors.username = 'Username is required';
-    if (!adConfig.password.trim()) newErrors.password = 'Password is required';
+    // Editing: an empty password keeps the stored one.
+    if (!isEditing && !adConfig.password.trim()) newErrors.password = 'Password is required';
     if (!adConfig.base_dn.trim()) newErrors.base_dn = 'Base DN is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -152,16 +110,22 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
     setConnectionTested(false);
 
     try {
+      // Without a new password, an edit is tested with the stored credentials.
+      const useStored = isEditing && !adConfig.password.trim() && editConfig?.id;
       await syncAD({
         provider: 'ad',
-        config: {
-          server: adConfig.server,
-          username: adConfig.username,
-          password: adConfig.password,
-          base_dn: adConfig.base_dn,
-          use_ssl: adConfig.use_ssl,
-          skip_verify: adConfig.skip_verify,
-        },
+        ...(useStored
+          ? { config_id: editConfig!.id }
+          : {
+              config: {
+                server: adConfig.server,
+                username: adConfig.username,
+                password: adConfig.password,
+                base_dn: adConfig.base_dn,
+                use_ssl: adConfig.use_ssl,
+                skip_verify: adConfig.skip_verify,
+              },
+            }),
         dry_run: true,
       }).unwrap();
 
@@ -216,7 +180,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
 
   const canProceed = () => {
     if (currentStepIndex === 0) {
-      return adConfig.config_name.trim() && adConfig.server.trim() && adConfig.username.trim() && adConfig.password.trim() && adConfig.base_dn.trim();
+      return adConfig.config_name.trim() && adConfig.server.trim() && adConfig.username.trim() && (isEditing || adConfig.password.trim()) && adConfig.base_dn.trim();
     }
     if (currentStepIndex === 1) {
       return connectionTested;
@@ -258,6 +222,7 @@ export function ADSyncInlineForm({ onClose, onSuccess, editConfig }: ADSyncInlin
                 config={adConfig}
                 onChange={setAdConfig}
                 errors={errors}
+                isEditing={isEditing}
               />
             </>
           )}

@@ -126,12 +126,12 @@ export const DynamicOidcProviderCellComponents = {
 
   scopes: ({ provider }: { provider: ApiOidcProvider }) => (
     <span className="text-sm text-foreground">
-      {provider.provider_config.scopes?.length || 0}
+      {provider.provider_config?.scopes?.length || 0}
     </span>
   ),
 
   clientId: ({ provider }: { provider: ApiOidcProvider }) => (
-    <span className="text-sm font-mono text-foreground">{provider.client_id.substring(0, 12)}...</span>
+    <span className="text-sm font-mono text-foreground">{provider.client_id?.substring(0, 12)}...</span>
   ),
 
   callbackUrl: ({ provider }: { provider: ApiOidcProvider }) => (
@@ -211,11 +211,11 @@ export function validateOidcProviderConfiguration(provider: ApiOidcProvider) {
   const issues: string[] = [];
   const config = provider.provider_config;
 
-  if (!config.auth_url) issues.push("Missing authorization URL");
-  if (!config.token_url) issues.push("Missing token URL");
-  if (!config.client_id) issues.push("Missing client ID");
-  if (!config.client_secret) issues.push("Missing client secret");
-  if (!config.scopes || config.scopes.length === 0) issues.push("No OAuth scopes configured");
+  if (!config?.auth_url) issues.push("Missing authorization URL");
+  if (!config?.token_url) issues.push("Missing token URL");
+  if (!config?.client_id) issues.push("Missing client ID");
+  if (!config?.client_secret) issues.push("Missing client secret");
+  if (!config?.scopes || config.scopes.length === 0) issues.push("No OAuth scopes configured");
   if (!provider.callback_url) issues.push("Missing callback URL");
 
   return {

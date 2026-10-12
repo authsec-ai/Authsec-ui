@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit2, Trash2, ExternalLink, AlertTriangle, Shield } from "lucide-react";
+import { Plus, Edit2, Trash2, Shield } from "lucide-react";
 import type { RoleFormData, RoleGrant, ClientOption, ResourceOption } from "../types";
 import { mockClients } from "../utils/mock-data";
 
@@ -92,12 +92,6 @@ export function PermissionBuilder({ formData, onUpdate }: PermissionBuilderProps
 
   const getClientName = (clientId?: string) => {
     return mockClients.find((c) => c.id === clientId)?.name || "Unknown Client";
-  };
-
-  const getResourceLabel = (resourcePath: string, clientId?: string) => {
-    const client = mockClients.find((c) => c.id === clientId);
-    const resource = client?.resources.find((r) => r.path === resourcePath);
-    return resource?.label || resourcePath;
   };
 
   const canAddGrant = selectedResource && selectedScopes.length > 0;

@@ -17,6 +17,8 @@ import { useGetApplicationQuery } from "@/app/api/applicationsApi";
 import { useListAccessRequestsQuery } from "@/app/api/agentIdentityApi";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import { Card } from "@/components/ui/card";
+import { NotFoundState } from "@/components/shared/NotFoundState";
+import { isNotFoundError } from "@/lib/error-utils";
 
 import { ApplicationDetailTabs } from "./components/ApplicationDetailTabs";
 import { ApplicationHeader } from "./components/ApplicationHeader";
@@ -63,12 +65,21 @@ export default function ApplicationLayout() {
     );
   }
 
+  if (isNotFoundError(error)) {
+    return (
+      <div className="p-6">
+        <Card>
+          <NotFoundState subject="application" backTo="/applications" backLabel="Back to applications" />
+        </Card>
+      </div>
+    );
+  }
+
   if (error || !application) {
     return (
       <div className="p-6">
         <Card className="p-6 text-sm text-[var(--color-danger)]">
-          Couldn't load this application. It may have been deleted, or your
-          session may have expired.
+          Couldn't load this application. Try again in a moment.
         </Card>
       </div>
     );

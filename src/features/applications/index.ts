@@ -35,7 +35,6 @@ export { default as ApplicationsPage } from "./ApplicationsPage";
 export { default as CreateApplicationPage } from "./CreateApplicationPage";
 export { default as ApplicationSetupPage } from "./ApplicationSetupPage";
 export { default as ApplicationToolsPage } from "./ApplicationToolsPage";
-export { default as ApplicationAccessPage } from "./ApplicationAccessPage";
 export { default as ApplicationClientsPage } from "./ApplicationClientsPage";
 export { default as ApplicationTestPage } from "./ApplicationTestPage";
 export { default as ApplicationLaunchPage } from "./ApplicationLaunchPage";

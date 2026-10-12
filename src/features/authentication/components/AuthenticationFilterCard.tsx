@@ -10,9 +10,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
-import type { AuthMethodStatus } from "../types";
 
 // Provider type options
 const PROVIDER_TYPE_OPTIONS = [

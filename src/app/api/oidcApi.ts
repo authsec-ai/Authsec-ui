@@ -5,6 +5,8 @@
  */
 
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { withUnauthorizedHandler } from "../../auth/unauthorized";
+import { withLoginTicket } from "../../auth/loginTicket";
 import config from "../../config";
 
 export interface OIDCTokenExchangeRequest {
@@ -207,6 +209,7 @@ export interface UFlowOIDCCallbackData {
   provider: string;
   provider_user_id: string;
   success: boolean;
+  state_token?: string;
   // For existing users
   client_id?: string;
   workspace_domain?: string;
@@ -226,6 +229,9 @@ export interface CompleteUFlowOIDCRegistrationRequest {
   name: string;
   picture: string;
   provider_user_id: string;
+  // Single-use token from the discover step, bound server-side to the
+  // identity the IdP verified; registration is refused without it.
+  state_token?: string;
 }
 
 export interface CompleteUFlowOIDCRegistrationResponse {
@@ -280,7 +286,7 @@ const getSessionData = () => {
 // RTK Query API for OIDC/OAuth operations
 export const oidcApi = createApi({
   reducerPath: "oidcApi",
-  baseQuery: fetchBaseQuery({
+  baseQuery: withLoginTicket(withUnauthorizedHandler(fetchBaseQuery({
     baseUrl: config.VITE_API_URL || "http://localhost:7468",
     timeout: 30000,
     credentials: "include",
@@ -294,7 +300,7 @@ export const oidcApi = createApi({
       }
       return headers;
     },
-  }),
+  }))),
   tagTypes: ["OIDC", "Token"],
   endpoints: (builder) => ({
     // Exchange OAuth code for tokens (Hydra flow)
@@ -325,17 +331,6 @@ export const oidcApi = createApi({
           error: res?.error,
         };
       },
-    }),
-
-    // UPDATED: Universal callback handler - no provider in URL path
-    // Provider information is extracted from the state parameter on the backend
-    handleCallback: builder.mutation<CallbackResponse, CallbackRequest>({
-      query: (data) => ({
-        url: "/authsec/hmgr/auth/callback", // Universal callback URL - no provider parameter
-        method: "POST",
-        body: data,
-        credentials: "include",
-      }),
     }),
 
     // Get login page data
@@ -648,7 +643,6 @@ export const oidcApi = createApi({
 
 export const {
   useExchangeCodeForTokensMutation,
-  useHandleCallbackMutation,
   useLazyGetLoginPageDataQuery,
   useCompleteLocalLoginMutation,
   useInitiateAuthMutation,

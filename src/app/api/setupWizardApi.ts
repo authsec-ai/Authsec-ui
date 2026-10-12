@@ -100,6 +100,7 @@ export interface RSRole {
   is_default: boolean;
   permissions: number;
   bindings: number;
+  scopes?: string[];
 }
 
 export interface RSBinding {
