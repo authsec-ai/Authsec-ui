@@ -191,23 +191,17 @@ export function CreateClientWizard({
       .map((s) => s.trim())
       .filter(Boolean);
 
-    const body = {
+    const body: PreRegisterResourceServerClientRequest = {
       client_name: formData.clientName,
       redirect_uris: redirectUriList,
-      // Cast to any: backend now accepts client_kind + software_id on this
-      // endpoint even though the TS type (PreRegisterResourceServerClientRequest)
-      // doesn't declare them yet.
       client_kind: formData.clientKind,
       ...(formData.softwareId ? { software_id: formData.softwareId } : {}),
-    } as PreRegisterResourceServerClientRequest & {
-      client_kind: ClientKind;
-      software_id?: string;
     };
 
     try {
       const result = await preRegister({
         id: formData.applicationId,
-        body: body as any,
+        body,
       }).unwrap();
 
       setCreatedClientId(result.client_id);

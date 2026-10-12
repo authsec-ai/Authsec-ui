@@ -77,6 +77,9 @@ export interface ResourceServerClientRegistration {
 export interface PreRegisterResourceServerClientRequest {
   client_name: string;
   redirect_uris: string[];
+  /** What the client is; the backend stores human_app when absent. */
+  client_kind?: "agent" | "human_app" | "m2m" | "cli";
+  software_id?: string;
   grant_types?: string[];
   response_types?: string[];
   token_endpoint_auth_method?: string;
@@ -230,6 +233,8 @@ export const resourceServersApi = baseApi.injectEndpoints({
           response_types: body.response_types ?? ["code"],
           token_endpoint_auth_method:
             body.token_endpoint_auth_method ?? "none",
+          ...(body.client_kind ? { client_kind: body.client_kind } : {}),
+          ...(body.software_id ? { software_id: body.software_id } : {}),
         },
       }),
       invalidatesTags: (_result, _error, { id }) => [
