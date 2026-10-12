@@ -87,6 +87,7 @@ const AuthenticationPage = React.lazy(() => import("./features/authentication/Au
 const CreateAuthMethodPage = React.lazy(() => import("./features/authentication/CreateAuthMethodPage").then((m) => ({ default: m.CreateAuthMethodPage })));
 const CreateSamlMethodPage = React.lazy(() => import("./features/authentication/CreateSamlMethodPage").then((m) => ({ default: m.CreateSamlMethodPage })));
 const EditSamlMethodPage = React.lazy(() => import("./features/authentication/EditSamlMethodPage").then((m) => ({ default: m.EditSamlMethodPage })));
+const EditOidcMethodPage = React.lazy(() => import("./features/authentication/EditOidcMethodPage").then((m) => ({ default: m.EditOidcMethodPage })));
 
 // External services and secrets management
 const ExternalServicesPage = React.lazy(() => import("./features/external-services/ExternalServicesPage").then((m) => ({ default: m.ExternalServicesPage })));
@@ -1298,6 +1299,17 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <EditSamlMethodPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/identity-providers/oidc/edit/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EditOidcMethodPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }

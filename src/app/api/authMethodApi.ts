@@ -36,6 +36,36 @@ export interface IdentityProvider {
   updated_at: string;
 }
 
+/** GET /authsec/identity-providers/:id of an OIDC provider: the row plus its
+ *  oidc_providers config (the client secret is never returned). */
+export interface OIDCIdentityProviderDetail extends IdentityProvider {
+  config?: {
+    provider_name?: string;
+    display_name?: string;
+    client_id?: string;
+    authorization_url?: string;
+    token_url?: string;
+    userinfo_url?: string;
+    scopes?: string;
+    redirect_uri?: string;
+  };
+}
+
+/** PUT /authsec/identity-providers/:id for an OIDC provider. Empty config
+ *  fields keep their value; a client_secret rotates the secret. */
+export interface UpdateOIDCIdentityProviderRequest {
+  id: string;
+  display_name?: string;
+  config: {
+    authorization_url?: string;
+    token_url?: string;
+    userinfo_url?: string;
+    client_id?: string;
+    client_secret?: string;
+    scopes?: string;
+  };
+}
+
 /** Payload posted when creating an OIDC IDP. The client_secret is sent to the
  *  backend in plaintext; it is written to Vault and never persisted in the DB. */
 export interface CreateOIDCIdentityProviderConfig {
@@ -116,6 +146,8 @@ export interface ShowAuthProvidersResponse {
     client_id?: string;
     count: number;
     providers: Array<{
+      /** identity_providers.id */
+      id: string;
       provider_name: string;
       display_name: string;
       client_id?: string;
@@ -261,10 +293,9 @@ export const authMethodApi = baseApi.injectEndpoints({
           client_id: arg.client_id,
           count: providers.length,
           providers: providers.map((provider, index) => ({
+            id: provider.id,
             provider_name: provider.display_name.toLowerCase().replace(/\s+/g, "-"),
             display_name: provider.display_name,
-            client_id: provider.config_ref,
-            client_ids: provider.config_ref,
             provider_type: provider.provider_type,
             is_active: provider.status === "configured",
             sort_order: index,
@@ -345,6 +376,26 @@ export const authMethodApi = baseApi.injectEndpoints({
         body,
       }),
       invalidatesTags: [{ type: "IdentityProvider", id: "LIST" }],
+    }),
+
+    getOIDCIdentityProvider: builder.query<OIDCIdentityProviderDetail, string>({
+      query: (id) => `/authsec/identity-providers/${encodeURIComponent(id)}`,
+      providesTags: (_r, _e, id) => [{ type: "IdentityProvider", id }],
+    }),
+
+    updateOIDCIdentityProvider: builder.mutation<
+      IdentityProvider,
+      UpdateOIDCIdentityProviderRequest
+    >({
+      query: ({ id, display_name, config }) => ({
+        url: `/authsec/identity-providers/${encodeURIComponent(id)}`,
+        method: "PUT",
+        body: { provider_type: "oidc", display_name, config },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "IdentityProvider", id },
+        { type: "IdentityProvider", id: "LIST" },
+      ],
     }),
 
     /** PUT /authsec/identity-providers/:id/status — 'configured' | 'disabled'. */
@@ -436,6 +487,8 @@ export const {
   useCreateIdentityProviderMutation,
   useUpdateIdentityProviderStatusMutation,
   useDeleteIdentityProviderMutation,
+  useGetOIDCIdentityProviderQuery,
+  useUpdateOIDCIdentityProviderMutation,
   // Application IDP policies
   useListApplicationIDPPoliciesQuery,
   useAddApplicationIDPPolicyMutation,

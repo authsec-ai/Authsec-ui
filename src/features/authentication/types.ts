@@ -193,6 +193,8 @@ export type ProviderType = 'oidc' | 'saml';
 
 // API OIDC Provider (from ShowAuthProviders endpoint)
 export interface ApiOidcProvider {
+  /** identity_providers.id */
+  id: string;
   provider_name: string;
   display_name: string;
   client_id?: string;
@@ -238,7 +240,9 @@ export interface ApiSamlProvider {
 // Unified Auth Provider - represents both OIDC and SAML in a single structure
 export interface UnifiedAuthProvider {
   // Common fields
-  id: string; // For OIDC: provider_name, For SAML: id
+  id: string; // row key: `${provider_type}-${idp_id}`
+  /** identity_providers.id, the id every /identity-providers/:id call takes */
+  idp_id: string;
   provider_type: ProviderType;
   provider_name: string;
   display_name: string;
