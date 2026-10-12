@@ -49,6 +49,7 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { wrapId } from "../shared/components/wrapText";
 import { shortResourceName } from "../shared/sketch";
 import { discoveryHref } from "../discovery/urlState";
+import { WorkloadPolicySection } from "../policy/DiscoveryPolicySection";
 import { AccessSummaryCard } from "./AccessSummaryCard";
 import { PurposeEditor } from "./PurposeEditor";
 import { isFullAdmin } from "../shared/access";
@@ -344,6 +345,8 @@ export function WorkloadOverview({
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
+          {/* Policy findings and owners (SPEC-iga-phase3-policy.md §9.4); nothing while the product is off. */}
+          {!frozen && w.lifecycle !== "retired" ? <WorkloadPolicySection ws={ws} workloadId={refId(w.ref)} /> : null}
           {/* Who does it act as? */}
           <Panel
             title="Identity"

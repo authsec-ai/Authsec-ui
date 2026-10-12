@@ -6,6 +6,7 @@ import { toneClasses, type ConsoleTone } from "@/components/console/status";
 import { cn } from "@/lib/utils";
 
 import { KIND_LABEL, type LogKind } from "./fixtures";
+import { eventIcon, eventLabel, eventTone } from "./policyEventKinds";
 
 const GLYPH: Record<LogKind, { icon: LucideIcon; tone: ConsoleTone }> = {
   scan_queued: { icon: Clock, tone: "neutral" },
@@ -27,6 +28,31 @@ export function KindGlyph({ kind, className, tone: toneOverride }: { kind: LogKi
     <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium text-(--color-text)", className)}>
       <Icon className={cn("size-4 shrink-0", toneClasses[tone].icon)} aria-hidden="true" />
       {KIND_LABEL[kind]}
+    </span>
+  );
+}
+
+/**
+ * A recorded policy event as an icon AND its name in words (§9.6). The name is
+ * the backend's event name; an unknown one is humanised, never dropped.
+ */
+export function PolicyKindGlyph({
+  name,
+  category,
+  payload,
+  className,
+}: {
+  name: string;
+  category: string;
+  payload?: Record<string, unknown>;
+  className?: string;
+}) {
+  const tone = eventTone(name, payload);
+  const Icon = eventIcon(name, category, tone);
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium text-(--color-text)", className)}>
+      <Icon className={cn("size-4 shrink-0", toneClasses[tone].icon)} aria-hidden="true" />
+      {eventLabel(name)}
     </span>
   );
 }

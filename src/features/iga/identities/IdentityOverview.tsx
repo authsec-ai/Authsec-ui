@@ -18,6 +18,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
 import { discoveryHref } from "../discovery/urlState";
+import { IdentityPolicySection } from "../policy/DiscoveryPolicySection";
 import { isFullAdmin } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
@@ -253,6 +254,8 @@ export function IdentityOverview({
 
       {/* Panels flow into two balanced columns on a wide screen. */}
       <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          {/* Policy: only an IAM role can be right-sized (SPEC-iga-phase3-policy.md §9.4). */}
+          {i.kind === "iam_role" && !frozen && i.lifecycle !== "retired" ? <IdentityPolicySection ws={ws} identityId={id} /> : null}
           <Panel title="What it is">
             <Facts>
               <Fact label="Kind">{kind}</Fact>

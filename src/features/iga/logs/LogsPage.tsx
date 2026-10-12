@@ -4,6 +4,9 @@
  *
  * Filters, search and time range live in the URL (q, kind, source, actor,
  * range), so a view can be shared and Back restores it.
+ *
+ * This is the page shown while the policy product is off. With it on, the
+ * default export renders PolicyLogsPage instead (recorded events only).
  */
 
 import { useState, type ReactNode } from "react";
@@ -22,9 +25,13 @@ import type { GraphFacetValue } from "@/app/api/igaGraphApi";
 
 import { IgaBadge } from "@/features/iga/shared/components/IgaBadge";
 
+import { PolicyCheckFailed, usePolicyCapabilities } from "@/features/iga/policy/shared";
+import { getWorkspaceId } from "@/utils/workspace";
+
 import { EventDrawer } from "./EventDrawer";
 import { KindGlyph } from "./KindGlyph";
 import { KIND_LABEL, LOG_EVENTS, LOG_KINDS, SAMPLE_NOW, type LogEvent, type LogKind } from "./fixtures";
+import { PolicyLogsPage } from "./PolicyLogsPage";
 import { linkRetries } from "./retries";
 
 /** Which failures a later scan recovered: fixed for the sample set. */
@@ -72,7 +79,7 @@ function dayHeading(d: Date): string {
   return format(d, "EEEE d MMMM");
 }
 
-export default function LogsPage() {
+function LogsPreviewPage() {
   const f = useListFilters(FILTER_SPEC);
   useSlashToSearch();
 
@@ -338,4 +345,23 @@ function EmptyState({ title, body, action }: { title: string; body: string; acti
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
+}
+
+/**
+ * `/iga/logs`: the recorded-events audit feed while the policy product is on;
+ * otherwise (off, or still loading) the sample-events preview above, which is
+ * never shown beside real events. A failed capability check is a banner with
+ * Retry, not the preview.
+ */
+export default function LogsPage() {
+  const ws = getWorkspaceId() ?? "";
+  const caps = usePolicyCapabilities(ws);
+  if (caps.state === "error") {
+    return (
+      <ConsolePage title="Logs" description="What AuthSec recorded.">
+        <PolicyCheckFailed onRetry={caps.refetch} />
+      </ConsolePage>
+    );
+  }
+  return caps.state === "on" ? <PolicyLogsPage ws={ws} /> : <LogsPreviewPage />;
 }

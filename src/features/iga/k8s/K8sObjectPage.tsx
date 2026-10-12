@@ -37,6 +37,7 @@ import { clusterSweeps } from "../discovery/k8s";
 import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "../discovery/urlState";
 import type { GraphFailure } from "../shared/graphErrors";
 import { dayText } from "../shared/labels";
+import { KubernetesPolicyNote } from "../policy/shared/KubernetesPolicyNote";
 import type { LifecycleView } from "../shared/lifecycle";
 import { activeTabOf } from "../shared/links";
 import { LazyGraphTab } from "../shared/components/LazyGraphTab";
@@ -195,6 +196,7 @@ function K8sObject({ kind, id, tab }: { kind: "workload" | "identity"; id: strin
           )}
           <WhatTheClusterLetsItDo access={access} sweep={sweep} noun={isWorkload ? "workload" : "ServiceAccount"} />
           <NotEvaluated />
+          <KubernetesPolicyNote />
         </>
       );
     } else if (gone) {
