@@ -27,7 +27,6 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { TableCard } from "@/theme/components/cards";
 
-import { SortSelect } from "../shared/components/FacetSelect";
 import { PreviewLayout, type PreviewModel } from "../shared/components/ObjectPreview";
 import { Timestamp } from "../shared/components/Timestamp";
 import { resolvePagedView, useRestartOnListingChanged, type PagedView } from "../shared/listView";
@@ -42,10 +41,6 @@ import type { ScreenProps } from "./screenTypes";
 
 const MUTED = "text-(--color-text-muted)";
 
-const SORTS = [
-  { value: "name", label: "Name A–Z" },
-  { value: "-last_seen", label: "Last seen" },
-] as const;
 
 const KIND_LABEL: Record<string, string> = {
   k8s_deployment: "Deployment",
@@ -89,12 +84,11 @@ export default function InventoryScreen(p: ScreenProps) {
   const [restarted, setRestarted] = useState(false);
   const kind = p.url.get("kind");
   const namespace = p.url.get("namespace");
-  const sort = (SORTS.map((s) => s.value) as string[]).includes(p.url.sort ?? "") ? (p.url.sort as (typeof SORTS)[number]["value"]) : "name";
   const blocked = p.scope.kind === "unknown" || p.scope.kind === "no_rows";
   const scopeId = p.scope.kind === "one" ? p.scope.source.scopeId : undefined;
 
   const list = useListInventoryQuery(
-    { ws: p.ws, key: paging.cacheKey, class: type, provider: "k8s", kind, scope: scopeId, q: p.url.q, sort, cursor: paging.cursor },
+    { ws: p.ws, key: paging.cacheKey, class: type, provider: "k8s", kind, scope: scopeId, q: p.url.q, sort: "name", cursor: paging.cursor },
     { skip: blocked },
   );
   useRestartOnListingChanged(list.error, paging.restart, () => setRestarted(true));
@@ -369,7 +363,6 @@ export default function InventoryScreen(p: ScreenProps) {
       facets={specs}
       trailing={
         <>
-          <SortSelect value={sort} options={[...SORTS]} onChange={(v) => p.url.patch({ sort: v === "name" ? null : v })} />
           <ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={layout} />
         </>
       }

@@ -224,8 +224,8 @@ export default function ConnectionsPage() {
         header: "Status",
         label: "Status",
         priority: 1,
-        approxWidth: 280,
-        cell: ({ row }) => <StatusBlock c={row.original} />,
+        approxWidth: 200,
+        cell: ({ row }) => <StatusBlock c={row.original} brief />,
         detail: (c) => <StatusBlock c={c} clamp={false} />,
       },
       {

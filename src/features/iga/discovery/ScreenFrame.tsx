@@ -32,7 +32,7 @@ export function ScreenFrame({
   /** Said under the search box: "Search the 120 loaded rows", or why a short query is not sent. */
   searchHint?: ReactNode;
   facets: FacetSpec[];
-  /** Sort and Columns, beside the search box (so sorting is reachable when its column is hidden). */
+  /** Columns, at the end of the toolbar row. */
   trailing?: ReactNode;
   onClearAll: () => void;
   /** Coverage, collection state: between the filters and the list. */
@@ -45,7 +45,7 @@ export function ScreenFrame({
   // "Unclassified only" chip beside the search read as part of the search.)
   return (
     <div ref={ref} className="min-w-0">
-      {/* One row: search, Filters, sort and columns. */}
+      {/* One row: search, Filters and Columns. */}
       <div data-graph-search data-compact-toolbar className="flex flex-wrap items-center gap-2.5 border-b border-(--color-border-subtle) px-4 py-3">
         <label className="relative flex min-w-[220px] max-w-[380px] flex-1 basis-[260px] items-center">
           <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />

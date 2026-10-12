@@ -9,10 +9,10 @@ import {
   refId,
   useListGraphWorkloadsQuery,
   type ClassificationFilter,
+  type ExecutionRoleState,
   type ListWorkloadsArgs,
   type RuntimeKind,
   type WorkloadRow,
-  type WorkloadSort,
 } from "@/app/api/igaGraphApi";
 import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { HelpTooltip } from "@/components/ui/tooltip";
@@ -20,7 +20,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 
 import { useLoadFirstPublication } from "../pipeline/usePipeline";
 import { ConfirmedCell } from "../shared/components/ConfirmedCell";
-import { SortSelect } from "../shared/components/FacetSelect";
+import { ConfirmedValue, type PreviewFact } from "../shared/components/ObjectPreview";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
@@ -55,12 +55,12 @@ import { QuickClassify } from "../classification/QuickClassify";
 const MUTED = "text-(--color-text-muted)";
 
 const RUNTIMES = Object.keys(RUNTIME_LABEL) as RuntimeKind[];
-const WORKLOAD_SORTS: { value: WorkloadSort; label: string }[] = [
-  { value: "name", label: "Name A–Z" },
-  { value: "-name", label: "Name Z–A" },
-  { value: "account", label: "Account" },
-  { value: "classification", label: "Classification" },
-  { value: "last_confirmed", label: "Last confirmed" },
+/** "Runs as" filter options: the execution role's state, as the server filters it (`execution_role_state`). */
+const RUNS_AS_VALUES: { value: ExecutionRoleState; label: string }[] = [
+  { value: "resolved", label: "A role in a connected account" },
+  { value: "not_in_inventory", label: "A role in an account not connected" },
+  { value: "not_in_scan", label: "A role not read in the latest scan" },
+  { value: "none", label: "No execution role" },
 ];
 const CLASSIFICATION_VALUES: { value: string; label: string }[] = [
   { value: "unclassified", label: "Unclassified (not yet reviewed)" },
@@ -74,9 +74,9 @@ export default function PublishedWorkloads(p: ScreenProps) {
   const [restarted, setRestarted] = useState(false);
   const region = p.url.get("region");
   const runtime = valid(p.url.get("runtime"), RUNTIMES);
+  const runsAs = valid(p.url.get("runs_as"), RUNS_AS_VALUES.map((v) => v.value));
   const classification = valid(p.url.get("classification"), ["classified_agent", "provider_native_agent", "unclassified"] as const);
   const lifecycle = valid(p.url.get("lifecycle"), ["retired", "all"] as const);
-  const sort = valid(p.url.get("sort"), WORKLOAD_SORTS.map((s) => s.value)) ?? "name";
 
   const args: ListWorkloadsArgs = {
     ws: p.ws,
@@ -88,7 +88,7 @@ export default function PublishedWorkloads(p: ScreenProps) {
     runtime_kind: runtime,
     classification: classification as ClassificationFilter | undefined,
     lifecycle,
-    sort,
+    execution_role_state: runsAs,
     cursor: c.paging.cursor,
   };
   const list = useListGraphWorkloadsQuery(args, { skip: c.gate.off || c.blocked });
@@ -234,6 +234,16 @@ export default function PublishedWorkloads(p: ScreenProps) {
       ...fixedFacet(facets, "runtime_kind", RUNTIMES.map((v) => ({ value: v, label: RUNTIME_LABEL[v] }))),
       onChange: (v) => p.url.patch({ runtime: v }),
     },
+    {
+      key: "runs_as",
+      label: "Runs as",
+      kind: "choice",
+      value: runsAs,
+      anyLabel: "Any",
+      // The server filters on this but reports no counts for it.
+      options: RUNS_AS_VALUES,
+      onChange: (v) => p.url.patch({ runs_as: v }),
+    },
   ];
 
   return (
@@ -247,22 +257,27 @@ export default function PublishedWorkloads(p: ScreenProps) {
         columns={columns}
         getRowId={(r) => refId(r.ref)}
         facets={specs}
-        sortControl={<SortSelect value={sort} options={WORKLOAD_SORTS} onChange={(v) => p.url.patch({ sort: v === "name" ? null : v })} />}
         searchPlaceholder="Search workloads by name, ARN or account"
-        clearKeys={["region", "lifecycle", "classification", "runtime", "source"]}
+        clearKeys={["region", "lifecycle", "classification", "runtime", "runs_as", "source"]}
         describeEmpty="compute or agent runtimes"
         restarted={restarted}
         chrome={chrome}
         preview={(r, meta) => {
           const acctGap = accountHasGap(meta, r.account);
-          const facts = [{ label: "Runs as", value: <WorkloadFact ws={p.ws} row={r} which="runs_as" /> }];
+          const facts: PreviewFact[] = [
+            { label: "Account", value: accountWithId(r.account) ?? "Account not stated", copy: r.account?.id },
+            { label: "Region", value: r.region ?? "Region not stated" },
+            { label: "ARN", value: r.arn, mono: true, copy: r.arn },
+            { label: "Runs as", value: <WorkloadFact ws={p.ws} row={r} which="runs_as" /> },
+          ];
           if (r.runtime_kind === "ecs_task_definition") facts.push({ label: "ECS agent uses as task execution role", value: <WorkloadFact ws={p.ws} row={r} which="task_role" /> });
+          facts.push({ label: "Last confirmed", value: <ConfirmedValue iso={r.last_confirmed_at} /> });
           return {
             key: refId(r.ref),
             name: r.name,
             kindLabel: RUNTIME_LABEL[r.runtime_kind],
             provider: "aws",
-            context: [accountWithId(r.account) ?? "Account not stated", r.region ?? "Region not stated"],
+            context: [],
             facts,
             exception:
               r.lifecycle === "retired"

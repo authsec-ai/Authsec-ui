@@ -601,9 +601,54 @@
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"]:focus-within {
-  /* A light wash of the primary blue, the same on every IGA table. */
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface-raised));
+  background: var(--component-table-row-hover);
   box-shadow: none;
+}
+
+/* A clickable row says so before it is clicked: its text turns link blue
+   under the pointer (or keyboard focus), and the name is underlined. Only
+   ink in the console's text colours changes; a badge keeps its own tone. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"]
+  :is(a, [class*="text-(--color-text"], [class*="text-muted-foreground"]):not(.rounded-full, .rounded-full *) {
+  color: var(--color-primary-text);
+}
+
+/* The same on narrow screens, where rows are cards: the name turns blue. */
+[data-shell="iga"] li[data-mobile-row]:is(:hover, :focus-within) :is(a[data-row-link], a[data-name-link]) {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The row the open preview is of stays tinted, so the panel's caret has a
+   target. admin-shell paints zebra stripes with a layered !important from
+   these two variables; set on the row itself, they carry the tint. */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"]:has(a[data-row-link][aria-current="true"]) {
+  --admin-table-row-base: var(--color-primary-soft);
+  --admin-table-row-zebra: var(--color-primary-soft);
+  background: var(--color-primary-soft);
+}
+
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+  > [data-slot="table-cell"]
+  :is(a[data-row-link], a[data-name-link]) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* A clickable row says so before it is clicked: pointer, and an eased tint. */
@@ -612,7 +657,7 @@
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"] {
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
