@@ -14,7 +14,8 @@ import { TOTPSetupComponent } from "../webauthn/TOTPSetupComponent";
 import { WebAuthnAuthComponent } from "../webauthn/WebAuthnAuthComponent";
 import { TOTPAuthComponent } from "../webauthn/TOTPAuthComponent";
 import { AuthSuccessComponent } from "../webauthn/AuthSuccessComponent";
-import { useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { decodeHandoff } from "@/utils/handoff";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 
@@ -30,6 +31,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   const adminWebauthn = useAdminAuth();
   const dispatch = useDispatch();
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   // Apply resumable query context first; keep handoff as cross-domain fallback only.
   useEffect(() => {
@@ -116,6 +118,14 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
       void getAdminMFAMethods();
     }
   }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, getAdminMFAMethods, adminWebauthn.availableMFAMethods]);
+
+  // Nothing to resume: a reload or a revisit lost the in-memory flow, and the
+  // URL carries no sign-in to pick up. Go on instead of waiting forever.
+  const params = new URLSearchParams(location.search);
+  const urlResumes = (params.get("email") && params.get("workspace_id")) || params.get("handoff");
+  if (adminWebauthn.currentStep === "login" && !adminWebauthn.email && !urlResumes) {
+    return <Navigate to={isAuthenticated ? "/dashboard" : "/admin/login"} replace />;
+  }
 
   // Render lightweight loader if step is still 'login' to avoid blank screen during transition
   if (adminWebauthn.currentStep === "login") {
