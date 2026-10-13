@@ -211,6 +211,11 @@ export const igaAccessPoliciesApi = baseApi.injectEndpoints({
     }),
     getAccessPolicy: b.query<PolicyEnvelope<AccessPolicyDetail>, ById>({
       query: ({ id }) => ({ url: `${BASE}/${enc(id)}` }),
+      // The server omits deployments, documents and versions when empty (omitempty).
+      transformResponse: (res: PolicyEnvelope<AccessPolicyDetail>) => ({
+        ...res,
+        data: { ...res.data, deployments: res.data.deployments ?? [], documents: res.data.documents ?? [], versions: res.data.versions ?? [], roles: res.data.roles ?? [] },
+      }),
       providesTags: (_r, _e, { id }) => [one(id)],
     }),
     listAccessPolicyEvents: b.query<PolicyEnvelope<AccessPolicyEvent[]>, ById & PageArgs>({

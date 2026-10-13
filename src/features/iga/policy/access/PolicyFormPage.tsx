@@ -502,7 +502,7 @@ export default function PolicyFormPage() {
                   </summary>
                   <div className="space-y-2 px-3 pb-3">
                     {shown.documents.map((d) => (
-                      <AwsDocument key={d.identity_account_id} title={`${d.role_name} · ${d.policy_name}`} document={d.document} />
+                      <AwsDocument key={d.identity_account_id} title={[d.role_name, d.policy_name].filter(Boolean).join(" · ") || "IAM policy"} document={d.document} />
                     ))}
                   </div>
                 </details>
