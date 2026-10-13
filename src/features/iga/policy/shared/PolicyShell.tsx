@@ -1,12 +1,8 @@
 /**
- * The shell every Policy view renders through (SPEC-iga-phase3-policy.md §9):
- * `ConsolePage` plus the secondary views of the one Policy destination —
- * Overview · Findings · Policies · Approvals · Deployments · Setup — and the
- * gate: with the policy product off the view says so in words (never an error,
- * never an empty list), and a route reached against a backend that predates
- * Phase 3 renders "not available".
- *
- * Approvals is offered only while the server has not refused `governance:approve`.
+ * The shell every Policy view renders through: `ConsolePage`, the two views of
+ * the Policy destination (Policies · AWS access) and the gate. With the policy
+ * product off, or a backend without access policies, the view says so in words
+ * (never an error, never an empty list).
  */
 
 import type { ReactNode } from "react";
@@ -17,42 +13,19 @@ import { DecisionBanner } from "@/components/console/status";
 import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { usePolicyPermission } from "./policyAccess";
 import { usePolicyCapabilities } from "./usePolicyCapabilities";
 
-interface NavItem {
-  key: string;
-  label: string;
-  to: string;
-  /** Path prefixes that keep this item current. */
-  match: string[];
-  needs?: "governance:approve";
-}
-
-const NAV: NavItem[] = [
-  { key: "overview", label: "Overview", to: "/iga/policy", match: [] },
-  { key: "findings", label: "Findings", to: "/iga/policy/findings", match: ["/iga/policy/findings"] },
-  { key: "policies", label: "Policies", to: "/iga/policy/policies", match: ["/iga/policy/policies", "/iga/policy/new"] },
-  { key: "approvals", label: "Approvals", to: "/iga/policy/approvals", match: ["/iga/policy/approvals", "/iga/policy/reviews"], needs: "governance:approve" },
-  { key: "deployments", label: "Deployments", to: "/iga/policy/deployments", match: ["/iga/policy/deployments"] },
-  { key: "setup", label: "Setup", to: "/iga/policy/setup", match: ["/iga/policy/setup"] },
+const NAV = [
+  { key: "policies", label: "Policies", to: "/iga/policy" },
+  { key: "setup", label: "AWS access", to: "/iga/policy/setup" },
 ];
-
-function currentKey(pathname: string): string {
-  const p = pathname.replace(/\/+$/, "");
-  if (p === "/iga/policy") return "overview";
-  for (const n of NAV) if (n.match.some((m) => p === m || p.startsWith(`${m}/`))) return n.key;
-  return "";
-}
 
 export function PolicyNav() {
   const { pathname } = useLocation();
-  const approve = usePolicyPermission("governance:approve");
-  const active = currentKey(pathname);
-  const items = NAV.filter((n) => !n.needs || approve.offered);
+  const active = pathname.startsWith("/iga/policy/setup") ? "setup" : "policies";
   return (
     <nav aria-label="Policy views" className="flex gap-1 overflow-x-auto border-b border-(--color-border-subtle)">
-      {items.map((n) => (
+      {NAV.map((n) => (
         <Link
           key={n.key}
           to={n.to}
@@ -71,7 +44,7 @@ export function PolicyNav() {
   );
 }
 
-/** The capability check itself failed: not the same as Policy being off, so no preview or "retired" page is shown in its place. */
+/** The capability check itself failed: not the same as Policy being off. */
 export function PolicyCheckFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <DecisionBanner
@@ -91,7 +64,7 @@ export function PolicyUnavailable({ reason }: { reason?: string | null }) {
       title="Policy is not available on this server"
       body={
         <>
-          The policy product is turned off or still starting here{reason ? ` (${reason})` : ""}. Discovery and Connections are unaffected.
+          Policies are turned off or still starting here{reason ? ` (${reason})` : ""}. Discovery and Connections are unaffected.
         </>
       }
       actionLabel="Open Discovery"
@@ -105,30 +78,34 @@ export function PolicyShell({
   description,
   actions,
   nav = true,
+  requires,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
-  /** The secondary-view strip. Off for a focused flow (the new-policy flow, an owner's review page). */
+  /** The Policies · AWS access strip. Off for a focused flow (create, edit). */
   nav?: boolean;
+  /** A feature the view needs beyond the policy product being on. */
+  requires?: "access_policies";
   children: ReactNode;
 }) {
   const ws = getWorkspaceId() ?? "";
   const caps = usePolicyCapabilities(ws);
+  const served = caps.state === "on" && (!requires || caps.feature(requires));
   return (
-    <ConsolePage title={title} description={description} actions={caps.state === "on" ? actions : undefined}>
+    <ConsolePage title={title} description={description} actions={served ? actions : undefined}>
       {nav ? <PolicyNav /> : null}
       {caps.state === "loading" ? (
         <p role="status" className="text-sm text-(--color-text-muted)">
           Checking what this server provides…
         </p>
-      ) : caps.state === "on" ? (
+      ) : served ? (
         children
       ) : caps.state === "error" ? (
         <PolicyCheckFailed onRetry={caps.refetch} />
       ) : (
-        <PolicyUnavailable reason={caps.reason} />
+        <PolicyUnavailable reason={caps.state === "on" && requires ? caps.featureReason(requires) : caps.reason} />
       )}
     </ConsolePage>
   );

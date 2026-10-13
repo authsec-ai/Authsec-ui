@@ -21,7 +21,7 @@ export function remedyFor(f: PolicyFailure): { label: string; to: string } | nul
   }
   const policy = f.detail?.policy_id;
   if (f.code === "role_controlled_by_policy" && typeof policy === "string" && policy) {
-    return { label: "Edit that policy", to: `/iga/policy/policies/${encodeURIComponent(policy)}` };
+    return { label: "Edit that policy", to: `/iga/policy/${encodeURIComponent(policy)}` };
   }
   return REMEDY_LINKS[f.code] ?? null;
 }

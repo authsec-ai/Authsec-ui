@@ -356,7 +356,7 @@ export function PolicyLogsPage({ ws }: { ws: string }) {
           {objectKind === "policy" && policyParam && !objectKindParam ? (
             <Meta>
               Showing the events of one policy (
-              <Link to={`/iga/policy/policies/${objectId}`} className="font-medium text-(--color-primary-text) underline-offset-2 hover:underline">
+              <Link to={`/iga/policy/${objectId}`} className="font-medium text-(--color-primary-text) underline-offset-2 hover:underline">
                 open policy {shortHash(objectId, 8)}
               </Link>
               ).

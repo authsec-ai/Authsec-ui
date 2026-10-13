@@ -16,7 +16,7 @@ export interface PolicyCaps {
   reason: string | null;
   caps: PolicyCapabilities | null;
   /** A flag is true only when the gate is on AND the feature is served. */
-  feature: (name: "findings" | "proposals" | "export" | "iac" | "enforcement" | "slack") => boolean;
+  feature: (name: "findings" | "proposals" | "export" | "iac" | "enforcement" | "slack" | "access_policies") => boolean;
   /** Why a feature is false, when the server said. */
   featureReason: (name: string) => string | null;
   /** Provider support: AWS supported, Kubernetes not in this release. */

@@ -1,34 +1,27 @@
 /**
- * What the graph's selection card offers about policy (SPEC-iga-phase3-policy.md
- * §9.4). One rule runs through every case: a policy changes an IAM **role**, by
- * removing whole AWS services it does not use. So a click on anything else leads
- * to the role, never to a made-up target:
+ * What the graph's selection card offers about policy. With the one access-policy
+ * feature, a policy blocks or allows access to an S3 bucket for an IAM role for a
+ * set window. The card is the way in: it carries the thing selected into the
+ * create form (`/iga/policy/new`), which resolves it server-side.
  *
- *   IAM role        status, open findings, Right-size this role (or Edit <policy>)
- *   workload        Right-size the role it runs as
- *   resource /
- *   statement       the roles drawn on this graph that reach it, each one action
- *   grant line      Create policy for the role that holds the grant
- *   IAM user/group  said plainly: not offered
+ *   IAM role        start a policy for this role (identity_account_id)
+ *   workload        start a policy for the role it runs as
+ *   S3 resource     start a policy on this bucket (resource_id)
+ *   other resource  said plainly: only S3 buckets in v1
+ *   grant line      start a policy for the role that holds the grant
+ *   IAM user/group  said plainly: policies change roles, not users or groups
  *   Kubernetes      said plainly: not yet supported, with the prerequisite
  *
- * Every action sends an object id to `POST /targets/resolve` (CreatePolicyAction),
- * so the server decides what is eligible; the roles listed for a resource are
- * only the ones this canvas has loaded, and the card says so. Nothing renders
- * while the policy product is off.
+ * Nothing renders while the policy product is off.
  */
 
 import { useId } from "react";
 import { Link } from "react-router-dom";
 
-import { OPEN_FINDING_STATUSES, useListGovFindingsQuery } from "@/app/api/igaPolicyReadsApi";
+import { Button } from "@/components/ui/button";
 import { refId, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { ControlChip } from "../policy/findings/ControlChip";
-import { CreatePolicyAction } from "../policy/findings/CreatePolicyAction";
-import { findingsHref } from "../policy/findings/findingModel";
-import { useObjectPolicy } from "../policy/findings/useObjectPolicy";
 import { KubernetesPolicyNote, plural, usePolicyCapabilities } from "../policy/shared";
 import { independentCount } from "./graphLabels";
 import type { SelectionSubject } from "./SelectionCard";
@@ -45,6 +38,15 @@ function Heading({ id }: { id: string }) {
 }
 
 const quiet = "rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle) px-2.5 py-1.5 text-xs text-(--color-text-muted)";
+
+/** Start an access policy with the selected role or resource already filled in. */
+function NewPolicyButton({ param, id, label, size = "sm", variant }: { param: "identity_account_id" | "resource_id"; id: string; label: string; size?: "sm" | "default"; variant?: "outline" }) {
+  return (
+    <Button asChild size={size} variant={variant}>
+      <Link to={`/iga/policy/new?${param}=${encodeURIComponent(id)}`}>{label}</Link>
+    </Button>
+  );
+}
 
 export function PolicyCardSection({
   subject,
@@ -72,17 +74,17 @@ export function PolicyCardSection({
 
   switch (first.kind) {
     case "iam_role":
-      return <RoleBlock ws={ws} identityId={refId(first.ref)} />;
+      return <RoleBlock identityId={refId(first.ref)} />;
     case "workload":
-      return <WorkloadBlock workloadId={refId(first.ref)} />;
+      return <WorkloadBlock />;
     case "iam_user":
     case "iam_group":
-      return <p className={quiet}>A policy changes IAM roles. It is not offered for {first.kind === "iam_user" ? "IAM users" : "IAM groups"}.</p>;
+      return <p className={quiet}>An access policy changes IAM roles. It is not offered for {first.kind === "iam_user" ? "IAM users" : "IAM groups"}.</p>;
     case "exact":
     case "selector":
     case "external":
     case "statement":
-      return <HoldersBlock id={subject.visual.id} what={first.kind === "statement" ? "statement" : "resource"} edges={edges} nodes={nodes} />;
+      return <ResourceBlock id={subject.visual.id} kind={first.kind} what={first.kind === "statement" ? "statement" : "resource"} edges={edges} nodes={nodes} />;
     default:
       return null;
   }
@@ -90,42 +92,14 @@ export function PolicyCardSection({
 
 /* ---------------------------------- role ---------------------------------- */
 
-function RoleBlock({ ws, identityId }: { ws: string; identityId: string }) {
+function RoleBlock({ identityId }: { identityId: string }) {
   const heading = useId();
-  const held = useObjectPolicy(ws, identityId, false);
-  const findings = useListGovFindingsQuery({ ws, identity_id: identityId, status: [...OPEN_FINDING_STATUSES], limit: 50 });
-  const open = findings.data?.data.length ?? 0;
-  const more = !!findings.data?.meta.next_cursor;
-
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Heading id={heading} />
-        <ControlChip ws={ws} control={held.control} />
-      </div>
-      {findings.isLoading ? (
-        <p role="status" className="text-xs text-(--color-text-muted)">
-          Looking for findings…
-        </p>
-      ) : findings.isError ? (
-        <p className="text-xs text-(--color-text-muted)">Findings for this role could not be read.</p>
-      ) : (
-        <p className="text-xs text-(--color-text)">
-          {open === 0 ? (
-            "No open findings for this role."
-          ) : (
-            <>
-              {open}
-              {more ? "+" : ""} open {open === 1 && !more ? "finding" : "findings"}.{" "}
-              <Link to={findingsHref({ identity_id: identityId })} className="font-medium text-(--color-primary-text) hover:underline">
-                See them
-              </Link>
-            </>
-          )}
-        </p>
-      )}
+      <Heading id={heading} />
+      <p className="text-xs text-(--color-text-muted)">Block or allow this role&rsquo;s access to an S3 bucket for a set window.</p>
       <div>
-        <CreatePolicyAction objectId={identityId} label="Right-size this role" size="sm" variant={open === 0 && !held.control ? "outline" : undefined} />
+        <NewPolicyButton param="identity_account_id" id={identityId} label="New access policy" />
       </div>
     </section>
   );
@@ -133,15 +107,12 @@ function RoleBlock({ ws, identityId }: { ws: string; identityId: string }) {
 
 /* -------------------------------- workload -------------------------------- */
 
-function WorkloadBlock({ workloadId }: { workloadId: string }) {
+function WorkloadBlock() {
   const heading = useId();
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
       <Heading id={heading} />
-      <p className="text-xs text-(--color-text-muted)">A workload has no policy of its own. A policy changes the IAM role it runs as, and affects everything that runs as that role.</p>
-      <div>
-        <CreatePolicyAction objectId={workloadId} label="Right-size the role it runs as" size="sm" variant="outline" />
-      </div>
+      <p className="text-xs text-(--color-text-muted)">A workload has no policy of its own. An access policy changes the IAM role it runs as, and affects everything that runs as that role. Select that role to start one.</p>
     </section>
   );
 }
@@ -183,36 +154,43 @@ function holdersOf(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNo
   return roles;
 }
 
-function HoldersBlock({ id, what, edges, nodes }: { id: string; what: "resource" | "statement"; edges: VisualEdge[]; nodes: Map<GraphRef, GraphNode> }) {
+function ResourceBlock({ id, kind, what, edges, nodes }: { id: string; kind: string; what: "resource" | "statement"; edges: VisualEdge[]; nodes: Map<GraphRef, GraphNode> }) {
   const heading = useId();
+  // Only an S3 bucket can be the target of an access policy in v1. The graph's
+  // "exact" resource is the one place a bucket is selected directly.
+  const isBucket = kind === "exact";
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, HOLDERS_SHOWN);
 
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
       <Heading id={heading} />
-      <p className="text-xs text-(--color-text-muted)">
-        AuthSec changes roles, not {what === "resource" ? "resources" : "statements"}. A policy removes whole AWS services a role does not use; it cannot restrict
-        access to one {what}.
-      </p>
-      {roles.length === 0 ? (
-        <p className={quiet}>No role that reaches this is drawn on the canvas. Expand the graph to see who can, then select a role.</p>
+      {isBucket ? (
+        <>
+          <p className="text-xs text-(--color-text-muted)">Block or allow access to this bucket for a role, for a set window.</p>
+          <div>
+            <NewPolicyButton param="resource_id" id={id} label="New access policy on this bucket" />
+          </div>
+        </>
       ) : (
+        <p className="text-xs text-(--color-text-muted)">Access policies target S3 buckets. This {what} is not a bucket, so there is nothing to create from it.</p>
+      )}
+      {roles.length > 0 ? (
         <>
           <p className="text-xs text-(--color-text)">
-            {plural(roles.length, "role")} drawn here {roles.length === 1 ? "reaches" : "reach"} it. Others may exist that the canvas has not loaded.
+            {plural(roles.length, "role")} drawn here {roles.length === 1 ? "reaches" : "reach"} it. Select one to start a policy for it.
           </p>
           <ul className="space-y-2">
             {shown.map((r) => (
               <li key={r.ref} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0 break-words text-[13px] font-medium text-(--color-text)">{r.label}</span>
-                <CreatePolicyAction objectId={refId(r.ref)} label="Right-size" size="sm" variant="outline" lazy />
+                <NewPolicyButton param="identity_account_id" id={refId(r.ref)} label="New policy" variant="outline" />
               </li>
             ))}
           </ul>
           {roles.length > shown.length ? <p className="text-xs text-(--color-text-muted)">+{roles.length - shown.length} more drawn here. Select one to act on it.</p> : null}
         </>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -221,24 +199,20 @@ function HoldersBlock({ id, what, edges, nodes }: { id: string; what: "resource"
 
 function GrantLine({ edge, holder }: { edge: VisualEdge; holder: GraphNode | null }) {
   const heading = useId();
-  const effect = edge.summary?.effect;
   const grants = independentCount(edge);
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
       <Heading id={heading} />
       {!holder ? (
-        <p className={quiet}>The role that holds this grant is not an IAM role drawn on the canvas, so there is nothing to change from here.</p>
-      ) : effect === "deny" ? (
-        <p className={quiet}>This is a Deny. A policy only removes access, so there is nothing to create from it.</p>
+        <p className={quiet}>The role that holds this grant is not an IAM role drawn on the canvas, so there is nothing to start from here.</p>
       ) : (
         <>
           <p className="text-xs text-(--color-text-muted)">
-            A policy changes the role, not one grant. It removes whole services the role does not use, so every grant to a removed service goes with it
-            {grants > 1 ? `; this line stands for ${grants} grants` : ""}. Services the role still uses stay as they are.
-            {effect === "mixed" ? " This line mixes Allow and Deny statements; a policy acts only on the access it removes." : ""}
+            An access policy blocks or allows this role&rsquo;s access to an S3 bucket for a window
+            {grants > 1 ? `; this line stands for ${grants} grants` : ""}.
           </p>
           <div>
-            <CreatePolicyAction objectId={refId(holder.ref)} label="Create policy for this role" size="sm" />
+            <NewPolicyButton param="identity_account_id" id={refId(holder.ref)} label="New policy for this role" />
           </div>
         </>
       )}

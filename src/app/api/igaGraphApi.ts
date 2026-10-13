@@ -1175,6 +1175,8 @@ export interface PolicyCapabilities {
   iac: boolean;
   enforcement: boolean;
   slack: boolean;
+  /** Block or allow roles on a resource for a time (absent on a backend without it). */
+  access_policies?: boolean;
   reasons: Record<string, string>;
 }
 
