@@ -35,7 +35,6 @@ import {
   type ConsoleFilterOption,
 } from "@/components/console/iam-console";
 import { MetricStrip } from "@/components/console/MetricStrip";
-import { rowAccentClassName } from "@/components/console/table-tone";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
@@ -966,7 +965,6 @@ export default function ServiceAccountsPage() {
               enableExpansion={false}
               getRowId={(sa) => sa.id}
               onRowClick={(sa) => setSelectedSA(sa)}
-              rowClassName={(sa) => rowAccentClassName(sa.status === "active" ? "success" : "neutral")}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}
