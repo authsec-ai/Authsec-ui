@@ -1,4 +1,5 @@
 const express = require("express");
+const compression = require("compression");
 const path = require("path");
 const app = express();
 const port = process.env.PORT || 3000;
@@ -9,6 +10,14 @@ app.use((req, res, next) => {
   console.log(`[${timestamp}] ${req.method} ${req.url} - Request received`);
   next();
 });
+
+// Compress text responses (brotli where the browser accepts it, else gzip).
+//
+// This server used to send everything raw: the 1.27 MB application bundle and
+// 463 KB stylesheet crossed the wire byte for byte, and every lazy page chunk
+// after them. Compression is the single largest cut to how long a page, and
+// each first visit to a route, takes to appear.
+app.use(compression());
 
 // Dynamic config endpoint
 app.get("/config.js", (req, res) => {
@@ -66,8 +75,40 @@ app.get("/version", (req, res) => {
   });
 });
 
-// Serve static files from the React app's dist directory
-app.use(express.static(path.join(__dirname, "dist")));
+// Serve static files from the React app's dist directory.
+//
+// Caching follows what each file is:
+//   /assets/*   Vite names these by content hash, so a given URL never changes
+//               meaning. Cache for a year and mark immutable: a page the browser
+//               has seen before costs no network at all. With express's default
+//               (max-age=0) every one of them was re-checked with the server on
+//               every load, one round trip per file, which is what each click
+//               onto a lazy page paid for.
+//   *.html      The entry point names the current hashed files, so it must be
+//               re-checked every time or a deploy would not be picked up.
+const DIST = path.join(__dirname, "dist");
+const YEAR = 60 * 60 * 24 * 365;
+app.use(
+  express.static(DIST, {
+    setHeaders(res, filePath) {
+      const rel = path.relative(DIST, filePath).split(path.sep);
+      if (rel[0] === "assets") {
+        res.setHeader("Cache-Control", `public, max-age=${YEAR}, immutable`);
+      } else if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  }),
+);
+
+// A hashed asset that no longer exists is gone, not "the app". After a deploy an
+// already-open tab asks for chunk names from the previous build. Answering with
+// index.html (200, text/html) makes the browser try to run HTML as JavaScript
+// and fail with a parse error, and it would be cached as the file's content.
+// A 404 is what lets the browser report a plain missing chunk.
+app.use("/assets", (req, res) => {
+  res.status(404).type("text/plain").send("asset not found");
+});
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -88,7 +129,8 @@ app.get("/health", (req, res) => {
 
 // Catch-all route to serve React app
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(path.join(DIST, "index.html"));
 });
 
 // Start the server
