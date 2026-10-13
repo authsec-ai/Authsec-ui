@@ -214,7 +214,11 @@ function AppContent() {
   return (
     <AuthProvider>
       <RbacAudienceProvider>
-        <Router>
+        {/* A navigation is a React transition: while a lazy page's chunk downloads the
+            current page and its sidebar stay on screen. Without this, the one Suspense
+            above <Routes> swaps the whole app -- shell included -- for "Loading…" on
+            every first visit to a page. */}
+        <Router future={{ v7_startTransition: true }}>
           <DensityProvider>
           <WizardProvider>
             <GuidedTourProvider>
