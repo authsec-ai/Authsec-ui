@@ -8,6 +8,7 @@
 
 import { Suspense, type ReactNode } from "react";
 
+import { PageLoadingSkeleton } from "./PageLoadingSkeleton";
 import { IgaSidebar } from "./IgaSidebar";
 import { AppHeader } from "./AppHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -50,7 +51,7 @@ export function IgaLayout({ children }: { children: ReactNode }) {
               className="h-full w-full overflow-y-auto scrollbar-hide"
               data-main-content-area="true"
             >
-              <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+              <Suspense fallback={<PageLoadingSkeleton />}>
                 {children}
               </Suspense>
             </div>
