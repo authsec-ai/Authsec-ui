@@ -224,6 +224,7 @@ export const baseApi = createApi({
     // family, each with an `ALL` list id and per-object ids, so a mutation
     // refreshes exactly what it changed. Everything is workspace-scoped by the
     // token on the server; the client adds `ws` to cache keys only.
+    "IgaAccessPolicy",
     "IgaGovFinding",
     "IgaGovReadiness",
     "IgaGovOwner",

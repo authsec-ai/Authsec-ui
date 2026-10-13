@@ -44,7 +44,7 @@ import { useMarkRefused } from "./useRefusal";
 const POLL_MS = 5_000;
 
 const INTRO =
-  "AuthSec can read this account. A second, separate role lets AuthSec apply approved changes: it can only create, attach and remove AuthSec-owned permissions boundaries. It cannot read data, read your policies, or change your own policies.";
+  "AuthSec can read this account. A second, separate role lets AuthSec apply your policies: it can only create, attach and remove AuthSec-owned IAM policies. It cannot read data, read your policies, or change your own policies.";
 
 function WhatItCanDo() {
   return (
@@ -52,8 +52,8 @@ function WhatItCanDo() {
       <summary className="cursor-pointer text-[13px] font-medium text-(--color-text)">What it can do</summary>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-(--color-text-muted)">
         <li>
-          Create, version and delete IAM policies under the <span className="font-mono">/authsec/</span> path, and attach or detach only those as a
-          role&apos;s permissions boundary.
+          Create, version and delete IAM policies under the <span className="font-mono">/authsec/</span> path, and attach or detach only those on a
+          role. Access policies need the current version of the stack; an older stack must be updated first.
         </li>
         <li>It cannot read your data or your own policies, and it cannot change them.</li>
         <li>
@@ -230,7 +230,7 @@ function AccountEnforcement({ connection }: { connection: Connection }) {
               <div className="flex flex-wrap items-center gap-2">
                 {state === "off" || (state === "error" && !bound) ? (
                   <Button size="sm" onClick={() => setEnableOpen(true)} disabled={revokedConnection}>
-                    {state === "off" ? "Enable enforcement" : "Try again"}
+                    {state === "off" ? "Allow AuthSec to change IAM" : "Try again"}
                   </Button>
                 ) : null}
                 {waiting ? (

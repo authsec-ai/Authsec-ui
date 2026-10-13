@@ -105,6 +105,8 @@ export interface PolicyErrorBody {
   error: {
     code: PolicyErrorCode | (string & {});
     message: string;
+    /** The request field a refusal is about (access policies). */
+    field?: string;
     detail?: Record<string, unknown>;
   };
 }

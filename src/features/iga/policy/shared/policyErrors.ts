@@ -42,6 +42,8 @@ export interface PolicyFailure {
   code: string;
   /** The backend's own message, shown when the UI has no better words. */
   message: string;
+  /** The request field the refusal names, when it names one. */
+  field?: string;
   detail: Record<string, unknown>;
 }
 
@@ -62,7 +64,7 @@ export function classifyPolicyError(error: FetchBaseQueryError | SerializedError
   }
   const b = bodyOf(error);
   const code = b?.code ?? "";
-  const base = { status: error.status, code, message: b?.message ?? "", detail: (b?.detail ?? {}) as Record<string, unknown> };
+  const base = { status: error.status, code, message: b?.message ?? "", field: b?.field, detail: (b?.detail ?? {}) as Record<string, unknown> };
   switch (error.status) {
     case 401:
       return { ...base, kind: "unauthenticated" };
@@ -86,7 +88,7 @@ export function classifyPolicyError(error: FetchBaseQueryError | SerializedError
     case 422:
       return { ...base, kind: "rejected" };
     case 503:
-      return code === "policy_unavailable" || code === "discovery_unavailable" || !code
+      return code === "policy_unavailable" || code === "access_policies_unavailable" || code === "discovery_unavailable" || !code
         ? { ...base, kind: "unavailable" }
         : { ...base, kind: "failed" };
     case 504:
