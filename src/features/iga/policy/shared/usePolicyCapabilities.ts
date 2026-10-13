@@ -25,6 +25,18 @@ export interface PolicyCaps {
   refetch: () => void;
 }
 
+/**
+ * Read the access-policies capability whatever shape the backend sends. The
+ * shipped backend sends `{available, reason}`; a boolean is also accepted so an
+ * older build reads correctly. `on` is false when the field is absent.
+ */
+function accessPolicies(caps: PolicyCapabilities | null): { on: boolean; reason: string | null } {
+  const v = caps?.access_policies;
+  if (v === undefined || v === null) return { on: false, reason: null };
+  if (typeof v === "boolean") return { on: v, reason: null };
+  return { on: v.available === true, reason: v.reason ?? null };
+}
+
 export function usePolicyCapabilities(ws: string): PolicyCaps {
   const q = useGetGraphCapabilitiesQuery({ ws });
   const caps = q.data?.policy ?? null;
