@@ -6,7 +6,7 @@
  * belongs to the legacy authorization console.
  */
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { IgaSidebar } from "./IgaSidebar";
 import { AppHeader } from "./AppHeader";
@@ -50,7 +50,9 @@ export function IgaLayout({ children }: { children: ReactNode }) {
               className="h-full w-full overflow-y-auto scrollbar-hide"
               data-main-content-area="true"
             >
-              {children}
+              <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+                {children}
+              </Suspense>
             </div>
           </div>
         </div>

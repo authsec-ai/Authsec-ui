@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { AppRightSidebar } from "./AppRightSidebar";
@@ -91,7 +91,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="h-full w-full overflow-y-auto scrollbar-hide"
                 data-main-content-area="true"
               >
-                {children}
+                <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+                  {children}
+                </Suspense>
               </div>
             </div>
           </div>
