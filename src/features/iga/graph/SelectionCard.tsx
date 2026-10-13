@@ -14,13 +14,17 @@
  * reference is not proof a resource exists, a selector is not a list.
  */
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Plus, X } from "lucide-react";
 
 import { objectPath, refType, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
+import { useListPolicyDemoQuery } from "@/app/api/policyDemoApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { PolicyFormDialog } from "../policy/demo/PolicyFormDialog";
+import { s3OfReference } from "../policy/demo/policyDemoModel";
 import { accountWithId } from "../shared/labels";
 import { Timestamp } from "../shared/components/Timestamp";
 import { edgeVerb, frontierLabel, independentCount, markedLimitations } from "./graphLabels";
@@ -248,6 +252,12 @@ export function SelectionCard({
     headingRef.current?.focus({ preventScroll: true });
   }, [key]);
 
+  // An S3 bucket (or a folder of one) offers Add policy and says how many policies already cover it.
+  const picked = subject.kind === "node" && !subject.visual.overflow && subject.visual.members.length === 1 ? subject.visual.members[0] : null;
+  const s3 = picked && (picked.kind === "exact" || picked.kind === "selector") ? s3OfReference(picked.text, picked.arn, picked.label) : null;
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const covering = useListPolicyDemoQuery(s3 ? { resource: s3.bucket } : undefined, { skip: !s3 });
+
   let title: string;
   let type: string;
   let category: NodeCategory | null = null;
@@ -369,7 +379,30 @@ export function SelectionCard({
           </p>
         ) : null}
         {body}
+        {s3 ? (
+          <p className="rounded-md bg-(--color-surface-subtle) px-2.5 py-1.5 text-xs text-(--color-text)">
+            {covering.isLoading || !covering.data ? (
+              "Looking for policies on this bucket…"
+            ) : covering.data.length === 0 ? (
+              <>No policy covers <span className="font-mono">{s3.bucket}</span> yet.</>
+            ) : (
+              <>
+                {covering.data.length} {covering.data.length === 1 ? "policy covers" : "policies cover"} <span className="font-mono">{s3.bucket}</span> (
+                {covering.data.filter((x) => x.phase === "active").length} active).{" "}
+                <Link to={`/iga/policy?resource=${encodeURIComponent(s3.bucket)}`} className="font-medium text-(--color-primary-text) hover:underline">
+                  View
+                </Link>
+              </>
+            )}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2 pt-1">
+          {s3 ? (
+            <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => setPolicyOpen(true)}>
+              <Plus aria-hidden="true" className="size-3.5" />
+              Add policy
+            </Button>
+          ) : null}
           {claims.length ? (
             <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => actions.onEvidence(claims)}>
               View evidence
@@ -387,6 +420,7 @@ export function SelectionCard({
           ) : null}
         </div>
       </div>
+      {s3 ? <PolicyFormDialog open={policyOpen} onOpenChange={setPolicyOpen} initial={{ resource: s3.bucket, prefix: s3.prefix }} /> : null}
     </section>
   );
 }
