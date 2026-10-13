@@ -28,6 +28,7 @@ import {
   plural,
   relTime,
   usePolicyPermission,
+  useWorkspaceMemberSession,
 } from "../shared";
 import { PolicyMetricsStrip } from "./PolicyMetricsStrip";
 
@@ -70,13 +71,16 @@ function Decision({
 }
 
 function NeedsADecision({ ws }: { ws: string }) {
+  // Upgrade to a workspace-member session before the member-gated reads (approvals, mine reviews).
+  const { ready } = useWorkspaceMemberSession();
   const approve = usePolicyPermission("governance:approve");
-  const approvals = useListGovApprovalsQuery({ ws, status: "pending", limit: LOOK }, { skip: !approve.offered });
-  const reviews = useListGovReviewsQuery({ ws, mine: true, status: ["open", "reopened"], limit: LOOK });
+  const approvals = useListGovApprovalsQuery({ ws, status: "pending", limit: LOOK }, { skip: !approve.offered || !ready });
+  const reviews = useListGovReviewsQuery({ ws, mine: true, status: ["open", "reopened"], limit: LOOK }, { skip: !ready });
   const deployments = useListGovDeploymentsQuery({ ws, limit: 200 });
 
   const approvalsFailure = classifyPolicyError(approvals.error);
-  // A 403 is "your role cannot approve", not a failure; the nav hides Approvals once it is marked.
+  // A 403 permission denial is "your role cannot approve", not a failure; the nav hides Approvals once marked.
+  // A member_session 403 is a session problem, not a role denial, so it stays visible as a failure below.
   const approvalsForbidden = approvalsFailure?.kind === "forbidden";
   const reviewsFailure = classifyPolicyError(reviews.error);
   const deploymentsFailure = classifyPolicyError(deployments.error);
