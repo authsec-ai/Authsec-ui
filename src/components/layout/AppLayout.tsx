@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Suspense, useEffect, useState } from "react";
+import { PageLoadingSkeleton } from "./PageLoadingSkeleton";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { AppRightSidebar } from "./AppRightSidebar";
@@ -91,7 +92,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="h-full w-full overflow-y-auto scrollbar-hide"
                 data-main-content-area="true"
               >
-                <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+                <Suspense fallback={<PageLoadingSkeleton />}>
                   {children}
                 </Suspense>
               </div>
