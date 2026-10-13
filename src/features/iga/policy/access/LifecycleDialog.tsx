@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
+import { Link } from "react-router-dom";
 
 import {
   useEndAccessPolicyMutation,
@@ -69,6 +70,12 @@ export function LifecycleDialog({
   const c = COPY[action];
   const missing = c.reasonRequired && !reason.trim();
 
+  // Resuming a policy whose window has already passed is refused with
+  // `access_policy_invalid` on `ends_at` (contract). Editing the window is the
+  // way forward, so offer it in place of a bare error.
+  const resumeExpired =
+    action === "resume" && act.failure?.code === "access_policy_invalid" && act.failure?.field === "ends_at";
+
   async function go() {
     if (!policy || !action || missing) return;
     const args = { id: policy.id, reason: reason.trim() };
@@ -93,19 +100,32 @@ export function LifecycleDialog({
           </label>
           <Textarea id="lifecycle-reason" rows={3} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Kept in the policy's history" />
         </div>
-        <PolicyActionError failure={act.failure} />
+        {resumeExpired ? (
+          <div className="rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
+            <p className="font-semibold">This policy&rsquo;s window has already ended.</p>
+            <p className="mt-0.5">Resuming it would do nothing. Edit it to set a new window instead.</p>
+          </div>
+        ) : (
+          <PolicyActionError failure={act.failure} />
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={act.pending}>
             Cancel
           </Button>
-          <Button
-            variant={action === "end" ? "destructive" : "default"}
-            className="text-white"
-            onClick={() => void go()}
-            disabled={act.pending || missing}
-          >
-            {act.pending ? "Working…" : c.button}
-          </Button>
+          {resumeExpired ? (
+            <Button asChild className="text-white">
+              <Link to={`/iga/policy/${policy.id}/edit`}>Edit instead</Link>
+            </Button>
+          ) : (
+            <Button
+              variant={action === "end" ? "destructive" : "default"}
+              className="text-white"
+              onClick={() => void go()}
+              disabled={act.pending || missing}
+            >
+              {act.pending ? "Working…" : c.button}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

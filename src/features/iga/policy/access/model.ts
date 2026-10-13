@@ -11,6 +11,7 @@
 import { differenceInMinutes, format, formatDistanceToNowStrict, isValid, parseISO } from "date-fns";
 
 import type { ConsoleTone } from "@/components/console/status";
+import { humanize } from "../shared";
 import type {
   AccessEffect,
   AccessLevel,
@@ -66,7 +67,50 @@ export const END_REASON: Record<string, string> = {
   ended: "Ended by hand.",
   superseded: "Replaced by a newer version.",
   paused: "Paused.",
+  expired_before_deploy: "Its window had passed before it could be applied.",
 };
+
+/* --------------------------------- events --------------------------------- */
+
+/** The history event names (GovEvent `event`) as words, from the contract. */
+const EVENT_LABEL: Record<string, string> = {
+  "access_policy.created": "Created",
+  "access_policy.applied": "Applied",
+  "access_policy.confirmed": "In place on role (verified)",
+  "access_policy.edited": "Edited",
+  "access_policy.paused": "Paused",
+  "access_policy.resumed": "Resumed",
+  "access_policy.ended": "Ended",
+  "access_policy.expired": "Reached its end time; removed from role",
+  "access_policy.removed": "Removed from role",
+  "access_policy.drifted": "Changed outside AuthSec",
+  "access_policy.reapplied": "Put back by AuthSec",
+  "access_policy.failed": "Failed on role",
+  "access_policy.outcome_unknown": "Waiting for AWS to confirm",
+};
+
+/**
+ * The words for a history event. A version number or role, when the payload
+ * carries one, is appended so "Applied" reads "Applied · v2". Unknown names are
+ * humanised (`access_policy.something_new` → "Something new").
+ */
+export function eventLabel(e: { event: string; payload?: Record<string, unknown> }): string {
+  const base = EVENT_LABEL[e.event] ?? humanize(e.event.replace(/^access_policy\./, "").replace(/_/g, " "));
+  const no = e.payload?.version_no;
+  const reason = e.payload?.reason;
+  const parts = [base];
+  if (typeof no === "number") parts.push(`v${no}`);
+  if ((e.event === "access_policy.paused" || e.event === "access_policy.resumed" || e.event === "access_policy.ended") && typeof reason === "string" && reason) {
+    parts.push(reason);
+  }
+  if (e.event === "access_policy.removed" && typeof e.payload?.end_reason === "string" && e.payload.end_reason) {
+    parts.push(END_REASON[e.payload.end_reason] ?? String(e.payload.end_reason));
+  }
+  if (e.event === "access_policy.failed" && typeof e.payload?.reason === "string" && e.payload.reason) {
+    parts.push(String(e.payload.reason));
+  }
+  return parts.join(" · ");
+}
 
 /* --------------------------------- access --------------------------------- */
 
@@ -162,6 +206,27 @@ export function policySentence(p: {
   const tail = p.ends_at ? ` until ${stamp(p.ends_at)}` : " until the policy is ended";
   const from = p.starts_at ? `, from ${stamp(p.starts_at)}` : "";
   return `${who} ${p.roles.length === 1 ? "is" : "are"} ${EFFECT[p.effect].verb} ${accessVerb(p.access)} on ${resourceText(p.resource)}${from}${tail}.`;
+}
+
+/**
+ * Map a backend `field` path onto the form's field id. The server speaks the
+ * request shape (`roles[0].identity_account_id`, `resource.resource_id`,
+ * `ends_at`); the form's inputs are `resource`, `roles`, `end`, and so on.
+ * Returns the server string unchanged when nothing matches, so a new field the
+ * server adds still lands somewhere rather than being swallowed.
+ */
+export function formFieldOf(serverField: string | undefined): string | undefined {
+  if (!serverField) return undefined;
+  const f = serverField.trim();
+  if (f.startsWith("roles")) return "roles";
+  if (f.startsWith("resource.prefix") || f === "prefix") return "prefix";
+  if (f.startsWith("resource")) return "resource";
+  if (f.startsWith("access")) return "access";
+  if (f === "ends_at") return "end";
+  if (f === "starts_at") return "start";
+  if (f === "name") return "name";
+  if (f === "reason") return "reason";
+  return f;
 }
 
 /* ---------------------------------- draft --------------------------------- */
@@ -289,7 +354,7 @@ export function draftProblem(d: PolicyDraft, now = new Date()): { field: string;
   if (!d.resource) return { field: "resource", message: "Choose a bucket." };
   if (d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
   if (d.roles.length === 0) return { field: "roles", message: "Choose at least one role." };
-  if (d.access.length === 0) return { field: "access", message: "Choose what to " + (d.effect === "block" ? "block." : "allow.") };
+  if (d.access.length === 0) return { field: "access", message: `Choose what to ${d.effect === "block" ? "block." : "allow."}` };
   const w = windowOf(d, now);
   if (d.preset === "custom") {
     if (d.start && !w.starts_at) return { field: "start", message: "The start time cannot be read." };

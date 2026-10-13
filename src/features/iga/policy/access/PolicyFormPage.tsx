@@ -40,6 +40,7 @@ import {
   draftOf,
   draftProblem,
   emptyDraft,
+  formFieldOf,
   policySentence,
   suggestedName,
   windowOf,
@@ -221,9 +222,18 @@ export default function PolicyFormPage() {
     }
   }
   useEffect(() => {
-    const f = act.failure?.field;
-    if (f) setFieldError({ field: f, message: act.failure ? describeFailure(act.failure).title : "" });
+    const f = formFieldOf(act.failure?.field);
+    if (f && act.failure) {
+      // The server's own message is written for the field; fall back to the
+      // code's title only when it did not send one.
+      setFieldError({ field: f, message: act.failure.message || describeFailure(act.failure).title });
+      document.getElementById(`ap-${f}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
   }, [act.failure]);
+
+  // A stale edit is refused with 409 version_conflict (detail.current_version_no).
+  // The only cure is to reload the policy and re-apply, so say exactly that.
+  const staleEdit = editing && act.failure?.code === "version_conflict";
 
   const err = (f: string) => (fieldError?.field === f ? fieldError.message : undefined);
   const localSentence = useMemo(() => {
@@ -501,7 +511,28 @@ export default function PolicyFormPage() {
           </div>
 
           <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) bg-(--color-surface-base) px-1 py-3">
-            <PolicyActionError failure={act.failure && !act.failure.field ? act.failure : null} className="basis-full" />
+            {staleEdit ? (
+              <div className="basis-full rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
+                <p className="font-semibold">This policy changed since you opened it.</p>
+                <p className="mt-0.5">
+                  Someone applied version {typeof act.failure?.detail?.current_version_no === "number" ? act.failure.detail.current_version_no : "a newer one"} while you were editing. Reload it, then re-apply your change.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    filled.current.policy = false;
+                    act.clear();
+                    void existing.refetch();
+                  }}
+                >
+                  Reload the policy
+                </Button>
+              </div>
+            ) : (
+              <PolicyActionError failure={act.failure && !act.failure.field ? act.failure : null} className="basis-full" />
+            )}
             <span className="text-xs text-(--color-text-muted)">{isBlock ? "Applies now. You can lift it any time." : "Applies now and ends on its own."}</span>
             <span className="flex-1" />
             <Button variant="outline" asChild>

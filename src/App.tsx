@@ -65,17 +65,12 @@ const ScanDetailPage = React.lazy(() => import("./features/iga/connections/ScanD
 const DiscoveryPage = React.lazy(() => import("./features/iga/discovery/DiscoveryPage"));
 const SightingDetailPage = React.lazy(() => import("./features/iga/discovery/SightingDetailPage"));
 const K8sObjectPage = React.lazy(() => import("./features/iga/k8s/K8sObjectPage"));
-const PolicyHome = React.lazy(() => import("./features/iga/policy/PolicyHome"));
 import GatedRedirect from "./features/iga/policy/GatedRedirect";
-const FindingsPage = React.lazy(() => import("./features/iga/policy/findings/FindingsPage"));
-const PoliciesPage = React.lazy(() => import("./features/iga/policy/policies/PoliciesPage"));
-const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/policies/PolicyDetailPage"));
-const NewPolicyPage = React.lazy(() => import("./features/iga/policy/new/NewPolicyPage"));
-const ApprovalsPage = React.lazy(() => import("./features/iga/policy/approvals/ApprovalsPage"));
-const ReviewsPage = React.lazy(() => import("./features/iga/policy/reviews/ReviewsPage"));
-const OwnerReviewPage = React.lazy(() => import("./features/iga/policy/reviews/OwnerReviewPage"));
-const DeploymentsPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentsPage"));
-const DeploymentDetailPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentDetailPage"));
+// Access policies (the one Policy feature): list, create/edit, detail. Each page
+// renders through PolicyShell, which gates on the access_policies capability.
+const PoliciesListPage = React.lazy(() => import("./features/iga/policy/access/PoliciesListPage"));
+const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
+const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
 const PolicySetupPage = React.lazy(() => import("./features/iga/policy/setup/SetupPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
@@ -805,55 +800,17 @@ function AppContent() {
                     }
                   />
 
-                  {/* Policy (SPEC-iga-phase3-policy.md §9): the Overview and its secondary views when the
-                      policy product is on; the reference preview while it is off. Logs: recorded events
-                      when on, the labelled preview while off. */}
+                  {/* Policy: one feature — access policies. An admin picks a resource
+                      and roles from Discovery, chooses Block or Allow, sets a window,
+                      and applies; AuthSec changes IAM. The list, create/edit and detail
+                      each gate on the access_policies capability inside PolicyShell.
+                      "AWS access" (setup) is kept for the enforcement binding. */}
                   <Route
                     path="/iga/policy"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <PolicyHome />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/findings"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <FindingsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/policies"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <PoliciesPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/policies/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <PolicyDetailPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/policies/:id/:tab"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <PolicyDetailPage />
+                          <PoliciesListPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -863,57 +820,27 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <NewPolicyPage />
+                          <PolicyFormPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
                   <Route
-                    path="/iga/policy/approvals"
+                    path="/iga/policy/:id"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <ApprovalsPage />
+                          <PolicyDetailPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
                   />
                   <Route
-                    path="/iga/policy/reviews"
+                    path="/iga/policy/:id/edit"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <ReviewsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/reviews/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <OwnerReviewPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/deployments"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <DeploymentsPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/deployments/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <DeploymentDetailPage />
+                          <PolicyFormPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -977,7 +904,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <GatedRedirect to="/iga/policy/policies" retired={<RetiredPage title="Agent policies" />} />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Agent policies" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -997,7 +924,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <GatedRedirect to="/iga/policy/deployments?attention=1" retired={<RetiredPage title="Policy warnings" />} />
+                          <GatedRedirect to="/iga/policy?status=failed" retired={<RetiredPage title="Policy warnings" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -1057,7 +984,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <GatedRedirect to="/iga/policy/deployments" retired={<RetiredPage title="Enforcement queue" />} />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Enforcement queue" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

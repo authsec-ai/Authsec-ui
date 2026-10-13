@@ -63,8 +63,12 @@ export interface AccessPolicyRole {
  * outcome_unknown (open: a newer backend may add one).
  */
 export interface AccessPolicyDeployment {
+  id: string;
   identity_account_id: string;
   role_name: string;
+  /** Which version this row deployed. The detail shows the current version's
+      rows and keeps older ones under a "Show earlier" toggle. */
+  version_no: number;
   state: string;
   aws_policy_arn: string;
   document_hash: string;
@@ -74,6 +78,8 @@ export interface AccessPolicyDeployment {
   /** Empty when AWS's copy matches what AuthSec sent. */
   drift: string;
   error: string;
+  /** Why this row left AWS: expired, paused, ended, superseded, expired_before_deploy. "" while live. */
+  end_reason: string;
 }
 
 export interface AccessPolicyVersion {
@@ -105,9 +111,17 @@ export interface AccessPolicy {
   roles: AccessPolicyRole[];
 }
 
+/** The exact IAM policy JSON attached to one role, with its AuthSec name. */
+export interface AccessPolicyDocument {
+  identity_account_id: string;
+  role_name: string;
+  policy_name: string;
+  document: Record<string, unknown>;
+}
+
 export interface AccessPolicyDetail extends AccessPolicy {
   deployments: AccessPolicyDeployment[];
-  documents: { identity_account_id: string; document: Record<string, unknown> }[];
+  documents: AccessPolicyDocument[];
   versions: AccessPolicyVersion[];
 }
 
@@ -143,14 +157,20 @@ export interface AccessPolicyPreview {
   blockers: AccessPolicyNotice[];
 }
 
+/**
+ * One recorded history event, as the backend serves it. There is no `message`
+ * or actor name on the wire: the label comes from `event` (see `eventLabel` in
+ * model) and the actor from `actor_kind` (`system` is AuthSec; `user` carries
+ * `actor_id`). `event` is one of `access_policy.created`, `.applied`,
+ * `.confirmed`, `.edited`, `.paused`, `.resumed`, `.ended`, `.expired`,
+ * `.removed`, `.drifted`, `.reapplied`, `.failed`, `.outcome_unknown`.
+ */
 export interface AccessPolicyEvent {
-  id: string;
-  at: string;
+  id: number;
+  occurred_at: string;
+  event: string;
   actor_kind: "user" | "system";
-  actor_name: string;
-  /** created · applied · confirmed · edited · paused · resumed · ended · expired · drifted · reapplied · failed */
-  kind: string;
-  message: string;
+  actor_id: string;
   payload: Record<string, unknown>;
 }
 

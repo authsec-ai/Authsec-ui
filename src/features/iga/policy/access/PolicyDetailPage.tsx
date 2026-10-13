@@ -28,6 +28,7 @@ import {
   STATUS,
   accessText,
   deploymentView,
+  eventLabel,
   policySentence,
   resourceText,
   whenText,
@@ -195,7 +196,13 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
 /* ---------------------------------- in AWS --------------------------------- */
 
 function InAws({ p }: { p: AccessPolicyDetail }) {
-  const docOf = (identity: string) => p.documents.find((d) => d.identity_account_id === identity)?.document;
+  const [showEarlier, setShowEarlier] = useState(false);
+  // deployments[] carries rows from older versions and past runs, newest first.
+  // The main view is this version's rows; earlier ones go behind a toggle.
+  const current = p.deployments.filter((d) => d.version_no === p.version_no);
+  const earlier = p.deployments.filter((d) => d.version_no !== p.version_no);
+  const docOf = (identity: string) => p.documents.find((d) => d.identity_account_id === identity);
+
   return (
     <div className="space-y-4">
       <Meta>
@@ -205,38 +212,63 @@ function InAws({ p }: { p: AccessPolicyDetail }) {
       {p.deployments.length === 0 ? (
         <p className="text-sm text-(--color-text-muted)">Nothing has been sent to AWS for this policy yet.</p>
       ) : (
-        p.deployments.map((d) => {
-          const v = deploymentView(d.state);
-          const doc = docOf(d.identity_account_id);
-          return (
-            <Panel key={`${d.identity_account_id}:${d.aws_policy_arn}`} title={d.role_name} actions={<StatusBadge tone={v.tone}>{v.label}</StatusBadge>}>
-              <div className="space-y-3">
-                <Facts>
-                  <Fact label="AWS policy" mono>
-                    {d.aws_policy_arn || "Not created yet"}
-                  </Fact>
-                  <Fact label="Applied">{d.deployed_at ? <Timestamp iso={d.deployed_at} /> : "Not yet"}</Fact>
-                  <Fact label="Confirmed by AWS">{d.verified_at ? <Timestamp iso={d.verified_at} /> : "Not yet"}</Fact>
-                  <Fact label="Last checked">{d.last_readback_at ? relTime(d.last_readback_at) : "Not yet"}</Fact>
-                  <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : d.last_readback_at ? "Yes" : "Not checked yet"}</Fact>
-                  {d.document_hash ? (
-                    <Fact label="Fingerprint" mono>
-                      {shortHash(d.document_hash)}
-                    </Fact>
-                  ) : null}
-                  {d.error ? (
-                    <Fact label="Problem">
-                      <span className="text-(--color-danger-text)">{d.error}</span>
-                    </Fact>
-                  ) : null}
-                </Facts>
-                {doc ? <AwsDocument title={d.aws_policy_arn || d.role_name} document={doc} /> : null}
-              </div>
-            </Panel>
-          );
-        })
+        <>
+          {current.length === 0 ? (
+            <p className="text-sm text-(--color-text-muted)">Nothing is in AWS for the current version yet.</p>
+          ) : (
+            current.map((d) => <DeploymentCard key={d.id} d={d} doc={docOf(d.identity_account_id)} />)
+          )}
+
+          {earlier.length > 0 ? (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setShowEarlier((s) => !s)}
+                className="text-xs font-medium text-(--color-primary-text) hover:underline"
+                aria-expanded={showEarlier}
+              >
+                {showEarlier ? "Hide earlier versions" : `Show earlier versions (${earlier.length})`}
+              </button>
+              {showEarlier ? earlier.map((d) => <DeploymentCard key={d.id} d={d} doc={docOf(d.identity_account_id)} earlier />) : null}
+            </div>
+          ) : null}
+        </>
       )}
     </div>
+  );
+}
+
+function DeploymentCard({ d, doc, earlier }: { d: AccessPolicyDetail["deployments"][number]; doc: AccessPolicyDetail["documents"][number] | undefined; earlier?: boolean }) {
+  const v = deploymentView(d.state);
+  return (
+    <Panel
+      title={earlier ? `${d.role_name} · v${d.version_no}` : d.role_name}
+      actions={<StatusBadge tone={v.tone}>{v.label}</StatusBadge>}
+    >
+      <div className="space-y-3">
+        <Facts>
+          <Fact label="AWS policy" mono>
+            {doc?.policy_name || d.aws_policy_arn || "Not created yet"}
+          </Fact>
+          <Fact label="Applied">{d.deployed_at ? <Timestamp iso={d.deployed_at} /> : "Not yet"}</Fact>
+          <Fact label="Confirmed by AWS">{d.verified_at ? <Timestamp iso={d.verified_at} /> : "Not yet"}</Fact>
+          <Fact label="Last checked">{d.last_readback_at ? relTime(d.last_readback_at) : "Not yet"}</Fact>
+          <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : d.last_readback_at ? "Yes" : "Not checked yet"}</Fact>
+          {d.end_reason ? <Fact label="Removed because">{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
+          {d.document_hash ? (
+            <Fact label="Fingerprint" mono>
+              {shortHash(d.document_hash)}
+            </Fact>
+          ) : null}
+          {d.error ? (
+            <Fact label="Problem">
+              <span className="text-(--color-danger-text)">{d.error}</span>
+            </Fact>
+          ) : null}
+        </Facts>
+        {doc ? <AwsDocument title={doc.policy_name || d.aws_policy_arn || d.role_name} document={doc.document} /> : null}
+      </div>
+    </Panel>
   );
 }
 
@@ -262,12 +294,12 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
           <ol className="divide-y divide-(--color-border-subtle)">
             {(events.data?.data ?? []).map((e) => (
               <li key={e.id} className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3 px-4 py-2.5">
-                <span className="text-xs text-(--color-text-muted)" title={e.at}>
-                  {relTime(e.at)}
+                <span className="text-xs text-(--color-text-muted)" title={e.occurred_at}>
+                  {relTime(e.occurred_at)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-(--color-text)">{e.message || e.kind}</span>
-                  <span className="block text-xs text-(--color-text-muted)">{e.actor_kind === "system" ? "AuthSec" : e.actor_name || "A member"}</span>
+                  <span className="block text-[13px] text-(--color-text)">{eventLabel(e)}</span>
+                  <span className="block text-xs text-(--color-text-muted)">{e.actor_kind === "system" ? "AuthSec" : "A member"}</span>
                 </span>
               </li>
             ))}

@@ -19,11 +19,6 @@ function payloadString(e: GovEventView, key: string): string | null {
   return typeof v === "string" && v ? v : null;
 }
 
-function payloadUuid(e: GovEventView, key: string): string | null {
-  const v = payloadString(e, key);
-  return isUuid(v) ? v : null;
-}
-
 /** The AWS request id of a mutating call's answer (`attempt.completed`), when the event carries one. */
 export function requestIdOf(e: GovEventView): string | null {
   return payloadString(e, "request_id");
@@ -42,25 +37,22 @@ export interface EventLink {
 
 /**
  * Where each object an event names can be opened in Policy. Only objects with
- * an id the event actually carries get a link; the routes are the Policy route
- * map (policy detail, deployment detail, review, findings drawer).
+ * an id the event actually carries get a link. With the one access-policy
+ * feature there is a single destination — the policy detail — which also holds
+ * the version history, deployments and events; there are no standalone
+ * deployment, review or findings screens any more.
  */
 export function eventLinks(e: GovEventView): EventLink[] {
   const links: EventLink[] = [];
-  if (e.policy_id) links.push({ key: "policy", label: "Policy", to: `/iga/policy/policies/${e.policy_id}` });
+  if (e.policy_id) links.push({ key: "policy", label: "Policy", to: `/iga/policy/${e.policy_id}` });
   if (e.version_id && e.policy_id) {
     const no = e.payload?.version_no;
     links.push({
       key: "version",
       label: typeof no === "number" ? `Version ${no}` : "Version",
-      to: `/iga/policy/policies/${e.policy_id}/versions`,
+      to: `/iga/policy/${e.policy_id}`,
     });
   }
-  const deployment = e.deployment_id ?? payloadUuid(e, "deployment_id");
-  if (deployment) links.push({ key: "deployment", label: "Deployment", to: `/iga/policy/deployments/${deployment}` });
-  const review = payloadUuid(e, "review_id");
-  if (review) links.push({ key: "review", label: "Review", to: `/iga/policy/reviews/${review}` });
-  if (e.finding_id) links.push({ key: "finding", label: "Finding", to: `/iga/policy/findings?finding=${e.finding_id}` });
   return links;
 }
 
