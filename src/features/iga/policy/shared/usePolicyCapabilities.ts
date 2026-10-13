@@ -38,10 +38,10 @@ export function usePolicyCapabilities(ws: string): PolicyCaps {
     state,
     reason: caps?.reason ?? (failure?.kind === "unavailable" ? failure.reason ?? null : null),
     caps,
-    feature: (name) => state === "on" && (name === "access_policies" ? caps?.access_policies?.available === true : caps?.[name] === true),
+    feature: (name) => state === "on" && (name === "access_policies" ? accessPolicies(caps).on : caps?.[name] === true),
     featureReason: (name) =>
       name === "access_policies"
-        ? caps?.access_policies?.reason ?? (caps?.access_policies ? null : "Access policies are switched off on this server (IGA_POLICY_R2).")
+        ? accessPolicies(caps).reason ?? (caps?.access_policies !== undefined ? null : "Access policies are switched off on this server (IGA_POLICY_R2).")
         : caps?.reasons?.[name] ?? null,
     providerSupported: (p) => state === "on" && caps?.providers?.[p] === "supported",
     providerReason: (p) => caps?.provider_reasons?.[p] ?? null,

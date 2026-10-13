@@ -1175,8 +1175,12 @@ export interface PolicyCapabilities {
   iac: boolean;
   enforcement: boolean;
   slack: boolean;
-  /** Block or allow roles on a resource for a time. Absent while IGA_POLICY_R2 is off or on a backend without it. */
-  access_policies?: { available: boolean; reason: string | null };
+  /**
+   * Block or allow roles on a resource for a time. Absent while IGA_POLICY_R2 is
+   * off or on a backend without it. The shipped backend sends `{available, reason}`;
+   * a boolean is accepted too so an older build (staging) still reads correctly.
+   */
+  access_policies?: { available: boolean; reason?: string | null } | boolean;
   reasons: Record<string, string>;
 }
 
