@@ -7,7 +7,8 @@
  * product switcher in the bottom-left user menu.
  *
  * Four destinations, one per task (SPEC-console-revamp.md): connect, find,
- * decide, review. Policy and Logs are previews and say so — until the policy
+ * decide, review. Only Connections and Discovery are shown for now; Policy and
+ * Logs are commented out of NAV below. Policy and Logs are previews and say so — until the policy
  * product is on (SPEC-iga-phase3-policy.md §9): then both are real and drop the tag. Object pages
  * (workloads, identities, resources, a connection's detail) belong to the
  * destination that opens them, so it stays highlighted on them.
@@ -15,7 +16,8 @@
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Cable, Radar, Scale, ScrollText, type LucideIcon } from "lucide-react";
+import { Cable, Radar, type LucideIcon } from "lucide-react";
+// import { Scale, ScrollText } from "lucide-react"; // for the Policy and Logs entries below
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -51,8 +53,11 @@ const NAV: IgaNavItem[] = [
     icon: Radar,
     activeFor: ["/iga/estate", "/iga/identities", "/iga/resources", "/iga/external-principals", "/iga/sightings", "/iga/k8s"],
   },
-  { title: "Policy", url: "/iga/policy", icon: Scale, tag: "Preview" },
-  { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },
+  // Policy and Logs are hidden from the sidebar for now. Their routes still work:
+  // /iga/policy/* and /iga/logs are reachable by URL. Uncomment these two entries
+  // and the Scale / ScrollText imports above to bring them back.
+  // { title: "Policy", url: "/iga/policy", icon: Scale, tag: "Preview" },
+  // { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },
 ];
 
 export function IgaSidebar({
