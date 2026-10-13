@@ -31,7 +31,7 @@ import {
   PendingWord,
   StatusBlock,
 } from "./ConnectionParts";
-import { ConnectMoreSources, StatusTiles, TableToolbar, type StatusTileKey } from "./ConnectionsListParts";
+import { ConnectMoreSources, TableToolbar } from "./ConnectionsListParts";
 import {
   PROVIDERS,
   actionsOf,
@@ -45,13 +45,11 @@ import {
   providerWord,
   revokeWord,
   scanInFlight,
-  statusFilterOf,
   typeWord,
   type StatusFilterKey,
 } from "./connectionModel";
 import { useAdminAccess } from "./permissions";
 import { ProviderGlyph } from "./ProviderGlyph";
-import { InfoTip } from "../shared/components/InfoTip";
 import { TruncatedId } from "../shared/components/TruncatedId";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
@@ -62,20 +60,6 @@ const POLL_MS = 5_000;
 function searchText(c: Connection): string {
   return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
 }
-
-/** The design's four status tiles; partial coverage counts as needing attention. */
-const TILES: { key: StatusTileKey; label: string }[] = [
-  { key: "connected", label: "Connected" },
-  { key: "attention", label: "Needs attention" },
-  { key: "running", label: "Scanning" },
-  { key: "revoked", label: "Revoked" },
-];
-
-function tileOf(c: Connection): StatusTileKey | null {
-  const f = statusFilterOf(c);
-  return f === "partial" ? "attention" : f === "all" ? null : (f as StatusTileKey);
-}
-
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
@@ -178,15 +162,12 @@ export default function ConnectionsPage() {
   };
 
   // ── Rows ───────────────────────────────────────────────────────────────
-  // An old link's ?status=partial selects the tile it now belongs to.
-  const tile: StatusTileKey | null = status === "all" ? null : status === "partial" ? "attention" : (status as StatusTileKey);
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return all.filter((c) => (!type || c.provider === type) && (!tile || tileOf(c) === tile) && (!q || searchText(c).includes(q)));
-  }, [all, type, tile, search]);
+    return all.filter((c) => (!type || c.provider === type) && (!q || searchText(c).includes(q)));
+  }, [all, type, search]);
 
   const filtered = !!search.trim() || type !== null || status !== "all";
-  const tiles = TILES.map((t) => ({ ...t, count: all.filter((c) => tileOf(c) === t.key).length }));
   const unconnected = PROVIDERS.filter((p) => !all.some((c) => c.provider === p));
   const clearFilters = () => setSearchParams({}, { replace: true });
 
@@ -332,11 +313,6 @@ export default function ConnectionsPage() {
         <span className="inline-flex flex-wrap items-center gap-1">
           Connect your AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organizations so AuthSec can
           discover the identities, agents and permissions inside them.
-          <InfoTip label="What discovery reads">
-            Discovery is read-only. AuthSec reads metadata: identities, roles, policies and the workloads that use them. It
-            does not change anything in a connected source, and it does not read secret values or the data stored in your
-            resources.
-          </InfoTip>
         </span>
       }
       actions={
@@ -372,10 +348,6 @@ export default function ConnectionsPage() {
         onRetry={(c, kind) => (kind === "revoke" ? setRevokeTarget(c) : void run(c, kind))}
         onDismiss={dismiss}
       />
-
-      {/* Doubles as the status filter. */}
-      {/* Only from a list that loaded: never zeros while loading or after a failure. */}
-      {query.data ? <StatusTiles tiles={tiles} active={tile} onPick={(k) => setParam("status", k)} /> : null}
 
       <TableCard>
         <CardContent variant="flush">

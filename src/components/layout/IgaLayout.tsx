@@ -44,7 +44,7 @@ export function IgaLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div data-slot="admin-main-surface" className="flex min-w-0 flex-1 flex-col">
-          <AppHeader hideSearch />
+          <AppHeader />
           <div className="flex-1 overflow-hidden">
             <div
               className="h-full w-full overflow-y-auto scrollbar-hide"

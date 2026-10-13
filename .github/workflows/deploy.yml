@@ -59,18 +59,17 @@ jobs:
       # hypothetical -- it is how this project accumulated its existing
       # diagnostics unnoticed.
       #
-      # The threshold is a ratchet, not a pass: the project carries known
-      # errors, and the rule is that a change must not ADD any. Lower it when
-      # you fix some; never raise it.
-      - name: TypeScript (must not add errors)
+      # The ceiling was 198 while the project carried known errors. They are
+      # all fixed, so the gate is now zero: any error fails the build. Never
+      # raise it to buy time -- fix the error or revert the change.
+      - name: TypeScript (must be clean)
         run: |
           STATUS=0
           npx tsc -p tsconfig.app.json --noEmit > typecheck.log 2>&1 || STATUS=$?
           COUNT=$(grep -cE "error TS" typecheck.log || true)
-          if [ "$STATUS" -ne 0 ] && [ "$COUNT" -eq 0 ]; then
-            cat typecheck.log
-            exit 1
-          fi
+          # A parse error reports as a single diagnostic and hides every other
+          # one, so a clean count is only trustworthy once the program itself
+          # parses. This check is what makes "0 errors" mean something.
           node <<'JS'
           const ts = require("typescript");
           const config = ts.readConfigFile("tsconfig.app.json", ts.sys.readFile);
@@ -79,26 +78,17 @@ jobs:
           const program = ts.createProgram(parsed.fileNames, parsed.options);
           const errors = [...parsed.errors, ...program.getSyntacticDiagnostics()];
           if (errors.length) { console.error(errors); process.exit(1); }
+          console.log(`parsed ${parsed.fileNames.length} files cleanly`);
           JS
-          echo "TypeScript errors: $COUNT (ceiling 198)"
-          # A PARSE error reports as 1 and hides every other diagnostic, so a
-          # suspiciously low count is a warning sign, not a win.
-          if [ "$COUNT" -le 2 ] && [ "$COUNT" -gt 0 ]; then
-            echo "Suspiciously low count — likely a parse error masking the rest:"
-            npx tsc -p tsconfig.app.json --noEmit 2>&1 | head -5
-            exit 1
-          fi
-          if [ "$COUNT" -gt 198 ]; then
-            echo "This change ADDS TypeScript errors. Ceiling is 198."
+          echo "TypeScript errors: $COUNT (ceiling 0)"
+          if [ "$COUNT" -gt 0 ] || [ "$STATUS" -ne 0 ]; then
+            cat typecheck.log
             exit 1
           fi
 
-      # A ratchet, like the TypeScript step above and for the same reason: this
-      # area carries 17 known errors, and a gate that demands they be fixed
-      # before anything can deploy is a gate somebody deletes in week one. The
-      # rule is that a change must not ADD any. Lower the ceiling when you fix
-      # some; never raise it.
-      - name: ESLint (must not add errors)
+      # Was a ratchet at 17 while those errors stood. They are gone, so this
+      # is a plain gate now. Never raise it to get a deploy out.
+      - name: ESLint (must be clean)
         run: |
           # -f json and sum errorCount. Grepping the human formatter is what
           # made the first version of this step read 0 every time — a ratchet
@@ -111,9 +101,9 @@ jobs:
             exit "$STATUS"
           fi
           COUNT=$(python3 -c "import json; print(sum(f['errorCount'] for f in json.load(open('eslint-report.json'))))")
-          echo "ESLint errors: $COUNT (ceiling 17)"
-          if [ "$COUNT" -gt 17 ]; then
-            echo "This change ADDS ESLint errors. Ceiling is 17."
+          echo "ESLint errors: $COUNT (ceiling 0)"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "ESLint errors must be fixed before deploying."
             npx eslint "src/features/discovery/**/*.{ts,tsx}" "src/app/api/*.ts" || true
             exit 1
           fi

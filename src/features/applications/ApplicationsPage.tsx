@@ -4,12 +4,9 @@
  * banner, metric strip, bespoke table), wired to real data + mutations.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
   ExternalLink,
   KeyRound,
   PlayCircle,
@@ -20,7 +17,6 @@ import {
   Trash2,
   Users,
   Wrench,
-  X,
 } from "lucide-react";
 import { useListApplicationsQuery } from "@/app/api/applicationsApi";
 import { Button } from "@/components/ui/button";
@@ -36,10 +32,6 @@ import { TableCard } from "@/theme/components/cards";
 
 import { DeleteApplicationDialog } from "./components/DeleteApplicationDialog";
 import { computeReadiness, isLaunched } from "./lib/computeReadiness";
-import {
-  computeNextBestAction,
-  nextActionHref,
-} from "./lib/computeNextBestAction";
 import type { Application } from "./types";
 import type { ReadinessState } from "./types";
 
@@ -104,8 +96,6 @@ function lastSignal(application: Application): string {
   return "No runtime signal";
 }
 
-const BANNER_DISMISS_STORAGE_KEY = "authsec.applications.pendingBanner.dismissedFor";
-
 const ROW_ACTIONS: Array<{ label: string; tab: string; icon: typeof ShieldCheck }> = [
   { label: "Open overview", tab: "overview", icon: ExternalLink },
   { label: "Setup", tab: "setup", icon: ShieldCheck },
@@ -136,56 +126,7 @@ export default function ApplicationsPage() {
     );
   }, [rows, query]);
 
-  const counts: BucketCounts = useMemo(() => {
-    const c = { total: rows.length, active: 0, inSetup: 0, blocked: 0 };
-    for (const row of rows) c[bucketRow(row)] += 1;
-    return c;
-  }, [rows]);
-
-  const pendingRows = useMemo(() => rows.filter((row) => bucketRow(row) !== "active"), [rows]);
-  const pendingSignature = useMemo(
-    () => pendingRows.map((r) => r.application.id).sort().join("|"),
-    [pendingRows],
-  );
-
-  const [dismissedSignature, setDismissedSignature] = useState<string | null>(() => {
-    try {
-      return sessionStorage.getItem(BANNER_DISMISS_STORAGE_KEY);
-    } catch {
-      return null;
-    }
-  });
-
-  useEffect(() => {
-    if (dismissedSignature && dismissedSignature !== pendingSignature) {
-      setDismissedSignature(null);
-      try {
-        sessionStorage.removeItem(BANNER_DISMISS_STORAGE_KEY);
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [pendingSignature, dismissedSignature]);
-
-  const handleDismissBanner = () => {
-    setDismissedSignature(pendingSignature);
-    try {
-      sessionStorage.setItem(BANNER_DISMISS_STORAGE_KEY, pendingSignature);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const showBanner = pendingRows.length > 0 && dismissedSignature !== pendingSignature;
-
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
-
-  const metricCells: Array<[keyof BucketCounts, string, string]> = [
-    ["total", "is-total", "applications"],
-    ["active", "is-live", "live"],
-    ["inSetup", "is-setup", "need setup"],
-    ["blocked", "is-blocked", "blocked"],
-  ];
 
   const columns = useMemo<AdaptiveColumn<AppRow>[]>(
     () => [
@@ -302,36 +243,6 @@ export default function ApplicationsPage() {
         </Button>
       }
     >
-      {isLoading ? null : showBanner ? (
-        <TriageBanner
-          pendingRows={pendingRows}
-          blockedCount={counts.blocked}
-          onDismiss={handleDismissBanner}
-        />
-      ) : counts.total > 0 ? (
-        <div className="banner banner--success">
-          <span className="bn-icon">
-            <CheckCircle2 className="icon" />
-          </span>
-          <div className="bn-body">
-            <p className="bn-title">All applications healthy</p>
-            <p className="bn-sub">Runtime policy is active for every launched application.</p>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="metric-strip">
-        {metricCells.map(([key, cls, label]) => {
-          const val = isLoading ? 0 : counts[key];
-          return (
-            <div className={cls === "is-total" ? "metric" : `metric${val === 0 ? " is-zero" : ""}`} key={cls}>
-              <span className={`m-dot ${cls}`} />
-              <span className="m-val">{isLoading ? "—" : val}</span>
-              <span className="m-label">{label}</span>
-            </div>
-          );
-        })}
-      </div>
 
       <ConsoleFilterBar
         search={query}
@@ -383,67 +294,3 @@ export default function ApplicationsPage() {
   );
 }
 
-function TriageBanner({
-  pendingRows,
-  blockedCount,
-  onDismiss,
-}: {
-  pendingRows: AppRow[];
-  blockedCount: number;
-  onDismiss: () => void;
-}) {
-  const navigate = useNavigate();
-  const ordered = useMemo(
-    () =>
-      [...pendingRows].sort(
-        (a, b) => (bucketRow(a) === "blocked" ? 0 : 1) - (bucketRow(b) === "blocked" ? 0 : 1),
-      ),
-    [pendingRows],
-  );
-  const visible = ordered.slice(0, 3);
-  const overflow = ordered.length - visible.length;
-  const total = pendingRows.length;
-
-  return (
-    <div className="banner banner--triage">
-      <span className="bn-icon">
-        <AlertTriangle className="icon" />
-      </span>
-      <div className="bn-body">
-        <p className="bn-title">
-          {total} application{total > 1 ? "s" : ""} need attention
-          {blockedCount > 0 ? ` · ${blockedCount} blocked` : ""}
-        </p>
-        <p className="bn-sub">Finish setup or clear runtime risk before launch.</p>
-        <div className="triage-list">
-          {visible.map((row) => {
-            const a = row.application;
-            const blocked = bucketRow(row) === "blocked";
-            const nba = computeNextBestAction(a, row.readiness);
-            return (
-              <div
-                className="triage-item"
-                key={a.id}
-                onClick={() => navigate(nextActionHref(a.id, nba))}
-              >
-                <span className={`badge badge--${blocked ? "danger" : "warning"}`}>
-                  <span className="bdot" />
-                  {readinessCopy(row)}
-                </span>
-                <span className="ti-name">{a.name}</span>
-                <span className="ti-uri">{a.resource_uri}</span>
-                <span className="ti-cta">
-                  {blocked ? "Resolve" : "Continue setup"} <ArrowRight className="icon-sm" />
-                </span>
-              </div>
-            );
-          })}
-          {overflow > 0 && <div className="triage-more">…and {overflow} more need attention</div>}
-        </div>
-      </div>
-      <button className="icon-btn bn-dismiss" aria-label="Dismiss" onClick={onDismiss}>
-        <X className="icon-sm" />
-      </button>
-    </div>
-  );
-}

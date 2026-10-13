@@ -23,62 +23,6 @@ import { ProviderGlyph } from "./ProviderGlyph";
 /** The four tiles of the design. "Needs attention" also counts partial coverage. */
 export type StatusTileKey = "connected" | "attention" | "running" | "revoked";
 
-const TILE_DOT: Record<StatusTileKey, string> = {
-  connected: "bg-(--color-success)",
-  attention: "bg-(--color-warning)",
-  running: "bg-(--color-primary)",
-  revoked: "bg-(--color-text-subtle)",
-};
-
-export function StatusTiles({
-  tiles,
-  active,
-  onPick,
-}: {
-  tiles: { key: StatusTileKey; label: string; count: number }[];
-  active: StatusTileKey | null;
-  onPick: (key: StatusTileKey | null) => void;
-}) {
-  return (
-    <div role="group" aria-label="Filter by status" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {tiles.map((t) => {
-        const on = active === t.key;
-        // A zero is not news: its number and dot go quiet so the tiles that
-        // need attention are the ones the eye lands on.
-        const zero = t.count === 0;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onPick(on ? null : t.key)}
-            className={cn(
-              "flex min-h-11 flex-col items-start gap-2 rounded-lg border px-4 py-3 text-left transition-colors",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)",
-              on
-                ? "border-(--color-primary) bg-(--color-primary-soft)"
-                : "border-(--color-border-subtle) bg-(--color-surface-raised) hover:border-(--color-border-strong) hover:bg-(--color-surface-subtle)/50",
-            )}
-          >
-            <span className="flex items-center gap-2 text-[13px] text-(--color-text-secondary)">
-              <span aria-hidden="true" className={cn("size-2 rounded-full", zero ? "bg-(--color-border-strong)" : TILE_DOT[t.key])} />
-              {t.label}
-            </span>
-            <span
-              className={cn(
-                "text-2xl font-semibold leading-none tracking-tight tabular-nums",
-                zero ? "font-normal text-(--color-text-muted)" : "text-(--color-text)",
-              )}
-            >
-              {t.count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /* --------------------------------- table toolbar --------------------------------- */
 
 export function TableToolbar({
