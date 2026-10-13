@@ -77,7 +77,6 @@ const OwnerReviewPage = React.lazy(() => import("./features/iga/policy/reviews/O
 const DeploymentsPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentsPage"));
 const DeploymentDetailPage = React.lazy(() => import("./features/iga/policy/deployments/DeploymentDetailPage"));
 const PolicySetupPage = React.lazy(() => import("./features/iga/policy/setup/SetupPage"));
-const LegacyPoliciesPage = React.lazy(() => import("./features/iga/policy/legacy/LegacyPoliciesPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
@@ -931,16 +930,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <PolicySetupPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/legacy"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <LegacyPoliciesPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

@@ -35,6 +35,7 @@ import {
   trust,
 } from "../shared";
 import { R1A_SCOPE, blockerText, dateTimeText, reviewStatus } from "../reviews/reviewCopy";
+import { dedicatedIdentityText } from "../plans/planCopy";
 import { forwardPlans, routeLine, undoLine, undoPlans } from "./approvalCopy";
 
 export function Block({ title, children }: { title: string; children: ReactNode }) {
@@ -71,10 +72,11 @@ export function SummaryBlock({ version, plans, review }: { version: GovVersionVi
   let headline: ReactNode;
   if (intent.kind === "dedicated_identity") {
     headline = (
-      <>
-        Moves a workload from the shared role to a new role named <span className="font-medium">{intent.new_role.name}</span>. This changes which role the workload runs as; the new role is created
-        with the permissions listed in the plans.
-      </>
+      dedicatedIdentityText(fwd[0]) ?? (
+        <>
+          Moves a workload from the shared role to a new role named <span className="font-medium">{intent.new_role.name}</span>.
+        </>
+      )
     );
   } else if (intent.kind === "remove_control") {
     headline = (

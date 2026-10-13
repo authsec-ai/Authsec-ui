@@ -642,7 +642,14 @@ export interface GovPolicyView {
   status: GovVersionStatus | null;
   /** `1 role` | `N roles`. */
   scope_summary: string;
-  /** Never set by the current code (always null). */
+  /**
+   * Where the policy stands, one server definition for the list, its tiles
+   * and the detail (iga_gov_authoring_service.go `policyStageSQL`).
+   */
+  stage: GovPolicyStage;
+  /** The newest current deployment's delivery; null before one. */
+  delivery: "direct" | "iac_pr" | "export" | null;
+  /** The newest verification of a live control's deployment; null before one. */
   last_verified_at: string | null;
   next_action: GovNextAction;
   created_by: string;
@@ -693,8 +700,27 @@ export interface GovPolicyVersion {
   status_changed_at: string;
 }
 
+/** `GovPolicyStages` (iga_gov_authoring_service.go): in the order the server defines them. */
+export const GOV_POLICY_STAGES = [
+  "archived",
+  "drifted",
+  "failed",
+  "canary",
+  "observing",
+  "partial",
+  "verified",
+  "applying",
+  "in_review",
+  "approved",
+  "draft",
+  "idle",
+] as const;
+export type GovPolicyStage = (typeof GOV_POLICY_STAGES)[number];
+
 export interface GovPolicyListMeta {
   next_cursor: string | null;
+  /** Policies per stage across the workspace (archived excluded), whatever page or filter is shown. List only. */
+  stage_tiles?: Partial<Record<GovPolicyStage, number>>;
 }
 
 export interface GovPolicyListArgs extends WsArg, PageArgs {
@@ -702,6 +728,7 @@ export interface GovPolicyListArgs extends WsArg, PageArgs {
   provider?: GovProvider;
   /** The current version's status. */
   status?: GovVersionStatus;
+  stage?: GovPolicyStage;
   lifecycle?: GovPolicyLifecycle;
   /** Case-insensitive name prefix. */
   q?: string;
@@ -726,13 +753,14 @@ export interface GovReasonBody {
 /**
  * `POST /proposals` (services.ProposalRequest, iga_gov_authoring_service.go:1258):
  * EXACTLY ONE of `from`, `template`+`keys`, `context` (else 400 invalid_parameter
- * `body`). `template` must be `right_size_services`. `name` is generated when
+ * `body`). `template` is `right_size_services`, or `dedicated_identity` with `isolation`. `name` is generated when
  * absent (an explicit duplicate is 409 policy_name_taken); `delivery` is chosen
  * by the server when absent (`export` when a customer-owned boundary exists).
  */
 export interface GovProposalRequest {
   from?: { finding_ids: string[] };
-  template?: "right_size_services";
+  template?: "right_size_services" | "dedicated_identity";
+  isolation?: { workload: GovDedicatedWorkload; role_name: string; role_path?: string };
   /** 1..50 keys, each exactly one form (iga_gov_targets.go:143). */
   keys?: GovTargetKey[];
   context?: { object_id: string };
@@ -794,8 +822,8 @@ export interface GovProposalRecommendation {
 /** services.ProposalResult (iga_gov_authoring_service.go:1322): the draft that was created, plus the recommendation. */
 export interface GovProposalResult {
   policy: { id: string; name: string; family: GovPolicyFamily; provider: GovProvider };
-  /** The version is version 1, status `draft`; `intent` is the canonical right_size_services intent. */
-  version: { id: string; no: number; status: GovVersionStatus; intent: GovRightSizeIntent; intent_hash: string };
+  /** The version is version 1, status `draft`; `intent` is the canonical right-sizing or dedicated-identity intent. */
+  version: { id: string; no: number; status: GovVersionStatus; intent: GovRightSizeIntent | GovDedicatedIdentityIntent; intent_hash: string };
   /** The first target's bundle; `evidence_targets` lists every target's. */
   evidence: GovProposalEvidence;
   evidence_targets: GovProposalEvidence[];
@@ -1179,6 +1207,8 @@ export interface GovReviewVersionRef {
   version_no: number;
   status: GovVersionStatus;
   created_by: string;
+  /** The author's display name, served with the review so an owner who cannot list members still reads who asked. */
+  created_by_name?: string;
   intent_hash: string;
 }
 
@@ -1191,7 +1221,18 @@ export interface GovReviewVersionRef {
 export type GovReviewGate = { passed: true } | { passed: false; code: string; message: string };
 
 /** services.GovReviewView (iga_gov_owner_review_service.go:1349): GET /reviews/:id. */
+/** services.GovReviewDeployment: a forward deployment of the reviewed version. */
+export interface GovReviewDeployment {
+  id: string;
+  kind: string;
+  state: string;
+  delivery: string;
+  role_arn: string;
+}
+
 export interface GovReviewView {
+  /** The forward deployments of the reviewed version; an owner needs no governance:read to report on them. */
+  deployments: GovReviewDeployment[];
   id: string;
   status: GovReviewStatus;
   deadline_at: string;
@@ -1242,6 +1283,8 @@ export interface GovReviewListArgs extends WsArg, PageArgs {
   /** Only the reviews the caller was asked in. Needs a verified member session; without it the list needs governance:read. */
   mine?: boolean;
   status?: GovReviewStatus[];
+  /** `due`: open reviews first by deadline, then closed ones; global across pages. Default newest first. */
+  order?: "due";
 }
 
 /**
@@ -1942,7 +1985,7 @@ export const igaPolicyAuthoringApi = baseApi.injectEndpoints({
     getGovReview: b.query<GovReviewView, { id: string } & WsArg>({
       query: ({ id }) => ({ url: `${POLICY_BASE}/reviews/${enc(id)}` }),
       transformResponse: (res: PolicyEnvelope<GovReviewView, Record<string, never>>) => res.data,
-      providesTags: (_r, _e, { id }) => [tag("IgaGovReview", id)],
+      providesTags: (_r, _e, { id }) => [tag("IgaGovReview", id), tag("IgaGovDeployment", ALL)],
     }),
 
     /**

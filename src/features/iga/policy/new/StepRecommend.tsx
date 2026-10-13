@@ -148,7 +148,7 @@ export function StepRecommend({ ws, session, intent, onIntent, roles, rolesLoadi
               {independent
                 .map((g) => `${g.services.join(", ")} ${g.services.length === 1 ? "is" : "are"} also granted by ${arnTail(g.policy_arn)} (${g.assignment_kind}) on ${nameOfRole(g.role_id)}`)
                 .join("; ")}
-              . The change removes {plural(intent.remove.length, "service")} for the role whichever policy grants {intent.remove.length === 1 ? "it" : "them"}. Those grants stay declared; AuthSec revokes nothing.
+              . The change removes {plural(intent.remove.length, "service")} for the role whichever policy grants {intent.remove.length === 1 ? "it" : "them"}. The original grants remain declared; the boundary restricts these services.
             </>
           }
         />
@@ -184,8 +184,8 @@ export function StepRecommend({ ws, session, intent, onIntent, roles, rolesLoadi
           )}
         </Panel>
 
-        <Panel title="Keep" count={intent.retain.length} description="Stays allowed. AuthSec only removes what has a qualified basis.">
-          {intent.retain.length === 0 ? <p className="text-[13px] text-(--color-text-muted)">Nothing is listed as kept: the role has no other service.</p> : null}
+        <Panel title="Keep" count={intent.retain.length} description="Unchanged by this proposal. Existing AWS policies and constraints still determine access.">
+          {intent.retain.length === 0 ? <p className="text-[13px] text-(--color-text-muted)">No retained services are listed in the available evidence. This does not establish that the role has no other access.</p> : null}
           <ul className="divide-y divide-(--color-border-subtle)">
             {intent.retain.map((r) => (
               <li key={r.service} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-[13px]">

@@ -14,12 +14,11 @@
 import { Link } from "react-router-dom";
 
 import { useListGovApprovalsQuery, useListGovReviewsQuery } from "@/app/api/igaPolicyAuthoringApi";
-import { needsOperator, useListGovDeploymentsQuery } from "@/app/api/igaPolicyDeploymentsApi";
+import { useListGovDeploymentsQuery } from "@/app/api/igaPolicyDeploymentsApi";
 import { StatusBadge } from "@/components/console/status";
 import { Panel } from "@/features/iga/shared/components/Panel";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { LegacyPoliciesNotice } from "../legacy/LegacyPoliciesNotice";
 import { ReadinessPanel } from "../readiness/ReadinessPanel";
 import {
   PolicyLoadFailure,
@@ -76,7 +75,7 @@ function NeedsADecision({ ws }: { ws: string }) {
   const approve = usePolicyPermission("governance:approve");
   const approvals = useListGovApprovalsQuery({ ws, status: "pending", limit: LOOK }, { skip: !approve.offered || !ready });
   const reviews = useListGovReviewsQuery({ ws, mine: true, status: ["open", "reopened"], limit: LOOK }, { skip: !ready });
-  const deployments = useListGovDeploymentsQuery({ ws, limit: 200 });
+  const deployments = useListGovDeploymentsQuery({ ws, attention: true, limit: 200 });
 
   const approvalsFailure = classifyPolicyError(approvals.error);
   // A 403 permission denial is "your role cannot approve", not a failure; the nav hides Approvals once marked.
@@ -88,7 +87,7 @@ function NeedsADecision({ ws }: { ws: string }) {
   const approvalRows = approvals.data?.data ?? [];
   const reviewRows = reviews.data?.data ?? [];
   const overdue = reviewRows.filter((r) => r.overdue).length;
-  const attention = (deployments.data?.data ?? []).filter((d) => needsOperator(d));
+  const attention = deployments.data?.data ?? [];
   const moreDeployments = !!deployments.data?.meta.next_cursor;
   const unresolved = attention.filter((d) => d.state === "outcome_unresolved").length;
 
@@ -232,7 +231,6 @@ export default function PolicyOverviewPage() {
         </Link>
       }
     >
-      <LegacyPoliciesNotice ws={ws} />
       <ReadinessPanel ws={ws} />
       <NeedsADecision ws={ws} />
       <PolicyMetricsStrip ws={ws} />

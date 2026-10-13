@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Panel } from "@/features/iga/shared/components/Panel";
-import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyLoadFailure, classifyPolicyError, usePolicyAction, usePolicyPermission } from "../shared";
@@ -88,12 +87,7 @@ function TargetsForm({ settings, onReload }: { settings: GovSettings; onReload: 
           Email and webhook targets cannot be changed on this server{n.reason ? `: ${n.reason}` : ""}.
         </p>
       ) : null}
-      {n.source === "legacy_copy" ? (
-        <p className="text-xs text-(--color-text-muted)">
-          These were copied from your previous governance settings{n.copied_from_legacy_at ? <> on <Timestamp iso={n.copied_from_legacy_at} /></> : ""}. A
-          webhook secret is not copied: set one again if the receiver checks it.
-        </p>
-      ) : null}
+
 
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">

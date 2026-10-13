@@ -34,7 +34,7 @@ import type {
   IGAGovVerification,
 } from "@/app/api/igaPolicyDeploymentsApi";
 
-import { humanize, plural, roleNameOf, shortHash, type StateView } from "../shared";
+import { humanize, plural, relTime, roleNameOf, shortHash, type StateView } from "../shared";
 
 /* --------------------------------- time ---------------------------------- */
 
@@ -261,7 +261,7 @@ export function nextActionSentence(d: IGAGovDeployment, ctx: NextActionContext =
       return why ? `Waiting to start: ${why}. Nothing needs to be done unless that changes.` : "Queued. AuthSec starts it shortly; nothing is needed from you.";
     }
     case "blocked":
-      return "It did not run: AWS or the approval changed since this was approved. Review the new plan; it needs a new approval.";
+      return `AWS changed since approval${d.state_reason ? `: ${humanize(d.state_reason).toLowerCase()}` : ""}. Review the new plan.`;
     case "applying":
       return "AuthSec is changing AWS now.";
     case "outcome_unknown":
@@ -278,14 +278,16 @@ export function nextActionSentence(d: IGAGovDeployment, ctx: NextActionContext =
         : `Waiting for your pipeline or you to apply the change${d.apply_deadline_at ? `; due ${clock(d.apply_deadline_at)}` : ""}. AuthSec checks at every scan.`;
     case "applied_unverified":
       return d.verify_deadline_at && new Date(d.verify_deadline_at) < now
-        ? `Applied, but verification is overdue (due ${clock(d.verify_deadline_at)}): no scan has confirmed it. This is not verified.`
+        ? `Applied ${relTime(d.applied_at)} — no scan has published since. This is not verified.`
         : `Applied. AuthSec is checking AWS and the next published scan${d.verify_deadline_at ? `; due ${clock(d.verify_deadline_at)}` : ""}.`;
     case "verified":
       return "The boundary in AWS matches the approved plan. That proves the boundary state, not that a service is unreachable or that applications still work; those are reported separately.";
     case "failed":
       return `The change did not complete as approved${d.state_reason ? `: ${humanize(d.state_reason)}` : ""}. Nothing further runs on this role until it is reviewed.`;
     case "drifted":
-      return "AWS no longer matches what AuthSec applied. Review the difference before changing this role again.";
+      return d.drift_accepted_at
+        ? "AWS no longer matches what AuthSec applied, and this was accepted. AuthSec leaves the role as it is."
+        : "AWS no longer matches what AuthSec applied. Re-apply the change (a new plan and approval) or accept the drift.";
     case "superseded":
       return "A newer deployment replaced this one. No action needed.";
     case "undone":
@@ -321,7 +323,7 @@ export function nextActionShort(d: IGAGovDeployment, now: Date = new Date()): st
     case "failed":
       return "Review the failure";
     case "drifted":
-      return "Review the difference";
+      return d.drift_accepted_at ? "None" : "Re-apply or accept the drift";
     case "superseded":
     case "undone":
       return "None";

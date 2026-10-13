@@ -1,5 +1,5 @@
 /**
- * The confirm dialog every Setup and legacy action goes through (SPEC-iga-phase3-
+ * The confirm dialog for Policy Setup actions (SPEC-iga-phase3-
  * policy.md §9.3 S9, §9.5): says exactly what will happen, keeps the server's
  * refusal inline under the buttons, and cannot be dismissed while the request
  * is in flight (a half-sent revoke must not look cancelled).

@@ -129,7 +129,7 @@ export default function OwnerReviewPage() {
   const inReview = review.version.status === "in_review";
   const answering = review.viewer_is_owner && reviewTakesAnswers(review.status) && inReview;
 
-  const requester = review.responses.find((r) => r.user_id === review.version.created_by)?.name;
+  const requester = review.version.created_by_name || review.responses.find((r) => r.user_id === review.version.created_by)?.name;
   const removed = [...new Set(review.targets.flatMap((t) => t.removed.map((r) => r.service)))].sort();
   const retained = [...new Set(review.targets.flatMap((t) => t.retained.map((r) => r.service)))].sort();
   const intent = version.data?.intent;
@@ -365,7 +365,7 @@ export default function OwnerReviewPage() {
 
         <ReviewAdminControls review={review} />
 
-        <ReviewHealthReports ws={ws} policyId={review.version.policy_id} versionNo={review.version.version_no} />
+        <ReviewHealthReports deployments={review.deployments} />
 
         <Panel title="What happens next">
           <NextSteps review={review} />

@@ -6,8 +6,10 @@
  * What the list can truthfully say.
  * - The tiles and status counts are the server's summary of the evaluated
  *   revision across every status, never counted from the rows on this page.
- * - A page is a page of FINDINGS (an unused service is one finding), so a
- *   role whose findings straddle two pages appears on both; the card says so.
+ * - A page is a page of ROLES (the server groups and pages by role), so a
+ *   role's findings are never split across pages; the card names the workloads
+ *   that run as the role. `category` limits the list to the roles of one
+ *   readiness category on Overview.
  * - Evidence ("3 of 14 used") and owners are read per role as its card comes
  *   into view; a read that fails leaves its cell empty and says nothing false.
  * - Filters live in the URL. A cursor belongs to one filter set and one
@@ -31,6 +33,7 @@ import {
   useListGovFindingsByRoleQuery,
   type GovFinding,
   type GovObjectOwnership,
+  type GovReadinessCategory,
   type GovRevMeta,
   type GovRoleGroup,
 } from "@/app/api/igaPolicyReadsApi";
@@ -65,6 +68,7 @@ import {
   ACTIONABLE_STATUSES,
   KIND_ORDER,
   KIND_TILE,
+  READINESS_CATEGORY_LABEL,
   bucketActivity,
   coverageHref,
   newPolicyHref,
@@ -107,6 +111,7 @@ function FindingsView() {
   const sev = parseSeverity(params.get("severity"));
   const conf = parseConfidence(params.get("confidence"));
   const account = params.get("account") ?? "";
+  const category = params.get("category") ?? "";
   const q = params.get("q") ?? "";
   const identityId = params.get("identity_id") ?? "";
   const workloadId = params.get("workload_id") ?? "";
@@ -136,7 +141,7 @@ function FindingsView() {
   }, [typed]);
 
   // A cursor belongs to one filter set.
-  const filterKey = [kind, status, sev, conf, account, q, identityId, workloadId].join("|");
+  const filterKey = [kind, status, sev, conf, account, category, q, identityId, workloadId].join("|");
   const [paging, setPaging] = useState<{ key: string; stack: string[] }>({ key: filterKey, stack: [] });
   const stack = paging.key === filterKey ? paging.stack : [];
   const cursor = stack[stack.length - 1];
@@ -150,6 +155,7 @@ function FindingsView() {
     severity: sev ? [sev] : undefined,
     confidence: conf ? [conf] : undefined,
     account: account || undefined,
+    category: category || undefined,
     q: q || undefined,
     identity_id: identityId || undefined,
     workload_id: workloadId || undefined,
@@ -169,7 +175,7 @@ function FindingsView() {
   const meta: GovRevMeta | undefined = list.currentData?.meta;
   const next = meta?.next_cursor ?? null;
   const findingsOnPage = groups.reduce((n, g) => n + g.findings.length, 0);
-  const filtered = !!(kind || status || sev || conf || account || q || identityId || workloadId);
+  const filtered = !!(kind || status || sev || conf || account || category || q || identityId || workloadId);
   const sum = summary.data?.data;
   const evaluated = meta?.evaluated_rev ?? null;
   const neverEvaluated = !!meta && evaluated === null;
@@ -267,10 +273,24 @@ function FindingsView() {
             ) : null}
           </div>
 
+          {category ? (
+            <p className="text-xs text-(--color-text-muted)">
+              Showing the findings of the roles AuthSec counts as &ldquo;{READINESS_CATEGORY_LABEL[category as GovReadinessCategory] ?? humanize(category)}&rdquo; on Overview. The counts above cover every role.{" "}
+              <button className="font-medium text-(--color-primary-text) hover:underline" onClick={() => setParam("category", null)}>
+                Show every role
+              </button>
+            </p>
+          ) : null}
+
           {identityId || workloadId ? (
             <p className="text-xs text-(--color-text-muted)">
               Showing findings for one {identityId ? "role" : "workload"}.{" "}
-              <button className="font-medium text-(--color-primary-text) hover:underline" onClick={() => { setParam("identity_id", null); setParam("workload_id", null); }}>
+              <button className="font-medium text-(--color-primary-text) hover:underline" onClick={() => {
+                  const next = new URLSearchParams(params);
+                  next.delete("identity_id");
+                  next.delete("workload_id");
+                  setParams(next, { replace: true });
+                }}>
                 Show every role
               </button>
             </p>
@@ -322,7 +342,6 @@ function FindingsView() {
                   ws={ws}
                   group={g}
                   rev={evaluated}
-                  straddles={(i === 0 && stack.length > 0 ? "before" : null) ?? (i === groups.length - 1 && next ? "after" : null)}
                   onOpen={(id) => setParam("finding", id)}
                 />
               ))}
@@ -433,13 +452,11 @@ function RoleCard({
   ws,
   group,
   rev,
-  straddles,
   onOpen,
 }: {
   ws: string;
   group: GovRoleGroup;
   rev: number | null;
-  straddles: "before" | "after" | null;
   onOpen: (id: string) => void;
 }) {
   const { ref, seen } = useInView();
@@ -459,7 +476,10 @@ function RoleCard({
       <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-4 py-2.5">
         <div className="min-w-0">
           <h3 className="truncate text-[13px] font-semibold text-(--color-text)">{name}</h3>
-          <p className="truncate text-xs text-(--color-text-muted)">IAM role{account ? ` · ${account}` : ""}</p>
+          <p className="truncate text-xs text-(--color-text-muted)">
+            IAM role{account ? ` · ${account}` : ""}
+            {group.workload_count > 0 ? ` · runs ${group.workloads.map((w) => w.name).join(", ")}${group.workload_count > group.workloads.length ? ` and ${group.workload_count - group.workloads.length} more` : ""}` : ""}
+          </p>
         </div>
         <p className="text-xs text-(--color-text-muted)">
           Owner:{" "}
@@ -501,11 +521,6 @@ function RoleCard({
         ))}
       </div>
 
-      {straddles ? (
-        <p className="border-t border-(--color-border-subtle) px-4 py-1.5 text-xs text-(--color-text-muted)">
-          More findings for this role may be on the {straddles === "before" ? "previous" : "next"} page.
-        </p>
-      ) : null}
     </section>
   );
 }

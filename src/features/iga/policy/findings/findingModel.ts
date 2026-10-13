@@ -15,6 +15,7 @@ import {
   govFindingDetail,
   type GovActivityEvidence,
   type GovFinding,
+  type GovReadinessCategory,
   type GovFindingKind,
   type GovFindingStatus,
   type GovUnusedServiceDetail,
@@ -272,4 +273,14 @@ export const KIND_TILE: Record<GovFindingKind, string> = {
   missing_owner: "No owner",
   missing_review_date: "No review date",
   activity_not_read: "Activity not read",
+};
+
+/** The readiness categories (§9.3 S0) in words; Findings names the one it is filtered to. */
+export const READINESS_CATEGORY_LABEL: Record<GovReadinessCategory, string> = {
+  direct_eligible: "Ready for AuthSec to apply",
+  iac_only: "Pull request or export only",
+  needs_owner: "Need an owner first",
+  blocked_by_collection: "Blocked by collection gaps",
+  ineligible: "Not eligible",
+  no_change_needed: "No change needed",
 };

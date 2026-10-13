@@ -1,6 +1,6 @@
 /**
- * The `⋯` menu of a policy (SPEC-iga-phase3-policy.md §9.3 S5): Edit (a new
- * version), Pause policy / Resume, Remove AuthSec control…, Archive. An item
+ * The header actions of a policy (SPEC-iga-phase3-policy.md §9.3 S5): a Pause /
+ * Resume button, and the `⋯` menu: Edit (a new version), Pause policy / Resume, Remove AuthSec control…, Archive. An item
  * is hidden once the server has refused its permission, and disabled WITH its
  * reason when the policy's state rules it out (Archive while AuthSec still
  * controls a role). Each outward action confirms in a dialog that says what it
@@ -56,6 +56,11 @@ export function PolicyMenu({
 
   return (
     <>
+      {enforce.offered ? (
+        <Button variant="outline" onClick={() => setDialog(policy.lifecycle === "paused" ? "resume" : "pause")}>
+          {policy.lifecycle === "paused" ? "Resume" : "Pause"}
+        </Button>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon" aria-label="Policy actions">

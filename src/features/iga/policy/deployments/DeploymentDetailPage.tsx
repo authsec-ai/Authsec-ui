@@ -3,11 +3,11 @@
  * "Deployments", §9.7 states and copy): what happened to one role, what is and
  * is not proven, and the one next step.
  *
- * Reads `GET /deployments/:id` (services.GovDeploymentDetail). It carries
- * neither the policy, the version number nor the role, so those come from the
- * list row (`useDeploymentRow`). There is no pull-request / IaC change object:
- * for awaiting_merge / awaiting_apply the page shows the state, the deadline
- * and the apply-progress evidence and says a link is not available.
+ * Reads `GET /deployments/:id` (services.GovDeploymentDetail): the policy,
+ * version and role it belongs to (`context`), the pull request of an iac_pr
+ * delivery (`iac_change`), and the role-only recovery plans. The list row
+ * (`useDeploymentRow`) supplies only the policy's other deployments, which
+ * Undo needs to know whether this is the latest.
  *
  * Boundary verification, application health, unexpected denials and the
  * observed restriction are four lines with their own evidence; the boundary
@@ -45,6 +45,7 @@ import {
   VerificationPanel,
 } from "./DeploymentSections";
 import { ExportPanel } from "../plans/ExportPanel";
+import { DriftPanel } from "./DriftPanel";
 import { OutcomePanel, StuckApplyingPanel } from "./OutcomePanel";
 import { HealthReportDialog } from "./HealthReportDialog";
 import { UndoDialog } from "./UndoDialog";
@@ -72,7 +73,7 @@ export default function DeploymentDetailPage() {
   const detail = query.data;
   useEffect(() => setLive(isLiveState(detail?.deployment.state)), [detail?.deployment.state]);
 
-  const ctx = useDeploymentRow(ws, id, policyHint);
+  const ctx = useDeploymentRow(ws, id, detail?.context.policy_id ?? policyHint);
   const nameOf = useMemberNames(ws);
   const enforce = usePolicyPermission("governance:enforce");
   const author = usePolicyPermission("governance:author");
@@ -104,11 +105,11 @@ export default function DeploymentDetailPage() {
 
   const d = detail.deployment;
   const row = ctx.row;
-  const pre = detail.plan.precondition as { role_arn?: unknown } | undefined;
-  const arn = row?.role_arn || (typeof pre?.role_arn === "string" ? pre.role_arn : "");
-  const role = roleLabel(arn, row?.role_id);
-  const policyId = row?.policy_id ?? policyHint ?? undefined;
-  const state = deploymentState(d.state);
+  const arn = detail.context.role_arn;
+  const role = roleLabel(arn, detail.context.role_id);
+  const policyId = detail.context.policy_id;
+  const versionNo = detail.context.version_no;
+  const state = deploymentState(d.state, d.delivery);
   const lines = verificationLines(detail);
   const artifactEv = detail.verifications.find((v) => v.dimension === "artifact");
   const progress: GovApplyProgress | undefined =
@@ -121,7 +122,7 @@ export default function DeploymentDetailPage() {
   return (
     <PolicyShell
       title={`${planKind(d.kind)} · ${role}`}
-      description={row ? `Policy version ${row.version_no} · account ${row.account_id}` : "What happened to this role, and what is proven."}
+      description={`${detail.context.policy_name} · version ${versionNo} · account ${detail.context.account_id}`}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {undoable ? (
@@ -164,7 +165,7 @@ export default function DeploymentDetailPage() {
           {policyId ? (
             <Fact label="Policy">
               <Link to={policyHref(policyId, "deployments")} className="text-(--color-primary-text) hover:underline">
-                Open the policy{row ? `, version ${row.version_no}` : ""}
+                {detail.context.policy_name}, version {versionNo}
               </Link>
             </Fact>
           ) : null}
@@ -208,16 +209,17 @@ export default function DeploymentDetailPage() {
         </Facts>
         {!row && !ctx.loading ? (
           <p className="mt-2 text-xs text-(--color-text-muted)">
-            This deployment was not found in the deployments list, so its policy is not shown and Undo is not offered here. Open it from its policy to undo it.
+            This deployment was not found among its policy&apos;s deployments, so Undo is not offered here. Open it from its policy to undo it.
           </p>
         ) : null}
       </Panel>
 
       {unknownOpen ? <OutcomePanel detail={detail} policyId={policyId} roleName={role} /> : null}
+      {d.state === "drifted" ? <DriftPanel detail={detail} policyId={policyId} roleName={role} nameOf={nameOf} /> : null}
       <StuckApplyingPanel detail={detail} policyId={policyId} roleName={role} />
 
       {d.delivery !== "direct" ? <DeliveryPanel detail={detail} progress={progress} /> : null}
-      {d.delivery === "export" && row && d.kind === "apply" ? <ExportPanel ws={ws} policyId={row.policy_id} versionNo={row.version_no} /> : null}
+      {d.delivery === "export" && policyId && versionNo && d.kind === "apply" ? <ExportPanel ws={ws} policyId={policyId} versionNo={versionNo} /> : null}
 
       <VerificationPanel lines={lines} />
 

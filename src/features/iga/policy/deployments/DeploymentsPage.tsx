@@ -1,15 +1,12 @@
 /**
  * Policy › Deployments (SPEC-iga-phase3-policy.md §9.3 S8): every deployment of
- * the workspace across policies, with what needs a person first.
+ * the workspace across policies, newest first with what needs a person first.
  *
- * What the list can truthfully do. `GET /deployments` filters only by
- * policy_id, state, account and kind, and orders `outcome_unresolved` first and
- * then by id (iga_gov_deploy_routes.go ListDeployments): there is no
- * `attention` or `delivery` filter and no newest-first order. So `?attention=1`
- * is a client rule over the rows of the page being shown (`needsOperator`),
- * said as such, and delivery is a column, not a filter. Filters live in the
- * URL; a cursor belongs to one filter set, so changing a filter drops it. A
- * failed read is a banner with Retry, never an empty table.
+ * The server filters (policy, state, kind, account, delivery, attention) and
+ * orders (`outcome_unresolved` first, then newest first, keyset cursor), so a
+ * page is a page of the answer, not of a sample. Filters live in the URL; a
+ * cursor belongs to one filter set, so changing a filter drops it. A failed
+ * read is a banner with Retry, never an empty table.
  */
 
 import { Search } from "lucide-react";
@@ -19,10 +16,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useListGovPoliciesQuery } from "@/app/api/igaPolicyAuthoringApi";
 import {
   GOV_DEPLOYMENT_STATES,
-  needsOperator,
   useListGovDeploymentsQuery,
   type GovDeploymentKind,
   type GovDeploymentState,
+  type GovDelivery,
 } from "@/app/api/igaPolicyDeploymentsApi";
 import { DecisionBanner } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
@@ -33,12 +30,13 @@ import { cn } from "@/lib/utils";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { PolicyLoadFailure, PolicyShell, classifyPolicyError, deploymentState, planKind } from "../shared";
+import { PolicyLoadFailure, PolicyShell, classifyPolicyError, delivery as deliveryView, deploymentState, planKind } from "../shared";
 import { DeploymentsTable } from "./DeploymentsTable";
 import { deploymentHref, isLiveState } from "./deploymentModel";
 
 const PAGE = 25;
 const KINDS: GovDeploymentKind[] = ["apply", "undo", "remove_control", "split", "split_revert"];
+const DELIVERIES: GovDelivery[] = ["direct", "iac_pr", "export"];
 const ACCOUNT_RE = /^\d{12}$/;
 
 const selectClass =
@@ -51,6 +49,7 @@ export default function DeploymentsPage() {
   const state = (params.get("state") ?? "") as "" | GovDeploymentState;
   const kind = (params.get("kind") ?? "") as "" | GovDeploymentKind;
   const account = params.get("account") ?? "";
+  const deliveryParam = (params.get("delivery") ?? "") as "" | GovDelivery;
   const attention = params.get("attention") === "1";
 
   const setParam = (k: string, v: string | null) => {
@@ -64,7 +63,7 @@ export default function DeploymentsPage() {
   const accountValid = account === "" || ACCOUNT_RE.test(account);
 
   // A cursor belongs to one filter set.
-  const filterKey = [state, kind, account].join("|");
+  const filterKey = [state, kind, account, deliveryParam, attention].join("|");
   const [paging, setPaging] = useState<{ key: string; stack: string[] }>({ key: filterKey, stack: [] });
   const stack = paging.key === filterKey ? paging.stack : [];
   const cursor = stack[stack.length - 1];
@@ -76,6 +75,8 @@ export default function DeploymentsPage() {
       cursor,
       state: state || undefined,
       kind: kind || undefined,
+      delivery: deliveryParam || undefined,
+      attention: attention || undefined,
       // The server answers 400 to an account that is not 12 digits: do not send a half-typed one.
       account: account && accountValid ? account : undefined,
     },
@@ -85,11 +86,11 @@ export default function DeploymentsPage() {
 
   const failure = classifyPolicyError(query.error);
   const all = useMemo(() => query.currentData?.data ?? [], [query.currentData]);
-  const rows = useMemo(() => (attention ? all.filter((d) => needsOperator(d, new Date())) : all), [all, attention]);
+  const rows = all;
   const next = query.currentData?.meta.next_cursor ?? null;
   const policyNames = useMemo(() => new Map((policies.data?.data ?? []).map((p) => [p.id, p.name])), [policies.data]);
   const unresolved = all.filter((d) => d.state === "outcome_unresolved");
-  const filtered = !!(state || kind || account || attention);
+  const filtered = !!(state || kind || account || deliveryParam || attention);
   const anyLive = all.some((d) => isLiveState(d.state));
 
   const clear = () => {
@@ -99,10 +100,7 @@ export default function DeploymentsPage() {
 
   const emptyState = attention ? (
     <div className="space-y-2 py-2">
-      <p>
-        Nothing on this page needs attention.
-        {next ? " More deployments exist on the next page." : ""}
-      </p>
+      <p>Nothing needs attention.</p>
       <Button variant="outline" size="sm" onClick={() => setParam("attention", null)}>
         Show every deployment
       </Button>
@@ -188,6 +186,17 @@ export default function DeploymentsPage() {
                       ))}
                     </select>
                   </label>
+                  <label className="flex items-center gap-2 text-[13px] text-(--color-text-muted)">
+                    Delivery
+                    <select value={deliveryParam} onChange={(e) => setParam("delivery", e.target.value || null)} className={selectClass}>
+                      <option value="">All deliveries</option>
+                      {DELIVERIES.map((d) => (
+                        <option key={d} value={d}>
+                          {deliveryView(d)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="relative flex min-w-[200px] max-w-[260px] flex-1 items-center">
                     <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
                     <Input
@@ -235,8 +244,8 @@ export default function DeploymentsPage() {
 
           {attention ? (
             <p className="text-xs text-(--color-text-muted)">
-              Needs attention is checked on this page of {PAGE}: blocked, failed or drifted changes, outcomes AuthSec could not establish, verification
-              past its deadline, and customer applies past theirs. Gate failures are on the policy&apos;s Rollout tab.
+              Needs attention: blocked or failed changes, drift nobody accepted, outcomes AuthSec could not establish, verification past its deadline, and
+              customer applies past theirs. Gate failures are on the policy&apos;s Rollout tab.
             </p>
           ) : null}
           {anyLive ? <p className="text-xs text-(--color-text-muted)">Changes still in progress refresh about every 30 seconds.</p> : null}

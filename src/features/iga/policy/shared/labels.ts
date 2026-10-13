@@ -42,7 +42,14 @@ export const DEPLOYMENT_STATE: Record<string, StateView> = {
   superseded: { label: "Superseded", tone: "neutral", hint: "A newer version replaced this one." },
   undone: { label: "Undone", tone: "neutral", hint: "AuthSec's change was undone." },
 };
-export const deploymentState = (v?: string | null) => view(DEPLOYMENT_STATE, v);
+/** A J1 export waits for the customer's own apply (§9.7), not for a pipeline. */
+const AWAITING_YOUR_APPLY: StateView = {
+  label: "Awaiting your apply",
+  tone: "info",
+  hint: "You apply the exported change yourself. AuthSec checks for it at every scan.",
+};
+export const deploymentState = (v?: string | null, deliveryKind?: string | null) =>
+  v === "awaiting_apply" && deliveryKind === "export" ? AWAITING_YOUR_APPLY : view(DEPLOYMENT_STATE, v);
 
 /** `iga_gov_policy_version.status`. */
 export const VERSION_STATUS: Record<string, StateView> = {
@@ -76,11 +83,28 @@ export const ROLLOUT_STAGE: Record<string, StateView> = {
 };
 export const rolloutStage = (v?: string | null) => view(ROLLOUT_STAGE, v);
 
+/** `GovPolicyView.stage`: where a policy stands (iga_gov_authoring_service.go `policyStageSQL`). */
+export const POLICY_STAGE: Record<string, StateView> = {
+  archived: { label: "Archived", tone: "neutral" },
+  drifted: { label: "Drifted", tone: "warning", hint: "AWS no longer matches what AuthSec applied to a role of this policy." },
+  failed: { label: "Failed", tone: "danger", hint: "A change failed, is blocked, or has an outcome nobody has resolved." },
+  canary: { label: "Canary", tone: "info", hint: "The change is applied to the canary role and being watched." },
+  observing: { label: "Observing", tone: "info", hint: "AuthSec is watching real use before it changes anything." },
+  partial: { label: "Partial", tone: "warning", hint: "Some roles are verified and others are not yet." },
+  verified: { label: "Verified", tone: "success", hint: "Every role's boundary in AWS matches the approved plan." },
+  applying: { label: "Applying", tone: "info", hint: "Changes are being applied or verified." },
+  in_review: { label: "In review", tone: "info", hint: "Owners and an approver are deciding." },
+  approved: { label: "Approved", tone: "success", hint: "Approved; not rolled out yet." },
+  draft: { label: "Draft", tone: "neutral" },
+  idle: { label: "No active version", tone: "neutral" },
+};
+export const policyStage = (v?: string | null) => view(POLICY_STAGE, v);
+
 /** `iga_gov_finding.status`. */
 export const FINDING_STATUS: Record<string, StateView> = {
   open: { label: "Open", tone: "warning" },
   resolved: { label: "Resolved", tone: "success" },
-  mitigated: { label: "Mitigated", tone: "info", hint: "Removed, but a resource policy still grants access the boundary does not limit." },
+  mitigated: { label: "Mitigated", tone: "warning", hint: "Removed, but a resource policy still grants access the boundary does not limit." },
   reopened: { label: "Reopened", tone: "danger" },
   excepted: { label: "Excepted", tone: "neutral" },
   under_review: { label: "Under review", tone: "info", hint: "A proposed change for this finding is being reviewed." },

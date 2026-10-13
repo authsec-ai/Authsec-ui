@@ -370,13 +370,26 @@ export interface GovFinding {
   collection_gap?: GovCollectionGap;
 }
 
-/** services/iga_gov_reads.go:439 `RoleGroup`: `group=role` answers one entry per role. */
+/** A workload that runs as a role (iga_gov_reads.go `GroupWorkload`). */
+export interface GovGroupWorkload {
+  workload_id: GovUuid;
+  name: string;
+  runtime_kind: string;
+}
+
+/**
+ * services/iga_gov_reads.go `RoleGroup`: `group=role` answers one entry per
+ * role and pages by role (a role's findings are never split across pages).
+ */
 export interface GovRoleGroup {
   role_id: string | null;
   identity_account_id: GovUuid | null;
   role_name: string;
   role_arn: string;
   findings: GovFinding[];
+  /** At most five; `workload_count` is the whole count. */
+  workloads: GovGroupWorkload[];
+  workload_count: number;
 }
 
 /** services/iga_gov_reads.go:473. Keys are present only for counted values. */
@@ -914,9 +927,8 @@ export interface GovNotificationSettings {
   /** https only, "" for none. */
   webhook_url: string;
   webhook_secret_set: boolean;
-  /** `default` | `phase3` | `legacy_copy`. */
-  source: "default" | "phase3" | "legacy_copy";
-  copied_from_legacy_at: GovTimestamp | null;
+  /** `default` | `phase3`. */
+  source: "default" | "phase3";
   slack: GovChannelAvailability;
 }
 
@@ -1165,6 +1177,8 @@ export interface GovFindingsFilter {
   severity?: GovSeverity[];
   confidence?: GovConfidence[];
   account?: string;
+  /** A readiness category: only the findings of the roles `GET /readiness` puts in it. */
+  category?: string;
   q?: string;
   identity_id?: GovUuid;
   workload_id?: GovUuid;
@@ -1225,7 +1239,7 @@ export const igaPolicyReadsApi = baseApi.injectEndpoints({
       query: (args) => ({ url: `${POLICY_BASE}/findings${policyQuery(args)}` }),
       providesTags: (res) => findingListTags(res?.data),
     }),
-    /** `group=role`: one entry per role, in first-seen order; a role whose findings straddle two pages appears on both. */
+    /** `group=role`: one entry per role; the page is of roles, so a role is never split across pages. */
     listGovFindingsByRole: builder.query<PolicyEnvelope<GovRoleGroup[], GovRevMeta>, GovFindingsArgs>({
       query: (args) => ({ url: `${POLICY_BASE}/findings${policyQuery({ ...args, group: "role" })}` }),
       providesTags: (res) => findingListTags(res?.data.flatMap((g) => g.findings)),

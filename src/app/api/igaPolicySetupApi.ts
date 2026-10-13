@@ -1,125 +1,10 @@
-/**
- * Policy › Setup and legacy API — the routes the Setup surfaces (S9) and the
- * legacy agent-policy view call. SPEC-iga-phase3-policy.md §3.6 (enforcement
- * stack and self-test), §7.9 (binding and IaC sources), §7.10 (legacy
- * compatibility), §7.11 (Slack), §9.3 S9 (Setup) and §9.5 (legacy view).
- *
- * NOT under `/api/iga/v1/policy`. Each group has its own mount, read from
- * `routes/routes.go` (the `authsec` group is `/authsec`, line 299):
- *
- *   enforcement + IaC  /authsec/discovery/aws/connectors/:id/...   routes.go:1701-1706
- *   Slack              /authsec/integrations/slack/...             routes.go:1519
- *   legacy             /api/iga/v1/legacy/agent-policies/...       routes.go:292
- *
- * Every route here but the legacy ones sits behind the IGA_POLICY gate and
- * answers `503 policy_unavailable` while it is off. The legacy routes are NOT
- * gated by IGA_POLICY (see below). Errors are `{ error: { code, message,
- * detail } }` (`PolicyErrorBody`); the workspace is the token's and is never
- * sent. `ws` in an argument is a client-only cache key.
- *
- * Endpoint -> Go handler (controllers/platform/ unless noted)
- *
- *   GET    /connectors/:id/enforcement                 cloud_enforcement_binding_controller.go:194  Get
- *   POST   /connectors/:id/enforcement/sessions        cloud_enforcement_binding_controller.go:209  StartSession
- *   GET    /connectors/:id/enforcement/sessions/:sid   cloud_enforcement_binding_controller.go:239  GetSession
- *   POST   /connectors/:id/enforcement                 cloud_enforcement_binding_controller.go:263  BindManual
- *   POST   /connectors/:id/enforcement/verify          cloud_enforcement_binding_controller.go:293  Verify
- *   DELETE /connectors/:id/enforcement                 cloud_enforcement_binding_controller.go:313  Revoke
- *   GET    /connectors/:id/iac-sources                 cloud_aws_iac_source_controller.go:96        List
- *   POST   /connectors/:id/iac-sources                 cloud_aws_iac_source_controller.go:110       Create
- *   DELETE /connectors/:id/iac-sources/:sid            cloud_aws_iac_source_controller.go:138       Delete
- *   GET    /integrations/slack/install                 slack_integration_controller.go:131          Install
- *   GET    /integrations/slack/oauth/callback          slack_integration_controller.go:155          OAuthCallback (browser only)
- *   PUT    /integrations/slack/settings                slack_integration_controller.go:231          PutSettings
- *   DELETE /integrations/slack                         slack_integration_controller.go:254          Disconnect
- *   POST   /integrations/slack/link/confirm            slack_integration_controller.go:272          ConfirmLink
- *   GET    /api/iga/v1/policy/settings (Slack block)   iga_gov_policy_controller.go:118 (GetSettings; services/iga_gov_settings_service.go:420)
- *   GET    /api/iga/v1/legacy/agent-policies           legacy_agent_policy_compat_controller.go:185 ListLegacyAgentPolicies
- *   POST   /api/iga/v1/legacy/agent-policies/:id/pause legacy_agent_policy_compat_controller.go:277 PauseLegacyAgentPolicy
- *   DELETE /api/iga/v1/legacy/agent-policies/:id       legacy_agent_policy_compat_controller.go:306 RemoveLegacyAgentPolicy
- *
- * Response structs: services/cloud_enforcement_binding_service.go (329, 510,
- * 1152, 1161), internal/awsenforce/selftest.go:72, services/
- * iga_gov_iac_source_service.go (73-97) with models/iga_gov_ops.go:108,
- * services/slack_integration_service.go (307, 481, 559, 672),
- * models/slack_integration.go, services/iga_gov_settings_service.go:347-366,
- * services/agent_policy_legacy_compat.go (25-70).
- *
- * WHICH ENDPOINT LISTS AWS ACCOUNTS WITH THEIR ENFORCEMENT STATE: none does.
- * `GET /authsec/discovery/connections` (connectionsApi.ts, not redefined
- * here) lists AWS accounts: a connection with `provider: "aws"` has `id` =
- * the cloud connector's id (internal/igaread/connections.go, connCloud:
- * `ID: c.ID`), which is the `:id` of every route here; `native_id` is the
- * 12-digit account id, `name` its display name, `connection.state` its state.
- * Enforcement state is a separate read per account: call
- * `useGetEnforcementBindingQuery(connectionId)` for each AWS row. There is no
- * bulk read and `GET /aws/connectors` carries no enforcement field.
- *
- * WHAT THE SPEC DESCRIBES FOR SETUP THAT THE BACKEND DOES NOT SERVE
- *   1. Slack members' link state. S9 notifications says "member links"; the
- *      only Slack read is the status block of `GET /policy/settings`
- *      (`notifications.slack.status`: connected, team_name,
- *      approvals_channel_id, installed_at, `linked_users` COUNT). There is no
- *      route listing which members are linked, so Setup can show the count
- *      and the confirm-a-link flow, never a member list.
- *   2. No standalone Slack status route. Use `useGetSlackStatusQuery` below,
- *      which reads the settings block. It needs `governance:read` and also
- *      answers the "Slack not configured on this server" reason.
- *   3. "Update stack" (S9 checklist). No route updates an enforcement stack
- *      in place: a bound binding refuses a new session with
- *      409 `binding_exists`; the way to move to a new template is Revoke,
- *      then a new session. `current_template_version` vs `template_version`
- *      tells whether an update is due.
- *   4. "Verifying" as an observable state. `POST .../verify` and the manual
- *      bind run the self-test synchronously and answer with the final state;
- *      a concurrent request gets 409 `self_test_in_progress`. A `verifying`
- *      state exists in the row (a worker holds it) but no endpoint exposes
- *      progress other than re-reading the binding.
- *   5. IaC "role matching" has a fixed shape the spec leaves open:
- *      `{ rules: [{ role_name, resource }] }` (one trailing `*` allowed).
- *   6. IaC sources cannot be edited, only created or deleted; a source with
- *      pull requests opened from it cannot be deleted (409 `iac_source_in_use`).
- *   7. Legacy routes use `governance:enforce` to pause and remove, as spec
- *      §7.10 says (controller "Permissions" note; `governance:admin` alone is
- *      refused). The console still learns the right from the server's 403.
- *   8. Spec §9.6 lists legacy pause/remove among the Logs events. The legacy
- *      controller writes `audit_events` only (auditAdminMutation) and no
- *      `iga_gov_event`; whether `GET /policy/events` surfaces them was not
- *      traced here.
- *   9. A route to list GitHub repositories for an IaC mapping does not exist:
- *      `repository` is typed `owner/name` by the user. The choosable
- *      `discovery_source_id` values are the `provider: "github"` entries of
- *      `GET /authsec/discovery/connections` (their `id` is
- *      `discovery_sources.id`, internal/igaread/connections.go connGitHubSQL).
- *
- * SLACK INSTALL, FOR THE SCREEN AUTHOR. `GET /install` does NOT redirect: it
- * returns JSON `{ data: { authorize_url, expires_at } }` and sets an HttpOnly
- * cookie (`authsec_slack_install`, 10 minutes) that the callback checks, so it
- * must be called by this API client (credentials are included by baseApi)
- * with the member's bearer token, then the page sends the browser to
- * `authorize_url` (`window.location.assign`, after `isSlackAuthorizeUrl`).
- * Needs a verified workspace-member session (a service token is 403
- * `forbidden`) with `governance:enforce`. The callback
- * (`GET /oauth/callback`) is Slack's browser redirect to the API host and is
- * never called from here; it ends by redirecting the browser to
- * `<console>/iga/policy/setup/notifications?slack=connected` or
- * `?slack_error=<code>` (`parseSlackReturn`), or answers JSON when the server
- * has no console base URL configured. An unlinked Slack user is sent to
- * `.../setup/notifications?slack_link=<signed token>`; the page posts that
- * token to `POST /link/confirm` and should remove it from the address bar.
- *
- * CONTRACT ASSUMPTIONS NOT TRACED: that the API origin's CORS answers
- * `Access-Control-Allow-Credentials` for the console origin (the install
- * cookie depends on it); that the deployed image contains these routes.
- */
-
+/** AWS enforcement setup, IaC delivery and Slack integration contracts. */
 import { baseApi } from "./baseApi";
-import { POLICY_BASE, enc, policyQuery } from "./igaPolicyCommon";
-import type { PageArgs, PolicyEnvelope, WsArg } from "./igaPolicyCommon";
+import { POLICY_BASE, enc } from "./igaPolicyCommon";
+import type { PolicyEnvelope, WsArg } from "./igaPolicyCommon";
 
 const AWS_DISCOVERY = "/authsec/discovery/aws";
 const SLACK_BASE = "/authsec/integrations/slack";
-const LEGACY_BASE = "/api/iga/v1/legacy/agent-policies";
 
 /* ======================================================================= */
 /* Enforcement binding (§3.6, §7.9)                                         */
@@ -563,106 +448,6 @@ export function parseSlackReturn(search: string): SlackReturn {
 }
 
 /* ======================================================================= */
-/* Legacy agent policies (§7.10, §9.5)                                      */
-/* ======================================================================= */
-
-/** services.LegacyAgentPolicyTarget (agent_policy_legacy_compat.go:25). */
-export interface LegacyAgentPolicyTarget {
-  kind: "agent" | "selector";
-  discovered_agent_id?: string;
-  /** The agent's display name, when `kind` is `agent` and the agent still exists. */
-  agent_label?: string;
-  /** Present for `selector`: the legacy reconciler's selector, as stored. */
-  selector?: Record<string, unknown>;
-}
-
-/**
- * services.LegacyReconcileOutcome (line 34): the newest recorded action of the
- * legacy reconciler for this policy. `arm`: `entitlement` | `cluster`.
- * `outcome`: `applied` | `failed` | `refused` | `planned` (models/agent_policy.go:49-52).
- */
-export interface LegacyReconcileOutcome {
-  action: string;
-  arm: string;
-  outcome: string;
-  /** A dry run planned the action and did not apply it. */
-  dry_run: boolean;
-  detail: string;
-  at: string;
-}
-
-/** services.LegacyAgentPolicyView (line 44): one row; also `pause`'s answer. */
-export interface LegacyAgentPolicyView {
-  id: string;
-  name: string;
-  description: string;
-  target: LegacyAgentPolicyTarget;
-  enabled: boolean;
-  desired_state: string;
-  /** `revoke` | `quarantine` | `evict` (models/agent_policy.go:23-25). `evict` removes the workload. */
-  on_expiry: string;
-  /** The policy's clock resolved; null when it has none. */
-  effective_expiry: string | null;
-  /**
-   * When the legacy reconciler will act destructively (`on_expiry = evict`)
-   * on an ENABLED policy; null otherwise. A date in the past means it acts
-   * on its next pass.
-   */
-  pending_destructive_deadline: string | null;
-  /** null when the reconciler has recorded nothing for it. */
-  last_reconcile: LegacyReconcileOutcome | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/** `meta` of the list. `legacy_workers`: whether THIS process still runs the reconciler and warning workers. */
-export interface LegacyAgentPolicyMeta {
-  next_cursor: string | null;
-  limit: number;
-  legacy_workers: "on" | "off";
-  [key: string]: unknown;
-}
-
-export interface ListLegacyAgentPoliciesArgs extends WsArg, PageArgs {}
-
-export interface PauseLegacyAgentPolicyArgs {
-  id: string;
-  /** Optional; recorded in the audit event. */
-  reason?: string;
-}
-
-export interface RemoveLegacyAgentPolicyArgs {
-  id: string;
-  /** Required: an empty reason is 400 `reason_required`. */
-  reason: string;
-}
-
-/** `DELETE` answer. Effects the policy already had are NOT undone. */
-export interface RemoveLegacyAgentPolicyResult {
-  id: string;
-  removed: boolean;
-  note: string;
-}
-
-/**
- * Legacy codes (controller): `legacy_agent_policies_unavailable` (404: the
- * stack is off and the workspace has none), `reason_required`, `invalid_body`,
- * `invalid_parameter`, `cursor_invalid`, `not_found`, `internal`.
- */
-export type LegacyErrorCode =
-  | "legacy_agent_policies_unavailable"
-  | "reason_required"
-  | "invalid_body"
-  | "invalid_parameter"
-  | "cursor_invalid"
-  | "not_found"
-  | "internal";
-
-/* ======================================================================= */
-/* Endpoints                                                                */
-/* ======================================================================= */
-
 const setupTag = (id: string) => ({ type: "IgaGovSetup" as const, id });
 const enfTag = (connectorId: string) => setupTag(`enforcement:${connectorId}`);
 const iacTag = (connectorId: string) => setupTag(`iac:${connectorId}`);
@@ -845,36 +630,9 @@ export const igaPolicySetupApi = baseApi.injectEndpoints({
       invalidatesTags: [setupTag("slack"), { type: "IgaGovSettings", id: "ALL" }],
     }),
 
-    /* ---- legacy agent policies ---- */
-
-    /** Read-only list, newest first (`governance:read`). 404 `legacy_agent_policies_unavailable` when there is nothing to show. */
-    listLegacyAgentPolicies: b.query<PolicyEnvelope<LegacyAgentPolicyView[], LegacyAgentPolicyMeta>, ListLegacyAgentPoliciesArgs>({
-      query: (args) => ({ url: `${LEGACY_BASE}${policyQuery(args)}`, method: "GET" }),
-      providesTags: [{ type: "IgaGovLegacy", id: "ALL" }],
-    }),
-
-    /** Disable the policy (`governance:enforce`). Idempotent. Nothing it already did is undone. */
-    pauseLegacyAgentPolicy: b.mutation<LegacyAgentPolicyView, PauseLegacyAgentPolicyArgs>({
-      query: ({ id, reason }) => ({
-        url: `${LEGACY_BASE}/${enc(id)}/pause`,
-        method: "POST",
-        body: reason?.trim() ? { reason: reason.trim() } : undefined,
-      }),
-      transformResponse: (r: PolicyEnvelope<LegacyAgentPolicyView>) => r.data,
-      invalidatesTags: [{ type: "IgaGovLegacy", id: "ALL" }],
-    }),
-
-    /** Remove the policy (`governance:enforce`). A reason is required. Recorded actions are kept. */
-    removeLegacyAgentPolicy: b.mutation<RemoveLegacyAgentPolicyResult, RemoveLegacyAgentPolicyArgs>({
-      query: ({ id, reason }) => ({
-        url: `${LEGACY_BASE}/${enc(id)}`,
-        method: "DELETE",
-        body: { reason: reason.trim() },
-      }),
-      transformResponse: (r: PolicyEnvelope<RemoveLegacyAgentPolicyResult>) => r.data,
-      invalidatesTags: [{ type: "IgaGovLegacy", id: "ALL" }],
-    }),
   }),
+
+
 });
 
 export const {
@@ -892,7 +650,4 @@ export const {
   useUpdateSlackSettingsMutation,
   useDisconnectSlackMutation,
   useConfirmSlackLinkMutation,
-  useListLegacyAgentPoliciesQuery,
-  usePauseLegacyAgentPolicyMutation,
-  useRemoveLegacyAgentPolicyMutation,
 } = igaPolicySetupApi;

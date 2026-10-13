@@ -8,9 +8,9 @@
  * sent them and never derived from the rows loaded below.
  *
  * "See every reason" lists each role of the current page with ALL its reasons,
- * not only the deciding one, and where to fix each. The backend has no
- * category filter on Findings, so a category links to the findings kind it is
- * about and to its role list here, never to a filter that would be ignored.
+ * not only the deciding one, and where to fix each. A category opens Findings
+ * filtered to exactly the roles the server put in it (`category`), so the two
+ * lists never disagree.
  */
 
 import { useMemo, useState } from "react";
@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { PolicyLoadFailure, classifyPolicyError, findingKind, humanize, plural, usePolicyCapabilities } from "../shared";
 import { AccountSelect } from "../findings/AccountSelect";
-import { consolePath, coverageHrefFor, findingsHref } from "../findings/findingModel";
+import { READINESS_CATEGORY_LABEL, consolePath, coverageHrefFor, findingsHref } from "../findings/findingModel";
 
 const PAGE = 25;
 
@@ -42,12 +42,12 @@ interface CategoryView {
 }
 
 const CATEGORY: Record<GovReadinessCategory, CategoryView> = {
-  direct_eligible: { label: "Ready for AuthSec to apply", hint: "Enforcement access is verified and nothing blocks the change.", tone: "success" },
-  iac_only: { label: "Pull request or export only", hint: "No verified enforcement access, enforcement is off, or the role has a boundary of your own.", tone: "info" },
-  needs_owner: { label: "Need an owner first", hint: "No accountable owner for the role or the workloads that run as it.", tone: "warning" },
-  blocked_by_collection: { label: "Blocked by collection gaps", hint: "AWS activity or resource policies were not fully read.", tone: "danger" },
-  ineligible: { label: "Not eligible", hint: "Service-linked, AWS-reserved or protected roles.", tone: "neutral" },
-  no_change_needed: { label: "No change needed", hint: "No open findings.", tone: "neutral" },
+  direct_eligible: { label: READINESS_CATEGORY_LABEL.direct_eligible, hint: "Enforcement access is verified and nothing blocks the change.", tone: "success" },
+  iac_only: { label: READINESS_CATEGORY_LABEL.iac_only, hint: "No verified enforcement access, enforcement is off, or the role has a boundary of your own.", tone: "info" },
+  needs_owner: { label: READINESS_CATEGORY_LABEL.needs_owner, hint: "No accountable owner for the role or the workloads that run as it.", tone: "warning" },
+  blocked_by_collection: { label: READINESS_CATEGORY_LABEL.blocked_by_collection, hint: "AWS activity or resource policies were not fully read.", tone: "danger" },
+  ineligible: { label: READINESS_CATEGORY_LABEL.ineligible, hint: "Service-linked, AWS-reserved or protected roles.", tone: "neutral" },
+  no_change_needed: { label: READINESS_CATEGORY_LABEL.no_change_needed, hint: "No open findings.", tone: "neutral" },
 };
 
 /** The order a reader scans in: what can be done first, what is stuck last. */
@@ -253,6 +253,9 @@ function CategoryLinks({ category, account, blockedConnectors }: { category: Gov
     case "blocked_by_collection":
       return blockedConnectors.length > 0 ? (
         <>
+          <Link to={findingsHref({ category, account })} className={link}>
+            Open these roles&apos; findings
+          </Link>
           {blockedConnectors.slice(0, 3).map((id, i) => (
             <Link key={id} to={coverageHrefFor(id)} className={link}>
               {blockedConnectors.length > 1 ? `Open coverage (connection ${i + 1})` : "Open the connection's Coverage"}
@@ -266,15 +269,15 @@ function CategoryLinks({ category, account, blockedConnectors }: { category: Gov
       );
     case "needs_owner":
       return (
-        <Link to={findingsHref({ kind: "missing_owner", account })} className={link}>
-          Open {findingKind("missing_owner").toLowerCase()} findings
+        <Link to={findingsHref({ category, account })} className={link}>
+          Open these roles&apos; findings
         </Link>
       );
     case "iac_only":
       return (
         <>
-          <Link to={findingsHref({ kind: "unused_service", account })} className={link}>
-            Open unused-service findings
+          <Link to={findingsHref({ category, account })} className={link}>
+            Open these roles&apos; findings
           </Link>
           <Link to="/iga/policy/setup" className={link}>
             Open Setup
@@ -283,8 +286,8 @@ function CategoryLinks({ category, account, blockedConnectors }: { category: Gov
       );
     case "direct_eligible":
       return (
-        <Link to={findingsHref({ kind: "unused_service", account })} className={link}>
-          Open unused-service findings
+        <Link to={findingsHref({ category, account })} className={link}>
+          Open these roles&apos; findings
         </Link>
       );
     default:

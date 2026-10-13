@@ -24,7 +24,7 @@ import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-tab
 import { CopyValue, Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
-import { StateChip, humanize, roleNameOf, shortHash, plural, routeState, serviceOutcome, type StateView } from "../shared";
+import { StateChip, humanize, relTime, roleNameOf, shortHash, plural, routeState, serviceOutcome, type StateView } from "../shared";
 import {
   ACCEPTANCE_WORDS,
   ARTIFACT_STATE_WORDS,
@@ -99,11 +99,13 @@ export function VerificationPanel({ lines }: { lines: VerificationLine[] }) {
 
 /**
  * J1/J2 progress. The API has no pull-request or IaC change object: only the
- * deployment's state, `apply_deadline_at` and the artifact verification's
- * apply-progress evidence. Said so rather than inventing a link.
+ * deployment's state, `apply_deadline_at`, the artifact verification's
+ * apply-progress evidence and, for a pull request, the change the server
+ * stored (`iac_change`): the link, the branch and the merge.
  */
 export function DeliveryPanel({ detail, progress }: { detail: GovDeploymentDetail; progress: GovApplyProgress | undefined }) {
   const d = detail.deployment;
+  const change = detail.iac_change;
   const viaPr = d.delivery === "iac_pr";
   return (
     <Panel title={viaPr ? "Pull request delivery" : "Export delivery"}>
@@ -112,6 +114,21 @@ export function DeliveryPanel({ detail, progress }: { detail: GovDeploymentDetai
         {d.apply_deadline_at ? (
           <Fact label="Apply deadline">
             {clock(d.apply_deadline_at)} (<Timestamp iso={d.apply_deadline_at} />)
+          </Fact>
+        ) : null}
+        {change && change.pr_url ? (
+          <Fact label="Pull request">
+            <a href={change.pr_url} target="_blank" rel="noreferrer" className="text-(--color-primary-text) hover:underline">
+              {change.pr_number ? `#${change.pr_number}` : "Open the pull request"}
+            </a>
+            {` · ${humanize(change.state)}`}
+          </Fact>
+        ) : null}
+        {change?.branch ? <Fact label="Branch" mono>{change.branch}</Fact> : null}
+        {change?.merged_at ? (
+          <Fact label="Merged">
+            <Timestamp iso={change.merged_at} />
+            {change.merged_sha ? ` (${change.merged_sha.slice(0, 7)})` : ""}
           </Fact>
         ) : null}
         {progress ? (
@@ -141,9 +158,13 @@ export function DeliveryPanel({ detail, progress }: { detail: GovDeploymentDetai
         </div>
       ) : null}
       <Meta className="mt-2">
-        {viaPr
-          ? "AuthSec does not return a link to the pull request here. Find it in your repository. AuthSec checks for the change at every scan and records it once AWS shows it."
-          : "You apply the exported change yourself. AuthSec checks for it at every scan and records it once AWS shows it."}
+        {change?.merged_at && d.state === "awaiting_apply"
+          ? `Merged ${relTime(change.merged_at)}${change.merged_sha ? ` (${change.merged_sha.slice(0, 7)})` : ""}. Waiting for your pipeline to apply it${
+              d.apply_deadline_at ? `; due ${relTime(d.apply_deadline_at)}` : ""
+            }. AuthSec checks for the change at every scan and records it once AWS shows it.`
+          : viaPr
+            ? "AuthSec checks for the change at every scan and records it once AWS shows it."
+            : "You apply the exported change yourself. AuthSec checks for it at every scan and records it once AWS shows it."}
       </Meta>
     </Panel>
   );

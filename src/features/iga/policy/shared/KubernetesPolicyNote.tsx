@@ -12,7 +12,10 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { usePolicyCapabilities } from "./usePolicyCapabilities";
 
-export function KubernetesPolicyNote({ clusterConnectionHref }: { clusterConnectionHref?: string }) {
+/** Kubernetes clusters have no connection page of their own; they are listed under Connections. */
+const CONNECTIONS = "/iga/connections";
+
+export function KubernetesPolicyNote({ clusterConnectionHref = CONNECTIONS }: { clusterConnectionHref?: string }) {
   const caps = usePolicyCapabilities(getWorkspaceId() ?? "");
   if (caps.state !== "on" || caps.providerSupported("k8s")) return null;
   return (
@@ -23,7 +26,7 @@ export function KubernetesPolicyNote({ clusterConnectionHref }: { clusterConnect
         <>
           {" "}
           <Link to={clusterConnectionHref} className="font-medium text-(--color-primary-text) hover:underline">
-            Open the cluster's connection
+            Open Connections
           </Link>
         </>
       ) : null}

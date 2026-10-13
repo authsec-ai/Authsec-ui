@@ -22,6 +22,7 @@ import {
   type GovPlanView,
   type GovPlansView,
 } from "@/app/api/igaPolicyAuthoringApi";
+import { useListGovDeploymentsQuery, type GovDeploymentView } from "@/app/api/igaPolicyDeploymentsApi";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { CopyButton } from "@/features/iga/shared/components/CopyButton";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
@@ -31,6 +32,7 @@ import {
   StateChip,
   classifyPolicyError,
   delivery,
+  deploymentState,
   humanize,
   planKind,
   plural,
@@ -44,9 +46,10 @@ import { CodeBlock } from "./CodeBlock";
 import { EvidenceBundleView } from "./EvidenceBundleView";
 import {
   R1A_SCOPE,
-  arnTail,
+  blockerText,
   dispositionText,
   eligibilityView,
+  firstBoundaryText,
   gapText,
   opText,
   planCaseText,
@@ -133,7 +136,7 @@ function PlanSection({ ws, plan, forward }: { ws: string; plan: GovPlanView; for
         </p>
       ) : null}
 
-      <p>{planCaseText(d.case)}</p>
+      <p>{planCaseText(d.case, plan)}</p>
       {d.notes.length > 0 ? (
         <ul className="list-disc space-y-0.5 pl-5 text-xs text-(--color-text-muted)">
           {d.notes.map((n) => (
@@ -209,26 +212,13 @@ function PlanSection({ ws, plan, forward }: { ws: string; plan: GovPlanView; for
         <div className="space-y-1.5 rounded-md border border-(--color-border-subtle) px-3 py-2">
           <p className="font-medium">First boundary on this role</p>
           <p className="text-xs text-(--color-text-muted)">
-            A role with no boundary can change how some resource policies evaluate once one is attached, so AuthSec checks every collected resource policy first
-            {fa.scan_run_id ? ` (scan ${shortHash(fa.scan_run_id, 6)})` : ""}.
+            {firstBoundaryText(fa.incomplete)}
+            {fa.scan_run_id ? ` Checked against scan ${shortHash(fa.scan_run_id, 6)}.` : ""}
           </p>
           {fa.blockers.length > 0 ? (
             <ul className="list-disc space-y-0.5 pl-5 text-xs text-(--color-danger-text)">
               {fa.blockers.map((b, i) => (
-                <li key={`${b.resource}:${i}`}>
-                  {b.kind === "unparseable" ? "Unparseable" : "Deny with NotPrincipal"}: {arnTail(b.resource)}
-                  {b.sid ? ` (${b.sid})` : ""}. Attaching any boundary could break access.
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {fa.incomplete.length > 0 ? (
-            <ul className="list-disc space-y-0.5 pl-5 text-xs text-(--color-warning-text)">
-              {fa.incomplete.map((f, i) => (
-                <li key={`${f.form}:${f.region ?? ""}:${i}`}>
-                  {humanize(f.form)}
-                  {f.region ? ` in ${f.region}` : ""} were not fully read ({humanize(f.state).toLowerCase()}).
-                </li>
+                <li key={`${b.resource}:${i}`}>{blockerText(b)}</li>
               ))}
             </ul>
           ) : null}
@@ -322,7 +312,12 @@ function PlanSection({ ws, plan, forward }: { ws: string; plan: GovPlanView; for
   );
 }
 
-function RolePlans({ ws, roleArn, plans }: { ws: string; roleArn: string; plans: GovPlanView[] }) {
+/** The role's newest deployment (§9.3 S5 Targets: "current deployment state"), whichever version made it. */
+function newestDeployment(rows: readonly GovDeploymentView[], controlId: string): GovDeploymentView | undefined {
+  return rows.filter((d) => d.control_id === controlId).sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+}
+
+function RolePlans({ ws, roleArn, plans, deployment }: { ws: string; roleArn: string; plans: GovPlanView[]; deployment: GovDeploymentView | "none" | "unread" | "loading" }) {
   const forward = plans.filter((p) => p.kind === "apply" || p.kind === "split");
   const others = plans.filter((p) => !forward.includes(p));
   const lead = forward[0] ?? plans[0];
@@ -330,7 +325,22 @@ function RolePlans({ ws, roleArn, plans }: { ws: string; roleArn: string; plans:
   return (
     <Panel
       title={roleNameOf(roleArn) || lead.role_id}
-      actions={<StateChip state={elig} />}
+      actions={
+        <>
+          <StateChip state={elig} />
+          {deployment === "unread" ? (
+            <span className="text-xs text-(--color-text-muted)">Deployment state could not be read</span>
+          ) : deployment === "none" ? (
+            <span className="text-xs text-(--color-text-muted)">Not deployed yet</span>
+          ) : deployment === "loading" ? null : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-(--color-text-muted)">
+              {deployment.kind === "apply" ? "Deployment" : planKind(deployment.kind)}
+              <StateChip state={deploymentState(deployment.state, deployment.delivery)} />
+              version {deployment.version_no}
+            </span>
+          )}
+        </>
+      }
       description={<span className="break-all">{roleArn}</span>}
     >
       <div className="space-y-4">
@@ -341,7 +351,7 @@ function RolePlans({ ws, roleArn, plans }: { ws: string; roleArn: string; plans:
           <details key={p.id} className="rounded-md border border-(--color-border-subtle)">
             <summary className="cursor-pointer select-none px-3 py-2 text-[13px] font-medium text-(--color-text)">
               {planKind(p.kind)} plan
-              <span className="ml-2 font-normal text-(--color-text-muted)">{planCaseText(p.diff.case).split(".")[0]}</span>
+              <span className="ml-2 font-normal text-(--color-text-muted)">{planCaseText(p.diff.case, p).split(".")[0]}</span>
             </summary>
             <div className="border-t border-(--color-border-subtle) px-3 py-3">
               <PlanSection ws={ws} plan={p} forward={false} />
@@ -361,6 +371,8 @@ function groupByRole(view: GovPlansView): { arn: string; plans: GovPlanView[] }[
 
 export function PlanView({ ws, policyId, versionNo }: { ws: string; policyId: string; versionNo: number }) {
   const q = useGetGovVersionPlansQuery({ ws, policyId, versionNo }, { skip: !policyId || !versionNo });
+  // The same wide page the policy's Deployments tab reads, so one cached call serves both.
+  const deployments = useListGovDeploymentsQuery({ ws, policy_id: policyId, limit: 200 }, { skip: !policyId });
   const failure = classifyPolicyError(q.error);
   const view = q.data;
 
@@ -408,7 +420,13 @@ export function PlanView({ ws, policyId, versionNo }: { ws: string; policyId: st
       </div>
       <Meta>{R1A_SCOPE}</Meta>
       {roles.map((r) => (
-        <RolePlans key={r.plans[0].role_id} ws={ws} roleArn={r.arn} plans={r.plans} />
+        <RolePlans
+          key={r.plans[0].role_id}
+          ws={ws}
+          roleArn={r.arn}
+          plans={r.plans}
+          deployment={deployments.data ? (newestDeployment(deployments.data.data, r.plans[0].control_id) ?? (deployments.data.meta.next_cursor ? "unread" : "none")) : deployments.isError ? "unread" : "loading"}
+        />
       ))}
       <details className="rounded-md border border-(--color-border-subtle)">
         <summary className="cursor-pointer select-none px-3 py-2 text-[13px] font-medium text-(--color-text)">Hashes an approval binds</summary>

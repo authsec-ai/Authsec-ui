@@ -59,7 +59,7 @@ function PlanArtifact({ ws, policyId, versionNo, plan }: { ws: string; policyId:
       title={`${role} · ${planKind(plan.kind)}`}
       actions={
         <>
-          {plan.deployment_state ? <StateChip state={deploymentState(plan.deployment_state)} /> : null}
+          {plan.deployment_state ? <StateChip state={deploymentState(plan.deployment_state, plan.delivery)} /> : null}
           <span className="text-xs text-(--color-text-muted)">{delivery(plan.delivery)}</span>
         </>
       }

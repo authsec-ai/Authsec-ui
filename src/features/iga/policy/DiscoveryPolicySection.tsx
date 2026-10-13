@@ -8,20 +8,28 @@
 
 import { Panel } from "@/features/iga/shared/components/Panel";
 
+import { ControlChip } from "./findings/ControlChip";
 import { CreatePolicyAction } from "./findings/CreatePolicyAction";
 import { ObjectFindingsPanel } from "./findings/ObjectFindingsPanel";
 import { ObjectOwnersPanel } from "./findings/ObjectOwnersPanel";
+import { useObjectPolicy } from "./findings/useObjectPolicy";
 import { usePolicyCapabilities } from "./shared";
 
 export function IdentityPolicySection({ ws, identityId }: { ws: string; identityId: string }) {
   const caps = usePolicyCapabilities(ws);
+  const held = useObjectPolicy(ws, identityId, caps.state !== "on");
   if (caps.state !== "on") return null;
   return (
     <>
       <Panel
         title="Policy"
         description="Restrict whole AWS services this role does not use. Owners are asked first, and nothing is applied without an approval."
-        actions={<CreatePolicyAction objectId={identityId} label="Right-size this role" />}
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ControlChip ws={ws} control={held.control} />
+            <CreatePolicyAction objectId={identityId} label="Right-size this role" />
+          </div>
+        }
       >
         <p className="text-[13px] text-(--color-text-muted)">
           Each change is previewed with who it affects, then verified in AWS afterwards.

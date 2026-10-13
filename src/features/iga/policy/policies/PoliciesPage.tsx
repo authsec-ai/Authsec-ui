@@ -2,15 +2,12 @@
  * Policy › Policies (SPEC-iga-phase3-policy.md §9.3 S7): every policy of the
  * workspace, what stage it is at, and what to do next.
  *
- * What the list can truthfully say. `GET /policies` serves a policy's current
- * version status, lifecycle, role count, owner and `next_action`; it serves no
- * counts, no delivery and no rollout stage (iga_gov_authoring_service.go
- * `GovPolicyView`). So the filters are chips on the server's `status`, not
- * tiles with invented numbers, and the Boundary chip and Delivery come from the
- * deployments list (the newest deployment per policy), which is read once and
- * said to be partial when more than one page exists. Application health and
- * the rollout stage live on the policy page. `last_verified_at` is never set
- * by the backend today: the column says "Not verified yet", never a date.
+ * `GET /policies` serves each policy's `stage` (one server definition, also the
+ * tiles' basis), `delivery`, `last_verified_at` and `meta.stage_tiles`: counts
+ * per stage across the workspace whatever page or filter is shown. The tiles
+ * are those counts and filter the list by stage; nothing here is derived from
+ * the rows loaded. Application health and the rollout detail live on the policy
+ * page.
  *
  * Filters live in the URL. A cursor belongs to one filter set, so changing a
  * filter drops it. A failed read is a banner with Retry, never an empty table.
@@ -22,14 +19,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   GOV_POLICY_FAMILIES,
-  GOV_VERSION_STATUSES,
   useListGovPoliciesQuery,
   type GovPolicyFamily,
   type GovPolicyLifecycle,
+  type GovPolicyStage,
   type GovPolicyView,
-  type GovVersionStatus,
 } from "@/app/api/igaPolicyAuthoringApi";
-import { useListGovDeploymentsQuery, type GovDeploymentView } from "@/app/api/igaPolicyDeploymentsApi";
 import { ConsoleRowActions } from "@/components/console/iam-console";
 import { Button } from "@/components/ui/button";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -47,19 +42,15 @@ import {
   StateChip,
   classifyPolicyError,
   delivery,
-  deploymentState,
-  humanize,
   lifecycle,
-  planKind,
+  policyStage,
   versionStatus,
 } from "../shared";
-import { LegacyPoliciesNotice } from "../legacy/LegacyPoliciesNotice";
 import { NewPolicyButton } from "./NewPolicyChooser";
 import { familyLabel, nextActionWords, policyHref, providerLabel } from "./policyModel";
 import { useMemberNames } from "./useMemberNames";
 
 const PAGE = 25;
-const DEPLOYMENT_LOOK = 200;
 
 type LifecycleParam = "" | GovPolicyLifecycle | "all";
 const LIFECYCLE_OPTIONS: { value: LifecycleParam; label: string }[] = [
@@ -70,21 +61,8 @@ const LIFECYCLE_OPTIONS: { value: LifecycleParam; label: string }[] = [
   { value: "all", label: "All, including archived" },
 ];
 
-const STATUS_CHIPS: { value: "" | GovVersionStatus; label: string }[] = [
-  { value: "", label: "All" },
-  ...GOV_VERSION_STATUSES.map((v) => ({ value: v, label: versionStatus(v).label })),
-];
-
-/** The newest deployment of each policy that still says something about the boundary. */
-function newestByPolicy(rows: GovDeploymentView[]): Map<string, GovDeploymentView> {
-  const m = new Map<string, GovDeploymentView>();
-  for (const d of rows) {
-    if (d.state === "superseded" || d.state === "recovered") continue;
-    const cur = m.get(d.policy_id);
-    if (!cur || d.created_at > cur.created_at) m.set(d.policy_id, d);
-  }
-  return m;
-}
+/** The tiles of §9.3 S7, in the spec's order. */
+const TILES: GovPolicyStage[] = ["in_review", "observing", "canary", "verified", "drifted", "failed", "partial"];
 
 const selectClass =
   "h-9 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-sm text-(--color-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)";
@@ -96,7 +74,7 @@ export default function PoliciesPage() {
   const [params, setParams] = useSearchParams();
 
   const family = params.get("family") ?? "";
-  const status = (params.get("status") ?? "") as "" | GovVersionStatus;
+  const stage = (params.get("stage") ?? "") as "" | GovPolicyStage;
   const life = (params.get("lifecycle") ?? "") as LifecycleParam;
   const q = params.get("q") ?? "";
 
@@ -119,7 +97,7 @@ export default function PoliciesPage() {
   }, [typed]);
 
   // A cursor belongs to one filter set.
-  const filterKey = [family, status, life, q].join("|");
+  const filterKey = [family, stage, life, q].join("|");
   const [paging, setPaging] = useState<{ key: string; stack: string[] }>({ key: filterKey, stack: [] });
   const stack = paging.key === filterKey ? paging.stack : [];
   const cursor = stack[stack.length - 1];
@@ -130,11 +108,10 @@ export default function PoliciesPage() {
     cursor,
     q: q || undefined,
     family: (family || undefined) as GovPolicyFamily | undefined,
-    status: status || undefined,
+    stage: stage || undefined,
     // The server has no "not archived": the default asks for everything and hides archived rows below.
     lifecycle: life === "" || life === "all" ? undefined : life,
   });
-  const deployments = useListGovDeploymentsQuery({ ws, limit: DEPLOYMENT_LOOK });
 
   const failure = classifyPolicyError(query.error);
   // `currentData` is the answer for these filters; `data` still holds the previous filter's rows while the next load runs.
@@ -143,9 +120,8 @@ export default function PoliciesPage() {
   const rows = useMemo(() => (life === "" ? all.filter((p) => p.lifecycle !== "archived") : all), [all, life]);
   const hiddenArchived = all.length - rows.length;
   const next = page?.meta.next_cursor ?? null;
-  const newest = useMemo(() => newestByPolicy(deployments.data?.data ?? []), [deployments.data]);
-  const depPartial = !!deployments.data?.meta.next_cursor;
-  const filtered = !!(family || status || q || life);
+  const tiles = page?.meta.stage_tiles;
+  const filtered = !!(family || stage || q || life);
 
   const clear = () => setParams({}, { replace: true });
 
@@ -176,8 +152,8 @@ export default function PoliciesPage() {
         label: "Status",
         priority: 1,
         approxWidth: 260,
-        cell: ({ row }) => <StatusChips policy={row.original} deployment={newest.get(row.original.id)} />,
-        detail: (p) => <StatusChips policy={p} deployment={newest.get(p.id)} />,
+        cell: ({ row }) => <StatusChips policy={row.original} />,
+        detail: (p) => <StatusChips policy={p} />,
       },
       {
         id: "next",
@@ -221,8 +197,8 @@ export default function PoliciesPage() {
         label: "Delivery",
         priority: 6,
         approxWidth: 150,
-        cell: ({ row }) => <DeliveryText deployment={newest.get(row.original.id)} partial={depPartial} />,
-        detail: (p) => <DeliveryText deployment={newest.get(p.id)} partial={depPartial} />,
+        cell: ({ row }) => <DeliveryText policy={row.original} />,
+        detail: (p) => <DeliveryText policy={p} />,
       },
       {
         id: "owner",
@@ -267,7 +243,7 @@ export default function PoliciesPage() {
         },
       },
     ],
-    [newest, depPartial, nameOf, navigate],
+    [nameOf, navigate],
   );
 
   const emptyState =
@@ -301,7 +277,6 @@ export default function PoliciesPage() {
       description="What AuthSec restricts, what stage each change is at, and what needs you next."
       actions={<NewPolicyButton />}
     >
-      <LegacyPoliciesNotice ws={ws} />
       {failure && !page ? (
         <PolicyLoadFailure failure={failure} subject="policies" onRetry={() => void query.refetch()} />
       ) : (
@@ -318,23 +293,25 @@ export default function PoliciesPage() {
           <TableCard>
             <CardContent variant="flush">
               <div data-compact-toolbar className="space-y-3 border-b border-(--color-border-subtle) px-4 py-3">
-                <div role="group" aria-label="Filter by version status" className="flex flex-wrap items-center gap-1.5">
-                  {STATUS_CHIPS.map((c) => {
-                    const on = status === c.value;
+                <div role="group" aria-label="Filter by stage" className="flex flex-wrap items-center gap-1.5">
+                  {[{ value: "" as const, label: "All" }, ...TILES.map((t) => ({ value: t, label: policyStage(t).label }))].map((c) => {
+                    const on = stage === c.value;
+                    const n = c.value && tiles ? (tiles[c.value] ?? 0) : null;
                     return (
                       <button
                         key={c.value || "all"}
                         type="button"
                         aria-pressed={on}
-                        onClick={() => setParam("status", c.value || null)}
+                        onClick={() => setParam("stage", c.value || null)}
                         className={cn(
-                          "inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors",
+                          "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors",
                           on
                             ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"
                             : "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text)",
                         )}
                       >
                         {c.label}
+                        {n !== null ? <span className="tabular-nums font-normal">{n}</span> : null}
                       </button>
                     );
                   })}
@@ -421,47 +398,28 @@ export default function PoliciesPage() {
               </button>
             </p>
           ) : null}
-          {deployments.isError ? (
-            <p className="text-xs text-(--color-text-muted)">
-              The boundary state and delivery could not be loaded, so those columns are empty. This does not change the list.{" "}
-              <button className="font-medium text-(--color-primary-text) hover:underline" onClick={() => void deployments.refetch()}>
-                Retry
-              </button>
-            </p>
-          ) : depPartial ? (
-            <p className="text-xs text-(--color-text-muted)">
-              Boundary state and delivery are read from the first {DEPLOYMENT_LOOK} deployments. Open a policy for its full state.
-            </p>
-          ) : null}
         </>
       )}
     </PolicyShell>
   );
 }
 
-/** Version status, lifecycle and boundary: three different facts, three chips. */
-function StatusChips({ policy, deployment }: { policy: GovPolicyView; deployment: GovDeploymentView | undefined }) {
+/** Stage, version status and lifecycle: three different facts. The stage leads. */
+function StatusChips({ policy }: { policy: GovPolicyView }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {policy.status ? <StateChip state={versionStatus(policy.status)} /> : <StateChip state={{ label: "No version", tone: "neutral" }} />}
+      <StateChip state={policyStage(policy.stage)} />
+      {policy.status && policy.status !== "approved" && policy.stage !== policy.status ? <StateChip state={versionStatus(policy.status)} /> : null}
       {policy.lifecycle !== "active" ? <StateChip state={lifecycle(policy.lifecycle)} /> : null}
-      {deployment ? (
-        <StateChip
-          state={{
-            ...deploymentState(deployment.state),
-            label: deployment.kind === "apply" ? `Boundary: ${deploymentState(deployment.state).label}` : `${planKind(deployment.kind)}: ${deploymentState(deployment.state).label}`,
-          }}
-        />
-      ) : null}
     </div>
   );
 }
 
-function DeliveryText({ deployment, partial }: { deployment: GovDeploymentView | undefined; partial: boolean }) {
-  if (deployment) return <span className="block truncate text-[13px]">{delivery(deployment.delivery) || humanize(deployment.delivery)}</span>;
+function DeliveryText({ policy }: { policy: GovPolicyView }) {
+  if (policy.delivery) return <span className="block truncate text-[13px]">{delivery(policy.delivery)}</span>;
   return (
     <span className="text-[13px] text-(--color-text-muted)" title="Delivery is shown once a deployment exists. Open the policy for the planned delivery.">
-      {partial ? "Open policy" : "Not deployed yet"}
+      Not deployed yet
     </span>
   );
 }

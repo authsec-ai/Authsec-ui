@@ -1,13 +1,12 @@
 /**
  * The list row of one deployment, and the deployments that share its policy.
  *
- * `GET /deployments/:id` names neither the policy, the version number nor the
- * role (services.GovDeploymentDetail), and the list cannot be filtered by id.
- * The page needs them for the role's name, Undo (the policy's plans, the
- * control's other deployments) and the link back to the policy. So the row is
- * found in the list: directly when the link carries `?policy=`, otherwise by
- * paging the unfiltered list, bounded. A deployment that is not found still
- * renders from its detail; only the actions that need the policy are withheld.
+ * Undo needs the policy's deployments (is this the latest on the control?) and
+ * the list row's version number. The list cannot be filtered by id, so the row
+ * is found in the policy's own list (newest first, bounded paging). The policy
+ * comes from the deployment's detail (`context`), or from the link's
+ * `?policy=` until that has loaded. A deployment that is not found still
+ * renders from its detail; only Undo is withheld.
  */
 
 import { useEffect, useState } from "react";
@@ -30,7 +29,8 @@ export function useDeploymentRow(ws: string, id: string, policyHint: string | nu
   const [cursor, setCursor] = useState<string | undefined>();
   const [pages, setPages] = useState(1);
 
-  const scan = useListGovDeploymentsQuery({ ws, policy_id: policyHint ?? undefined, limit: PAGE, cursor }, { skip: !id });
+  // The policy is known from the deployment's detail (or the link); the unfiltered list is never walked.
+  const scan = useListGovDeploymentsQuery({ ws, policy_id: policyHint ?? undefined, limit: PAGE, cursor }, { skip: !id || !policyHint });
   const foundHere = scan.data?.data.find((d) => d.id === id);
   const next = scan.data?.meta.next_cursor ?? null;
 
@@ -41,16 +41,11 @@ export function useDeploymentRow(ws: string, id: string, policyHint: string | nu
   }, [scan.isFetching, scan.data, foundHere, next, pages]);
 
   const row = foundHere;
-  // With the policy known, the siblings are the policy's own list; without a hint they come from a second, filtered read.
-  const needSiblings = !!row && !policyHint;
-  const sib = useListGovDeploymentsQuery({ ws, policy_id: row?.policy_id, limit: PAGE }, { skip: !needSiblings });
-
-  const siblingSource = needSiblings ? sib.data : scan.data;
   const stillScanning = !row && !!next && pages < MAX_PAGES;
   return {
     row,
-    siblings: siblingSource?.data ?? (row ? [row] : []),
-    siblingsPartial: !!siblingSource?.meta.next_cursor || (!needSiblings && cursor !== undefined),
-    loading: scan.isLoading || scan.isFetching || stillScanning || (needSiblings && sib.isLoading),
+    siblings: scan.data?.data ?? (row ? [row] : []),
+    siblingsPartial: !!next || cursor !== undefined,
+    loading: !!policyHint && (scan.isLoading || scan.isFetching || stillScanning),
   };
 }

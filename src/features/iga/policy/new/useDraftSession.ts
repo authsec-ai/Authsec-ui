@@ -229,7 +229,7 @@ export function useDraftSession(ws: string, entry: Entry, urlPolicyId: string | 
       const snapshot: ProposalSnapshot = {
         recommendation: r.recommendation,
         evidence_targets: r.evidence_targets,
-        evaluated_rev: made.meta?.evaluated_rev ?? r.version.intent.evidence_rev,
+        evaluated_rev: made.meta?.evaluated_rev ?? (r.version.intent.kind === "right_size_services" ? r.version.intent.evidence_rev : 0),
         initial_delivery: r.version.intent.delivery,
       };
       rememberDraft(ws, entry.sig, r.policy.id, snapshot);

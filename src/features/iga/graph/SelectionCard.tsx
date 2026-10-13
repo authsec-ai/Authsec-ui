@@ -36,6 +36,7 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { WrapId } from "../shared/components/WrapId";
 import { edgeMeaning, edgeVerb, frontierLabel, independentCount, isK8sEdge, markedLimitations } from "./graphLabels";
 import { describeNode, type NodeCategory } from "./nodeView";
+import { PolicyCardSection } from "./PolicyCardSection";
 import { frontierKey, type FrontierControl, type VisualEdge, type VisualNode } from "./types";
 
 export type SelectionSubject = { kind: "node"; visual: VisualNode } | { kind: "edge"; edge: VisualEdge };
@@ -482,6 +483,7 @@ export function SelectionCard({
           </p>
         ) : null}
         {body}
+        <PolicyCardSection key={key} subject={subject} edges={edges} nodes={nodes} />
         <div className="flex flex-wrap gap-2 pt-1">
           {claims.length ? (
             <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => actions.onEvidence(claims)}>

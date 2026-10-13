@@ -192,6 +192,10 @@ export function describeFailure(f: PolicyFailure): { title: string; fix?: string
   if (known) return known;
   switch (f.kind) {
     case "forbidden":
+      // The server's own words when the session, not the role, is the problem: no permission can fix that.
+      if (/member session/i.test(f.message)) {
+        return { title: "This needs your own member session", fix: "Reload the page. If it keeps happening, sign out and sign in again." };
+      }
       return { title: "Your role cannot do this", fix: "An administrator can grant the permission." };
     case "unauthenticated":
       return { title: "Your session has ended", fix: "Sign in again to continue." };

@@ -18,6 +18,7 @@ import { Panel } from "@/features/iga/shared/components/Panel";
 import { PolicyLoadFailure, type PolicyFailure, humanize, versionStatus } from "../shared";
 import { targetName, targetProblem } from "./copy";
 import { keyOfText } from "./entry";
+import { DedicatedIdentityPanel } from "./DedicatedIdentityPanel";
 import { SubmitFailure } from "./StepReview";
 import { targetBlock, type Boot } from "./useDraftSession";
 
@@ -60,6 +61,7 @@ export function StartScreen() {
         </form>
         <p className="mt-3 text-xs text-(--color-text-muted)">{DRAFT_NOTE}</p>
       </Panel>
+      <DedicatedIdentityPanel />
       <p className="text-[13px] text-(--color-text-muted)">
         To start from what AuthSec recommends, open{" "}
         <Link to="/iga/policy/findings" className="font-medium text-(--color-primary-text) hover:underline">

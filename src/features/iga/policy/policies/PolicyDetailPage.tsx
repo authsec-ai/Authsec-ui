@@ -24,7 +24,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 import { PolicyDeploymentsTab } from "../deployments/PolicyDeploymentsTab";
 import { PlanView } from "../plans/PlanView";
 import { RolloutTab } from "../rollout/RolloutTab";
-import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, delivery, lifecycle, rolloutStage, usePolicyPermission, useWorkspaceMemberSession, versionStatus } from "../shared";
+import { PolicyLoadFailure, PolicyShell, StateChip, classifyPolicyError, delivery, lifecycle, policyStage, usePolicyPermission, useWorkspaceMemberSession } from "../shared";
 import { EventsTab } from "./EventsTab";
 import { OverviewTab } from "./OverviewTab";
 import { OwnersTab } from "./OwnersTab";
@@ -34,6 +34,8 @@ import { VersionsTab } from "./VersionsTab";
 import { POLICIES_PATH, familyLabel, parseTab, policyHref, providerLabel, statusLines, type PolicyTab } from "./policyModel";
 import { useVersionApproval, useVersionReview, usePolicyRollout } from "./usePolicyFacts";
 import { useMemberNames } from "./useMemberNames";
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 const TAB_LABEL: Record<PolicyTab, string> = {
   overview: "Overview",
@@ -97,7 +99,11 @@ export default function PolicyDetailPage() {
   const intent = version?.intent;
   const deliveryName = intent && "delivery" in intent ? delivery(intent.delivery) : "";
   const boundary = rollout.rollout === "unknown" ? null : statusLines(rollout.rollout).find((l) => l.key === "boundary");
-  const stage = rollout.rollout && rollout.rollout !== "unknown" ? rollout.rollout.rollout.stage : "";
+  // One status chip (§9.3 S5): the server's stage (the same word the list shows), then the boundary's state.
+  const lead = policyStage(policy.stage);
+  const boundaryWords = boundary && boundary.text !== "No evidence yet" ? `boundary ${lowerFirst(boundary.text)}` : null;
+  const statusText = [lead?.label, boundaryWords].filter(Boolean).join(" · ");
+  const statusTone = boundaryWords && boundary ? boundary.tone : (lead?.tone ?? "neutral");
   const versions = versionsQ.data;
   const archived = policy.lifecycle === "archived";
 
@@ -134,10 +140,8 @@ export default function PolicyDetailPage() {
       actions={<PolicyMenu ws={ws} policy={policy} versions={versions} onReload={refetchAll} />}
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <StateChip state={lifecycle(policy.lifecycle)} />
-        {policy.status ? <StateChip state={versionStatus(policy.status)} /> : null}
-        {stage ? <StateChip state={rolloutStage(stage)} /> : null}
-        {boundary && boundary.text !== "No evidence yet" ? <StatusBadge tone={boundary.tone}>{`Boundary: ${boundary.text}`}</StatusBadge> : null}
+        {policy.lifecycle !== "active" ? <StateChip state={lifecycle(policy.lifecycle)} /> : null}
+        {statusText ? <StatusBadge tone={statusTone}>{statusText}</StatusBadge> : null}
         <Link to={`${POLICIES_PATH}`} className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>

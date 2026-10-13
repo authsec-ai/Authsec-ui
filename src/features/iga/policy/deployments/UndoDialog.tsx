@@ -10,7 +10,9 @@
  * still decides, and its three refusals are explained here: not the latest
  * deployment, AWS changed since approval, and a boundary now shared with
  * another role (a role-only recovery plan, which needs its own approval or an
- * emergency undo).
+ * emergency undo). The recovery plan is shown with its approval state; an
+ * approver other than the version's author approves the plan hash they see
+ * (`POST .../recovery-plans/:plan_id/approve`), and the undo then names it.
  *
  * The result never says "access restored": AuthSec's change was undone; other
  * controls may still restrict the role.
@@ -22,7 +24,9 @@ import { toast } from "react-hot-toast";
 
 import {
   undoBlocker,
+  useApproveGovRecoveryPlanMutation,
   useEmergencyUndoGovDeploymentMutation,
+  useGetGovDeploymentQuery,
   useUndoGovDeploymentMutation,
   type GovChangedOutsideDetail,
   type GovConsumersChangedDetail,
@@ -32,8 +36,9 @@ import {
 } from "@/app/api/igaPolicyDeploymentsApi";
 import { useGetGovVersionPlansQuery, type GovPlanView } from "@/app/api/igaPolicyAuthoringApi";
 import { Button } from "@/components/ui/button";
+import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
-import { PolicyLoadFailure, classifyPolicyError, serviceList, usePolicyAction, usePolicyPermission } from "../shared";
+import { PolicyLoadFailure, classifyPolicyError, serviceList, shortHash, usePolicyAction, usePolicyPermission } from "../shared";
 import { ActionFrame, ReasonField } from "./ActionFrame";
 import { CLASSIFICATION_WORDS, deploymentHref, roleLabel } from "./deploymentModel";
 
@@ -124,13 +129,22 @@ export function UndoDialog({
 }) {
   const navigate = useNavigate();
   const [undo] = useUndoGovDeploymentMutation();
+  const [approveRecovery] = useApproveGovRecoveryPlanMutation();
   const [emergencyUndo] = useEmergencyUndoGovDeploymentMutation();
   const normal = usePolicyAction("governance:enforce");
   const urgent = usePolicyAction("governance:emergency");
   const emergencyAccess = usePolicyPermission("governance:emergency");
+  const approveAccess = usePolicyPermission("governance:approve");
+  const approving = usePolicyAction("governance:approve");
   const [emergency, setEmergency] = useState(false);
   const [reason, setReason] = useState("");
   const [recoveryPlanId, setRecoveryPlanId] = useState<string | undefined>();
+  const [useRecovery, setUseRecovery] = useState(false);
+
+  // Recovery plans compiled by an earlier blocked attempt survive a reload.
+  const detail = useGetGovDeploymentQuery({ ws, id: d.id }, { skip: !open });
+  const recovery = detail.data?.recovery_plans.find((r) => r.plan_id === recoveryPlanId) ?? detail.data?.recovery_plans[0];
+  const recoveryApproved = !!recovery?.approval_id && !!recovery.approval_expires_at && new Date(recovery.approval_expires_at) > new Date();
 
   const plans = useGetGovVersionPlansQuery({ ws, policyId: d.policy_id, versionNo: d.version_no }, { skip: !open });
   const undoPlan = plans.data?.plans.find((p) => p.kind === "undo" && p.control_id === d.control_id);
@@ -145,8 +159,10 @@ export function UndoDialog({
       setEmergency(false);
       setReason("");
       setRecoveryPlanId(undefined);
+      setUseRecovery(false);
       normal.clear();
       urgent.clear();
+      approving.clear();
     }
     // `clear` only resets local state; closing is the only trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +174,7 @@ export function UndoDialog({
   const planFailure = classifyPolicyError(plans.error);
 
   async function confirm() {
-    const body = { id: d.id, plan_id: recoveryPlanId, reason: reason.trim() || undefined };
+    const body = { id: d.id, plan_id: useRecovery ? recovery?.plan_id : undefined, reason: reason.trim() || undefined };
     const res = emergency
       ? await urgent.run(() => emergencyUndo({ ...body, reason: reason.trim() }))
       : await normal.run(() => undo(body));
@@ -172,10 +188,17 @@ export function UndoDialog({
   // The server's detail, when it refused in one of the three documented ways (§8.9).
   useEffect(() => {
     if (failure?.code === "artifact_consumers_changed") {
-      const detail = failure.detail as unknown as GovConsumersChangedDetail;
-      setRecoveryPlanId(detail.recovery_plan_id);
+      const d2 = failure.detail as unknown as GovConsumersChangedDetail;
+      setRecoveryPlanId(d2.recovery_plan_id);
+      setUseRecovery(!!d2.recovery_plan_id);
     }
   }, [failure]);
+
+  async function approvePlan() {
+    if (!recovery) return;
+    const res = await approving.run(() => approveRecovery({ id: d.id, planId: recovery.plan_id, plan_hash: recovery.plan_hash, reason: reason.trim() || undefined }));
+    if (res) toast.success("Recovery plan approved");
+  }
 
   const extra = (() => {
     if (!failure) return null;
@@ -226,14 +249,14 @@ export function UndoDialog({
       onOpenChange={onOpenChange}
       title={emergency ? "Emergency undo" : "Undo this deployment"}
       description={`Undo deployment of version ${d.version_no} on ${role}.`}
-      confirmLabel={emergency ? "Emergency undo" : recoveryPlanId ? "Undo with the role-only plan" : "Undo"}
+      confirmLabel={emergency ? "Emergency undo" : useRecovery ? "Undo with the role-only plan" : "Undo"}
       busyLabel="Queuing…"
       destructive={emergency}
       pending={action.pending}
       failure={failure}
       failureExtra={extra}
       onConfirm={() => void confirm()}
-      confirmDisabled={!!advisoryBlocker || (emergency && !reason.trim())}
+      confirmDisabled={!!advisoryBlocker || (emergency && !reason.trim()) || (!emergency && useRecovery && !recoveryApproved)}
       extraActions={
         emergencyAccess.offered && !emergency ? (
           <Button variant="outline" onClick={() => setEmergency(true)} disabled={action.pending}>
@@ -258,6 +281,50 @@ export function UndoDialog({
           ))}
         </ul>
       )}
+
+      {recovery && !emergency ? (
+        <div className="space-y-2 rounded-md border border-(--color-border-strong) px-3 py-2">
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={useRecovery} onChange={(e) => setUseRecovery(e.target.checked)} disabled={action.pending} />
+            <span>
+              <span className="font-medium">Use the role-only recovery plan.</span> It removes the boundary from {role} only and never changes the shared
+              policy. Use it when another role now uses the boundary; otherwise the ordinary undo is enough.
+            </span>
+          </label>
+          {useRecovery ? (
+            <p className="text-(--color-text-muted)">
+              {recovery.desired_attachment === "absent"
+                ? `The plan detaches the boundary from ${role} only.`
+                : `The plan attaches a new boundary holding the earlier document to ${role} only.`}{" "}
+              The shared policy is {recovery.artifact_disposition === "retain_shared" ? "kept and not changed" : "handled as the plan says"}. Plan{" "}
+              <span className="font-mono">{shortHash(recovery.plan_hash)}</span>: approving it approves exactly this plan.
+            </p>
+          ) : null}
+          {useRecovery ? (
+            recoveryApproved ? (
+              <p role="status" className="text-(--color-text-muted)">
+                Approved <Timestamp iso={recovery.approved_at} />; the approval can be used until <Timestamp iso={recovery.approval_expires_at} />.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-(--color-text-muted)">
+                  {recovery.approval_id
+                    ? "The approval of this plan has expired. It needs a new one."
+                    : "This plan needs its own approval from someone other than the version's author, or an emergency undo."}
+                </p>
+                {approveAccess.offered ? (
+                  <Button variant="outline" size="sm" onClick={() => void approvePlan()} disabled={approving.pending}>
+                    {approving.pending ? "Approving…" : "Approve this plan"}
+                  </Button>
+                ) : (
+                  <p className="text-(--color-text-muted)">Ask a member who can approve policies to open this deployment and approve the plan.</p>
+                )}
+                {approving.failure ? <p role="alert" className="text-(--color-danger-text)">{approving.failure.message}</p> : null}
+              </div>
+            )
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="text-(--color-text-muted)">
         AuthSec checks AWS first and stops if the role is not as the deployment left it. When the undo is verified the result reads: AuthSec&apos;s

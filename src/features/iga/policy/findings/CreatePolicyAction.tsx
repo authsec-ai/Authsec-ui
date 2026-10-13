@@ -6,6 +6,10 @@
  * not eligible, already controlled (with a link to that policy) or evidence
  * that is not trusted (with a link to the connection).
  *
+ * Once the server has said a policy already controls the role, the button
+ * becomes **Edit <policy name>** and goes straight to that policy, so nobody
+ * clicks a create button to be told it cannot create (§9.4).
+ *
  * Renders nothing while the policy product is off.
  */
 
@@ -20,6 +24,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
+
+import { useObjectPolicy } from "./useObjectPolicy";
 
 import { POLICY_ERROR_COPY, PolicyLoadFailure, classifyPolicyError, humanize, trust, usePolicyCapabilities, type PolicyFailure } from "../shared";
 import { coverageHrefFor, trustReasonWords } from "./findingModel";
@@ -40,15 +46,39 @@ const NOT_FOUND: Record<string, string> = {
   identity_retired: "The role it pointed to no longer exists.",
 };
 
-export function CreatePolicyAction({ objectId, label = "Create policy", className }: { objectId: string; label?: string; className?: string }) {
+export function CreatePolicyAction({
+  objectId,
+  label = "Create policy",
+  className,
+  size,
+  variant,
+  lazy,
+}: {
+  objectId: string;
+  label?: string;
+  className?: string;
+  size?: "sm";
+  variant?: "outline";
+  /** Ask the server only when clicked, for rows that would otherwise each make a request. Never shows "Edit <policy>" up front. */
+  lazy?: boolean;
+}) {
   const ws = getWorkspaceId() ?? "";
   const caps = usePolicyCapabilities(ws);
+  const held = useObjectPolicy(ws, objectId, caps.state !== "on" || !!lazy);
   const navigate = useNavigate();
   const [resolve, { isFetching }] = useLazyResolveGovTargetsQuery();
   const [answer, setAnswer] = useState<GovResolvedTarget | null>(null);
   const [failure, setFailure] = useState<PolicyFailure | null>(null);
 
   if (caps.state !== "on" || !objectId) return null;
+
+  if (held.control) {
+    return (
+      <Button asChild size={size} variant={variant} className={cn(variant ? "" : "text-white", className)}>
+        <Link to={`/iga/policy/policies/${encodeURIComponent(held.control.policy_id)}`}>{held.policyName ? `Edit ${held.policyName}` : "Edit policy"}</Link>
+      </Button>
+    );
+  }
 
   const click = async () => {
     setAnswer(null);
@@ -72,7 +102,7 @@ export function CreatePolicyAction({ objectId, label = "Create policy", classNam
 
   return (
     <div className="inline-flex max-w-full flex-col items-end gap-2 text-left">
-      <Button onClick={() => void click()} disabled={isFetching} className={cn("text-white", className)}>
+      <Button onClick={() => void click()} disabled={isFetching} size={size} variant={variant} className={cn(variant ? "" : "text-white", className)}>
         {isFetching ? "Checking…" : label}
       </Button>
       {failure ? (

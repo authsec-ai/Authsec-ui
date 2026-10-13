@@ -21,6 +21,9 @@
  *
  *   GET  /deployments                         ListDeployments          iga_gov_deployments_controller.go:22
  *   GET  /deployments/:id                     GetDeployment            iga_gov_deployments_controller.go:46
+ *   POST /deployments/:id/recovery-plans/:plan_id/approve ApproveRecoveryPlan iga_gov_deployments_controller.go (governance:approve)
+ *   POST /deployments/:id/accept-drift        AcceptDrift              iga_gov_deployments_controller.go (governance:enforce)
+ *   POST /deployments/:id/reapply             ReapplyDeployment        iga_gov_deployments_controller.go (governance:author)
  *   POST /deployments/:id/resolve             ResolveDeployment        iga_gov_deployments_controller.go:59
  *   POST /deployments/:id/undo                UndoDeployment           iga_gov_deployments_controller.go:112 (undo :86)
  *   POST /deployments/:id/emergency-undo      EmergencyUndoDeployment  iga_gov_deployments_controller.go:115
@@ -37,14 +40,11 @@
  *   POST /policies/:id/rollout/resume         ResumeRollout            iga_gov_rollout_controller.go:113
  *
  * What the backend does NOT serve although the spec describes it:
- *   - `GET /deployments?attention=1` and `?delivery=`: the handler parses only
- *     policy_id, state, account, kind, cursor and limit (ListDeployments
- *     :28-:36). "Needs attention" is therefore a client rule (`needsOperator`).
- *   - The list is ordered outcome_unresolved first, then by id; it is not
- *     "newest first" (iga_gov_deploy_routes.go ListDeployments ORDER BY).
- *   - The deployment detail carries no pull-request / IaC change object: the
- *     J1/J2 delivery state is only the deployment state, `apply_deadline_at`
- *     and the artifact verification's `GovApplyProgress` evidence.
+ *   - Nothing the spec describes for deployments is missing any more:
+ *     `GET /deployments` takes `delivery` and `attention=1`, orders
+ *     outcome_unresolved first and then newest first with a keyset cursor, and
+ *     the detail carries `context` and the pull request (`iac_change`). Recovery
+ *     plan approval, Accept drift and Re-apply have their own routes (below).
  *   - `POST /deployments/:id/health-reports` always records channel `ui`
  *     (the request type's Channel is `json:"-"`).
  *
@@ -400,6 +400,10 @@ export interface IGAGovDeployment {
   revalidation_result?: "unchanged";
   created_at: string;
   updated_at: string;
+  /** Set when an operator accepted this drifted deployment (§8.8); its state stays `drifted`. */
+  drift_accepted_at?: string;
+  drift_accepted_by?: string;
+  drift_accepted_reason: string;
 }
 
 /** services.GovDeploymentView (iga_gov_deploy_routes.go:63-70): a list row. */
@@ -710,8 +714,53 @@ export interface GovDeploymentGateFacts {
 }
 
 /** services.GovDeploymentDetail (iga_gov_deploy_routes.go:136-149): `GET /deployments/:id`. */
+/** services.GovDeploymentContext: what the deployment is of. */
+export interface GovDeploymentContext {
+  policy_id: string;
+  policy_name: string;
+  version_no: number;
+  account_id: string;
+  role_id: string;
+  role_arn: string;
+}
+
+/** models.IGAGovIaCChange: the pull request of an `iac_pr` deployment (§8.11). */
+export interface GovIaCChange {
+  id: string;
+  deployment_id: string;
+  source_id: string;
+  branch: string;
+  pr_number?: number;
+  pr_url: string;
+  proposed_sha: string;
+  reviewed_sha: string;
+  merged_sha: string;
+  merged_at?: string;
+  apply_run_ref: string;
+  state: string;
+  updated_at: string;
+}
+
+/** services.GovRecoveryPlanView: a role-only recovery plan (§8.9) with the approval it holds, if any. */
+export interface GovRecoveryPlan {
+  plan_id: string;
+  plan_hash: string;
+  desired_attachment: string;
+  artifact_disposition: string;
+  created_at: string;
+  approval_id?: string;
+  approved_by?: string;
+  approved_at?: string;
+  approval_expires_at?: string;
+}
+
 export interface GovDeploymentDetail {
   deployment: IGAGovDeployment;
+  context: GovDeploymentContext;
+  /** Null unless the deployment's delivery is `iac_pr`. */
+  iac_change: GovIaCChange | null;
+  /** Role-only recovery plans of an apply deployment; empty unless an undo was blocked. */
+  recovery_plans: GovRecoveryPlan[];
   plan: GovDeploymentPlanRow;
   /** Ordered by op_seq, attempt_no. */
   attempts: IGAGovAttempt[];
@@ -1063,24 +1112,26 @@ export function isHoldingRole(state: GovDeploymentState): boolean {
 /** The fields a deployment row needs for the helpers (a list row or a detail's `deployment`). */
 export type GovDeploymentFacts = Pick<
   IGAGovDeployment,
-  "id" | "control_id" | "kind" | "state" | "applied_at" | "verify_deadline_at" | "apply_deadline_at"
+  "id" | "control_id" | "kind" | "state" | "applied_at" | "verify_deadline_at" | "apply_deadline_at" | "drift_accepted_at"
 >;
 
 /**
  * Whether a deployment needs a person now (spec S8 `attention=1`, which the
- * backend does not serve): blocked, failed or drifted; an outcome the system
- * could not establish (`outcome_unknown`, `outcome_unresolved` which needs an
- * operator's Resolve); verification past its deadline; a customer apply past
- * its deadline. Gate failures live on the rollout, not on the row.
+ * list serves; this is the same rule for a row already in hand): blocked,
+ * failed or drifted and not accepted; an outcome the system could not
+ * establish (`outcome_unknown`, `outcome_unresolved` which needs an operator's
+ * Resolve); verification past its deadline; a customer apply past its
+ * deadline. Gate failures live on the rollout, not on the row.
  */
 export function needsOperator(d: GovDeploymentFacts, now: Date = new Date()): boolean {
   switch (d.state) {
     case "blocked":
     case "failed":
-    case "drifted":
     case "outcome_unknown":
     case "outcome_unresolved":
       return true;
+    case "drifted":
+      return d.drift_accepted_at === undefined;
     case "applied_unverified":
       return d.verify_deadline_at !== undefined && new Date(d.verify_deadline_at) < now;
     case "awaiting_apply":
@@ -1146,6 +1197,27 @@ export interface ListGovDeploymentsArgs extends WsArg, PageArgs {
   /** A 12-digit AWS account id. */
   account?: string;
   kind?: GovDeploymentKind;
+  delivery?: GovDelivery;
+  /** Only deployments that need a person (the server's rule, see `needsOperator`). */
+  attention?: boolean;
+}
+
+/** `POST /deployments/:id/recovery-plans/:plan_id/approve` body; `plan_hash` is the hash the approver was shown. */
+export interface GovApproveRecoveryPlanRequest {
+  plan_hash: string;
+  reason?: string;
+}
+
+/** `POST /deployments/:id/accept-drift` and `/reapply` body. Reason is required. */
+export interface GovDriftActionRequest {
+  reason: string;
+}
+
+/** What Accept drift did (services.GovDriftAccepted). */
+export interface GovDriftAccepted {
+  deployment: IGAGovDeployment;
+  /** AuthSec's boundary was no longer attached, so the control moved to `removed`. */
+  control_removed: boolean;
 }
 
 export interface GovDeploymentArgs extends WsArg {
@@ -1217,6 +1289,40 @@ export const igaPolicyDeploymentsApi = baseApi.injectEndpoints({
         { type: "IgaGovDeployment", id },
         { type: "IgaGovDeployment", id: "ALL" },
         { type: "IgaGovRollout", id: "ALL" },
+        ...DEPLOYMENT_FANOUT,
+      ],
+    }),
+
+    /** 201: the recovery plan's own approval (`scope: "recovery"`). Needs governance:approve; never the version's author. */
+    approveGovRecoveryPlan: b.mutation<{ id: string }, { id: string; planId: string } & GovApproveRecoveryPlanRequest>({
+      query: ({ id, planId, ...body }) => ({
+        url: `${POLICY_BASE}/deployments/${enc(id)}/recovery-plans/${enc(planId)}/approve`,
+        method: "POST",
+        body,
+      }),
+      transformResponse: (res: { data: { id: string } }) => res.data,
+      invalidatesTags: (_r, _e, { id }) => [{ type: "IgaGovDeployment", id }, { type: "IgaGovEvent", id: "ALL" }],
+    }),
+
+    /** 200: the deployment, marked accepted. Needs governance:enforce. */
+    acceptGovDrift: b.mutation<GovDriftAccepted, { id: string } & GovDriftActionRequest>({
+      query: ({ id, ...body }) => ({ url: `${POLICY_BASE}/deployments/${enc(id)}/accept-drift`, method: "POST", body }),
+      transformResponse: (res: { data: GovDriftAccepted }) => res.data,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "IgaGovDeployment", id },
+        { type: "IgaGovDeployment", id: "ALL" },
+        ...DEPLOYMENT_FANOUT,
+      ],
+    }),
+
+    /** 201: a new version proposed with the drifted deployment's intent (plans compiled from AWS now). Needs governance:author. */
+    reapplyGovDeployment: b.mutation<GovResolveProposed, { id: string } & GovDriftActionRequest>({
+      query: ({ id, ...body }) => ({ url: `${POLICY_BASE}/deployments/${enc(id)}/reapply`, method: "POST", body }),
+      transformResponse: (res: { data: GovResolveProposed }) => res.data,
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "IgaGovDeployment", id },
+        { type: "IgaGovApproval", id: "ALL" },
+        { type: "IgaGovReview", id: "ALL" },
         ...DEPLOYMENT_FANOUT,
       ],
     }),
@@ -1360,6 +1466,9 @@ export const {
   useResolveGovDeploymentMutation,
   useUndoGovDeploymentMutation,
   useEmergencyUndoGovDeploymentMutation,
+  useApproveGovRecoveryPlanMutation,
+  useAcceptGovDriftMutation,
+  useReapplyGovDeploymentMutation,
   useDeclareGovDeploymentValidationMutation,
   useListGovDeploymentValidationsQuery,
   useCreateGovDeploymentHealthReportMutation,

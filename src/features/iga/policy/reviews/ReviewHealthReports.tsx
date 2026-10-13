@@ -6,16 +6,16 @@
  * word. The server allows an owner of a consumer of the role, or a holder of
  * `governance:author`; anyone else is refused in words.
  *
- * Shown only when the reviewed version has a deployment: the deployments of the
- * policy are read (needs `governance:read`) and filtered to this version's
- * forward deployments. When that read is refused or fails the section is
- * absent, never an invented "no deployments" statement.
+ * Shown only when the reviewed version has a deployment. They come with the
+ * review itself (`deployments`), so an owner who cannot list deployments still
+ * sees the section.
  */
 
 import { useState } from "react";
 
-import { useCreateGovDeploymentHealthReportMutation, useListGovDeploymentsQuery } from "@/app/api/igaPolicyDeploymentsApi";
+import { useCreateGovDeploymentHealthReportMutation } from "@/app/api/igaPolicyDeploymentsApi";
 import type { GovHealthReportKind } from "@/app/api/igaPolicyDeploymentsApi";
+import type { GovReviewDeployment } from "@/app/api/igaPolicyAuthoringApi";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -30,8 +30,7 @@ interface Target {
   state: string;
 }
 
-export function ReviewHealthReports({ ws, policyId, versionNo }: { ws: string; policyId: string; versionNo: number }) {
-  const list = useListGovDeploymentsQuery({ ws, policy_id: policyId, limit: 200 });
+export function ReviewHealthReports({ deployments }: { deployments: GovReviewDeployment[] }) {
   const [report] = useCreateGovDeploymentHealthReportMutation();
   const { run, pending, failure, clear } = usePolicyAction();
   const [target, setTarget] = useState<Target | null>(null);
@@ -40,7 +39,7 @@ export function ReviewHealthReports({ ws, policyId, versionNo }: { ws: string; p
   const [detail, setDetail] = useState("");
   const [sent, setSent] = useState<string | null>(null);
 
-  const rows = (list.data?.data ?? []).filter((d) => d.version_no === versionNo && (d.kind === "apply" || d.kind === "split"));
+  const rows = deployments;
   if (rows.length === 0) return null;
 
   function open(t: Target, k: GovHealthReportKind) {
@@ -77,7 +76,7 @@ export function ReviewHealthReports({ ws, policyId, versionNo }: { ws: string; p
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-(--color-text)">{roleNameOf(d.role_arn)}</p>
                 <div className="mt-0.5 flex items-center gap-2">
-                  <StateChip state={deploymentState(d.state)} />
+                  <StateChip state={deploymentState(d.state, d.delivery)} />
                 </div>
               </div>
               <div className="flex gap-2">

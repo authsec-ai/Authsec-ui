@@ -59,7 +59,7 @@ export function AcceptItems({
                 <label htmlFor={id} className="text-[13px] leading-5 text-(--color-text)">
                   <span className="font-medium">{words.title}</span>
                   <span className="block text-xs text-(--color-text-muted)">{words.why}</span>
-                  <span className="block text-xs text-(--color-text-muted)">I accept this uncertainty for this plan.</span>
+                  <span className="block text-xs font-medium text-(--color-text)">Accept to continue</span>
                 </label>
               </div>
               {s.on ? (

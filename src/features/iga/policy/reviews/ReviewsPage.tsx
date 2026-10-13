@@ -2,13 +2,9 @@
  * Policy › Reviews (SPEC-iga-phase3-policy.md §9.3 S4b): the owner reviews the
  * caller was asked in, the ones that need an answer first.
  *
- * What the list can truthfully say. `GET /reviews` is ordered newest first by
- * the server (iga_gov_owner_review_service.go `List`), not by deadline, and is
- * cursor-paged, so "due dates first" is applied within the page on screen:
- * reviews that wait on the caller come first, then other open reviews, each by
- * deadline, then closed ones in the server's order. A page is therefore not a
- * global ranking and the footer says so when more pages exist. `mine=true`
- * (the default) lists the reviews the caller was asked in and needs a verified
+ * The server orders the list (`order=due`): open reviews first by deadline,
+ * then closed ones, with a keyset cursor, so the order holds across pages.
+ * `mine=true` (the default) lists the reviews the caller was asked in and needs a verified
  * member session; "everyone's" needs `governance:read`. A deadline changes
  * nothing by itself (silence is not consent), so "overdue" is a mark, not a
  * state. A failed read is a banner with Retry, never an empty list.
@@ -49,21 +45,6 @@ const isLive = (r: GovReviewSummary) => r.closed_at === null && (r.status === "o
 /** The caller was asked and has not answered a review that still takes answers. */
 const waitsOnMe = (r: GovReviewSummary) => r.asked && r.my_response === null && isLive(r);
 
-/** Waiting on the caller, then other open reviews (each by deadline), then closed ones as the server sent them. */
-function arrange(rows: GovReviewSummary[]): GovReviewSummary[] {
-  const group = (r: GovReviewSummary) => (waitsOnMe(r) ? 0 : isLive(r) ? 1 : 2);
-  return rows
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => {
-      const ga = group(a.r);
-      const gb = group(b.r);
-      if (ga !== gb) return ga - gb;
-      if (ga < 2 && a.r.deadline_at !== b.r.deadline_at) return a.r.deadline_at < b.r.deadline_at ? -1 : 1;
-      return a.i - b.i;
-    })
-    .map((x) => x.r);
-}
-
 export default function ReviewsPage() {
   const ws = getWorkspaceId() ?? "";
   const navigate = useNavigate();
@@ -87,10 +68,10 @@ export default function ReviewsPage() {
 
   // Upgrade to a workspace-member session before the member-gated (mine) list runs.
   const { ready } = useWorkspaceMemberSession();
-  const query = useListGovReviewsQuery({ ws, mine: scope === "mine", status: statusesOf(status), limit: PAGE, cursor }, { skip: !ready });
+  const query = useListGovReviewsQuery({ ws, mine: scope === "mine", status: statusesOf(status), order: "due", limit: PAGE, cursor }, { skip: !ready });
   const failure = classifyPolicyError(query.error);
   const next = query.currentData?.meta.next_cursor ?? null;
-  const rows = useMemo(() => arrange(query.currentData?.data ?? []), [query.currentData]);
+  const rows = useMemo(() => query.currentData?.data ?? [], [query.currentData]);
   const waiting = rows.filter(waitsOnMe).length;
   const filtered = scope !== "mine" || status !== "active";
 

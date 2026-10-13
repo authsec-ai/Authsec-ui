@@ -64,10 +64,9 @@ export function IgaSidebar({
   const navigate = useNavigate();
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
-  // Policy and Logs are previews only while the policy product is off. The tag stays while
-  // the capability loads; a failed check drops it (it says nothing about the product being off).
-  const policyState = usePolicyCapabilities(getWorkspaceId() ?? "").state;
-  const policyOn = policyState === "on" || policyState === "error";
+  // Policy and Logs are previews until the policy product is known to be on. The tag stays while
+  // the capability loads or cannot be read: a failed check does not say the product is on.
+  const policyOn = usePolicyCapabilities(getWorkspaceId() ?? "").state === "on";
 
   const items = useMemo(
     () =>

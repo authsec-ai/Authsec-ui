@@ -27,6 +27,7 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { TableCard } from "@/theme/components/cards";
 
+import { KubernetesPolicyNote } from "../policy/shared";
 import { PreviewLayout, type PreviewModel } from "../shared/components/ObjectPreview";
 import { Timestamp } from "../shared/components/Timestamp";
 import { resolvePagedView, useRestartOnListingChanged, type PagedView } from "../shared/listView";
@@ -369,6 +370,7 @@ export default function InventoryScreen(p: ScreenProps) {
       onClearAll={() => p.url.patch({ kind: null, namespace: null, source: null })}
       notices={
         <>
+          <KubernetesPolicyNote />
           {restarted ? (
             <p role="status" className="text-xs text-(--color-text-muted)">
               The list restarted at the first page: it changed while you were paging.

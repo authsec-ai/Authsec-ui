@@ -54,7 +54,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   drift: "Drift",
   undo: "Undo",
   control_removal: "Control removal",
-  legacy_agent_policy: "Legacy agent policies",
   finding: "Finding exceptions and rules",
 };
 
@@ -81,7 +80,6 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   drift: GitCompare,
   undo: Undo2,
   control_removal: ShieldOff,
-  legacy_agent_policy: Archive,
   finding: Flag,
 };
 

@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 import { Panel } from "@/features/iga/shared/components/Panel";
 import { getWorkspaceId } from "@/utils/workspace";
 
@@ -204,13 +205,15 @@ function RuleRow({ rule, canChange, onRemove }: { rule: GovFindingRuleView; canC
 export default function FindingRulesSection() {
   const ws = getWorkspaceId() ?? "";
   const author = usePolicyPermission("governance:author");
-  const rules = useListGovFindingRulesQuery({ ws });
+  const [paging, setPaging] = useState<{ ws: string; stack: string[] }>({ ws, stack: [] });
+  const stack = paging.ws === ws ? paging.stack : [];
+  const rules = useListGovFindingRulesQuery({ ws, limit: 25, cursor: stack.at(-1) });
   const [del] = useDeleteGovFindingRuleMutation();
   const delAction = usePolicyAction("governance:author");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<GovFindingRuleView | null>(null);
   const failure = classifyPolicyError(rules.error);
-  const rows = rules.data?.data ?? [];
+  const rows = rules.currentData?.data ?? [];
   const canChange = author.offered;
 
   async function remove() {
@@ -230,11 +233,11 @@ export default function FindingRulesSection() {
       }
       flush
     >
-      {rules.isLoading ? (
+      {rules.isFetching && !rules.currentData ? (
         <p role="status" className="px-4 py-3 text-[13px] text-(--color-text-muted)">
           Loading…
         </p>
-      ) : failure && !rules.data ? (
+      ) : failure && !rules.currentData ? (
         <div className="px-4 py-3">
           {failure.kind === "forbidden" ? (
             <p className="text-[13px] text-(--color-text-muted)">Your role cannot see finding rules. They are for people who can author policy.</p>
@@ -254,8 +257,13 @@ export default function FindingRulesSection() {
           ))}
         </ul>
       )}
-      {rules.data?.meta.next_cursor ? (
-        <p className="px-4 pb-3 text-xs text-(--color-text-muted)">More rules exist than are shown here.</p>
+      {rules.currentData ? (
+        <CursorPager meta={{ limit: 25, next_cursor: rules.currentData.meta.next_cursor ?? null }}
+          pageIndex={stack.length} rowsOnPage={rows.length}
+          onPrev={() => setPaging({ ws, stack: stack.slice(0, -1) })}
+          onNext={(cursor) => setPaging({ ws, stack: [...stack, cursor] })} />
+      ) : stack.length > 0 ? (
+        <Button variant="outline" className="m-3" onClick={() => setPaging({ ws, stack: stack.slice(0, -1) })}>Previous page</Button>
       ) : null}
       <AddRuleDialog open={adding} onOpenChange={setAdding} />
       <ActionDialog

@@ -387,7 +387,7 @@ export default function NewPolicyPage() {
   return (
     <PolicyShell
       title="New policy"
-      description="Restrict whole AWS services a role has not used. Recommendation first; nothing changes in AWS until it is approved and rolled out."
+      description="Right-size an AWS role or give a workload its own identity. Nothing changes in AWS until the proposal is reviewed, approved and delivered."
       nav={false}
     >
       {author.refused ? (

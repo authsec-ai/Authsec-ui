@@ -9,7 +9,10 @@
  *   R1A_SCOPE                  the scope sentence every change description carries
  *   refusalText(refusal)       why a plan is ineligible, in a sentence
  *   eligibilityView(e)         eligible / pull request or export only / not eligible
- *   planCaseText(case)         what the plan does to the role's boundary
+ *   planCaseText(case, plan)   what the plan does to the role's boundary
+ *   firstBoundaryText(forms)   why a first boundary needs every resource-policy form read
+ *   blockerText(blocker)       a resource policy that makes a first boundary unsafe
+ *   dedicatedIdentityText(plan) what moving a workload to its own role does, with the by-name references counted
  *   dispositionText(plan)      what happens to the boundary policy AuthSec writes
  *   opText(op)                 one operation of the plan, in words
  *   gapText(gap)               one evidence gap an approver must accept
@@ -24,8 +27,11 @@
 
 import type {
   GovArtifactDisposition,
+  GovArtifactStateFacts,
+  GovBlocker,
   GovEligibility,
   GovGap,
+  GovIncompleteForm,
   GovNarrowedStatement,
   GovOp,
   GovPlanCase,
@@ -35,7 +41,7 @@ import type {
   GovUnanalysedItem,
 } from "@/app/api/igaPolicyAuthoringApi";
 
-import { humanize, type StateView } from "../shared";
+import { humanize, plural, type StateView } from "../shared";
 
 export const R1A_SCOPE =
   "R1a restricts whole AWS services for selected roles. It does not narrow actions or resources within the services a role keeps.";
@@ -104,11 +110,13 @@ export function refusalText(r: GovRefusal | string): string {
   return `${humanize(code)}${detail ? `: ${detail}` : ""}.`;
 }
 
+const SPLIT_PROPOSAL = "AuthSec proposes a copy for this role only; the shared boundary is not changed.";
+
 const CASES: Record<GovPlanCase, string> = {
   none_to_authsec: "The role has no boundary. AuthSec creates one that excludes the removed services and attaches it.",
   authsec_version: "The role already has an AuthSec boundary. AuthSec writes a new default version of it.",
   customer_in_place: "The role has its own boundary, used by this role only. It is narrowed in place by removing the services' actions; AuthSec never edits it in AWS, so your pipeline or you apply it.",
-  customer_split: "The role's boundary is shared with other entities and is not changed. A copy narrowed for this role only is created and set as this role's boundary.",
+  customer_split: `The role's boundary is shared with other entities. ${SPLIT_PROPOSAL}`,
   undo_delete_new_boundary: "Undo: the role had no boundary before. AuthSec's boundary is detached and deleted.",
   undo_earlier_document: "Undo: the boundary returns to the document of the version before this one.",
   undo_customer_in_place: "Undo: the role's own boundary returns to the document it had before.",
@@ -122,7 +130,23 @@ const CASES: Record<GovPlanCase, string> = {
   split_isolate: "The workload moves to a role of its own with the same IAM policies and boundary.",
   split_revert: "The workload moves back to the role it came from.",
 };
-export const planCaseText = (c: string | null | undefined): string => (c ? CASES[c as GovPlanCase] ?? humanize(c) : "");
+/**
+ * What the plan does to the role's boundary. For a shared customer boundary the
+ * plan names it and says how many others use it (§9.7); the others are the
+ * boundary's attachment set without this role's own use as its boundary.
+ */
+export function planCaseText(c: string | null | undefined, plan?: Pick<GovPlanView, "diff" | "precondition" | "role_id">): string {
+  if (!c) return "";
+  if (c === "customer_split" && plan?.diff.boundary_before) {
+    const set = (plan.precondition as { artifact_state?: GovArtifactStateFacts } | null | undefined)?.artifact_state?.attachment_set;
+    const others = set?.filter((e) => !(e.kind === "role" && e.id === plan.role_id && e.usage === "boundary"));
+    if (others && others.length > 0) {
+      const count = others.every((e) => e.kind === "role") ? plural(others.length, "other role") : plural(others.length, "other entity", "other entities");
+      return `Boundary ${arnTail(plan.diff.boundary_before.arn)} is also used by ${count}. ${SPLIT_PROPOSAL}`;
+    }
+  }
+  return CASES[c as GovPlanCase] ?? humanize(c);
+}
 
 /** The boundary policy AuthSec writes: what happens to it, the role's attachment and any boundary it replaces. */
 export function dispositionText(plan: Pick<GovPlanView, "desired_attachment" | "artifact_disposition" | "desired_boundary_arn" | "replaced_boundary_arn" | "kind">): string[] {
@@ -203,6 +227,50 @@ const FORM_WORDS: Record<string, string> = {
   s3_access_point: "S3 access point policies",
 };
 const formWords = (form: string | undefined): string => (form ? FORM_WORDS[form] ?? `${humanize(form).toLowerCase()} policies` : "resource policies");
+
+/** §9.7 "First boundary needs evidence": every collected resource-policy form must be read before a first boundary. */
+export function firstBoundaryText(incomplete: readonly GovIncompleteForm[]): string {
+  const lead = "This role has no boundary yet. Before AuthSec attaches one, every collected resource-policy form must be read";
+  if (incomplete.length === 0) return `${lead}.`;
+  return `${lead}: ${incomplete.map((f) => `${formWords(f.form)} could not be read${f.region ? ` in ${f.region}` : ""}`).join("; ")}.`;
+}
+
+const FORM_NOUN: Record<string, string> = {
+  s3_bucket: "bucket",
+  sqs_queue: "queue",
+  sns_topic: "topic",
+  kms_key: "key",
+  ecr_repository: "repository",
+  lambda_function: "function",
+  secrets_manager_secret: "secret",
+  s3_access_point: "access point",
+};
+
+/** §9.7 "Resource policy blocks a boundary": the resource named, and why no boundary is attached. */
+export function blockerText(b: GovBlocker): string {
+  const noun = FORM_NOUN[b.form];
+  const what = `The policy of ${noun ? `${noun} ` : ""}${arnTail(b.resource)}`;
+  const why = b.kind === "unparseable" ? "could not be parsed" : "uses Deny with NotPrincipal";
+  return `${what} ${why}${b.sid ? ` (${b.sid})` : ""}. Attaching any boundary could break access, so AuthSec will not attach one.`;
+}
+
+/**
+ * §9.7 "Dedicated identity": the move, and what happens to access granted to
+ * the old role by name. Counts come from the plan's compatibility items; a
+ * handling that has no items is left out, never shown as zero.
+ */
+export function dedicatedIdentityText(plan: Pick<GovPlanView, "diff" | "unanalysed" | "delivery">): string | null {
+  const split = plan.diff.split;
+  if (!split) return null;
+  const by = (h: string) => split.compatibility.filter((c) => c.handling === h).length;
+  const parts = [
+    by("pr_adds_new_role") > 0 ? `${by("pr_adds_new_role")} updated in this ${plan.delivery === "iac_pr" ? "pull request" : "export"}` : "",
+    by("owner_confirmation") > 0 ? `${by("owner_confirmation")} confirmed by the owner` : "",
+    by("effect_unknown") > 0 ? `${by("effect_unknown")} whose effect AuthSec could not establish` : "",
+    plan.unanalysed.some((u) => u.key === "kms_grants") ? "KMS grants not analysed (accepted at approval)" : "",
+  ].filter(Boolean);
+  return `${arnTail(split.subject_arn)} moves to its own role with the same IAM policies, inline copies and boundary. Access granted to ${arnTail(split.source_role_arn)} by name elsewhere does not follow unless updated${parts.length > 0 ? `: ${parts.join(", ")}` : ""}. Narrowing the new role is a later, separate change.`;
+}
 
 /** One bundle gap: an item an approver must accept before approval. */
 export function gapText(g: GovGap): string {

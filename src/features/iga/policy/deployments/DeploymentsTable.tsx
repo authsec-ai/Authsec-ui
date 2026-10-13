@@ -72,8 +72,8 @@ export function DeploymentsTable({
         label: "State",
         priority: 1,
         approxWidth: 170,
-        cell: ({ row }) => <StateChip state={deploymentState(row.original.state)} />,
-        detail: (d) => <StateChip state={deploymentState(d.state)} />,
+        cell: ({ row }) => <StateChip state={deploymentState(row.original.state, row.original.delivery)} />,
+        detail: (d) => <StateChip state={deploymentState(d.state, d.delivery)} />,
       },
       {
         id: "next",

@@ -237,7 +237,6 @@ export const baseApi = createApi({
     "IgaGovSettings",
     "IgaGovMetrics",
     "IgaGovSetup",
-    "IgaGovLegacy",
   ],
   endpoints: () => ({}),
 });
