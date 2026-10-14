@@ -255,6 +255,24 @@ export interface DraftResource {
   bucket: string;
   arn: string;
   account_id: string;
+  /**
+   * Every Discovery record naming this bucket or a path in it, the bucket's own
+   * record first when it has one. Most buckets are known only through paths
+   * policies name (`bucket/folder/*`), and who can reach the bucket is the
+   * union of who can reach each of them.
+   */
+  records?: { id: string; text: string }[];
+  /** Folders Discovery saw named in this bucket, e.g. `attachments/`. */
+  folders?: string[];
+}
+
+/** The path a record names inside its bucket: "" for the bucket or all of it, else `folder/*` or a key. */
+export function pathInBucket(text: string): string {
+  const i = text.indexOf(":::");
+  const rest = i >= 0 ? text.slice(i + 3) : text;
+  const slash = rest.indexOf("/");
+  const path = slash >= 0 ? rest.slice(slash + 1) : "";
+  return path === "*" ? "" : path;
 }
 
 /** The form's state: what the person chose, before it becomes a request. */

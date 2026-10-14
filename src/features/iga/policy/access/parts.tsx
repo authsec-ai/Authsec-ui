@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 import { classifyPolicyError } from "../shared";
 import { EFFECT, STATUS } from "./model";
+import { readinessWords } from "./readiness";
 
 export function PolicyStatusChip({ status, className }: { status: AccessPolicyStatus; className?: string }) {
   const s = STATUS[status] ?? { label: status, tone: "neutral" as const, hint: "" };
@@ -78,7 +79,7 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
     ? r.reason || "Applying policies is turned off on this server."
     : accounts.length === 0
       ? "No AWS account is connected yet. Connect one in Connections first."
-      : `${notReady.map((a) => `${a.account_id}${a.reason ? ` (${a.reason})` : ""}`).join(", ")}: AuthSec can read ${notReady.length === 1 ? "this account" : "these accounts"} but cannot change IAM there yet. Set up AWS access to apply policies.`;
+      : `${notReady.map((a) => `Account ${a.account_id}: ${readinessWords(a.reason)}.`).join(" ")} AuthSec can read ${notReady.length === 1 ? "it" : "them"} but cannot change IAM yet.`;
   return (
     <DecisionBanner
       tone="warning"
