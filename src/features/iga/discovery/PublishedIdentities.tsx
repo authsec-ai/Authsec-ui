@@ -96,7 +96,7 @@ export default function PublishedIdentities(p: ScreenProps) {
       },
       {
         id: "used_by",
-        header: "Bound to",
+        header: "Used by",
         label: DIRECT_BINDINGS_LABEL,
         priority: 1,
         approxWidth: 150,

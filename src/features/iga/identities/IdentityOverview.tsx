@@ -334,7 +334,7 @@ export function IdentityOverview({
                   <li key={c.key_id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
                     <span className="font-mono text-xs">{c.key_id}</span>
                     <StatusBadge tone={c.status === "Active" ? "neutral" : "warning"}>{c.status}</StatusBadge>
-                    <span className="text-xs text-(--color-text-muted)">Created {dayText(c.created_at)}</span>
+                    <span className="text-xs text-(--color-text-muted)">{c.created_at ? `Created ${dayText(c.created_at)}` : "Creation date not reported"}</span>
                     <span className="ml-auto text-xs text-(--color-text-muted)">
                       {c.last_used_at
                         ? `Last authenticated attempt ${agoText(c.last_used_at)}`

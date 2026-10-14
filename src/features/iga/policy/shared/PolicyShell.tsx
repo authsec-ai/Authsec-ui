@@ -24,7 +24,7 @@ export function PolicyNav() {
   const { pathname } = useLocation();
   const active = pathname.startsWith("/iga/policy/setup") ? "setup" : "policies";
   return (
-    <nav aria-label="Policy views" className="flex gap-1 overflow-x-auto border-b border-(--color-border-subtle)">
+    <nav aria-label="Policy views" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-(--color-border-subtle)">
       {NAV.map((n) => (
         <Link
           key={n.key}

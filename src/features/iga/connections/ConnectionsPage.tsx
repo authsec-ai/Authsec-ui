@@ -56,6 +56,19 @@ import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 
 const POLL_MS = 5_000;
 
+/** The scan, in the Last scan column: "Finished" is the usual case and goes unsaid. */
+function scanLine(c: Connection): string {
+  const text = lastScanText(c);
+  return c.provider !== "k8s" && c.scan.state === "finished" ? text.replace(/^Finished /, "") || "Finished" : text;
+}
+
+/** What the graph made of it. The revision counter is on the detail page, not here. */
+function graphLine(c: Connection): string {
+  const g = graphText(c);
+  if (c.graph.state === "published") return c.graph.published_at ? g.text.replace(/^Published/, "Graph updated") : "Graph updated";
+  return g.note ? `${g.text} · ${g.note}` : g.text;
+}
+
 /** What the search box matches: the name, the account/project/cluster id, the provider and the scope. */
 function searchText(c: Connection): string {
   return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
@@ -217,23 +230,21 @@ export default function ConnectionsPage() {
         approxWidth: 200,
         // The scan, and under it what the graph made of it.
         cell: ({ row }) => {
-          const g = graphText(row.original);
           return (
             <div className="min-w-0 space-y-0.5 whitespace-normal">
-              <div className="text-[13px]">{lastScanText(row.original)}</div>
-              <div className="text-xs text-muted-foreground">{g.note ? `${g.text} · ${g.note}` : g.text}</div>
+              <div className="text-[13px]">{scanLine(row.original)}</div>
+              <div className="text-xs text-muted-foreground">{graphLine(row.original)}</div>
             </div>
           );
         },
-        detail: (c) => {
-          const g = graphText(c);
-          return `${lastScanText(c)} · ${g.note ? `${g.text} · ${g.note}` : g.text}`;
-        },
+        detail: (c) => `${scanLine(c)} · ${graphLine(c)}`,
       },
       {
+        // The id stays "coverage" so saved column choices keep working. The value is
+        // what was chosen to scan; what was actually read is the Coverage tab.
         id: "coverage",
-        header: "Coverage",
-        label: "Coverage",
+        header: "Scope",
+        label: "Scope",
         priority: 3,
         approxWidth: 150,
         cell: ({ row }) => <span className="block truncate text-[13px]">{row.original.scope_summary || "—"}</span>,
@@ -311,8 +322,8 @@ export default function ConnectionsPage() {
       title="Connections"
       description={
         <span className="inline-flex flex-wrap items-center gap-1">
-          Connect your AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organizations so AuthSec can
-          discover the identities, agents and permissions inside them.
+          Connect the cloud accounts, clusters and code organisations AuthSec should watch. Each one is scanned, and
+          Discovery shows the identities, agents and permissions found in it.
         </span>
       }
       actions={
@@ -352,6 +363,8 @@ export default function ConnectionsPage() {
       <TableCard>
         <CardContent variant="flush">
           <TableToolbar
+            // Search and the type filter earn their place once the list is long enough to need them.
+            controls={all.length >= 5 || filtered}
             search={search}
             onSearch={(v) => setParam("q", v || null)}
             filtered={filtered}

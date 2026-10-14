@@ -120,6 +120,14 @@ function accessHint(access: AccessLevel[], isBlock: boolean): string {
   return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
 }
 
+/** Scrolls to the field a refusal names and puts the cursor in it, so the fix is one keystroke away. */
+function revealField(field: string) {
+  const box = document.getElementById(`ap-${field}`);
+  box?.scrollIntoView({ block: "center", behavior: "smooth" });
+  const target = box?.matches("input, textarea, select, button") ? box : box?.querySelector<HTMLElement>("input, textarea, select, button");
+  target?.focus({ preventScroll: true });
+}
+
 export default function PolicyFormPage() {
   const ws = getWorkspaceId() ?? "";
   const navigate = useNavigate();
@@ -223,7 +231,7 @@ export default function PolicyFormPage() {
     const problem = draftProblem(draft);
     if (problem) {
       setFieldError(problem);
-      document.getElementById(`ap-${problem.field}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      revealField(problem.field);
       return;
     }
     const body = { ...bodyOf(draft), name: draft.name.trim() || suggestedName(draft) };
@@ -241,7 +249,7 @@ export default function PolicyFormPage() {
       // The server's own message is written for the field; fall back to the
       // code's title only when it did not send one.
       setFieldError({ field: f, message: act.failure.message || describeFailure(act.failure).title });
-      document.getElementById(`ap-${f}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      revealField(f);
     }
   }, [act.failure]);
 
@@ -561,7 +569,7 @@ export default function PolicyFormPage() {
             </aside>
           </div>
 
-          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) bg-(--color-surface-base) px-1 py-3">
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) py-4">
             {staleEdit ? (
               <div className="basis-full rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
                 <p className="font-semibold">This policy changed since you opened it.</p>

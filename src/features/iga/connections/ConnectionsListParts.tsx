@@ -26,6 +26,7 @@ export type StatusTileKey = "connected" | "attention" | "running" | "revoked";
 /* --------------------------------- table toolbar --------------------------------- */
 
 export function TableToolbar({
+  controls = true,
   search,
   onSearch,
   typeControl,
@@ -33,6 +34,8 @@ export function TableToolbar({
   onClear,
   countLabel,
 }: {
+  /** false: only the count, for a list too short to search. */
+  controls?: boolean;
   search: string;
   onSearch: (v: string) => void;
   typeControl: ReactNode;
@@ -42,20 +45,24 @@ export function TableToolbar({
 }) {
   return (
     <div data-compact-toolbar className="flex flex-wrap items-center gap-3 border-b border-(--color-border-subtle) px-4 py-3">
-      <label className="relative flex min-w-[220px] max-w-[360px] flex-1 basis-[260px] items-center">
-        <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search name or ID"
-          aria-label="Search connections"
-          className="h-9 pl-9"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
-      {typeControl}
+      {controls ? (
+        <>
+          <label className="relative flex min-w-[220px] max-w-[360px] flex-1 basis-[260px] items-center">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search name or ID"
+              aria-label="Search connections"
+              className="h-9 pl-9"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          {typeControl}
+        </>
+      ) : null}
       <span className="flex-1" />
       {filtered ? (
         <button type="button" onClick={onClear} className="h-8 rounded-md px-2.5 text-[13px] font-medium text-(--color-primary-text) hover:bg-(--color-surface-subtle)">

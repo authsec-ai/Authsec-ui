@@ -175,6 +175,8 @@ export const POLICY_ERROR_COPY: Record<string, { title: string; fix?: string }> 
   binding_template_v1: { title: "The enforcement stack is on an older template", fix: "Update the stack in AWS access to the latest template." },
   policy_ended: { title: "This policy has ended", fix: "Ended policies are read-only. Create a new one if you need it again." },
   policy_not_active: { title: "This policy is not in a state for that", fix: "Refresh to see its current state." },
+  policy_not_ended: { title: "End this policy first", fix: "Only an ended policy can be deleted." },
+  policy_removing: { title: "Still in AWS", fix: "Delete is available once AuthSec has taken the policy out of AWS. If it stays like this, check the connection on Connections." },
   policy_busy: { title: "AuthSec is still removing the paused policy", fix: "Still removing from AWS — try again in a minute." },
   finding_not_actionable: { title: "This finding cannot start a policy", fix: "Only findings that name services to remove can." },
   review_closed: { title: "This review is already closed", fix: "Reload to see its outcome." },

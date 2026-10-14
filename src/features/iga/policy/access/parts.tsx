@@ -3,10 +3,11 @@
 import { Copy } from "lucide-react";
 
 import { useGetAccessReadinessQuery, type AccessEffect, type AccessPolicyStatus } from "@/app/api/igaAccessPoliciesApi";
-import { DecisionBanner, StatusBadge } from "@/components/console/status";
+import { DecisionBanner } from "@/components/console/status";
 import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
+import { IgaBadge } from "../../shared/components/IgaBadge";
 import { classifyPolicyError } from "../shared";
 import { EFFECT, STATUS } from "./model";
 import { readinessWords } from "./readiness";
@@ -14,15 +15,15 @@ import { readinessWords } from "./readiness";
 export function PolicyStatusChip({ status, className }: { status: AccessPolicyStatus; className?: string }) {
   const s = STATUS[status] ?? { label: status, tone: "neutral" as const, hint: "" };
   return (
-    <StatusBadge tone={s.tone} title={s.hint} className={className}>
+    <IgaBadge tone={s.tone} title={s.hint} className={className}>
       {s.label}
-    </StatusBadge>
+    </IgaBadge>
   );
 }
 
 export function EffectChip({ effect }: { effect: AccessEffect }) {
   const e = EFFECT[effect];
-  return <StatusBadge tone={e.tone}>{e.label}</StatusBadge>;
+  return <IgaBadge tone={e.tone}>{e.label}</IgaBadge>;
 }
 
 /** One IAM policy document, as AWS will hold it. */

@@ -20,7 +20,7 @@ import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { ConfirmedValue } from "../shared/components/ObjectPreview";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
-import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId } from "../shared/labels";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId, resourceTypeLabel } from "../shared/labels";
 import { IgaBadge } from "../shared/components/IgaBadge";
 import { useRestartOnListingChanged } from "../shared/listView";
 import { useTrackRevision } from "../shared/revision";
@@ -86,7 +86,7 @@ export default function PublishedResources(p: ScreenProps) {
             name={referenceName(row.original.text)}
             rowKey={refId(row.original.ref)}
             selected={p.url.sel === refId(row.original.ref)}
-            context={[row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service, row.original.region]}
+            context={[row.original.type !== "unknown" ? resourceTypeLabel(row.original.type) : resourceTypeLabel(row.original.service), row.original.region]}
             account={row.original.account ? accountLabel(row.original.account) : "Unknown account"}
             lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
           />
@@ -117,8 +117,8 @@ export default function PublishedResources(p: ScreenProps) {
         priority: 1,
         approxWidth: 160,
         cell: ({ row }) => {
-          const t = row.original.type !== "unknown" ? row.original.type.replace(/_/g, " ") : row.original.service;
-          return <span className="text-sm">{t ? t.charAt(0).toUpperCase() + t.slice(1) : "Not stated"}</span>;
+          const t = row.original.type !== "unknown" ? resourceTypeLabel(row.original.type) : resourceTypeLabel(row.original.service);
+          return <span className="text-sm">{t || "Not stated"}</span>;
         },
       },
       {
@@ -243,7 +243,7 @@ export default function PublishedResources(p: ScreenProps) {
         preview={(r) => ({
           key: refId(r.ref),
           name: referenceName(r.text),
-          kindLabel: `${RESOURCE_KIND_LABEL[r.kind]}${r.type !== "unknown" ? ` · ${r.type.replace(/_/g, " ")}` : ""}`,
+          kindLabel: `${RESOURCE_KIND_LABEL[r.kind]}${r.type !== "unknown" ? ` · ${resourceTypeLabel(r.type)}` : ""}`,
           provider: "aws",
           context: [],
           facts: [

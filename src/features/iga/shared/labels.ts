@@ -311,6 +311,22 @@ export const RESOURCE_KIND_LABEL: Record<ResourceKind, string> = {
   external: "External or unresolved",
 };
 
+const TYPE_WORDS: Record<string, string> = {
+  iam: "IAM", s3: "S3", ec2: "EC2", ecs: "ECS", eks: "EKS", ecr: "ECR", kms: "KMS", sqs: "SQS", sns: "SNS",
+  rds: "RDS", vpc: "VPC", elb: "ELB", ssm: "SSM", sts: "STS", api: "API", arn: "ARN",
+  dynamodb: "DynamoDB", cloudwatch: "CloudWatch", cloudtrail: "CloudTrail", lambda: "Lambda",
+  secretsmanager: "Secrets Manager", bedrock: "Bedrock", agentcore: "AgentCore",
+};
+
+/** "dynamodb_table" -> "DynamoDB table", "iam_role" -> "IAM role": a provider type as a person writes it. */
+export function resourceTypeLabel(type: string | null | undefined): string {
+  if (!type) return "";
+  const words = type.split(/[_\s]+/).filter(Boolean);
+  return words
+    .map((w, i) => TYPE_WORDS[w.toLowerCase()] ?? (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()))
+    .join(" ");
+}
+
 export const RESOURCE_KIND_NOTE: Record<ResourceKind, string> = {
   exact: "Named exactly by a policy statement. Not independently discovered — we have not confirmed it exists.",
   selector: "A pattern, not a resource. We have not enumerated what it matches, and it may match nothing.",

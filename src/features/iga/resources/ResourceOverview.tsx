@@ -22,7 +22,7 @@ import { DecisionBanner, StatusBadge } from "@/components/console/status";
 import { discoveryHref } from "../discovery/urlState";
 import { SCOPE_LABEL, accessScope } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
-import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, IDENTITY_KIND_LABEL, accountLabel, dayText, countText } from "../shared/labels";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, IDENTITY_KIND_LABEL, accountLabel, dayText, countText, resourceTypeLabel } from "../shared/labels";
 import { accountCoverageNote } from "../shared/lifecycle";
 import { viaLink } from "../shared/links";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
@@ -133,8 +133,8 @@ export function ResourceOverview({
                     <span className="text-(--color-text-muted)">{RESOURCE_KIND_NOTE[r.kind]}</span>
                   </span>
                 }</Fact>
-              {r.type !== "unknown" ? <Fact label="Type" mono>{r.type}</Fact> : null}
-              {r.service ? <Fact label="Service" mono>{r.service}</Fact> : null}
+              {r.type !== "unknown" ? <Fact label="Type">{resourceTypeLabel(r.type)}</Fact> : null}
+              {r.service ? <Fact label="Service">{resourceTypeLabel(r.service)}</Fact> : null}
               <Fact label="Account">{
                   r.account ? (
                     <>
@@ -153,7 +153,7 @@ export function ResourceOverview({
                   )
                 }</Fact>
               <Fact label="Region">{r.region ?? "Region not stated"}</Fact>
-              <Fact label="Existence">Not verified. Nothing enumerates resources in this phase.</Fact>
+              <Fact label="Existence">Not verified. AuthSec does not list the resources in this account yet, so it cannot confirm this one exists.</Fact>
               <Fact label={r.kind === "selector" ? "Pattern" : "ARN"}><CopyValue value={r.text} what={r.kind === "selector" ? "Pattern" : "ARN"} /></Fact>
             </Facts>
           </Panel>

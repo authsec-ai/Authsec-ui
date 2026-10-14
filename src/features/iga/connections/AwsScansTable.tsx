@@ -117,7 +117,7 @@ export function AwsScansTable({ connectionId }: { connectionId: string }) {
                 <th className="px-4 py-2.5 font-medium">Result</th>
                 <th className="px-4 py-2.5 font-medium">Duration</th>
                 <th className="px-4 py-2.5 font-medium">Surfaces</th>
-                <th className="px-4 py-2.5 font-medium">Graph</th>
+                <th className="px-4 py-2.5 font-medium">Graph revision</th>
               </tr>
             </thead>
             <tbody>

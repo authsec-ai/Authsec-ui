@@ -249,6 +249,11 @@ export const igaAccessPoliciesApi = baseApi.injectEndpoints({
       query: ({ id, reason }) => ({ url: `${BASE}/${enc(id)}/end`, method: "POST", body: { reason } }),
       invalidatesTags: (_r, _e, { id }) => [LIST, one(id)],
     }),
+    /** DELETE /:id: hides an ended policy. Its history stays in the Logs. */
+    deleteAccessPolicy: b.mutation<PolicyEnvelope<{ id: string; deleted: boolean }>, { id: string }>({
+      query: ({ id }) => ({ url: `${BASE}/${enc(id)}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, { id }) => [LIST, one(id)],
+    }),
   }),
 });
 
@@ -263,4 +268,5 @@ export const {
   usePauseAccessPolicyMutation,
   useResumeAccessPolicyMutation,
   useEndAccessPolicyMutation,
+  useDeleteAccessPolicyMutation,
 } = igaAccessPoliciesApi;

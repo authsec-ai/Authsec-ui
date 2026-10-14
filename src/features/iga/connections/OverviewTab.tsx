@@ -140,7 +140,8 @@ function scanSentence(c: Connection): string {
     case "failed":
       return `${lastScanText(c)}. ${holdsLine(c)}.`;
     case "finished":
-      return `${lastScanText(c)}.`;
+      // The pill above already says "Finished"; the line gives the time and how long ago.
+      return c.scan.at ? `Last run ${ago(c.scan.at)}.` : "The last scan finished.";
     default:
       return "AuthSec reports a scan state this console does not recognise.";
   }

@@ -29,8 +29,8 @@ export const STATUS: Record<AccessPolicyStatus, { label: string; tone: ConsoleTo
   active: { label: "Active", tone: "success", hint: "In AWS and inside its window." },
   drift: { label: "Changed in AWS", tone: "warning", hint: "Someone changed or removed it in AWS. AuthSec is putting it back." },
   failed: { label: "Failed", tone: "danger", hint: "AuthSec could not apply it to every role. Open it to see why." },
-  paused: { label: "Paused", tone: "neutral", hint: "Taken out of AWS by hand. Resume puts it back." },
-  ended: { label: "Ended", tone: "neutral", hint: "No longer in AWS. The record is kept." },
+  paused: { label: "Paused", tone: "warning", hint: "Taken out of AWS by hand. Resume puts it back." },
+  ended: { label: "Ended", tone: "info", hint: "No longer in AWS. The record is kept." },
 };
 
 export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ended"];

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- classification UI is commented out for the demo; imports stay so it can be restored */
 /**
  * AWS Published workloads: the §5.3 graph list, pinned to one publication.
  */
@@ -119,29 +120,30 @@ export default function PublishedWorkloads(p: ScreenProps) {
           />
         ),
       },
-      {
-        id: "classification",
-        header: () => (
-          <span className="inline-flex items-center gap-1.5">
-            Classification
-            <HelpTooltip content="Whether this workload is recorded as an agent. Provider-native agents are agents by type. Everything else stays unclassified until someone reviews it." />
-          </span>
-        ),
-        label: "Classification",
-        priority: 1,
-        approxWidth: 150,
-        cardSummary: true,
-        cell: ({ row }) => (
-          <IgaBadge tone={classificationTone(row.original.classification)} title={classificationMeaning(row.original.classification)}>
-            {classificationShort(row.original.classification)}
-          </IgaBadge>
-        ),
-        detail: (r) => (
-          <span>
-            {classificationShort(r.classification)} <span className={MUTED}>— {classificationMeaning(r.classification)}</span>
-          </span>
-        ),
-      },
+      // Hidden for now: classification is not designed yet. Restore this block when it is.
+      // {
+      //   id: "classification",
+      //   header: () => (
+      //     <span className="inline-flex items-center gap-1.5">
+      //       Classification
+      //       <HelpTooltip content="Whether this workload is recorded as an agent. Provider-native agents are agents by type. Everything else stays unclassified until someone reviews it." />
+      //     </span>
+      //   ),
+      //   label: "Classification",
+      //   priority: 1,
+      //   approxWidth: 150,
+      //   cardSummary: true,
+      //   cell: ({ row }) => (
+      //     <IgaBadge tone={classificationTone(row.original.classification)} title={classificationMeaning(row.original.classification)}>
+      //       {classificationShort(row.original.classification)}
+      //     </IgaBadge>
+      //   ),
+      //   detail: (r) => (
+      //     <span>
+      //       {classificationShort(r.classification)} <span className={MUTED}>— {classificationMeaning(r.classification)}</span>
+      //     </span>
+      //   ),
+      // },
       {
         id: "runtime",
         header: "Runtime",
@@ -216,15 +218,16 @@ export default function PublishedWorkloads(p: ScreenProps) {
       note: LIFECYCLE_NOTE,
       onChange: (v) => p.url.patch({ lifecycle: v }),
     },
-    {
-      key: "classification",
-      label: "Classification",
-      kind: "choice",
-      value: classification,
-      anyLabel: "Any classification",
-      ...fixedFacet(facets, "classification", CLASSIFICATION_VALUES),
-      onChange: (v) => p.url.patch({ classification: v }),
-    },
+    // The Classification filter goes with the column: classification is not designed yet.
+    // {
+    //   key: "classification",
+    //   label: "Classification",
+    //   kind: "choice",
+    //   value: classification,
+    //   anyLabel: "Any classification",
+    //   ...fixedFacet(facets, "classification", CLASSIFICATION_VALUES),
+    //   onChange: (v) => p.url.patch({ classification: v }),
+    // },
     {
       key: "runtime",
       label: "Runtime",
@@ -290,7 +293,8 @@ export default function PublishedWorkloads(p: ScreenProps) {
             detailsHref: `/iga/estate/${refId(r.ref)}`,
             graphHref: `/iga/estate/${refId(r.ref)}/graph`,
             // Keyed by the workload, so one workload's message never shows on the next.
-            actions: <QuickClassify key={refId(r.ref)} ws={p.ws} workloadRef={r.ref} name={r.name} />,
+            // The one-click "classify as agent" is hidden with the rest of classification.
+            // actions: <QuickClassify key={refId(r.ref)} ws={p.ws} workloadRef={r.ref} name={r.name} />,
           };
         }}
       />
