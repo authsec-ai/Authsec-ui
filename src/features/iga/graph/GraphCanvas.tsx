@@ -44,11 +44,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { GraphFrontier, GraphRef } from "@/app/api/igaGraphApi";
+import { refId, type GraphFrontier, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { GraphEdgeView, type GraphEdgeData, type RFGraphEdge } from "./edges";
+import { useGraphBlocks, type GraphBlocks } from "./policyBlocks";
 import { GraphNodeView, type FrontierControl, type GraphNodeData, type RFGraphNode } from "./nodes";
 import type { Position, Size } from "./layout";
 import type { NodeCategory, NodeDescription } from "./nodeView";
@@ -190,6 +191,10 @@ function GraphCanvasInner({
   const lastDragEnd = useRef<{ id: string; at: number } | null>(null);
   const [lost, setLost] = useState(false);
 
+  // Block policies in force, from AuthSec's own record: the scan never draws a Deny.
+  const blocks = useGraphBlocks();
+  const byId = useMemo(() => new Map(visualNodes.map((v) => [v.id, v])), [visualNodes]);
+
   const rfNodes = useMemo<RFGraphNode[]>(
     () =>
       visualNodes
@@ -211,6 +216,7 @@ function GraphCanvasInner({
             onRefresh,
             stateOf,
             canLoadMore,
+            block: blockNote(v, blocks),
           };
           return {
             id: v.id,
@@ -239,7 +245,7 @@ function GraphCanvasInner({
             ) || undefined,
           } satisfies RFGraphNode;
         }),
-    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds, focusCategory],
+    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds, focusCategory, blocks],
   );
   const drawnIds = useMemo(() => new Set(rfNodes.map((n) => n.id)), [rfNodes]);
 
@@ -258,7 +264,11 @@ function GraphCanvasInner({
           const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * (showEdgeLabels ? 24 : 14);
           const selected = selection?.kind === "edge" && selection.id === e.id;
           const highlighted = highlightedEdgeIds?.has(e.id) ?? false;
-          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels };
+          const block =
+            e.kind === "declares"
+              ? (byId.get(e.to)?.members ?? []).map((t) => blocks.lineBlock(byId.get(e.from)?.members[0], t)).find(Boolean) ?? null
+              : null;
+          const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels, block };
           return {
             id: e.id,
             type: "graphEdge",
@@ -272,11 +282,11 @@ function GraphCanvasInner({
               type: MarkerType.ArrowClosed,
               width: 14,
               height: 14,
-              color: selected ? "var(--color-primary)" : highlighted ? "var(--color-text)" : "var(--color-border-strong)",
+              color: selected ? "var(--color-primary)" : block ? "var(--color-danger)" : highlighted ? "var(--color-text)" : "var(--color-border-strong)",
             },
           } satisfies RFGraphEdge;
         });
-  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge, showEdgeLabels]);
+  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge, showEdgeLabels, blocks, byId]);
 
   /* ------------------------------- viewport ------------------------------- */
 
@@ -559,4 +569,19 @@ function GraphCanvasInner({
       ) : null}
     </div>
   );
+}
+
+/** The card's block chip: a role a Block policy names, or a resource one covers. */
+function blockNote(v: VisualNode, blocks: GraphBlocks): GraphNodeData["block"] {
+  const first = v.members[0];
+  if (!first) return undefined;
+  if (first.kind === "iam_role") {
+    const m = blocks.roleBlocks(refId(first.ref));
+    return m ? { text: m.full ? "Blocked" : "Partly blocked", long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
+  }
+  if (first.kind === "exact" || first.kind === "selector") {
+    const m = v.members.map((n) => blocks.resourceBlocks(n)).find(Boolean);
+    return m ? { text: `Blocked for ${m.roles} ${m.roles === 1 ? "role" : "roles"}`, long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
+  }
+  return undefined;
 }

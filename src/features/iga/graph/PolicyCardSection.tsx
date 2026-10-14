@@ -22,8 +22,12 @@ import { Button } from "@/components/ui/button";
 import { refId, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
+import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
+
+import { bucketOf, whenText } from "../policy/access/model";
 import { KubernetesPolicyNote, plural, usePolicyCapabilities } from "../policy/shared";
 import { independentCount } from "./graphLabels";
+import { useGraphBlocks } from "./policyBlocks";
 import type { SelectionSubject } from "./SelectionCard";
 import type { VisualEdge } from "./types";
 
@@ -40,11 +44,30 @@ function Heading({ id }: { id: string }) {
 const quiet = "rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle) px-2.5 py-1.5 text-xs text-(--color-text-muted)";
 
 /** Start an access policy with the selected role or resource already filled in. */
-function NewPolicyButton({ param, id, label, size = "sm", variant }: { param: "identity_account_id" | "resource_id"; id: string; label: string; size?: "sm" | "default"; variant?: "outline" }) {
+function NewPolicyButton({ query, label, size = "sm", variant }: { query: { identity_account_id?: string; resource_id?: string }; label: string; size?: "sm" | "default"; variant?: "outline" }) {
+  const qs = new URLSearchParams(Object.entries(query).filter((kv): kv is [string, string] => !!kv[1])).toString();
   return (
-    <Button asChild size={size} variant={variant}>
-      <Link to={`/iga/policy/new?${param}=${encodeURIComponent(id)}`}>{label}</Link>
+    <Button asChild size={size} variant={variant} className={variant ? undefined : "text-white"}>
+      <Link to={`/iga/policy/new?${qs}`}>{label}</Link>
     </Button>
+  );
+}
+
+/** The access policies in force on what is selected, from AuthSec's own record (a rescan is not needed). */
+function InForce({ policies }: { policies: AccessPolicy[] }) {
+  if (!policies.length) return null;
+  return (
+    <ul className="space-y-1 rounded-md border border-(--color-danger) bg-(--color-danger-soft) px-2.5 py-1.5">
+      {policies.map((p) => (
+        <li key={p.id} className="text-xs text-(--color-text)">
+          <span className="font-semibold text-(--color-danger-text)">{p.effect === "block" ? "Blocked" : "Allowed"}</span>{" "}
+          <Link to={`/iga/policy/${p.id}`} className="font-medium text-(--color-primary-text) hover:underline">
+            {p.name}
+          </Link>
+          <span className="text-(--color-text-muted)"> · {whenText(p)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -84,7 +107,7 @@ export function PolicyCardSection({
     case "selector":
     case "external":
     case "statement":
-      return <ResourceBlock id={subject.visual.id} kind={first.kind} what={first.kind === "statement" ? "statement" : "resource"} edges={edges} nodes={nodes} />;
+      return <ResourceBlock id={subject.visual.id} node={first} what={first.kind === "statement" ? "statement" : "resource"} edges={edges} nodes={nodes} />;
     default:
       return null;
   }
@@ -94,12 +117,14 @@ export function PolicyCardSection({
 
 function RoleBlock({ identityId }: { identityId: string }) {
   const heading = useId();
+  const blocks = useGraphBlocks();
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
       <Heading id={heading} />
+      <InForce policies={blocks.forRole(identityId)} />
       <p className="text-xs text-(--color-text-muted)">Block or allow this role&rsquo;s access to an S3 bucket for a set window.</p>
       <div>
-        <NewPolicyButton param="identity_account_id" id={identityId} label="New access policy" />
+        <NewPolicyButton query={{ identity_account_id: identityId }} label="New access policy" />
       </div>
     </section>
   );
@@ -154,26 +179,34 @@ function holdersOf(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNo
   return roles;
 }
 
-function ResourceBlock({ id, kind, what, edges, nodes }: { id: string; kind: string; what: "resource" | "statement"; edges: VisualEdge[]; nodes: Map<GraphRef, GraphNode> }) {
+function ResourceBlock({ id, node, what, edges, nodes }: { id: string; node: GraphNode; what: "resource" | "statement"; edges: VisualEdge[]; nodes: Map<GraphRef, GraphNode> }) {
   const heading = useId();
-  // Only an S3 bucket can be the target of an access policy in v1. The graph's
-  // "exact" resource is the one place a bucket is selected directly.
-  const isBucket = kind === "exact";
+  const blocks = useGraphBlocks();
+  // Access policies cover S3 in this release: a bucket, a folder pattern or an
+  // object, which the form resolves to its bucket (and folder). The resource's
+  // own id goes to the form, never the canvas's card id.
+  const s3 = what === "resource" ? bucketOf(node.text ?? node.arn ?? node.label) : null;
+  const resourceId = s3 ? refId(node.ref) : undefined;
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, HOLDERS_SHOWN);
 
   return (
     <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
       <Heading id={heading} />
-      {isBucket ? (
+      {s3 ? <InForce policies={blocks.forResource(node)} /> : null}
+      {s3 ? (
         <>
-          <p className="text-xs text-(--color-text-muted)">Block or allow access to this bucket for a role, for a set window.</p>
+          <p className="text-xs text-(--color-text-muted)">
+            Block or allow access to {s3.prefix ? `${s3.bucket}/${s3.prefix}` : s3.bucket} for a role, for a set window.
+          </p>
           <div>
-            <NewPolicyButton param="resource_id" id={id} label="New access policy on this bucket" />
+            <NewPolicyButton query={{ resource_id: resourceId }} label="New access policy here" />
           </div>
         </>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">Access policies target S3 buckets. This {what} is not a bucket, so there is nothing to create from it.</p>
+        <p className="text-xs text-(--color-text-muted)">
+          Access policies cover S3 buckets in this release. This {what} is not in S3, so there is nothing to start from it.
+        </p>
       )}
       {roles.length > 0 ? (
         <>
@@ -184,7 +217,7 @@ function ResourceBlock({ id, kind, what, edges, nodes }: { id: string; kind: str
             {shown.map((r) => (
               <li key={r.ref} className="flex flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0 break-words text-[13px] font-medium text-(--color-text)">{r.label}</span>
-                <NewPolicyButton param="identity_account_id" id={refId(r.ref)} label="New policy" variant="outline" />
+                <NewPolicyButton query={{ identity_account_id: refId(r.ref), resource_id: resourceId }} label={s3 ? "Block or allow" : "New policy"} variant="outline" />
               </li>
             ))}
           </ul>
@@ -212,7 +245,7 @@ function GrantLine({ edge, holder }: { edge: VisualEdge; holder: GraphNode | nul
             {grants > 1 ? `; this line stands for ${grants} grants` : ""}.
           </p>
           <div>
-            <NewPolicyButton param="identity_account_id" id={refId(holder.ref)} label="New policy for this role" />
+            <NewPolicyButton query={{ identity_account_id: refId(holder.ref) }} label="New policy for this role" />
           </div>
         </>
       )}

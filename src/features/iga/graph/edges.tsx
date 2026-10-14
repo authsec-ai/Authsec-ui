@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { limitationText } from "../shared/labels";
 import { edgeMeaning, edgeVerb, independentCount, isK8sEdge, markedLimitations, mixedStateText } from "./graphLabels";
 import type { VisualEdge } from "./types";
+import type { BlockMark } from "./policyBlocks";
 
 export interface GraphEdgeData extends Record<string, unknown> {
   visual: VisualEdge;
@@ -37,6 +38,8 @@ export interface GraphEdgeData extends Record<string, unknown> {
   spread: number;
   /** Print the verb on the line even when it is not emphasised. */
   showLabel: boolean;
+  /** A Block policy in force covers this line (declares lines only). */
+  block?: BlockMark | null;
 }
 
 export type RFGraphEdge = Edge<GraphEdgeData, "graphEdge">;
@@ -68,9 +71,13 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
   const emphasised = data.isSelected || data.hovered || data.highlighted || focused;
   const deny = e.summary?.effect === "deny";
   const labelled = emphasised || data.showLabel;
+  const block = data.block;
+  const blockWords = block ? `${block.full ? "blocked" : "partly blocked"} by ${block.policies.map((p) => p.name).join(", ")}` : null;
 
   const stroke = data.isSelected
     ? "var(--color-primary)"
+    : block
+      ? "var(--color-danger)"
     : data.highlighted
       ? "var(--color-text)"
       : ended
@@ -83,6 +90,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
 
   const description = [
     edgeVerb(e),
+    blockWords,
     grants > 1
       ? e.kind === "grant"
         ? isK8sEdge(e)
@@ -111,7 +119,7 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
         style={{
           // Stale and ended by dash; a Deny line by a long dash-dot, and its
           // label says "denies" — never the same line as an Allow.
-          strokeDasharray: stale ? "6 4" : ended ? "2 4" : deny ? "10 3 2 3" : undefined,
+          strokeDasharray: stale ? "6 4" : ended ? "2 4" : deny ? "10 3 2 3" : block ? "5 4" : undefined,
           stroke,
           strokeWidth: data.isSelected || data.highlighted ? 2.25 : 1.25,
           transition: data.reducedMotion ? undefined : "stroke 150ms",
@@ -143,15 +151,18 @@ function GraphEdgeImpl({ id, sourceX, sourceY, targetX, targetY, sourcePosition,
               emphasised && "shadow-(--shadow-xs)",
               data.isSelected
                 ? "border-(--color-primary) text-(--color-primary-text)"
-                : emphasised
+                : block
+                  ? "border-(--color-danger) text-(--color-danger-text)"
+                  : emphasised
                   ? "border-(--color-border-strong) text-(--color-text)"
                   : "border-(--color-border-subtle) text-(--color-text-muted)",
             )}
           >
             {/* The verb while labels are on, or when the line is in focus.
                 Otherwise only what must stay visible, or a dot to click. */}
-            {labelled ? <span className="whitespace-nowrap">{edgeVerb(e)}</span> : null}
-            {!labelled && grants <= 1 && !marked.length && !e.closesCycle && !e.crossesAccount ? (
+            {block ? <span className="whitespace-nowrap font-semibold">{block.full ? "Blocked" : "Partly blocked"}</span> : null}
+            {labelled ? <span className={cn("whitespace-nowrap", block && "line-through opacity-70")}>{edgeVerb(e)}</span> : null}
+            {!labelled && !block && grants <= 1 && !marked.length && !e.closesCycle && !e.crossesAccount ? (
               <span aria-hidden="true" className="block size-1.5 rounded-full bg-current" />
             ) : null}
             {grants > 1 ? <span className="tabular-nums">×{grants}</span> : null}
