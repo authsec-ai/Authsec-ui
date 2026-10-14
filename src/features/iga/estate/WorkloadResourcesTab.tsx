@@ -403,7 +403,7 @@ function LineDetail({ line, workload, graphAvailable }: { line: ResourceLine; wo
                   </p>
                 ) : null}
                 {g.exclusions.length ? <p className="text-xs text-(--color-text-secondary)">Excludes {g.exclusions.map((x) => x.text).join(", ")}.</p> : null}
-                {g.statement.conditional ? <p className="text-xs text-(--color-warning-text)">Has conditions (not evaluated).</p> : null}
+                {g.statement.conditional ? <p className="text-xs text-(--color-warning-text)">Has conditions that AuthSec has not checked.</p> : null}
               </li>
             ))}
           </ul>
@@ -417,7 +417,7 @@ function LineDetail({ line, workload, graphAvailable }: { line: ResourceLine; wo
               ]
                 .filter(Boolean)
                 .join(" and ")}{" "}
-              (listed, not evaluated).
+              (listed, but AuthSec has not checked how they apply).
             </p>
           ) : null}
         </div>
@@ -514,8 +514,8 @@ export function WorkloadResourcesTab({
             ))}
           </div>
           <InfoTip label="How permissions are worked out">
-            What this workload's execution identities declare. Read, Write and Broad are inferred from action and resource names; conditions, Deny
-            statements and permissions boundaries are not evaluated.
+            This is what AWS has written down for the identities this workload runs as. Read, Write and Broad are worked out from the names of the
+            actions. AuthSec has not checked the extra rules that can still block access (conditions, Deny rules and permission limits).
           </InfoTip>
         </div>
 

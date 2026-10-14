@@ -311,7 +311,7 @@ function StepAction({
   switch (step.action) {
     case "verify":
       return actions.verify ? (
-        <Button size="sm" variant="outline" disabled={!!pending} onClick={() => onRun("verify")}>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("verify")}>
           {pending === "verify" ? PENDING_WORD.verify : "Verify"}
         </Button>
       ) : (
@@ -319,7 +319,7 @@ function StepAction({
       );
     case "scan":
       return actions.scan ? (
-        <Button size="sm" variant="outline" disabled={!!pending} onClick={() => onRun("scan")}>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
           {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
         </Button>
       ) : (
@@ -327,7 +327,7 @@ function StepAction({
       );
     case "scope":
       return actions.editScope ? (
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" asChild>
           <Link to={detailHref(c.id, "scope")} state={{ editScope: true }}>
             Choose scope
           </Link>

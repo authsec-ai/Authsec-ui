@@ -1,6 +1,7 @@
 /** Small pieces every access-policy screen shares: chips, the AWS document, and the readiness banner. */
 
-import { Copy } from "lucide-react";
+import { Copy, Info } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useGetAccessReadinessQuery, type AccessEffect, type AccessPolicyStatus } from "@/app/api/igaAccessPoliciesApi";
 import { DecisionBanner } from "@/components/console/status";
@@ -48,6 +49,27 @@ export function AwsDocument({ title, document, className }: { title?: string; do
   );
 }
 
+/** A quiet note above a list: one line of what, one of why, and the way forward on the right. */
+function SetupNotice({ title, body, actionLabel, actionHref }: { title: string; body: string; actionLabel?: string; actionHref?: string }) {
+  return (
+    <section className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3">
+      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
+      <div className="min-w-0 flex-1 basis-72">
+        <h2 className="text-[13px] font-semibold leading-5 text-(--color-text)">{title}</h2>
+        <p className="mt-0.5 max-w-3xl text-[13px] leading-5 text-(--color-text-muted)">{body}</p>
+      </div>
+      {actionLabel && actionHref ? (
+        <Link
+          to={actionHref}
+          className="inline-flex h-8 shrink-0 items-center rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-3 text-xs font-semibold text-(--color-text-secondary) transition-colors hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
+        >
+          {actionLabel}
+        </Link>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Whether AuthSec can change IAM yet. Says so once, with the way to fix it,
  * and nothing when every connected account is ready. A failed check is said
@@ -80,11 +102,10 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
     ? r.reason || "Applying policies is turned off on this server."
     : accounts.length === 0
       ? "No AWS account is connected yet. Connect one in Connections first."
-      : `${notReady.map((a) => `Account ${a.account_id}: ${readinessWords(a.reason)}.`).join(" ")} AuthSec can read ${notReady.length === 1 ? "it" : "them"} but cannot change IAM yet.`;
+      : `${notReady.length === 1 ? `Account ${notReady[0].account_id} needs` : `Accounts ${notReady.map((a) => a.account_id).join(", ")} need`} AWS access set up before AuthSec can apply policies there. Until then AuthSec can read ${notReady.length === 1 ? "it" : "them"} but not change ${notReady.length === 1 ? "it" : "them"}. ${[...new Set(notReady.map((a) => readinessWords(a.reason)))].map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(". ")}.`;
   return (
-    <DecisionBanner
-      tone="warning"
-      title="AuthSec cannot change AWS yet"
+    <SetupNotice
+      title="AWS access is not set up yet"
       body={body}
       actionLabel={r.available && accounts.length > 0 ? "Set up AWS access" : undefined}
       actionHref={r.available && accounts.length > 0 ? "/iga/policy/setup" : undefined}

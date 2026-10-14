@@ -72,10 +72,10 @@ function AssumeBody({ rel, from }: { rel: AssumeRelationship; from: From }) {
       facts={<ClaimFacts claim={rel.claim} basis={rel.basis} state={rel.state} confirmedAt={rel.last_confirmed_at} />}
     >
       <p className="text-xs leading-relaxed text-(--color-text-muted)">
-        The role's trust policy {rel.statement.sid ? `(statement ${rel.statement.sid}) ` : ""}names this workload's
-        identity as a principal. The caller's own sts:AssumeRole permission was not checked.
-        {rel.conditions ? " The trust policy also sets conditions, which were not evaluated." : ""}
-        {rel.statement.negated ? " It uses NotPrincipal, so who it admits could not be resolved." : ""}
+        This role's trust rule {rel.statement.sid ? `(${rel.statement.sid}) ` : ""}lists this workload's identity, so it is allowed to borrow the
+        role. AuthSec did not check whether the identity also has permission to ask for it.
+        {rel.conditions ? " The rule also has extra conditions, which AuthSec has not checked." : ""}
+        {rel.statement.negated ? " The rule says who is NOT allowed, so AuthSec cannot list who is allowed." : ""}
       </p>
     </ClaimRow>
   );
@@ -87,9 +87,9 @@ function executionEmpty(data: WorkloadIdentities): string {
     case "none":
       return "No execution role configured.";
     case "not_in_inventory":
-      return `Runs as ${arn ?? "a role"} — matches no identity in any connected account.`;
+      return `Runs as ${arn ?? "a role"} — this role is not in any AWS account connected to AuthSec.`;
     case "not_in_scan":
-      return `Runs as ${arn ?? "a role"} — not read in the latest scan. The account's coverage says why.`;
+      return `Runs as ${arn ?? "a role"} — the latest scan did not read this role. The account's coverage notes say why.`;
     default:
       return "The execution identity could not be shown.";
   }

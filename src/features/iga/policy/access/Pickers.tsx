@@ -27,7 +27,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-import { bucketOf, pathInBucket, type DraftResource, type DraftRole } from "./model";
+import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
+
+import { bucketOf, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
 
 /** Every bucket the S3 records name, with its records (bucket record first) and the folders seen in it. */
 function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: boolean })[] {
@@ -115,7 +117,7 @@ export function ResourcePicker({
           id="ap-resource"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search S3 buckets found by Discovery"
+          placeholder="Search S3 buckets named in policies Discovery read"
           aria-label="Search S3 buckets"
           className="border-0 pl-9 shadow-none focus-visible:ring-0"
           autoComplete="off"
@@ -135,10 +137,13 @@ export function ResourcePicker({
           </p>
         ) : buckets.length === 0 ? (
           <p className="px-3 py-3 text-xs text-(--color-text-muted)">
-            {dq ? `No bucket matches “${dq}”.` : "Discovery has not found an S3 bucket yet. Buckets appear once a scan reads the policies that name them."}
+            {dq ? `No bucket matches “${dq}”.` : "No S3 bucket is named in the policies Discovery has read yet. A bucket appears once a policy names it; buckets nothing names are not listed."}
           </p>
         ) : (
           <ul>
+            {list.data?.meta?.next_cursor ? (
+              <li className="border-b border-(--color-border-subtle) px-3 py-1.5 text-xs text-(--color-text-muted)">Showing the first 200 records. Type part of the bucket name to find the rest.</li>
+            ) : null}
             {buckets.map((b) => (
               <li key={b.bucket}>
                 <button type="button" className={rowButton} onClick={() => onChange({ resource_id: b.resource_id, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders })}>
@@ -211,17 +216,25 @@ interface Candidate {
   hasAccess: boolean;
   /** Where in the bucket it has access: "" for the whole bucket, else paths like `attachments/*`. */
   paths?: string[];
+  /** Why it cannot be chosen (an Allow of access it already has), else unset. */
+  blocked?: string;
 }
 
 export function RolePicker({
   ws,
   resource,
+  effect,
+  folder,
   value,
   onChange,
   invalid,
 }: {
   ws: string;
   resource: DraftResource | null;
+  /** Block lists the roles that reach the folder now; Allow lists the ones that do not. */
+  effect: AccessEffect;
+  /** The folder the rule is for (`sandbox/`), "" for the whole bucket. */
+  folder: string;
   value: DraftRole[];
   onChange: (roles: DraftRole[]) => void;
   invalid?: boolean;
@@ -248,17 +261,38 @@ export function RolePicker({
   }, [access.rows]);
   const others = useMemo(() => access.rows.filter((r) => r.holder.kind !== "iam_role").length, [access.rows]);
   const truncated = access.truncated;
+  const isAllow = effect === "allow";
+  const target = resource ? `${resource.bucket}${folder.trim() ? `/${folder.trim()}` : ""}` : "";
+
+  // A role reaches the target when any path it holds in the bucket overlaps the folder.
+  const reaches = (c: Candidate) => reachesFolder(c.paths ?? [], folder);
+  // Block: roles that reach the folder (blocking anyone else changes nothing today).
+  // Allow: roles that hold access elsewhere in the bucket but not here.
+  const listed = useMemo(() => reaching.filter((c) => (isAllow ? !reachesFolder(c.paths ?? [], folder) : reachesFolder(c.paths ?? [], folder))), [reaching, isAllow, folder]);
+  const hidden = reaching.length - listed.length;
 
   const chosen = new Set(value.map((r) => r.identity_account_id));
   const toggle = (c: { identity_account_id: string; name: string }) =>
     onChange(chosen.has(c.identity_account_id) ? value.filter((r) => r.identity_account_id !== c.identity_account_id) : [...value, { identity_account_id: c.identity_account_id, name: c.name }]);
 
   const found = (search.data?.data ?? [])
-    .map((r) => ({ identity_account_id: refId(r.ref), name: r.name, account: r.account?.label ?? r.account?.id ?? "", hasAccess: reaching.some((x) => x.identity_account_id === refId(r.ref)) }))
-    .filter((c) => !reaching.some((x) => x.identity_account_id === c.identity_account_id));
+    .map((r): Candidate => {
+      const id = refId(r.ref);
+      const held = reaching.find((x) => x.identity_account_id === id);
+      const c: Candidate = { identity_account_id: id, name: r.name, account: r.account?.label ?? r.account?.id ?? "", hasAccess: !!held && reaches(held), paths: held?.paths };
+      return isAllow && c.hasAccess ? { ...c, blocked: "Already has access here" } : c;
+    })
+    .filter((c) => !listed.some((x) => x.identity_account_id === c.identity_account_id));
 
-  // Roles already ticked in the list need no chip; only ones added by search do.
-  const extra = value.filter((r) => !reaching.some((c) => c.identity_account_id === r.identity_account_id));
+  // Roles already ticked in the list need no chip; only ones added by search (or no longer listed) do.
+  const extra = value.filter((r) => !listed.some((c) => c.identity_account_id === r.identity_account_id));
+
+  // Chosen roles the rule would not change: an Allow of what a role has, a Block of what it lacks.
+  const pointless = access.isLoading || access.isError ? [] : value.filter((r) => {
+    const held = reaching.find((c) => c.identity_account_id === r.identity_account_id);
+    const has = !!held && reaches(held);
+    return isAllow ? has : !has;
+  });
 
   if (!resource) {
     return <p className="rounded-md border border-dashed border-(--color-border-strong) px-3 py-3 text-xs text-(--color-text-muted)">Choose a bucket first; the roles that can reach it are listed here.</p>;
@@ -280,7 +314,10 @@ export function RolePicker({
       ) : null}
 
       <div className={cn("overflow-hidden rounded-md border", invalid ? "border-(--color-danger)" : "border-(--color-border-strong)")}>
-        <div className="border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-3 py-1.5 text-xs font-medium text-(--color-text-muted)">Roles that can reach {resource.bucket} now{value.length ? ` · ${value.length} selected` : ""}</div>
+        <div className="border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-3 py-1.5 text-xs font-medium text-(--color-text-muted)">
+          {isAllow ? `Roles with no access to ${target} yet` : `Roles that can reach ${target} now`}
+          {value.length ? ` · ${value.length} selected` : ""}
+        </div>
         <div className="max-h-56 overflow-y-auto">
           {access.isLoading ? (
             <p role="status" className="px-3 py-3 text-xs text-(--color-text-muted)">
@@ -293,23 +330,44 @@ export function RolePicker({
                 Retry
               </button>
             </p>
-          ) : reaching.length === 0 ? (
-            <p className="px-3 py-3 text-xs text-(--color-text-muted)">No role can reach this bucket in the last scan. Search for a role below to allow it.</p>
+          ) : listed.length === 0 ? (
+            <p className="px-3 py-3 text-xs text-(--color-text-muted)">
+              {isAllow
+                ? reaching.length === 0
+                  ? "No role can reach this bucket in the last scan. Search for a role below to allow it."
+                  : `Every role that reaches this bucket already has access to ${target}. Search for another role below.`
+                : reaching.length === 0
+                  ? "No role can reach this bucket in the last scan. Search for a role below to block it ahead of time."
+                  : `No role reaches ${target} in the last scan. Search for a role below to block it ahead of time.`}
+            </p>
           ) : (
             <ul>
-              {reaching.map((c) => (
+              {listed.map((c) => (
                 <CandidateRow key={c.identity_account_id} c={c} on={chosen.has(c.identity_account_id)} onToggle={() => toggle(c)} />
               ))}
             </ul>
           )}
         </div>
-        {others > 0 || truncated ? (
+        {others > 0 || truncated || hidden > 0 ? (
           <p className="border-t border-(--color-border-subtle) px-3 py-1.5 text-xs text-(--color-text-muted)">
+            {hidden > 0
+              ? isAllow
+                ? `${hidden} ${hidden === 1 ? "role already has" : "roles already have"} access to ${target} and ${hidden === 1 ? "is" : "are"} not listed. `
+                : `${hidden} ${hidden === 1 ? "role reaches" : "roles reach"} only other parts of this bucket and ${hidden === 1 ? "is" : "are"} not listed. `
+              : ""}
             {others > 0 ? `${others} access ${others === 1 ? "path" : "paths"} through users or groups ${others === 1 ? "is" : "are"} not shown: only roles can be targets in this release. ` : ""}
             {truncated ? "Only the first 100 access paths were read; search for a role that is missing." : ""}
           </p>
         ) : null}
       </div>
+
+      {pointless.length ? (
+        <p role="status" className="rounded-md border border-(--color-border-strong) bg-(--color-surface-subtle) px-3 py-2 text-xs text-(--color-warning-text)">
+          {isAllow
+            ? `${pointless.map((r) => r.name).join(", ")} already ${pointless.length === 1 ? "has" : "have"} access to ${target}; allowing it changes nothing. Remove ${pointless.length === 1 ? "it" : "them"} or pick a role without access.`
+            : `${pointless.map((r) => r.name).join(", ")} ${pointless.length === 1 ? "has" : "have"} no access to ${target} in the last scan; blocking ${pointless.length === 1 ? "it" : "them"} changes nothing today and only guards against access added later.`}
+        </p>
+      ) : null}
 
       <div className="relative">
         <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--color-text-muted)" />
@@ -346,9 +404,20 @@ export function RolePicker({
 }
 
 function CandidateRow({ c, on, onToggle }: { c: Candidate; on: boolean; onToggle: () => void }) {
+  // A role that cannot be added stays visible so the reason is too; one already chosen can still be removed.
+  const off = !!c.blocked && !on;
   return (
     <li>
-      <button type="button" role="checkbox" aria-checked={on} onClick={onToggle} className={rowButton}>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        aria-disabled={off || undefined}
+        disabled={off}
+        title={c.blocked}
+        onClick={onToggle}
+        className={cn(rowButton, off && "cursor-not-allowed opacity-60 hover:bg-transparent")}
+      >
         <span className={cn("grid size-4 shrink-0 place-items-center rounded border", on ? "border-(--color-primary) bg-(--color-primary) text-white" : "border-(--color-border-strong)")}>
           {on ? <Check aria-hidden="true" className="size-3" /> : null}
         </span>
@@ -363,7 +432,7 @@ function CandidateRow({ c, on, onToggle }: { c: Candidate; on: boolean; onToggle
             <span className="block truncate text-xs text-(--color-text-muted)">{c.account}</span>
           ) : null}
         </span>
-        <StatusBadge tone={c.hasAccess ? "success" : "neutral"}>{c.hasAccess ? "Has access" : "No access now"}</StatusBadge>
+        <StatusBadge tone={c.hasAccess ? "success" : "neutral"}>{c.blocked ?? (c.hasAccess ? "Has access" : "No access now")}</StatusBadge>
       </button>
     </li>
   );

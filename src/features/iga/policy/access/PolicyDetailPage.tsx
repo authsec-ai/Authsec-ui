@@ -79,6 +79,10 @@ export default function PolicyDetailPage() {
   }
 
   const live = p.status !== "ended";
+  // AWS still holds the policy while any deployment is on its way in, in, or on its way out.
+  const stillInAws = p.deployments.some((d) => ["approved", "deploying", "active", "outcome_unknown", "expiring"].includes(d.state));
+  // Ended and paused policies say where AuthSec is, in one quiet line by the status chip.
+  const quietNote = (p.status === "ended" || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
   const actions =
     enforce.offered && live ? (
       <div className="flex flex-wrap gap-2">
@@ -93,7 +97,13 @@ export default function PolicyDetailPage() {
         </Button>
       </div>
     ) : enforce.offered ? (
-      <Button variant="outline" className="text-(--color-danger-text)" onClick={() => setDeleteOpen(true)}>
+      <Button
+        variant="outline"
+        className="text-(--color-danger-text)"
+        onClick={() => setDeleteOpen(true)}
+        disabled={stillInAws}
+        title={stillInAws ? "Available once AuthSec has removed the policy from AWS" : undefined}
+      >
         Delete
       </Button>
     ) : undefined;
@@ -104,12 +114,13 @@ export default function PolicyDetailPage() {
         <EffectChip effect={p.effect} />
         <PolicyStatusChip status={p.status} />
         <span className="text-xs text-(--color-text-muted)">{whenText(p)}</span>
+        {quietNote ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
         <Link to="/iga/policy" className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>
       </div>
 
-      {p.status === "failed" || p.status === "drift" || (p.status_reason && p.status !== "applying") ? (
+      {p.status === "failed" || p.status === "drift" || (p.status_reason && !["applying", "ended", "paused"].includes(p.status)) ? (
         <p
           role={p.status === "failed" ? "alert" : undefined}
           className={cn(

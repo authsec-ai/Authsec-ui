@@ -25,6 +25,45 @@ export type StatusTileKey = "connected" | "attention" | "running" | "revoked";
 
 /* --------------------------------- table toolbar --------------------------------- */
 
+/** Same look as the policy list's Block / Allow buttons, so every list filters the same way. */
+export const PILL_BUTTON =
+  "inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)";
+export const PILL_OFF =
+  "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text)";
+export const PILL_ON = "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)";
+
+/** One choice out of several, as a row of buttons. */
+export function FilterPills<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { key: T; label: string; count?: number }[];
+  onChange: (key: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-0.5 text-[13px] text-(--color-text-muted)">{label}</span>
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="radio"
+          aria-checked={value === o.key}
+          onClick={() => onChange(o.key)}
+          className={`${PILL_BUTTON} ${value === o.key ? PILL_ON : PILL_OFF}`}
+        >
+          {o.label}
+          {o.count !== undefined ? <span className="ml-1.5 tabular-nums opacity-70">{o.count}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function TableToolbar({
   controls = true,
   search,
@@ -33,6 +72,7 @@ export function TableToolbar({
   filtered,
   onClear,
   countLabel,
+  extra,
 }: {
   /** false: only the count, for a list too short to search. */
   controls?: boolean;
@@ -42,6 +82,8 @@ export function TableToolbar({
   filtered: boolean;
   onClear: () => void;
   countLabel: string;
+  /** Sits by the count, whatever `controls` says: the "Show revoked" switch. */
+  extra?: ReactNode;
 }) {
   return (
     <div data-compact-toolbar className="flex flex-wrap items-center gap-3 border-b border-(--color-border-subtle) px-4 py-3">
@@ -69,6 +111,7 @@ export function TableToolbar({
           Clear filters
         </button>
       ) : null}
+      {extra}
       <span className="text-[13px] text-(--color-text-muted) tabular-nums">{countLabel}</span>
     </div>
   );

@@ -30,7 +30,7 @@ import { shortResourceName } from "../shared/sketch";
 import { incompleteAccounts } from "../shared/listSummary";
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
-import { CopyValue, Fact, Facts, Meta, Panel } from "../shared/components/Panel";
+import { CopyValue, Fact, Facts, Meta, Panel, TechnicalDetails } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 
 const SKETCH_HOLDERS = 5;
@@ -139,7 +139,6 @@ export function ResourceOverview({
                   r.account ? (
                     <>
                       {accountLabel(r.account)}
-                      {r.account.label !== r.account.id ? <span className="ml-1 font-mono text-xs text-(--color-text-muted)">{r.account.id}</span> : null}
                       {!r.account.connected ? <span className="block text-xs text-(--color-warning-text)">Not a connected account</span> : null}
                       {partial ? <span className="block text-xs text-(--color-warning-text)">{partial}</span> : null}
                     </>
@@ -147,19 +146,24 @@ export function ResourceOverview({
                     <>
                       Unknown account
                       <span className="block text-xs text-(--color-text-muted)">
-                        The ARN states no account. It is not assumed to be the grantor's.
+                        The unique AWS ID does not say which AWS account this belongs to, so AuthSec does not guess.
                       </span>
                     </>
                   )
                 }</Fact>
               <Fact label="Region">{r.region ?? "Region not stated"}</Fact>
               <Fact label="Existence">Not verified. AuthSec does not list the resources in this account yet, so it cannot confirm this one exists.</Fact>
-              <Fact label={r.kind === "selector" ? "Pattern" : "ARN"}><CopyValue value={r.text} what={r.kind === "selector" ? "Pattern" : "ARN"} /></Fact>
             </Facts>
+            <TechnicalDetails>
+              <Facts>
+                {r.account && r.account.label !== r.account.id ? <Fact label="Account number"><CopyValue value={r.account.id} what="Account number" /></Fact> : null}
+                <Fact label={r.kind === "selector" ? "Pattern" : "ARN (the unique AWS ID)"}><CopyValue value={r.text} what={r.kind === "selector" ? "Pattern" : "ARN"} /></Fact>
+              </Facts>
+            </TechnicalDetails>
           </Panel>
 
           <Panel
-            title="Declared access"
+            title="Who is allowed to use it"
             actions={
               <Link to={`/iga/resources/${encodeURIComponent(refId(r.ref))}/access`} className="font-medium text-(--color-primary-text) hover:underline">
                 See who can access
@@ -198,11 +202,11 @@ export function ResourceOverview({
                         <span className="text-xs text-(--color-text-muted)">More available</span>
                       ) : null}
                       {gap.length ? <Meta>Collection is incomplete for {gap.join(", ")}, so this may not be every identity.</Meta> : null}
-                      <Meta>Identities whose declared access names it; whether a request would succeed is not evaluated.</Meta>
+                      <Meta>Identities that AWS says are allowed to use it. AuthSec has not tested whether a real request would succeed.</Meta>
                     </span>
                   ) : (
                     <span className="text-(--color-text-muted)">
-                      {gap.length ? `None found in what could be read; collection is incomplete for ${gap.join(", ")}.` : "No declared access names it as a target."}
+                      {gap.length ? `None found in what could be read; collection is incomplete for ${gap.join(", ")}.` : "No identity has been given access to it."}
                     </span>
                   )
                 }</Fact>

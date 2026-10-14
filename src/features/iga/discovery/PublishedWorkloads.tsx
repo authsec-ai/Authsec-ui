@@ -91,6 +91,7 @@ export default function PublishedWorkloads(p: ScreenProps) {
     lifecycle,
     execution_role_state: runsAs,
     cursor: c.paging.cursor,
+    limit: c.pageSize,
   };
   const list = useListGraphWorkloadsQuery(args, { skip: c.gate.off || c.blocked });
   useTrackRevision(p.ws, list.currentData, classifyGraphError(list.error), (r, d) =>

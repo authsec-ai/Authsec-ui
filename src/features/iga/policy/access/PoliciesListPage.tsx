@@ -223,7 +223,7 @@ export default function PoliciesListPage() {
     <div className="mx-auto max-w-md space-y-3 py-6 text-center">
       <p className="text-sm font-semibold text-(--color-text)">No policies yet</p>
       <p className="text-[13px] text-(--color-text-muted)">
-        A policy blocks or allows roles on a bucket for as long as you say. Create one here, or open a bucket or role in Discovery and add one from there.
+        A policy blocks or allows an agent&rsquo;s role on a storage bucket for as long as you say. Create one here, or open a bucket or role in Discovery and add one from there.
       </p>
       {enforce.offered ? (
         <Button asChild className="text-white">
@@ -243,6 +243,9 @@ export default function PoliciesListPage() {
     </div>
   );
 
+  // A workspace with no policy at all: the filters and the empty table would only be noise, so show the invitation alone.
+  const firstRun = !filtered && !failure && !!list.data && all.length === 0;
+
   const applied = [
     resourceId ? { key: "resource", label: `Bucket ${resourceName || resourceId}`, onRemove: () => setParams(dropKeys(params, ["resource_id", "resource_name"]), { replace: true }) } : null,
     identityId ? { key: "identity", label: `Role ${identityName || identityId}`, onRemove: () => setParams(dropKeys(params, ["identity_account_id", "identity_name"]), { replace: true }) } : null,
@@ -254,7 +257,7 @@ export default function PoliciesListPage() {
   return (
     <PolicyShell
       title="Policy"
-      description="Time-boxed rules that block or allow access. AuthSec applies each through the provider's own controls (AWS IAM today)."
+      description="Stop an AI agent from reaching a storage bucket, or let it in, for a set time. AuthSec applies the rule in AWS and removes it when the time is up."
       requires="access_policies"
       actions={
         enforce.offered ? (
@@ -269,6 +272,7 @@ export default function PoliciesListPage() {
     >
       <ReadinessBanner ws={ws} />
 
+      {firstRun ? null : (
       <ConsoleFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -298,9 +302,14 @@ export default function PoliciesListPage() {
         }
         below={applied.length ? <AppliedFilters filters={applied} onClearAll={() => setParams({}, { replace: true })} /> : undefined}
       />
+      )}
 
       {failure && !list.data ? (
         <PolicyLoadFailure failure={failure} subject="policies" onRetry={() => void list.refetch()} />
+      ) : firstRun ? (
+        <TableCard>
+          <CardContent variant="flush">{emptyState}</CardContent>
+        </TableCard>
       ) : (
         <TableCard>
           <CardContent variant="flush">

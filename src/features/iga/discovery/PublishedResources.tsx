@@ -63,7 +63,7 @@ export default function PublishedResources(p: ScreenProps) {
   // only overrides Representation, and says so.
   const kind: ResourceKind | undefined = external ? "external" : representation;
 
-  const args: ListResourcesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, region, kind, service, lifecycle, cursor: c.paging.cursor };
+  const args: ListResourcesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, region, kind, service, lifecycle, cursor: c.paging.cursor, limit: c.pageSize };
   const list = useListGraphResourcesQuery(args, { skip: c.gate.off || c.blocked });
   useTrackRevision(p.ws, list.currentData, classifyGraphError(list.error), (r, d) =>
     c.dispatch(igaGraphApi.util.upsertQueryData("listGraphResources", { ...args, rev: r }, d)),

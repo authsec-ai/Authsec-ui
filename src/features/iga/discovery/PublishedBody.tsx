@@ -118,6 +118,8 @@ export function PublishedBody<Row>(b: BodyProps<Row>) {
       pageIndex={c.paging.pageIndex}
       onPrev={c.paging.prev}
       onNext={c.paging.next}
+      pageSize={c.pageSize}
+      onPageSize={c.setPageSize}
       onRetry={() => void list.refetch()}
       onRefresh={c.refresh}
       subject={b.subject}

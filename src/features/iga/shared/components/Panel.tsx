@@ -67,6 +67,19 @@ export function Fact({ label, children, mono = false }: { label: ReactNode; chil
   );
 }
 
+/**
+ * The long identifiers (account number, ARN) kept out of the way: a reader who
+ * needs them opens this; everyone else sees the plain name above it.
+ */
+export function TechnicalDetails({ children }: { children: ReactNode }) {
+  return (
+    <details className="mt-3 border-t border-(--color-border-subtle) pt-2.5">
+      <summary className="cursor-pointer text-xs font-medium text-(--color-text-secondary) hover:text-(--color-text)">Technical details</summary>
+      <div className="mt-2.5">{children}</div>
+    </details>
+  );
+}
+
 /** Secondary words under a name or a fact: 12 px muted. */
 export function Meta({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cn("text-xs leading-relaxed text-(--color-text-muted)", className)}>{children}</p>;

@@ -54,9 +54,9 @@ import { ResourcePicker, RolePicker } from "./Pickers";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="space-y-2.5">
+    <section className="space-y-3 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) p-4">
       <div>
-        <h2 className="text-[13px] font-semibold text-(--color-text)">{title}</h2>
+        <h2 className="text-sm font-semibold text-(--color-text)">{title}</h2>
         {hint ? <p className="mt-0.5 text-xs text-(--color-text-muted)">{hint}</p> : null}
       </div>
       {children}
@@ -99,7 +99,7 @@ function Pill({
       title={title}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center rounded-md border px-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         on
           ? danger
             ? "border-(--color-danger) bg-(--color-danger-soft) text-(--color-danger-text)"
@@ -314,13 +314,13 @@ export default function PolicyFormPage() {
         <>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
             <form
-              className="min-w-0 space-y-6"
+              className="min-w-0 space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 void apply();
               }}
             >
-              <Block title="Bucket" hint="An S3 bucket Discovery found. Add a folder to limit the rule to it.">
+              <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
                   <div id="ap-resource">
                     <ResourcePicker
@@ -369,9 +369,9 @@ export default function PolicyFormPage() {
                 </div>
               </Block>
 
-              <Block title="Roles" hint="An agent reaches AWS through the role it runs as, so the rule applies to every agent or job using these roles.">
+              <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
                 <div id="ap-roles">
-                  <RolePicker ws={ws} resource={draft.resource} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                  <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
                   <FieldError message={err("roles")} />
                 </div>
               </Block>

@@ -133,7 +133,7 @@ export function ConnectionActionBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {a.scan ? (
-        <Button variant="outline" size="sm" disabled={!!pending} onClick={() => onRun("scan")}>
+        <Button variant="outline" size="sm" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
           {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
         </Button>
       ) : null}
@@ -141,7 +141,7 @@ export function ConnectionActionBar({
       {more ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="px-2" disabled={!!pending} aria-label="More actions" title="More actions">
+            <Button variant="outline" size="sm" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-2" disabled={!!pending} aria-label="More actions" title="More actions">
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

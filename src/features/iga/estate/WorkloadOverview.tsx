@@ -448,7 +448,7 @@ export function WorkloadOverview({
             }
           >
             <Facts>
-              <Fact label="ARN"><CopyValue value={w.arn} what="ARN" /></Fact>
+              <Fact label="ARN (the unique AWS ID)"><CopyValue value={w.arn} what="ARN" /></Fact>
               <Fact label="First seen">{dayText(w.first_seen_at)}</Fact>
               <Fact label="Last confirmed"><Timestamp iso={w.last_confirmed_at} /></Fact>
               <Fact label="Region">{w.region ?? "Not stated"}</Fact>

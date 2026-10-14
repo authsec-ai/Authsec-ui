@@ -51,7 +51,7 @@ import { InfoTip } from "../shared/components/InfoTip";
 const DESCRIPTION = (
   <span className="inline-flex items-center gap-1">
     Workloads, identities and resources found in your connected sources.
-    <InfoTip label="About access shown here">Access is declared, not evaluated: nothing here tests whether a request would succeed.</InfoTip>
+    <InfoTip label="About access shown here">This shows the access that has been written down in AWS. AuthSec has not tested whether a real request would be allowed or blocked.</InfoTip>
   </span>
 );
 
