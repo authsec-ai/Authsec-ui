@@ -244,8 +244,8 @@
   --component-table-border: rgba(255, 255, 255, 0.08);
   --component-table-header-bg: #1b212a;
   --component-table-header-fg: #f3f5f7;
-  --component-table-row-hover: rgba(96, 165, 250, 0.07);
-  --component-table-row-selected: rgba(96, 165, 250, 0.14);
+  --component-table-row-hover: rgba(96, 165, 250, 0.16);
+  --component-table-row-selected: rgba(96, 165, 250, 0.26);
 
 }
 
@@ -593,8 +593,12 @@
 }
 
 /* admin-shell.css frames clickable rows with a full-bleed inset wash, a 1px
-   inset ring and per-cell edge shadows. Replaced here with one quiet tint,
-   per spec §7 ("very subtle blue/gray"). Hover BEHAVIOUR is unchanged. */
+   inset ring and a near-invisible (2%) per-CELL wash. That cell wash sits on
+   top of any row background, so tinting only the row reads as "no hover".
+   The fix: paint the hover on the CELLS themselves, in a clearly visible blue,
+   and cancel admin-shell's box-shadow framing. Covers hover and keyboard focus.
+   `!important` wins against admin-shell's equally-specific cell rules without
+   depending on stylesheet order. */
 [data-shell="iga"]
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
@@ -605,6 +609,19 @@
   [data-slot="table-row"][data-clickable="true"]:focus-within {
   background: var(--component-table-row-hover);
   box-shadow: none;
+}
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:hover
+  > [data-slot="table-cell"],
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"][data-clickable="true"]:focus-within
+  > [data-slot="table-cell"] {
+  background: var(--component-table-row-hover) !important;
+  box-shadow: none !important;
 }
 
 /* A clickable row says so before it is clicked: the NAME turns link blue (and
@@ -636,6 +653,15 @@
   --admin-table-row-base: var(--color-primary-soft);
   --admin-table-row-zebra: var(--color-primary-soft);
   background: var(--color-primary-soft);
+}
+/* The selected row's tint must reach the CELLS too, else admin-shell's
+   transparent per-cell background hides it (same reason as hover, above). */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"]:has(a[data-row-link][aria-current="true"])
+  > [data-slot="table-cell"] {
+  background: var(--color-primary-soft) !important;
 }
 
 [data-shell="iga"]

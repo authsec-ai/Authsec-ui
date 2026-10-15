@@ -1161,8 +1161,13 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           onApi={onApi}
         />
         {card && !evidenceOpen ? (
+          // The card must fit the canvas and scroll inside itself. `inset-y-3`
+          // already gives this overlay a definite height; `h-full` passes it
+          // down so the card's inner `max-h-full`/`overflow-y-auto` resolves
+          // against a real pixel height instead of `height:auto` (which let the
+          // card grow past the fold with no scroll).
           <div className="pointer-events-none absolute inset-y-3 right-3 flex items-start">
-            <div className="pointer-events-auto max-h-full">
+            <div className="pointer-events-auto flex h-full min-h-0 flex-col">
               <SelectionCard subject={card} edges={visual.edges} nodes={model.nodes} rootAccountId={rootAccountId} actions={cardActions} />
             </div>
           </div>
