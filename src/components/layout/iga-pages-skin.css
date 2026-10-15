@@ -592,36 +592,36 @@
   vertical-align: middle;
 }
 
-/* admin-shell.css frames clickable rows with a full-bleed inset wash, a 1px
-   inset ring and a near-invisible (2%) per-CELL wash. That cell wash sits on
-   top of any row background, so tinting only the row reads as "no hover".
-   The fix: paint the hover on the CELLS themselves, in a clearly visible blue,
-   and cancel admin-shell's box-shadow framing. Covers hover and keyboard focus.
-   `!important` wins against admin-shell's equally-specific cell rules without
-   depending on stylesheet order. */
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-body"]
-  [data-slot="table-row"][data-clickable="true"]:hover,
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-body"]
-  [data-slot="table-row"][data-clickable="true"]:focus-within {
-  background: var(--component-table-row-hover) !important;
-  box-shadow: none !important;
-}
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-body"]
-  [data-slot="table-row"][data-clickable="true"]:hover
-  > [data-slot="table-cell"],
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-body"]
-  [data-slot="table-row"][data-clickable="true"]:focus-within
-  > [data-slot="table-cell"] {
-  background: var(--component-table-row-hover) !important;
-  box-shadow: none !important;
+/* Row hover: a clear blue fill across the whole row.
+
+   This has to live in `@layer components`. admin-shell.css is wrapped in that
+   layer and sets the row's background (`--admin-table-row-base`) and every
+   hovered cell's (`transparent`) with !important. For !important declarations
+   CSS reverses layer order: a LAYERED !important beats an UNLAYERED one, at any
+   specificity. So while these rules were unlayered, no amount of specificity or
+   !important could win, and hovered rows stayed white.
+
+   Inside the same layer the normal rules apply: these selectors are one step
+   more specific than admin-shell's (the shell element carries both
+   `data-ui-scope="admin-shell"` and `data-shell="iga"`), so they win without
+   depending on stylesheet order. The row and its cells are both painted, and
+   admin-shell's inset wash and 1px ring are cleared, so the fill is flat. */
+@layer components {
+  [data-ui-scope="admin-shell"][data-shell="iga"]
+    [data-slot="card"][data-variant="table"]
+    [data-slot="table-body"]
+    [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within) {
+    background: var(--component-table-row-hover) !important;
+    box-shadow: none !important;
+  }
+  [data-ui-scope="admin-shell"][data-shell="iga"]
+    [data-slot="card"][data-variant="table"]
+    [data-slot="table-body"]
+    [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
+    > [data-slot="table-cell"] {
+    background: var(--component-table-row-hover) !important;
+    box-shadow: none !important;
+  }
 }
 
 /* A clickable row says so before it is clicked: the NAME turns link blue (and
@@ -690,18 +690,6 @@
     [data-slot="table-row"][data-clickable="true"] {
     transition: none;
   }
-}
-
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-row"][data-clickable="true"]:hover
-  > [data-slot="table-cell"],
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-row"][data-clickable="true"]:focus-within
-  > [data-slot="table-cell"] {
-  background: transparent;
-  box-shadow: none;
 }
 
 /* the accent rail admin-shell paints on the first cell of a clickable row */
