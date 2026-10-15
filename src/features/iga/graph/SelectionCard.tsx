@@ -488,7 +488,9 @@ export function SelectionCard({
         ) : null}
         {body}
         <PolicyCardSection key={key} subject={subject} edges={edges} nodes={nodes} />
-        <div className="flex flex-wrap gap-2 pt-1">
+      </div>
+      {claims.length || open ? (
+        <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-(--color-border-subtle) px-3.5 py-2.5">
           {claims.length ? (
             <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => actions.onEvidence(claims)}>
               View evidence
@@ -500,12 +502,12 @@ export function SelectionCard({
             </Button>
           ) : null}
           {open && subject.kind === "node" && refType(open) !== "external_principal" && subject.visual.members[0].kind !== "statement" ? (
-            <Button size="sm" variant="ghost" onClick={() => actions.onFocusHere(open!)}>
+            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => actions.onFocusHere(open!)}>
               Graph from here
             </Button>
           ) : null}
-        </div>
-      </div>
+        </footer>
+      ) : null}
     </section>
   );
 }

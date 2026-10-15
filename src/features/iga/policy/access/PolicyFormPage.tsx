@@ -571,10 +571,11 @@ export default function PolicyFormPage() {
             </aside>
           </div>
 
-          {/* Sticky action bar, aligned to the page content (not full-bleed, so
-              it sits flush with the form columns above). It stays in view while
-              the form scrolls, so Apply/Cancel are always one click away. */}
-          <div className="sticky bottom-0 z-10 mt-4 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)/90 px-4 py-3 shadow-(--shadow-xs) backdrop-blur supports-backdrop-filter:bg-(--color-surface-raised)/80">
+          {/* A bottom action bar pinned to the page, spanning the full content
+              width (the negative margins cancel .console-page's 32px padding) so
+              it reads as the page's commit zone and stays in view while the form
+              scrolls. */}
+          <div className="sticky bottom-0 z-10 -mx-8 -mb-12 border-t border-(--color-border-subtle) bg-(--color-surface-raised) px-8 py-3">
             {staleEdit ? (
               <div className="mb-3 rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
                 <p className="font-semibold">This policy changed since you opened it.</p>

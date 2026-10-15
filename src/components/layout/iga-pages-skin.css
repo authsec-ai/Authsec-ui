@@ -607,8 +607,8 @@
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"]:focus-within {
-  background: var(--component-table-row-hover);
-  box-shadow: none;
+  background: var(--component-table-row-hover) !important;
+  box-shadow: none !important;
 }
 [data-shell="iga"]
   [data-slot="card"][data-variant="table"]
