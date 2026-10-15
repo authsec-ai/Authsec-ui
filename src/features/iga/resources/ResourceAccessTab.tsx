@@ -115,7 +115,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
   } else if (!view.rows.length && !view.footerFailure) {
     access = (
       <p className="text-sm text-(--color-text-muted)">
-        {emptyGiven("No declared access names this as a target.", q.currentData?.meta.coverage)}
+        {emptyGiven("No identity has been given access to this.", q.currentData?.meta.coverage)}
       </p>
     );
   } else {
@@ -161,7 +161,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
                     {statementLabel(a.statement)}
                   </p>
                   {a.statement.conditional ? (
-                    <p className="text-xs text-(--color-warning-text)">The statement has conditions, which were not evaluated.</p>
+                    <p className="text-xs text-(--color-warning-text)">This rule only applies when extra conditions are met. AuthSec has not checked them.</p>
                   ) : null}
                 </div>
                 {a.via_group ? (
@@ -192,7 +192,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
         {q.currentData?.meta.coverage?.length ? (
           <CoverageSummary subject="holders" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
         ) : null}
-        <DrawerSection label="Granted by declared access">{access}</DrawerSection>
+        <DrawerSection label="Who is allowed to use it">{access}</DrawerSection>
         {whole ? (
           <>
             <Restrictions
@@ -205,7 +205,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
               label="Deny statements naming it"
               rows={whole.deny_statements_naming}
               more={whole.deny_statements_naming_more}
-              note="A Deny may block what the grants above declare. Restrictions are listed, not evaluated."
+              note="A Deny rule may block some of the access listed above. AuthSec lists these rules but has not worked out their effect."
             />
           </>
         ) : null}

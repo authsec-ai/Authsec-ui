@@ -7,14 +7,14 @@
  */
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   useGetAccessPolicyQuery,
   useListAccessPolicyEventsQuery,
   type AccessPolicyDetail,
 } from "@/app/api/igaAccessPoliciesApi";
-import { StatusBadge } from "@/components/console/status";
+import { IgaBadge } from "../../shared/components/IgaBadge";
 import { Button } from "@/components/ui/button";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyLoadFailure, PolicyShell, classifyPolicyError, relTime, shortHash, usePolicyPermission } from "../shared";
+import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
 import {
   END_REASON,
@@ -52,6 +53,8 @@ export default function PolicyDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>("overview");
   const [lifecycle, setLifecycle] = useState<LifecycleAction | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const navigate = useNavigate();
   const enforce = usePolicyPermission("governance:enforce");
 
   const [poll, setPoll] = useState(60_000);
@@ -76,6 +79,10 @@ export default function PolicyDetailPage() {
   }
 
   const live = p.status !== "ended";
+  // AWS still holds the policy while any deployment is on its way in, in, or on its way out.
+  const stillInAws = p.deployments.some((d) => ["approved", "deploying", "active", "outcome_unknown", "expiring"].includes(d.state));
+  // Ended and paused policies say where AuthSec is, in one quiet line by the status chip.
+  const quietNote = (p.status === "ended" || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
   const actions =
     enforce.offered && live ? (
       <div className="flex flex-wrap gap-2">
@@ -89,6 +96,16 @@ export default function PolicyDetailPage() {
           End now
         </Button>
       </div>
+    ) : enforce.offered ? (
+      <Button
+        variant="outline"
+        className="text-(--color-danger-text)"
+        onClick={() => setDeleteOpen(true)}
+        disabled={stillInAws}
+        title={stillInAws ? "Available once AuthSec has removed the policy from AWS" : undefined}
+      >
+        Delete
+      </Button>
     ) : undefined;
 
   return (
@@ -97,12 +114,13 @@ export default function PolicyDetailPage() {
         <EffectChip effect={p.effect} />
         <PolicyStatusChip status={p.status} />
         <span className="text-xs text-(--color-text-muted)">{whenText(p)}</span>
+        {quietNote ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
         <Link to="/iga/policy" className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>
       </div>
 
-      {p.status === "failed" || p.status === "drift" || p.status_reason ? (
+      {p.status === "failed" || p.status === "drift" || (p.status_reason && !["applying", "ended", "paused"].includes(p.status)) ? (
         <p
           role={p.status === "failed" ? "alert" : undefined}
           className={cn(
@@ -123,7 +141,7 @@ export default function PolicyDetailPage() {
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--color-focus-ring)",
               tab === t.key ? "border-(--color-primary) text-(--color-text)" : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
             )}
           >
@@ -134,6 +152,7 @@ export default function PolicyDetailPage() {
 
       {tab === "overview" ? <Overview p={p} /> : tab === "aws" ? <InAws p={p} /> : <History ws={ws} p={p} />}
 
+      <DeletePolicyDialog policy={deleteOpen ? p : null} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate("/iga/policy")} />
       <LifecycleDialog policy={lifecycle ? p : null} action={lifecycle} onClose={() => setLifecycle(null)} />
     </PolicyShell>
   );
@@ -151,9 +170,8 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
           <Fact label="Effect">{p.effect === "block" ? "Block: deny these roles, whatever else allows them" : "Allow for a time: grant access the roles do not have"}</Fact>
           <Fact label="Resource">
             <span className="font-mono text-xs">{resourceText(p.resource)}</span>
-            <Meta>
-              {p.resource.arn} · account {p.resource.account_id}
-            </Meta>
+            <Meta>{p.resource.arn}</Meta>
+            <Meta>Account {p.resource.account_id}</Meta>
           </Fact>
           <Fact label="Access">{accessText(p.access)}</Fact>
           <Fact label="Window">
@@ -169,10 +187,8 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
           <Fact label="Applied by">
             {p.created_by.name || "Unknown"} · <Timestamp iso={p.created_at} />
           </Fact>
-          <Fact label="Version">
-            {p.version_no}
-            {p.version_no > 1 ? <Meta>Last changed {relTime(p.updated_at)}</Meta> : null}
-          </Fact>
+          {/* Version lives on the History tab */}
+          {p.version_no > 1 ? <Fact label="Last changed">{relTime(p.updated_at)}</Fact> : null}
           {p.status === "ended" ? <Fact label="Ended">{[relTime(p.ended_at), END_REASON[p.end_reason] ?? ""].filter(Boolean).join(" · ") || "Ended"}</Fact> : null}
         </Facts>
       </Panel>
@@ -243,17 +259,20 @@ function DeploymentCard({ d, doc, earlier }: { d: AccessPolicyDetail["deployment
   return (
     <Panel
       title={earlier ? `${d.role_name} · v${d.version_no}` : d.role_name}
-      actions={<StatusBadge tone={v.tone}>{v.label}</StatusBadge>}
+      actions={<IgaBadge tone={v.tone}>{v.label}</IgaBadge>}
     >
       <div className="space-y-3">
         <Facts>
           <Fact label="AWS policy" mono>
             {doc?.policy_name || d.aws_policy_arn || "Not created yet"}
           </Fact>
-          <Fact label="Applied">{d.deployed_at ? <Timestamp iso={d.deployed_at} /> : "Not yet"}</Fact>
-          <Fact label="Confirmed by AWS">{d.verified_at ? <Timestamp iso={d.verified_at} /> : "Not yet"}</Fact>
-          <Fact label="Last checked">{d.last_readback_at ? relTime(d.last_readback_at) : "Not yet"}</Fact>
-          <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : d.last_readback_at ? "Yes" : "Not checked yet"}</Fact>
+          {d.deployed_at ? <Fact label="Applied"><Timestamp iso={d.deployed_at} /></Fact> : null}
+          {d.verified_at ? <Fact label="Confirmed by AWS"><Timestamp iso={d.verified_at} /></Fact> : null}
+          {d.last_readback_at ? <Fact label="Last checked">{relTime(d.last_readback_at)}</Fact> : null}
+          {d.drift || d.last_readback_at ? (
+            <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : "Yes"}</Fact>
+          ) : null}
+          {!d.deployed_at && !d.error ? <Fact label="Status">Waiting for AWS to accept the policy.</Fact> : null}
           {d.end_reason ? <Fact label="Removed because">{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
           {d.document_hash ? (
             <Fact label="Fingerprint" mono>
@@ -312,10 +331,10 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
           {p.versions.map((v) => (
             <li key={v.version_no} className="flex items-baseline gap-3 py-2 first:pt-0 last:pb-0">
               <span className="text-[13px] font-semibold text-(--color-text)">v{v.version_no}</span>
-              <span className="min-w-0 flex-1 text-xs text-(--color-text-muted)">
+              <span className="min-w-0 flex-1 text-xs text-(--color-text-secondary)">
                 {v.created_by.name || "Unknown"} · {relTime(v.created_at)} · <span className="font-mono">{shortHash(v.intent_hash)}</span>
               </span>
-              <StatusBadge tone={v.status === "applied" ? "success" : "neutral"}>{v.status === "applied" ? "Current" : "Replaced"}</StatusBadge>
+              <IgaBadge tone={v.status === "applied" ? "success" : "info"}>{v.status === "applied" ? "Current" : "Replaced"}</IgaBadge>
             </li>
           ))}
         </ul>

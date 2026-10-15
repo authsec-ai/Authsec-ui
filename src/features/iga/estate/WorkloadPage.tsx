@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- classification UI is commented out for the demo; imports stay so it can be restored */
 /**
  * One agent or workload (SPEC-iga-phase2-graph.md §2.14.5, §2.14.6):
  * Overview · Identities · Resources · Graph · Changes.
@@ -124,17 +125,18 @@ export default function WorkloadPage() {
                         : undefined,
                 },
                 publishedAt: meta?.published_at,
-                actions: editable ? (
-                  w.classification === "classified_agent" ? (
-                    <Button variant="outline" size="sm" onClick={() => setDialog("undo")}>
-                      Undo classification
-                    </Button>
-                  ) : (
-                    <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => setDialog("classify")}>
-                      Classify as agent
-                    </Button>
-                  )
-                ) : undefined,
+                // "Classify as agent" / "Undo classification" are hidden for now: classification is not designed yet.
+                // actions: editable ? (
+                //   w.classification === "classified_agent" ? (
+                //     <Button variant="outline" size="sm" onClick={() => setDialog("undo")}>
+                //       Undo classification
+                //     </Button>
+                //   ) : (
+                //     <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => setDialog("classify")}>
+                //       Classify as agent
+                //     </Button>
+                //   )
+                // ) : undefined,
                 copy: { value: w.arn, label: "Copy ARN", what: "ARN" },
               }
             : undefined

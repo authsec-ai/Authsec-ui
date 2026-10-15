@@ -123,14 +123,14 @@ function Statement({ s, from, changesHref }: { s: StatementDetail; from: From; c
       </Facts>
       {s.condition ? (
         <details className="text-xs">
-          <summary className="cursor-pointer font-medium text-(--color-warning-text)">Conditions — recorded, not evaluated</summary>
+          <summary className="cursor-pointer font-medium text-(--color-warning-text)">Extra conditions (shown, not checked by AuthSec)</summary>
           <pre className="mt-1 overflow-x-auto rounded bg-(--color-surface-subtle) p-2 font-mono text-[11px]">
             {JSON.stringify(s.condition, null, 2)}
           </pre>
         </details>
       ) : null}
       {s.effect === "deny" ? (
-        <p className="text-xs text-(--color-text-muted)">A Deny restricts what other statements grant. It was not evaluated against them.</p>
+        <p className="text-xs text-(--color-text-muted)">A Deny rule blocks what other rules allow. AuthSec has not worked out which allowed actions it blocks.</p>
       ) : s.grant ? (
         <ClaimFacts claim={s.grant} basis="declared" state={s.grant_state ?? undefined} />
       ) : null}
@@ -271,7 +271,7 @@ export function IdentityPermissionsTab({ ws, identity }: { ws: string; identity:
                 <>
                   <span className="font-medium">{data.boundary.policy.name}</span>{" "}
                   <span className="text-(--color-text-muted)">
-                    limits what the policies above can grant. It is a limit, not a grant, and was not evaluated.
+                    sets a ceiling on what the policies above can allow. It gives no access by itself. AuthSec has not worked out its effect.
                   </span>
                 </>
               ) : (

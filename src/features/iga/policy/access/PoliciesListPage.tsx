@@ -7,7 +7,7 @@
  * to one bucket or one role. A row opens the policy's page.
  */
 
-import { Pause, Pencil, Play, Plus, Square } from "lucide-react";
+import { Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -24,7 +24,9 @@ import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { getWorkspaceId } from "@/utils/workspace";
 
+import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { PolicyLoadFailure, PolicyShell, classifyPolicyError, usePolicyPermission } from "../shared";
+import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
 import { STATUS, STATUS_ORDER, accessText, resourceText, whenText, windowText } from "./model";
 import { EffectChip, PolicyStatusChip, ReadinessBanner } from "./parts";
@@ -77,6 +79,7 @@ export default function PoliciesListPage() {
   const rows = useMemo(() => (status ? all.filter((p) => p.status === status) : all), [all, status]);
 
   const [lifecycle, setLifecycle] = useState<{ policy: AccessPolicy; action: LifecycleAction } | null>(null);
+  const [deleting, setDeleting] = useState<AccessPolicy | null>(null);
 
   const columns = useMemo<AdaptiveColumn<AccessPolicy>[]>(
     () => [
@@ -86,17 +89,24 @@ export default function PoliciesListPage() {
         label: "Policy",
         primary: true,
         alwaysVisible: true,
-        minWidth: 220,
+        minWidth: 260,
+        approxWidth: 320,
+        cellClassName: "py-3.5",
         cell: ({ row }) => (
-          <div className="min-w-0">
-            <Link
-              to={`/iga/policy/${row.original.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="block max-w-full truncate text-[13px] font-medium text-(--color-primary-text) hover:underline"
-            >
-              {row.original.name}
-            </Link>
-            {row.original.reason ? <div className="truncate text-xs text-(--color-text-muted)">{row.original.reason}</div> : null}
+          <div className="flex min-w-0 items-center gap-3">
+            {/* Policies of every provider share this list; the mark says which one this is. Today: AWS. */}
+            <ProviderGlyph provider="aws" className="shrink-0" />
+            <div className="min-w-0">
+              <Link
+                to={`/iga/policy/${row.original.id}`}
+                onClick={(e) => e.stopPropagation()}
+                title={row.original.name}
+                className="block max-w-full truncate text-[13px] font-medium text-(--color-text) hover:text-(--color-primary-text) hover:underline"
+              >
+                {row.original.name}
+              </Link>
+              {row.original.reason ? <div className="truncate text-xs text-(--color-text-secondary)" title={row.original.reason}>{row.original.reason}</div> : null}
+            </div>
           </div>
         ),
       },
@@ -105,7 +115,7 @@ export default function PoliciesListPage() {
         header: "Effect",
         label: "Effect",
         priority: 1,
-        approxWidth: 90,
+        approxWidth: 120,
         cell: ({ row }) => <EffectChip effect={row.original.effect} />,
         detail: (p) => (p.effect === "block" ? "Block" : "Allow"),
       },
@@ -114,14 +124,14 @@ export default function PoliciesListPage() {
         header: "Roles",
         label: "Roles",
         priority: 2,
-        approxWidth: 190,
+        approxWidth: 230,
         cell: ({ row }) => {
           const r = row.original.roles;
           const used = [...new Set(r.flatMap((x) => x.used_by.map((w) => w.name)))];
           return (
             <div className="min-w-0">
-              <div className="truncate text-[13px]">{r.length === 1 ? r[0].name : `${r[0]?.name ?? ""} and ${r.length - 1} more`}</div>
-              {used.length ? <div className="truncate text-xs text-(--color-text-muted)">Used by {used.slice(0, 2).join(", ")}{used.length > 2 ? ` +${used.length - 2}` : ""}</div> : null}
+              <div className="truncate text-[13px]" title={r.map((x) => x.name).join(", ")}>{r.length === 1 ? r[0].name : `${r[0]?.name ?? ""} and ${r.length - 1} more`}</div>
+              {used.length ? <div className="truncate text-xs text-(--color-text-secondary)">Used by {used.slice(0, 2).join(", ")}{used.length > 2 ? ` +${used.length - 2}` : ""}</div> : null}
             </div>
           );
         },
@@ -132,11 +142,15 @@ export default function PoliciesListPage() {
         header: "Resource",
         label: "Resource",
         priority: 3,
-        approxWidth: 180,
+        approxWidth: 280,
         cell: ({ row }) => (
-          <span className="block truncate font-mono text-xs" title={row.original.resource.arn}>
-            {resourceText(row.original.resource)}
-          </span>
+          <div className="min-w-0">
+            <span className="block truncate text-[13px]" title={row.original.resource.arn}>
+              {resourceText(row.original.resource)}
+            </span>
+            {/* Access is said under the resource it applies to, so the row has one column fewer to fit. */}
+            <span className="block truncate text-xs text-(--color-text-secondary)">{accessText(row.original.access)} access</span>
+          </div>
         ),
         detail: (p) => resourceText(p.resource),
       },
@@ -144,6 +158,7 @@ export default function PoliciesListPage() {
         id: "access",
         header: "Access",
         label: "Access",
+        defaultHidden: true,
         priority: 5,
         approxWidth: 110,
         cell: ({ row }) => <span className="text-[13px]">{accessText(row.original.access)}</span>,
@@ -154,11 +169,11 @@ export default function PoliciesListPage() {
         header: "Window",
         label: "Window",
         priority: 4,
-        approxWidth: 190,
+        approxWidth: 200,
         cell: ({ row }) => (
           <div className="min-w-0">
             <div className="text-[13px]">{windowText(row.original)}</div>
-            <div className="truncate text-xs text-(--color-text-muted)">{whenText(row.original)}</div>
+            <div className="truncate text-xs text-(--color-text-secondary)">{whenText(row.original)}</div>
           </div>
         ),
         detail: (p) => `${windowText(p)} · ${whenText(p)}`,
@@ -168,7 +183,7 @@ export default function PoliciesListPage() {
         header: "Status",
         label: "Status",
         priority: 1,
-        approxWidth: 130,
+        approxWidth: 150,
         cell: ({ row }) => <PolicyStatusChip status={row.original.status} />,
         detail: (p) => STATUS[p.status]?.label ?? p.status,
       },
@@ -182,8 +197,11 @@ export default function PoliciesListPage() {
         cellClassName: "pr-4 text-right",
         cell: ({ row }) => {
           const p = row.original;
-          if (!enforce.offered || p.status === "ended") return null;
-          const items = [
+          if (!enforce.offered) return null;
+          // An ended policy has only one thing left to do.
+          const items = p.status === "ended" ? [
+            { label: "Delete", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setDeleting(p) },
+          ] : [
             { label: "Edit", icon: <Pencil className="size-4" />, onSelect: () => navigate(`/iga/policy/${p.id}/edit`) },
             p.status === "paused"
               ? { label: "Resume", icon: <Play className="size-4" />, onSelect: () => setLifecycle({ policy: p, action: "resume" }) }
@@ -206,7 +224,7 @@ export default function PoliciesListPage() {
     <div className="mx-auto max-w-md space-y-3 py-6 text-center">
       <p className="text-sm font-semibold text-(--color-text)">No policies yet</p>
       <p className="text-[13px] text-(--color-text-muted)">
-        A policy blocks or allows roles on a bucket for as long as you say. Create one here, or open a bucket or role in Discovery and add one from there.
+        A policy blocks or allows an agent&rsquo;s role on a storage bucket for as long as you say. Create one here, or open a bucket or role in Discovery and add one from there.
       </p>
       {enforce.offered ? (
         <Button asChild className="text-white">
@@ -226,6 +244,11 @@ export default function PoliciesListPage() {
     </div>
   );
 
+  // A workspace with no policy at all: the filters and the empty table would only be noise, so show the invitation alone.
+  const firstRun = !filtered && !failure && !!list.data && all.length === 0;
+  // Nothing loaded at all: one clear message below, not a stack of three.
+  const loadFailed = !!failure && !list.data;
+
   const applied = [
     resourceId ? { key: "resource", label: `Bucket ${resourceName || resourceId}`, onRemove: () => setParams(dropKeys(params, ["resource_id", "resource_name"]), { replace: true }) } : null,
     identityId ? { key: "identity", label: `Role ${identityName || identityId}`, onRemove: () => setParams(dropKeys(params, ["identity_account_id", "identity_name"]), { replace: true }) } : null,
@@ -237,7 +260,7 @@ export default function PoliciesListPage() {
   return (
     <PolicyShell
       title="Policy"
-      description="Block or allow roles on a resource for as long as you say. AuthSec writes it into IAM and AWS enforces it."
+      description="Control what your AI agents can access and when. Allow or block access for a set period. AuthSec enforces each policy and removes temporary access automatically when it ends."
       requires="access_policies"
       actions={
         enforce.offered ? (
@@ -250,8 +273,9 @@ export default function PoliciesListPage() {
         ) : undefined
       }
     >
-      <ReadinessBanner ws={ws} />
+      {loadFailed ? null : <ReadinessBanner ws={ws} />}
 
+      {firstRun || loadFailed ? null : (
       <ConsoleFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -260,19 +284,35 @@ export default function PoliciesListPage() {
         activeFilter={status}
         onFilterChange={(k) => setParam("status", k || null)}
         trailing={
-          <div role="radiogroup" aria-label="Effect" className="flex gap-1">
+          <div role="radiogroup" aria-label="Effect" className="flex items-center gap-1.5">
             {(["", "block", "allow"] as const).map((e) => (
-              <Button key={e || "any"} size="sm" variant={effect === e ? "secondary" : "ghost"} role="radio" aria-checked={effect === e} onClick={() => setParam("effect", e || null)}>
+              <button
+                key={e || "any"}
+                type="button"
+                role="radio"
+                aria-checked={effect === e}
+                onClick={() => setParam("effect", e || null)}
+                className={`inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors ${
+                  effect === e
+                    ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"
+                    : "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
+                }`}
+              >
                 {e === "" ? "Any effect" : e === "block" ? "Block" : "Allow"}
-              </Button>
+              </button>
             ))}
           </div>
         }
         below={applied.length ? <AppliedFilters filters={applied} onClearAll={() => setParams({}, { replace: true })} /> : undefined}
       />
+      )}
 
       {failure && !list.data ? (
         <PolicyLoadFailure failure={failure} subject="policies" onRetry={() => void list.refetch()} />
+      ) : firstRun ? (
+        <TableCard>
+          <CardContent variant="flush">{emptyState}</CardContent>
+        </TableCard>
       ) : (
         <TableCard>
           <CardContent variant="flush">
@@ -297,6 +337,7 @@ export default function PoliciesListPage() {
       )}
       {more ? <p className="text-xs text-(--color-text-muted)">Showing the first {PAGE}. Search or filter to find the rest.</p> : null}
 
+      <DeletePolicyDialog policy={deleting} onClose={() => setDeleting(null)} />
       <LifecycleDialog policy={lifecycle?.policy ?? null} action={lifecycle?.action ?? null} onClose={() => setLifecycle(null)} />
     </PolicyShell>
   );

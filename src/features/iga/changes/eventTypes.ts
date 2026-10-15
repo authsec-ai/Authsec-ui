@@ -25,7 +25,7 @@ export interface EventType {
 
 const BY_KIND: Record<ChangeKind, EventType> = {
   first_seen: { label: "First seen", tone: "info" },
-  retired: { label: "No longer present", tone: "neutral" },
+  retired: { label: "No longer found", tone: "neutral" },
   restored: { label: "Seen again", tone: "success" },
   relationship_started: { label: "Identity linked", tone: "neutral" },
   relationship_ended: { label: "Identity unlinked", tone: "neutral" },
@@ -33,9 +33,9 @@ const BY_KIND: Record<ChangeKind, EventType> = {
   policy_detached: { label: "Policy detached", tone: "neutral" },
   grant_started: { label: "Access granted", tone: "neutral" },
   grant_ended: { label: "Access ended", tone: "neutral" },
-  statement_revised: { label: "Statement revised", tone: "neutral" },
-  statement_replaced: { label: "Statement replaced", tone: "neutral" },
-  coverage_changed: { label: "Scan coverage", tone: "neutral" },
+  statement_revised: { label: "Permission rule edited", tone: "neutral" },
+  statement_replaced: { label: "Permission rule replaced", tone: "neutral" },
+  coverage_changed: { label: "Scan coverage changed", tone: "neutral" },
 };
 
 /** What a History filter selects. `coverage` has no filter: it is its own feed. */

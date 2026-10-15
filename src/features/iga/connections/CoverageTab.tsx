@@ -14,7 +14,7 @@ import { useGetAwsConnectorQuery, useGetGcpConnectorQuery, useListAwsScanRunsQue
 import { useListScanRunsQuery } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { RunReport } from "@/features/discovery/GitHubScanPanel";
 import {
   PROBE_REASON,
@@ -87,7 +87,7 @@ function Row({ r }: { r: CoverageRow }) {
           <p className="text-xs leading-relaxed text-(--color-text-muted)">{r.lead}</p>
           {r.todo ? <p className="text-xs leading-relaxed text-(--color-text)">{r.todo}</p> : null}
         </div>
-        <CloudPill tone={COVERAGE_TONE[r.state]}>{COVERAGE_WORD[r.state]}</CloudPill>
+        <ConnPill tone={COVERAGE_TONE[r.state]}>{COVERAGE_WORD[r.state]}</ConnPill>
       </div>
       <details className="mt-1.5">
         <summary className="inline cursor-pointer text-xs text-(--color-primary-text) hover:underline">Details</summary>
@@ -189,7 +189,7 @@ function Summary({ c, asOf, note }: { c: Connection; asOf?: string | null; note?
   return (
     <Panel title="Summary">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <CloudPill tone={c.coverage.state === "complete" ? "success" : c.coverage.state === "unknown" ? "muted" : "warning"}>{coverageText(c)}</CloudPill>
+        <ConnPill tone={c.coverage.state === "complete" ? "success" : c.coverage.state === "unknown" ? "muted" : "warning"}>{coverageText(c)}</ConnPill>
         {asOf ? (
           <span className="text-xs text-(--color-text-muted)">
             Last scan finished <Timestamp iso={asOf} />
@@ -262,7 +262,7 @@ function GcpReach({ c }: { c: Connection }) {
                     {cap.unknown && cap.reason ? <p className="text-xs text-(--color-text-muted)">{PROBE_REASON[cap.reason] ?? cap.reason}</p> : null}
                     {!cap.unknown && cap.missing?.length ? <p className="text-xs text-(--color-text-muted)">Missing: {cap.missing.join(", ")}</p> : null}
                   </div>
-                  <CloudPill tone={tone}>{cap.unknown ? "Unknown" : cap.can ? "Readable" : "Not readable"}</CloudPill>
+                  <ConnPill tone={tone}>{cap.unknown ? "Unknown" : cap.can ? "Readable" : "Not readable"}</ConnPill>
                 </li>
               );
             })}

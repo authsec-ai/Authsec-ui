@@ -11,6 +11,7 @@ import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { usePipeline } from "../pipeline/usePipeline";
 import { useGraphFeature } from "../shared/capabilities";
 import { accountCoverageNote } from "../shared/lifecycle";
+import { PAGE_SIZES } from "../shared/components/CursorPager";
 import { usePaging } from "../shared/paging";
 import { useGraphRevision } from "../shared/revision";
 import type { FacetOptions } from "./facets";
@@ -38,10 +39,14 @@ export function usePublishedCommon(p: ScreenProps, feature: "workloads" | "ident
   const { rev, epoch, refresh } = useGraphRevision(p.ws);
   const gate = useGraphFeature(p.ws, feature);
   const paging = usePaging(`discovery-${feature}`, epoch);
+  const sizeParam = Number(p.url.get("size"));
+  const pageSize = (PAGE_SIZES as readonly number[]).includes(sizeParam) ? sizeParam : PAGE_SIZES[0];
+  // A new page size starts the list again at page one (a filter-style edit drops the cursors).
+  const setPageSize = (n: number) => p.url.patch({ size: n === PAGE_SIZES[0] ? null : String(n) });
   const pipeline = usePipeline(p.ws, gate.off);
   const blocked = p.scope.kind === "unknown" || p.scope.kind === "no_rows";
   const account = p.scope.kind === "one" ? [p.scope.source.scopeId] : undefined;
-  return { dispatch, rev, epoch, refresh, gate, paging, pipeline, blocked, account };
+  return { dispatch, rev, epoch, refresh, gate, paging, pipeline, blocked, account, pageSize, setPageSize };
 }
 export type Common = ReturnType<typeof usePublishedCommon>;
 

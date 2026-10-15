@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 
 import type { GraphFailure } from "../graphErrors";
 
+/** Rows-per-page choices; the first is the default. */
+export const PAGE_SIZES = [25, 50, 100] as const;
+
 /** The paging fields every graph list's `meta` carries (§5.2). */
 export interface PagerMeta {
   next_cursor: string | null;
@@ -34,6 +37,8 @@ export function CursorPager({
   onRetry,
   onRefresh,
   previousPage = false,
+  pageSize,
+  onPageSize,
 }: {
   meta: PagerMeta;
   pageIndex: number;
@@ -47,6 +52,9 @@ export function CursorPager({
   onRefresh?: () => void;
   /** The rows shown are the page before the one that failed to load. */
   previousPage?: boolean;
+  /** Rows per page, when the list lets the reader choose. */
+  pageSize?: number;
+  onPageSize?: (size: number) => void;
 }) {
   const shownIndex = previousPage ? pageIndex - 1 : pageIndex;
   const from = rowsOnPage === 0 ? 0 : shownIndex * meta.limit + 1;
@@ -63,6 +71,8 @@ export function CursorPager({
 
   const stale = failure?.kind === "revision_stale";
   const next = meta.next_cursor;
+  // Only worth showing when there is more than one page, or a bigger page was chosen.
+  const showSize = !!onPageSize && pageSize !== undefined && (shownIndex > 0 || !!next || pageSize !== PAGE_SIZES[0]);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--color-border-subtle) px-4 py-2 text-xs">
@@ -82,6 +92,22 @@ export function CursorPager({
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {showSize ? (
+          <label className="inline-flex items-center gap-1.5 text-(--color-text-muted)">
+            Rows per page
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSize?.(Number(e.target.value))}
+              className="h-7 rounded-md border border-(--color-border-subtle) bg-(--color-surface) px-1.5 text-xs text-(--color-text)"
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {failure ? (
           <span role="alert" className="text-(--color-warning-text)">
             {stale

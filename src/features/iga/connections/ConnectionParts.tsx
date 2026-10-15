@@ -7,7 +7,7 @@ import { Loader2, MoreHorizontal } from "lucide-react";
 import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { cn } from "@/lib/utils";
 
 import { actionsOf, statusOf, type ActionSet } from "./connectionModel";
@@ -33,7 +33,7 @@ export function StatusBlock({
   const support = brief && SAID_BY_LAST_SCAN.has(s.key) ? "" : s.support;
   return (
     <div className="min-w-0 space-y-1">
-      {pill ? <CloudPill tone={s.tone}>{s.label}</CloudPill> : null}
+      {pill ? <ConnPill tone={s.tone}>{s.label}</ConnPill> : null}
       {support ? (
         <p
           className={cn("text-xs leading-snug text-muted-foreground", brief ? "line-clamp-1" : clamp && "line-clamp-2")}
@@ -133,7 +133,7 @@ export function ConnectionActionBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {a.scan ? (
-        <Button variant="outline" size="sm" disabled={!!pending} onClick={() => onRun("scan")}>
+        <Button variant="outline" size="sm" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
           {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
         </Button>
       ) : null}
@@ -141,7 +141,7 @@ export function ConnectionActionBar({
       {more ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="px-2" disabled={!!pending} aria-label="More actions" title="More actions">
+            <Button variant="outline" size="sm" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-2" disabled={!!pending} aria-label="More actions" title="More actions">
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

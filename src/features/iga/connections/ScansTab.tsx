@@ -15,7 +15,7 @@ import { useGetGcpConnectorQuery } from "@/app/api/cloudDiscoveryApi";
 import { useListScanRunsQuery } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { GitHubScanPanel, StatusPill as GitHubRunPill } from "@/features/discovery/GitHubScanPanel";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
@@ -72,9 +72,9 @@ function GcpScans({ c }: { c: Connection }) {
       {cov?.status ? (
         <Facts>
           <Fact label="Outcome">
-            <CloudPill tone={cov.status === "complete" ? "success" : cov.status === "running" ? "info" : cov.status === "partial" ? "warning" : "danger"}>
+            <ConnPill tone={cov.status === "complete" ? "success" : cov.status === "running" ? "info" : cov.status === "partial" ? "warning" : "danger"}>
               {cov.status === "complete" ? "Complete" : cov.status === "running" ? "Running" : cov.status === "partial" ? "Partial" : "Failed"}
-            </CloudPill>
+            </ConnPill>
           </Fact>
           <Fact label="Started">{cov.started_at ? <Timestamp iso={cov.started_at} /> : "—"}</Fact>
           <Fact label="Finished">{cov.finished_at ? <Timestamp iso={cov.finished_at} /> : cov.status === "running" ? "Still running" : "—"}</Fact>

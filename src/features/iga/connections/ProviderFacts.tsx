@@ -13,7 +13,7 @@ import { useGetAwsConnectorQuery, useGetGcpConnectorQuery } from "@/app/api/clou
 import { connectorStatusFromSource, type DiscoverySource } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import {
   TEMPLATE_VERSION_WITH_COMPUTE,
   stackPredatesCompute,
@@ -84,9 +84,9 @@ export function AwsFacts({ c }: { c: Connection }) {
             <span className="inline-flex items-center gap-2">
               {attrs?.template_version ?? "—"}
               {outdated ? (
-                <CloudPill tone="warning" dot={false}>
+                <ConnPill tone="warning" dot={false}>
                   Outdated
-                </CloudPill>
+                </ConnPill>
               ) : null}
             </span>
           </Fact>
@@ -124,9 +124,9 @@ export function GcpFacts({ c }: { c: Connection }) {
       <Panel title="Discovery readiness" description="Whether AuthSec can scan this project, from the last permission probe.">
         {attrs.discovery_readiness ? (
           <div className="space-y-2">
-            <CloudPill tone={READINESS_TONE[attrs.discovery_readiness] ?? "muted"}>
+            <ConnPill tone={READINESS_TONE[attrs.discovery_readiness] ?? "muted"}>
               {READINESS_LABEL[attrs.discovery_readiness] ?? attrs.discovery_readiness}
-            </CloudPill>
+            </ConnPill>
             {attrs.discovery_readiness_reasons?.length ? (
               <ul className="list-disc space-y-1 pl-5 text-[13px] text-(--color-text-muted)">
                 {attrs.discovery_readiness_reasons.map((r) => (

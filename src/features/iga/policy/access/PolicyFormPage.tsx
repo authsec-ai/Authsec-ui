@@ -11,7 +11,7 @@
  * is opened from Discovery or the graph.
  */
 
-import { AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -49,14 +49,14 @@ import {
   type PolicyDraft,
 } from "./model";
 import { AwsDocument, EffectChip } from "./parts";
-import { readinessWords, useAccessReadiness } from "./readiness";
+import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="space-y-2.5">
+    <section className="space-y-3 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) p-4">
       <div>
-        <h2 className="text-[13px] font-semibold text-(--color-text)">{title}</h2>
+        <h2 className="text-sm font-semibold text-(--color-text)">{title}</h2>
         {hint ? <p className="mt-0.5 text-xs text-(--color-text-muted)">{hint}</p> : null}
       </div>
       {children}
@@ -99,7 +99,7 @@ function Pill({
       title={title}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center rounded-md border px-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         on
           ? danger
             ? "border-(--color-danger) bg-(--color-danger-soft) text-(--color-danger-text)"
@@ -118,6 +118,14 @@ function accessHint(access: AccessLevel[], isBlock: boolean): string {
   const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => a.blurb.replace(/\.$/, "").toLowerCase());
   if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
   return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
+}
+
+/** Scrolls to the field a refusal names and puts the cursor in it, so the fix is one keystroke away. */
+function revealField(field: string) {
+  const box = document.getElementById(`ap-${field}`);
+  box?.scrollIntoView({ block: "center", behavior: "smooth" });
+  const target = box?.matches("input, textarea, select, button") ? box : box?.querySelector<HTMLElement>("input, textarea, select, button");
+  target?.focus({ preventScroll: true });
 }
 
 export default function PolicyFormPage() {
@@ -223,7 +231,7 @@ export default function PolicyFormPage() {
     const problem = draftProblem(draft);
     if (problem) {
       setFieldError(problem);
-      document.getElementById(`ap-${problem.field}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      revealField(problem.field);
       return;
     }
     const body = { ...bodyOf(draft), name: draft.name.trim() || suggestedName(draft) };
@@ -241,7 +249,7 @@ export default function PolicyFormPage() {
       // The server's own message is written for the field; fall back to the
       // code's title only when it did not send one.
       setFieldError({ field: f, message: act.failure.message || describeFailure(act.failure).title });
-      document.getElementById(`ap-${f}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      revealField(f);
     }
   }, [act.failure]);
 
@@ -306,13 +314,13 @@ export default function PolicyFormPage() {
         <>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
             <form
-              className="min-w-0 space-y-6"
+              className="min-w-0 space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 void apply();
               }}
             >
-              <Block title="Bucket" hint="An S3 bucket Discovery found. Add a folder to limit the rule to it.">
+              <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
                   <div id="ap-resource">
                     <ResourcePicker
@@ -361,9 +369,9 @@ export default function PolicyFormPage() {
                 </div>
               </Block>
 
-              <Block title="Roles" hint="An agent reaches AWS through the role it runs as, so the rule applies to every agent or job using these roles.">
+              <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
                 <div id="ap-roles">
-                  <RolePicker ws={ws} resource={draft.resource} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                  <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
                   <FieldError message={err("roles")} />
                 </div>
               </Block>
@@ -493,16 +501,16 @@ export default function PolicyFormPage() {
                       AuthSec can change IAM in this account.
                     </li>
                   ) : (
-                    <li className="space-y-1.5 bg-(--color-warning-soft) px-4 py-2.5">
+                    <li className="space-y-1.5 bg-(--color-surface-subtle) px-4 py-2.5">
                       <p className="flex items-start gap-2 text-(--color-text)">
-                        <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-warning-text)" />
+                        <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
                         <span>
                           {readiness.failed
                             ? "Could not check whether AuthSec can change AWS."
                             : !readiness.available
                               ? readiness.reason || "Applying policies is turned off on this server."
                               : readiness.notReady.length
-                                ? `${readiness.notReady.map((a) => `${a.account_id}: ${readinessWords(a.reason)}`).join("; ")}.`
+                                ? `AWS access is not set up for ${readiness.notReady.length === 1 ? "account" : "accounts"} ${readiness.notReady.map((a) => a.account_id).join(", ")}. AuthSec can read ${readiness.notReady.length === 1 ? "it" : "them"} but cannot change ${readiness.notReady.length === 1 ? "it" : "them"} yet.`
                                 : "No AWS account is connected yet."}
                         </span>
                       </p>
@@ -561,7 +569,7 @@ export default function PolicyFormPage() {
             </aside>
           </div>
 
-          <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) bg-(--color-surface-base) px-1 py-3">
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) py-4">
             {staleEdit ? (
               <div className="basis-full rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
                 <p className="font-semibold">This policy changed since you opened it.</p>

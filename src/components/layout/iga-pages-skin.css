@@ -50,8 +50,8 @@
      (counts, timestamps, zero values, helper lines). #5b6472 is 5.9:1 on
      white — AA at every size — so it is still never "light grey" text, but a
      page now has hierarchy: object, its metadata, then the detail. */
-  --color-text-muted: #5b6472;
-  --color-text-subtle: #5b6472;
+  --color-text-muted: #3d4550;
+  --color-text-subtle: #3d4550;
   /* Placeholders and the search magnifier are hints, not content: they keep
      their own lighter grey so an empty field never reads as filled in. */
   --iga-hint: #6b7280;
@@ -187,8 +187,8 @@
   --color-text: #f3f5f7;
   --color-text-primary: #f3f5f7;
   --color-text-secondary: #d0d5db;
-  --color-text-muted: #9aa4b2;
-  --color-text-subtle: #9aa4b2;
+  --color-text-muted: #b8c0cc;
+  --color-text-subtle: #b8c0cc;
   --iga-hint: #8b97a8;
   --color-surface-base: #0f1318;
   --color-surface-raised: #151a21;
@@ -605,20 +605,15 @@
   box-shadow: none;
 }
 
-/* A clickable row says so before it is clicked: its text turns link blue
-   under the pointer (or keyboard focus), and the name is underlined. Only
-   ink in the console's text colours changes; a badge keeps its own tone. */
-[data-shell="iga"]
-  [data-slot="card"][data-variant="table"]
-  [data-slot="table-body"]
-  [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
-  > [data-slot="table-cell"],
+/* A clickable row says so before it is clicked: the NAME turns link blue (and
+   is underlined, below) under the pointer or keyboard focus. The other cells
+   keep their ink, so a hovered row does not flash a whole column of blue. */
 [data-shell="iga"]
   [data-slot="card"][data-variant="table"]
   [data-slot="table-body"]
   [data-slot="table-row"][data-clickable="true"]:is(:hover, :focus-within)
   > [data-slot="table-cell"]
-  :is(a, [class*="text-(--color-text"], [class*="text-muted-foreground"]):not(.rounded-full, .rounded-full *) {
+  :is(a[data-row-link], a[data-name-link]) {
   color: var(--color-primary-text);
 }
 
@@ -946,4 +941,47 @@
 
 [data-shell="iga"] [data-slot="button"][data-variant="outline"] {
   --admin-border-strong: var(--color-border-subtle);
+}
+
+/* ====================================================================
+   TABLE POLISH (2026-10-14) — no zebra, hairline dividers, one quiet hover
+   admin-shell paints even rows from --admin-table-row-zebra with a layered
+   !important that no unlayered rule can beat, but it reads the colour from
+   a variable. Setting the variables on the row itself flattens the stripes;
+   the 1px divider set under "rows" above carries the rhythm instead. The
+   selected-row rule earlier in this file is more specific and still wins.
+   ==================================================================== */
+[data-shell="iga"]
+  [data-slot="card"][data-variant="table"]
+  [data-slot="table-body"]
+  [data-slot="table-row"] {
+  --admin-table-row-base: var(--color-surface-raised);
+  --admin-table-row-zebra: var(--color-surface-raised);
+  /* the 1px outline admin-shell draws around a hovered clickable row */
+  --admin-table-row-hover-outline: transparent;
+}
+
+/* ---- buttons: a little life, no new colours ------------------------- */
+[data-shell="iga"] [data-slot="button"] {
+  transition:
+    background-color 130ms ease,
+    border-color 130ms ease,
+    color 130ms ease;
+}
+
+[data-shell="iga"] [data-slot="button"]:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+[data-shell="iga"] [data-slot="button"]:disabled {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-shell="iga"] [data-slot="button"] {
+    transition: none;
+  }
+  [data-shell="iga"] [data-slot="button"]:active:not(:disabled) {
+    transform: none;
+  }
 }

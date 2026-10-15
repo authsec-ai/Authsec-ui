@@ -29,8 +29,8 @@ export const STATUS: Record<AccessPolicyStatus, { label: string; tone: ConsoleTo
   active: { label: "Active", tone: "success", hint: "In AWS and inside its window." },
   drift: { label: "Changed in AWS", tone: "warning", hint: "Someone changed or removed it in AWS. AuthSec is putting it back." },
   failed: { label: "Failed", tone: "danger", hint: "AuthSec could not apply it to every role. Open it to see why." },
-  paused: { label: "Paused", tone: "neutral", hint: "Taken out of AWS by hand. Resume puts it back." },
-  ended: { label: "Ended", tone: "neutral", hint: "No longer in AWS. The record is kept." },
+  paused: { label: "Paused", tone: "warning", hint: "Taken out of AWS by hand. Resume puts it back." },
+  ended: { label: "Ended", tone: "info", hint: "No longer in AWS. The record is kept." },
 };
 
 export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ended"];
@@ -114,10 +114,10 @@ export function eventLabel(e: { event: string; payload?: Record<string, unknown>
 
 /* --------------------------------- access --------------------------------- */
 
-export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; blurb: string; verb: string }[] = [
-  { key: "read", label: "Read", blurb: "List the folder and read objects.", verb: "reading" },
-  { key: "write", label: "Write", blurb: "Upload and overwrite objects.", verb: "writing" },
-  { key: "delete", label: "Delete", blurb: "Remove objects and their versions.", verb: "deleting" },
+export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; blurb: string; verb: string; base: string }[] = [
+  { key: "read", label: "Read", blurb: "List the folder and read objects.", verb: "reading", base: "read" },
+  { key: "write", label: "Write", blurb: "Upload and overwrite objects.", verb: "writing", base: "write" },
+  { key: "delete", label: "Delete", blurb: "Remove objects and their versions.", verb: "deleting", base: "delete" },
 ];
 
 /** "Read, Write" or "All access". */
@@ -126,16 +126,37 @@ export function accessText(levels: readonly AccessLevel[]): string {
   return ACCESS.filter((a) => levels.includes(a.key)).map((a) => a.label).join(", ") || "None";
 }
 
-/** "reading and writing" or "everything". */
-function accessVerb(levels: readonly AccessLevel[]): string {
+/**
+ * "reading and writing" or "everything". With `base`, the plain verbs
+ * ("read and write") that follow "allowed to"; "blocked from" takes the -ing form.
+ */
+export function accessVerb(levels: readonly AccessLevel[], base = false): string {
   if (levels.includes("all")) return "everything";
-  const v = ACCESS.filter((a) => levels.includes(a.key)).map((a) => a.verb);
+  const v = ACCESS.filter((a) => levels.includes(a.key)).map((a) => (base ? a.base : a.verb));
   return v.length <= 1 ? v.join("") : `${v.slice(0, -1).join(", ")} and ${v[v.length - 1]}`;
 }
 
 /** `invoices/` in `finance-reports` → `finance-reports/invoices/`; the whole bucket → `finance-reports`. */
 export function resourceText(r: { bucket: string; prefix: string }): string {
   return r.prefix ? `${r.bucket}/${r.prefix}` : r.bucket;
+}
+
+/**
+ * Whether a path Discovery saw a role reach inside a bucket (`""` the whole
+ * bucket, `attachments/*`, `reports/q3.csv`) overlaps the folder a rule is for
+ * (`""` the whole bucket, else `sandbox/`). A role that holds `attachments/*`
+ * does not reach `sandbox/`; one that holds the bucket, or `sandbox/a.txt`, or
+ * `sand*`, does.
+ */
+export function pathReachesFolder(path: string, folder: string): boolean {
+  const f = folder.trim();
+  const p = path.replace(/\*+$/, "");
+  return f === "" || p === "" || p.startsWith(f) || f.startsWith(p);
+}
+
+/** Whether any of the paths a role holds reaches the folder. */
+export function reachesFolder(paths: readonly string[], folder: string): boolean {
+  return paths.some((p) => pathReachesFolder(p, folder));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */
@@ -205,7 +226,7 @@ export function policySentence(p: {
   const who = p.roles.map((r) => r.name).join(" and ") || "No role";
   const tail = p.ends_at ? ` until ${stamp(p.ends_at)}` : " until the policy is ended";
   const from = p.starts_at ? `, from ${stamp(p.starts_at)}` : "";
-  return `${who} ${p.roles.length === 1 ? "is" : "are"} ${EFFECT[p.effect].verb} ${accessVerb(p.access)} on ${resourceText(p.resource)}${from}${tail}.`;
+  return `${who} ${p.roles.length === 1 ? "is" : "are"} ${EFFECT[p.effect].verb} ${accessVerb(p.access, p.effect === "allow")} on ${resourceText(p.resource)}${from}${tail}.`;
 }
 
 /**

@@ -23,7 +23,8 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 
 import { classifyGraphError } from "../shared/graphErrors";
-import { IDENTITY_KIND_LABEL, accountLabel } from "../shared/labels";
+import { IDENTITY_KIND_HINT, IDENTITY_KIND_LABEL, accountPhrase } from "../shared/labels";
+import { servicePlain } from "../shared/access";
 import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { viaLink } from "../shared/links";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
@@ -31,12 +32,18 @@ import { Panel } from "../shared/components/Panel";
 import { WrapId } from "../shared/components/WrapId";
 
 const MECHANISM_LABEL: Record<string, string> = {
-  sts_assume_role: "AssumeRole",
-  oidc_federation: "OIDC federation",
-  saml_federation: "SAML federation",
-  assume_role_with_web_identity: "Web identity",
-  assume_role_with_saml: "SAML",
+  sts_assume_role: "can borrow this role",
+  oidc_federation: "signs in through an OIDC provider",
+  saml_federation: "signs in through a SAML provider",
+  assume_role_with_web_identity: "signs in with a web identity",
+  assume_role_with_saml: "signs in with SAML",
 };
+
+/** "lambda.amazonaws.com" reads as "Lambda (functions) service"; anything else is shown as it is. */
+function principalName(kind: string, name: string): string {
+  const m = /^([a-z0-9-]+)\.amazonaws\.com$/.exec(name);
+  return kind === "aws_service" && m ? `${servicePlain(m[1])} service` : name;
+}
 
 function mechanism(m: string): string {
   return MECHANISM_LABEL[m] ?? m.replace(/_/g, " ");
@@ -51,28 +58,31 @@ function Principal({ p, from }: { p: UsedByPrincipal; from: { ref: GraphRef; nam
         <div className="min-w-0">
           {path ? (
             <Link {...viaLink(path, from)} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
-              {p.principal.name}
+              {principalName(p.principal.kind, p.principal.name)}
             </Link>
           ) : (
-            <span className="text-[13px] font-medium text-(--color-text)">{p.principal.name}</span>
+            <span className="text-[13px] font-medium text-(--color-text)">{principalName(p.principal.kind, p.principal.name)}</span>
           )}
           <span className="ml-2 text-xs text-(--color-text-muted)">
-            {kind}
-            {p.principal.account ? ` · ${accountLabel(p.principal.account)}` : ""} · {mechanism(p.mechanism)}
+            <span title={IDENTITY_KIND_HINT[p.principal.kind as keyof typeof IDENTITY_KIND_HINT]}>{kind}</span>
+            {p.principal.account ? ` · in ${accountPhrase(p.principal.account)}` : ""} · {mechanism(p.mechanism)}
           </span>
           {p.principal.arn ? (
-            <p className="mt-0.5 font-mono text-xs leading-5 text-(--color-text-muted)">
-              <WrapId>{p.principal.arn}</WrapId>
+            <p className="mt-0.5 text-xs leading-5 text-(--color-text-muted)">
+              Unique AWS ID:{" "}
+              <span className="font-mono">
+                <WrapId>{p.principal.arn}</WrapId>
+              </span>
             </p>
           ) : null}
         </div>
         <ClaimFacts claim={p.claim} basis={p.basis} state={p.state} confirmedAt={p.last_confirmed_at} />
       </div>
       {p.conditions ? (
-        <p className="text-xs text-(--color-warning-text)">The trust statement sets conditions, which were not evaluated.</p>
+        <p className="text-xs text-(--color-warning-text)">This rule only applies when extra conditions are met. AuthSec shows the conditions but has not checked them.</p>
       ) : null}
       {p.statement.negated ? (
-        <p className="text-xs text-(--color-warning-text)">It uses NotPrincipal, so who it admits could not be resolved.</p>
+        <p className="text-xs text-(--color-warning-text)">This rule says who is NOT allowed, so AuthSec cannot list who is allowed.</p>
       ) : null}
     </li>
   );
@@ -94,10 +104,10 @@ export function TrustCard({ ws, identity, from }: { ws: string; identity: GraphR
 
   return (
     <Panel
-      title="Who can assume this role"
+      title="Who can use this role"
       flush
       count={section ? `${section.total ?? section.items.length}${section.next_cursor ? "+" : ""}` : undefined}
-      description="From the role's trust policy. Not evaluated."
+      description="The people and services this role trusts, as written in AWS. AuthSec has not checked the extra conditions."
     >
       {failure ? (
         <p className="px-4 py-3 text-sm text-(--color-text-muted)">
@@ -127,7 +137,7 @@ export function TrustCard({ ws, identity, from }: { ws: string; identity: GraphR
           ) : null}
         </>
       ) : (
-        <p className="px-4 py-3 text-sm text-(--color-text-muted)">No principal is named in this role's trust policy.</p>
+        <p className="px-4 py-3 text-sm text-(--color-text-muted)">This role does not name anyone who may use it.</p>
       )}
     </Panel>
   );

@@ -209,6 +209,34 @@ export const SERVICE_LABEL: Record<string, string> = {
   any: "Any service",
 };
 
+/** Plain names for the card's rows: what the service is, for a reader who does not know the acronym. */
+const SERVICE_PLAIN: Record<string, string> = {
+  s3: "Amazon S3 (file storage)",
+  secretsmanager: "Secrets Manager (stored passwords and keys)",
+  ssm: "Systems Manager (settings and parameters)",
+  logs: "CloudWatch Logs (application logs)",
+  cloudwatch: "CloudWatch (metrics and alarms)",
+  dynamodb: "DynamoDB (database)",
+  sqs: "SQS (message queues)",
+  sns: "SNS (notifications)",
+  kms: "KMS (encryption keys)",
+  iam: "IAM (users and roles)",
+  sts: "STS (temporary access)",
+  ec2: "EC2 (servers)",
+  lambda: "Lambda (functions)",
+  ecr: "ECR (container images)",
+  ecs: "ECS (containers)",
+  eks: "EKS (Kubernetes)",
+  events: "EventBridge (events)",
+  states: "Step Functions (workflows)",
+  kinesis: "Kinesis (data streams)",
+  rds: "RDS (database)",
+};
+
+export function servicePlain(service: string): string {
+  return SERVICE_PLAIN[service] ?? serviceLabel(service);
+}
+
 export function serviceLabel(service: string): string {
   return SERVICE_LABEL[service] ?? service;
 }
