@@ -134,7 +134,7 @@ export function ConnectionActionBar({
     <div className="flex flex-wrap items-center gap-2">
       {a.scan ? (
         <Button variant="outline" size="sm" disabled={!!pending} onClick={() => onRun("scan")}>
-          {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
+          {pending === "scan" ? PENDING_WORD.scan : c.provider === "azure" ? "Rescan" : "Scan now"}
         </Button>
       ) : null}
       {primary}

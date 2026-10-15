@@ -295,7 +295,7 @@ export default function ConnectionsPage() {
                   Reports every {Math.max(1, Math.round(c.scan.reports_every_seconds / 60))} min
                 </span>
               ) : a.scan ? (
-                <Button variant="ghost" size="icon" className="size-9" aria-label={`Scan ${c.name} now`} title="Scan now" onClick={() => void run(c, "scan")}>
+                <Button variant="ghost" size="icon" className="size-9" aria-label={c.provider === "azure" ? `Rescan ${c.name}` : `Scan ${c.name} now`} title={c.provider === "azure" ? "Rescan" : "Scan now"} onClick={() => void run(c, "scan")}>
                   <RefreshCw className="size-4" aria-hidden="true" />
                 </Button>
               ) : null}

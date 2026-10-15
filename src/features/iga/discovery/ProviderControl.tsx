@@ -10,6 +10,7 @@ const FULL_NAME: Record<DiscoveryProvider, string> = {
   aws: "Amazon Web Services",
   gcp: "Google Cloud",
   k8s: "Kubernetes",
+  azure: "Microsoft Azure",
   github: "GitHub",
 };
 

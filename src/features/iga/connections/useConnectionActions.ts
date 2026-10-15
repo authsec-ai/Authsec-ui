@@ -126,7 +126,12 @@ export function useConnectionActions() {
       setPending((p) => ({ ...p, [c.id]: kind }));
       dismiss(c.id);
       try {
-        if (kind === "scan") {
+        if (kind === "scan" && c.provider === "azure") {
+          // Azure has no separate scan route: Verify re-checks access and starts
+          // a fresh discovery pass of the directory and readable subscriptions.
+          await verifyAzure(c.id).unwrap();
+          toast.success(`Rescan of ${c.name} started. It runs in the background and can take a few minutes.`);
+        } else if (kind === "scan") {
           await (c.provider === "aws" ? scanAws(c.id) : c.provider === "gcp" ? scanGcp(c.id) : scanGitHub(c.id)).unwrap();
           toast.success(`Scan of ${c.name} queued. It runs in the background.`);
         } else if (kind === "verify") {

@@ -18,7 +18,8 @@ const ERROR_LABELS: Record<string, string> = {
   not_configured: "Azure discovery is not configured on this deployment.",
   state_invalid: "The sign-in session expired or was already used. Start again from Connections.",
   consent_denied: "Admin consent was denied. The administrator must accept the permissions for AuthSec to read the tenant.",
-  consent_required: "Admin consent is required but was not granted.",
+  consent_required:
+    "Microsoft could not sign you in to Azure for AuthSec: the AuthSec app registration does not request Azure Service Management access. This is a deployment problem on AuthSec's side, not in your tenant.",
   tenant_mismatch: "The tenant you signed into does not match the one you started with.",
   authsec_credential_rejected: "AuthSec's own credential was rejected by this tenant. This is a deployment problem.",
   sign_in_failed: "The sign-in did not complete. Try again from Connections.",

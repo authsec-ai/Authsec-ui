@@ -318,7 +318,7 @@ function StepAction({
     case "scan":
       return actions.scan ? (
         <Button size="sm" variant="outline" disabled={!!pending} onClick={() => onRun("scan")}>
-          {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
+          {pending === "scan" ? PENDING_WORD.scan : c.provider === "azure" ? "Rescan" : "Scan now"}
         </Button>
       ) : (
         <span className="text-xs text-(--color-text-muted)">An administrator can start a scan.</span>

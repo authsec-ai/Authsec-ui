@@ -12,6 +12,7 @@
  */
 
 import { baseApi } from "./baseApi";
+import type { CloudConnector } from "./cloudDiscoveryApi";
 
 export type ConnectionProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
 export type ConnectionScopeKind = "account" | "project" | "cluster" | "organisation" | "tenant";
@@ -81,6 +82,61 @@ export interface Connection {
   };
 }
 
+const AUTH_CODES = new Set(["auth_refused", "credential_invalid"]);
+
+/**
+ * An Azure tenant connector in the shared Connection shape. The server's
+ * connections list does not include Azure yet, so the console reads the tenants
+ * from `/azure/connectors` and adds them; one the server already lists is not
+ * added twice.
+ */
+export function azureTenantConnection(t: CloudConnector, all: CloudConnector[]): Connection {
+  const cov = t.coverage ?? {};
+  const surfaces = Object.entries(cov.surfaces ?? {});
+  const gaps = surfaces
+    // "unsupported" (e.g. a licence the tenant does not have) is not a gap in the
+    // connection; the backend counts such a pass as complete too.
+    .filter(([, s]) => s.state !== "reached" && s.state !== "not_selected" && s.state !== "unsupported")
+    .map(([surface, s]) => ({ surface, state: s.state }));
+  const subs = all.filter((c) => c.scope_kind === "subscription" && c.parent_scope_id === t.scope_id && c.status === "active").length;
+  const finished = cov.status === "complete" || cov.status === "partial";
+  const state: ConnectionState =
+    t.status === "revoked"
+      ? "revoked"
+      : t.status === "error"
+        ? AUTH_CODES.has(t.last_error_code ?? "")
+          ? "authentication_failed"
+          : "not_verified"
+        : t.verified_at
+          ? "connected"
+          : "not_verified";
+  return {
+    id: t.id,
+    provider: "azure",
+    scope_kind: "tenant",
+    name: t.scope_id,
+    native_id: t.scope_id,
+    scope_id: t.scope_id,
+    created_at: t.created_at,
+    connection: { state, reason_code: t.last_error_code || null, verified_at: t.verified_at ?? null },
+    scan: {
+      state: cov.status === "running" ? "running" : cov.status === "failed" ? "failed" : finished ? "finished" : "never_run",
+      at: cov.finished_at ?? cov.started_at ?? null,
+      run_id: null,
+    },
+    coverage: {
+      state: cov.status === "complete" && !gaps.length ? "complete" : finished ? "partial" : cov.status === "failed" ? "denied" : "unknown",
+      gaps,
+    },
+    graph: { state: "not_applicable", rev: null, published_at: null },
+    scope_summary: subs === 1 ? "1 subscription" : `${subs} subscriptions`,
+    // A pass in progress replaces the coverage, but an earlier finished pass
+    // (generation above 1) left results Discovery can already show.
+    discovery: { ready: finished || (t.scan_generation ?? 0) > 1, as_of: finished ? cov.finished_at ?? null : null },
+    capabilities: { scan: true, verify: true, edit_scope: false, revoke: true, rules: false },
+  };
+}
+
 export const connectionsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     /**
@@ -92,8 +148,22 @@ export const connectionsApi = baseApi.injectEndpoints({
       query: () => ({ url: "/authsec/discovery/connections/can-administer" }),
     }),
     listDiscoveryConnections: builder.query<Connection[], void>({
-      query: () => ({ url: "/authsec/discovery/connections" }),
-      transformResponse: (r: { connections?: Connection[] }) => r?.connections ?? [],
+      async queryFn(_arg, _api, _opts, fetchWithBQ) {
+        const res = await fetchWithBQ({ url: "/authsec/discovery/connections" });
+        // A backend without the shared list (404) still lists its Azure tenants.
+        // A plain-text 404 arrives as PARSING_ERROR with originalStatus 404.
+        const notFound = res.error && (res.error.status === 404 || ("originalStatus" in res.error && res.error.originalStatus === 404));
+        if (res.error && !notFound) return { error: res.error };
+        const listed = res.error ? [] : ((res.data as { connections?: Connection[] })?.connections ?? []);
+        // Best effort: a failed Azure read leaves the other providers' list intact.
+        const az = await fetchWithBQ({ url: "/authsec/discovery/azure/connectors" });
+        const azure = az.error ? [] : ((az.data as { data?: CloudConnector[] })?.data ?? []);
+        const known = new Set(listed.map((c) => c.id));
+        const tenants = azure
+          .filter((c) => c.scope_kind === "tenant" && !known.has(c.id))
+          .map((t) => azureTenantConnection(t, azure));
+        return { data: [...listed, ...tenants] };
+      },
       providesTags: ["Connections"],
     }),
   }),

@@ -37,7 +37,7 @@ import type { PagedView } from "../shared/listView";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
-import { nonDefaultBranch, SIGHTING_SOURCE } from "./model";
+import { azureAgentOrigin, nonDefaultBranch, SIGHTING_SOURCE, sightingProviderOf } from "./model";
 import { useClientsLookup } from "./useClientsLookup";
 import type { FacetSpec } from "./FacetBar";
 import { EmptyList, FilteredEmpty, UnknownSource } from "./ListStates";
@@ -80,7 +80,7 @@ function githubEmptyDetail(connections: Connection[]): ReactNode {
 
 export default function SightingsScreen(p: ScreenProps) {
   const navigate = useNavigate();
-  const provider = p.provider === "github" ? "github" : "k8s";
+  const provider = sightingProviderOf(p.provider);
   const paging = usePaging("discovery-sightings", 0);
   const status = (STATUSES as string[]).includes(p.url.get("status") ?? "") ? (p.url.get("status") as DiscoveredAgentStatus) : undefined;
   const live = !!p.url.get("live");
@@ -95,7 +95,9 @@ export default function SightingsScreen(p: ScreenProps) {
       limit: PAGE,
       offset,
       // The connection id is the discovery source id for Kubernetes and GitHub.
-      ...(p.scope.kind === "one" ? { discovery_source_id: p.scope.source.id } : {}),
+      // An Azure agent comes from a tenant connector and has none, so every
+      // tenant's agents are listed and each row names its tenant.
+      ...(p.scope.kind === "one" && provider !== "azure" ? { discovery_source_id: p.scope.source.id } : {}),
     },
     { skip: blocked },
   );
@@ -131,7 +133,11 @@ export default function SightingsScreen(p: ScreenProps) {
     if (dropSelection) select(null);
   }, [dropSelection, select]);
 
-  const sourceLabel = (a: DiscoveredAgent) => p.sources.find((s) => s.id === a.discovery_source_id)?.label ?? SOURCE_LABELS[a.source];
+  const sourceLabel = (a: DiscoveredAgent) => {
+    const tenant = provider === "azure" ? String(a.metadata?.tenant_id ?? "").toLowerCase() : "";
+    const s = tenant ? p.sources.find((x) => x.scopeId.toLowerCase() === tenant) : p.sources.find((x) => x.id === a.discovery_source_id);
+    return s?.label ?? SOURCE_LABELS[a.source];
+  };
 
   const columns = useMemo<AdaptiveColumn<DiscoveredAgent>[]>(
     () => [
@@ -148,7 +154,7 @@ export default function SightingsScreen(p: ScreenProps) {
               name={row.original.display_name || "Unnamed"}
               rowKey={row.original.id}
               selected={selectedId === row.original.id}
-              context={[SOURCE_LABELS[row.original.source]]}
+              context={[azureAgentOrigin(row.original) ?? SOURCE_LABELS[row.original.source]]}
               account={sourceLabel(row.original)}
               badge={
                 branch ? (
@@ -205,7 +211,7 @@ export default function SightingsScreen(p: ScreenProps) {
               </p>
               <p className={`text-[11px] ${MUTED}`}>
                 {declared
-                  ? `still declared · ${row.original.sighting_count} scan${row.original.sighting_count === 1 ? "" : "s"}`
+                  ? `still ${row.original.source === "azure" ? "listed" : "declared"} · ${row.original.sighting_count} scan${row.original.sighting_count === 1 ? "" : "s"}`
                   : `${row.original.sighting_count} sighting${row.original.sighting_count === 1 ? "" : "s"}`}
               </p>
             </div>
@@ -241,7 +247,7 @@ export default function SightingsScreen(p: ScreenProps) {
       label: "Source",
       kind: "choice",
       value: p.scope.kind === "one" ? p.scope.source.id : p.url.source,
-      anyLabel: provider === "github" ? "Every organisation" : "Every cluster",
+      anyLabel: provider === "github" ? "Every organisation" : provider === "azure" ? "Every tenant" : "Every cluster",
       options: p.sources.map((s) => ({ value: s.id, label: s.revoked ? `${s.label} (revoked)` : s.label })),
       onChange: (v) => p.url.patch({ source: v }),
     },
@@ -263,7 +269,7 @@ export default function SightingsScreen(p: ScreenProps) {
     name: a.display_name || "Unnamed sighting",
     kindLabel: `Agent sighting · ${SOURCE_LABELS[a.source]}`,
     provider,
-    context: [sourceLabel(a), evidenceModeOf(a) === "declared" ? "Declared in code — it may never have run" : "Observed running"],
+    context: [sourceLabel(a), azureAgentOrigin(a) ?? (evidenceModeOf(a) === "declared" ? "Declared in code — it may never have run" : "Observed running")],
     facts: [
       { label: "Status", value: <span className="inline-flex flex-wrap gap-1.5"><SightingStatus status={a.status} /><SightingRuntime runtime={a.runtime_status} /></span> },
       { label: "Matched identity", value: a.matched_client_id ? clients.nameOf(a.matched_client_id) ?? "Matched, name not available" : "Unmatched" },
@@ -326,7 +332,16 @@ export default function SightingsScreen(p: ScreenProps) {
                         }}
                       />
                     ) : (
-                      <EmptyList subject="sightings" detail={provider === "github" ? githubEmptyDetail(inScope) : "No agents have been sighted in the clusters that report here."} />
+                      <EmptyList
+                        subject="sightings"
+                        detail={
+                          provider === "github"
+                            ? githubEmptyDetail(inScope)
+                            : provider === "azure"
+                              ? "No agents were found in the connected tenants: none is listed by Microsoft Entra Agent ID or the Microsoft 365 agent registry, and none was inferred."
+                              : "No agents have been sighted in the clusters that report here."
+                        }
+                      />
                     )
                   }
                 />

@@ -14,6 +14,10 @@
  */
 
 import {
+  useListAzureIdentitiesQuery,
+  useListAzureResourcesQuery,
+  useListAzureWorkloadsQuery,
+  type CloudConnector,
   useListAwsIdentityPageQuery,
   useListAwsResourcesQuery,
   useListAwsWorkloadsQuery,
@@ -21,11 +25,12 @@ import {
 import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { useListGraphIdentitiesQuery, useListGraphResourcesQuery, useListGraphWorkloadsQuery } from "@/app/api/igaGraphApi";
 import { useGetInventorySummaryQuery, useListInventoryQuery } from "@/app/api/igaInventoryApi";
+import { azureSourceFor } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { useListK8sClustersQuery } from "@/app/api/k8sGraphApi";
 
 import { COUNT_LOADING, COUNT_UNAVAILABLE, countOfExact, countOfMeta, type CountValue } from "../shared/components/countValue";
 import { clusterSweeps, type ClusterSweep } from "./k8s";
-import { SIGHTING_SOURCE } from "./model";
+import { SIGHTING_SOURCE, sightingProviderOf } from "./model";
 import type { SourceScope } from "./sources";
 import type { DiscoveryProvider, DiscoveryType, DiscoveryView } from "./urlState";
 
@@ -47,6 +52,9 @@ interface Args {
   q: string | undefined;
   rev: number | null;
   epoch: number;
+  /** Azure: its connectors, and the Source in the URL (checked per type). */
+  azureConnectors?: CloudConnector[];
+  source?: string;
 }
 
 function pageCount(p: { total: number; totalKnown: boolean } | undefined, failed: boolean): CountValue {
@@ -62,7 +70,7 @@ function sum(a: CountValue, b: CountValue): CountValue {
   return { kind: exact ? "exact" : "at_least", value: a.value + b.value };
 }
 
-export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch }: Args): Overview {
+export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch, azureConnectors = [], source }: Args): Overview {
   const blocked = scope.kind === "unknown" || scope.kind === "no_rows";
   const sourceId = scope.kind === "one" ? scope.source.id : undefined;
   const scopeId = scope.kind === "one" ? scope.source.scopeId : undefined;
@@ -92,14 +100,35 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch 
   const ki = useListInventoryQuery({ ws, class: "identities", provider: "k8s", scope: scopeId, q, limit: 1 }, { skip: !fallback });
   const clusters = useListK8sClustersQuery(undefined, { skip: !k8sOn });
 
+  /* ---- Azure: each list's own total ---- */
+  const azureOn = provider === "azure";
+  const az = (t: "agents" | "identities" | "resources" | "workloads") => ({ limit: 1, connector_id: azureSourceFor(azureConnectors, t, source) });
+  const aa = useListAzureIdentitiesQuery({ ...az("agents"), kind: "entra_agent_identity" }, { skip: !azureOn });
+  const ai = useListAzureIdentitiesQuery(az("identities"), { skip: !azureOn });
+  const ar = useListAzureResourcesQuery(az("resources"), { skip: !azureOn });
+  const aw = useListAzureWorkloadsQuery(az("workloads"), { skip: !azureOn });
+
   /* ---- Sightings ---- */
-  const sightingsOn = (provider === "k8s" || provider === "github") && !blocked;
+  const sightingsOn = (provider === "k8s" || provider === "github" || provider === "azure") && !blocked;
+  const sightingsOf = provider ? sightingProviderOf(provider) : "k8s";
   const sightings = useListDiscoveredAgentsQuery(
-    { source: SIGHTING_SOURCE[provider === "github" ? "github" : "k8s"], limit: 1, ...(sourceId ? { discovery_source_id: sourceId } : {}) },
+    // An Azure agent comes from a tenant connector, not a discovery source, so it has no discovery_source_id to filter by.
+    { source: SIGHTING_SOURCE[sightingsOf], limit: 1, ...(sourceId && sightingsOf !== "azure" ? { discovery_source_id: sourceId } : {}) },
     { skip: !sightingsOn },
   );
   const sightingsCount: CountValue = sightings.isError ? COUNT_UNAVAILABLE : sightings.data ? { kind: "exact", value: sightings.data.total } : COUNT_LOADING;
 
+  if (azureOn) {
+    return {
+      counts: {
+        agents: pageCount(aa.data, aa.isError),
+        identities: pageCount(ai.data, ai.isError),
+        resources: pageCount(ar.data, ar.isError),
+        workloads: pageCount(aw.data, aw.isError),
+        sightings: sightingsCount,
+      },
+    };
+  }
   if (graphOn) {
     const meta = gw.currentData?.meta ?? gi.currentData?.meta ?? gr.currentData?.meta;
     return {

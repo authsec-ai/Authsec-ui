@@ -523,7 +523,7 @@ export function actionsOf(c: Connection, canAdminister: boolean): ActionSet {
   // revoked one must stay removable. AWS and GCP revoke once: a revoked row keeps its history.
   const removable = c.provider === "k8s" || c.provider === "github";
   return {
-    scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github"),
+    scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github" || c.provider === "azure"),
     verify: canAdminister && live && verifiable(c),
     editScope: canAdminister && live && cap.edit_scope && (c.provider === "aws" || c.provider === "github"),
     rules: cap.rules && c.provider === "github",
@@ -747,7 +747,7 @@ export function trackerOf(c: Connection, opts: { scopeChosen: boolean }): Step[]
         : "No result yet.",
   });
 
-  if (c.provider === "aws" || c.provider === "azure") {
+  if (c.provider === "aws") {
     steps.push({
       key: "graph",
       title: "Graph published",

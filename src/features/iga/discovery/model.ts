@@ -6,7 +6,7 @@
  * all answer from the same place.
  */
 
-import type { DiscoveredAgent, DiscoverySourceKind } from "@/app/api/discoveryApi";
+import { evidenceModeOf, type DiscoveredAgent, type DiscoverySourceKind } from "@/app/api/discoveryApi";
 
 import {
   PROVIDER_LABEL,
@@ -21,6 +21,7 @@ export const TYPES_BY_PROVIDER: Record<DiscoveryProvider, DiscoveryType[]> = {
   aws: ["workloads", "identities", "resources"],
   k8s: ["workloads", "identities", "sightings"],
   gcp: ["identities"],
+  azure: ["agents", "sightings", "identities", "resources", "workloads"],
   github: ["sightings"],
 };
 
@@ -51,6 +52,8 @@ export function notCollectedReason(provider: DiscoveryProvider, type: DiscoveryT
       return type === "sightings"
         ? "AuthSec does not collect agent sightings from Google Cloud."
         : `AuthSec collects only service accounts from Google Cloud today, not ${what}.`;
+    case "azure":
+      return `AuthSec does not collect ${what} from Azure.`;
     case "github":
       return type === "workloads" || type === "identities" || type === "resources"
         ? `GitHub ${what} appear in the inventory only once a GitHub collector records them, and none does yet. GitHub is sightings only today.`
@@ -126,7 +129,7 @@ function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: D
     if (type === "workloads" || type === "identities") return ["kind", "namespace"];
     if (type === "sightings") return ["status", "live"];
   }
-  if (provider === "github" && type === "sightings") return ["status", "live"];
+  if ((provider === "github" || provider === "azure") && type === "sightings") return ["status", "live"];
   return [];
 }
 
@@ -141,6 +144,7 @@ export interface RemovedFilter {
 }
 
 const NOUN: Record<DiscoveryType, string> = {
+  agents: "agent",
   workloads: "workload",
   identities: "identity",
   resources: "resource",
@@ -205,11 +209,17 @@ export function planSwitch(current: URLSearchParams, from: Scope, to: Scope): { 
 }
 
 /** The collector kind each provider's sightings come from. */
-export const SIGHTING_SOURCE: Record<"k8s" | "github", DiscoverySourceKind> = { k8s: "k8s_webhook", github: "repo_scan" };
+export type SightingProvider = "k8s" | "github" | "azure";
+export const SIGHTING_SOURCE: Record<SightingProvider, DiscoverySourceKind> = { k8s: "k8s_webhook", github: "repo_scan", azure: "azure" };
+
+/** The provider whose Sightings list a screen for `provider` reads; k8s when it has none of its own. */
+export function sightingProviderOf(provider: DiscoveryProvider): SightingProvider {
+  return provider === "github" || provider === "azure" ? provider : "k8s";
+}
 
 /** The provider whose Sightings list a finding of this collector kind belongs to. */
-export function sightingProvider(source: DiscoverySourceKind): "k8s" | "github" | undefined {
-  return source === "k8s_webhook" ? "k8s" : source === "repo_scan" ? "github" : undefined;
+export function sightingProvider(source: DiscoverySourceKind): SightingProvider | undefined {
+  return source === "k8s_webhook" ? "k8s" : source === "repo_scan" ? "github" : source === "azure" ? "azure" : undefined;
 }
 
 /** The non-default ref a finding came from, or null on the default branch or off a repository scan. */
@@ -218,4 +228,32 @@ export function nonDefaultBranch(agent: DiscoveredAgent): string | null {
   if (meta["is_default_branch"] !== false) return null;
   const b = meta["branch"];
   return typeof b === "string" && b !== "" ? b : null;
+}
+
+/**
+ * Where an Azure agent came from, in Microsoft's terms: listed by Microsoft
+ * Entra Agent ID, listed in the Microsoft 365 agent registry, or inferred by
+ * AuthSec from what the identity does. Null for every other source.
+ */
+export function azureAgentOrigin(agent: DiscoveredAgent): string | null {
+  if (agent.source !== "azure") return null;
+  const meta = (agent.metadata ?? {}) as Record<string, unknown>;
+  if (meta["evidence_source"] === "entra_agent_id") return "Listed by Microsoft Entra Agent ID";
+  if (meta["evidence_source"] === "foundry_agent_application") return "Published as a Microsoft Foundry agent application";
+  if (meta["evidence_source"] === "azure_bot_service") return "An Azure Bot Service bot";
+  if (meta["evidence_source"] === "foundry_project_agent") return "An agent of a Microsoft Foundry project";
+  if (meta["evidence_source"] === "logic_apps_agent") return "A Logic Apps workflow running an agent loop";
+  if (meta["evidence_source"] === "teams_app_catalog") return "Published to Teams with a bot";
+  if (meta["evidence_source"] === "agent_registry") {
+    const reg = (meta["registry"] ?? {}) as Record<string, unknown>;
+    const platform = typeof reg["platform"] === "string" && reg["platform"] ? ` · for ${reg["platform"]}` : "";
+    return `Listed in the Microsoft 365 agent registry${platform}`;
+  }
+  return evidenceModeOf(agent) === "declared" ? "Listed by Microsoft" : "Inferred from its sign-ins, permissions and federation";
+}
+
+/** The facts behind an Azure agent finding, as discovery recorded them. */
+export function azureAgentSignals(agent: DiscoveredAgent): string[] {
+  const s = (agent.metadata as Record<string, unknown> | undefined)?.["signals"];
+  return Array.isArray(s) ? s.map(String) : [];
 }
