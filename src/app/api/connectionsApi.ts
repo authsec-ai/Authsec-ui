@@ -13,8 +13,8 @@
 
 import { baseApi } from "./baseApi";
 
-export type ConnectionProvider = "aws" | "gcp" | "k8s" | "github";
-export type ConnectionScopeKind = "account" | "project" | "cluster" | "organisation";
+export type ConnectionProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
+export type ConnectionScopeKind = "account" | "project" | "cluster" | "organisation" | "tenant";
 
 /** Can AuthSec reach it? */
 export type ConnectionState = "connected" | "authentication_failed" | "revoked" | "not_verified";

@@ -147,6 +147,15 @@ export default function ConnectionsPage() {
     };
   }, [code, convertManifest, setSearchParams]);
 
+  // Azure OAuth: when Microsoft redirects back through AzureOAuthCallbackPage,
+  // the callback navigates here with ?azure_session_id=... which reopens the
+  // wizard at step 2 (Review tenant).
+  const azureSessionId = searchParams.get("azure_session_id");
+  useEffect(() => {
+    if (!azureSessionId) return;
+    setWizard("azure");
+  }, [azureSessionId]);
+
   const added = (id?: string) => {
     dispatch(connectionsApi.util.invalidateTags(["Connections"]));
     // A new GitHub organisation scans nothing until repositories are chosen.

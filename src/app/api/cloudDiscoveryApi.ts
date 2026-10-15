@@ -1180,6 +1180,72 @@ export interface ProvisionGoogleOAuthRequest {
   display_name?: string;
 }
 
+// ── Azure types ────────────────────────────────────────────────────────────
+
+export interface AzureOAuthStatus {
+  available: boolean;
+  client_id: string;
+  redirect_uri: string;
+}
+
+export interface AzureOAuthStartRequest {
+  tenant?: string;
+  login_hint?: string;
+}
+
+export interface AzureOAuthStartResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export interface AzureSubscriptionPreview {
+  subscription_id: string;
+  display_name: string;
+  state: string;
+  eligible: boolean;
+  can_assign_reader?: boolean | null;
+}
+
+export interface AzureOAuthSession {
+  session_id: string;
+  tenant_id: string;
+  tenant_display_name: string;
+  signed_in_as: string;
+  subscriptions: AzureSubscriptionPreview[];
+  graph_permissions: { name: string; granted: boolean }[];
+}
+
+export interface AzureConnectCustomAppRequest {
+  client_id: string;
+  client_secret: string;
+  tenant_id: string;
+}
+
+export interface AzureConnectRequest {
+  session_id: string;
+  subscription_ids?: string[];
+}
+
+export interface AzureConnectResult {
+  success: boolean;
+  message: string;
+  data: {
+    tenant_id: string;
+    tenant_created: boolean;
+    subscriptions_connected: number;
+    graph_permissions_verified: string[];
+  };
+}
+
+export interface AzureScanRun {
+  id: string;
+  connector_id: string;
+  state: string;
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+}
+
 export const cloudDiscoveryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     listAwsConnectors: builder.query<CloudConnector[], void>({
@@ -1755,6 +1821,81 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       transformResponse: (r: ConnectorEnvelope) => r.data,
       invalidatesTags: [{ type: "CloudConnector", id: "GCP_LIST" }, "Connections"],
     }),
+
+    // ── Azure ──────────────────────────────────────────────────────────────
+
+    getAzureOAuthStatus: builder.query<AzureOAuthStatus, void>({
+      query: () => ({ url: "/authsec/discovery/azure/oauth/status", method: "GET" }),
+    }),
+
+    startAzureOAuth: builder.mutation<AzureOAuthStartResponse, AzureOAuthStartRequest>({
+      query: (body) => ({ url: "/authsec/discovery/azure/oauth/start", method: "POST", body }),
+    }),
+
+    getAzureOAuthSession: builder.query<AzureOAuthSession, string>({
+      query: (sessionId) => ({
+        url: "/authsec/discovery/azure/oauth/session",
+        method: "GET",
+        params: { session_id: sessionId },
+      }),
+      transformResponse: (r: { data: AzureOAuthSession }) => r.data,
+    }),
+
+    connectAzureTenant: builder.mutation<AzureConnectResult, AzureConnectRequest>({
+      query: (body) => ({
+        url: "/authsec/discovery/azure/oauth/connect",
+        method: "POST",
+        body,
+        timeout: 120_000,
+      }),
+      invalidatesTags: [{ type: "CloudConnector", id: "AZURE_LIST" }, "Connections"],
+    }),
+
+    connectAzureCustomApp: builder.mutation<AzureConnectResult, AzureConnectCustomAppRequest>({
+      query: (body) => ({
+        url: "/authsec/discovery/azure/connect-custom",
+        method: "POST",
+        body,
+        timeout: 120_000,
+      }),
+      invalidatesTags: [{ type: "CloudConnector", id: "AZURE_LIST" }, "Connections"],
+    }),
+
+    listAzureConnectors: builder.query<CloudConnector[], void>({
+      query: () => ({ url: "/authsec/discovery/azure/connectors", method: "GET" }),
+      transformResponse: (r: ConnectorListEnvelope) => r.data ?? [],
+      providesTags: [{ type: "CloudConnector", id: "AZURE_LIST" }],
+    }),
+
+    getAzureConnector: builder.query<CloudConnector, string>({
+      query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}`, method: "GET" }),
+      transformResponse: (r: { data: CloudConnector }) => r.data,
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector", id }],
+    }),
+
+    verifyAzureConnector: builder.mutation<CloudConnector, string>({
+      query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/verify`, method: "POST" }),
+      transformResponse: (r: ConnectorEnvelope) => r.data,
+      invalidatesTags: (_r, _e, id) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "AZURE_LIST" },
+        "Connections",
+      ],
+    }),
+
+    revokeAzureConnector: builder.mutation<{ success: boolean; message: string }, string>({
+      query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "CloudConnector", id },
+        { type: "CloudConnector", id: "AZURE_LIST" },
+        "Connections",
+      ],
+    }),
+
+    listAzureScanRuns: builder.query<AzureScanRun[], string>({
+      query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/scan-runs`, method: "GET" }),
+      transformResponse: (r: { data: AzureScanRun[] }) => r.data ?? [],
+    }),
   }),
 });
 
@@ -1792,4 +1933,14 @@ export const {
   useLazyListGoogleProjectsQuery,
   usePreflightGoogleOAuthMutation,
   useProvisionGoogleOAuthMutation,
+  useGetAzureOAuthStatusQuery,
+  useStartAzureOAuthMutation,
+  useLazyGetAzureOAuthSessionQuery,
+  useConnectAzureTenantMutation,
+  useConnectAzureCustomAppMutation,
+  useListAzureConnectorsQuery,
+  useGetAzureConnectorQuery,
+  useVerifyAzureConnectorMutation,
+  useRevokeAzureConnectorMutation,
+  useListAzureScanRunsQuery,
 } = cloudDiscoveryApi;

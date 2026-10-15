@@ -45,8 +45,8 @@ export const CLOUD_PROVIDER_META: Record<CloudProvider, CloudProviderMeta> = {
     label: "Azure",
     initial: "AZ",
     colorClass: "bg-white border border-border text-[#0078d4]",
-    tagline: "Coming soon.",
-    available: false,
+    tagline: "Entra identities, RBAC roles and AI agents in an Azure tenant.",
+    available: true,
   },
 };
 

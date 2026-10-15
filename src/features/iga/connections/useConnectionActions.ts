@@ -22,10 +22,12 @@ import { toast } from "react-hot-toast";
 import type { Connection } from "@/app/api/connectionsApi";
 import {
   useRevokeAwsConnectorMutation,
+  useRevokeAzureConnectorMutation,
   useRevokeGcpConnectorMutation,
   useScanAwsConnectorMutation,
   useScanGcpConnectorMutation,
   useVerifyAwsConnectorMutation,
+  useVerifyAzureConnectorMutation,
   useVerifyGcpConnectorMutation,
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
@@ -102,6 +104,8 @@ export function useConnectionActions() {
   const [scanGcp] = useScanGcpConnectorMutation();
   const [verifyGcp] = useVerifyGcpConnectorMutation();
   const [revokeGcp] = useRevokeGcpConnectorMutation();
+  const [verifyAzure] = useVerifyAzureConnectorMutation();
+  const [revokeAzure] = useRevokeAzureConnectorMutation();
   const [scanGitHub] = useScanGitHubSourceMutation();
   const [deleteSource] = useDeleteDiscoverySourceMutation();
 
@@ -126,12 +130,12 @@ export function useConnectionActions() {
           await (c.provider === "aws" ? scanAws(c.id) : c.provider === "gcp" ? scanGcp(c.id) : scanGitHub(c.id)).unwrap();
           toast.success(`Scan of ${c.name} queued. It runs in the background.`);
         } else if (kind === "verify") {
-          await (c.provider === "aws" ? verifyAws(c.id) : verifyGcp(c.id)).unwrap();
+          await (c.provider === "aws" ? verifyAws(c.id) : c.provider === "azure" ? verifyAzure(c.id) : verifyGcp(c.id)).unwrap();
           toast.success(c.provider === "gcp" ? "Connection verified and permissions re-checked." : "Connection verified.");
         } else {
-          await (c.provider === "aws" ? revokeAws(c.id) : c.provider === "gcp" ? revokeGcp(c.id) : deleteSource(c.id)).unwrap();
+          await (c.provider === "aws" ? revokeAws(c.id) : c.provider === "azure" ? revokeAzure(c.id) : c.provider === "gcp" ? revokeGcp(c.id) : deleteSource(c.id)).unwrap();
           toast.success(
-            c.provider === "aws" || c.provider === "gcp"
+            c.provider === "aws" || c.provider === "gcp" || c.provider === "azure"
               ? `${c.name} revoked. Everything already discovered is kept.`
               : `${c.name} removed.`,
           );
@@ -156,7 +160,7 @@ export function useConnectionActions() {
         });
       }
     },
-    [dismiss, scanAws, scanGcp, scanGitHub, verifyAws, verifyGcp, revokeAws, revokeGcp, deleteSource],
+    [dismiss, scanAws, scanGcp, scanGitHub, verifyAws, verifyAzure, verifyGcp, revokeAws, revokeAzure, revokeGcp, deleteSource],
   );
 
   return { pending, failures, run, dismiss };

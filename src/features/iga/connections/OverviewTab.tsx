@@ -40,7 +40,7 @@ import {
   type Step,
   type StepState,
 } from "./connectionModel";
-import { AwsFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
+import { AwsFacts, AzureFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
 import { useSourceFacts } from "./providerData";
 import { PENDING_WORD, type ActionKind } from "./useConnectionActions";
 import { graphCell } from "./scanCells";
@@ -462,6 +462,7 @@ export function OverviewTab({
         </div>
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <AwsFacts c={c} /> : null}
+          {c.provider === "azure" ? <AzureFacts c={c} /> : null}
           {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
       {c.provider === "k8s" || c.provider === "github" ? (
         source.isError && !source.data ? (

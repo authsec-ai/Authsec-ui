@@ -74,6 +74,7 @@ import IdentityPage from "./features/iga/identities/IdentityPage";
 import ResourcePage from "./features/iga/resources/ResourcePage";
 import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
+import AzureOAuthCallbackPage from "./features/discovery/cloud/azure/AzureOAuthCallbackPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
@@ -711,6 +712,10 @@ function AppContent() {
                   <Route
                     path="/discovery/cloud/gcp/google-oauth/callback"
                     element={<GoogleOAuthCallbackPage />}
+                  />
+                  <Route
+                    path="/discovery/cloud/azure/oauth/callback"
+                    element={<AzureOAuthCallbackPage />}
                   />
                   <Route
                     path="/iga/estate/:id"
