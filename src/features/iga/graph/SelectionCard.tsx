@@ -23,7 +23,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Network, X } from "lucide-react";
 
 import { objectPath, refType, type Basis, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
@@ -490,19 +490,41 @@ export function SelectionCard({
         <PolicyCardSection key={key} subject={subject} edges={edges} nodes={nodes} />
       </div>
       {claims.length || open ? (
-        <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-(--color-border-subtle) px-3.5 py-2.5">
-          {claims.length ? (
-            <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => actions.onEvidence(claims)}>
-              View evidence
-            </Button>
-          ) : null}
-          {open ? (
-            <Button size="sm" variant="outline" onClick={() => actions.onOpenObject(open!)}>
-              Open details
-            </Button>
-          ) : null}
+        // A narrow panel cannot hold three differently-styled buttons in one
+        // wrapping row: the third wrapped onto a line of its own and `ml-auto`
+        // pushed it to the far side. Instead: the two main actions as an
+        // equal-width pair, then re-rooting the graph as a full-width row with
+        // the app's access-graph icon. One compact height throughout.
+        <footer className="shrink-0 space-y-1.5 border-t border-(--color-border-subtle) px-3.5 py-3">
+          <div className={cn("grid gap-2", claims.length && open ? "grid-cols-2" : "grid-cols-1")}>
+            {claims.length ? (
+              <Button
+                size="sm"
+                className="h-8 min-h-8 w-full px-3 text-[length:13px] text-white"
+                onClick={() => actions.onEvidence(claims)}
+              >
+                View evidence
+              </Button>
+            ) : null}
+            {open ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 min-h-8 w-full px-3 text-[length:13px]"
+                onClick={() => actions.onOpenObject(open!)}
+              >
+                Open details
+              </Button>
+            ) : null}
+          </div>
           {open && subject.kind === "node" && refType(open) !== "external_principal" && subject.visual.members[0].kind !== "statement" ? (
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => actions.onFocusHere(open!)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 min-h-8 w-full gap-1.5 px-3 text-[length:13px] font-medium text-(--color-primary-text) hover:bg-(--color-primary-soft) hover:text-(--color-primary-text)"
+              onClick={() => actions.onFocusHere(open!)}
+            >
+              <Network className="size-3.5" aria-hidden="true" />
               Graph from here
             </Button>
           ) : null}
