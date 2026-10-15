@@ -10,7 +10,7 @@
  * targets in this release.
  */
 
-import { Check, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAppDispatch } from "@/app/hooks";
@@ -24,7 +24,15 @@ import {
 } from "@/app/api/igaGraphApi";
 import { StatusBadge } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
@@ -87,6 +95,7 @@ export function ResourcePicker({
   onChange: (r: DraftResource | null) => void;
   invalid?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim());
   const list = useListGraphResourcesQuery({ ws, q: dq || undefined, service: "s3", limit: 200 }, { skip: !!value });
@@ -110,57 +119,78 @@ export function ResourcePicker({
   }
 
   return (
-    <div className={cn("overflow-hidden rounded-md border", invalid ? "border-(--color-danger)" : "border-(--color-border-strong)")}>
-      <div className="relative border-b border-(--color-border-subtle)">
-        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--color-text-muted)" />
-        <Input
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
           id="ap-resource"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search for an S3 bucket"
-          aria-label="Search S3 buckets"
-          className="border-0 pl-9 shadow-none focus-visible:ring-0"
-          autoComplete="off"
-        />
-      </div>
-      <div className="max-h-64 overflow-y-auto">
-        {list.isLoading || list.isFetching ? (
-          <p role="status" className="px-3 py-3 text-xs text-(--color-text-muted)">
-            Looking for buckets…
-          </p>
-        ) : list.isError ? (
-          <p className="px-3 py-3 text-xs text-(--color-danger-text)">
-            Buckets could not be read.{" "}
-            <button type="button" className="underline" onClick={() => void list.refetch()}>
-              Retry
-            </button>
-          </p>
-        ) : buckets.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-(--color-text-muted)">
-            {dq ? `No bucket matches “${dq}”.` : "No S3 bucket found yet. A bucket shows up here once one of your AWS policies mentions it."}
-          </p>
-        ) : (
-          <ul>
-            {list.data?.meta?.next_cursor ? (
-              <li className="border-b border-(--color-border-subtle) px-3 py-1.5 text-xs text-(--color-text-muted)">Showing the first 200 records. Type part of the bucket name to find the rest.</li>
-            ) : null}
-            {buckets.map((b) => (
-              <li key={b.bucket}>
-                <button type="button" className={rowButton} onClick={() => onChange({ resource_id: b.resource_id, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders })}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-(--color-text)">{b.bucket}</span>
-                    <span className="block truncate text-xs text-(--color-text-muted)">
-                      {b.folders?.length ? `Folders seen: ${b.folders.join(", ")}` : "Named as a whole bucket"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs text-(--color-text-muted)">{b.records?.length === 1 ? "1 path" : `${b.records?.length ?? 0} paths`}</span>
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          aria-label="Choose an S3 bucket"
+          className={cn(
+            "flex h-10 w-full items-center gap-2 rounded-md border bg-(--color-surface-raised) px-3 text-left text-[13px] shadow-xs transition-colors hover:bg-(--color-surface-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
+            invalid ? "border-(--color-danger)" : "border-(--color-border-strong)",
+          )}
+        >
+          <Search aria-hidden="true" className="size-4 shrink-0 text-(--color-text-muted)" />
+          <span className="flex-1 truncate text-(--color-text-muted)">Search for an S3 bucket</span>
+          <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-(--color-text-muted)" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+        {/* Discovery filters server-side, so cmdk does not filter again. */}
+        <Command shouldFilter={false}>
+          <CommandInput value={q} onValueChange={setQ} placeholder="Search for an S3 bucket" />
+          <CommandList className="max-h-72">
+            {list.isLoading || list.isFetching ? (
+              <p role="status" className="px-3 py-6 text-center text-xs text-(--color-text-muted)">
+                Looking for buckets…
+              </p>
+            ) : list.isError ? (
+              <p className="px-3 py-6 text-center text-xs text-(--color-danger-text)">
+                Buckets could not be read.{" "}
+                <button type="button" className="font-medium underline" onClick={() => void list.refetch()}>
+                  Retry
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+              </p>
+            ) : buckets.length === 0 ? (
+              <CommandEmpty>
+                {dq ? `No bucket matches “${dq}”.` : "No S3 bucket found yet. A bucket shows up here once one of your AWS policies mentions it."}
+              </CommandEmpty>
+            ) : (
+              <>
+                {list.data?.meta?.next_cursor ? (
+                  <p className="border-b border-(--color-border-subtle) px-3 py-1.5 text-xs text-(--color-text-muted)">
+                    Showing the first 200 records. Type part of the name to find the rest.
+                  </p>
+                ) : null}
+                <div className="p-1">
+                  {buckets.map((b) => (
+                    <CommandItem
+                      key={b.bucket}
+                      value={b.bucket}
+                      onSelect={() => {
+                        onChange({ resource_id: b.resource_id, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders });
+                        setOpen(false);
+                      }}
+                      className="gap-3 px-2.5 py-2"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-(--color-text)">{b.bucket}</span>
+                        <span className="block truncate text-xs text-(--color-text-muted)">
+                          {b.folders?.length ? `Folders seen: ${b.folders.join(", ")}` : "Named as a whole bucket"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs text-(--color-text-muted)">{b.records?.length === 1 ? "1 path" : `${b.records?.length ?? 0} paths`}</span>
+                    </CommandItem>
+                  ))}
+                </div>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

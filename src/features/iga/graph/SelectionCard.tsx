@@ -341,8 +341,12 @@ export function SelectionCard({
   docked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const key = subject.kind === "node" ? `n:${subject.visual.id}` : `e:${subject.edge.id}`;
   useEffect(() => {
+    // A new selection starts at the top: without this, a body scrolled down on
+    // the previous card stays scrolled and reads as "stuck / clipped at the top".
+    bodyRef.current?.scrollTo({ top: 0 });
     headingRef.current?.focus({ preventScroll: true });
   }, [key]);
 
@@ -454,7 +458,7 @@ export function SelectionCard({
         docked ? "h-full w-[320px] shrink-0 border-l border-(--color-border-subtle)" : "w-[320px] rounded-lg border border-(--color-border-subtle) shadow-(--shadow-md)",
       )}
     >
-      <header className="flex shrink-0 items-start gap-2 px-3.5 pt-3">
+      <header className="flex shrink-0 items-start gap-2 border-b border-(--color-border-subtle) px-3.5 pb-2.5 pt-3">
         <div className="min-w-0 flex-1">
           <p className="mb-1">
             <CategoryChip category={category} icon={icon}>{type}</CategoryChip>
@@ -467,7 +471,7 @@ export function SelectionCard({
           <X className="size-4" />
         </Button>
       </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pb-3 pt-2">
+      <div ref={bodyRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3.5 pb-3 pt-3">
         <p className="text-[13px] leading-relaxed text-(--color-text)">{sentence}</p>
         {facts.length ? <dl className="space-y-1.5">{facts.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}</dl> : null}
         {why ? (

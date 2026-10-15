@@ -22,6 +22,7 @@ import {
   StatusBlock,
 } from "./ConnectionParts";
 import { CoverageTab } from "./CoverageTab";
+import { EnforcementTab, IacTab, NotificationsTab, SettingsTab } from "./ConnectionSetupTabs";
 import { OverviewTab, ReadinessStrip } from "./OverviewTab";
 import { ConnPill } from "./ConnPill";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
@@ -182,6 +183,10 @@ export default function ConnectionDetailPage() {
       {active === "coverage" ? <CoverageTab c={c} /> : null}
       {active === "scope" ? <ScopeTab c={c} actions={actions} onScan={() => run(c, "scan")} /> : null}
       {active === "rules" ? <RuleCatalogPanel scansHref={detailHref(c.id, "scans")} /> : null}
+      {active === "enforcement" ? <EnforcementTab c={c} /> : null}
+      {active === "iac" ? <IacTab c={c} /> : null}
+      {active === "notifications" ? <NotificationsTab /> : null}
+      {active === "settings" ? <SettingsTab /> : null}
       {active === null ? (
         tabParam === "rules" ? (
           <Panel title="Scan rules">

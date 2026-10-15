@@ -137,8 +137,10 @@
   --component-table-border: #e8eef4;
   --component-table-header-bg: #f4f7fb;
   --component-table-header-fg: #111418;
-  --component-table-row-hover: #f5f9fe;
-  --component-table-row-selected: #e8f1ff;
+  /* A hovered row reads as clearly blue, not a barely-there wash. The selected
+     row sits one step stronger so the two states stay distinguishable. */
+  --component-table-row-hover: #e4eefc;
+  --component-table-row-selected: #d2e4fc;
   --component-table-cell-padding-inline: 20px;
   --component-table-cell-padding-block: 12px;
   --component-table-header-height: 44px;

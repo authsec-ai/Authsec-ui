@@ -38,7 +38,7 @@ import { IAC_FORMS, iacFormatLabel, permissionChip } from "./iacModel";
 import { MapRepositoryDialog } from "./MapRepositoryDialog";
 import { useMarkRefused } from "./useRefusal";
 
-function SupportedForms() {
+export function SupportedForms() {
   return (
     <details className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3">
       <summary className="cursor-pointer text-[13px] font-semibold text-(--color-text)">Which infrastructure code AuthSec can change</summary>
@@ -200,7 +200,7 @@ function RemoveSourceDialog({
   );
 }
 
-function AccountSources({ account, githubList }: { account: Connection; githubList: Connection[] }) {
+export function AccountSources({ account, githubList }: { account: Connection; githubList: Connection[] }) {
   const enforce = usePolicyPermission("governance:enforce");
   const sources = useListIacSourcesQuery(account.id);
   const failure = classifyPolicyError(sources.error);

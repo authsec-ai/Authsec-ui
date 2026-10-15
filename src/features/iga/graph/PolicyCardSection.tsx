@@ -35,7 +35,7 @@ const HOLDERS_SHOWN = 5;
 
 function Heading({ id }: { id: string }) {
   return (
-    <h3 id={id} className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+    <h3 id={id} className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text)">
       Policy
     </h3>
   );
@@ -119,7 +119,7 @@ function RoleBlock({ identityId }: { identityId: string }) {
   const heading = useId();
   const blocks = useGraphBlocks();
   return (
-    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
+    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-3">
       <Heading id={heading} />
       <InForce policies={blocks.forRole(identityId)} />
       <p className="text-xs text-(--color-text-muted)">Block or allow this role&rsquo;s access to an S3 bucket for a set window.</p>
@@ -135,7 +135,7 @@ function RoleBlock({ identityId }: { identityId: string }) {
 function WorkloadBlock() {
   const heading = useId();
   return (
-    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
+    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-3">
       <Heading id={heading} />
       <p className="text-xs text-(--color-text-muted)">A workload has no policy of its own. An access policy changes the IAM role it runs as, and affects everything that runs as that role. Select that role to start one.</p>
     </section>
@@ -191,7 +191,7 @@ function ResourceBlock({ id, node, what, edges, nodes }: { id: string; node: Gra
   const shown = roles.slice(0, HOLDERS_SHOWN);
 
   return (
-    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
+    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-3">
       <Heading id={heading} />
       {s3 ? <InForce policies={blocks.forResource(node)} /> : null}
       {s3 ? (
@@ -234,7 +234,7 @@ function GrantLine({ edge, holder }: { edge: VisualEdge; holder: GraphNode | nul
   const heading = useId();
   const grants = independentCount(edge);
   return (
-    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-2">
+    <section aria-labelledby={heading} className="space-y-2 border-t border-(--color-border-subtle) pt-3">
       <Heading id={heading} />
       {!holder ? (
         <p className={quiet}>The role that holds this grant is not an IAM role drawn on the canvas, so there is nothing to start from here.</p>

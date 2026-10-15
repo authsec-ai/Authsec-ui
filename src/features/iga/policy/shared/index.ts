@@ -7,6 +7,6 @@ export * from "./usePolicyCapabilities";
 export * from "./workspaceMemberSession";
 export { PolicyActionError, PolicyLoadFailure } from "./PolicyErrorPanel";
 export * from "./remedy";
-export { PolicyCheckFailed, PolicyNav, PolicyShell, PolicyUnavailable } from "./PolicyShell";
+export { PolicyCheckFailed, PolicyShell, PolicyUnavailable } from "./PolicyShell";
 export { StateChip } from "./StatusChip";
 export { KubernetesPolicyNote } from "./KubernetesPolicyNote";

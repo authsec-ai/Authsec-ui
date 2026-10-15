@@ -88,8 +88,8 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
         body="Applying may still be refused. Retry, or check AWS access."
         actionLabel="Retry"
         onAction={() => void q.refetch()}
-        secondaryLabel="AWS access"
-        secondaryHref="/iga/policy/setup"
+        secondaryLabel="Open Connections"
+        secondaryHref="/iga/connections"
       />
     );
   }
@@ -107,8 +107,8 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
     <SetupNotice
       title="AWS access is not set up yet"
       body={body}
-      actionLabel={r.available && accounts.length > 0 ? "Set up AWS access" : undefined}
-      actionHref={r.available && accounts.length > 0 ? "/iga/policy/setup" : undefined}
+      actionLabel={r.available && accounts.length > 0 ? "Open Connections" : undefined}
+      actionHref={r.available && accounts.length > 0 ? "/iga/connections" : undefined}
     />
   );
 }

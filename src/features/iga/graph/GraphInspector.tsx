@@ -101,7 +101,7 @@ export function GraphInspector({
   );
 
   const body = (
-    <div ref={bodyRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+    <div ref={bodyRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
       <EvidenceClaims ws={ws} claims={subject.claims} contextOf={contextOf} grants={grants} />
     </div>
   );

@@ -102,7 +102,7 @@ function Checklist({ binding }: { binding: EnforcementBindingView }) {
   );
 }
 
-function AccountEnforcement({ connection }: { connection: Connection }) {
+export function AccountEnforcement({ connection }: { connection: Connection }) {
   const enforce = usePolicyPermission("governance:enforce");
   const [poll, setPoll] = useState(0);
   const binding = useGetEnforcementBindingQuery(connection.id, { pollingInterval: poll, skipPollingIfUnfocused: true });

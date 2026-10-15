@@ -491,7 +491,7 @@ export interface GovReadinessRole {
   category: GovReadinessCategory;
   /** EVERY reason that applies, not only the deciding one. */
   reasons: GovReadinessReason[];
-  /** A console path to fix it: connection coverage, Findings filtered to the role, or `/iga/policy/setup`; "" for no_change_needed. */
+  /** A console path to fix it: connection coverage, Findings filtered to the role, or an AWS connection's setup tab; "" for no_change_needed. */
   remedy: string;
   /** Open (open, reopened, under_review) finding counts by kind; absent kinds are zero. */
   open_findings: Partial<Record<GovFindingKind, number>>;

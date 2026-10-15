@@ -71,7 +71,6 @@ import GatedRedirect from "./features/iga/policy/GatedRedirect";
 const PoliciesListPage = React.lazy(() => import("./features/iga/policy/access/PoliciesListPage"));
 const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
 const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
-const PolicySetupPage = React.lazy(() => import("./features/iga/policy/setup/SetupPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
@@ -804,7 +803,8 @@ function AppContent() {
                       and roles from Discovery, chooses Block or Allow, sets a window,
                       and applies; AuthSec changes IAM. The list, create/edit and detail
                       each gate on the access_policies capability inside PolicyShell.
-                      "AWS access" (setup) is kept for the enforcement binding. */}
+                      AWS-account setup (enforcement, IaC, notifications, settings) lives
+                      on each AWS connection's detail page, not here. */}
                   <Route
                     path="/iga/policy"
                     element={
@@ -841,26 +841,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <PolicyFormPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/setup"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <PolicySetupPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/policy/setup/:section"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <PolicySetupPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

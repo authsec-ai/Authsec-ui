@@ -1,7 +1,7 @@
 /**
  * One read-only line on an AWS connection's page (SPEC-iga-phase3-policy.md §9.3
  * S9): "Enforcement: On · verified 3 hours ago", "Off" or "Partial", linking to
- * Policy › Setup › Enforcement. `connectionId` is the cloud connector's id.
+ * this connection's Enforcement tab. `connectionId` is the cloud connector's id.
  *
  * It is an aside on a page that belongs to Connections, so it never says
  * anything went wrong: with the policy product off, with no permission to read
@@ -39,7 +39,7 @@ export function EnforcementLine({ connectionId }: { connectionId: string }) {
     <p className="text-[13px] text-(--color-text-muted)">
       Enforcement:{" "}
       <Link
-        to="/iga/policy/setup/enforcement"
+        to={`/iga/connections/${encodeURIComponent(connectionId)}/enforcement`}
         title={view.hint}
         className={cn("font-medium underline-offset-2 hover:underline", TONE_TEXT[view.tone] ?? "text-(--color-text)")}
       >

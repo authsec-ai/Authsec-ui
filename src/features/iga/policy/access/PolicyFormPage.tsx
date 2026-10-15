@@ -276,14 +276,14 @@ export default function PolicyFormPage() {
 
   if (editing && loadFailure && !existing.data) {
     return (
-      <PolicyShell title="Edit policy" nav={false} requires="access_policies">
+      <PolicyShell title="Edit policy" requires="access_policies">
         <PolicyLoadFailure failure={loadFailure} subject="this policy" onRetry={() => void existing.refetch()} />
       </PolicyShell>
     );
   }
   if (editing && existing.data?.data.status === "ended") {
     return (
-      <PolicyShell title="Edit policy" nav={false} requires="access_policies">
+      <PolicyShell title="Edit policy" requires="access_policies">
         <p className="text-sm text-(--color-text-muted)">
           This policy has ended and cannot be edited.{" "}
           <Link to="/iga/policy/new" className="font-medium text-(--color-primary-text) hover:underline">
@@ -303,7 +303,6 @@ export default function PolicyFormPage() {
           ? "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
           : "Block or allow roles on a bucket for as long as you say. AuthSec writes it into IAM and AWS enforces it."
       }
-      nav={false}
       requires="access_policies"
     >
       {editing && existing.isLoading ? (
@@ -378,17 +377,20 @@ export default function PolicyFormPage() {
 
               <Block title="Rule">
                 <div className="space-y-4">
-                  <div role="radiogroup" aria-label="Block or allow" className="flex flex-wrap items-center gap-1.5">
-                    <Pill radio danger on={isBlock} onClick={() => setEffect("block")} title="Deny these roles, whatever else allows them">
-                      Block
-                    </Pill>
-                    <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title="Grant access these roles do not have; must end within 30 days">
-                      Allow for a time
-                    </Pill>
+                  <div>
+                    <p className="mb-1.5 text-[13px] font-medium text-(--color-text)">Effect</p>
+                    <div role="radiogroup" aria-label="Block or allow" className="flex flex-wrap items-center gap-1.5">
+                      <Pill radio danger on={isBlock} onClick={() => setEffect("block")} title="Deny these roles, whatever else allows them">
+                        Block
+                      </Pill>
+                      <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title="Grant access these roles do not have; must end within 30 days">
+                        Allow for a time
+                      </Pill>
+                    </div>
                   </div>
 
                   <fieldset id="ap-access">
-                    <legend className="mb-1.5 text-xs font-medium text-(--color-text-muted)">{isBlock ? "What to block" : "What to allow"}</legend>
+                    <legend className="mb-1.5 text-[13px] font-medium text-(--color-text)">{isBlock ? "What to block" : "What to allow"}</legend>
                     <div className="flex flex-wrap gap-1.5">
                       {isBlock ? (
                         <Pill on={draft.access.includes("all")} onClick={() => toggleAccess("all")}>
@@ -406,7 +408,7 @@ export default function PolicyFormPage() {
                   </fieldset>
 
                   <div id="ap-end">
-                    <p className="mb-1.5 text-xs font-medium text-(--color-text-muted)">For how long</p>
+                    <p className="mb-1.5 text-[13px] font-medium text-(--color-text)">For how long</p>
                     <div role="radiogroup" aria-label="For how long" className="flex flex-wrap gap-1.5">
                       {PRESETS.filter((p) => isBlock || p.key !== "none").map((p) => (
                         <Pill key={p.key} radio on={draft.preset === p.key} onClick={() => set("preset", p.key)}>
@@ -515,8 +517,8 @@ export default function PolicyFormPage() {
                         </span>
                       </p>
                       {readiness.available && !readiness.failed ? (
-                        <Link to="/iga/policy/setup" className="ml-6 inline-flex items-center gap-1 text-xs font-semibold text-(--color-primary-text) hover:underline">
-                          Set up AWS access
+                        <Link to="/iga/connections" className="ml-6 inline-flex items-center gap-1 text-xs font-semibold text-(--color-primary-text) hover:underline">
+                          Open Connections
                           <ArrowRight aria-hidden="true" className="size-3.5" />
                         </Link>
                       ) : null}
@@ -569,9 +571,12 @@ export default function PolicyFormPage() {
             </aside>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-(--color-border-subtle) py-4">
+          {/* Full-bleed sticky action bar. The negative margin matches the
+              .console-page horizontal padding (32px) so the bar spans edge to
+              edge and the border reads as the page's commit zone. */}
+          <div className="sticky bottom-0 z-10 -mx-8 border-t border-(--color-border-subtle) bg-(--color-surface-raised)/90 px-8 py-3 backdrop-blur supports-backdrop-filter:bg-(--color-surface-raised)/80">
             {staleEdit ? (
-              <div className="basis-full rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
+              <div className="mb-3 rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
                 <p className="font-semibold">This policy changed since you opened it.</p>
                 <p className="mt-0.5">
                   Someone applied version {typeof act.failure?.detail?.current_version_no === "number" ? act.failure.detail.current_version_no : "a newer one"} while you were editing. Reload it, then re-apply your change.
@@ -590,23 +595,24 @@ export default function PolicyFormPage() {
                 </Button>
               </div>
             ) : (
-              <PolicyActionError failure={act.failure && !act.failure.field ? act.failure : null} className="basis-full" />
+              <PolicyActionError failure={act.failure && !act.failure.field ? act.failure : null} className="mb-3" />
             )}
-            <span className={cn("text-xs", disabledWhy ? "text-(--color-warning-text)" : "text-(--color-text-muted)")}>
-              {disabledWhy || (isBlock ? "Takes effect when you apply. You can lift it any time." : "Takes effect when you apply and ends on its own.")}
-            </span>
-            <span className="flex-1" />
-            <Button variant="outline" asChild>
-              <Link to={editing ? `/iga/policy/${id}` : "/iga/policy"}>Cancel</Link>
-            </Button>
-            <Button
-              variant={isBlock ? "destructive" : "default"}
-              className="text-white"
-              onClick={() => void apply()}
-              disabled={act.pending || !!disabledWhy}
-            >
-              {act.pending ? "Applying…" : editing ? "Apply changes" : isBlock ? "Apply block" : "Apply allow"}
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+              <span className={cn("mr-auto text-xs", disabledWhy ? "text-(--color-warning-text)" : "text-(--color-text-muted)")}>
+                {disabledWhy || (isBlock ? "Takes effect when you apply. You can lift it any time." : "Takes effect when you apply and ends on its own.")}
+              </span>
+              <Button variant="outline" asChild>
+                <Link to={editing ? `/iga/policy/${id}` : "/iga/policy"}>Cancel</Link>
+              </Button>
+              <Button
+                variant={isBlock ? "destructive" : "default"}
+                className="text-white"
+                onClick={() => void apply()}
+                disabled={act.pending || !!disabledWhy}
+              >
+                {act.pending ? "Applying…" : editing ? "Apply changes" : isBlock ? "Apply block" : "Apply allow"}
+              </Button>
+            </div>
           </div>
         </>
       )}
