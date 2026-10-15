@@ -117,7 +117,7 @@ export function ResourcePicker({
           id="ap-resource"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search S3 buckets named in policies Discovery read"
+          placeholder="Search for an S3 bucket"
           aria-label="Search S3 buckets"
           className="border-0 pl-9 shadow-none focus-visible:ring-0"
           autoComplete="off"
@@ -137,7 +137,7 @@ export function ResourcePicker({
           </p>
         ) : buckets.length === 0 ? (
           <p className="px-3 py-3 text-xs text-(--color-text-muted)">
-            {dq ? `No bucket matches “${dq}”.` : "No S3 bucket is named in the policies Discovery has read yet. A bucket appears once a policy names it; buckets nothing names are not listed."}
+            {dq ? `No bucket matches “${dq}”.` : "No S3 bucket found yet. A bucket shows up here once one of your AWS policies mentions it."}
           </p>
         ) : (
           <ul>
@@ -295,7 +295,7 @@ export function RolePicker({
   });
 
   if (!resource) {
-    return <p className="rounded-md border border-dashed border-(--color-border-strong) px-3 py-3 text-xs text-(--color-text-muted)">Choose a bucket first; the roles that can reach it are listed here.</p>;
+    return <p className="rounded-md border border-dashed border-(--color-border-strong) px-3 py-3 text-xs text-(--color-text-muted)">Choose a bucket first. The roles that can reach it will be listed here.</p>;
   }
 
   return (

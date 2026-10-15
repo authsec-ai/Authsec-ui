@@ -7,7 +7,7 @@ import { Loader2, MoreHorizontal } from "lucide-react";
 import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { cn } from "@/lib/utils";
 
 import { actionsOf, statusOf, type ActionSet } from "./connectionModel";
@@ -33,7 +33,7 @@ export function StatusBlock({
   const support = brief && SAID_BY_LAST_SCAN.has(s.key) ? "" : s.support;
   return (
     <div className="min-w-0 space-y-1">
-      {pill ? <CloudPill tone={s.tone}>{s.label}</CloudPill> : null}
+      {pill ? <ConnPill tone={s.tone}>{s.label}</ConnPill> : null}
       {support ? (
         <p
           className={cn("text-xs leading-snug text-muted-foreground", brief ? "line-clamp-1" : clamp && "line-clamp-2")}

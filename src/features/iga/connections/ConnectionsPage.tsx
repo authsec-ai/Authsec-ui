@@ -343,8 +343,8 @@ export default function ConnectionsPage() {
       title="Connections"
       description={
         <span className="inline-flex flex-wrap items-center gap-1">
-          Connect the places your AI agents run and the code they come from: AWS accounts, Google Cloud projects,
-          Kubernetes clusters and GitHub organisations. AuthSec scans each one to find agents and what they can access.
+          Connect your cloud accounts, Kubernetes clusters, and GitHub organisations to AuthSec. Discover your AI agents, identify their access
+          permissions, and understand what they can access across your infrastructure.
         </span>
       }
       actions={
@@ -394,6 +394,7 @@ export default function ConnectionsPage() {
           <TableToolbar
             // Search and the filters are there as soon as there is a connection to filter.
             controls={all.length >= 1 || filtered}
+            showSearch={all.length >= 6 || !!search.trim()}
             search={search}
             onSearch={(v) => setParam("q", v || null)}
             filtered={filtered}

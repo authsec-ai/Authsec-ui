@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useListAwsScanRunsQuery, type CloudScanRunHistoryItem } from "@/app/api/cloudDiscoveryApi";
 import { Button } from "@/components/ui/button";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { RUN_LABEL, RUN_TONE } from "@/features/discovery/cloud/aws/awsScanRunLabels";
 import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 import { surfaceStateText } from "@/features/iga/shared/labels";
@@ -142,7 +142,7 @@ export function AwsScansTable({ connectionId }: { connectionId: string }) {
                     <div className="text-xs capitalize text-(--color-text-muted)">{r.trigger}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <CloudPill tone={RUN_TONE[r.status]}>{RUN_LABEL[r.status]}</CloudPill>
+                    <ConnPill tone={RUN_TONE[r.status]}>{RUN_LABEL[r.status]}</ConnPill>
                     {failed(r) && r.last_error ? <div className="mt-1 max-w-[360px] text-xs text-(--color-danger-text)">{safeErrorProse(r.last_error)}.</div> : null}
                   </td>
                   <td className="px-4 py-3 tabular-nums text-(--color-text)">{duration(r)}</td>

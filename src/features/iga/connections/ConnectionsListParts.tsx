@@ -66,6 +66,7 @@ export function FilterPills<T extends string>({
 
 export function TableToolbar({
   controls = true,
+  showSearch = true,
   search,
   onSearch,
   typeControl,
@@ -76,6 +77,8 @@ export function TableToolbar({
 }: {
   /** false: only the count, for a list too short to search. */
   controls?: boolean;
+  /** The search box only earns its place on a longer list. */
+  showSearch?: boolean;
   search: string;
   onSearch: (v: string) => void;
   typeControl: ReactNode;
@@ -89,6 +92,7 @@ export function TableToolbar({
     <div data-compact-toolbar className="flex flex-wrap items-center gap-3 border-b border-(--color-border-subtle) px-4 py-3">
       {controls ? (
         <>
+          {showSearch ? (
           <label className="relative flex min-w-[220px] max-w-[360px] flex-1 basis-[260px] items-center">
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
             <Input
@@ -102,6 +106,7 @@ export function TableToolbar({
               spellCheck={false}
             />
           </label>
+          ) : null}
           {typeControl}
         </>
       ) : null}

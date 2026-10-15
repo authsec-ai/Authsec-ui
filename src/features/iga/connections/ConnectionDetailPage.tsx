@@ -23,7 +23,7 @@ import {
 } from "./ConnectionParts";
 import { CoverageTab } from "./CoverageTab";
 import { OverviewTab, ReadinessStrip } from "./OverviewTab";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { ScansTab } from "./ScansTab";
 import { ScopeTab } from "./ScopeTab";
@@ -116,7 +116,7 @@ export default function ConnectionDetailPage() {
         <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
           <ProviderGlyph provider={c.provider} size="size-8" />
           <span className={hasFriendlyName(c) ? undefined : "font-mono"}>{c.name}</span>
-          <CloudPill tone={status.tone}>{status.label}</CloudPill>
+          <ConnPill tone={status.tone}>{status.label}</ConnPill>
         </span>
       }
       description={[

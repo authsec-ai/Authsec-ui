@@ -11,7 +11,7 @@
  * is opened from Discovery or the graph.
  */
 
-import { AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
@@ -49,7 +49,7 @@ import {
   type PolicyDraft,
 } from "./model";
 import { AwsDocument, EffectChip } from "./parts";
-import { readinessWords, useAccessReadiness } from "./readiness";
+import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
@@ -501,16 +501,16 @@ export default function PolicyFormPage() {
                       AuthSec can change IAM in this account.
                     </li>
                   ) : (
-                    <li className="space-y-1.5 bg-(--color-warning-soft) px-4 py-2.5">
+                    <li className="space-y-1.5 bg-(--color-surface-subtle) px-4 py-2.5">
                       <p className="flex items-start gap-2 text-(--color-text)">
-                        <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-warning-text)" />
+                        <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
                         <span>
                           {readiness.failed
                             ? "Could not check whether AuthSec can change AWS."
                             : !readiness.available
                               ? readiness.reason || "Applying policies is turned off on this server."
                               : readiness.notReady.length
-                                ? `${readiness.notReady.map((a) => `${a.account_id}: ${readinessWords(a.reason)}`).join("; ")}.`
+                                ? `AWS access is not set up for ${readiness.notReady.length === 1 ? "account" : "accounts"} ${readiness.notReady.map((a) => a.account_id).join(", ")}. AuthSec can read ${readiness.notReady.length === 1 ? "it" : "them"} but cannot change ${readiness.notReady.length === 1 ? "it" : "them"} yet.`
                                 : "No AWS account is connected yet."}
                         </span>
                       </p>

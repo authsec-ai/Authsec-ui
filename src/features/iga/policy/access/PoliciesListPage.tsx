@@ -89,8 +89,9 @@ export default function PoliciesListPage() {
         label: "Policy",
         primary: true,
         alwaysVisible: true,
-        minWidth: 220,
-        approxWidth: 260,
+        minWidth: 260,
+        approxWidth: 320,
+        cellClassName: "py-3.5",
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-3">
             {/* Policies of every provider share this list; the mark says which one this is. Today: AWS. */}
@@ -114,7 +115,7 @@ export default function PoliciesListPage() {
         header: "Effect",
         label: "Effect",
         priority: 1,
-        approxWidth: 90,
+        approxWidth: 120,
         cell: ({ row }) => <EffectChip effect={row.original.effect} />,
         detail: (p) => (p.effect === "block" ? "Block" : "Allow"),
       },
@@ -123,7 +124,7 @@ export default function PoliciesListPage() {
         header: "Roles",
         label: "Roles",
         priority: 2,
-        approxWidth: 190,
+        approxWidth: 230,
         cell: ({ row }) => {
           const r = row.original.roles;
           const used = [...new Set(r.flatMap((x) => x.used_by.map((w) => w.name)))];
@@ -141,10 +142,10 @@ export default function PoliciesListPage() {
         header: "Resource",
         label: "Resource",
         priority: 3,
-        approxWidth: 240,
+        approxWidth: 280,
         cell: ({ row }) => (
           <div className="min-w-0">
-            <span className="block truncate font-mono text-xs" title={row.original.resource.arn}>
+            <span className="block truncate text-[13px]" title={row.original.resource.arn}>
               {resourceText(row.original.resource)}
             </span>
             {/* Access is said under the resource it applies to, so the row has one column fewer to fit. */}
@@ -168,7 +169,7 @@ export default function PoliciesListPage() {
         header: "Window",
         label: "Window",
         priority: 4,
-        approxWidth: 190,
+        approxWidth: 200,
         cell: ({ row }) => (
           <div className="min-w-0">
             <div className="text-[13px]">{windowText(row.original)}</div>
@@ -182,7 +183,7 @@ export default function PoliciesListPage() {
         header: "Status",
         label: "Status",
         priority: 1,
-        approxWidth: 130,
+        approxWidth: 150,
         cell: ({ row }) => <PolicyStatusChip status={row.original.status} />,
         detail: (p) => STATUS[p.status]?.label ?? p.status,
       },
@@ -245,6 +246,8 @@ export default function PoliciesListPage() {
 
   // A workspace with no policy at all: the filters and the empty table would only be noise, so show the invitation alone.
   const firstRun = !filtered && !failure && !!list.data && all.length === 0;
+  // Nothing loaded at all: one clear message below, not a stack of three.
+  const loadFailed = !!failure && !list.data;
 
   const applied = [
     resourceId ? { key: "resource", label: `Bucket ${resourceName || resourceId}`, onRemove: () => setParams(dropKeys(params, ["resource_id", "resource_name"]), { replace: true }) } : null,
@@ -257,7 +260,7 @@ export default function PoliciesListPage() {
   return (
     <PolicyShell
       title="Policy"
-      description="Stop an AI agent from reaching a storage bucket, or let it in, for a set time. AuthSec applies the rule in AWS and removes it when the time is up."
+      description="Control what your AI agents can access and when. Allow or block access for a set period. AuthSec enforces each policy and removes temporary access automatically when it ends."
       requires="access_policies"
       actions={
         enforce.offered ? (
@@ -270,9 +273,9 @@ export default function PoliciesListPage() {
         ) : undefined
       }
     >
-      <ReadinessBanner ws={ws} />
+      {loadFailed ? null : <ReadinessBanner ws={ws} />}
 
-      {firstRun ? null : (
+      {firstRun || loadFailed ? null : (
       <ConsoleFilterBar
         search={search}
         onSearchChange={setSearch}
