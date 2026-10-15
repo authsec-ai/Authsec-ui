@@ -9,7 +9,6 @@ import {
   useGetGraphIdentityPermissionsQuery,
   useGetGraphIdentityUsedByQuery,
   type GraphCoverageGap,
-  type GraphRef,
   type IdentityDetail,
   type IdentityPermissions,
   type IdentityUsedBy,
@@ -17,7 +16,6 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { discoveryHref } from "../discovery/urlState";
 import { IdentityPolicySection } from "../policy/DiscoveryPolicySection";
 import { isFullAdmin } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
@@ -40,6 +38,7 @@ import { DeclaredExamples, type ExampleLine } from "../shared/components/Declare
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
 import { CopyValue, Fact, Facts, Meta, Panel, TechnicalDetails } from "../shared/components/Panel";
+import { EvidenceSummary } from "../evidence/EvidenceSummary";
 import { Timestamp } from "../shared/components/Timestamp";
 
 const SKETCH_SIDE = 3;
@@ -184,8 +183,6 @@ export function IdentityOverview({
 }) {
   const kind = IDENTITY_KIND_LABEL[i.kind];
   const attrs = i.provider_attrs;
-  const connector = i.sources[0]?.integration;
-  const connectorId = connector ? refId(connector as GraphRef) : null;
   const tags = Object.entries(attrs.tags ?? {});
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
@@ -352,21 +349,11 @@ export function IdentityOverview({
             </Panel>
           ) : null}
 
-          <Panel title="How we know"
-            actions={
-              <Link
-                to={discoveryHref({ provider: "aws", type: "identities", view: "latest", source: connectorId ?? undefined })}
-                className="font-medium text-(--color-primary-text) hover:underline"
-              >
-                Latest collected
-              </Link>
-            }
-          >
-            <Facts>
+          <EvidenceSummary objectRef={i.ref}>
               <Fact label="First seen">{dayText(i.first_seen_at)}</Fact>
-              <Fact label="Last confirmed"><Timestamp iso={i.last_confirmed_at} /></Fact>
-              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
-              <Fact label="Identity continuity">{
+              <Fact label="Last seen in a scan"><Timestamp iso={i.last_confirmed_at} /></Fact>
+              {publishedAt ? <Fact label="Graph updated"><Timestamp iso={publishedAt} /></Fact> : null}
+              <Fact label="Tracked by">{
                   i.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation${i.immutable_key ? ` (${i.immutable_key})` : ""}, so an ${kind} deleted and recreated under the same name is a new identity.`
                     : "Same name only. AWS gives this identity no creation id we can read, so one recreated under this name looks the same to us."
@@ -382,8 +369,7 @@ export function IdentityOverview({
                     </span>
                   }</Fact>
               ) : null}
-            </Facts>
-          </Panel>
+          </EvidenceSummary>
       </div>
     </div>
   );

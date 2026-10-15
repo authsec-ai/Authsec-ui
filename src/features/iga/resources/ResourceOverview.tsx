@@ -19,7 +19,6 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { discoveryHref } from "../discovery/urlState";
 import { SCOPE_LABEL, accessScope } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
 import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, IDENTITY_KIND_LABEL, accountLabel, dayText, countText, resourceTypeLabel } from "../shared/labels";
@@ -31,6 +30,7 @@ import { incompleteAccounts } from "../shared/listSummary";
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
 import { CopyValue, Fact, Facts, Meta, Panel, TechnicalDetails } from "../shared/components/Panel";
+import { EvidenceSummary } from "../evidence/EvidenceSummary";
 import { Timestamp } from "../shared/components/Timestamp";
 
 const SKETCH_HOLDERS = 5;
@@ -222,27 +222,15 @@ export function ResourceOverview({
             </Facts>
           </Panel>
 
-          <Panel
-            title="How we know"
-            actions={
-              <Link
-                to={discoveryHref({ provider: "aws", type: "resources", view: "latest" })}
-                className="font-medium text-(--color-primary-text) hover:underline"
-              >
-                Latest collected
-              </Link>
-            }
-          >
-            <Facts>
-              <Fact label="Last confirmed"><Timestamp iso={r.last_confirmed_at} /></Fact>
-              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
-              <Fact label="Found in">{
-                  r.sources.length
-                    ? r.sources.map((s) => `${accountLabel(s.account)}${s.state !== "current" ? ` (${s.state})` : ""}`).join(", ")
-                    : "No current source"
-                }</Fact>
-            </Facts>
-          </Panel>
+          <EvidenceSummary objectRef={r.ref}>
+            <Fact label="Last seen in a scan"><Timestamp iso={r.last_confirmed_at} /></Fact>
+            {publishedAt ? <Fact label="Graph updated"><Timestamp iso={publishedAt} /></Fact> : null}
+            <Fact label="Read from">{
+                r.sources.length
+                  ? r.sources.map((s) => `${accountLabel(s.account)}${s.state !== "current" ? ` (${s.state})` : ""}`).join(", ")
+                  : "No current source"
+              }</Fact>
+          </EvidenceSummary>
       </div>
     </div>
   );
