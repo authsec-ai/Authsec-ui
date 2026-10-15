@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyActionError, PolicyLoadFailure, PolicyShell, classifyPolicyError, describeFailure, usePolicyAction } from "../shared";
+import { PageFooter } from "@/components/layout/PageFooter";
 import {
   ACCESS,
   PRESETS,
@@ -571,11 +572,9 @@ export default function PolicyFormPage() {
             </aside>
           </div>
 
-          {/* A bottom action bar pinned to the page, spanning the full content
-              width (the negative margins cancel .console-page's 32px padding) so
-              it reads as the page's commit zone and stays in view while the form
-              scrolls. */}
-          <div className="sticky bottom-0 z-10 -mx-8 -mb-12 border-t border-(--color-border-subtle) bg-(--color-surface-raised) px-8 py-3">
+          {/* The page's commit zone: rendered by the layout beneath the scroll
+              area, so it is always at the bottom of the window and spans it. */}
+          <PageFooter>
             {staleEdit ? (
               <div className="mb-3 rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-[13px] text-(--color-warning-text)">
                 <p className="font-semibold">This policy changed since you opened it.</p>
@@ -614,7 +613,7 @@ export default function PolicyFormPage() {
                 {act.pending ? "Applying…" : editing ? "Apply changes" : isBlock ? "Apply block" : "Apply allow"}
               </Button>
             </div>
-          </div>
+          </PageFooter>
         </>
       )}
     </PolicyShell>
