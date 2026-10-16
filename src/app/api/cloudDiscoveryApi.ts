@@ -275,6 +275,26 @@ interface ConnectorEnvelope {
   meta?: { as_of?: string; verified?: string | null; note?: string };
 }
 
+/** `GET|PUT /aws/connectors/:id/schedule` — automatic rescans.
+ * A connector never scheduled reads as `enabled: false` with the default
+ * interval. `paused_reason` is "" unless the scheduler paused the schedule
+ * after repeated failures. `scheduler_active: false` means this deployment has
+ * the scheduler switched off: the settings are kept but nothing runs on them. */
+export interface AWSScanSchedule {
+  enabled: boolean;
+  interval_minutes: number;
+  next_due_at: string | null;
+  last_enqueued_at: string | null;
+  paused_reason: string;
+  scheduler_active: boolean;
+}
+
+interface AWSScanScheduleEnvelope {
+  success?: boolean;
+  data: AWSScanSchedule;
+  meta?: { as_of?: string; note?: string };
+}
+
 // ── AWS onboarding + IAM discovery ───────────────────────────────────────────
 
 /** One additional read granted beyond the SecurityAudit baseline, or one hard
@@ -1367,6 +1387,33 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       ],
     }),
 
+    /** Automatic rescans. Under its own tag, like the regions: a scan or verify
+     * (which invalidate the connector) must not refetch it, and saving it must
+     * not refetch the connector. */
+    getAwsScanSchedule: builder.query<AWSScanSchedule, string>({
+      query: (id) => ({ url: `/authsec/discovery/aws/connectors/${id}/schedule`, method: "GET" }),
+      transformResponse: (r: AWSScanScheduleEnvelope) => r.data,
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector" as const, id: `${id}:schedule` }],
+    }),
+
+    /** Turn automatic rescans on or off and set the interval (1440 or 10080
+     * minutes; omitted keeps the current one). Turning on, resuming a paused
+     * schedule or changing the interval sets the next scan one interval from
+     * now; it never scans at once. `422 invalid_parameter` names
+     * `interval_minutes`; `409 connector_revoked`. */
+    updateAwsScanSchedule: builder.mutation<
+      AWSScanSchedule,
+      { id: string; enabled: boolean; interval_minutes?: number }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/authsec/discovery/aws/connectors/${id}/schedule`,
+        method: "PUT",
+        body,
+      }),
+      transformResponse: (r: AWSScanScheduleEnvelope) => r.data,
+      invalidatesTags: (_r, _e, { id }) => [{ type: "CloudConnector" as const, id: `${id}:schedule` }],
+    }),
+
     /* ──────────────────── The seven AWS discovery reads ───────────────────
      *
      * PAGINATED, every one of them, since the backend's pagination-and-scoping
@@ -1771,6 +1818,8 @@ export const {
   useListAwsScanRunsQuery,
   useGetAwsConnectorRegionsQuery,
   useUpdateAwsConnectorRegionsMutation,
+  useGetAwsScanScheduleQuery,
+  useUpdateAwsScanScheduleMutation,
   useListAwsIdentityPageQuery,
   useListAwsSecretsQuery,
   useListAwsAssumeEdgesQuery,
