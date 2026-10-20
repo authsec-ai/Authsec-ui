@@ -30,7 +30,6 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { ObjectShell, type ObjectHeaderData, type ObjectTabDef } from "@/features/iga/shared/components/ObjectShell";
-import { Panel } from "@/features/iga/shared/components/Panel";
 import type { GraphFailure } from "@/features/iga/shared/graphErrors";
 import { dayText } from "@/features/iga/shared/labels";
 import { activeTabOf } from "@/features/iga/shared/links";
