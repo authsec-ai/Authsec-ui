@@ -271,6 +271,7 @@ function RecentScans({ c }: { c: Connection }) {
                 <span className="tabular-nums text-(--color-text-muted)">{r.queued_at ? format(new Date(r.queued_at), "d MMM, HH:mm") : "—"}</span>
                 <span className={failed ? "min-w-0 text-(--color-danger-text)" : "min-w-0 text-(--color-text)"}>
                   {failed && r.last_error ? `Failed: ${safeErrorProse(r.last_error)}` : RUN_LABEL[r.status]}
+                  {r.trigger === "scheduled" ? <span className="ml-2 text-xs text-(--color-text-muted)">Scheduled</span> : null}
                 </span>
                 <span className="text-xs text-(--color-text-muted)" title={graphCell(r).title}>
                   {graphCell(r).text === "—" ? "" : graphCell(r).text}

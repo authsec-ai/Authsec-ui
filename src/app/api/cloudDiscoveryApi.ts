@@ -287,6 +287,13 @@ export interface AWSScanSchedule {
   last_enqueued_at: string | null;
   paused_reason: string;
   scheduler_active: boolean;
+  /** The chosen time, "HH:MM" on a quarter hour in `timezone`; null when none was
+   * chosen (scans then run at the time of day auto-scan was turned on). */
+  time_of_day: string | null;
+  /** IANA zone name the time is read in. "UTC" by default. */
+  timezone: string;
+  /** 0 = Sunday .. 6 = Saturday. Set for weekly schedules with a chosen time. */
+  day_of_week: number | null;
 }
 
 interface AWSScanScheduleEnvelope {
@@ -1396,14 +1403,23 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "CloudConnector" as const, id: `${id}:schedule` }],
     }),
 
-    /** Turn automatic rescans on or off and set the interval (1440 or 10080
-     * minutes; omitted keeps the current one). Turning on, resuming a paused
-     * schedule or changing the interval sets the next scan one interval from
-     * now; it never scans at once. `422 invalid_parameter` names
-     * `interval_minutes`; `409 connector_revoked`. */
+    /** Turn automatic rescans on or off, set the interval (1440 or 10080
+     * minutes; omitted keeps the current one) and, optionally, the time of day,
+     * timezone and weekday. Omitted fields keep their value. With a chosen time
+     * the next scan is its next occurrence (starting up to 30 minutes after it);
+     * without one it is one interval from now. It never scans at once.
+     * `422 invalid_parameter` names `interval_minutes`, `time_of_day`,
+     * `timezone` or `day_of_week`; `409 connector_revoked`. */
     updateAwsScanSchedule: builder.mutation<
       AWSScanSchedule,
-      { id: string; enabled: boolean; interval_minutes?: number }
+      {
+        id: string;
+        enabled: boolean;
+        interval_minutes?: number;
+        time_of_day?: string;
+        timezone?: string;
+        day_of_week?: number;
+      }
     >({
       query: ({ id, ...body }) => ({
         url: `/authsec/discovery/aws/connectors/${id}/schedule`,
