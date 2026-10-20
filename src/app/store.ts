@@ -29,8 +29,9 @@ import uiSlice from "./slices/uiSlice";
 // Import auth slices from new location
 import authSlice, { logout } from "../auth/slices/authSlice";
 import { resetGraphRevisions } from "../features/iga/shared/revision";
-import adminWebAuthnSlice from "../auth/slices/adminWebAuthnSlice";
-import oidcWebAuthnSlice from "../auth/slices/oidcWebAuthnSlice";
+import adminWebAuthnSlice, { resetAdminWebAuthnState } from "../auth/slices/adminWebAuthnSlice";
+import oidcWebAuthnSlice, { resetOIDCWebAuthnState } from "../auth/slices/oidcWebAuthnSlice";
+import { SESSION_KEY, sessionIdentityFromStorage } from "../utils/sessionManager";
 
 /**
  * Redux store configuration with RTK Query integration
@@ -58,11 +59,32 @@ sessionListener.startListening({
   predicate: (action, current, previous) =>
     logout.match(action) ||
     sessionIdentity(current) !== sessionIdentity(previous),
-  effect: (_action, api) => {
-    api.dispatch(baseApi.util.resetApiState());
-    resetGraphRevisions();
+  effect: (action, api) => {
+    // Signing in is the sign-in flow's own last step: its slice still drives
+    // the redirect that follows (it holds the step and the token), so only a
+    // session that ends or changes takes the flow state with it.
+    const signingIn = !logout.match(action) && sessionIdentity(api.getOriginalState()) === "signed-out";
+    resetSessionScopedState(api.dispatch, { keepSignInFlow: signingIn });
   },
 });
+
+// Everything cached for one (workspace, user) is dropped when that changes:
+// every RTK Query cache and, unless the change is the sign-in itself, the
+// sign-in flow slices (ADR-0001 §8).
+export function resetSessionScopedState(
+  dispatch: (action: unknown) => unknown,
+  { keepSignInFlow = false }: { keepSignInFlow?: boolean } = {},
+) {
+  dispatch(baseApi.util.resetApiState());
+  dispatch(userAuthApi.util.resetApiState());
+  dispatch(oidcApi.util.resetApiState());
+  dispatch(deviceApi.util.resetApiState());
+  if (!keepSignInFlow) {
+    dispatch(resetAdminWebAuthnState());
+    dispatch(resetOIDCWebAuthnState());
+  }
+  resetGraphRevisions();
+}
 
 export const store = configureStore({
   reducer: {
@@ -104,6 +126,32 @@ export const store = configureStore({
 
 // Enable listener behavior for the store
 setupListeners(store.dispatch);
+
+// Another tab signing in, switching workspace or signing out changes the
+// shared session. This tab's caches belong to the previous identity, so it
+// reloads rather than mix one workspace's data with another's token.
+const RELOAD_STAMP_KEY = "authsec_session_reload_at";
+
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key !== SESSION_KEY && event.key !== null) return;
+    const before = sessionIdentityFromStorage(event.oldValue);
+    const after = sessionIdentityFromStorage(event.key === null ? null : event.newValue);
+    if (before === after) return;
+    resetSessionScopedState(store.dispatch);
+    // Never reload twice within a few seconds. Two tabs that keep rewriting the
+    // session would otherwise reload each other in a loop; the state reset above
+    // still runs, so the tab never mixes one identity's data with another's.
+    try {
+      const last = Number(window.sessionStorage.getItem(RELOAD_STAMP_KEY) || 0);
+      if (Date.now() - last < 10_000) return;
+      window.sessionStorage.setItem(RELOAD_STAMP_KEY, String(Date.now()));
+    } catch {
+      // sessionStorage unavailable: reload as before.
+    }
+    window.location.reload();
+  });
+}
 
 // Infer types from the store itself
 export type RootState = ReturnType<typeof store.getState>;

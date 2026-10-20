@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- classification UI is commented out for the demo; imports stay so it can be restored */
 /**
  * Overview — "what is this, and should I care?"
  *
@@ -49,6 +50,7 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { wrapId } from "../shared/components/wrapText";
 import { shortResourceName } from "../shared/sketch";
 import { discoveryHref } from "../discovery/urlState";
+import { WorkloadPolicySection } from "../policy/DiscoveryPolicySection";
 import { AccessSummaryCard } from "./AccessSummaryCard";
 import { PurposeEditor } from "./PurposeEditor";
 import { isFullAdmin } from "../shared/access";
@@ -344,6 +346,10 @@ export function WorkloadOverview({
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="space-y-4">
+          {/* Policy findings and owners (SPEC-iga-phase3-policy.md §9.4); nothing while the product is off. */}
+          {/* Hidden for now: the Policy tile has no action yet. Restore with the workload policy flow.
+          {!frozen && w.lifecycle !== "retired" ? <WorkloadPolicySection ws={ws} workloadId={refId(w.ref)} /> : null}
+          */}
           {/* Who does it act as? */}
           <Panel
             title="Identity"
@@ -366,10 +372,9 @@ export function WorkloadOverview({
             />
           </Panel>
 
-          {/* Purpose. Classify / Undo live in the header (ObjectShell actions). */}
+          {/* Hidden for now: Purpose depends on classification, which is not designed yet. Restore with it.
           <Panel title="Purpose">
             <div className="space-y-1.5 text-[13px] leading-5">
-              {/* The classification is said here, once; the header no longer repeats it. */}
               <StatusBadge tone={classificationTone(w.classification)}>{classificationLabel(w.classification)}</StatusBadge>
               {w.classification !== "provider_native_agent" ? (
                 <PurposeEditor
@@ -399,6 +404,7 @@ export function WorkloadOverview({
               </div>
             ) : null}
           </Panel>
+          */}
 
           {/* The access card above already summarises this; the examples
               would say it a third time. They stay for a retired workload,
@@ -442,7 +448,7 @@ export function WorkloadOverview({
             }
           >
             <Facts>
-              <Fact label="ARN"><CopyValue value={w.arn} what="ARN" /></Fact>
+              <Fact label="ARN (the unique AWS ID)"><CopyValue value={w.arn} what="ARN" /></Fact>
               <Fact label="First seen">{dayText(w.first_seen_at)}</Fact>
               <Fact label="Last confirmed"><Timestamp iso={w.last_confirmed_at} /></Fact>
               <Fact label="Region">{w.region ?? "Not stated"}</Fact>

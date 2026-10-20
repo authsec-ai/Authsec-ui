@@ -38,9 +38,6 @@ interface TOTPSetupComponentProps {
  * Shown when: selectedMFAMethod: "totp" and currentStep: "totp_setup"
  */
 export function TOTPSetupComponent({ 
-  contextType,
-  email,
-  workspaceId,
   totpData,
   onSuccess,
   onError,
@@ -98,7 +95,7 @@ export function TOTPSetupComponent({
       try {
         await navigator.clipboard.writeText(totpData.manual_entry);
         toast.success("Secret copied to clipboard");
-      } catch (error) {
+      } catch {
         toast.error("Failed to copy secret");
       }
     }

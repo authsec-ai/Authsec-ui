@@ -65,7 +65,7 @@ export default function PublishedIdentities(p: ScreenProps) {
   const bound = p.url.get("bound") ? ("workloads" as const) : undefined;
   const lifecycle = valid(p.url.get("lifecycle"), ["retired", "all"] as const);
 
-  const args: ListIdentitiesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, kind, used_by: bound, lifecycle, cursor: c.paging.cursor };
+  const args: ListIdentitiesArgs = { ws: p.ws, rev: c.rev, key: c.paging.cacheKey, q: p.url.q, account: c.account, kind, used_by: bound, lifecycle, cursor: c.paging.cursor, limit: c.pageSize };
   const list = useListGraphIdentitiesQuery(args, { skip: c.gate.off || c.blocked });
   useTrackRevision(p.ws, list.currentData, classifyGraphError(list.error), (r, d) =>
     c.dispatch(igaGraphApi.util.upsertQueryData("listGraphIdentities", { ...args, rev: r }, d)),
@@ -96,7 +96,7 @@ export default function PublishedIdentities(p: ScreenProps) {
       },
       {
         id: "used_by",
-        header: "Bound to",
+        header: "Used by",
         label: DIRECT_BINDINGS_LABEL,
         priority: 1,
         approxWidth: 150,

@@ -508,7 +508,7 @@ export const clientApi = baseApi.injectEndpoints({
       DeleteClientResponse,
       DeleteClientRequest
     >({
-      query: ({ workspace_id, client_id }) => ({
+      query: ({ client_id }) => ({
         url: `/authsec/applications/${client_id}`,
         method: "DELETE",
       }),
@@ -616,14 +616,11 @@ export const clientApi = baseApi.injectEndpoints({
         try {
           // Parse the regular clients response and transform it to enhanced format
           const parsed = parseFirstValidJSON<any>(response);
-          console.log("Raw API response after parsing:", parsed);
 
           // Handle the actual API response structure which has different fields
           if (parsed.clients && Array.isArray(parsed.clients)) {
             const enhancedClients: EnhancedClientData[] = parsed.clients.map(
               (client: any, index: number) => {
-                console.log("Processing client in API transform:", client);
-
                 // Handle authentication_methods - can be string, array of strings, or array of objects
                 let authMethodsArray: Array<{
                   id: string;
@@ -717,8 +714,6 @@ export const clientApi = baseApi.injectEndpoints({
               },
             );
 
-            console.log("Enhanced clients after :", enhancedClients);
-
             return {
               clients: enhancedClients,
               total: parsed.pagination?.total || enhancedClients.length,
@@ -730,18 +725,9 @@ export const clientApi = baseApi.injectEndpoints({
 
           // Fallback for old response format
           const normalizedResponse = normalizeClientsResponse(parsed);
-          console.log("Normalized response (fallback):", normalizedResponse);
-          console.log(
-            "First client in normalized response:",
-            normalizedResponse.clients?.[0],
-          );
 
           const enhancedClients: EnhancedClientData[] =
             normalizedResponse.clients.map((client) => {
-              console.log(
-                "Processing client in API transform (fallback):",
-                client,
-              );
               return {
                 ...client,
                 authentication_methods: [],

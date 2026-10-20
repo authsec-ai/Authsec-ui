@@ -10,7 +10,7 @@
 
 import { Link } from "react-router-dom";
 
-import { LEVEL_LABEL, LEVEL_MEANING, countWord, serviceLabel, type AccessLevel, type ServiceAccess } from "../shared/access";
+import { LEVEL_LABEL, LEVEL_MEANING, countWord, servicePlain, type AccessLevel, type ServiceAccess } from "../shared/access";
 import { InfoTip } from "../shared/components/InfoTip";
 import { Panel } from "../shared/components/Panel";
 import type { WorkloadAccess } from "../shared/useWorkloadAccess";
@@ -31,7 +31,7 @@ function Row({ s }: { s: ServiceAccess }) {
     <li className="flex min-h-10 items-center gap-3 px-4 py-2">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] text-(--color-text)">
-          <span className="font-medium">{serviceLabel(s.service)}</span>
+          <span className="font-medium">{servicePlain(s.service)}</span>
           <span aria-hidden="true" className="px-1.5 text-(--color-text-muted)">
             ·
           </span>
@@ -77,7 +77,7 @@ export function AccessSummaryCard({
               ))}
             </dl>
             <p className="mt-2">
-              Declared in AWS and inferred from action names. Conditions, Deny statements and permissions boundaries are not evaluated.
+              This is what AWS has written down for this identity, worked out from the names of the actions. AuthSec has not checked the extra rules that can still block access (conditions, Deny rules and permission limits).
               {summary?.partial ? " Counts are from the first page, so they are a minimum." : ""}
             </p>
           </InfoTip>

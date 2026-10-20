@@ -34,8 +34,9 @@ import {
   useRevokeScimConnectionMutation,
 } from "@/app/api/scimConnectionsApi";
 import config from "@/config";
+import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
-const INFO_KEY = "scim_connections_info_dismissed_v1";
+const infoKey = () => scopedStorageKey("scim_connections_info_dismissed_v1");
 
 type ScimConnection = {
   id: string;
@@ -57,10 +58,10 @@ export default function ScimConnectionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
   const [query, setQuery] = useState("");
   const [infoDismissed, setInfoDismissed] = useState(() => {
-    try { return localStorage.getItem(INFO_KEY) === "1"; } catch { return false; }
+    try { return localStorage.getItem(infoKey()) === "1"; } catch { return false; }
   });
 
-  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(INFO_KEY, "1"); } catch {} };
+  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(infoKey(), "1"); } catch { /* storage unavailable; ignore */ } };
 
   const handleCreate = async () => {
     try {
@@ -88,7 +89,10 @@ export default function ScimConnectionsPage() {
     toast.success("Copied to clipboard");
   };
 
-  const safeConnections: ScimConnection[] = Array.isArray(connections) ? connections : [];
+  const safeConnections = useMemo<ScimConnection[]>(
+    () => (Array.isArray(connections) ? connections : []),
+    [connections],
+  );
   const apiBase = config.VITE_API_URL || "";
 
   const rows = useMemo<ScimConnection[]>(() => {
@@ -397,7 +401,7 @@ export default function ScimConnectionsPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.id}
-              rowClassName={(row) => row.original?.status !== "active" ? "opacity-50" : undefined}
+              rowClassName={(row) => row.status !== "active" ? "opacity-50" : undefined}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}

@@ -1,15 +1,14 @@
 import React from "react";
 import { Button } from "../../../components/ui/button";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
 } from "../../../components/ui/dropdown-menu";
-import { Settings2, Eye, EyeOff, Sliders } from "lucide-react";
+import { Eye, EyeOff, Sliders } from "lucide-react";
 
 export interface ColumnConfig {
   id: string;
@@ -28,7 +27,6 @@ interface ColumnSelectorProps {
 }
 
 export function ColumnSelector({ 
-  availableColumns,
   selectedColumns, 
   onColumnsChange, 
   onReset 

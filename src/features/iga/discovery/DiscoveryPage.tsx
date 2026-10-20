@@ -55,7 +55,7 @@ import { InfoTip } from "../shared/components/InfoTip";
 const DESCRIPTION = (
   <span className="inline-flex items-center gap-1">
     Workloads, identities and resources found in your connected sources.
-    <InfoTip label="About access shown here">Access is declared, not evaluated: nothing here tests whether a request would succeed.</InfoTip>
+    <InfoTip label="About access shown here">This shows the access that has been written down in AWS. AuthSec has not tested whether a real request would be allowed or blocked.</InfoTip>
   </span>
 );
 
@@ -95,10 +95,6 @@ export default function DiscoveryPage() {
 
   const { normalise } = url;
   useEffect(() => {
-    // Make the resolved provider and type explicit in the URL, once.
-    if (ready && provider && (!url.provider || !url.type)) normalise({ provider, type });
-  }, [ready, provider, type, url.provider, url.type, normalise]);
-  useEffect(() => {
     if (url.provider && url.type) rememberDiscoverySearch(url.provider, url.type, url.search);
   }, [url.provider, url.type, url.search]);
   useEffect(() => {
@@ -122,6 +118,21 @@ export default function DiscoveryPage() {
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);
   usePipeline(ws, !awsPublished);
   const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source });
+
+  // Make the resolved provider and type explicit in the URL, once. A Kubernetes cluster
+  // that has reported sightings but no inventory yet opens on its sightings: landing on
+  // an empty list while what the reader just connected sits one tab away reads as nothing found.
+  const wl = overview.counts.workloads;
+  const idn = overview.counts.identities;
+  const sg = overview.counts.sightings;
+  const k8sUndecided = provider === "k8s" && !url.type && (!wl || !idn || !sg || wl.kind === "loading" || idn.kind === "loading" || sg.kind === "loading");
+  const landingType: DiscoveryType =
+    provider === "k8s" && !url.type && wl?.kind === "exact" && wl.value === 0 && idn?.kind === "exact" && idn.value === 0 && sg?.kind === "exact" && sg.value > 0
+      ? "sightings"
+      : type;
+  useEffect(() => {
+    if (ready && provider && !k8sUndecided && (!url.provider || !url.type)) normalise({ provider, type: landingType });
+  }, [ready, provider, landingType, k8sUndecided, url.provider, url.type, normalise]);
 
   const current: Scope | undefined = provider ? { provider, type, view } : undefined;
   const switchTo = (to: Scope) => {

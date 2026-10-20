@@ -19,7 +19,7 @@ import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { Button } from "@/components/ui/button";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { RUN_LABEL, RUN_TONE, graphOutcome } from "@/features/discovery/cloud/aws/awsScanRunLabels";
 import { RunReport } from "@/features/discovery/GitHubScanPanel";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
@@ -83,7 +83,7 @@ function AwsScan({ c, runId }: { c: Connection; runId: string }) {
 
   return (
     <div className="space-y-4">
-      <Panel title="Outcome" actions={<CloudPill tone={RUN_TONE[data.status]}>{RUN_LABEL[data.status]}</CloudPill>}>
+      <Panel title="Outcome" actions={<ConnPill tone={RUN_TONE[data.status]}>{RUN_LABEL[data.status]}</ConnPill>}>
         <Facts>
           <Fact label="Requested">
             <Timestamp iso={data.requested_at} /> · {data.trigger}

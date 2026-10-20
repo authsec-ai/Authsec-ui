@@ -1,13 +1,11 @@
 export { BulkActionsBar } from "./BulkActionsBar";
-export { EnhancedAuthTable } from "./EnhancedAuthTable";
 export { default as AuthenticationFilterCard } from "./AuthenticationFilterCard";
 export { DataTableSkeleton } from "@/components/ui/table-skeleton";
 export { AuthTableSkeleton } from "./AuthTableSkeleton";
 export { OidcProvidersTable } from "./OidcProvidersTable";
 export { AuthProvidersTable } from "./AuthProvidersTable";
 
-// Enhanced OIDC Providers Table Components
-export { EnhancedOidcProvidersTable, DefaultOidcProvidersTableConfig } from './EnhancedOidcProvidersTable';
+// OIDC Providers Table Components
 export { ColumnSelector, type ColumnConfig } from './ColumnSelector';
 
 

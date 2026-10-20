@@ -258,6 +258,8 @@ export interface RoleFilters extends ListParams {
 
 export interface ResourceFilters extends ListParams {
   type?: string;
+  resource_type?: string;
+  offset?: number;
   status?: string;
   auto_discovery?: boolean;
   client_id?: string;

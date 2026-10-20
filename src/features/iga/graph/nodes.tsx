@@ -42,6 +42,8 @@ export interface GraphNodeData extends Record<string, unknown> {
   onRefresh: () => void;
   stateOf: (f: GraphFrontier) => FrontierControl;
   canLoadMore: (f: GraphFrontier) => boolean;
+  /** A Block policy in force names this role or covers this resource. */
+  block?: { text: string; long: string };
 }
 
 export type RFGraphNode = Node<GraphNodeData, GraphNodeKind>;
@@ -270,9 +272,14 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
             {d.context}
           </p>
         ) : null}
-        {d.indicators.length ? (
+        {d.indicators.length || data.block ? (
           <p className="mt-1 flex h-4 items-center gap-1 overflow-hidden">
-            {d.indicators.map((c) => (
+            {data.block ? (
+              <span title={data.block.long} className="shrink-0 truncate rounded bg-(--color-danger-soft) px-1.5 text-[11px] leading-4 font-semibold text-(--color-danger-text)">
+                {data.block.text}
+              </span>
+            ) : null}
+            {(data.block ? d.indicators.slice(0, 1) : d.indicators).map((c) => (
               <span key={c.key} title={c.long} className={cn("shrink-0 truncate rounded px-1.5 text-[11px] leading-4 font-medium", TONE_CLASS[c.tone])}>
                 {c.text}
               </span>

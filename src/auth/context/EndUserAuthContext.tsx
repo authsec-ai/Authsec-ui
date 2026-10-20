@@ -17,25 +17,21 @@ import {
   useConfirmTOTPSetupMutation,
   useVerifyTOTPMutation,
   useWebauthnEnduserCallbackMutation,
-  type WebAuthnCredential,
-  type MFAMethod,
-  type MFAStatusMethod
+  type MFAStatusMethod,
 } from "../../app/api/webauthnApi";
 import { useNotifyNewUserRegistrationMutation } from "../../app/api/authApi";
 import {
   setCurrentStep,
-  setLoginData,
   setClientId,
   setAvailableMFAMethods,
   setSelectedMFAMethod,
   setTOTPSecret,
   setTOTPSetupData,
-  setIsLoading,
   setAuthenticationError,
   setDisplayToken,
   setMFARequired,
   resetOIDCWebAuthnState,
-  type MFAMethod as OIDCMFAMethod
+  type MFAMethod as OIDCMFAMethod,
 } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
 import { toast } from "react-hot-toast";
@@ -305,7 +301,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
 
       return true;
-    } catch (e) {
+    } catch {
       toast.error("Failed to get MFA methods");
       return false;
     }
@@ -399,7 +395,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
         credential: {
           id: credential.id,
           rawId: arrayBufferToBase64Url(publicKeyCredential.rawId),
-          type: "public-key",
+          type: "public-key" as const,
           response: {
             attestationObject: arrayBufferToBase64Url(response.attestationObject),
             clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
@@ -565,7 +561,7 @@ export const EndUserAuthProvider: React.FC<{ children: React.ReactNode }> = ({ c
         credential: {
           id: credential.id,
           rawId: arrayBufferToBase64Url(publicKeyCredential.rawId),
-          type: "public-key",
+          type: "public-key" as const,
           response: {
             clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
             authenticatorData: arrayBufferToBase64Url(response.authenticatorData),

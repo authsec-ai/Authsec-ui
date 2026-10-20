@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { SpotlightPosition, ContentPosition, TourContentPosition, TourStep } from '../types';
+import type { SpotlightPosition, ContentPosition, TourStep } from '../types';
 
 /**
  * Get the target element from a ref or selector
@@ -89,7 +89,7 @@ export function calculateContentPosition(
       }
       break;
 
-    case 'top':
+    case 'top': {
       // Estimate content card height (more realistic than 200px)
       const estimatedContentHeight = 250;
 
@@ -122,6 +122,7 @@ export function calculateContentPosition(
         }
       }
       break;
+    }
 
     case 'left':
       // Position to the left of spotlight

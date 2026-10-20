@@ -17,7 +17,6 @@ export function WebAuthnPage() {
   const handleAuthComplete = () => {
     // Handle successful admin WebAuthn completion
     console.log("🎉 Admin WebAuthn authentication completed, redirecting to dashboard");
-    console.log("🔑 JWT token in localStorage:", localStorage.getItem('jwt_token'));
     
     toast.success("Authentication completed successfully!");
     

@@ -16,6 +16,7 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { cn } from "@/lib/utils";
 import { EntraConfigForm, type EntraConfigFormData } from "./EntraConfigForm";
 import { useCreateSyncConfigMutation, useUpdateSyncConfigMutation, type SyncConfig } from "@/app/api/syncConfigsApi";
+import { ENTRA_DEFAULTS, hydrateEntraForm } from "./syncConfigForm";
 import { useSyncEntraIDMutation } from "@/app/api/enduser/invitesApi";
 
 const WIZARD_STEPS = [
@@ -42,45 +43,11 @@ interface EntraSyncInlineFormProps {
   editConfig?: SyncConfig | null;
 }
 
-type EntraSyncFallback = SyncConfig & {
-  workspace_id?: string;
-  client_id?: string;
-  client_secret?: string;
-  entra_tenant_id?: string;
-  entra_client_id?: string;
-  skip_verify?: boolean;
-};
-
 export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyncInlineFormProps) {
   const isEditing = !!editConfig;
 
-  const createDefaultConfig = useCallback(
-    (): EntraConfigFormData => ({
-    config_name: "",
-    description: "",
-    workspace_id: "",
-    client_id: "",
-    client_secret: "",
-    skip_verify: true,
-    }),
-    []
-  );
-
-  const hydrateConfig = useCallback((source: SyncConfig): EntraConfigFormData => {
-    const defaults = createDefaultConfig();
-    const entra = source.entra_config ?? {};
-    const fallback: EntraSyncFallback = source;
-
-    return {
-      ...defaults,
-      config_name: source.config_name || defaults.config_name,
-      description: source.description || '',
-      workspace_id: entra.workspace_id || fallback.workspace_id || fallback.entra_tenant_id || defaults.workspace_id,
-      client_id: entra.client_id || fallback.entra_client_id || fallback.client_id || defaults.client_id,
-      client_secret: entra.client_secret || fallback.client_secret || defaults.client_secret,
-      skip_verify: entra.skip_verify ?? fallback.skip_verify ?? defaults.skip_verify,
-    };
-  }, [createDefaultConfig]);
+  const createDefaultConfig = useCallback((): EntraConfigFormData => ({ ...ENTRA_DEFAULTS }), []);
+  const hydrateConfig = useCallback((source: SyncConfig): EntraConfigFormData => hydrateEntraForm(source), []);
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [entraConfig, setEntraConfig] = useState<EntraConfigFormData>(() =>
@@ -114,7 +81,8 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     if (!entraConfig.config_name.trim()) newErrors.config_name = "Configuration name is required";
     if (!entraConfig.workspace_id.trim()) newErrors.workspace_id = "Tenant ID is required";
     if (!entraConfig.client_id.trim()) newErrors.client_id = "Client ID is required";
-    if (!entraConfig.client_secret.trim()) newErrors.client_secret = "Client Secret is required";
+    // Editing: an empty secret keeps the stored one.
+    if (!isEditing && !entraConfig.client_secret.trim()) newErrors.client_secret = "Client secret value is required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -150,14 +118,19 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
     setConnectionTested(false);
 
     try {
+      // Without a new secret, an edit is tested with the stored credentials.
+      const useStored = isEditing && !entraConfig.client_secret.trim() && editConfig?.id;
       await syncEntra({
         provider: "entra",
-        config: {
-          workspace_id: entraConfig.workspace_id,
-          client_id: entraConfig.client_id,
-          client_secret: entraConfig.client_secret,
-          skip_verify: entraConfig.skip_verify,
-        },
+        ...(useStored
+          ? { config_id: editConfig!.id }
+          : {
+              config: {
+                workspace_id: entraConfig.workspace_id.trim(),
+                client_id: entraConfig.client_id.trim(),
+                client_secret: entraConfig.client_secret,
+              },
+            }),
         dry_run: true,
       }).unwrap();
 
@@ -182,10 +155,9 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
         config_name: entraConfig.config_name,
         description: entraConfig.description,
         entra_config: {
-          workspace_id: entraConfig.workspace_id,
-          client_id: entraConfig.client_id,
+          workspace_id: entraConfig.workspace_id.trim(),
+          client_id: entraConfig.client_id.trim(),
           client_secret: entraConfig.client_secret,
-          skip_verify: entraConfig.skip_verify,
         },
         is_active: true,
       };
@@ -213,7 +185,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
         entraConfig.config_name.trim() &&
         entraConfig.workspace_id.trim() &&
         entraConfig.client_id.trim() &&
-        entraConfig.client_secret.trim()
+        (isEditing || entraConfig.client_secret.trim())
       );
     }
     if (currentStepIndex === 1) {
@@ -257,7 +229,7 @@ export function EntraSyncInlineForm({ onClose, onSuccess, editConfig }: EntraSyn
                 <h3 className="text-base font-semibold">Entra ID Configuration</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Configure your Microsoft Entra ID (Azure AD) connection</p>
               </div>
-              <EntraConfigForm config={entraConfig} onChange={setEntraConfig} errors={errors} />
+              <EntraConfigForm config={entraConfig} onChange={setEntraConfig} errors={errors} isEditing={isEditing} />
             </div>
           )}
 

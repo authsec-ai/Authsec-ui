@@ -1152,7 +1152,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           // What covers the canvas's right edge: the selection card, or — when the
           // evidence drawer floats over the canvas rather than beside it — the drawer.
           // A narrow window's drawer is modal and covers everything; nothing is panned for it.
-          rightInset={card && !evidenceOpen ? 344 : evidenceOpen && !inline && !narrow ? inspectorWidth : 0}
+          rightInset={card && !evidenceOpen ? 384 : evidenceOpen && !inline && !narrow ? inspectorWidth : 0}
           expanded={expanded}
           showEdgeLabels={showEdgeLabels}
           revealToken={revealToken}
@@ -1161,8 +1161,12 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           onApi={onApi}
         />
         {card && !evidenceOpen ? (
+          // The card runs the canvas's full height and scrolls inside itself.
+          // `inset-y-3` gives this overlay a definite height; `h-full` passes it
+          // down so the card's `h-full`/`overflow-y-auto` resolves against a
+          // real pixel height instead of `height:auto`.
           <div className="pointer-events-none absolute inset-y-3 right-3 flex items-start">
-            <div className="pointer-events-auto max-h-full">
+            <div className="pointer-events-auto flex h-full min-h-0 flex-col">
               <SelectionCard subject={card} edges={visual.edges} nodes={model.nodes} rootAccountId={rootAccountId} actions={cardActions} />
             </div>
           </div>

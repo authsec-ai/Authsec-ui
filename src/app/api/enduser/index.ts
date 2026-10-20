@@ -5,7 +5,4 @@
  * These require AuthMiddleware (user context extracted from JWT).
  */
 
-export * from './rolesApi';
-export * from './permissionsApi';
-export * from './resourcesApi';
 export * from './usersApi';

@@ -22,9 +22,6 @@ import {
   type RestrictionRow,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
-import { DrawerSection } from "@/components/console/detail";
-import { CardContent } from "@/components/ui/card";
-import { TableCard } from "@/theme/components/cards";
 import { cn } from "@/lib/utils";
 
 import { classifyGraphError } from "../shared/graphErrors";
@@ -34,7 +31,7 @@ import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { POLICY_KIND_LABEL, statementLabel } from "../shared/labels";
 import { ClaimFacts } from "../shared/components/ClaimFacts";
 import { ActionList } from "../shared/components/ActionList";
-import { ClaimRow } from "../shared/components/Panel";
+import { ClaimRow, Panel } from "../shared/components/Panel";
 import { CursorPager } from "../shared/components/CursorPager";
 import { GraphStatePanel } from "../shared/components/GraphStatePanel";
 import { IdentityName } from "../shared/components/IdentityName";
@@ -58,9 +55,8 @@ function Restrictions({
 }) {
   if (!rows.length) return null;
   return (
-    <DrawerSection label={label}>
-      <p className="mb-2 text-xs text-(--color-text-muted)">{note}</p>
-      <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
+    <Panel title={label} description={note} flush>
+      <ul className="divide-y divide-(--color-border-subtle)">
         {rows.map((r) => (
           <li key={r.statement.ref} className="space-y-1.5 px-4 py-3">
             <p className="text-[13px]">
@@ -77,8 +73,10 @@ function Restrictions({
           </li>
         ))}
       </ul>
-      {more ? <p className="mt-2 text-xs text-(--color-text-muted)">More statements do this than are listed here.</p> : null}
-    </DrawerSection>
+      {more ? (
+        <p className="border-t border-(--color-border-subtle) px-4 py-2 text-xs text-(--color-text-muted)">More statements do this than are listed here.</p>
+      ) : null}
+    </Panel>
   );
 }
 
@@ -109,18 +107,26 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
 
   let access: ReactNode;
   if (view.kind === "loading") {
-    access = <div className="h-24 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading" />;
+    access = (
+      <div className="px-4 py-3">
+        <div className="h-24 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading" />
+      </div>
+    );
   } else if (view.kind === "failed") {
-    access = <GraphStatePanel failure={view.failure} subject="access" onRetry={() => void q.refetch()} onRefresh={refresh} />;
+    access = (
+      <div className="px-4 py-3">
+        <GraphStatePanel failure={view.failure} subject="access" onRetry={() => void q.refetch()} onRefresh={refresh} />
+      </div>
+    );
   } else if (!view.rows.length && !view.footerFailure) {
     access = (
-      <p className="text-sm text-(--color-text-muted)">
-        {emptyGiven("No declared access names this as a target.", q.currentData?.meta.coverage)}
+      <p className="px-4 py-3 text-sm text-(--color-text-muted)">
+        {emptyGiven("No identity has been given access to this.", q.currentData?.meta.coverage)}
       </p>
     );
   } else {
     access = (
-      <div className="rounded-md border border-(--color-border-subtle)">
+      <>
         <ul className={cn("divide-y divide-(--color-border-subtle)", view.dim && "opacity-60")}>
           {view.rows.map((a) => {
             const path = objectPath(a.holder.ref);
@@ -154,14 +160,14 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
                     )}
                   </p>
                 ) : null}
-                <div className="space-y-1 rounded-md border border-(--color-border-subtle) bg-(--color-surface-subtle)/40 px-3 py-2">
+                <div className="space-y-1.5">
                   {a.statement.actions.length ? <ActionList actions={a.statement.actions} /> : null}
                   <p className="text-xs text-(--color-text-muted)">
                     Granted by <span className="font-medium text-(--color-text)">{a.policy.name}</span> · {POLICY_KIND_LABEL[a.policy.kind]} policy,{" "}
                     {statementLabel(a.statement)}
                   </p>
                   {a.statement.conditional ? (
-                    <p className="text-xs text-(--color-warning-text)">The statement has conditions, which were not evaluated.</p>
+                    <p className="text-xs text-(--color-warning-text)">This rule only applies when extra conditions are met. AuthSec has not checked them.</p>
                   ) : null}
                 </div>
                 {a.via_group ? (
@@ -182,34 +188,34 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
           onRefresh={refresh}
           previousPage={view.previousPage}
         />
-      </div>
+      </>
     );
   }
 
   return (
-    <TableCard>
-      <CardContent className="space-y-6">
-        {q.currentData?.meta.coverage?.length ? (
-          <CoverageSummary subject="holders" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
-        ) : null}
-        <DrawerSection label="Granted by declared access">{access}</DrawerSection>
-        {whole ? (
-          <>
-            <Restrictions
-              label="Excluded by (NotResource)"
-              rows={whole.excluded_by}
-              more={whole.excluded_by_more}
-              note="These Allow statements grant every resource EXCEPT this one. They exclude it; they do not grant it."
-            />
-            <Restrictions
-              label="Deny statements naming it"
-              rows={whole.deny_statements_naming}
-              more={whole.deny_statements_naming_more}
-              note="A Deny may block what the grants above declare. Restrictions are listed, not evaluated."
-            />
-          </>
-        ) : null}
-      </CardContent>
-    </TableCard>
+    <div className="space-y-4">
+      {q.currentData?.meta.coverage?.length ? (
+        <CoverageSummary subject="holders" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
+      ) : null}
+      <Panel title="Who is allowed to use it" flush>
+        {access}
+      </Panel>
+      {whole ? (
+        <>
+          <Restrictions
+            label="Excluded by (NotResource)"
+            rows={whole.excluded_by}
+            more={whole.excluded_by_more}
+            note="These Allow statements grant every resource EXCEPT this one. They exclude it; they do not grant it."
+          />
+          <Restrictions
+            label="Deny statements naming it"
+            rows={whole.deny_statements_naming}
+            more={whole.deny_statements_naming_more}
+            note="A Deny rule may block some of the access listed above. AuthSec lists these rules but has not worked out their effect."
+          />
+        </>
+      ) : null}
+    </div>
   );
 }

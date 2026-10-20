@@ -71,9 +71,9 @@ function PrincipalBody({ r, from }: { r: UsedByPrincipal; from: From }) {
       facts={<ClaimFacts claim={r.claim} basis={r.basis} state={r.state} confirmedAt={r.last_confirmed_at} />}
     >
       <p className="text-xs leading-relaxed text-(--color-text-muted)">
-        Named by this role's trust policy{r.statement.sid ? ` (statement ${r.statement.sid})` : ""}. The caller's own
-        sts:AssumeRole permission was not checked.
-        {r.conditions ? " The trust policy sets conditions on it, which were not evaluated." : ""}
+        This role's trust rule{r.statement.sid ? ` (${r.statement.sid})` : ""} allows this to borrow the role. AuthSec did not check whether it also
+        has permission to ask for it.
+        {r.conditions ? " The rule also has extra conditions, which AuthSec has not checked." : ""}
       </p>
     </ClaimRow>
   );
@@ -140,14 +140,14 @@ export function IdentityUsedByTab({ ws, identity }: { ws: string; identity: Iden
                 empty={empty("No workload is directly bound to this identity.")}
               />
               <SectionList
-                label="Trusted principals (incoming)"
+                label="Who can use this role"
                 first={data.principals ?? none<UsedByPrincipal>()}
                 loadMore={more("principals")}
                 onStale={onStale}
               onRefresh={refresh}
                 itemKey={(r) => r.claim}
                 render={(r) => <PrincipalBody r={r} from={from} />}
-                empty={empty("Its trust policy names no principal we could resolve. Declared trust only, not a proven assumption.")}
+                empty={empty("This role does not name anyone we could identify as allowed to use it.")}
               />
               {data.principals?.limitations?.map((code) => (
                 <p key={code} className="text-xs text-(--color-text-muted)">

@@ -30,9 +30,6 @@ interface TOTPAuthComponentProps {
  * Shown when: first_login: false, currentStep: "authentication", and using TOTP
  */
 export function TOTPAuthComponent({ 
-  contextType,
-  email,
-  workspaceId,
   onSuccess,
   onError,
   onAuthenticate

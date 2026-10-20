@@ -1158,11 +1158,38 @@ export type GraphFeature =
   | "classification"
   | "coverage";
 
+/**
+ * The `policy` block of /capabilities (SPEC-iga-phase3-policy.md §4.3): the
+ * IGA_POLICY gate, one flag per feature with a reason for every false one, and
+ * provider support. Optional: a backend that predates Phase 3 omits it.
+ */
+export interface PolicyCapabilities {
+  state: "on" | "off" | "misconfigured";
+  reason: string | null;
+  schema_head: string | null;
+  providers: Record<string, "supported" | "not_supported">;
+  provider_reasons?: Record<string, string>;
+  findings: boolean;
+  proposals: boolean;
+  export: boolean;
+  iac: boolean;
+  enforcement: boolean;
+  slack: boolean;
+  /**
+   * Block or allow roles on a resource for a time. Absent while IGA_POLICY_R2 is
+   * off or on a backend without it. The shipped backend sends `{available, reason}`;
+   * a boolean is accepted too so an older build (staging) still reads correctly.
+   */
+  access_policies?: { available: boolean; reason?: string | null } | boolean;
+  reasons: Record<string, string>;
+}
+
 export interface Capabilities {
   graph_projection: "on" | "off" | "misconfigured";
   reason: string | null;
   features: Partial<Record<GraphFeature, boolean>>;
   schema_head: string | null;
+  policy?: PolicyCapabilities;
 }
 
 /* --------------------------------- args ---------------------------------- */

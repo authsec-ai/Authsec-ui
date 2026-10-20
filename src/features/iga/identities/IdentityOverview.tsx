@@ -9,7 +9,6 @@ import {
   useGetGraphIdentityPermissionsQuery,
   useGetGraphIdentityUsedByQuery,
   type GraphCoverageGap,
-  type GraphRef,
   type IdentityDetail,
   type IdentityPermissions,
   type IdentityUsedBy,
@@ -17,7 +16,7 @@ import {
 import { useAppDispatch } from "@/app/hooks";
 import { DecisionBanner, StatusBadge } from "@/components/console/status";
 
-import { discoveryHref } from "../discovery/urlState";
+import { IdentityPolicySection } from "../policy/DiscoveryPolicySection";
 import { isFullAdmin } from "../shared/access";
 import { classifyGraphError } from "../shared/graphErrors";
 import {
@@ -26,7 +25,7 @@ import {
   IDENTITY_KIND_LABEL,
   RESOURCE_KIND_LABEL,
   RUNTIME_LABEL,
-  accountWithId,
+  accountLabel,
   agoText,
   countText,
   dayText,
@@ -38,7 +37,8 @@ import { shortResourceName } from "../shared/sketch";
 import { DeclaredExamples, type ExampleLine } from "../shared/components/DeclaredExamples";
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
-import { CopyValue, Fact, Facts, Meta, Panel } from "../shared/components/Panel";
+import { CopyValue, Fact, Facts, Meta, Panel, TechnicalDetails } from "../shared/components/Panel";
+import { EvidenceSummary } from "../evidence/EvidenceSummary";
 import { Timestamp } from "../shared/components/Timestamp";
 
 const SKETCH_SIDE = 3;
@@ -138,7 +138,7 @@ function TrustedPrincipals({ i, data, failure, pending, retry, refresh }: {
   const sec = data.principals;
   const from = { ref: i.ref, name: i.name };
   if (!sec?.items.length)
-    return <span className="text-(--color-text-muted)">Its trust policy names no principal we could resolve.</span>;
+    return <span className="text-(--color-text-muted)">This role does not name anyone we could identify as allowed to use it.</span>;
   const shown = sec.items.slice(0, 3);
   // "n more" only with an exact total; a cursor alone is "More available".
   const rest = sec.total_known && sec.total !== undefined ? sec.total - shown.length : null;
@@ -160,7 +160,7 @@ function TrustedPrincipals({ i, data, failure, pending, retry, refresh }: {
         );
       })}
       {rest && rest > 0 ? <span className="text-xs text-(--color-text-muted)">{rest} more</span> : sec.next_cursor || sec.items.length > shown.length ? <span className="text-xs text-(--color-text-muted)">More available</span> : null}
-      <Meta>Trusted to assume this role (declared). The caller's own permission was not checked.</Meta>
+      <Meta>These are allowed to borrow this role, as set up in AWS. AuthSec did not check whether they also have permission to ask for it.</Meta>
     </span>
   );
 }
@@ -183,8 +183,6 @@ export function IdentityOverview({
 }) {
   const kind = IDENTITY_KIND_LABEL[i.kind];
   const attrs = i.provider_attrs;
-  const connector = i.sources[0]?.integration;
-  const connectorId = connector ? refId(connector as GraphRef) : null;
   const tags = Object.entries(attrs.tags ?? {});
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
@@ -253,12 +251,14 @@ export function IdentityOverview({
 
       {/* Panels flow into two balanced columns on a wide screen. */}
       <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+          {/* Policy: only an IAM role can be right-sized (SPEC-iga-phase3-policy.md §9.4). */}
+          {i.kind === "iam_role" && !frozen && i.lifecycle !== "retired" ? <IdentityPolicySection ws={ws} identityId={id} /> : null}
           <Panel title="What it is">
             <Facts>
               <Fact label="Kind">{kind}</Fact>
               <Fact label="Account">{
                   <>
-                    {accountWithId(i.account) ?? "Not known"}
+                    {i.account ? accountLabel(i.account) : "Not known"}
                     {accountCoverageNote(gaps, i.account?.id) ? <span className="block text-xs text-(--color-warning-text)">Coverage partial</span> : null}
                   </>
                 }</Fact>
@@ -274,7 +274,7 @@ export function IdentityOverview({
                   )
                 }</Fact>
               {i.kind === "iam_role" ? (
-                <Fact label="Trusted principals (incoming)">
+                <Fact label="Who can use this role">
                   {frozen ? (
                     <span className="text-(--color-text-muted)">Not loaded for a retired object.</span>
                   ) : (
@@ -289,18 +289,23 @@ export function IdentityOverview({
                   )}
                 </Fact>
               ) : null}
-              <Fact label="ARN"><CopyValue value={i.arn} what="ARN" /></Fact>
             </Facts>
+            <TechnicalDetails>
+              <Facts>
+                {i.account && i.account.label !== i.account.id ? <Fact label="Account number"><CopyValue value={i.account.id} what="Account number" /></Fact> : null}
+                <Fact label="ARN (the unique AWS ID)"><CopyValue value={i.arn} what="ARN" /></Fact>
+              </Facts>
+            </TechnicalDetails>
           </Panel>
 
           {frozen ? null : permFailure ? (
-            <Panel title="Declared permissions — examples">
+            <Panel title="What it is allowed to do (examples)">
               <p className="text-[13px]">
                 <InlineState failure={permFailure} subject="declared permissions" onRetry={() => void permQ.refetch()} onRefresh={refresh} />
               </p>
             </Panel>
           ) : !perms ? (
-            <Panel title="Declared permissions — examples">
+            <Panel title="What it is allowed to do (examples)">
               <p className="text-[13px] text-(--color-text-muted)">Loading…</p>
             </Panel>
           ) : (
@@ -314,11 +319,11 @@ export function IdentityOverview({
 
           {/* A permissions boundary is stated on the declared permission it limits, not here. */}
           {attrs.trust_has_deny || attrs.trust_has_not_principal ? (
-            <Panel title="Trust policy restrictions (listed, not evaluated)">
+            <Panel title="Extra rules on who can use this role (not checked)">
               <ul className="list-disc space-y-1 pl-5 text-sm">
-                {attrs.trust_has_deny ? <li>Its trust policy has a Deny statement, which may exclude some principals.</li> : null}
+                {attrs.trust_has_deny ? <li>The role has a Deny rule, which may block some of the people or services listed.</li> : null}
                 {attrs.trust_has_not_principal ? (
-                  <li>Its trust policy uses NotPrincipal, so who it admits could not be resolved.</li>
+                  <li>The role has a rule saying who is NOT allowed, so AuthSec cannot list who is allowed.</li>
                 ) : null}
               </ul>
             </Panel>
@@ -331,7 +336,7 @@ export function IdentityOverview({
                   <li key={c.key_id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
                     <span className="font-mono text-xs">{c.key_id}</span>
                     <StatusBadge tone={c.status === "Active" ? "neutral" : "warning"}>{c.status}</StatusBadge>
-                    <span className="text-xs text-(--color-text-muted)">Created {dayText(c.created_at)}</span>
+                    <span className="text-xs text-(--color-text-muted)">{c.created_at ? `Created ${dayText(c.created_at)}` : "Creation date not reported"}</span>
                     <span className="ml-auto text-xs text-(--color-text-muted)">
                       {c.last_used_at
                         ? `Last authenticated attempt ${agoText(c.last_used_at)}`
@@ -344,21 +349,11 @@ export function IdentityOverview({
             </Panel>
           ) : null}
 
-          <Panel title="How we know"
-            actions={
-              <Link
-                to={discoveryHref({ provider: "aws", type: "identities", view: "latest", source: connectorId ?? undefined })}
-                className="font-medium text-(--color-primary-text) hover:underline"
-              >
-                Latest collected
-              </Link>
-            }
-          >
-            <Facts>
+          <EvidenceSummary objectRef={i.ref}>
               <Fact label="First seen">{dayText(i.first_seen_at)}</Fact>
-              <Fact label="Last confirmed"><Timestamp iso={i.last_confirmed_at} /></Fact>
-              {publishedAt ? <Fact label="Published"><Timestamp iso={publishedAt} /></Fact> : null}
-              <Fact label="Identity continuity">{
+              <Fact label="Last seen in a scan"><Timestamp iso={i.last_confirmed_at} /></Fact>
+              {publishedAt ? <Fact label="Graph updated"><Timestamp iso={publishedAt} /></Fact> : null}
+              <Fact label="Tracked by">{
                   i.continuity === "immutable"
                     ? `Tracked by the id AWS assigns at creation${i.immutable_key ? ` (${i.immutable_key})` : ""}, so an ${kind} deleted and recreated under the same name is a new identity.`
                     : "Same name only. AWS gives this identity no creation id we can read, so one recreated under this name looks the same to us."
@@ -374,8 +369,7 @@ export function IdentityOverview({
                     </span>
                   }</Fact>
               ) : null}
-            </Facts>
-          </Panel>
+          </EvidenceSummary>
       </div>
     </div>
   );

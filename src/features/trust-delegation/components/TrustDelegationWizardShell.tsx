@@ -14,7 +14,7 @@ export interface TrustDelegationWizardStep {
 interface TrustDelegationWizardShellProps {
   title: string;
   description: string;
-  steps: TrustDelegationWizardStep[];
+  steps: readonly TrustDelegationWizardStep[];
   currentStepIndex: number;
   onClose: () => void;
   onBack: () => void;

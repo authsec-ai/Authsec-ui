@@ -2,8 +2,6 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 
 export interface EntraConfigFormData {
   config_name: string;
@@ -11,7 +9,6 @@ export interface EntraConfigFormData {
   workspace_id: string;
   client_id: string;
   client_secret: string;
-  skip_verify?: boolean;
 }
 
 interface EntraConfigFormProps {
@@ -20,14 +17,17 @@ interface EntraConfigFormProps {
   touched?: Partial<Record<keyof EntraConfigFormData, boolean>>;
   onBlur?: (field: keyof EntraConfigFormData) => void;
   errors?: Partial<Record<keyof EntraConfigFormData, string>>;
+  /** Editing a stored configuration: the client secret is write-only. */
+  isEditing?: boolean;
 }
 
 export function EntraConfigForm({
   config,
   onChange,
-  touched = {},
+  touched,
   onBlur,
   errors = {},
+  isEditing = false,
 }: EntraConfigFormProps) {
   const updateField = <K extends keyof EntraConfigFormData>(
     field: K,
@@ -36,7 +36,8 @@ export function EntraConfigForm({
     onChange({ ...config, [field]: value });
   };
 
-  const isErr = (k: keyof EntraConfigFormData) => touched[k] && errors[k];
+  // Without touched tracking, a field's error shows as soon as it is set.
+  const isErr = (k: keyof EntraConfigFormData) => (!touched || touched[k]) && errors[k];
 
   return (
     <div className="space-y-3">
@@ -77,7 +78,7 @@ export function EntraConfigForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label htmlFor="entra-tenant-id" className="text-sm">
-            Tenant ID <span className="text-destructive">*</span>
+            Directory (tenant) ID <span className="text-destructive">*</span>
           </Label>
           <Input
             id="entra-tenant-id"
@@ -90,7 +91,7 @@ export function EntraConfigForm({
             className="h-9"
           />
           <p className="text-[11px] text-muted-foreground">
-            Azure tenant ID (Directory ID)
+            Entra → App registrations → your app → Overview
           </p>
           {isErr("workspace_id") && (
             <p className="text-xs text-destructive">{errors.workspace_id}</p>
@@ -99,10 +100,13 @@ export function EntraConfigForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="entra-client-id" className="text-sm">
-            Client ID <span className="text-destructive">*</span>
+            Application (client) ID <span className="text-destructive">*</span>
           </Label>
           <Input
             id="entra-client-id"
+            name="entra-application-id"
+            data-1p-ignore
+            data-lpignore="true"
             value={config.client_id}
             onChange={(e) => updateField("client_id", e.target.value)}
             onBlur={() => onBlur?.("client_id")}
@@ -112,7 +116,7 @@ export function EntraConfigForm({
             className="h-9"
           />
           <p className="text-[11px] text-muted-foreground">
-            Application (client) ID
+            Same Overview page as the tenant ID
           </p>
           {isErr("client_id") && (
             <p className="text-xs text-destructive">{errors.client_id}</p>
@@ -123,38 +127,30 @@ export function EntraConfigForm({
       {/* Client Secret - full width */}
       <div className="space-y-1.5">
         <Label htmlFor="entra-client-secret" className="text-sm">
-          Client Secret <span className="text-destructive">*</span>
+          Client secret value {!isEditing && <span className="text-destructive">*</span>}
         </Label>
         <PasswordInput
           id="entra-client-secret"
+          name="entra-client-secret"
+          data-1p-ignore
+          data-lpignore="true"
           value={config.client_secret}
           onChange={(e) => updateField("client_secret", e.target.value)}
           onBlur={() => onBlur?.("client_secret")}
           aria-invalid={!!isErr("client_secret")}
-          placeholder="Enter your application client secret"
-          autoComplete="off"
+          placeholder={isEditing ? "Leave empty to keep the stored secret" : "Certificates & secrets → Value"}
+          autoComplete="new-password"
           className="h-9"
         />
         <p className="text-[11px] text-muted-foreground">
-          Client secret value (not the secret ID)
+          The Value column, not the Secret ID. The app registration needs the
+          Microsoft Graph application permission User.Read.All with admin
+          consent. This can be a different app registration from the one used
+          for &ldquo;Sign in with Microsoft&rdquo;.
         </p>
         {isErr("client_secret") && (
           <p className="text-xs text-destructive">{errors.client_secret}</p>
         )}
-      </div>
-
-      {/* Skip Verify Option */}
-      <div className="flex items-center space-x-2 pt-2">
-        <Checkbox
-          id="skip-verify"
-          checked={config.skip_verify ?? false}
-          onCheckedChange={(checked) =>
-            updateField("skip_verify", checked as boolean)
-          }
-        />
-        <Label htmlFor="skip-verify" className="text-sm font-normal cursor-pointer">
-          Skip Certificate Verification <span className="text-[11px] text-muted-foreground">(testing only)</span>
-        </Label>
       </div>
     </div>
   );

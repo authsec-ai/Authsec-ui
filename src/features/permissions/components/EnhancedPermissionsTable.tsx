@@ -13,8 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { format } from "date-fns";
-import { Trash2, Shield, Database, Key, Calendar, MoreHorizontal } from "lucide-react";
+import { Trash2, Shield, Key, MoreHorizontal } from "lucide-react";
 import type { Permission } from "@/app/api/permissionsApi";
 import { useDeletePermissionsMutation } from "@/app/api/permissionsApi";
 import { toast } from "@/lib/toast";

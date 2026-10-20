@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
-import { X, Users, UserPlus, Plus } from "lucide-react";
-import type { RoleFormData, User as UserType, Group } from "../types";
+import { X, Users, UserPlus } from "lucide-react";
+import type { RoleFormData } from "../types";
 import { mockUsers, mockGroups } from "../utils/mock-data";
 
 interface AssignmentsPanelProps {

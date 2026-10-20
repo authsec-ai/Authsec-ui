@@ -304,12 +304,48 @@ export const IDENTITY_KIND_LABEL: Record<IdentitySummary["kind"], string> = {
   k8s_service_account: "Kubernetes service account",
 };
 
+/** One plain sentence per kind, for a reader who does not know the AWS word. */
+export const IDENTITY_KIND_HINT: Record<IdentitySummary["kind"], string> = {
+  iam_role: "An IAM role is a set of AWS permissions that an app or service can borrow. It has no password of its own.",
+  iam_user: "An IAM user is a person or program with its own AWS login.",
+  iam_group: "An IAM group is a list of users who share the same permissions.",
+  external_principal: "Someone or something outside this AWS account that a role trusts.",
+  aws_account: "A whole AWS account.",
+  aws_principal: "An AWS user or role named in a trust rule.",
+  aws_service: "An AWS service (such as Lambda) acting on its own.",
+  oidc: "A sign-in provider that uses the OIDC standard.",
+  saml: "A sign-in provider that uses the SAML standard.",
+  k8s_service_account: "The login a Kubernetes app uses.",
+};
+
+/** "AWS account Payments" or "AWS account 429418377036": says what the name or number is. */
+export function accountPhrase(account: GraphAccount | null | undefined): string {
+  if (!account) return "an unknown AWS account";
+  return `AWS account ${accountLabel(account)}`;
+}
+
 /** §2.14.12: an ARN in a policy is not proof a resource exists. */
 export const RESOURCE_KIND_LABEL: Record<ResourceKind, string> = {
   exact: "Exact reference",
   selector: "Selector",
   external: "External or unresolved",
 };
+
+const TYPE_WORDS: Record<string, string> = {
+  iam: "IAM", s3: "S3", ec2: "EC2", ecs: "ECS", eks: "EKS", ecr: "ECR", kms: "KMS", sqs: "SQS", sns: "SNS",
+  rds: "RDS", vpc: "VPC", elb: "ELB", ssm: "SSM", sts: "STS", api: "API", arn: "ARN",
+  dynamodb: "DynamoDB", cloudwatch: "CloudWatch", cloudtrail: "CloudTrail", lambda: "Lambda",
+  secretsmanager: "Secrets Manager", bedrock: "Bedrock", agentcore: "AgentCore",
+};
+
+/** "dynamodb_table" -> "DynamoDB table", "iam_role" -> "IAM role": a provider type as a person writes it. */
+export function resourceTypeLabel(type: string | null | undefined): string {
+  if (!type) return "";
+  const words = type.split(/[_\s]+/).filter(Boolean);
+  return words
+    .map((w, i) => TYPE_WORDS[w.toLowerCase()] ?? (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()))
+    .join(" ");
+}
 
 export const RESOURCE_KIND_NOTE: Record<ResourceKind, string> = {
   exact: "Named exactly by a policy statement. Not independently discovered — we have not confirmed it exists.",

@@ -1,19 +1,12 @@
 import {
   ArrowLeftRight,
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
-  CreditCard,
   LogOut,
   Radar,
-  Sparkles,
-  Building,
-  Users,
-  Settings,
-  Plus,
   Mic,
 } from "lucide-react";
 import { useAuth } from "@/auth/context/AuthContext";
+import { WorkspaceSwitcherItems } from "@/components/workspace-switcher";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
 
@@ -48,14 +41,13 @@ export function NavUser({
   const navigate = useNavigate();
   const location = useLocation();
   const isIgaConsole = location.pathname.startsWith("/iga");
-  const { user: authUser, currentProject, projects, signOut, switchProject } = useAuth();
+  const { user: authUser, signOut } = useAuth();
   const { isAdmin } = useRbacAudience();
 
   const handleSignOut = async () => {
     await signOut();
   };
 
-  const displayUser = authUser || user;
   const displayName = authUser
     ? authUser.first_name && authUser.last_name
       ? `${authUser.first_name} ${authUser.last_name}`
@@ -116,64 +108,7 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
 
-            {/* Project Section */}
-            {currentProject && (
-              <>
-                <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-foreground">
-                  Current Project
-                </DropdownMenuLabel>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem className="flex items-center gap-2">
-                    <Building className="h-4 w-4" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{currentProject.name}</span>
-                      <span className="text-xs text-foreground">{currentProject.role}</span>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                {projects.length > 1 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-foreground">
-                      Switch Project
-                    </DropdownMenuLabel>
-                    <DropdownMenuGroup>
-                      {projects
-                        .filter((p) => p.id !== currentProject.id)
-                        .map((project) => (
-                          <DropdownMenuItem
-                            key={project.id}
-                            onClick={async () => await switchProject(project.id)}
-                            className="flex items-center gap-2"
-                          >
-                            <Building className="h-4 w-4" />
-                            <div className="flex flex-col">
-                              <span>{project.name}</span>
-                              <span className="text-xs text-foreground">
-                                {project.role}
-                              </span>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuGroup>
-                  </>
-                )}
-
-                {/* Create New Project - Commented out since projects are created automatically */}
-                {/* <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => navigate("/admin/create-workspace")}
-                    className="flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Create New Project</span>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup> */}
-                <DropdownMenuSeparator />
-              </>
-            )}
+            <WorkspaceSwitcherItems />
 
            
             {isAdmin && (

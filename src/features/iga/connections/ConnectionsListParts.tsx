@@ -23,101 +23,100 @@ import { ProviderGlyph } from "./ProviderGlyph";
 /** The four tiles of the design. "Needs attention" also counts partial coverage. */
 export type StatusTileKey = "connected" | "attention" | "running" | "revoked";
 
-const TILE_DOT: Record<StatusTileKey, string> = {
-  connected: "bg-(--color-success)",
-  attention: "bg-(--color-warning)",
-  running: "bg-(--color-primary)",
-  revoked: "bg-(--color-text-subtle)",
-};
+/* --------------------------------- table toolbar --------------------------------- */
 
-export function StatusTiles({
-  tiles,
-  active,
-  onPick,
+/** Same look as the policy list's Block / Allow buttons, so every list filters the same way. */
+export const PILL_BUTTON =
+  "inline-flex h-8 items-center rounded-md border px-2.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)";
+export const PILL_OFF =
+  "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text)";
+export const PILL_ON = "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)";
+
+/** One choice out of several, as a row of buttons. */
+export function FilterPills<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
 }: {
-  tiles: { key: StatusTileKey; label: string; count: number }[];
-  active: StatusTileKey | null;
-  onPick: (key: StatusTileKey | null) => void;
+  label: string;
+  value: T;
+  options: { key: T; label: string; count?: number }[];
+  onChange: (key: T) => void;
 }) {
   return (
-    <div role="group" aria-label="Filter by status" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {tiles.map((t) => {
-        const on = active === t.key;
-        // A zero is not news: its number and dot go quiet so the tiles that
-        // need attention are the ones the eye lands on.
-        const zero = t.count === 0;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onPick(on ? null : t.key)}
-            className={cn(
-              "flex min-h-11 flex-col items-start gap-2 rounded-lg border px-4 py-3 text-left transition-colors",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)",
-              on
-                ? "border-(--color-primary) bg-(--color-primary-soft)"
-                : "border-(--color-border-subtle) bg-(--color-surface-raised) hover:border-(--color-border-strong) hover:bg-(--color-surface-subtle)/50",
-            )}
-          >
-            <span className="flex items-center gap-2 text-[13px] text-(--color-text-secondary)">
-              <span aria-hidden="true" className={cn("size-2 rounded-full", zero ? "bg-(--color-border-strong)" : TILE_DOT[t.key])} />
-              {t.label}
-            </span>
-            <span
-              className={cn(
-                "text-2xl font-semibold leading-none tracking-tight tabular-nums",
-                zero ? "font-normal text-(--color-text-muted)" : "text-(--color-text)",
-              )}
-            >
-              {t.count}
-            </span>
-          </button>
-        );
-      })}
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-0.5 text-[13px] text-(--color-text-muted)">{label}</span>
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="radio"
+          aria-checked={value === o.key}
+          onClick={() => onChange(o.key)}
+          className={`${PILL_BUTTON} ${value === o.key ? PILL_ON : PILL_OFF}`}
+        >
+          {o.label}
+          {o.count !== undefined ? <span className="ml-1.5 tabular-nums opacity-70">{o.count}</span> : null}
+        </button>
+      ))}
     </div>
   );
 }
 
-/* --------------------------------- table toolbar --------------------------------- */
-
 export function TableToolbar({
+  controls = true,
+  showSearch = true,
   search,
   onSearch,
   typeControl,
   filtered,
   onClear,
   countLabel,
+  extra,
 }: {
+  /** false: only the count, for a list too short to search. */
+  controls?: boolean;
+  /** The search box only earns its place on a longer list. */
+  showSearch?: boolean;
   search: string;
   onSearch: (v: string) => void;
   typeControl: ReactNode;
   filtered: boolean;
   onClear: () => void;
   countLabel: string;
+  /** Sits by the count, whatever `controls` says: the "Show revoked" switch. */
+  extra?: ReactNode;
 }) {
   return (
     <div data-compact-toolbar className="flex flex-wrap items-center gap-3 border-b border-(--color-border-subtle) px-4 py-3">
-      <label className="relative flex min-w-[220px] max-w-[360px] flex-1 basis-[260px] items-center">
-        <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search name or ID"
-          aria-label="Search connections"
-          className="h-9 pl-9"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
-      {typeControl}
+      {controls ? (
+        <>
+          {showSearch ? (
+          <label className="relative flex min-w-[220px] max-w-[360px] flex-1 basis-[260px] items-center">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search name or ID"
+              aria-label="Search connections"
+              className="h-9 pl-9"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          ) : null}
+          {typeControl}
+        </>
+      ) : null}
       <span className="flex-1" />
       {filtered ? (
         <button type="button" onClick={onClear} className="h-8 rounded-md px-2.5 text-[13px] font-medium text-(--color-primary-text) hover:bg-(--color-surface-subtle)">
           Clear filters
         </button>
       ) : null}
+      {extra}
       <span className="text-[13px] text-(--color-text-muted) tabular-nums">{countLabel}</span>
     </div>
   );

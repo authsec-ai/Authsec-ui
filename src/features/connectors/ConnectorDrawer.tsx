@@ -1,3 +1,5 @@
+import { NotFoundState } from "@/components/shared/NotFoundState";
+import { isNotFoundError } from "@/lib/error-utils";
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "react-hot-toast";
@@ -110,7 +112,9 @@ export function ConnectorDrawer({
   const [newActionKey, setNewActionKey] = useState(ALL_ACTIONS);
   const [newConstraints, setNewConstraints] = useState("");
 
-  const { data, isLoading } = useGetConnectorQuery(connectorId ?? "", { skip: !connectorId });
+  const { data, isLoading, error: connectorError } = useGetConnectorQuery(connectorId ?? "", {
+    skip: !connectorId,
+  });
   const { data: providers } = useListConnectorProvidersQuery();
   const { data: assignments, isLoading: assignmentsLoading } = useListConnectorAssignmentsQuery(
     connectorId ?? "",
@@ -247,7 +251,13 @@ export function ConnectorDrawer({
         ariaTitle={connector?.name ?? "Connector"}
         ariaDescription="Connector details, access, actions, and usage."
       >
-        {isLoading || !connector ? (
+        {isNotFoundError(connectorError) ? (
+          <NotFoundState subject="connector" onBack={handleClose} backLabel="Close" />
+        ) : connectorError ? (
+          <div role="alert" className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            Couldn't load this connector.
+          </div>
+        ) : isLoading || !connector ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             Loading…
           </div>

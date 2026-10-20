@@ -31,7 +31,7 @@ import {
   PendingWord,
   StatusBlock,
 } from "./ConnectionParts";
-import { ConnectMoreSources, StatusTiles, TableToolbar, type StatusTileKey } from "./ConnectionsListParts";
+import { ConnectMoreSources, FilterPills, TableToolbar } from "./ConnectionsListParts";
 import {
   PROVIDERS,
   actionsOf,
@@ -41,41 +41,40 @@ import {
   hasFriendlyName,
   isConnectionProvider,
   isFilterKey,
+  statusFilterOf,
+  STATUS_FILTERS,
   lastScanText,
   providerWord,
   revokeWord,
   scanInFlight,
-  statusFilterOf,
   typeWord,
   type StatusFilterKey,
 } from "./connectionModel";
 import { useAdminAccess } from "./permissions";
 import { ProviderGlyph } from "./ProviderGlyph";
-import { InfoTip } from "../shared/components/InfoTip";
 import { TruncatedId } from "../shared/components/TruncatedId";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
 import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 
 const POLL_MS = 5_000;
 
+/** The scan, in the Last scan column: "Finished" is the usual case and goes unsaid. */
+function scanLine(c: Connection): string {
+  const text = lastScanText(c);
+  return c.provider !== "k8s" && c.scan.state === "finished" ? text.replace(/^Finished /, "") || "Finished" : text;
+}
+
+/** What the graph made of it. The revision counter is on the detail page, not here. */
+function graphLine(c: Connection): string {
+  const g = graphText(c);
+  if (c.graph.state === "published") return c.graph.published_at ? g.text.replace(/^Published/, "Graph updated") : "Graph updated";
+  return g.note ? `${g.text} · ${g.note}` : g.text;
+}
+
 /** What the search box matches: the name, the account/project/cluster id, the provider and the scope. */
 function searchText(c: Connection): string {
   return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
 }
-
-/** The design's four status tiles; partial coverage counts as needing attention. */
-const TILES: { key: StatusTileKey; label: string }[] = [
-  { key: "connected", label: "Connected" },
-  { key: "attention", label: "Needs attention" },
-  { key: "running", label: "Scanning" },
-  { key: "revoked", label: "Revoked" },
-];
-
-function tileOf(c: Connection): StatusTileKey | null {
-  const f = statusFilterOf(c);
-  return f === "partial" ? "attention" : f === "all" ? null : (f as StatusTileKey);
-}
-
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
@@ -187,15 +186,22 @@ export default function ConnectionsPage() {
   };
 
   // ── Rows ───────────────────────────────────────────────────────────────
-  // An old link's ?status=partial selects the tile it now belongs to.
-  const tile: StatusTileKey | null = status === "all" ? null : status === "partial" ? "attention" : (status as StatusTileKey);
+  // Revoked connections are history: hidden until asked for, or until the Status filter names them.
+  const showRevoked = searchParams.get("revoked") === "1";
+  const revokedCount = useMemo(() => all.filter((c) => statusFilterOf(c) === "revoked").length, [all]);
+  const hidingRevoked = status === "all" && !showRevoked;
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return all.filter((c) => (!type || c.provider === type) && (!tile || tileOf(c) === tile) && (!q || searchText(c).includes(q)));
-  }, [all, type, tile, search]);
+    return all.filter(
+      (c) =>
+        (!type || c.provider === type) &&
+        (!q || searchText(c).includes(q)) &&
+        (status === "all" ? showRevoked || statusFilterOf(c) !== "revoked" : statusFilterOf(c) === status),
+    );
+  }, [all, type, search, status, showRevoked]);
+  const inScope = hidingRevoked ? all.length - revokedCount : all.length;
 
   const filtered = !!search.trim() || type !== null || status !== "all";
-  const tiles = TILES.map((t) => ({ ...t, count: all.filter((c) => tileOf(c) === t.key).length }));
   const unconnected = PROVIDERS.filter((p) => !all.some((c) => c.provider === p));
   const clearFilters = () => setSearchParams({}, { replace: true });
 
@@ -245,23 +251,21 @@ export default function ConnectionsPage() {
         approxWidth: 200,
         // The scan, and under it what the graph made of it.
         cell: ({ row }) => {
-          const g = graphText(row.original);
           return (
             <div className="min-w-0 space-y-0.5 whitespace-normal">
-              <div className="text-[13px]">{lastScanText(row.original)}</div>
-              <div className="text-xs text-muted-foreground">{g.note ? `${g.text} · ${g.note}` : g.text}</div>
+              <div className="text-[13px]">{scanLine(row.original)}</div>
+              <div className="text-xs text-muted-foreground">{graphLine(row.original)}</div>
             </div>
           );
         },
-        detail: (c) => {
-          const g = graphText(c);
-          return `${lastScanText(c)} · ${g.note ? `${g.text} · ${g.note}` : g.text}`;
-        },
+        detail: (c) => `${scanLine(c)} · ${graphLine(c)}`,
       },
       {
+        // The id stays "coverage" so saved column choices keep working. The value is
+        // what was chosen to scan; what was actually read is the Coverage tab.
         id: "coverage",
-        header: "Coverage",
-        label: "Coverage",
+        header: "Scope",
+        label: "Scope",
         priority: 3,
         approxWidth: 150,
         cell: ({ row }) => <span className="block truncate text-[13px]">{row.original.scope_summary || "—"}</span>,
@@ -308,11 +312,20 @@ export default function ConnectionsPage() {
     [canAdminister, navigate, pending, run],
   );
 
+  const firstRun = query.isSuccess && all.length === 0;
+
   const emptyState = filtered ? (
     <div className="space-y-2 py-2">
       <p>No connections match these filters.</p>
       <Button variant="outline" size="sm" onClick={clearFilters}>
         Clear filters
+      </Button>
+    </div>
+  ) : all.length > 0 ? (
+    <div className="space-y-2 py-2">
+      <p>Every connection here has been revoked.</p>
+      <Button variant="outline" size="sm" onClick={() => setParam("revoked", "1")}>
+        Show revoked ({revokedCount})
       </Button>
     </div>
   ) : (
@@ -339,13 +352,8 @@ export default function ConnectionsPage() {
       title="Connections"
       description={
         <span className="inline-flex flex-wrap items-center gap-1">
-          Connect your AWS accounts, Google Cloud projects, Kubernetes clusters and GitHub organizations so AuthSec can
-          discover the identities, agents and permissions inside them.
-          <InfoTip label="What discovery reads">
-            Discovery is read-only. AuthSec reads metadata: identities, roles, policies and the workloads that use them. It
-            does not change anything in a connected source, and it does not read secret values or the data stored in your
-            resources.
-          </InfoTip>
+          Connect your cloud accounts, Kubernetes clusters, and GitHub organisations to AuthSec. Discover your AI agents, identify their access
+          permissions, and understand what they can access across your infrastructure.
         </span>
       }
       actions={
@@ -382,34 +390,60 @@ export default function ConnectionsPage() {
         onDismiss={dismiss}
       />
 
-      {/* Doubles as the status filter. */}
-      {/* Only from a list that loaded: never zeros while loading or after a failure. */}
-      {query.data ? <StatusTiles tiles={tiles} active={tile} onPick={(k) => setParam("status", k)} /> : null}
-
+      {firstRun ? (
+        // Nothing connected and nothing wrong: the invitation alone, without an empty table around it.
+        <TableCard>
+          <CardContent variant="flush">
+            <div className="px-6 py-10 text-center text-sm text-(--color-text-secondary)">{emptyState}</div>
+          </CardContent>
+        </TableCard>
+      ) : (
       <TableCard>
         <CardContent variant="flush">
           <TableToolbar
+            // Search and the filters are there as soon as there is a connection to filter.
+            controls={all.length >= 1 || filtered}
+            showSearch={all.length >= 6 || !!search.trim()}
             search={search}
             onSearch={(v) => setParam("q", v || null)}
             filtered={filtered}
             onClear={clearFilters}
-            countLabel={`${rows.length} of ${all.length} ${all.length === 1 ? "connection" : "connections"}`}
-            typeControl={
-              <label className="flex items-center gap-2 text-[13px] text-(--color-text-muted)">
-                Type
-                <select
-                  value={type ?? "all"}
-                  onChange={(e) => setParam("type", e.target.value === "all" ? null : e.target.value)}
-                  className="h-9 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) px-2.5 text-sm text-(--color-text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)"
+            countLabel={`${rows.length} of ${inScope} ${inScope === 1 ? "connection" : "connections"}`}
+            extra={
+              revokedCount > 0 && status === "all" ? (
+                <button
+                  type="button"
+                  onClick={() => setParam("revoked", showRevoked ? null : "1")}
+                  className="h-8 rounded-md px-2.5 text-[13px] font-medium text-(--color-primary-text) hover:bg-(--color-surface-subtle)"
                 >
-                  <option value="all">All types</option>
-                  {PROVIDERS.map((p) => (
-                    <option key={p} value={p}>
-                      {providerWord(p)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  {showRevoked ? `Hide revoked (${revokedCount})` : `Show revoked (${revokedCount})`}
+                </button>
+              ) : undefined
+            }
+            typeControl={
+              <>
+                <FilterPills
+                  label="Type"
+                  value={type ?? "all"}
+                  onChange={(k) => setParam("type", k === "all" ? null : k)}
+                  options={[
+                    { key: "all", label: "All" },
+                    ...PROVIDERS.filter((p) => p === type || all.some((c) => c.provider === p)).map((p) => ({
+                      key: p as string,
+                      label: providerWord(p),
+                      count: all.filter((c) => c.provider === p).length,
+                    })),
+                  ]}
+                />
+                <FilterPills
+                  label="Status"
+                  value={status}
+                  onChange={(k) => setParam("status", k === "all" ? null : k)}
+                  options={STATUS_FILTERS.map((f) => ({ key: f.key, label: f.label, count: f.key === "all" ? undefined : all.filter((c) => statusFilterOf(c) === f.key).length })).filter(
+                    (o) => o.key === "all" || o.key === status || (o.count ?? 0) > 0,
+                  )}
+                />
+              </>
             }
           />
           <AdaptiveTable
@@ -432,6 +466,7 @@ export default function ConnectionsPage() {
           />
         </CardContent>
       </TableCard>
+      )}
 
       {canAdminister && query.data ? <ConnectMoreSources providers={unconnected} onAdd={(p) => setWizard(p)} /> : null}
 

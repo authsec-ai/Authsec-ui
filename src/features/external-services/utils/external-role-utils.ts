@@ -1,4 +1,4 @@
-import type { ExternalService, Resource, Scope } from "@/types/entities";
+import type { ExternalService, Resource } from "@/types/entities";
 import { convertExternalServicesToResources } from "./external-resource-utils";
 
 /**

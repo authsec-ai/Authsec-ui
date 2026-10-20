@@ -26,7 +26,6 @@ import {
   FormGrid,
   FormDivider,
   FormInput,
-  FormCopyField,
 } from "../../theme";
 import {
   useGetSamlProviderQuery,
@@ -39,6 +38,7 @@ import {
 } from "../../app/api/samlApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { SamlIdpReference } from "./CreateSamlMethodPage";
+import { providerLoadError } from "./utils/providerLoadError";
 import { buildAuth0SettingsJson } from "../../app/api/samlApi";
 import {
   SAML_IDP_FIELD_HELP,
@@ -96,7 +96,11 @@ export function EditSamlMethodPage() {
   );
 
   // Fetch existing SAML provider data
-  const { data: providerData, isLoading: isLoadingProvider } = useGetSamlProviderQuery(
+  const {
+    data: providerData,
+    isLoading: isLoadingProvider,
+    error: providerError,
+  } = useGetSamlProviderQuery(
     { workspace_id: workspaceId, provider_id: id || "" },
     { skip: !workspaceId || !id }
   );
@@ -253,7 +257,7 @@ export function EditSamlMethodPage() {
       }).unwrap();
       toast.success("SAML provider updated successfully!");
       setShowConfirmDialog(false);
-      navigate("/authentication");
+      navigate("/identity-providers");
     } catch (error: any) {
       console.error("Failed to update SAML provider:", error);
       toast.error(error?.data?.error || error?.data?.message || "Failed to update SAML provider");
@@ -281,10 +285,10 @@ export function EditSamlMethodPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-stone-950">
         <div className="container mx-auto max-w-8xl space-y-8 px-8 py-8">
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
-            <p className="text-foreground">Provider not found</p>
-            <Button onClick={() => navigate("/authentication")}>
+            <p className="text-foreground">{providerLoadError(providerError)}</p>
+            <Button onClick={() => navigate("/identity-providers")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Authentication
+              Back to Identity Providers
             </Button>
           </div>
         </div>
@@ -301,7 +305,7 @@ export function EditSamlMethodPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/authentication")}
+                onClick={() => navigate("/identity-providers")}
                 className="h-8 px-2"
               >
                 <ArrowLeft className="h-4 w-4" />

@@ -85,6 +85,8 @@ export function DiscoveryTable<T>({
   pageIndex,
   onPrev,
   onNext,
+  pageSize,
+  onPageSize,
   onRetry,
   onRefresh,
   subject,
@@ -106,6 +108,8 @@ export function DiscoveryTable<T>({
   pageIndex: number;
   onPrev: () => void;
   onNext: (cursor: string) => void;
+  pageSize?: number;
+  onPageSize?: (size: number) => void;
   onRetry: () => void;
   onRefresh?: () => void;
   subject: string;
@@ -217,6 +221,8 @@ export function DiscoveryTable<T>({
         onRetry={onRetry}
         onRefresh={onRefresh}
         previousPage={view.previousPage}
+        pageSize={pageSize}
+        onPageSize={onPageSize}
       />
     </>
   );

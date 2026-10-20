@@ -547,7 +547,16 @@ export function revokeWord(c: Connection): { verb: string; noun: string } {
 
 /* ------------------------------------- tabs ------------------------------------- */
 
-export type DetailTab = "overview" | "scans" | "coverage" | "scope" | "rules";
+export type DetailTab =
+  | "overview"
+  | "scans"
+  | "coverage"
+  | "scope"
+  | "rules"
+  | "enforcement"
+  | "iac"
+  | "notifications"
+  | "settings";
 
 export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
   const tabs: { key: DetailTab; label: string }[] = [
@@ -557,6 +566,16 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
     { key: "scope", label: "Scope" },
   ];
   if (c.provider === "github") tabs.push({ key: "rules", label: "Scan rules" });
+  // AWS accounts carry the policy setup that used to live under Policy › AWS
+  // access: enforcement, pull-request sources, notifications and settings.
+  if (c.provider === "aws") {
+    tabs.push(
+      { key: "enforcement", label: "Enforcement" },
+      { key: "iac", label: "IaC sources" },
+      { key: "notifications", label: "Notifications" },
+      { key: "settings", label: "Settings" },
+    );
+  }
   return tabs;
 }
 

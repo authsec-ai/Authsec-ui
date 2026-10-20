@@ -4,7 +4,6 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import { Card, CardHeader, CardDescription, CardContent } from "./card";
-import { Badge } from "./badge";
 
 type ColorVariant = "default" | "blue" | "green" | "amber" | "purple" | "red" | "cyan";
 
@@ -37,7 +36,7 @@ export function MetricCard({
   footer,
   onClick,
   className,
-  colorVariant = "default",
+  colorVariant: _colorVariant = "default",
 }: MetricCardProps) {
   const TrendIcon = trend?.isPositive !== false ? IconTrendingUp : IconTrendingDown;
   const FooterIcon = footer?.icon;
@@ -102,7 +101,7 @@ interface MetricCardGridProps {
   className?: string;
 }
 
-export function MetricCardGrid({ children, enhanced = true, className }: MetricCardGridProps) {
+export function MetricCardGrid({ children, enhanced: _enhanced = true, className }: MetricCardGridProps) {
   return (
     <div className={cn("grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4", className)}>
       {children}

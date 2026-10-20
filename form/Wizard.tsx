@@ -98,7 +98,7 @@ interface WizardHeaderProps {
 }
 
 export function WizardHeader({ children, className }: WizardHeaderProps) {
-  const { currentStep, totalSteps, goToStep, isStepValid } = useWizard();
+  const { currentStep, totalSteps, goToStep } = useWizard();
 
   // If children are provided, render them (custom header)
   if (children) {
@@ -121,7 +121,6 @@ export function WizardHeader({ children, className }: WizardHeaderProps) {
         {Array.from({ length: totalSteps }).map((_, index) => {
           const isActive = index === currentStep;
           const isCompleted = index < currentStep;
-          const isClickable = isCompleted || index === currentStep + 1; // Allow clicking next immediate step if current is valid? Maybe restrict to completed only.
 
           return (
             <button
@@ -164,8 +163,8 @@ interface WizardStepProps {
   isValid?: boolean;
 }
 
-export function WizardStep({ children, title, description, isValid = true }: WizardStepProps) {
-  const { currentStep, registerStep } = useWizard();
+export function WizardStep({ children, title, description }: WizardStepProps) {
+  useWizard();
   
   // We need to know which index this step is. 
   // Since we can't easily get index from context without registering, 
@@ -194,7 +193,7 @@ export function WizardStep({ children, title, description, isValid = true }: Wiz
 
 // Wrapper to handle step logic and animations
 export function WizardContent({ children }: { children: React.ReactNode }) {
-  const { currentStep, registerStep } = useWizard();
+  const { currentStep } = useWizard();
   const steps = React.Children.toArray(children);
   
   // Register validity for the current step

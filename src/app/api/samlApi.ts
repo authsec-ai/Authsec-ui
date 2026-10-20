@@ -450,7 +450,7 @@ const coerceAttributeMapping = (
 
 export const samlApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    listSamlProviders: builder.query<ListSamlProvidersResponse, { workspace_id: string }>({
+    listSamlProviders: builder.query<ListSamlProvidersResponse, { workspace_id: string; client_id?: string }>({
       query: () => "/authsec/identity-providers?provider_type=saml",
       transformResponse: (providers: IdentityProviderListEntry[], _meta, arg) => ({
         success: true,

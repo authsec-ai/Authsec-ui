@@ -88,12 +88,12 @@ function Overview({ p, publishedAt }: { p: ExternalPrincipalDetail; publishedAt?
               </p>
             )}
           </DrawerSection>
-          <DrawerSection label="How we know">
+          <DrawerSection label="Evidence">
             <DetailGrid>
               <DetailRow label="First named" value={dayText(p.first_seen_at)} />
-              <DetailRow label="Last confirmed" value={<Timestamp iso={p.last_confirmed_at} />} />
+              <DetailRow label="Last seen in a scan" value={<Timestamp iso={p.last_confirmed_at} />} />
               {/* The header no longer repeats the publication; it is said here. */}
-              {publishedAt ? <DetailRow label="Published" value={<Timestamp iso={publishedAt} />} /> : null}
+              {publishedAt ? <DetailRow label="Graph updated" value={<Timestamp iso={publishedAt} />} /> : null}
             </DetailGrid>
           </DrawerSection>
         </CardContent>

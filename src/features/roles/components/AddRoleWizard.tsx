@@ -50,7 +50,7 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react";
-import type { Resource, RolePermission } from "../../../types/entities";
+import type { Group, Resource, RolePermission, User } from "../../../types/entities";
 
 // Mock data imports
 
@@ -223,13 +223,18 @@ export function AddRoleWizard({ isOpen, onClose, onRoleCreated }: AddRoleWizardP
     }));
   };
 
-  const filteredUsers = [].filter(
-    (user: any) =>
+  // User, group and resource lists are not wired to an API yet.
+  const availableUsers: User[] = [];
+  const availableGroups: Group[] = [];
+  const availableResources: Resource[] = [];
+
+  const filteredUsers = availableUsers.filter(
+    (user) =>
       user.name.toLowerCase().includes(searchUsers.toLowerCase()) ||
       user.email.toLowerCase().includes(searchUsers.toLowerCase())
   );
 
-  const filteredGroups = [].filter((group) =>
+  const filteredGroups = availableGroups.filter((group) =>
     group.name.toLowerCase().includes(searchGroups.toLowerCase())
   );
 
@@ -326,7 +331,7 @@ export function AddRoleWizard({ isOpen, onClose, onRoleCreated }: AddRoleWizardP
                 <CardContent>
                   <ScrollArea className="h-[300px]">
                     <div className="space-y-3">
-                      {[].map((resource) => (
+                      {availableResources.map((resource) => (
                         <ResourcePermissionCard
                           key={resource.id}
                           resource={resource}

@@ -289,7 +289,7 @@ export function CreateSamlMethodPage() {
         },
       }).unwrap();
       toast.success("SAML identity provider created!");
-      navigate("/authentication", {
+      navigate("/identity-providers", {
         state: { authProviderCreated: true },
       });
     } catch (error: any) {
@@ -318,7 +318,7 @@ export function CreateSamlMethodPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/authentication")}
+            onClick={() => navigate("/identity-providers")}
             aria-label="Close"
             className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
           >
@@ -648,7 +648,7 @@ export function CreateSamlMethodPage() {
       {/* Footer — single Save action, stays pinned while the form scrolls */}
       <div className="sticky bottom-0 z-10 flex-shrink-0 border-t bg-background py-4 px-8">
         <div className="flex w-full items-center justify-between gap-4">
-          <Button variant="outline" onClick={() => navigate("/authentication")}>
+          <Button variant="outline" onClick={() => navigate("/identity-providers")}>
             Cancel
           </Button>
           <Button

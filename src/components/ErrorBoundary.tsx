@@ -2,7 +2,8 @@ import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { AlertTriangle, Home } from "lucide-react";
+import { AlertTriangle, Home, RefreshCw } from "lucide-react";
+import { isChunkLoadError, reloadOnceForNewVersion } from "../utils/chunkReload";
 
 interface Props {
   children: ReactNode;
@@ -41,6 +42,9 @@ export class ErrorBoundary extends Component<Props, State> {
     // Log error to monitoring service
     console.error("Error caught by boundary:", error, errorInfo);
 
+    // A page file that a newer release replaced: load the new version once.
+    if (isChunkLoadError(error)) reloadOnceForNewVersion();
+
   }
 
   handleGoHome = () => {
@@ -52,6 +56,31 @@ export class ErrorBoundary extends Component<Props, State> {
       // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback;
+      }
+
+      // A release replaced the page files this tab was using: say so and offer the reload.
+      if (isChunkLoadError(this.state.error)) {
+        return (
+          <div className="min-h-screen bg-background flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg">
+              <CardHeader className="text-center">
+                <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <RefreshCw className="w-6 h-6 text-primary" />
+                </div>
+                <CardTitle className="text-xl">A new version of AuthSec is available</CardTitle>
+                <CardDescription>
+                  This page was open while an update was released. Reload to continue; you stay signed in.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => window.location.reload()} className="w-full">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Reload
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        );
       }
 
       // Default error UI
@@ -84,6 +113,17 @@ export class ErrorBoundary extends Component<Props, State> {
                     </details>
                   )}
                 </div>
+              )}
+
+              {process.env.NODE_ENV !== "development" && this.state.error && (
+                <details className="rounded-lg bg-muted p-3">
+                  <summary className="cursor-pointer text-xs">Technical details (include these if you contact support)</summary>
+                  <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words text-xs text-foreground">
+                    {this.state.error.toString().slice(0, 600)}
+                    {"\n"}
+                    {window.location.pathname}
+                  </pre>
+                </details>
               )}
 
               <div className="flex gap-2">

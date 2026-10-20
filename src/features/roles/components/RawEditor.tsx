@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Check, Copy, FileText } from "lucide-react";
+import { AlertCircle, Check, Copy } from "lucide-react";
 import type { RoleFormData } from "../types";
 import { toast } from "@/lib/toast";
 
@@ -20,7 +20,7 @@ export function RawEditor({ formData, onUpdate, isOpen, onToggle }: RawEditorPro
   const [format, setFormat] = useState<"json" | "yaml">("json");
   const [rawValue, setRawValue] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
-  const [isValidJson, setIsValidJson] = useState(true);
+  const [, setIsValidJson] = useState(true);
 
   // Convert form data to JSON/YAML
   useEffect(() => {
@@ -101,7 +101,7 @@ export function RawEditor({ formData, onUpdate, isOpen, onToggle }: RawEditorPro
     try {
       await navigator.clipboard.writeText(rawValue);
       toast.success("Raw data copied to clipboard");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy data");
     }
   };

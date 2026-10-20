@@ -1,5 +1,4 @@
-import { baseApi, withSessionData } from "./baseApi";
-import type { AdminUsersResponse } from "./admin/usersApi";
+import { baseApi } from "./baseApi";
 
 /**
  * Dashboard API Types
@@ -286,7 +285,7 @@ export const dashboardApi = baseApi.injectEndpoints({
 
     // Get Quick Actions Status (aggregated from various sources)
     getQuickActionsStatus: builder.query<QuickActionsStatus, { workspace_id: string }>({
-      async queryFn(arg, _queryApi, _extraOptions, fetchWithBQ) {
+      async queryFn(_arg, _queryApi, _extraOptions, _fetchWithBQ) {
         try {
           // For now, return placeholder data
           // TODO: Replace with real API calls when backend endpoints are available

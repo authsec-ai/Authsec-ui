@@ -124,7 +124,7 @@ export function AWSRegionEditor({
           <span className="text-(--color-text-muted)">Scanned: </span>
           <span className="font-mono">{current.length ? current.join(", ") : "No regions recorded"}</span>
         </p>
-        <p role="alert" className="text-xs text-(--color-danger-text)">
+        <p role="alert" className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-3 py-2 text-xs leading-relaxed text-(--color-text)">
           {readFailureText(q.error)} The regions scanned stay as they are.
         </p>
         <div className="flex gap-2">

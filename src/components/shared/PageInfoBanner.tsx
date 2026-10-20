@@ -78,7 +78,7 @@ export function PageInfoBanner({
   className,
   dismissButtonClassName,
   // Legacy props
-  summary,
+  summary: _summary,
   sections,
 }: PageInfoBannerProps) {
   // Single dismiss state for the entire banner
@@ -198,8 +198,6 @@ export function PageInfoBanner({
       </div>
     );
   }
-
-  const displayTitle = title || summary || "";
 
   const isNewLayout = !!(
     features ||

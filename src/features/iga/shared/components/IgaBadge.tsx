@@ -32,7 +32,7 @@ export function IgaBadge({
     <span
       title={title}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-(--color-border-strong) bg-(--color-surface-raised) px-2 py-0.5 text-[11px] font-semibold leading-5",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-(--color-border-subtle) bg-(--color-surface-raised) px-2 py-0.5 text-[11px] font-medium leading-5",
         tone === "danger" ? "text-(--color-danger-text)" : "text-(--color-text)",
         className,
       )}

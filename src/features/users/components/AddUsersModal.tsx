@@ -40,7 +40,7 @@ export function AddUsersModal({
   const [syncingAll, setSyncingAll] = useState<'ad' | 'entra' | null>(null);
   const [deleteConfirmConfig, setDeleteConfirmConfig] = useState<SyncConfig | null>(null);
 
-  const configs = configsData?.configs || [];
+  const configs = configsData ?? [];
   const adConfigs = configs.filter((c) => c.sync_type === 'active_directory');
   const entraConfigs = configs.filter((c) => c.sync_type === 'entra_id');
 
@@ -93,7 +93,7 @@ export function AddUsersModal({
       if (failed === 0) {
         toast.success(`Synced ${successful} ${type.toUpperCase()} config${successful > 1 ? 's' : ''}`);
       } else {
-        toast.warning(`${successful} succeeded, ${failed} failed`);
+        toast.info(`${successful} succeeded, ${failed} failed`);
       }
     } catch (error: any) {
       toast.error(`Sync failed: ${error.data?.message || error.message}`);

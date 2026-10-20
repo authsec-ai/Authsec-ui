@@ -7,14 +7,16 @@
  * product switcher in the bottom-left user menu.
  *
  * Four destinations, one per task (SPEC-console-revamp.md): connect, find,
- * decide, review. Policy and Logs are previews and say so. Object pages
+ * decide, review. Logs is commented out of NAV below for now. Policy and Logs are previews and say so — until the policy
+ * product is on (SPEC-iga-phase3-policy.md §9): then both are real and drop the tag. Object pages
  * (workloads, identities, resources, a connection's detail) belong to the
  * destination that opens them, so it stays highlighted on them.
  */
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Cable, Radar, Scale, ScrollText, type LucideIcon } from "lucide-react";
+import { Cable, Radar, Scale, type LucideIcon } from "lucide-react";
+// import { ScrollText } from "lucide-react"; // for the Logs entry below
 
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -28,7 +30,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { AuthSecLogo } from "@/components/ui/authsec-logo";
+import { usePolicyCapabilities } from "@/features/iga/policy/shared/usePolicyCapabilities";
 import { cn } from "@/lib/utils";
+import { getWorkspaceId } from "@/utils/workspace";
 
 interface IgaNavItem {
   title: string;
@@ -49,7 +53,9 @@ const NAV: IgaNavItem[] = [
     activeFor: ["/iga/estate", "/iga/identities", "/iga/resources", "/iga/external-principals", "/iga/sightings", "/iga/k8s"],
   },
   { title: "Policy", url: "/iga/policy", icon: Scale, tag: "Preview" },
-  { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },
+  // Logs is hidden from the sidebar for now. Its route still works (/iga/logs).
+  // Uncomment this entry and the ScrollText import above to bring it back.
+  // { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },
 ];
 
 export function IgaSidebar({
@@ -61,17 +67,21 @@ export function IgaSidebar({
   const navigate = useNavigate();
 
   const handleNavigation = useCallback((path: string) => navigate(path), [navigate]);
+  // Policy and Logs are previews until the policy product is known to be on. The tag stays while
+  // the capability loads or cannot be read: a failed check does not say the product is on.
+  const policyOn = usePolicyCapabilities(getWorkspaceId() ?? "").state === "on";
 
   const items = useMemo(
     () =>
       NAV.map((item) => ({
         ...item,
+        tag: policyOn && (item.url === "/iga/policy" || item.url === "/iga/logs") ? undefined : item.tag,
         isActive: [item.url, ...(item.activeFor ?? [])].some(
           (url) => location.pathname === url || location.pathname.startsWith(`${url}/`),
         ),
         onClick: () => handleNavigation(item.url),
       })),
-    [location.pathname, handleNavigation],
+    [location.pathname, handleNavigation, policyOn],
   );
 
   return (

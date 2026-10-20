@@ -13,7 +13,7 @@
  * callback race condition that existed before.
  */
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
 import { setCurrentStep } from "../slices/oidcWebAuthnSlice";
@@ -93,6 +93,7 @@ export function OIDCWebAuthnRouter({
     if (mfaPrefetchedRef.current) return;
     mfaPrefetchedRef.current = true;
     void oidcWebauthn.getMFAMethods();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prefetch runs once per step change, guarded by mfaPrefetchedRef
   }, [oidcWebauthn.currentStep, oidcWebauthn.email, oidcWebauthn.workspaceId]);
 
   // ── Loader while step is still "login" ──

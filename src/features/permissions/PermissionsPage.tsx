@@ -18,7 +18,6 @@ import { PermissionsFilterCard } from "./components/PermissionsFilterCard";
 import { BulkActionsBar } from "./components/BulkActionsBar";
 import { CreatePermissionModal } from "./components/CreatePermissionModal";
 import { useRbacAudience } from "@/contexts/RbacAudienceContext";
-import { useContextualNavigate } from "@/hooks/useContextualNavigate";
 import { TableCard } from "@/theme/components/cards";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,6 @@ import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { useDispatch } from "react-redux";
 import { FilterCard as FilterShell } from "@/theme/components/cards";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ResponsiveDataTable,
@@ -60,7 +58,6 @@ interface SimpleResource {
  * - Real-time data from AuthSec API
  */
 export function PermissionsPage() {
-  const contextualNavigate = useContextualNavigate();
   const standardNavigate = useNavigate();
   const { isAdmin, audience } = useRbacAudience();
   const location = useLocation();

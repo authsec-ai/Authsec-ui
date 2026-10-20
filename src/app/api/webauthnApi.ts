@@ -17,12 +17,13 @@ export interface AdminWebAuthnRequest {
 
 export interface AdminMFAStatusRequest {
   email: string;
+  workspace_id?: string;
 }
 
 export interface MFAStatusForLoginRequest {
   email: string;
   workspace_id: string;
-  client_id: string;
+  client_id?: string;
 }
 
 export interface MFAStatusMethod {

@@ -133,7 +133,7 @@ const OIDCLoginPageInner: React.FC = () => {
   };
 
   // WebAuthn state
-  const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
 
   // Forgot Password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -334,8 +334,6 @@ const OIDCLoginPageInner: React.FC = () => {
             email: samlUserEmail,
           }).unwrap();
 
-          console.log("✅ SAML login check response:", samlLoginResponse);
-
           // Check if WebAuthn is needed based on first_login
           if (samlLoginResponse.first_login !== undefined) {
             // Set up WebAuthn flow data
@@ -396,6 +394,7 @@ const OIDCLoginPageInner: React.FC = () => {
     };
 
     handleSamlCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- should only re-run when the SAML callback parameters change
   }, [
     samlClientId,
     samlUserEmail,
@@ -830,7 +829,7 @@ const OIDCLoginPageInner: React.FC = () => {
               workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
-              clientId, // Include client_id in Redux state
+              clientId: clientId ?? undefined, // Include client_id in Redux state
             })
           );
 
@@ -852,7 +851,7 @@ const OIDCLoginPageInner: React.FC = () => {
               workspaceId: webauthnFlowData.workspaceId,
               email: webauthnFlowData.email,
               isFirstLogin: webauthnFlowData.firstLogin,
-              clientId, // Include client_id in Redux state
+              clientId: clientId ?? undefined, // Include client_id in Redux state
             })
           );
 

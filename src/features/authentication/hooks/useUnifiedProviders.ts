@@ -44,14 +44,15 @@ export const useUnifiedProviders = ({
   // Convert OIDC provider to unified format
   const normalizeOidcProvider = (oidc: ApiOidcProvider): UnifiedAuthProvider => {
     return {
-      id: `oidc-${oidc.provider_name}-${oidc.client_id}`,
+      id: `oidc-${oidc.id}`,
+      idp_id: oidc.id,
       provider_type: 'oidc',
       provider_name: oidc.provider_name,
       display_name: oidc.display_name,
       client_id: oidc.client_ids || oidc.client_id || '',
       is_active: oidc.is_active,
       sort_order: oidc.sort_order,
-      status: oidc.status,
+      status: oidc.status ?? '',
       callback_url: oidc.callback_url,
       hydra_client_id: oidc.hydra_client_id,
       endpoints: oidc.endpoints,
@@ -63,6 +64,7 @@ export const useUnifiedProviders = ({
   const normalizeSamlProvider = (saml: ApiSamlProvider): UnifiedAuthProvider => {
     return {
       id: `saml-${saml.id}`,
+      idp_id: saml.id,
       provider_type: 'saml',
       provider_name: saml.provider_name,
       display_name: saml.display_name,

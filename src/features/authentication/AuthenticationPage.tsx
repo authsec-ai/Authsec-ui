@@ -5,7 +5,7 @@
  * and the Add Provider modal.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pencil,
@@ -34,15 +34,13 @@ import { TableCard } from "@/theme/components/cards";
 import { AddAuthMethodModal } from "./components/AddAuthMethodModal";
 import { toast } from "@/lib/toast";
 import {
-  useUpdateProviderMutation,
-  useDeleteProviderMutation,
-  type UpdateProviderRequest,
-  type DeleteProviderRequest,
+  useUpdateIdentityProviderStatusMutation,
+  useDeleteIdentityProviderMutation,
 } from "../../app/api/authMethodApi";
-import { useUpdateSamlProviderMutation, useDeleteSamlProviderMutation } from "../../app/api/samlApi";
 import { useGetClientsQuery } from "../../app/api/clientApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { useUnifiedProviders } from "./hooks/useUnifiedProviders";
+import { providerEditPath } from "./utils/providerPaths";
 import { ProviderIcon } from "./utils/provider-icons";
 import { useTourStep, TOUR_REGISTRY } from "@/features/guided-tour";
 
@@ -72,10 +70,8 @@ export function AuthenticationPage() {
     [clientsResponse],
   );
 
-  const [updateOidcProvider] = useUpdateProviderMutation();
-  const [deleteOidcProvider, { isLoading: isDeletingOidc }] = useDeleteProviderMutation();
-  const [updateSamlProvider] = useUpdateSamlProviderMutation();
-  const [deleteSamlProvider, { isLoading: isDeletingSaml }] = useDeleteSamlProviderMutation();
+  const [updateProviderStatus] = useUpdateIdentityProviderStatusMutation();
+  const [deleteProvider, { isLoading: isDeleting }] = useDeleteIdentityProviderMutation();
 
   const {
     providers: unifiedProviders,
@@ -100,40 +96,23 @@ export function AuthenticationPage() {
 
   const filtersActive = search.trim() !== "" || typeFilter !== "all" || statusFilter !== "all" || !!selectedClientId;
 
-  const handleToggleActive = async (providerId: string, isActive: boolean) => {
+  // Every action addresses the identity_providers row by its UUID (idp_id);
+  // the row id is only a table key.
+  const handleToggleActive = useCallback(async (providerId: string, isActive: boolean) => {
     if (!workspaceId) return toast.error("Workspace context missing; please sign in again.");
     const provider = (unifiedProviders ?? []).find((item) => item.id === providerId);
     if (!provider) return toast.error("Provider not found.");
     try {
-      if (provider.provider_type === "saml") {
-        await updateSamlProvider({
-          workspace_id: workspaceId,
-          provider_id: providerId.replace("saml-", ""),
-          is_active: isActive,
-        }).unwrap();
-      } else {
-        const payload: UpdateProviderRequest = {
-          workspace_id: workspaceId,
-          org_id: sessionData?.org_id || "",
-          provider_name: provider.provider_name,
-          display_name: provider.display_name,
-          client_id: provider.client_id || provider.hydra_client_id || workspaceId,
-          client_secret: "",
-          auth_url: provider.endpoints?.auth_url || "",
-          token_url: provider.endpoints?.token_url || "",
-          user_info_url: provider.endpoints?.user_info_url || "",
-          scopes: ["openid", "profile", "email"],
-          is_active: isActive,
-          updated_by: sessionData?.user?.email || "system",
-        };
-        await updateOidcProvider(payload).unwrap();
-      }
+      await updateProviderStatus({
+        id: provider.idp_id,
+        status: isActive ? "configured" : "disabled",
+      }).unwrap();
       toast.success(`${provider.display_name} ${isActive ? "activated" : "deactivated"}`);
       refetchProviders();
     } catch (error: any) {
-      toast.error(error?.data?.message || `Failed to update ${provider.display_name}`);
+      toast.error(error?.data?.error || error?.data?.message || `Failed to update ${provider.display_name}`);
     }
-  };
+  }, [workspaceId, unifiedProviders, updateProviderStatus, refetchProviders]);
 
   const handleConfirmDelete = async () => {
     if (!workspaceId || !deleteTarget) {
@@ -147,29 +126,17 @@ export function AuthenticationPage() {
       return;
     }
     try {
-      if (provider.provider_type === "saml") {
-        await deleteSamlProvider({
-          workspace_id: workspaceId,
-          provider_id: deleteTarget.id.replace("saml-", ""),
-        }).unwrap();
-      } else {
-        const payload: DeleteProviderRequest = {
-          workspace_id: workspaceId,
-          client_id: provider.client_id,
-          provider_name: provider.provider_name,
-        };
-        await deleteOidcProvider(payload).unwrap();
-      }
+      await deleteProvider(provider.idp_id).unwrap();
       toast.success(`${provider.display_name} deleted successfully`);
       setDeleteTarget(null);
       refetchProviders();
     } catch (error: any) {
-      toast.error(error?.data?.message || `Failed to delete ${provider.display_name}`);
+      toast.error(error?.data?.error || error?.data?.message || `Failed to delete ${provider.display_name}`);
     }
   };
 
   // ─── Type filter pills ──────────────────────────────────────────────────────
-  const allProviders = unifiedProviders ?? [];
+  const allProviders = useMemo(() => unifiedProviders ?? [], [unifiedProviders]);
   const typeFilters = useMemo(
     () => [
       { key: "all", label: "All", count: allProviders.length },
@@ -329,7 +296,7 @@ export function AuthenticationPage() {
                 <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
                   <DropdownMenuItem
                     className="menu-item"
-                    onSelect={() => navigate(`/identity-providers/saml/edit/${p.id}`)}
+                    onSelect={() => navigate(providerEditPath(p))}
                   >
                     <span className="mi-ic"><Pencil className="icon-sm" /></span>
                     Edit
@@ -357,7 +324,6 @@ export function AuthenticationPage() {
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [navigate, handleToggleActive],
   );
 
@@ -446,7 +412,7 @@ export function AuthenticationPage() {
 
       <Dialog
         open={!!deleteTarget}
-        onOpenChange={(o) => !o && !(isDeletingOidc || isDeletingSaml) && setDeleteTarget(null)}
+        onOpenChange={(o) => !o && !(isDeleting) && setDeleteTarget(null)}
       >
         <DialogContent data-cr showCloseButton={false} className="border-0 bg-transparent p-0 shadow-none sm:max-w-md">
           <div className="dialog" style={{ width: "100%" }}>
@@ -465,17 +431,17 @@ export function AuthenticationPage() {
               <Button
                 variant="outline"
                 onClick={() => setDeleteTarget(null)}
-                disabled={isDeletingOidc || isDeletingSaml}
+                disabled={isDeleting}
               >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => void handleConfirmDelete()}
-                disabled={isDeletingOidc || isDeletingSaml}
+                disabled={isDeleting}
               >
                 <Trash2 className="mr-1.5 size-4" />
-                {isDeletingOidc || isDeletingSaml ? "Deleting…" : "Delete provider"}
+                {isDeleting ? "Deleting…" : "Delete provider"}
               </Button>
             </div>
           </div>

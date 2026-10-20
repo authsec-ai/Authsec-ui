@@ -10,10 +10,8 @@ import {
   IconCheck,
 } from "@tabler/icons-react";
 import {
-  useHandleCallbackMutation,
   useExchangeCodeForTokensMutation,
   useSendTokenToOIDCLoginMutation,
-  useSamlLoginMutation,
 } from "../../app/api/oidcApi";
 import { setLoginData, setCurrentStep } from "../slices/oidcWebAuthnSlice";
 import type { RootState } from "../../app/store";
@@ -49,10 +47,8 @@ const OIDCCallbackPageInner: React.FC = () => {
   const { captureClientId } = useEndUserAuth();
 
   // RTK Query hooks
-  const [handleCallback] = useHandleCallbackMutation();
   const [exchangeCodeForTokens] = useExchangeCodeForTokensMutation();
   const [sendTokenToOIDCLogin] = useSendTokenToOIDCLoginMutation();
-  const [samlLogin] = useSamlLoginMutation();
 
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [message, setMessage] = useState<string>(
@@ -96,11 +92,8 @@ const OIDCCallbackPageInner: React.FC = () => {
   );
 
   useEffect(() => {
-    console.log("Universal CallbackPage mounted");
-    console.log("URL params:", Object.fromEntries(urlParams.entries()));
-    console.log("Full URL:", window.location.href);
-
     processCallback();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the callback must be processed exactly once on mount
   }, []);
 
   // Helper function to extract provider from state
@@ -172,6 +165,9 @@ const OIDCCallbackPageInner: React.FC = () => {
           sessionStorage.setItem("uflow_user_picture", picture || "");
           sessionStorage.setItem("uflow_provider", provider);
           sessionStorage.setItem("uflow_provider_user_id", providerUserId);
+          // Registration is refused without the discover step's state token.
+          const stateToken = urlParams.get("state_token");
+          if (stateToken) sessionStorage.setItem("uflow_state_token", stateToken);
 
           // Clean up OAuth session data
           sessionStorage.removeItem("uflow_oauth_type");
@@ -257,7 +253,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                 workspaceId: webauthnFlowData.workspaceId,
                 email: webauthnFlowData.email,
                 isFirstLogin: webauthnFlowData.firstLogin,
-                clientId: clientId,
+                clientId,
               }),
             );
 
@@ -304,13 +300,6 @@ const OIDCCallbackPageInner: React.FC = () => {
           );
           const samlClientId = sessionStorage.getItem("saml_client_id");
           const samlUserEmail = sessionStorage.getItem("saml_user_email");
-
-          console.log("📋 SAML post-WebAuthn parameters:", {
-            login_challenge: samlLoginChallenge,
-            client_id: samlClientId,
-            email: samlUserEmail,
-            token_received: !!storedToken,
-          });
 
           if (storedToken && samlLoginChallenge) {
             setWebauthnCallbackToken(storedToken);
@@ -429,14 +418,6 @@ const OIDCCallbackPageInner: React.FC = () => {
         setDetectedProvider(provider);
       }
 
-      console.log("Universal OAuth callback parameters:", {
-        code: code ? `${code.substring(0, 10)}...` : null,
-        state: state ? `${state.substring(0, 10)}...` : null,
-        error,
-        errorDescription,
-        detectedProvider: provider,
-      });
-
       // Check for OAuth errors first
       if (error) {
         setStatus("error");
@@ -465,9 +446,6 @@ const OIDCCallbackPageInner: React.FC = () => {
         return;
       }
 
-      // Step 3: Validate state parameter against stored value (skip for Hydra codes)
-      const storedState = sessionStorage.getItem("oauth_state");
-      const storedProvider = sessionStorage.getItem("oauth_provider");
       const storedLoginChallenge = sessionStorage.getItem("login_challenge");
 
       if (isHydraCode) {
@@ -519,7 +497,7 @@ const OIDCCallbackPageInner: React.FC = () => {
                   access_token: accessToken,
                   expires_in: normalizedTokens?.expires_in || 3600,
                 }).unwrap();
-              } catch (e) {
+              } catch {
                 console.warn(
                   "OIDC login endpoint returned no body or non-standard shape",
                 );
@@ -609,7 +587,6 @@ const OIDCCallbackPageInner: React.FC = () => {
               }
             }
 
-            console.log("Token exchange successful:", normalizedTokens);
             sessionStorage.removeItem("login_challenge");
           }
         } catch (exchangeError) {
@@ -626,319 +603,19 @@ const OIDCCallbackPageInner: React.FC = () => {
         }
         return;
       } else {
-        console.log("State validation:", {
-          storedState: storedState
-            ? `${storedState.substring(0, 10)}...`
-            : null,
-          receivedState: state ? `${state.substring(0, 10)}...` : null,
-          stateMatch: storedState === state,
-          providerMatch: storedProvider === provider,
-          hasLoginChallenge: !!storedLoginChallenge,
-        });
-
-        if (!storedState || storedState !== state) {
-          setStatus("error");
-          setMessage("Invalid state parameter - possible security issue");
-          setDebugInfo({
-            storedState: storedState
-              ? `${storedState.substring(0, 10)}...`
-              : null,
-            receivedState: state ? `${state.substring(0, 10)}...` : null,
-            stateMatch: storedState === state,
-          });
-          return;
-        }
-
-        if (!storedProvider || storedProvider !== provider) {
-          setStatus("error");
-          setMessage("Provider mismatch - possible security issue");
-          setDebugInfo({
-            storedProvider,
-            receivedProvider: provider,
-            providerMatch: storedProvider === provider,
-          });
-          return;
-        }
-
-        if (!storedLoginChallenge) {
-          setStatus("error");
-          setMessage("Missing login challenge - authentication flow error");
-          setDebugInfo({ hasLoginChallenge: false });
-          return;
-        }
-
-        // Clear stored session data
+        // A provider code that is not a Hydra code used to be posted to
+        // /authsec/hmgr/auth/callback, which the backend removed (UI-019).
+        // Providers now return to /authsec/uflow/oidc/callback on the server,
+        // which completes the Hydra login itself, so the browser only comes
+        // back here with a Hydra (ory_ac_) code. Reaching this branch means
+        // the provider's redirect URI still points at this page.
         sessionStorage.removeItem("oauth_state");
         sessionStorage.removeItem("oauth_provider");
-
-        setMessage("Validating provider response with server...");
-
-        try {
-          // Step 5: Send callback data to API server for processing
-          // Note: No provider in URL path now, provider comes from state
-          const response = await handleCallback({
-            code,
-            state,
-            error: error || undefined,
-          }).unwrap();
-
-          console.log("API callback response:", response);
-
-          if (response) {
-            setStatus("processing");
-            setMessage("Provider credentials accepted.");
-            setDebugInfo({
-              redirectTo: response.redirect_to,
-              userInfo: response.user_info,
-            });
-
-            // Defensive check: ensure we're not redirecting back to the login page (infinite loop prevention)
-            const currentOrigin = window.location.origin;
-            if (!response.redirect_to) {
-              setStatus("error");
-              setMessage(
-                "Authentication flow error: No redirect URL provided by backend.",
-              );
-              setDebugInfo({
-                ...debugInfo,
-                error: "Missing redirect_to in response",
-              });
-              return;
-            }
-            const redirectUrl = new URL(response.redirect_to, currentOrigin);
-            const isLoopingBack =
-              redirectUrl.pathname.includes("/oidc/login") ||
-              redirectUrl.pathname.includes("/oidc/auth/callback");
-
-            if (isLoopingBack) {
-              console.error(
-                "⚠️ Potential infinite loop detected! Backend returned redirect_to pointing back to OIDC flow:",
-                response.redirect_to,
-              );
-              setStatus("error");
-              setMessage(
-                "Authentication flow error: Backend returned invalid redirect URL. Please contact support.",
-              );
-              setDebugInfo({
-                ...debugInfo,
-                error: "Infinite loop prevented",
-                redirect_to: response.redirect_to,
-                detected_loop: true,
-              });
-              return;
-            }
-
-            // Check if this is a SAML provider that needs WebAuthn check
-            const isSamlProvider =
-              storedProvider?.toLowerCase().includes("saml") ||
-              provider?.toLowerCase().includes("saml");
-
-            if (isSamlProvider) {
-              console.log(
-                "🔐 SAML provider detected, checking for WebAuthn requirements...",
-              );
-              setMessage("Checking authentication requirements...");
-
-              try {
-                // Get SAML parameters from sessionStorage (stored by OIDCLoginPage from URL params)
-                const samlStoredClientId =
-                  sessionStorage.getItem("saml_client_id");
-                const samlStoredEmail =
-                  sessionStorage.getItem("saml_user_email");
-
-                // Fallback to other sources if not in sessionStorage
-                const clientIdForSaml =
-                  samlStoredClientId ||
-                  reduxClientId ||
-                  sessionStorage.getItem("client_id");
-                const userEmail = samlStoredEmail || response.user_info?.email;
-
-                console.log("📋 SAML parameters retrieved:", {
-                  client_id_from_saml_storage: samlStoredClientId,
-                  email_from_saml_storage: samlStoredEmail,
-                  client_id_final: clientIdForSaml,
-                  email_final: userEmail,
-                  fallback_to_redux: !samlStoredClientId && reduxClientId,
-                  fallback_to_response:
-                    !samlStoredEmail && response.user_info?.email,
-                });
-
-                if (!clientIdForSaml) {
-                  console.error(
-                    "❌ Cannot proceed with SAML WebAuthn check: client_id not available",
-                  );
-                  // Clean up SAML parameters
-                  sessionStorage.removeItem("saml_client_id");
-                  sessionStorage.removeItem("saml_user_email");
-                  sessionStorage.removeItem("saml_tenant_id");
-                  sessionStorage.removeItem("saml_user_id");
-                  sessionStorage.removeItem("saml_provider");
-                  sessionStorage.removeItem("saml_provider_id");
-                  sessionStorage.removeItem("saml_project_id");
-                  sessionStorage.removeItem("saml_success");
-                  // Fallback to direct redirect if client_id is missing
-                  setTimeout(() => {
-                    console.log(
-                      "Redirecting to Hydra (no client_id for WebAuthn check):",
-                      response.redirect_to,
-                    );
-                    if (response.redirect_to) {
-                      window.location.href = response.redirect_to;
-                    }
-                  }, 1500);
-                  return;
-                }
-
-                if (!userEmail) {
-                  console.error(
-                    "❌ Cannot proceed with SAML WebAuthn check: email not available",
-                  );
-                  // Clean up SAML parameters
-                  sessionStorage.removeItem("saml_client_id");
-                  sessionStorage.removeItem("saml_user_email");
-                  sessionStorage.removeItem("saml_tenant_id");
-                  sessionStorage.removeItem("saml_user_id");
-                  sessionStorage.removeItem("saml_provider");
-                  sessionStorage.removeItem("saml_provider_id");
-                  sessionStorage.removeItem("saml_project_id");
-                  sessionStorage.removeItem("saml_success");
-                  // Fallback to direct redirect if email is missing
-                  setTimeout(() => {
-                    console.log(
-                      "Redirecting to Hydra (no email for WebAuthn check):",
-                      response.redirect_to,
-                    );
-                    if (response.redirect_to) {
-                      window.location.href = response.redirect_to;
-                    }
-                  }, 1500);
-                  return;
-                }
-
-                console.log(
-                  `🔍 Calling SAML login check for email: ${userEmail}, client_id: ${clientIdForSaml}`,
-                );
-
-                // Call SAML login check API
-                const samlLoginResponse = await samlLogin({
-                  client_id: clientIdForSaml,
-                  email: userEmail,
-                }).unwrap();
-
-                console.log("✅ SAML login check response:", samlLoginResponse);
-
-                // Check if WebAuthn is needed based on first_login
-                if (samlLoginResponse.first_login !== undefined) {
-                  // Set up WebAuthn flow data
-                  const webauthnFlowData = {
-                    workspaceId: samlLoginResponse.workspace_id,
-                    email: samlLoginResponse.email,
-                    firstLogin: samlLoginResponse.first_login,
-                  };
-
-                  setMessage("Initiating multi-factor authentication...");
-
-                  // Ensure client_id is captured
-                  if (clientIdForSaml !== reduxClientId) {
-                    captureClientId(clientIdForSaml);
-                  }
-
-                  // Initialize WebAuthn flow in Redux
-                  dispatch(
-                    setLoginData({
-                      workspaceId: webauthnFlowData.workspaceId,
-                      email: webauthnFlowData.email,
-                      isFirstLogin: webauthnFlowData.firstLogin,
-                      clientId: clientIdForSaml,
-                    }),
-                  );
-
-                  // Set appropriate WebAuthn step
-                  if (webauthnFlowData.firstLogin) {
-                    console.log("🆕 First-time SAML user → MFA setup");
-                    dispatch(setCurrentStep("mfa_selection"));
-                  } else {
-                    console.log(
-                      "🔑 Returning SAML user → WebAuthn authentication",
-                    );
-                    dispatch(setCurrentStep("authentication"));
-                  }
-                  transitionToMfa(
-                    webauthnFlowData,
-                    clientIdForSaml,
-                    response.redirect_to,
-                  );
-
-                  return; // Don't redirect yet, wait for WebAuthn completion
-                } else {
-                  console.log(
-                    "⚠️ SAML login response missing first_login field, proceeding without WebAuthn",
-                  );
-                  // Clean up SAML parameters
-                  sessionStorage.removeItem("saml_client_id");
-                  sessionStorage.removeItem("saml_user_email");
-                  sessionStorage.removeItem("saml_tenant_id");
-                  sessionStorage.removeItem("saml_user_id");
-                  sessionStorage.removeItem("saml_provider");
-                  sessionStorage.removeItem("saml_provider_id");
-                  sessionStorage.removeItem("saml_project_id");
-                  sessionStorage.removeItem("saml_success");
-                  // Fallback to direct redirect if response is incomplete
-                  setTimeout(() => {
-                    console.log("Redirecting to Hydra:", response.redirect_to);
-                    if (response.redirect_to) {
-                      window.location.href = response.redirect_to;
-                    }
-                  }, 1500);
-                }
-              } catch (samlLoginError) {
-                console.error("❌ SAML login check failed:", samlLoginError);
-                // Clean up SAML parameters
-                sessionStorage.removeItem("saml_client_id");
-                sessionStorage.removeItem("saml_user_email");
-                sessionStorage.removeItem("saml_tenant_id");
-                sessionStorage.removeItem("saml_user_id");
-                sessionStorage.removeItem("saml_provider");
-                sessionStorage.removeItem("saml_provider_id");
-                sessionStorage.removeItem("saml_project_id");
-                sessionStorage.removeItem("saml_success");
-                // Fallback: proceed with redirect even if SAML login check fails
-                setMessage(
-                  "Provider credentials accepted. Redirecting to authorization server...",
-                );
-                setTimeout(() => {
-                  console.log(
-                    "Redirecting to Hydra (SAML check failed):",
-                    response.redirect_to,
-                  );
-                  if (response.redirect_to) {
-                    window.location.href = response.redirect_to;
-                  }
-                }, 1500);
-              }
-            } else {
-              // Not a SAML provider or no email - proceed with normal redirect
-              setMessage(
-                "Provider credentials accepted. Redirecting to authorization server...",
-              );
-              setTimeout(() => {
-                console.log("Redirecting to Hydra:", response.redirect_to);
-                if (response.redirect_to) {
-                  window.location.href = response.redirect_to;
-                }
-              }, 1500);
-            }
-          }
-        } catch (err) {
-          console.error("Callback processing error:", err);
-          setStatus("error");
-          setMessage(
-            err instanceof Error
-              ? err.message
-              : "Failed to process authentication callback",
-          );
-          setDebugInfo({ error: err });
-        }
+        setStatus("error");
+        setMessage(
+          "This sign-in provider is misconfigured: its redirect URI must point at /authsec/uflow/oidc/callback. Contact your administrator.",
+        );
+        setDebugInfo({ provider, reason: "provider_redirect_uri_points_at_ui" });
       }
     } catch (outerErr) {
       console.error("Callback processing error (outer):", outerErr);

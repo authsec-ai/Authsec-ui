@@ -19,15 +19,15 @@ import { WizardProvider } from "./contexts/WizardContext";
 import { DensityProvider } from "./contexts/DensityContext";
 import React from "react";
 
-import { DashboardPage } from "./features/dashboard/DashboardPage";
-import AccessControlPage from "./features/access/AccessControlPage";
+const DashboardPage = React.lazy(() => import("./features/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const AccessControlPage = React.lazy(() => import("./features/access/AccessControlPage"));
 
-import { UsersPage } from "./features/users/UsersPage";
+const UsersPage = React.lazy(() => import("./features/users/UsersPage").then((m) => ({ default: m.UsersPage })));
 import NotFoundPage from "./components/shared/NotFoundPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import EndUsersPage from "./features/end-users/EndUsersPage";
-import TeamPage from "./features/team/TeamPage";
-import TrustedIssuersPage from "./features/settings/TrustedIssuersPage";
+const EndUsersPage = React.lazy(() => import("./features/end-users/EndUsersPage"));
+const TeamPage = React.lazy(() => import("./features/team/TeamPage"));
+const TrustedIssuersPage = React.lazy(() => import("./features/settings/TrustedIssuersPage"));
 
 
 const DevBypassPage = import.meta.env.DEV
@@ -37,69 +37,71 @@ const DevBypassPage = import.meta.env.DEV
       })),
     )
   : null;
-import ScopeCatalogPage from "./features/scope-catalog/ScopeCatalogPage";
+const ScopeCatalogPage = React.lazy(() => import("./features/scope-catalog/ScopeCatalogPage"));
 // import { GroupsPage } from "./features/groups/GroupsPage";
-// import ResourcesPage from "./features/resources/ResourcesPage";
 
 // Resource server is now a backend/API term. User-facing legacy
 // `/resource-servers/*` URLs redirect into the Applications console.
-import ApplicationsPage from "./features/applications/ApplicationsPage";
-import CreateApplicationPage from "./features/applications/CreateApplicationPage";
-import ApplicationLayout from "./features/applications/ApplicationLayout";
-import ApplicationSetupPage from "./features/applications/ApplicationSetupPage";
-import ApplicationToolsPage from "./features/applications/ApplicationToolsPage";
-import ApplicationScopesPage from "./features/applications/ApplicationScopesPage";
+const ApplicationsPage = React.lazy(() => import("./features/applications/ApplicationsPage"));
+const CreateApplicationPage = React.lazy(() => import("./features/applications/CreateApplicationPage"));
+const ApplicationLayout = React.lazy(() => import("./features/applications/ApplicationLayout"));
+const ApplicationSetupPage = React.lazy(() => import("./features/applications/ApplicationSetupPage"));
+const ApplicationToolsPage = React.lazy(() => import("./features/applications/ApplicationToolsPage"));
+const ApplicationScopesPage = React.lazy(() => import("./features/applications/ApplicationScopesPage"));
 import ApplicationAccessPageV2 from "./features/applications/ApplicationAccessPageV2";
-import ApplicationConnectionsPage from "./features/applications/ApplicationConnectionsPage";
-import ApplicationRolesPage from "./features/applications/ApplicationRolesPage";
-import ApplicationConsentGrantsPage from "./features/applications/ApplicationConsentGrantsPage";
-import ApplicationClientsPage from "./features/applications/ApplicationClientsPage";
-import ApplicationTestPage from "./features/applications/ApplicationTestPage";
-import ApplicationLaunchPage from "./features/applications/ApplicationLaunchPage";
-import ApplicationActivityPage from "./features/applications/ApplicationActivityPage";
-import AgentsPage from "./features/agents/AgentsPage";
-import ServiceAccountsPage from "./features/service-accounts/ServiceAccountsPage";
-import WorkloadPage from "./features/iga/estate/WorkloadPage";
-import ConnectionsPage from "./features/iga/connections/ConnectionsPage";
-import ConnectionDetailPage from "./features/iga/connections/ConnectionDetailPage";
-import ScanDetailPage from "./features/iga/connections/ScanDetailPage";
-import DiscoveryPage from "./features/iga/discovery/DiscoveryPage";
-import SightingDetailPage from "./features/iga/discovery/SightingDetailPage";
-import K8sObjectPage from "./features/iga/k8s/K8sObjectPage";
-import PolicyPage from "./features/iga/policy/PolicyPage";
-import LogsPage from "./features/iga/logs/LogsPage";
-import RetiredPage from "./features/iga/retired/RetiredPage";
+const ApplicationConnectionsPage = React.lazy(() => import("./features/applications/ApplicationConnectionsPage"));
+const ApplicationRolesPage = React.lazy(() => import("./features/applications/ApplicationRolesPage"));
+const ApplicationConsentGrantsPage = React.lazy(() => import("./features/applications/ApplicationConsentGrantsPage"));
+const ApplicationClientsPage = React.lazy(() => import("./features/applications/ApplicationClientsPage"));
+const ApplicationTestPage = React.lazy(() => import("./features/applications/ApplicationTestPage"));
+const ApplicationLaunchPage = React.lazy(() => import("./features/applications/ApplicationLaunchPage"));
+const ApplicationActivityPage = React.lazy(() => import("./features/applications/ApplicationActivityPage"));
+const AgentsPage = React.lazy(() => import("./features/agents/AgentsPage"));
+const ServiceAccountsPage = React.lazy(() => import("./features/service-accounts/ServiceAccountsPage"));
+const WorkloadPage = React.lazy(() => import("./features/iga/estate/WorkloadPage"));
+const ConnectionsPage = React.lazy(() => import("./features/iga/connections/ConnectionsPage"));
+const ConnectionDetailPage = React.lazy(() => import("./features/iga/connections/ConnectionDetailPage"));
+const ScanDetailPage = React.lazy(() => import("./features/iga/connections/ScanDetailPage"));
+const DiscoveryPage = React.lazy(() => import("./features/iga/discovery/DiscoveryPage"));
+const SightingDetailPage = React.lazy(() => import("./features/iga/discovery/SightingDetailPage"));
+const K8sObjectPage = React.lazy(() => import("./features/iga/k8s/K8sObjectPage"));
+import GatedRedirect from "./features/iga/policy/GatedRedirect";
+// Access policies (the one Policy feature): list, create/edit, detail. Each page
+// renders through PolicyShell, which gates on the access_policies capability.
+const PoliciesListPage = React.lazy(() => import("./features/iga/policy/access/PoliciesListPage"));
+const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
+const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
+const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
+const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
-import IdentityPage from "./features/iga/identities/IdentityPage";
-import ResourcePage from "./features/iga/resources/ResourcePage";
-import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
-import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
-import AzureOAuthCallbackPage from "./features/discovery/cloud/azure/AzureOAuthCallbackPage";
-import AzureObjectPage from "./features/discovery/cloud/azure/AzureObjectPage";
+const IdentityPage = React.lazy(() => import("./features/iga/identities/IdentityPage"));
+const ResourcePage = React.lazy(() => import("./features/iga/resources/ResourcePage"));
+const ExternalPrincipalPage = React.lazy(() => import("./features/iga/external/ExternalPrincipalPage"));
+const GoogleOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/gcp/GoogleOAuthCallbackPage"));
+const AzureOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureOAuthCallbackPage"));
+const AzureObjectPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureObjectPage"));
 import { IgaLayout } from "./components/layout/IgaLayout";
-import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
-import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
-import { AuthLogsPage } from "./features/logging/AuthLogsPage";
-import { AuditLogsPage } from "./features/logging/AuditLogsPage";
-import { M2MLogsPage } from "./features/logging/M2MLogsPage";
-import { VaultPage } from "./features/vault/VaultPage";
-
-import { ImportSecretsPage } from "./features/vault/ImportSecretsPage";
-import ScimConnectionsPage from "./features/scim-connections/ScimConnectionsPage";
-import DirectorySyncPage from "./features/directory-sync/DirectorySyncPage";
-import { RolesPage } from "./features/roles/RolesPage";
-import { RoleTemplatesPage } from "./features/roles/RoleTemplatesPage";
-import { AuthenticationPage } from "./features/authentication/AuthenticationPage";
-import { CreateAuthMethodPage } from "./features/authentication/CreateAuthMethodPage";
-import { CreateSamlMethodPage } from "./features/authentication/CreateSamlMethodPage";
-import { EditSamlMethodPage } from "./features/authentication/EditSamlMethodPage";
+const AdminVoiceAgentPage = React.lazy(() => import("./features/voice-auth/AdminVoiceAgentPage").then((m) => ({ default: m.AdminVoiceAgentPage })));
+const LogsConfigurationPage = React.lazy(() => import("./features/logging/LogsConfigurationPage").then((m) => ({ default: m.LogsConfigurationPage })));
+const AuthLogsPage = React.lazy(() => import("./features/logging/AuthLogsPage").then((m) => ({ default: m.AuthLogsPage })));
+const AuditLogsPage = React.lazy(() => import("./features/logging/AuditLogsPage").then((m) => ({ default: m.AuditLogsPage })));
+const M2MLogsPage = React.lazy(() => import("./features/logging/M2MLogsPage").then((m) => ({ default: m.M2MLogsPage })));
+const ScimConnectionsPage = React.lazy(() => import("./features/scim-connections/ScimConnectionsPage"));
+const DirectorySyncPage = React.lazy(() => import("./features/directory-sync/DirectorySyncPage"));
+const RolesPage = React.lazy(() => import("./features/roles/RolesPage").then((m) => ({ default: m.RolesPage })));
+const RoleTemplatesPage = React.lazy(() => import("./features/roles/RoleTemplatesPage").then((m) => ({ default: m.RoleTemplatesPage })));
+const AuthenticationPage = React.lazy(() => import("./features/authentication/AuthenticationPage").then((m) => ({ default: m.AuthenticationPage })));
+const CreateAuthMethodPage = React.lazy(() => import("./features/authentication/CreateAuthMethodPage").then((m) => ({ default: m.CreateAuthMethodPage })));
+const CreateSamlMethodPage = React.lazy(() => import("./features/authentication/CreateSamlMethodPage").then((m) => ({ default: m.CreateSamlMethodPage })));
+const EditSamlMethodPage = React.lazy(() => import("./features/authentication/EditSamlMethodPage").then((m) => ({ default: m.EditSamlMethodPage })));
+const EditOidcMethodPage = React.lazy(() => import("./features/authentication/EditOidcMethodPage").then((m) => ({ default: m.EditOidcMethodPage })));
 
 // External services and secrets management
-import { ExternalServicesPage } from "./features/external-services/ExternalServicesPage";
-import { AddExternalServicePage } from "./features/external-services/AddExternalServicePage";
+const ExternalServicesPage = React.lazy(() => import("./features/external-services/ExternalServicesPage").then((m) => ({ default: m.ExternalServicesPage })));
+const AddExternalServicePage = React.lazy(() => import("./features/external-services/AddExternalServicePage").then((m) => ({ default: m.AddExternalServicePage })));
 
 // Custom Domains
-import { CustomDomainsPage } from "./features/custom-domains";
+const CustomDomainsPage = React.lazy(() => import("./features/custom-domains").then((m) => ({ default: m.CustomDomainsPage })));
 import {
   TrustDelegationPoliciesPage,
   TrustDelegationPolicyDetailPage,
@@ -111,19 +113,18 @@ import {
 
 // New pages
 // import CreateGroupPage from "./features/groups/CreateGroupPage";
-// import { AddResourcePage } from "./features/resources/AddResourcePage";
 
 // RBAC pages
-import { PermissionsPage } from "./features/permissions/PermissionsPage";
-import { RoleBindingsPage } from "./features/role-bindings/RoleBindingsPage";
-import { PermissionResourcesPage } from "./features/resources/PermissionResourcesPage";
-import EffectiveAccessPage from "./features/effective-access/EffectiveAccessPage";
+const PermissionsPage = React.lazy(() => import("./features/permissions/PermissionsPage").then((m) => ({ default: m.PermissionsPage })));
+const RoleBindingsPage = React.lazy(() => import("./features/role-bindings/RoleBindingsPage").then((m) => ({ default: m.RoleBindingsPage })));
+const PermissionResourcesPage = React.lazy(() => import("./features/resources/PermissionResourcesPage").then((m) => ({ default: m.PermissionResourcesPage })));
+const EffectiveAccessPage = React.lazy(() => import("./features/effective-access/EffectiveAccessPage"));
 
 import { UnifiedAuthFlowPage } from "./auth/app/UnifiedAuthFlowPage";
 
 // Other pages
 import { LandingPage } from "./pages/LandingPage";
-import { ClientsPage } from "./features/clients/ClientsPage";
+const ClientsPage = React.lazy(() => import("./features/clients/ClientsPage").then((m) => ({ default: m.ClientsPage })));
 
 function LegacyTrustDelegationPolicyDetailRedirect() {
   const { policyId = "" } = useParams();
@@ -209,12 +210,17 @@ function AppContent() {
   return (
     <AuthProvider>
       <RbacAudienceProvider>
-        <Router>
+        {/* A navigation is a React transition: while a lazy page's chunk downloads the
+            current page and its sidebar stay on screen. Without this, the one Suspense
+            above <Routes> swaps the whole app -- shell included -- for "Loading…" on
+            every first visit to a page. */}
+        <Router future={{ v7_startTransition: true }}>
           <DensityProvider>
           <WizardProvider>
             <GuidedTourProvider>
               <div className="min-h-screen bg-background text-foreground">
                 <RoutedErrorBoundary>
+                <React.Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
                 <Routes>
                   {/* Auth routes - accessible without authentication */}
                   <Route path="/admin/login" element={<UnifiedAuthFlowPage />} />
@@ -819,13 +825,48 @@ function AppContent() {
                     }
                   />
 
-                  {/* Policy and Logs: reserved, labelled previews */}
+                  {/* Policy: one feature — access policies. An admin picks a resource
+                      and roles from Discovery, chooses Block or Allow, sets a window,
+                      and applies; AuthSec changes IAM. The list, create/edit and detail
+                      each gate on the access_policies capability inside PolicyShell.
+                      AWS-account setup (enforcement, IaC, notifications, settings) lives
+                      on each AWS connection's detail page, not here. */}
                   <Route
                     path="/iga/policy"
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <PolicyPage />
+                          <PoliciesListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyFormPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policy/:id/edit"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyFormPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -869,7 +910,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Agent policies" />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Agent policies" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -879,7 +920,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Scheduled actions" />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Scheduled actions" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -889,7 +930,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Policy warnings" />
+                          <GatedRedirect to="/iga/policy?status=failed" retired={<RetiredPage title="Policy warnings" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -949,7 +990,7 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <RetiredPage title="Enforcement queue" />
+                          <GatedRedirect to="/iga/policy" retired={<RetiredPage title="Enforcement queue" />} />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -1334,6 +1375,17 @@ function AppContent() {
                   />
 
                   <Route
+                    path="/identity-providers/oidc/edit/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <EditOidcMethodPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
                     path="/scim-connections"
                     element={
                       <ProtectedRoute requireProject>
@@ -1350,28 +1402,6 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <AppLayout>
                           <DirectorySyncPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/vault"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <VaultPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/vault/import"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <ImportSecretsPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1635,6 +1665,7 @@ function AppContent() {
                   {/* Global catch-all — unmatched URLs must never render a blank page */}
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                </React.Suspense>
                 </RoutedErrorBoundary>
 
                 {/* Professional toast notification system */}

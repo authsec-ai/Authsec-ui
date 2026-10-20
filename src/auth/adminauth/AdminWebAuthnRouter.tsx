@@ -14,7 +14,8 @@ import { TOTPSetupComponent } from "../webauthn/TOTPSetupComponent";
 import { WebAuthnAuthComponent } from "../webauthn/WebAuthnAuthComponent";
 import { TOTPAuthComponent } from "../webauthn/TOTPAuthComponent";
 import { AuthSuccessComponent } from "../webauthn/AuthSuccessComponent";
-import { useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { decodeHandoff } from "@/utils/handoff";
 import { AuthActionPanel } from "../components/AuthActionPanel";
 
@@ -30,6 +31,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   const adminWebauthn = useAdminAuth();
   const dispatch = useDispatch();
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   // Apply resumable query context first; keep handoff as cross-domain fallback only.
   useEffect(() => {
@@ -53,12 +55,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
     const handoff = params.get("handoff");
     if (!handoff) return;
 
-    const payload = decodeHandoff<{
-      email?: string;
-      workspace_id?: string;
-      first_login?: boolean;
-      target?: "login" | "webauthn";
-    }>(handoff);
+    const payload = decodeHandoff(handoff);
 
     if (payload?.email && payload?.workspace_id) {
       dispatch(
@@ -110,6 +107,7 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
   }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.isFirstLogin, dispatch]);
 
   // Prefetch MFA methods when entering authentication or selection
+  const getAdminMFAMethods = adminWebauthn.getMFAMethods;
   useEffect(() => {
     if (!adminWebauthn.email || !adminWebauthn.workspaceId) return;
     if (
@@ -117,9 +115,17 @@ function AdminWebAuthnRouterInner({ onAuthComplete, onAuthError }: AdminWebAuthn
       (!adminWebauthn.availableMFAMethods || adminWebauthn.availableMFAMethods.length === 0)
     ) {
       // Fire and forget; context handles errors/toasts
-      void adminWebauthn.getMFAMethods();
+      void getAdminMFAMethods();
     }
-  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, adminWebauthn.getMFAMethods, adminWebauthn.availableMFAMethods]);
+  }, [adminWebauthn.currentStep, adminWebauthn.email, adminWebauthn.workspaceId, getAdminMFAMethods, adminWebauthn.availableMFAMethods]);
+
+  // Nothing to resume: a reload or a revisit lost the in-memory flow, and the
+  // URL carries no sign-in to pick up. Go on instead of waiting forever.
+  const params = new URLSearchParams(location.search);
+  const urlResumes = (params.get("email") && params.get("workspace_id")) || params.get("handoff");
+  if (adminWebauthn.currentStep === "login" && !adminWebauthn.email && !urlResumes) {
+    return <Navigate to={isAuthenticated ? "/dashboard" : "/admin/login"} replace />;
+  }
 
   // Render lightweight loader if step is still 'login' to avoid blank screen during transition
   if (adminWebauthn.currentStep === "login") {

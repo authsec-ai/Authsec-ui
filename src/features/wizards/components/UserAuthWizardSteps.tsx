@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Plus,
   CheckCircle,
-  AlertCircle,
   ArrowLeft,
 } from "lucide-react";
 import { useUnifiedProviders } from "@/features/authentication/hooks/useUnifiedProviders";

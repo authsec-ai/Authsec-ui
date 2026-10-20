@@ -27,6 +27,7 @@ import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { TableCard } from "@/theme/components/cards";
 
+import { KubernetesPolicyNote } from "../policy/shared";
 import { PreviewLayout, type PreviewModel } from "../shared/components/ObjectPreview";
 import { Timestamp } from "../shared/components/Timestamp";
 import { resolvePagedView, useRestartOnListingChanged, type PagedView } from "../shared/listView";
@@ -369,6 +370,7 @@ export default function InventoryScreen(p: ScreenProps) {
       onClearAll={() => p.url.patch({ kind: null, namespace: null, source: null })}
       notices={
         <>
+          <KubernetesPolicyNote />
           {restarted ? (
             <p role="status" className="text-xs text-(--color-text-muted)">
               The list restarted at the first page: it changed while you were paging.
@@ -409,7 +411,7 @@ export default function InventoryScreen(p: ScreenProps) {
                     narrowing.length ? (
                       <FilteredEmpty subject={type} narrowing={narrowing} onClear={() => p.url.patch({ q: null, kind: null, namespace: null, source: null })} />
                     ) : sweeps.length && sweeps.every((s) => s.state === "not_swept") ? (
-                      <EmptyList subject={type} detail="No inventory received yet: the cluster has not completed a sweep. This is not a finding that it holds none." />
+                      <EmptyList subject={type} detail="No inventory received yet: the cluster has not completed a sweep. This is not a finding that it holds none. Agents the cluster agent has already sighted are listed under Sightings." />
                     ) : sweeps.some((s) => s.observedAt && s.state !== "not_swept") ? (
                       <EmptyList subject={type} detail="The latest sweep was read and recorded no Kubernetes objects of this type." />
                     ) : (

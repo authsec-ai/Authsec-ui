@@ -1,4 +1,4 @@
-import { baseApi, withSessionData } from "./baseApi";
+import { baseApi } from "./baseApi";
 
 // ============================================================================
 // Domain Management API Types

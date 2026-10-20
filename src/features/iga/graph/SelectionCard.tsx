@@ -1,8 +1,9 @@
 /**
  * The selection card (SPEC-iga-phase2-graph.md §2.14.11 *Selection*): what a
  * selected card or line IS, in one plain sentence, a few facts, the one
- * uncertainty that matters, and the next step — View evidence, Open
- * details. Readable without scrolling on a normal desktop.
+ * uncertainty that matters, and the next step — a new access policy where
+ * one can be set, then Open details. An object's evidence lives on its page
+ * (Overview › Evidence); a line has no page, so its card keeps View evidence.
  *
  * Non-modal and in a stable place (the canvas's top-right corner; the canvas
  * pans so it never covers what is selected). The deeper evidence panel
@@ -23,7 +24,8 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Network, X } from "lucide-react";
 
 import { objectPath, refType, type Basis, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,7 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { WrapId } from "../shared/components/WrapId";
 import { edgeMeaning, edgeVerb, frontierLabel, independentCount, isK8sEdge, markedLimitations } from "./graphLabels";
 import { describeNode, type NodeCategory } from "./nodeView";
+import { usePolicyCard } from "./PolicyCardSection";
 import { frontierKey, type FrontierControl, type VisualEdge, type VisualNode } from "./types";
 
 export type SelectionSubject = { kind: "node"; visual: VisualNode } | { kind: "edge"; edge: VisualEdge };
@@ -140,7 +143,7 @@ function k8sNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edges
     sentence =
       first.kind === "k8s_service_account"
         ? `A Kubernetes ServiceAccount${where(first)}${first.scope ? `, cluster ${first.scope.label}` : ""}. Rules reach it through RoleBindings and ClusterRoleBindings.`
-        : `A Kubernetes ${kind} that a binding names${first.scope ? ` in cluster ${first.scope.label}` : ""}. The cluster holds no object for it; it is known only from the binding.`;
+        : `A Kubernetes ${kind} that a binding names${first.scope ? ` in cluster ${first.scope.label}` : ""}. The cluster holds no object for it, it is known only from the binding.`;
     const direct = first.used_by_count;
     if (direct) facts.push(["Used by", direct.value == null ? "Not known" : `${direct.exact ? "" : "at least "}${direct.value} workload${direct.value === 1 ? "" : "s"} directly`]);
   }
@@ -206,11 +209,11 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
       if (first.sid) facts.push(["Sid", first.sid]);
       break;
     case "exact":
-      sentence = "An exact reference named by a policy statement. That this resource exists has not been confirmed.";
-      facts.push(...refFact("Reference"));
+      // The title is the resource's name; its full ARN is on its page.
+      sentence = "Named in a policy statement. AuthSec has not confirmed that it exists.";
       break;
     case "selector":
-      sentence = "A pattern that policy statements name. It is not a list of resources — what it matches was not enumerated.";
+      sentence = "A pattern named in policy statements. What it matches was not listed.";
       facts.push(...refFact("Pattern"));
       break;
     case "external":
@@ -340,8 +343,12 @@ export function SelectionCard({
   docked?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const key = subject.kind === "node" ? `n:${subject.visual.id}` : `e:${subject.edge.id}`;
   useEffect(() => {
+    // A new selection starts at the top: without this, a body scrolled down on
+    // the previous card stays scrolled and reads as "stuck / clipped at the top".
+    bodyRef.current?.scrollTo({ top: 0 });
     headingRef.current?.focus({ preventScroll: true });
   }, [key]);
 
@@ -356,6 +363,7 @@ export function SelectionCard({
   let uncertainty: string[] = [];
   let open: GraphRef | null = null;
   let body: ReactNode = null;
+  const policy = usePolicyCard({ subject, edges, nodes, onSelectNode: actions.onSelectNode });
 
   const k8s = subject.kind === "node" ? subject.visual.members[0].provider === "k8s" : isK8sEdge(subject.edge);
 
@@ -439,6 +447,36 @@ export function SelectionCard({
     if (e.summary?.effect === "deny") uncertainty.unshift("A Deny statement. It was recorded, not evaluated against any Allow.");
   }
 
+  // The footer: the policy action when one can be taken here, then the object's
+  // page. A line has no page, so View evidence stays its way to the records;
+  // so does an object without a page (a statement).
+  const btn = "h-8 min-h-8 w-full px-3 text-[length:13px]";
+  const evidence = claims.length && !open;
+  const primary = policy.action ? (
+    <Button asChild size="sm" className={cn(btn, "text-white")}>
+      <Link to={policy.action.to}>{policy.action.label}</Link>
+    </Button>
+  ) : evidence ? (
+    <Button size="sm" className={cn(btn, "text-white")} onClick={() => actions.onEvidence(claims)}>
+      View evidence
+    </Button>
+  ) : open ? (
+    <Button size="sm" className={cn(btn, "text-white")} onClick={() => actions.onOpenObject(open!)}>
+      Open details
+    </Button>
+  ) : null;
+  const secondary =
+    policy.action && open ? (
+      <Button size="sm" variant="outline" className={btn} onClick={() => actions.onOpenObject(open!)}>
+        Open details
+      </Button>
+    ) : policy.action && evidence ? (
+      <Button size="sm" variant="outline" className={btn} onClick={() => actions.onEvidence(claims)}>
+        View evidence
+      </Button>
+    ) : null;
+  const graphFromHere = !!open && subject.kind === "node" && refType(open) !== "external_principal" && subject.visual.members[0].kind !== "statement";
+
   return (
     <section
       aria-labelledby="graph-selection-heading"
@@ -449,16 +487,16 @@ export function SelectionCard({
         }
       }}
       className={cn(
-        "flex max-h-full flex-col overflow-hidden bg-(--color-surface-raised)",
-        docked ? "h-full w-[320px] shrink-0 border-l border-(--color-border-subtle)" : "w-[320px] rounded-lg border border-(--color-border-subtle) shadow-(--shadow-md)",
+        "flex h-full flex-col overflow-hidden bg-(--color-surface-raised)",
+        docked ? "w-[360px] shrink-0 border-l border-(--color-border-subtle)" : "w-[360px] rounded-lg border border-(--color-border-subtle) shadow-(--shadow-md)",
       )}
     >
-      <header className="flex shrink-0 items-start gap-2 px-3.5 pt-3">
+      <header className="flex shrink-0 items-start gap-2 border-b border-(--color-border-subtle) px-4 pb-3 pt-3.5">
         <div className="min-w-0 flex-1">
           <p className="mb-1">
             <CategoryChip category={category} icon={icon}>{type}</CategoryChip>
           </p>
-          <h2 ref={headingRef} id="graph-selection-heading" tabIndex={-1} className="break-words text-sm font-semibold leading-snug text-(--color-text) outline-none">
+          <h2 ref={headingRef} id="graph-selection-heading" tabIndex={-1} className="break-words text-[15px] font-semibold leading-snug text-(--color-text) outline-none">
             {title}
           </h2>
         </div>
@@ -466,13 +504,13 @@ export function SelectionCard({
           <X className="size-4" />
         </Button>
       </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 pb-3 pt-2">
+      <div ref={bodyRef} className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-4 pb-4 pt-3.5">
         <p className="text-[13px] leading-relaxed text-(--color-text)">{sentence}</p>
-        {facts.length ? <dl className="space-y-1.5">{facts.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}</dl> : null}
-        {why ? (
-          <dl className="space-y-1.5 border-t border-(--color-border-subtle) pt-2">
-            {why.basis ? <Fact label="Basis">{(k8s ? K8S_BASIS_SHORT[why.basis] : undefined) ?? BASIS_SHORT[why.basis]}</Fact> : null}
-            <Fact label="Confirmed"><Timestamp iso={why.at} /></Fact>
+        {facts.length || why ? (
+          <dl className="space-y-1.5">
+            {facts.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}
+            {why?.basis ? <Fact label="Basis">{(k8s ? K8S_BASIS_SHORT[why.basis] : undefined) ?? BASIS_SHORT[why.basis]}</Fact> : null}
+            {why ? <Fact label="Last confirmed"><Timestamp iso={why.at} /></Fact> : null}
           </dl>
         ) : null}
         {uncertainty.length ? (
@@ -482,24 +520,31 @@ export function SelectionCard({
           </p>
         ) : null}
         {body}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {claims.length ? (
-            <Button size="sm" className="text-[length:var(--text-sm)] text-white" onClick={() => actions.onEvidence(claims)}>
-              View evidence
-            </Button>
+        {policy.section}
+      </div>
+      {primary || secondary || graphFromHere ? (
+        // At most two buttons side by side (the main one first), then re-rooting
+        // the graph as a quiet full-width row. One compact height throughout.
+        <footer className="shrink-0 space-y-1.5 border-t border-(--color-border-subtle) px-4 py-3">
+          {primary || secondary ? (
+            <div className={cn("grid gap-2", primary && secondary ? "grid-cols-2" : "grid-cols-1")}>
+              {primary}
+              {secondary}
+            </div>
           ) : null}
-          {open ? (
-            <Button size="sm" variant="outline" onClick={() => actions.onOpenObject(open!)}>
-              Open details
-            </Button>
-          ) : null}
-          {open && subject.kind === "node" && refType(open) !== "external_principal" && subject.visual.members[0].kind !== "statement" ? (
-            <Button size="sm" variant="ghost" onClick={() => actions.onFocusHere(open!)}>
+          {graphFromHere ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 min-h-8 w-full gap-1.5 px-3 text-[length:13px] font-medium text-(--color-primary-text) hover:bg-(--color-primary-soft) hover:text-(--color-primary-text)"
+              onClick={() => actions.onFocusHere(open!)}
+            >
+              <Network className="size-3.5" aria-hidden="true" />
               Graph from here
             </Button>
           ) : null}
-        </div>
-      </div>
+        </footer>
+      ) : null}
     </section>
   );
 }

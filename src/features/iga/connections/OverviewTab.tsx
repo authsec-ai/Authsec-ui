@@ -16,8 +16,9 @@ import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCo
 
 import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
-import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { ConnPill } from "./ConnPill";
 import { Panel } from "@/features/iga/shared/components/Panel";
+import { EnforcementLine } from "@/features/iga/policy/setup/EnforcementLine";
 import { cn } from "@/lib/utils";
 
 import {
@@ -42,6 +43,7 @@ import {
 } from "./connectionModel";
 import { AwsFacts, AzureFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
 import { useSourceFacts } from "./providerData";
+import { AutoScanPanel } from "./AutoScanPanel";
 import { PENDING_WORD, type ActionKind } from "./useConnectionActions";
 import { graphCell } from "./scanCells";
 import { LoadFailurePanel } from "@/components/console/load-state";
@@ -52,15 +54,15 @@ import { loadFailureOf } from "@/components/console/load-failure";
 function connectionPill(c: Connection) {
   switch (c.connection.state) {
     case "connected":
-      return <CloudPill tone="success">Connected</CloudPill>;
+      return <ConnPill tone="success">Connected</ConnPill>;
     case "authentication_failed":
-      return <CloudPill tone="danger">Authentication failed</CloudPill>;
+      return <ConnPill tone="danger">Authentication failed</ConnPill>;
     case "revoked":
-      return <CloudPill tone="muted">{primaryOf(c).label}</CloudPill>;
+      return <ConnPill tone="muted">{primaryOf(c).label}</ConnPill>;
     case "not_verified":
-      return <CloudPill tone="warning">{primaryOf(c).label}</CloudPill>;
+      return <ConnPill tone="warning">{primaryOf(c).label}</ConnPill>;
     default:
-      return <CloudPill tone="muted">Status unknown</CloudPill>;
+      return <ConnPill tone="muted">Status unknown</ConnPill>;
   }
 }
 
@@ -111,17 +113,17 @@ function revokedConsequence(c: Connection): string {
 function scanPill(c: Connection) {
   switch (c.scan.state) {
     case "queued":
-      return <CloudPill tone="info">Queued</CloudPill>;
+      return <ConnPill tone="info">Queued</ConnPill>;
     case "running":
-      return <CloudPill tone="info">Running</CloudPill>;
+      return <ConnPill tone="info">Running</ConnPill>;
     case "finished":
-      return <CloudPill tone="success">Finished</CloudPill>;
+      return <ConnPill tone="success">Finished</ConnPill>;
     case "failed":
-      return <CloudPill tone="danger">Failed</CloudPill>;
+      return <ConnPill tone="danger">Failed</ConnPill>;
     case "never_run":
-      return <CloudPill tone="muted">Never run</CloudPill>;
+      return <ConnPill tone="muted">Never run</ConnPill>;
     default:
-      return <CloudPill tone="muted">Unknown</CloudPill>;
+      return <ConnPill tone="muted">Unknown</ConnPill>;
   }
 }
 
@@ -141,7 +143,8 @@ function scanSentence(c: Connection): string {
     case "failed":
       return `${lastScanText(c)}. ${holdsLine(c)}.`;
     case "finished":
-      return `${lastScanText(c)}.`;
+      // The pill above already says "Finished"; the line gives the time and how long ago.
+      return c.scan.at ? `Last run ${ago(c.scan.at)}.` : "The last scan finished.";
     default:
       return "AuthSec reports a scan state this console does not recognise.";
   }
@@ -150,13 +153,13 @@ function scanSentence(c: Connection): string {
 function coveragePill(c: Connection) {
   const text = coverageText(c);
   const tone = c.coverage.state === "complete" ? "success" : c.coverage.state === "unknown" ? "muted" : "warning";
-  return <CloudPill tone={tone}>{text}</CloudPill>;
+  return <ConnPill tone={tone}>{text}</ConnPill>;
 }
 
 function graphPill(c: Connection) {
   const g = graphText(c);
   const tone = c.graph.state === "published" ? "success" : c.graph.state === "failed" ? "danger" : c.graph.state === "publishing" ? "info" : "muted";
-  return <CloudPill tone={tone}>{g.text}</CloudPill>;
+  return <ConnPill tone={tone}>{g.text}</ConnPill>;
 }
 
 function graphSentence(c: Connection): string {
@@ -270,6 +273,7 @@ function RecentScans({ c }: { c: Connection }) {
                 <span className="tabular-nums text-(--color-text-muted)">{r.queued_at ? format(new Date(r.queued_at), "d MMM, HH:mm") : "—"}</span>
                 <span className={failed ? "min-w-0 text-(--color-danger-text)" : "min-w-0 text-(--color-text)"}>
                   {failed && r.last_error ? `Failed: ${safeErrorProse(r.last_error)}` : RUN_LABEL[r.status]}
+                  {r.trigger === "scheduled" ? <span className="ml-2 text-xs text-(--color-text-muted)">Scheduled</span> : null}
                 </span>
                 <span className="text-xs text-(--color-text-muted)" title={graphCell(r).title}>
                   {graphCell(r).text === "—" ? "" : graphCell(r).text}
@@ -311,7 +315,7 @@ function StepAction({
   switch (step.action) {
     case "verify":
       return actions.verify ? (
-        <Button size="sm" variant="outline" disabled={!!pending} onClick={() => onRun("verify")}>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("verify")}>
           {pending === "verify" ? PENDING_WORD.verify : "Verify"}
         </Button>
       ) : (
@@ -319,7 +323,7 @@ function StepAction({
       );
     case "scan":
       return actions.scan ? (
-        <Button size="sm" variant="outline" disabled={!!pending} onClick={() => onRun("scan")}>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
           {pending === "scan" ? PENDING_WORD.scan : c.provider === "azure" ? "Rescan" : "Scan now"}
         </Button>
       ) : (
@@ -327,7 +331,7 @@ function StepAction({
       );
     case "scope":
       return actions.editScope ? (
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" asChild>
           <Link to={detailHref(c.id, "scope")} state={{ editScope: true }}>
             Choose scope
           </Link>
@@ -460,11 +464,13 @@ export function OverviewTab({
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <RecentScans c={c} /> : null}
+          {c.provider === "aws" && primary.key !== "revoked" ? <AutoScanPanel c={c} /> : null}
           <Tracker c={c} scopeChosen={scopeChosen} actions={actions} pending={pending} onRun={onRun} />
         </div>
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <AwsFacts c={c} /> : null}
           {c.provider === "azure" ? <AzureFacts c={c} /> : null}
+          {c.provider === "aws" ? <EnforcementLine connectionId={c.id} /> : null}
           {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
       {c.provider === "k8s" || c.provider === "github" ? (
         source.isError && !source.data ? (
