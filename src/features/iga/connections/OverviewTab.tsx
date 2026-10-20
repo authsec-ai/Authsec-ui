@@ -43,6 +43,7 @@ import {
 } from "./connectionModel";
 import { AwsFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
 import { useSourceFacts } from "./providerData";
+import { AutoScanPanel } from "./AutoScanPanel";
 import { PENDING_WORD, type ActionKind } from "./useConnectionActions";
 import { graphCell } from "./scanCells";
 import { LoadFailurePanel } from "@/components/console/load-state";
@@ -270,6 +271,7 @@ function RecentScans({ c }: { c: Connection }) {
                 <span className="tabular-nums text-(--color-text-muted)">{r.queued_at ? format(new Date(r.queued_at), "d MMM, HH:mm") : "—"}</span>
                 <span className={failed ? "min-w-0 text-(--color-danger-text)" : "min-w-0 text-(--color-text)"}>
                   {failed && r.last_error ? `Failed: ${safeErrorProse(r.last_error)}` : RUN_LABEL[r.status]}
+                  {r.trigger === "scheduled" ? <span className="ml-2 text-xs text-(--color-text-muted)">Scheduled</span> : null}
                 </span>
                 <span className="text-xs text-(--color-text-muted)" title={graphCell(r).title}>
                   {graphCell(r).text === "—" ? "" : graphCell(r).text}
@@ -460,6 +462,7 @@ export function OverviewTab({
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <RecentScans c={c} /> : null}
+          {c.provider === "aws" && primary.key !== "revoked" ? <AutoScanPanel c={c} /> : null}
           <Tracker c={c} scopeChosen={scopeChosen} actions={actions} pending={pending} onRun={onRun} />
         </div>
         <div className="min-w-0 space-y-4">
