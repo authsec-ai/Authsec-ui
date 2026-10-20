@@ -26,7 +26,7 @@
  *    reason, and waits to be resumed. While it is paused its settings are
  *    locked: the server resumes on any save, so a changed setting would
  *    un-pause it without anyone having read why it stopped;
- *  - when this deployment has the scheduler switched off, nothing will run,
+ *  - when the scan scheduler is not running on the server, nothing will run,
  *    and the panel says so instead of showing a schedule that never fires.
  *
  * The pure parts (choices, request bodies, time formatting) are in
@@ -444,7 +444,7 @@ function AutoScanBody({ c }: { c: Connection }) {
                   ? s.next_due_at
                     ? `Next scan ${formatInZone(s.next_due_at, zone)} (${formatDistanceToNowStrict(new Date(s.next_due_at), { addSuffix: true })})`
                     : null
-                  : "Scheduled scans are switched off on this deployment, so nothing will run yet"}
+                  : "The scan scheduler is not running on the server, so nothing will run yet"}
               </span>
               {stale ? <span className="text-(--color-warning-text)">Inventory may be out of date</span> : null}
               {canAdminister ? (
