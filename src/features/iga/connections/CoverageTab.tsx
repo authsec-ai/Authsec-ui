@@ -27,6 +27,7 @@ import { buildCoverage, COVERAGE_TONE, COVERAGE_WORD, k8sCoverageRows, type Cove
 import { coverageText, detailHref, scanHref } from "./connectionModel";
 import { gcpAttrs } from "./providerData";
 import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
+import { AzureCoverage } from "./AzureConnectionTabs";
 
 function Skeleton({ label }: { label: string }) {
   return <div className="h-32 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label={label} />;
@@ -395,5 +396,6 @@ function GitHubCoverage({ c }: { c: Connection }) {
 export function CoverageTab({ c }: { c: Connection }) {
   if (c.provider === "k8s") return <K8sCoverage c={c} />;
   if (c.provider === "github") return <GitHubCoverage c={c} />;
+  if (c.provider === "azure") return <AzureCoverage c={c} />;
   return <SurfaceCoverage c={c} />;
 }

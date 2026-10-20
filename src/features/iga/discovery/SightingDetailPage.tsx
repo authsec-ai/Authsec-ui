@@ -27,7 +27,7 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { FailurePanel } from "./ListStates";
 import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
 import { useClientsLookup } from "./useClientsLookup";
-import { sightingProvider } from "./model";
+import { azureAgentOrigin, azureAgentSignals, sightingProvider } from "./model";
 import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
@@ -77,7 +77,14 @@ export default function SightingDetailPage() {
   }
 
   const mode = evidenceModeOf(a);
-  const connection = connections.data?.find((c) => c.id === a.discovery_source_id);
+  // An Azure agent is tied to its tenant connection by tenant id; the others by discovery source.
+  const azureOrigin = azureAgentOrigin(a);
+  const azureTenant = azureOrigin ? String(a.metadata?.tenant_id ?? "").toLowerCase() : "";
+  const connection = azureTenant
+    ? connections.data?.find((c) => c.provider === "azure" && c.scope_id.toLowerCase() === azureTenant)
+    : connections.data?.find((c) => c.id === a.discovery_source_id);
+  // "Declared in code" wording is GitHub's; an Azure declaration is Microsoft listing it.
+  const codeDeclared = mode === "declared" && !azureOrigin;
   const client = a.matched_client_id ? clients.client(a.matched_client_id) : undefined;
   const matched = a.matched_client_id ? (
     client ? (
@@ -121,7 +128,7 @@ export default function SightingDetailPage() {
           <Fact label="Runs as">{a.observed_service_account || <span className={MUTED}>Not observed</span>}</Fact>
           <Fact label="Identity verified">{a.identity_verified_at ? ago(a.identity_verified_at) : <span className={MUTED}>Not verified</span>}</Fact>
           <Fact label="Origin">
-            {mode === "declared" && a.deployment_origin === "unknown" ? (
+            {codeDeclared && a.deployment_origin === "unknown" ? (
               <span className={MUTED}>Not established — a declaration does not say how it was deployed</span>
             ) : (
               ORIGIN_LABELS[a.deployment_origin]
@@ -134,7 +141,16 @@ export default function SightingDetailPage() {
         </Facts>
       </Panel>
 
-      <Panel title="Runtime" description={mode === "declared" ? "A declaration is not an observation: the agent may never have run." : "What was last observed."}>
+      <Panel
+        title="Runtime"
+        description={
+          codeDeclared
+            ? "A declaration is not an observation: the agent may never have run."
+            : azureOrigin
+              ? "Running means it signed in to Microsoft Entra ID, or was used in Microsoft 365, in the last week."
+              : "What was last observed."
+        }
+      >
         <Facts>
           <Fact label="Observed state">{a.runtime_status === "unknown" ? <span className={MUTED}>Unknown</span> : <SightingRuntime runtime={a.runtime_status} />}</Fact>
           <Fact label="Observed">{a.runtime_observed_at ? ago(a.runtime_observed_at) : <span className={MUTED}>Not observed</span>}</Fact>
@@ -155,7 +171,29 @@ export default function SightingDetailPage() {
         </Facts>
       </Panel>
 
-      {mode === "declared" ? (
+      {azureOrigin ? (
+        <Panel title="Evidence" description="What Microsoft records about it, as discovery read it.">
+          <Facts>
+            <Fact label="Found by">{azureOrigin}</Fact>
+            <Fact label="Tenant">{azureTenant || <span className={MUTED}>Not recorded</span>}</Fact>
+            {typeof a.metadata?.object_id === "string" ? (
+              <Fact label="Microsoft Entra object ID">
+                <CopyValue value={a.metadata.object_id} what="Object ID" />
+              </Fact>
+            ) : null}
+            {typeof a.metadata?.blueprint_name === "string" && a.metadata.blueprint_name ? (
+              <Fact label="Agent identity blueprint">{a.metadata.blueprint_name}</Fact>
+            ) : null}
+          </Facts>
+          {azureAgentSignals(a).length ? (
+            <ul className="mt-4 list-inside list-disc space-y-1 text-xs text-(--color-text-muted)">
+              {azureAgentSignals(a).map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          ) : null}
+        </Panel>
+      ) : codeDeclared ? (
         <Panel title="Evidence" description="Where it was declared. File contents are never stored — only a hash.">
           <div className="space-y-6">
             <GitHubEvidenceSection agent={a} />

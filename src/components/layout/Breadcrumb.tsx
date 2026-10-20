@@ -116,6 +116,9 @@ export function Breadcrumb() {
         case "k8s":
           label = "Kubernetes";
           break;
+        case "azure":
+          label = "Azure";
+          break;
         case "policy":
           label = "Policy";
           break;

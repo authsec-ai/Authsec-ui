@@ -126,6 +126,7 @@ export function TableToolbar({
 
 const SOURCE_COPY: Record<ConnectionProvider, { title: string; note: string }> = {
   aws: { title: "AWS account", note: "IAM roles, users and workloads" },
+  azure: { title: "Azure tenant", note: "Entra ID identities, agents and Azure roles" },
   k8s: { title: "Kubernetes cluster", note: "Service accounts and RBAC" },
   gcp: { title: "Google Cloud project", note: "IAM bindings and keys" },
   github: { title: "GitHub organisation", note: "Apps, tokens and members" },
