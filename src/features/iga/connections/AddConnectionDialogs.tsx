@@ -11,7 +11,6 @@ import { DeployCollectorWizard } from "@/features/discovery/DeployCollectorWizar
 import { GitHubSetupWizard } from "@/features/discovery/GitHubSetupWizard";
 import { CloudProviderPicker, type PickerProvider } from "@/features/discovery/cloud/CloudProviderPicker";
 import { AWSOnboardingWizard } from "@/features/discovery/cloud/aws/AWSOnboardingWizard";
-import { AzureOnboardingWizard } from "@/features/discovery/cloud/azure/AzureOnboardingWizard";
 import { GCPOnboardingWizard } from "@/features/discovery/cloud/gcp/GCPOnboardingWizard";
 
 import type { ConnectionProvider } from "@/app/api/connectionsApi";
@@ -39,12 +38,11 @@ export function AddConnectionDialogs({
         open={pickerOpen}
         onOpenChange={onPickerOpenChange}
         onContinue={(p: PickerProvider) => {
-          if (p === "aws" || p === "gcp" || p === "azure" || p === "k8s" || p === "github") onWizardChange(p);
+          if (p === "aws" || p === "gcp" || p === "k8s" || p === "github") onWizardChange(p);
           else toast("That provider is not available yet.");
         }}
       />
       <AWSOnboardingWizard open={wizard === "aws"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
-      <AzureOnboardingWizard open={wizard === "azure"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <GCPOnboardingWizard open={wizard === "gcp"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <DeployCollectorWizard open={wizard === "k8s"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <GitHubSetupWizard

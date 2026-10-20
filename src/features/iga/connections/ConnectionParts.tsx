@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { ConnPill } from "./ConnPill";
 import { cn } from "@/lib/utils";
 
-import { actionsOf, revokeWord, statusOf, type ActionSet } from "./connectionModel";
+import { actionsOf, statusOf, type ActionSet } from "./connectionModel";
 import { PENDING_WORD, type ActionFailure, type ActionKind } from "./useConnectionActions";
 
 /** The primary condition in words, with a dot: colour is never the only signal. */
@@ -134,7 +134,7 @@ export function ConnectionActionBar({
     <div className="flex flex-wrap items-center gap-2">
       {a.scan ? (
         <Button variant="outline" size="sm" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
-          {pending === "scan" ? PENDING_WORD.scan : c.provider === "azure" ? "Rescan" : "Scan now"}
+          {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
         </Button>
       ) : null}
       {primary}
@@ -155,7 +155,7 @@ export function ConnectionActionBar({
                   onSelect={() => onRun("revoke")}
                   className="text-(--color-danger-text) focus:bg-(--color-danger-soft) focus:text-(--color-danger-text)"
                 >
-                  {c.provider === "aws" || c.provider === "gcp" || c.provider === "azure" ? `${revokeWord(c).verb}…` : "Remove connection…"}
+                  {c.provider === "aws" || c.provider === "gcp" ? "Revoke…" : "Remove connection…"}
                 </DropdownMenuItem>
               </>
             ) : null}

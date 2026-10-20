@@ -45,8 +45,8 @@ export const CLOUD_PROVIDER_META: Record<CloudProvider, CloudProviderMeta> = {
     label: "Azure",
     initial: "AZ",
     colorClass: "bg-white border border-border text-[#0078d4]",
-    tagline: "Microsoft Entra ID identities and agents, and Azure role assignments, in a tenant.",
-    available: true,
+    tagline: "Coming soon.",
+    available: false,
   },
 };
 

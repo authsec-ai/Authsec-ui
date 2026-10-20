@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { providerWord } from "./connectionModel";
 
 export function ProviderGlyph({ provider, size = "size-7", className }: { provider: ConnectionProvider; size?: string; className?: string }) {
-  if (provider === "aws" || provider === "gcp" || provider === "azure") return <CloudProviderBadge provider={provider} size={size} />;
+  if (provider === "aws" || provider === "gcp") return <CloudProviderBadge provider={provider} size={size} />;
   // A provider this console does not know gets a neutral mark, not GitHub's.
   const Icon = provider === "k8s" ? Boxes : provider === "github" ? Github : CircleHelp;
   return (

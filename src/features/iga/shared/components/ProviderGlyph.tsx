@@ -8,19 +8,18 @@ import { Boxes, Github } from "lucide-react";
 import { CloudProviderLogo } from "@/features/discovery/cloud/CloudProviderLogo";
 import { cn } from "@/lib/utils";
 
-export type GlyphProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
+export type GlyphProvider = "aws" | "gcp" | "k8s" | "github";
 
 const GLYPH_PROVIDER_LABEL: Record<GlyphProvider, string> = {
   aws: "AWS",
   gcp: "Google Cloud",
-  azure: "Azure",
   k8s: "Kubernetes",
   github: "GitHub",
 };
 
 export function ProviderGlyph({ provider, withName = false, className }: { provider: GlyphProvider; withName?: boolean; className?: string }) {
   const mark =
-    provider === "aws" || provider === "gcp" || provider === "azure" ? (
+    provider === "aws" || provider === "gcp" ? (
       <span className="size-4 shrink-0 text-(--color-text-muted)">
         <CloudProviderLogo provider={provider} />
       </span>

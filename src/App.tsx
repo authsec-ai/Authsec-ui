@@ -78,8 +78,6 @@ const IdentityPage = React.lazy(() => import("./features/iga/identities/Identity
 const ResourcePage = React.lazy(() => import("./features/iga/resources/ResourcePage"));
 const ExternalPrincipalPage = React.lazy(() => import("./features/iga/external/ExternalPrincipalPage"));
 const GoogleOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/gcp/GoogleOAuthCallbackPage"));
-const AzureOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureOAuthCallbackPage"));
-const AzureObjectPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureObjectPage"));
 import { IgaLayout } from "./components/layout/IgaLayout";
 const AdminVoiceAgentPage = React.lazy(() => import("./features/voice-auth/AdminVoiceAgentPage").then((m) => ({ default: m.AdminVoiceAgentPage })));
 const LogsConfigurationPage = React.lazy(() => import("./features/logging/LogsConfigurationPage").then((m) => ({ default: m.LogsConfigurationPage })));
@@ -697,26 +695,6 @@ function AppContent() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/iga/azure/:kind/:id"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <AzureObjectPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/iga/azure/:kind/:id/:tab"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <IgaLayout>
-                          <AzureObjectPage />
-                        </IgaLayout>
-                      </ProtectedRoute>
-                    }
-                  />
                   {/* Google Authentication's OAuth popup landing page — see
                       controllers/platform/cloud_gcp_oauth_controller.go's
                       GoogleOAuthCallback, which redirects here with
@@ -739,10 +717,6 @@ function AppContent() {
                   <Route
                     path="/discovery/cloud/gcp/google-oauth/callback"
                     element={<GoogleOAuthCallbackPage />}
-                  />
-                  <Route
-                    path="/discovery/cloud/azure/oauth/callback"
-                    element={<AzureOAuthCallbackPage />}
                   />
                   <Route
                     path="/iga/estate/:id"

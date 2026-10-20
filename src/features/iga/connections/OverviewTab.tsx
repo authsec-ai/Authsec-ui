@@ -41,7 +41,7 @@ import {
   type Step,
   type StepState,
 } from "./connectionModel";
-import { AwsFacts, AzureFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
+import { AwsFacts, GcpFacts, GitHubFacts, K8sFacts } from "./ProviderFacts";
 import { useSourceFacts } from "./providerData";
 import { AutoScanPanel } from "./AutoScanPanel";
 import { PENDING_WORD, type ActionKind } from "./useConnectionActions";
@@ -99,8 +99,6 @@ function revokedConsequence(c: Connection): string {
       return "Earlier results stay in Discovery, marked stale. Reconnect the account to resume.";
     case "gcp":
       return "Earlier results stay in Discovery, marked stale. Reconnect the project to resume.";
-    case "azure":
-      return "Earlier results stay in Discovery, marked stale. Reconnect the tenant to resume.";
     case "k8s":
       return "Earlier results stay, marked stale. Removing the connection deletes its sightings; graph objects stay.";
     case "github":
@@ -324,7 +322,7 @@ function StepAction({
     case "scan":
       return actions.scan ? (
         <Button size="sm" variant="outline" className="h-8 rounded-md border border-(--color-border-strong) bg-(--color-surface-raised) text-xs font-semibold text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text) px-3" disabled={!!pending} onClick={() => onRun("scan")}>
-          {pending === "scan" ? PENDING_WORD.scan : c.provider === "azure" ? "Rescan" : "Scan now"}
+          {pending === "scan" ? PENDING_WORD.scan : "Scan now"}
         </Button>
       ) : (
         <span className="text-xs text-(--color-text-muted)">An administrator can start a scan.</span>
@@ -469,7 +467,6 @@ export function OverviewTab({
         </div>
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <AwsFacts c={c} /> : null}
-          {c.provider === "azure" ? <AzureFacts c={c} /> : null}
           {c.provider === "aws" ? <EnforcementLine connectionId={c.id} /> : null}
           {c.provider === "gcp" ? <GcpFacts c={c} /> : null}
       {c.provider === "k8s" || c.provider === "github" ? (

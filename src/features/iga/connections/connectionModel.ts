@@ -27,7 +27,6 @@ import { K8S_COVERAGE_LABEL } from "@/features/iga/discovery/k8s";
 const PROVIDER_WORDS: Record<ConnectionProvider, string> = {
   aws: "AWS",
   gcp: "Google Cloud",
-  azure: "Azure",
   k8s: "Kubernetes",
   github: "GitHub",
 };
@@ -53,8 +52,6 @@ export function typeWord(c: Connection): string {
       return "GCP scope";
     case "k8s":
       return "Kubernetes cluster";
-    case "azure":
-      return "Azure tenant";
     case "github":
       return "GitHub organisation";
     default:
@@ -62,7 +59,7 @@ export function typeWord(c: Connection): string {
   }
 }
 
-export const PROVIDERS: ConnectionProvider[] = ["aws", "azure", "k8s", "gcp", "github"];
+export const PROVIDERS: ConnectionProvider[] = ["aws", "k8s", "gcp", "github"];
 
 export function isConnectionProvider(v: string | null | undefined): v is ConnectionProvider {
   return !!v && (PROVIDERS as string[]).includes(v);
@@ -300,9 +297,7 @@ function reasonAction(c: Connection, code: string | null): string {
         ? checkThenVerify(c, "Check that the reader service account still exists and its role grants are in place")
         : provider === "aws"
           ? checkThenVerify(c, "Check the role ARN, the ExternalId in its trust policy and that it trusts AuthSec")
-          : provider === "azure"
-            ? checkThenVerify(c, "Check that an administrator granted consent to the AuthSec application in the tenant, or that your own app's client secret is still valid")
-            : "Check the installation's permissions, then try again.";
+          : "Check the installation's permissions, then try again.";
     case "throttled":
       return "This is usually temporary. Try again in a moment.";
     case "timeout":
@@ -365,7 +360,7 @@ export function statusOf(c: Connection): StatusSummary {
   switch (p.key) {
     case "revoked": {
       // A cluster or an organisation that is switched off can still be removed; say so.
-      if (c.provider === "aws" || c.provider === "gcp" || c.provider === "azure") return { ...p, support: "Its last results are kept, and are no longer reconfirmed." };
+      if (c.provider === "aws" || c.provider === "gcp") return { ...p, support: "Its last results are kept, and are no longer reconfirmed." };
       return { ...p, support: `${reasonCopy(c).cause}. ${holdsLine(c)}. It can be removed.` };
     }
     case "auth_failed": {
@@ -525,22 +520,22 @@ export function actionsOf(c: Connection, canAdminister: boolean): ActionSet {
   // revoked one must stay removable. AWS and GCP revoke once: a revoked row keeps its history.
   const removable = c.provider === "k8s" || c.provider === "github";
   return {
-    scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github" || c.provider === "azure"),
+    scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github"),
     verify: canAdminister && live && verifiable(c),
     editScope: canAdminister && live && cap.edit_scope && (c.provider === "aws" || c.provider === "github"),
     rules: cap.rules && c.provider === "github",
-    revoke: canAdminister && cap.revoke && (live || removable) && (removable || c.provider === "aws" || c.provider === "gcp" || c.provider === "azure"),
+    revoke: canAdminister && cap.revoke && (live || removable) && (removable || c.provider === "aws" || c.provider === "gcp"),
   };
 }
 
 /** Does this provider have a verify route that this console calls? GitHub has none. */
 function verifiable(c: Connection): boolean {
-  return c.capabilities.verify && (c.provider === "aws" || c.provider === "gcp" || c.provider === "azure");
+  return c.capabilities.verify && (c.provider === "aws" || c.provider === "gcp");
 }
 
 /** The word for the destructive action: AWS and GCP are revoked, a cluster and an organisation are removed. */
 export function revokeWord(c: Connection): { verb: string; noun: string } {
-  return c.provider === "aws" || c.provider === "gcp" || c.provider === "azure"
+  return c.provider === "aws" || c.provider === "gcp"
     ? { verb: "Revoke", noun: "revoke" }
     : { verb: "Remove connection", noun: "remove" };
 }
@@ -603,10 +598,6 @@ export function discoveryLocation(c: Connection): DiscoveryLocation {
         : { provider: "aws", type: "workloads", view: "latest", source: c.id };
     case "gcp":
       return { provider: "gcp", type: "identities", source: c.id };
-    case "azure":
-      return c.graph.state === "published"
-        ? { provider: "azure", type: "identities", view: "published", source: c.id }
-        : { provider: "azure", type: "identities", view: "latest", source: c.id };
     case "k8s":
       return { provider: "k8s", type: "workloads", source: c.id };
     default:
@@ -628,8 +619,6 @@ export function discoveryWaitingFor(c: Connection): string {
       return "Waiting for a completed scan of the organisation.";
     case "gcp":
       return "Waiting for collected identities for this project.";
-    case "azure":
-      return "Waiting for the first scan to finish.";
     default:
       return "Waiting for the first scan to finish.";
   }
@@ -719,10 +708,8 @@ export function trackerOf(c: Connection, opts: { scopeChosen: boolean }): Step[]
       ? `${capitalise(c.scope_summary || "Scope set")}.`
       : c.provider === "github"
         ? "No repositories are selected, so a scan would look at nothing."
-        : c.provider === "azure"
-          ? "No subscriptions are readable yet. Connect the tenant again to choose them."
-          : "No scope is recorded yet.",
-    action: opts.scopeChosen || revoked || c.provider === "k8s" || c.provider === "azure" ? undefined : "scope",
+        : "No scope is recorded yet.",
+    action: opts.scopeChosen || revoked || c.provider === "k8s" ? undefined : "scope",
   });
 
   // Scan.

@@ -9,7 +9,7 @@
  *
  *   /iga/discovery?provider=aws&type=workloads&view=published&q=refund&source=<connection id>
  *
- * `provider`  aws · k8s · gcp · azure · github    absent: the default rule (DiscoveryPage)
+ * `provider`  aws · k8s · gcp · github    absent: the default rule (DiscoveryPage)
  * `type`      workloads · identities · resources · sightings    default: workloads
  * `view`      published · latest          default: published (AWS only)
  * `q`         search text
@@ -24,10 +24,10 @@ import type { RemovedFilter } from "./model";
 
 export const DISCOVERY_PATH = "/iga/discovery";
 
-export const DISCOVERY_PROVIDERS = ["aws", "k8s", "gcp", "azure", "github"] as const;
+export const DISCOVERY_PROVIDERS = ["aws", "k8s", "gcp", "github"] as const;
 export type DiscoveryProvider = (typeof DISCOVERY_PROVIDERS)[number];
 
-const DISCOVERY_TYPES = ["agents", "workloads", "identities", "resources", "sightings"] as const;
+const DISCOVERY_TYPES = ["workloads", "identities", "resources", "sightings"] as const;
 export type DiscoveryType = (typeof DISCOVERY_TYPES)[number];
 
 export const DISCOVERY_VIEWS = ["published", "latest"] as const;
@@ -37,12 +37,10 @@ export const PROVIDER_LABEL: Record<DiscoveryProvider, string> = {
   aws: "AWS",
   k8s: "Kubernetes",
   gcp: "Google Cloud",
-  azure: "Azure",
   github: "GitHub",
 };
 
 export const TYPE_LABEL: Record<DiscoveryType, string> = {
-  agents: "Agents",
   workloads: "Workloads",
   identities: "Identities",
   resources: "Resources",

@@ -1,5 +1,5 @@
 /**
- * The consequences of revoking (AWS, Google Cloud, Azure) or removing (Kubernetes,
+ * The consequences of revoking (AWS, Google Cloud) or removing (Kubernetes,
  * GitHub) a connection, said before the button is pressed.
  *
  * Every sentence below was checked against what the backend does, and where it
@@ -68,24 +68,6 @@ function Copy({ c, lastGitHubOrg }: { c: Connection; lastGitHubOrg: boolean }): 
           </p>
         </div>
       );
-    case "azure":
-      return (
-        <div className="space-y-2">
-          <p>
-            AuthSec stops reading <strong>{c.name}</strong>, and its subscriptions are revoked with it. No scan can run on
-            this connection again.
-          </p>
-          <p className="text-muted-foreground">
-            <strong>AuthSec deletes nothing in your Azure tenant.</strong> The Reader role assignments and the AuthSec
-            enterprise application stay until you delete the application in Microsoft Entra ID, which also removes its role
-            assignments.
-          </p>
-          <p className="text-muted-foreground">
-            Everything already discovered is kept, unchanged, and is no longer reconfirmed. Connecting the same tenant again
-            reactivates this connection rather than creating a duplicate.
-          </p>
-        </div>
-      );
     case "k8s":
       return (
         <div className="space-y-2">
@@ -145,11 +127,9 @@ export function RevokeConnectionDialog({
       ? "Revoke this AWS connection?"
       : connection.provider === "gcp"
         ? "Revoke this Google Cloud connection?"
-        : connection.provider === "azure"
-          ? "Revoke this Azure connection?"
-          : connection.provider === "k8s"
-            ? "Remove this cluster connection?"
-            : "Remove this GitHub organisation?";
+        : connection.provider === "k8s"
+          ? "Remove this cluster connection?"
+          : "Remove this GitHub organisation?";
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !pending && onCancel()}>
       <DialogContent>

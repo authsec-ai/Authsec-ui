@@ -18,7 +18,6 @@ import { CopyValue, Fact, Facts, Meta, Panel } from "@/features/iga/shared/compo
 
 import type { ActionSet } from "./connectionModel";
 import { awsAttrs, gcpScopeRows, useSourceFacts } from "./providerData";
-import { AzureScope } from "./AzureConnectionTabs";
 
 function AwsScope({ c, actions, onScan }: { c: Connection; actions: ActionSet; onScan?: () => Promise<boolean> }) {
   const q = useGetAwsConnectorQuery(c.id);
@@ -135,8 +134,6 @@ export function ScopeTab({ c, actions, onScan }: { c: Connection; actions: Actio
       return <GcpScope c={c} />;
     case "k8s":
       return <K8sScope c={c} />;
-    case "azure":
-      return <AzureScope c={c} />;
     default:
       return <GitHubScope c={c} actions={actions} />;
   }

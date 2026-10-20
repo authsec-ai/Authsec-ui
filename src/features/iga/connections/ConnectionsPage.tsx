@@ -146,15 +146,6 @@ export default function ConnectionsPage() {
     };
   }, [code, convertManifest, setSearchParams]);
 
-  // Azure OAuth: when Microsoft redirects back through AzureOAuthCallbackPage,
-  // the callback navigates here with ?azure_session_id=... which reopens the
-  // wizard at step 2 (Review tenant).
-  const azureSessionId = searchParams.get("azure_session_id");
-  useEffect(() => {
-    if (!azureSessionId) return;
-    setWizard("azure");
-  }, [azureSessionId]);
-
   const added = (id?: string) => {
     dispatch(connectionsApi.util.invalidateTags(["Connections"]));
     // A new GitHub organisation scans nothing until repositories are chosen.
@@ -299,7 +290,7 @@ export default function ConnectionsPage() {
                   Reports every {Math.max(1, Math.round(c.scan.reports_every_seconds / 60))} min
                 </span>
               ) : a.scan ? (
-                <Button variant="ghost" size="icon" className="size-9" aria-label={c.provider === "azure" ? `Rescan ${c.name}` : `Scan ${c.name} now`} title={c.provider === "azure" ? "Rescan" : "Scan now"} onClick={() => void run(c, "scan")}>
+                <Button variant="ghost" size="icon" className="size-9" aria-label={`Scan ${c.name} now`} title="Scan now" onClick={() => void run(c, "scan")}>
                   <RefreshCw className="size-4" aria-hidden="true" />
                 </Button>
               ) : null}

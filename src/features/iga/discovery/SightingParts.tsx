@@ -61,20 +61,11 @@ const EVIDENCE_TITLE = {
   inferred: "Deduced from indirect signal; the weakest form of evidence.",
 } as const;
 
-// Azure: what "declared" and "inferred" mean there.
-const AZURE_EVIDENCE_TITLE = {
-  observed: EVIDENCE_TITLE.observed,
-  declared: "Listed by Microsoft as an agent: in Microsoft Entra Agent ID or the Microsoft 365 agent registry.",
-  inferred: "Inferred by AuthSec from the identity's sign-ins, permissions and federation. Microsoft does not list it as an agent.",
-} as const;
-
 export function SightingEvidence({ agent }: { agent: DiscoveredAgent }) {
   const mode = evidenceModeOf(agent);
   return (
-    <span title={(agent.source === "azure" ? AZURE_EVIDENCE_TITLE : EVIDENCE_TITLE)[mode]}>
-      <StatusBadge tone={mode === "observed" ? "success" : mode === "declared" ? "info" : "neutral"}>
-        {agent.source === "azure" && mode === "declared" ? "Listed by Microsoft" : EVIDENCE_LABELS[mode]}
-      </StatusBadge>
+    <span title={EVIDENCE_TITLE[mode]}>
+      <StatusBadge tone={mode === "observed" ? "success" : mode === "declared" ? "info" : "neutral"}>{EVIDENCE_LABELS[mode]}</StatusBadge>
     </span>
   );
 }

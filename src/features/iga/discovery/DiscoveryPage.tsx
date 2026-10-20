@@ -15,10 +15,6 @@ import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
-import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
-import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
-import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
-import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { DecisionBanner } from "@/components/console/status";
 import { loadFailureOf } from "@/components/console/load-failure";
@@ -45,7 +41,7 @@ import type { ScreenProps } from "./screenTypes";
 import { useDiscoveryOverview } from "./useDiscoveryOverview";
 import { useDiscoveryUrl } from "./useDiscoveryUrl";
 import { inScope } from "./k8s";
-import { DISCOVERY_PROVIDERS, PROVIDER_LABEL, TYPE_LABEL, rememberDiscoverySearch, type DiscoveryProvider, type DiscoveryType, type DiscoveryView } from "./urlState";
+import { PROVIDER_LABEL, TYPE_LABEL, rememberDiscoverySearch, type DiscoveryProvider, type DiscoveryType, type DiscoveryView } from "./urlState";
 import LatestScreen from "./LatestScreen";
 import InventoryScreen from "./InventoryScreen";
 import PublishedScreen from "./PublishedScreen";
@@ -67,20 +63,11 @@ export default function DiscoveryPage() {
 
   const connQ = useListDiscoveryConnectionsQuery();
   const connections = useMemo(() => connQ.data ?? [], [connQ.data]);
-  // Azure tenants are read from the Azure connectors, which the shared
-  // connections list does not include.
-  const azureQ = useListAzureConnectorsQuery();
-  const azureConnectors = useMemo(() => azureQ.data ?? [], [azureQ.data]);
-  const azureConnected = azureConnectors.some((c) => c.scope_kind === "tenant" && c.status !== "revoked");
-  const connected = useMemo(() => {
-    const base = connectedProviders(connections);
-    return azureConnected && !base.includes("azure") ? DISCOVERY_PROVIDERS.filter((p) => p === "azure" || base.includes(p)) : base;
-  }, [connections, azureConnected]);
+  const connected = useMemo(() => connectedProviders(connections), [connections]);
 
   // The default rule: the URL, then what was last used in this browser, else the
   // most recently available result, else the only connected provider.
-  const resolved: DiscoveryProvider | undefined =
-    url.provider ?? defaultProvider(connections, url.type) ?? defaultProvider(connections) ?? (azureConnected ? "azure" : undefined);
+  const resolved: DiscoveryProvider | undefined = url.provider ?? defaultProvider(connections, url.type) ?? defaultProvider(connections);
   const provider = resolved;
   const type: DiscoveryType = url.type ?? (provider ? TYPES_BY_PROVIDER[provider][0] : "workloads");
   const view: DiscoveryView = provider ? effectiveView(provider, type, url.view) : "published";
@@ -91,7 +78,7 @@ export default function DiscoveryPage() {
   // (Latest collected) must not leave the previous list's sentence in its place.
   useAnnounce(provider ? `Discovery: ${PROVIDER_LABEL[provider]}, ${TYPE_LABEL[type]}${hasViews(provider, type) ? (view === "latest" ? ", latest collected" : ", published") : ""}` : null);
   const connectionsFailed = connQ.isError && !connQ.data;
-  const ready = !connQ.isLoading && !azureQ.isLoading && !connectionsFailed;
+  const ready = !connQ.isLoading && !connectionsFailed;
 
   const { normalise } = url;
   useEffect(() => {
@@ -104,7 +91,7 @@ export default function DiscoveryPage() {
   // Nothing is read for a provider the workspace has no connection to.
   const active: DiscoveryProvider | undefined = provider && connected.includes(provider) ? provider : undefined;
   const sources = useMemo(() => (active ? sourcesOf(connections, active) : []), [connections, active]);
-  const needsScopeId = (active === "aws" && view === "published") || active === "k8s" || active === "azure";
+  const needsScopeId = (active === "aws" && view === "published") || active === "k8s";
   const scope = resolveSource(sources, url.source, needsScopeId);
   const scoped = scope.kind === "one" || scope.kind === "no_rows" ? [scope.source.connection] : scope.kind === "all" ? sources.map((s) => s.connection) : [];
 
@@ -117,7 +104,7 @@ export default function DiscoveryPage() {
   const awsPublished = active === "aws" && view === "published";
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);
   usePipeline(ws, !awsPublished);
-  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source });
+  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch });
 
   // Make the resolved provider and type explicit in the URL, once. A Kubernetes cluster
   // that has reported sightings but no inventory yet opens on its sightings: landing on
@@ -227,7 +214,7 @@ export default function DiscoveryPage() {
 
   /* ----------------------------------- body ---------------------------------- */
   let body;
-  if (connQ.isLoading || azureQ.isLoading) {
+  if (connQ.isLoading) {
     body = <div className="h-40 animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading connections" />;
   } else if (connectionsFailed) {
     const f = loadFailureOf(connQ.error);
@@ -269,16 +256,12 @@ export default function DiscoveryPage() {
         <div id="discovery-tabpanel" role="tabpanel" aria-labelledby={`discovery-tab-${type}`}>
         {!supportsType(provider, type) ? (
           <NotCollected provider={provider} type={type} />
-        ) : type === "sightings" ? (
-          <SightingsScreen {...props} />
-        ) : provider === "azure" && type === "agents" ? (
-          <AzureDiscoveryScreen type={type as AzureDiscoveryType} connectors={azureConnectors} />
-        ) : provider === "azure" ? (
-          <AzureInventoryScreen {...props} />
         ) : view === "latest" ? (
           <LatestScreen {...props} />
         ) : provider === "aws" ? (
           <PublishedScreen {...props} />
+        ) : type === "sightings" ? (
+          <SightingsScreen {...props} />
         ) : (
           <InventoryScreen {...props} />
         )}

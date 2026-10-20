@@ -22,7 +22,6 @@ import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
 import { ago, day, inventoryLagsHeartbeat, heartbeatRecent, scanHref } from "./connectionModel";
 import { AwsScansTable } from "./AwsScansTable";
-import { AzureScans } from "./AzureConnectionTabs";
 import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCopy";
 
 function K8sScans({ c }: { c: Connection }) {
@@ -141,8 +140,6 @@ export function ScansTab({ c }: { c: Connection }) {
       return <GcpScans c={c} />;
     case "k8s":
       return <K8sScans c={c} />;
-    case "azure":
-      return <AzureScans c={c} />;
     default:
       return <GitHubScans c={c} />;
   }

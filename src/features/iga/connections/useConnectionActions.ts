@@ -22,18 +22,15 @@ import { toast } from "react-hot-toast";
 import type { Connection } from "@/app/api/connectionsApi";
 import {
   useRevokeAwsConnectorMutation,
-  useRevokeAzureConnectorMutation,
   useRevokeGcpConnectorMutation,
   useScanAwsConnectorMutation,
   useScanGcpConnectorMutation,
   useVerifyAwsConnectorMutation,
-  useVerifyAzureConnectorMutation,
   useVerifyGcpConnectorMutation,
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
 import { useDeleteDiscoverySourceMutation, useScanGitHubSourceMutation } from "@/app/api/discoveryApi";
 import { awsErrorCopy } from "@/features/discovery/cloud/aws/awsErrorCopy";
-import { azureErrorCopy } from "@/features/discovery/cloud/azure/azureErrorCopy";
 import { gcpErrorCopy } from "@/features/discovery/cloud/gcp/gcpErrorCopy";
 
 import { markAdminDenied } from "./permissions";
@@ -95,10 +92,6 @@ function describe(c: Connection, kind: ActionKind, err: unknown): Described {
     const copy = gcpErrorCopy(apiErr, FALLBACK[kind]);
     return { message: `${copy.title}. ${copy.body}`, forbidden: false, alreadyRunning: false };
   }
-  if (c.provider === "azure") {
-    const copy = azureErrorCopy(apiErr, FALLBACK[kind]);
-    return { message: `${copy.title}. ${copy.body}`, forbidden: false, alreadyRunning: false };
-  }
   return { message: apiErr?.error || FALLBACK[kind], forbidden: false, alreadyRunning: false };
 }
 
@@ -109,8 +102,6 @@ export function useConnectionActions() {
   const [scanGcp] = useScanGcpConnectorMutation();
   const [verifyGcp] = useVerifyGcpConnectorMutation();
   const [revokeGcp] = useRevokeGcpConnectorMutation();
-  const [verifyAzure] = useVerifyAzureConnectorMutation();
-  const [revokeAzure] = useRevokeAzureConnectorMutation();
   const [scanGitHub] = useScanGitHubSourceMutation();
   const [deleteSource] = useDeleteDiscoverySourceMutation();
 
@@ -131,21 +122,16 @@ export function useConnectionActions() {
       setPending((p) => ({ ...p, [c.id]: kind }));
       dismiss(c.id);
       try {
-        if (kind === "scan" && c.provider === "azure") {
-          // Azure has no separate scan route: Verify re-checks access and starts
-          // a fresh discovery pass of the directory and readable subscriptions.
-          await verifyAzure(c.id).unwrap();
-          toast.success(`Rescan of ${c.name} started. It runs in the background and can take a few minutes.`);
-        } else if (kind === "scan") {
+        if (kind === "scan") {
           await (c.provider === "aws" ? scanAws(c.id) : c.provider === "gcp" ? scanGcp(c.id) : scanGitHub(c.id)).unwrap();
           toast.success(`Scan of ${c.name} queued. It runs in the background.`);
         } else if (kind === "verify") {
-          await (c.provider === "aws" ? verifyAws(c.id) : c.provider === "azure" ? verifyAzure(c.id) : verifyGcp(c.id)).unwrap();
+          await (c.provider === "aws" ? verifyAws(c.id) : verifyGcp(c.id)).unwrap();
           toast.success(c.provider === "gcp" ? "Connection verified and permissions re-checked." : "Connection verified.");
         } else {
-          await (c.provider === "aws" ? revokeAws(c.id) : c.provider === "azure" ? revokeAzure(c.id) : c.provider === "gcp" ? revokeGcp(c.id) : deleteSource(c.id)).unwrap();
+          await (c.provider === "aws" ? revokeAws(c.id) : c.provider === "gcp" ? revokeGcp(c.id) : deleteSource(c.id)).unwrap();
           toast.success(
-            c.provider === "aws" || c.provider === "gcp" || c.provider === "azure"
+            c.provider === "aws" || c.provider === "gcp"
               ? `${c.name} revoked. Everything already discovered is kept.`
               : `${c.name} removed.`,
           );
@@ -170,7 +156,7 @@ export function useConnectionActions() {
         });
       }
     },
-    [dismiss, scanAws, scanGcp, scanGitHub, verifyAws, verifyAzure, verifyGcp, revokeAws, revokeAzure, revokeGcp, deleteSource],
+    [dismiss, scanAws, scanGcp, scanGitHub, verifyAws, verifyGcp, revokeAws, revokeGcp, deleteSource],
   );
 
   return { pending, failures, run, dismiss };

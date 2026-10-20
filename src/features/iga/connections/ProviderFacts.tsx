@@ -9,7 +9,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { AlertTriangle } from "lucide-react";
 
 import type { Connection } from "@/app/api/connectionsApi";
-import { useGetAwsConnectorQuery, useGetGcpConnectorQuery, useGetAzureConnectorQuery } from "@/app/api/cloudDiscoveryApi";
+import { useGetAwsConnectorQuery, useGetGcpConnectorQuery } from "@/app/api/cloudDiscoveryApi";
 import { connectorStatusFromSource, type DiscoverySource } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
@@ -181,31 +181,6 @@ export function GcpFacts({ c }: { c: Connection }) {
         </Panel>
       ) : null}
     </>
-  );
-}
-
-/* ----------------------------------- Azure ----------------------------------- */
-
-export function AzureFacts({ c }: { c: Connection }) {
-  const q = useGetAzureConnectorQuery(c.id);
-  if (q.isError && !q.data) return <FactsFailure error={q.error} subject="this tenant's details" onRetry={() => void q.refetch()} />;
-  if (!q.data) return <PanelSkeleton title="Tenant" />;
-  const attrs = q.data.attrs as Record<string, unknown> | undefined;
-  return (
-    <Panel title="Tenant">
-      <Facts>
-        <Fact label="Tenant ID" mono>
-          {c.native_id}
-        </Fact>
-        {attrs?.tenant_display_name ? (
-          <Fact label="Directory name">{String(attrs.tenant_display_name)}</Fact>
-        ) : null}
-        <Fact label="Subscriptions">{attrs?.subscription_count != null ? String(attrs.subscription_count) : "—"}</Fact>
-        <Fact label="Last verified">
-          <Timestamp iso={q.data.verified_at} missing="Never proven" />
-        </Fact>
-      </Facts>
-    </Panel>
   );
 }
 
