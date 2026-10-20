@@ -15,8 +15,6 @@
 
 import {
   useListAzureIdentitiesQuery,
-  useListAzureResourcesQuery,
-  useListAzureWorkloadsQuery,
   type CloudConnector,
   useListAwsIdentityPageQuery,
   useListAwsResourcesQuery,
@@ -100,13 +98,12 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const ki = useListInventoryQuery({ ws, class: "identities", provider: "k8s", scope: scopeId, q, limit: 1 }, { skip: !fallback });
   const clusters = useListK8sClustersQuery(undefined, { skip: !k8sOn });
 
-  /* ---- Azure: each list's own total ---- */
+  /* ---- Azure: the inventory summary; the Agents tab keeps its own list's total ---- */
   const azureOn = provider === "azure";
-  const az = (t: "agents" | "identities" | "resources" | "workloads") => ({ limit: 1, connector_id: azureSourceFor(azureConnectors, t, source) });
-  const aa = useListAzureIdentitiesQuery({ ...az("agents"), kind: "entra_agent_identity" }, { skip: !azureOn });
-  const ai = useListAzureIdentitiesQuery(az("identities"), { skip: !azureOn });
-  const ar = useListAzureResourcesQuery(az("resources"), { skip: !azureOn });
-  const aw = useListAzureWorkloadsQuery(az("workloads"), { skip: !azureOn });
+  const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
+  const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", scope: scopeId, q }, { skip: !azureOn || blocked });
+  const azCount = (c: "identities" | "resources" | "workloads"): CountValue =>
+    azSummary.data ? countOfExact(azSummary.data.data[c]) : azSummary.isError ? COUNT_UNAVAILABLE : COUNT_LOADING;
 
   /* ---- Sightings ---- */
   const sightingsOn = (provider === "k8s" || provider === "github" || provider === "azure") && !blocked;
@@ -122,9 +119,9 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
     return {
       counts: {
         agents: pageCount(aa.data, aa.isError),
-        identities: pageCount(ai.data, ai.isError),
-        resources: pageCount(ar.data, ar.isError),
-        workloads: pageCount(aw.data, aw.isError),
+        identities: azCount("identities"),
+        resources: azCount("resources"),
+        workloads: azCount("workloads"),
         sightings: sightingsCount,
       },
     };

@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { CloudPill } from "@/features/discovery/cloud/CloudPill";
 import { cn } from "@/lib/utils";
 
-import { actionsOf, statusOf, type ActionSet } from "./connectionModel";
+import { actionsOf, revokeWord, statusOf, type ActionSet } from "./connectionModel";
 import { PENDING_WORD, type ActionFailure, type ActionKind } from "./useConnectionActions";
 
 /** The primary condition in words, with a dot: colour is never the only signal. */
@@ -155,7 +155,7 @@ export function ConnectionActionBar({
                   onSelect={() => onRun("revoke")}
                   className="text-(--color-danger-text) focus:bg-(--color-danger-soft) focus:text-(--color-danger-text)"
                 >
-                  {c.provider === "aws" || c.provider === "gcp" ? "Revoke…" : "Remove connection…"}
+                  {c.provider === "aws" || c.provider === "gcp" || c.provider === "azure" ? `${revokeWord(c).verb}…` : "Remove connection…"}
                 </DropdownMenuItem>
               </>
             ) : null}

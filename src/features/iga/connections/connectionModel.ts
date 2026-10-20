@@ -300,7 +300,9 @@ function reasonAction(c: Connection, code: string | null): string {
         ? checkThenVerify(c, "Check that the reader service account still exists and its role grants are in place")
         : provider === "aws"
           ? checkThenVerify(c, "Check the role ARN, the ExternalId in its trust policy and that it trusts AuthSec")
-          : "Check the installation's permissions, then try again.";
+          : provider === "azure"
+            ? checkThenVerify(c, "Check that an administrator granted consent to the AuthSec application in the tenant, or that your own app's client secret is still valid")
+            : "Check the installation's permissions, then try again.";
     case "throttled":
       return "This is usually temporary. Try again in a moment.";
     case "timeout":
@@ -698,8 +700,10 @@ export function trackerOf(c: Connection, opts: { scopeChosen: boolean }): Step[]
       ? `${capitalise(c.scope_summary || "Scope set")}.`
       : c.provider === "github"
         ? "No repositories are selected, so a scan would look at nothing."
-        : "No scope is recorded yet.",
-    action: opts.scopeChosen || revoked || c.provider === "k8s" ? undefined : "scope",
+        : c.provider === "azure"
+          ? "No subscriptions are readable yet. Connect the tenant again to choose them."
+          : "No scope is recorded yet.",
+    action: opts.scopeChosen || revoked || c.provider === "k8s" || c.provider === "azure" ? undefined : "scope",
   });
 
   // Scan.

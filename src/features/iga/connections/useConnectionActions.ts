@@ -33,6 +33,7 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import { useDeleteDiscoverySourceMutation, useScanGitHubSourceMutation } from "@/app/api/discoveryApi";
 import { awsErrorCopy } from "@/features/discovery/cloud/aws/awsErrorCopy";
+import { azureErrorCopy } from "@/features/discovery/cloud/azure/azureErrorCopy";
 import { gcpErrorCopy } from "@/features/discovery/cloud/gcp/gcpErrorCopy";
 
 import { markAdminDenied } from "./permissions";
@@ -92,6 +93,10 @@ function describe(c: Connection, kind: ActionKind, err: unknown): Described {
   }
   if (c.provider === "gcp") {
     const copy = gcpErrorCopy(apiErr, FALLBACK[kind]);
+    return { message: `${copy.title}. ${copy.body}`, forbidden: false, alreadyRunning: false };
+  }
+  if (c.provider === "azure") {
+    const copy = azureErrorCopy(apiErr, FALLBACK[kind]);
     return { message: `${copy.title}. ${copy.body}`, forbidden: false, alreadyRunning: false };
   }
   return { message: apiErr?.error || FALLBACK[kind], forbidden: false, alreadyRunning: false };
