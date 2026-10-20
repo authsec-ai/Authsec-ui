@@ -1,12 +1,18 @@
 import type { ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
+import type { SerializedError } from "@reduxjs/toolkit";
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 
 import type { CloudConnector } from "@/app/api/cloudDiscoveryApi";
+import { DetailGrid, DetailRow, DrawerEmpty } from "@/components/console/detail";
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
 import { CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { TableCard } from "@/theme/components/cards";
 
+import { TruncationLine } from "../aws/AWSInventoryNotices";
 import { attrLabel, connectorLabel, type DirectoryRef } from "./azureDiscoveryLabels";
 
 export const ALL = "all";
@@ -75,7 +81,7 @@ function factValue(v: unknown): ReactNode {
   if (Array.isArray(v) && v.every((x) => typeof x === "string" || typeof x === "number")) {
     return v.length ? v.join(", ") : <span className="text-muted-foreground">None</span>;
   }
-  return <code className="break-all text-[11px]">{JSON.stringify(v)}</code>;
+  return <code className="break-all text-xs">{JSON.stringify(v)}</code>;
 }
 
 /** Every attribute Microsoft returned for an object, as name/value pairs, in
@@ -84,14 +90,11 @@ export function AttrFacts({ attrs, skip = [] }: { attrs: Record<string, unknown>
   const entries = Object.entries(attrs ?? {}).filter(([k]) => !skip.includes(k));
   if (!entries.length) return <p className="text-xs text-muted-foreground">No further attributes were recorded.</p>;
   return (
-    <dl className="grid grid-cols-[minmax(120px,40%)_1fr] gap-x-4 gap-y-2 text-[13px]">
+    <DetailGrid>
       {entries.map(([k, v]) => (
-        <div key={k} className="contents">
-          <dt className="text-xs text-muted-foreground">{attrLabel(k)}</dt>
-          <dd className="min-w-0 break-words">{factValue(v)}</dd>
-        </div>
+        <DetailRow key={k} label={attrLabel(k)} value={factValue(v)} full={typeof v === "object" && v !== null ? true : typeof v === "string" && v.length > 36} />
       ))}
-    </dl>
+    </DetailGrid>
   );
 }
 
@@ -99,6 +102,7 @@ export function AttrFacts({ attrs, skip = [] }: { attrs: Record<string, unknown>
 export function ListFrame({
   loading,
   failed,
+  error,
   onRetry,
   empty,
   noMatch,
@@ -107,6 +111,7 @@ export function ListFrame({
 }: {
   loading: boolean;
   failed: boolean;
+  error?: FetchBaseQueryError | SerializedError;
   onRetry: () => void;
   empty: boolean;
   noMatch: boolean;
@@ -122,11 +127,8 @@ export function ListFrame({
     );
   } else if (failed) {
     body = (
-      <div className="px-6 py-10 text-center text-xs text-muted-foreground">
-        The request failed, so nothing is listed. This is not an empty inventory.{" "}
-        <button className="font-semibold text-(--color-primary-text) underline" onClick={onRetry}>
-          Retry
-        </button>
+      <div className="p-4">
+        <LoadFailurePanel failure={loadFailureOf(error) ?? "failed"} subject="this list" permission="discovery:read" onRetry={onRetry} />
       </div>
     );
   } else if (empty) {
@@ -147,19 +149,28 @@ export function DrawerList<T>({
   empty,
   render,
 }: {
-  query: { isLoading: boolean; isError: boolean; data?: { rows: T[]; total: number; totalKnown: boolean } };
+  query: {
+    isLoading: boolean;
+    isError: boolean;
+    error?: FetchBaseQueryError | SerializedError;
+    refetch?: () => unknown;
+    data?: { rows: T[]; total: number; totalKnown: boolean };
+  };
   empty: string;
   render: (row: T) => ReactNode;
 }) {
-  if (query.isLoading) return <p className="text-xs text-muted-foreground">Loading…</p>;
-  if (query.isError) return <p className="text-xs text-(--color-danger-text)">Could not load this list.</p>;
+  if (query.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (query.isError) {
+    return <LoadFailurePanel failure={loadFailureOf(query.error) ?? "failed"} subject="this list" permission="discovery:read" onRetry={() => void query.refetch?.()} />;
+  }
   const rows = query.data?.rows ?? [];
-  if (!rows.length) return <p className="text-xs text-muted-foreground">{empty}</p>;
-  const more = query.data && query.data.totalKnown && query.data.total > rows.length ? query.data.total - rows.length : 0;
+  if (!rows.length) return <DrawerEmpty title={empty} />;
+  const total = query.data?.total ?? rows.length;
+  const totalKnown = !!query.data?.totalKnown;
   return (
     <div className="space-y-2">
       <ul className="divide-y rounded-md border">{rows.map((r, i) => <li key={i} className="px-3 py-2 text-[13px]">{render(r)}</li>)}</ul>
-      {more ? <p className="text-[11px] text-muted-foreground">{more} more not shown.</p> : null}
+      <TruncationLine truncation={{ truncated: totalKnown && total > rows.length, shown: rows.length, total, totalKnown }} noun="entries" />
     </div>
   );
 }

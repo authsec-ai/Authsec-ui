@@ -97,6 +97,8 @@ function revokedConsequence(c: Connection): string {
       return "Earlier results stay in Discovery, marked stale. Reconnect the account to resume.";
     case "gcp":
       return "Earlier results stay in Discovery, marked stale. Reconnect the project to resume.";
+    case "azure":
+      return "Earlier results stay in Discovery, marked stale. Reconnect the tenant to resume.";
     case "k8s":
       return "Earlier results stay, marked stale. Removing the connection deletes its sightings; graph objects stay.";
     case "github":

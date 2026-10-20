@@ -19,7 +19,7 @@
 import { baseApi } from "./baseApi";
 import type { ExactCount, GraphCoverageGap, GraphFacetValue, GraphRef } from "./igaGraphApi";
 
-export type InventoryProvider = "aws" | "k8s" | "github";
+export type InventoryProvider = "aws" | "k8s" | "github" | "azure";
 export type InventoryClass = "workloads" | "identities" | "resources";
 
 /** What the page of rows is, as a whole, relative to a numbered publication. */

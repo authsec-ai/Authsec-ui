@@ -4,8 +4,8 @@
  * sponsors, status, created). Counts and facts only; nothing is rated.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   AWS_DISCOVERY_MAX_LIMIT,
@@ -22,7 +22,6 @@ import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { CopyableId } from "../aws/AWSInventoryCells";
 import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { AzureIdentityDrawer } from "./AzureIdentityDrawer";
 import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
 
 type View = "identities" | "blueprints";
@@ -33,6 +32,17 @@ const KIND_ARGS = {
   principals: { kind: "entra_service_principal", agent_type: "agent_identity_blueprint_principal" },
   users: { kind: "entra_agent_user" },
 } as const;
+
+/** An agent or blueprint opens its own page, keyed by its Entra object id. */
+const detailHref = (r: Pick<AzureIdentity, "native_id">) => `/iga/azure/identity/${encodeURIComponent(r.native_id)}`;
+
+function NameLink({ r, children }: { r: AzureIdentity; children: string }) {
+  return (
+    <Link to={detailHref(r)} onClick={(e) => e.stopPropagation()} className="hover:underline">
+      {children}
+    </Link>
+  );
+}
 
 function createdBy(r: AzureIdentity): string | undefined {
   const c = r.attrs?.["created_by"] as { by?: string } | undefined;
@@ -66,7 +76,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   const view: View = params.get("agents") === "blueprints" ? "blueprints" : "identities";
   const source = params.get("source");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -97,11 +107,6 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     });
   }, [rows, search]);
 
-  const index = filtered.findIndex((r) => r.id === selectedId);
-  useEffect(() => {
-    if (selectedId && index === -1) setSelectedId(null);
-  }, [selectedId, index]);
-
   const toIdentities = (kind: string) => {
     const next = new URLSearchParams(params);
     next.set("type", "identities");
@@ -119,7 +124,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         alwaysVisible: true,
         priority: 1,
         approxWidth: 280,
-        cell: ({ row }) => <EntityCell label={row.original.name || row.original.native_id} detail={<CopyableId value={row.original.native_id} label="Object ID" />} />,
+        cell: ({ row }) => <EntityCell label={<NameLink r={row.original}>{row.original.name || row.original.native_id}</NameLink>} detail={<CopyableId value={row.original.native_id} label="Object ID" />} />,
       },
       {
         id: "blueprint",
@@ -172,7 +177,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         approxWidth: 280,
         cell: ({ row }) => {
           const appId = typeof row.original.attrs?.["app_id"] === "string" ? (row.original.attrs["app_id"] as string) : row.original.native_id;
-          return <EntityCell label={row.original.name || appId} detail={<CopyableId value={appId} label="Application (client) ID" />} />;
+          return <EntityCell label={<NameLink r={row.original}>{row.original.name || appId}</NameLink>} detail={<CopyableId value={appId} label="Application (client) ID" />} />;
         },
       },
       {
@@ -256,6 +261,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       <ListFrame
         loading={q.isLoading}
         failed={q.isError && !rows.length}
+        error={q.error}
         onRetry={() => void q.refetch()}
         empty={!rows.length}
         noMatch={!filtered.length}
@@ -276,19 +282,10 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           enableSelection={false}
           enableExpansion={false}
           rowDetails={false}
-          onRowClick={(r) => setSelectedId(r.id)}
+          onRowClick={(r) => navigate(detailHref(r))}
           pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
         />
       </ListFrame>
-
-      <AzureIdentityDrawer
-        identity={index >= 0 ? filtered[index] : null}
-        onClose={() => setSelectedId(null)}
-        onPrev={() => setSelectedId(filtered[index - 1]?.id ?? null)}
-        onNext={() => setSelectedId(filtered[index + 1]?.id ?? null)}
-        index={index >= 0 ? index : 0}
-        total={filtered.length}
-      />
     </div>
   );
 }

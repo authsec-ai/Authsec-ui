@@ -116,7 +116,7 @@ export function azureTenantConnection(t: CloudConnector, all: CloudConnector[]):
     scope_kind: "tenant",
     name: t.scope_id,
     native_id: t.scope_id,
-    scope_id: t.scope_id,
+    scope_id: t.scope_id.toLowerCase(),
     created_at: t.created_at,
     connection: { state, reason_code: t.last_error_code || null, verified_at: t.verified_at ?? null },
     scan: {

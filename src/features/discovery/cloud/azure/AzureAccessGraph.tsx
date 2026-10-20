@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { ArrowLeft, Info, RotateCcw } from "lucide-react";
 
 import {
   useGetAzureNeighbourhoodQuery,
@@ -17,9 +17,12 @@ import {
   type AzureGraphEdge,
   type AzureGraphNode,
 } from "@/app/api/cloudDiscoveryApi";
+import { loadFailureOf } from "@/components/console/load-failure";
+import { LoadFailurePanel } from "@/components/console/load-state";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { InventoryNotice } from "../aws/AWSInventoryNotices";
 import { agentTypeLabel, armTypeLabel, identityKindLabel } from "./azureDiscoveryLabels";
 
 const W = 640;
@@ -272,7 +275,7 @@ const VIA: Record<string, string> = { self: "directly", member_of: "through a gr
 function WhatItCanReach({ objectId }: { objectId: string }) {
   const q = useGetAzureReachQuery(objectId);
   // currentData, not data: data keeps the previous object's answer while this one loads.
-  if (q.isError) return <p className="text-xs text-muted-foreground">Not available for this object.</p>;
+  if (q.isError) return <LoadFailurePanel failure={loadFailureOf(q.error) ?? "failed"} subject="what this object can reach" permission="discovery:read" onRetry={() => void q.refetch()} />;
   if (!q.currentData) return <p className="text-xs text-muted-foreground">Loading…</p>;
   const { reach, grants } = q.currentData;
   return (
@@ -320,9 +323,9 @@ function WhatItCanReach({ objectId }: { objectId: string }) {
   );
 }
 
-export function AzureAccessGraph({ objectId, name }: { objectId: string; name: string }) {
+export function AzureAccessGraph({ objectId, name, startRef }: { objectId?: string; name: string; startRef?: string }) {
   useSubscriptionNames();
-  const start = `object:${objectId}`;
+  const start = startRef ?? `object:${objectId}`;
   const [trail, setTrail] = useState<{ ref: string; label: string; objectId?: string }[]>([{ ref: start, label: name, objectId }]);
   const current = trail[trail.length - 1].ref;
   const q = useGetAzureNeighbourhoodQuery(current);
@@ -353,22 +356,26 @@ export function AzureAccessGraph({ objectId, name }: { objectId: string; name: s
       {q.isFetching && !data ? (
         <div className="h-64 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading the graph" />
       ) : q.isError ? (
-        <p className="text-xs text-muted-foreground">
-          This object is not in the access graph yet. Graph projection must be on (IGA_GRAPH_PROJECTION) and a scan must have finished since.
-        </p>
+        loadFailureOf(q.error) === "not_found" ? (
+          <InventoryNotice icon={<Info />}>
+            This object is not in the access graph yet. Graph projection must be on (IGA_GRAPH_PROJECTION) and a scan must have finished since.
+          </InventoryNotice>
+        ) : (
+          <LoadFailurePanel failure={loadFailureOf(q.error) ?? "failed"} subject="the access graph" permission="discovery:read" onRetry={() => void q.refetch()} />
+        )
       ) : data ? (
         <>
           <div className="rounded-md border bg-(--color-surface-subtle) p-2">
             <Graph rootRef={rootRef} nodes={data.nodes} edges={data.edges} onOpen={open} />
           </div>
           {data.truncated ? (
-            <p className="text-[11px] text-muted-foreground">
+            <InventoryNotice icon={<Info />}>
               Each relationship type shows up to 40 entries. Totals:{" "}
               {Object.entries(data.totals)
                 .map(([k, v]) => `${v} ${(EDGE_GROUP[k] ?? k).toLowerCase()}`)
                 .join(", ")}
               .
-            </p>
+            </InventoryNotice>
           ) : null}
           <RelationshipList rootRef={rootRef} nodes={data.nodes} edges={data.edges} onOpen={open} />
         </>

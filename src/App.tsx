@@ -75,6 +75,7 @@ import ResourcePage from "./features/iga/resources/ResourcePage";
 import ExternalPrincipalPage from "./features/iga/external/ExternalPrincipalPage";
 import GoogleOAuthCallbackPage from "./features/discovery/cloud/gcp/GoogleOAuthCallbackPage";
 import AzureOAuthCallbackPage from "./features/discovery/cloud/azure/AzureOAuthCallbackPage";
+import AzureObjectPage from "./features/discovery/cloud/azure/AzureObjectPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
@@ -686,6 +687,26 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <K8sObjectPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/azure/:kind/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AzureObjectPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/azure/:kind/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AzureObjectPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

@@ -17,6 +17,7 @@ import { RefreshCw } from "lucide-react";
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
 import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
+import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { DecisionBanner } from "@/components/console/status";
@@ -107,7 +108,7 @@ export default function DiscoveryPage() {
   // Nothing is read for a provider the workspace has no connection to.
   const active: DiscoveryProvider | undefined = provider && connected.includes(provider) ? provider : undefined;
   const sources = useMemo(() => (active ? sourcesOf(connections, active) : []), [connections, active]);
-  const needsScopeId = (active === "aws" && view === "published") || active === "k8s";
+  const needsScopeId = (active === "aws" && view === "published") || active === "k8s" || active === "azure";
   const scope = resolveSource(sources, url.source, needsScopeId);
   const scoped = scope.kind === "one" || scope.kind === "no_rows" ? [scope.source.connection] : scope.kind === "all" ? sources.map((s) => s.connection) : [];
 
@@ -259,8 +260,10 @@ export default function DiscoveryPage() {
           <NotCollected provider={provider} type={type} />
         ) : type === "sightings" ? (
           <SightingsScreen {...props} />
-        ) : provider === "azure" ? (
+        ) : provider === "azure" && type === "agents" ? (
           <AzureDiscoveryScreen type={type as AzureDiscoveryType} connectors={azureConnectors} />
+        ) : provider === "azure" ? (
+          <AzureInventoryScreen {...props} />
         ) : view === "latest" ? (
           <LatestScreen {...props} />
         ) : provider === "aws" ? (

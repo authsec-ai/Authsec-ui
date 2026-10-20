@@ -58,6 +58,8 @@ import {
   type AzureOAuthSession,
   type CloudOnboardingApiError,
 } from "@/app/api/cloudDiscoveryApi";
+import { CloudPill } from "../CloudPill";
+import { azureErrorCopy, azureErrorOf } from "./azureErrorCopy";
 
 const MANAGED_STEPS = ["Consent & sign in", "Review tenant", "Connected"] as const;
 // Your own app has no Microsoft sign-in and nothing to review: credentials, then done.
@@ -73,12 +75,11 @@ const PERMISSION_STATE: Record<string, string> = {
   unknown: "Granted, not confirmed",
 };
 
-/** The backend's {error, hint} as one sentence: what went wrong, then what to do. */
+/** The backend's {error, hint} as sentences, led by whose move it is when the backend says. */
 function apiMessage(err: unknown, fallback: string): string {
-  const data = (err as { data?: { error?: string; hint?: string } })?.data;
-  const parts = [data?.error, data?.hint].filter((x): x is string => !!x && x.trim() !== "");
-  if (!parts.length) return fallback;
-  return parts.map((x) => (/[.!?]$/.test(x.trim()) ? x.trim() : `${x.trim()}.`)).join(" ");
+  const apiErr = azureErrorOf(err);
+  const copy = azureErrorCopy(apiErr, fallback);
+  return !apiErr || copy.title === "Check what was entered" ? copy.body : `${copy.title}. ${copy.body}`;
 }
 
 /** Can Connect act on this subscription: it accepts a role assignment, and the administrator may assign Reader (unknown counts as maybe). */
@@ -676,14 +677,9 @@ export function AzureOnboardingWizard({
                                 <span className="font-medium">{sub.display_name}</span>
                                 <span className="ml-2 font-mono text-muted-foreground">{sub.subscription_id}</span>
                               </div>
-                              <span className={cn(
-                                "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium",
-                                disabled
-                                  ? "bg-muted text-muted-foreground"
-                                  : "bg-(--color-success-soft) text-(--color-success-text)",
-                              )}>
+                              <CloudPill tone={disabled ? "muted" : "success"} dot={false} className="shrink-0">
                                 {reason ?? (sub.state || "Active")}
-                              </span>
+                              </CloudPill>
                             </label>
                           );
                         })}
@@ -784,14 +780,9 @@ export function AzureOnboardingWizard({
                       <li key={s.subscription_id} className="space-y-0.5 px-2 py-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate font-medium">{s.display_name || s.subscription_id}</span>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium",
-                              s.reader?.verified ? "bg-(--color-success-soft) text-(--color-success-text)" : "bg-muted text-muted-foreground",
-                            )}
-                          >
+                          <CloudPill tone={s.reader?.verified ? "success" : "muted"} dot={false} className="shrink-0">
                             {s.reader?.verified ? "Readable" : READER_STATUS[s.reader?.status] ?? "Not readable yet"}
-                          </span>
+                          </CloudPill>
                         </div>
                         {!s.reader?.verified && (s.error || s.reader?.error) ? (
                           <p className="break-words text-muted-foreground">{s.error || s.reader?.error}</p>
