@@ -16,10 +16,8 @@ import {
   type AzureIdentity,
   type CloudConnector,
 } from "@/app/api/cloudDiscoveryApi";
-import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { EntityCell } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { cn } from "@/lib/utils";
 
 import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
@@ -34,8 +32,6 @@ type View = "identities" | "blueprints" | "foundry";
 const KIND_ARGS = {
   identities: { kind: "entra_agent_identity" },
   blueprints: { kind: "entra_application", agent_type: "agent_identity_blueprint" },
-  principals: { kind: "entra_service_principal", agent_type: "agent_identity_blueprint_principal" },
-  users: { kind: "entra_agent_user" },
 } as const;
 
 /** An agent or blueprint opens its own page, keyed by its Entra object id. */
@@ -52,28 +48,6 @@ function NameLink({ r, children }: { r: AzureIdentity; children: string }) {
 function createdBy(r: AzureIdentity): string | undefined {
   const c = r.attrs?.["created_by"] as { by?: string } | undefined;
   return c?.by || undefined;
-}
-
-function Tile({ label, value, active, onClick, title }: { label: string; value: number | undefined; active?: boolean; onClick?: () => void; title: string }) {
-  const body = (
-    <>
-      <span className="block text-2xl font-semibold tabular-nums text-(--color-text)">{value ?? "–"}</span>
-      <span className="block text-xs text-(--color-text-muted)">{label}</span>
-    </>
-  );
-  const cls = cn(
-    "rounded-lg border px-4 py-3 text-left",
-    active ? "border-(--color-primary) bg-(--color-primary-soft)" : "border-(--color-border-subtle) bg-(--color-surface-raised)",
-  );
-  return onClick ? (
-    <button type="button" className={cn(cls, "hover:border-(--color-primary)")} onClick={onClick} title={title} aria-pressed={active}>
-      {body}
-    </button>
-  ) : (
-    <div className={cls} title={title}>
-      {body}
-    </div>
-  );
 }
 
 export default function AzureAgentsScreen({ connectors }: { connectors: CloudConnector[] }) {
@@ -94,12 +68,6 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   const options = azureSourcesFor(connectors, "agents");
   const connectorId = azureSourceFor(connectors, "agents", source);
   const scope = { connector_id: connectorId };
-
-  // The four counts, each the server's own total.
-  const cIdentities = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.identities, limit: 1 });
-  const cBlueprints = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.blueprints, limit: 1 });
-  const cPrincipals = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.principals, limit: 1 });
-  const cUsers = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.users, limit: 1 });
 
   // Foundry is read once for every tenant: its rows belong to subscriptions, so
   // the tenant chosen above narrows them by the subscriptions under it.
@@ -122,14 +90,6 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       return [r.name, r.native_id, bp, ...people].some((v) => v.toLowerCase().includes(s));
     });
   }, [rows, search]);
-
-  const toIdentities = (kind: string) => {
-    const next = new URLSearchParams(params);
-    next.set("type", "identities");
-    next.set("kind", kind);
-    next.delete("agents");
-    setParams(next);
-  };
 
   const identityColumns = useMemo<AdaptiveColumn<AzureIdentity>[]>(
     () => [
@@ -235,38 +195,6 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />;
   return (
     <div className="space-y-4 p-4">
-      <AllAgentsNote onOpen={() => setParam("type", "sightings")} />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Tile
-          label="Agent identities"
-          value={cIdentities.data?.total}
-          active={view === "identities"}
-          onClick={() => setParam("agents", null)}
-          title="Show agent identities"
-        />
-        <Tile
-          label="Agent identity blueprints"
-          value={cBlueprints.data?.total}
-          active={view === "blueprints"}
-          onClick={() => setParam("agents", "blueprints")}
-          title="Show agent identity blueprints"
-        />
-        <Tile
-          label="Agent identity blueprint principals"
-          value={cPrincipals.data?.total}
-          onClick={() => toIdentities("agent_identity_blueprint_principal")}
-          title="Open them in Identities"
-        />
-        <Tile label="Agents' user accounts" value={cUsers.data?.total} onClick={() => toIdentities("entra_agent_user")} title="Open them in Identities" />
-        <Tile
-          label="Microsoft Foundry"
-          value={foundryQ.data ? foundryTotals.objects : undefined}
-          active={view === "foundry"}
-          onClick={() => setParam("agents", "foundry")}
-          title="Show Foundry resources, projects, model deployments and agent applications"
-        />
-      </div>
-
       {view === "foundry" ? (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -327,25 +255,5 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         </>
       )}
     </div>
-  );
-}
-
-/**
- * This tab lists Microsoft Entra Agent ID objects only. Every Azure agent —
- * these, Microsoft 365 agent registry agents and the ones AuthSec inferred —
- * is in the shared agent inventory, which Sightings lists.
- */
-function AllAgentsNote({ onOpen }: { onOpen: () => void }) {
-  const all = useListDiscoveredAgentsQuery({ source: "azure", limit: 1 });
-  const total = all.data?.total;
-  if (total === undefined) return null;
-  return (
-    <p className="text-xs text-(--color-text-muted)">
-      These are the agents Microsoft Entra Agent ID lists.{" "}
-      <button type="button" onClick={onOpen} className="font-medium text-(--color-primary-text) hover:underline">
-        See all {total} Azure {total === 1 ? "agent" : "agents"} in Sightings
-      </button>
-      , including Microsoft 365 agent registry agents and agents inferred from sign-ins and permissions.
-    </p>
   );
 }
