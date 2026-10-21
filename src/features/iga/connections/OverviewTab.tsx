@@ -17,6 +17,7 @@ import { safeErrorProse } from "@/features/discovery/cloud/cloudConnectorErrorCo
 import type { Connection } from "@/app/api/connectionsApi";
 import { Button } from "@/components/ui/button";
 import { ConnPill } from "./ConnPill";
+import { ConnectionCoverageStrip } from "./ConnectionCoverageStrip";
 import { Panel } from "@/features/iga/shared/components/Panel";
 import { EnforcementLine } from "@/features/iga/policy/setup/EnforcementLine";
 import { cn } from "@/lib/utils";
@@ -461,6 +462,7 @@ export function OverviewTab({
           </div>
         </div>
       ) : null}
+      {primary.key !== "revoked" ? <ConnectionCoverageStrip c={c} /> : null}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
         <div className="min-w-0 space-y-4">
           {c.provider === "aws" ? <RecentScans c={c} /> : null}
