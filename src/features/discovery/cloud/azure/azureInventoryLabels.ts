@@ -1,7 +1,7 @@
 import type { CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import type { InventoryClass } from "@/app/api/igaInventoryApi";
 
-import { armTypeLabel, identityKindLabel } from "./azureDiscoveryLabels";
+import { armTypeLabel, identityKindLabel, shortId } from "./azureDiscoveryLabels";
 
 const GRAPH_KIND_LABEL: Record<string, string> = {
   entra_app_role: "Application permission",
@@ -19,9 +19,14 @@ export function tenantScopeId(c: Pick<CloudConnector, "scope_id">): string {
   return c.scope_id.toLowerCase();
 }
 
-/** A tenant's name where the connector has one, else its id. */
+/** A tenant's name where the connector has one, else its id as a stub (a full GUID is never the label). */
 export function tenantName(c: CloudConnector | undefined, fallback: string): string {
   const attrs = (c?.attrs ?? {}) as Record<string, unknown>;
   const name = attrs["tenant_display_name"];
-  return typeof name === "string" && name ? name : fallback;
+  return typeof name === "string" && name ? name : shortId(fallback);
+}
+
+/** A subscription as the inventory states it: its name, or its id as a stub when no name was read. */
+export function subscriptionLabel(sub: string | null | undefined): string {
+  return sub ? shortId(sub) : "Tenant-wide";
 }

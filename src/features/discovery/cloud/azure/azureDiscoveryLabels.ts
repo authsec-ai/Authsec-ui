@@ -257,13 +257,23 @@ export function foundryKindLabel(kind: string | undefined, runtimeKind: string):
   return (kind && FOUNDRY_KIND_LABEL[kind]) || armTypeLabel(runtimeKind);
 }
 
-/** A connector's name for the Source filter and the Subscription column. */
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A full id as a readable stub: `3f1c6a52…1b0d7c3`. Anything that is not a GUID is returned as written. */
+export function shortId(id: string): string {
+  return GUID.test(id) ? `${id.slice(0, 8)}…${id.slice(-6)}` : id;
+}
+
+/** A connector's name for the Source filter and the Subscription column: a name where one was read, else the id as a stub. */
 export function connectorLabel(c: CloudConnector | undefined): string {
   if (!c) return "Unknown";
   const attrs = (c.attrs ?? {}) as Record<string, unknown>;
   const name = typeof attrs["display_name"] === "string" ? (attrs["display_name"] as string) : "";
-  if (c.scope_kind === "tenant") return `Tenant ${c.scope_id}`;
-  return name || c.scope_id;
+  if (c.scope_kind === "tenant") {
+    const tenant = typeof attrs["tenant_display_name"] === "string" ? (attrs["tenant_display_name"] as string) : "";
+    return tenant || `Tenant ${shortId(c.scope_id)}`;
+  }
+  return name || shortId(c.scope_id);
 }
 
 /** Turns an attrs key into words: "user_principal_name" → "User principal name". */

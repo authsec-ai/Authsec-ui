@@ -11,6 +11,8 @@
  * this connection's rows, so Discovery filters a connection's objects with it.
  */
 
+import { tenantName } from "@/features/discovery/cloud/azure/azureInventoryLabels";
+
 import { baseApi } from "./baseApi";
 import type { CloudConnector } from "./cloudDiscoveryApi";
 
@@ -114,7 +116,7 @@ export function azureTenantConnection(t: CloudConnector, all: CloudConnector[]):
     id: t.id,
     provider: "azure",
     scope_kind: "tenant",
-    name: t.scope_id,
+    name: tenantName(t, t.scope_id),
     native_id: t.scope_id,
     scope_id: t.scope_id.toLowerCase(),
     created_at: t.created_at,

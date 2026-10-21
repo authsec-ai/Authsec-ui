@@ -30,7 +30,7 @@ export function AzureGraphPanel({ kind, id, name, objectId }: { kind: "identity"
         <LazyGraphTab ws={getWorkspaceId() ?? ""} root={toGraphRef(q.currentData.root)} rootName={name} provider="azure" />
       ) : failure === "not_found" ? (
         <InventoryNotice icon={<Info />}>
-          This object is not in the access graph yet. Graph projection must be on (IGA_GRAPH_PROJECTION) and a scan must have finished since.
+          This object is not in the access graph yet. The access graph has to be turned on for this workspace, and a scan has to have finished since.
         </InventoryNotice>
       ) : failure ? (
         <LoadFailurePanel failure={failure} subject="the access graph" permission="discovery:read" onRetry={() => void q.refetch()} />

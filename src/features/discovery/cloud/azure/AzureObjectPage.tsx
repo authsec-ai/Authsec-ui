@@ -194,7 +194,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
     } else if (active === "graph") {
       body = byArmId ? (
         <InventoryNotice icon={<Info />}>
-          The access graph is not available for this object yet. It was opened from the scan tables, which carry no graph reference. Open it from Discovery once graph projection is on.
+          The access graph is not available for this object yet. It was opened from the scan tables, which carry no graph reference. Open it from Discovery once the access graph is turned on for this workspace.
         </InventoryNotice>
       ) : (
         <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />

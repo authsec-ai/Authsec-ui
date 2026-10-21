@@ -129,7 +129,7 @@ function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: D
     if (type === "workloads" || type === "identities") return ["kind", "namespace"];
     if (type === "sightings") return ["status", "live"];
   }
-  if (provider === "azure" && (type === "identities" || type === "resources" || type === "workloads")) return ["kind"];
+  if (provider === "azure" && (type === "identities" || type === "resources" || type === "workloads")) return ["kind", "lifecycle"];
   if ((provider === "github" || provider === "azure") && type === "sightings") return ["status", "live"];
   return [];
 }
