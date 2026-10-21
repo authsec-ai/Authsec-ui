@@ -18,7 +18,7 @@
 
 import type { GraphFrontier, GraphNode, GraphNodeKind } from "@/app/api/igaGraphApi";
 
-import { agentTypeLabel, armTypeLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { agentTypeLabel, armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
 import { RUNTIME_LABEL, accountLabel, limitationText } from "../shared/labels";
 import { parseAnchor, roleKindWord, ruleFlags, sameScope, scopeBadge, scopeOfBinding, workloadKindWord, type Scope } from "../k8s/rules";
@@ -416,7 +416,7 @@ function describeAzure(v: VisualNode): NodeDescription {
       context = first.sublabel ? `Issuer ${first.sublabel}` : null;
       break;
     case "azure_resource":
-      type = `Resource · ${first.sublabel ? armTypeLabel(first.sublabel) : "Azure resource"}`;
+      type = `Resource · ${first.sublabel ? graphKindLabel("resource", first.sublabel) : "Azure resource"}`;
       context = null;
       break;
     case "azure_scope":
