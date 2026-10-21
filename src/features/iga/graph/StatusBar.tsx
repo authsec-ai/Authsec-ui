@@ -32,6 +32,14 @@ const K8S_CATEGORIES: { key: NodeCategory; icon: NodeIcon; label: string; meanin
   { key: "statement", icon: "rule", label: "Rule", meaning: "A Role or ClusterRole's rules, one card per role in Summary" },
 ];
 
+/** The same categories as an Azure graph draws them: no policy statements; the identity kinds are Microsoft's. */
+const AZURE_CATEGORIES: { key: NodeCategory; icon: NodeIcon; label: string; meaning: string }[] = [
+  { key: "workload", icon: "workload", label: "Workload", meaning: "An Azure resource that runs as an identity" },
+  { key: "identity", icon: "service_account", label: "Identity", meaning: "A user, group, app registration, service principal, managed identity or agent identity in Microsoft Entra ID" },
+  { key: "resource", icon: "resource", label: "Resource or scope", meaning: "An Azure resource, or the scope (directory, subscription, resource group) a role is assigned at" },
+  { key: "external", icon: "external", label: "Federated credential", meaning: "An outside issuer and subject trusted to act as an identity — dashed outline" },
+];
+
 const K8S_LINE_MEANING = {
   stale: "Unconfirmed by the latest sweep, and still believed",
   ended: "The sweep no longer sees it",
@@ -54,6 +62,7 @@ export function StatusBar({
   onZoomOut,
   canvas,
   k8s = false,
+  azure = false,
 }: {
   nodes: VisualNode[];
   edges: VisualEdge[];
@@ -67,6 +76,8 @@ export function StatusBar({
   canvas: boolean;
   /** A Kubernetes graph: its own words for the categories and for what is not evaluated. */
   k8s?: boolean;
+  /** An Azure graph: Microsoft's words for the categories, and for what is not evaluated. */
+  azure?: boolean;
 }) {
   const counts = new Map<NodeCategory, number>();
   let folded = 0;
@@ -91,7 +102,7 @@ export function StatusBar({
     <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-(--color-border-subtle) px-3 py-1.5 text-[11px] text-(--color-text-muted)">
       <ul className="flex flex-wrap items-center gap-1" aria-label="Drawn objects" onMouseLeave={() => onFocusCategory(null)}>
         {CATEGORIES.filter((c) => counts.has(c.key))
-          .map((c) => (k8s ? { ...c, ...K8S_CATEGORIES.find((k) => k.key === c.key) } : c))
+          .map((c) => (k8s ? { ...c, ...K8S_CATEGORIES.find((k) => k.key === c.key) } : azure ? { ...c, ...AZURE_CATEGORIES.find((k) => k.key === c.key) } : c))
           .map((c) => {
           const Icon = NODE_ICON[c.icon];
           const active = focusCategory === c.key;
@@ -151,13 +162,15 @@ export function StatusBar({
         <span
           className="inline-flex items-center gap-1"
           title={
-            k8s
+            azure
+              ? "Everything here is access Azure and Microsoft Entra ID report as assigned: role assignments, API permissions, group memberships and credentials. Whether a request would succeed has not been evaluated: deny assignments, conditions and Conditional Access are not applied."
+              : k8s
               ? "Everything here is declared by Roles, ClusterRoles and their bindings as the sweep read them. Whether a request would succeed has not been evaluated: admission policies and webhooks, token mounting, grants through groups and cloud identity links are not read here."
               : "Everything here is declared by policy and configuration. Whether a request would succeed has not been evaluated: conditions, boundaries, Deny statements and resource policies are recorded, not applied."
           }
         >
           <Info aria-hidden="true" className="size-3" />
-          {k8s ? "Declared by RBAC · admission policies and token mounting not evaluated" : "Declared access · not evaluated"}
+          {azure ? "Assigned access · not evaluated" : k8s ? "Declared by RBAC · admission policies and token mounting not evaluated" : "Declared access · not evaluated"}
         </span>
         {canvas ? (
           <span className="inline-flex items-center rounded border border-(--color-border-subtle)" role="group" aria-label="Zoom">
