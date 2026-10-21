@@ -1,440 +1,499 @@
 /**
- * `AgentsPage` — workspace home for AI agents (cross-app / XAA actors).
+ * `AgentsPage` — /agents. One list of everything that calls your MCP servers:
+ * AI agents, voice agents, service accounts and other OAuth clients.
  *
- * An "agent" is a confidential OAuth client (client_kind="agent") that logs a
- * USER in and acts on their behalf, reaching MCP servers via the ID-JAG flow
- * (OIDC login → token-exchange → jwt-bearer). It is a different entity from a
- * Service Account (a machine principal with no user) — see /service-accounts.
+ * Sources (no rows are made up):
+ *   - GET /authsec/clients (workspace client registry, one row per client per
+ *     MCP server). client_kind "agent" → AI agent; a client whose ID is a
+ *     service account's OAuth client folds into that service account; every
+ *     other kind → Other client. Pending registrations come from here too.
+ *   - GET /authsec/uflow/admin/service-accounts → Service accounts, with their
+ *     MCP access from /service-accounts/:id/access.
+ *   - Agents registered from this browser that no server has seen yet
+ *     (registeredAgents.ts) → "Waiting for first connection". That record is
+ *     also the only place a voice agent is told apart from an AI agent: the
+ *     registry has no voice kind.
  *
- * There is no dedicated agent-list endpoint yet, so the inventory is derived by
- * filtering the workspace client registry to client_kind="agent". An agent
- * surfaces here once it has connected to at least one MCP server. The register
- * action mints the confidential client (POST /authsec/agents).
+ * A row that needs a decision carries one button (Approve or Test
+ * Integration). Everything else — revoke, deny, edit, rotate, delete, copy —
+ * is in the drawer a row click opens. There are no row menus.
  */
 
 import { useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { Ban, Bot, ClipboardCopy, ExternalLink, Plus } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { Link, useSearchParams } from "react-router-dom";
+import { Bot, Check, Loader2, Plus, X } from "lucide-react";
 
+import { useListWorkspaceClientsQuery, type WorkspaceClientItem } from "@/app/api/mcpClientsApi";
 import {
-  useListWorkspaceClientsQuery,
-  useRevokeWorkspaceClientMutation,
-} from "@/app/api/mcpClientsApi";
-import { useRegisterAgentMutation } from "@/app/api/agentIdentityApi";
-import type { WorkspaceClientItem } from "@/app/api/mcpClientsApi";
-import { Badge } from "@/components/ui/badge";
+  useListServiceAccountAccessQuery,
+  useListWorkspaceServiceAccountsQuery,
+  type WorkspaceServiceAccount,
+} from "@/app/api/agentIdentityApi";
+import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { ConsoleFilterBar, ConsoleRowActions, EntityCell } from "@/components/console/iam-console";
+import { ConsoleFilterBar, EntityCell, type ConsoleFilterOption } from "@/components/console/iam-console";
+import { StatusBadge, type ConsoleTone } from "@/components/console/status";
+import { DetailRow, DrawerSection } from "@/components/console/detail";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { cn } from "@/lib/utils";
 
-const DOCS_URL = "https://docs.authsec.dev/getting-started";
+import { ClientDrawer } from "@/features/clients/ClientDrawer";
+import {
+  CONNECTION_STATUS,
+  SMALL_TEXT,
+  clientStatus,
+  latestToken,
+  relativeOrNever,
+  useApproveClient,
+} from "@/features/clients/clientStatus";
+import { ServiceAccountDetail, ServiceAccountReach } from "@/features/service-accounts/components/ServiceAccountDetail";
+import {
+  AUTH_METHOD_LABEL,
+  SA_STATUS,
+  authMethodOf,
+  saStatusOf,
+} from "@/features/service-accounts/components/serviceAccountStatus";
 
-// ── Register agent wizard ─────────────────────────────────────────────────────
-// Mints a confidential agent client (authorization_code + token-exchange +
-// secret) in THIS workspace. The agent uses it to log a user in and reach MCP
-// servers via the cross-app (ID-JAG) flow.
-function RegisterAgentDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const [name, setName] = useState("");
-  const [redirect, setRedirect] = useState("http://localhost:8126/callback");
-  const [register, { isLoading }] = useRegisterAgentMutation();
-  const [result, setResult] = useState<{
-    client_id: string;
-    client_secret: string;
-    issuer: string;
-  } | null>(null);
+import { forgetRegisteredAgent, readRegisteredAgents, type RegisteredAgent } from "./registeredAgents";
 
-  const reset = () => {
-    setName("");
-    setRedirect("http://localhost:8126/callback");
-    setResult(null);
+// ── Row model ─────────────────────────────────────────────────────────────────
+
+type AgentType = "ai" | "voice" | "service" | "other";
+type TypeFilter = "all" | AgentType;
+
+const TYPE_LABEL: Record<AgentType, string> = {
+  ai: "AI agent",
+  voice: "Voice agent",
+  service: "Service account",
+  other: "Other client",
+};
+
+const FILTERS: { key: TypeFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "ai", label: "AI agents" },
+  { key: "voice", label: "Voice agents" },
+  { key: "service", label: "Service accounts" },
+  { key: "other", label: "Other clients" },
+];
+
+interface RowStatus {
+  label: string;
+  tone: ConsoleTone;
+  /** Needs a decision: sorts first. */
+  pending?: boolean;
+  /** Never connected: offers Test Integration. */
+  waiting?: boolean;
+  /** Revoked or disabled: sorts last. */
+  inactive?: boolean;
+}
+
+interface ClientRow {
+  kind: "client";
+  key: string;
+  type: Exclude<AgentType, "service">;
+  name: string;
+  clientId: string;
+  /** One registry row per MCP server; empty for a not-yet-seen agent. */
+  connections: WorkspaceClientItem[];
+  /** Registered from this browser. */
+  local?: RegisteredAgent;
+  status: RowStatus;
+  lastUsed?: string;
+}
+
+interface ServiceRow {
+  kind: "service";
+  key: string;
+  type: "service";
+  name: string;
+  sa: WorkspaceServiceAccount;
+  status: RowStatus;
+  lastUsed?: string;
+}
+
+type AgentRow = ClientRow | ServiceRow;
+
+function clientRowStatus(conns: WorkspaceClientItem[]): RowStatus {
+  if (conns.length === 0) return { ...CONNECTION_STATUS.waiting, waiting: true };
+  const s = clientStatus(conns);
+  return {
+    ...CONNECTION_STATUS[s],
+    pending: s === "pending",
+    waiting: s === "waiting",
+    inactive: s === "revoked",
   };
+}
 
-  const submit = async () => {
-    if (!name.trim()) {
-      toast.error("Name is required.");
-      return;
-    }
-    try {
-      const res = await register({
-        name: name.trim(),
-        redirect_uris: [redirect.trim()],
-      }).unwrap();
-      setResult({
-        client_id: res.client_id,
-        client_secret: res.client_secret,
-        issuer: res.issuer,
-      });
-      toast.success("Agent registered.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't register agent.");
-    }
-  };
+function saRowStatus(sa: WorkspaceServiceAccount): RowStatus {
+  const s = saStatusOf(sa);
+  return { ...SA_STATUS[s], waiting: s === "waiting", inactive: s === "disabled" };
+}
 
+const isFilter = (v: string | null): v is TypeFilter =>
+  v === "all" || v === "ai" || v === "voice" || v === "service" || v === "other";
+
+// ── Row action: one button, only when there is something to do ─────────────────
+
+function testLink(rsId: string) {
+  return `/applications/${encodeURIComponent(rsId)}/test`;
+}
+
+function TestIntegrationLink({ rsId }: { rsId: string }) {
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) reset();
-        onOpenChange(v);
+    <Button size="sm" variant="outline" asChild onClick={(e) => e.stopPropagation()}>
+      <Link to={testLink(rsId)}>Test Integration</Link>
+    </Button>
+  );
+}
+
+/** A never-connected service account: test against the first server it was granted. */
+function ServiceTestAction({ saId }: { saId: string }) {
+  const { data } = useListServiceAccountAccessQuery(saId);
+  const rsId = data?.items[0]?.resource_server_id;
+  return rsId ? <TestIntegrationLink rsId={rsId} /> : null;
+}
+
+function ApproveAction({ row, onOpen }: { row: ClientRow; onOpen: () => void }) {
+  const [approve, { isLoading }] = useApproveClient();
+  const pending = row.connections.filter((c) => c.status === "pending_approval");
+  return (
+    <Button
+      size="sm"
+      className="text-white"
+      disabled={isLoading}
+      onClick={(e) => {
+        e.stopPropagation();
+        // One pending server: approve it here. Several: pick in the drawer.
+        if (pending.length === 1) void approve(pending[0]);
+        else onOpen();
       }}
     >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Register AI agent</DialogTitle>
-          <DialogDescription>
-            Creates a confidential client that logs a user in and calls MCP servers on their
-            behalf (cross-app / ID-JAG). Use these values in the agent's config.
-          </DialogDescription>
-        </DialogHeader>
-
-        {result ? (
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-emerald-700">
-              Agent registered — copy the secret now, it won't be shown again.
-            </p>
-            {(
-              [
-                ["AGENT_CLIENT_ID", result.client_id],
-                ["AGENT_CLIENT_SECRET", result.client_secret],
-                ["AUTHSEC_ISSUER", result.issuer],
-              ] as const
-            ).map(([label, val]) => (
-              <div key={label} className="space-y-1">
-                <Label>{label}</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
-                    {val}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(val);
-                      toast.success("Copied");
-                    }}
-                  >
-                    <ClipboardCopy className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
-              <span className="font-medium text-slate-700">What happens next:</span> the agent logs
-              a user in (OIDC), exchanges that for an ID-JAG, then redeems it for a scoped token at
-              each MCP server. Its first call to a server appears as a pending request on that
-              server's <span className="font-medium">Connections</span> tab — approve it there with
-              a role.{" "}
-              <a
-                href={DOCS_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-0.5 font-medium text-blue-700 hover:underline"
-              >
-                Agent guide <ExternalLink className="size-3" />
-              </a>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  reset();
-                  onOpenChange(false);
-                }}
-                className="text-white"
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="ag-name">Name</Label>
-              <Input
-                id="ag-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="research-agent"
-                autoComplete="off"
-                className="h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ag-redirect">Redirect URI</Label>
-              <Input
-                id="ag-redirect"
-                value={redirect}
-                onChange={(e) => setRedirect(e.target.value)}
-                autoComplete="off"
-                className="h-9 font-mono text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Where the user is sent back after login. Default matches the sample agent's
-                loopback callback.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  reset();
-                  onOpenChange(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void submit()}
-                disabled={!name.trim() || isLoading}
-                className="text-white"
-              >
-                {isLoading ? "Registering…" : "Register agent"}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+      {isLoading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Check className="mr-1.5 size-3.5" />}
+      Approve
+    </Button>
   );
 }
 
-const STATUS_BADGE: Record<string, { label: string; variant: "default" | "outline" | "secondary" }> =
-  {
-    approved: { label: "Connected", variant: "default" },
-    pending_approval: { label: "Pending approval", variant: "secondary" },
-    revoked: { label: "Revoked", variant: "outline" },
-  };
-
-// Revoke an agent's connection to a server. Backed by the connections DELETE
-// endpoint; the workspace-clients list invalidates on success so the row clears.
-function RevokeAgentDialog({
-  agent,
-  open,
-  onOpenChange,
+function RowAction({
+  row,
+  serverIdByName,
+  onOpen,
 }: {
-  agent: WorkspaceClientItem | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
+  row: AgentRow;
+  serverIdByName: Map<string, string>;
+  onOpen: () => void;
 }) {
-  const [revoke, { isLoading }] = useRevokeWorkspaceClientMutation();
+  if (row.kind === "service") {
+    return row.status.waiting ? <ServiceTestAction saId={row.sa.id} /> : null;
+  }
+  if (row.status.pending) return <ApproveAction row={row} onOpen={onOpen} />;
+  if (!row.status.waiting) return null;
+  const approved = row.connections.find((c) => c.status === "approved");
+  const rsId =
+    approved?.resource_server_id ??
+    row.local?.server_ids?.[0] ??
+    row.local?.servers.map((n) => serverIdByName.get(n)).find(Boolean);
+  return rsId ? <TestIntegrationLink rsId={rsId} /> : null;
+}
 
-  const submit = async () => {
-    if (!agent) return;
-    try {
-      await revoke({ rsId: agent.resource_server_id, clientId: agent.client_id }).unwrap();
-      toast.success("Connection revoked.");
-      onOpenChange(false);
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't revoke connection.");
-    }
-  };
+// ── Cells ───────────────────────────────────────────────────────────────────────
 
+const dash = <span className="text-sm text-muted-foreground">–</span>;
+
+function ClientReach({ row }: { row: ClientRow }) {
+  const reach = row.connections.filter((c) => c.status === "approved").map((c) => c.resource_server_name);
+  const pending = row.connections
+    .filter((c) => c.status === "pending_approval")
+    .map((c) => c.resource_server_name);
+  if (!reach.length && !pending.length) {
+    return row.local?.servers.length ? (
+      <span className="text-sm text-foreground">{row.local.servers.join(", ")}</span>
+    ) : (
+      dash
+    );
+  }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Revoke agent connection?</DialogTitle>
-          <DialogDescription>
-            This stops <span className="font-medium text-foreground">{agent?.client_name}</span> from
-            minting new tokens for{" "}
-            <span className="font-medium text-foreground">{agent?.resource_server_name}</span>.
-            Existing tokens expire at their normal lifetime.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="pt-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={() => void submit()} disabled={isLoading}>
-            <Ban className="mr-1.5 size-3.5" />
-            {isLoading ? "Revoking…" : "Revoke connection"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <span className="text-sm text-foreground">
+      {reach.join(", ")}
+      {pending.length ? (
+        <span className="text-muted-foreground">
+          {reach.length ? ", " : ""}
+          {pending.join(", ")} (pending)
+        </span>
+      ) : null}
+    </span>
   );
 }
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AgentsPage() {
-  const { data, isLoading } = useListWorkspaceClientsQuery();
+  const clientsQ = useListWorkspaceClientsQuery();
+  const saQ = useListWorkspaceServiceAccountsQuery();
+  const { data: servers } = useListResourceServersQuery();
+  const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const [revokeTarget, setRevokeTarget] = useState<WorkspaceClientItem | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [localVersion, setLocalVersion] = useState(0);
 
-  const agents = useMemo(() => {
-    let items = (data ?? []).filter((c) => c.client_kind === "agent");
-    const q = query.trim().toLowerCase();
-    if (q) {
-      items = items.filter((c) =>
-        [c.client_name, c.client_id, c.resource_server_name]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q)),
-      );
+  const rawType = params.get("type");
+  const typeFilter: TypeFilter = isFilter(rawType) ? rawType : "all";
+  const setTypeFilter = (next: TypeFilter) => {
+    const p = new URLSearchParams(params);
+    if (next === "all") p.delete("type");
+    else p.set("type", next);
+    setParams(p, { replace: true });
+  };
+
+  const serverIdByName = useMemo(
+    () => new Map((servers ?? []).map((s) => [s.name, s.id] as const)),
+    [servers],
+  );
+
+  const allRows = useMemo<AgentRow[]>(() => {
+    // localVersion re-reads browser storage after "Remove from this list".
+    void localVersion;
+    const local = readRegisteredAgents();
+    const localById = new Map(local.map((a) => [a.client_id, a] as const));
+    const sas = saQ.data ?? [];
+    const saClientIds = new Set(sas.map((sa) => sa.oauth_client_id).filter((v): v is string => !!v));
+
+    const byClient = new Map<string, WorkspaceClientItem[]>();
+    for (const c of clientsQ.data ?? []) {
+      // A service account's own OAuth client is that service account's row.
+      if (saClientIds.has(c.client_id)) continue;
+      const list = byClient.get(c.client_id);
+      if (list) list.push(c);
+      else byClient.set(c.client_id, [c]);
     }
-    return items;
-  }, [data, query]);
 
-  const columns = useMemo<AdaptiveColumn<WorkspaceClientItem>[]>(
+    const clientRows: ClientRow[] = Array.from(byClient.entries()).map(([clientId, conns]) => {
+      const mine = localById.get(clientId);
+      const type: ClientRow["type"] =
+        conns[0].client_kind === "agent" ? (mine?.kind === "voice" ? "voice" : "ai") : "other";
+      return {
+        kind: "client",
+        key: `client:${clientId}`,
+        type,
+        name: conns[0].client_name || conns[0].software_id || clientId,
+        clientId,
+        connections: conns,
+        local: mine,
+        status: clientRowStatus(conns),
+        lastUsed: latestToken(conns),
+      };
+    });
+
+    // Registered here, not yet listed by the registry. Only once the registry
+    // has answered, so a loading list doesn't flash them as unseen.
+    const unseen: ClientRow[] = clientsQ.data
+      ? local
+          .filter((a) => !byClient.has(a.client_id) && !saClientIds.has(a.client_id))
+          .map((a) => ({
+            kind: "client",
+            key: `client:${a.client_id}`,
+            type: a.kind === "voice" ? "voice" : "ai",
+            name: a.name,
+            clientId: a.client_id,
+            connections: [],
+            local: a,
+            status: clientRowStatus([]),
+          }))
+      : [];
+
+    const serviceRows: ServiceRow[] = sas.map((sa) => ({
+      kind: "service",
+      key: `sa:${sa.id}`,
+      type: "service",
+      name: sa.name,
+      sa,
+      status: saRowStatus(sa),
+      lastUsed: sa.last_seen_at,
+    }));
+
+    const rank = (r: AgentRow) => (r.status.pending ? 0 : r.status.inactive ? 2 : 1);
+    return [...unseen, ...clientRows, ...serviceRows].sort(
+      (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name),
+    );
+  }, [clientsQ.data, saQ.data, localVersion]);
+
+  const counts = useMemo(() => {
+    const c: Record<TypeFilter, number> = { all: allRows.length, ai: 0, voice: 0, service: 0, other: 0 };
+    for (const r of allRows) c[r.type] += 1;
+    return c;
+  }, [allRows]);
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allRows.filter((r) => {
+      if (typeFilter !== "all" && r.type !== typeFilter) return false;
+      if (!q) return true;
+      const hay =
+        r.kind === "service"
+          ? [r.name, r.sa.description, r.sa.oauth_client_id, r.sa.spiffe_id, r.sa.owner_email]
+          : [r.name, r.clientId, ...r.connections.map((c) => c.resource_server_name), ...(r.local?.servers ?? [])];
+      return hay.filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [allRows, query, typeFilter]);
+
+  const filters = useMemo<ConsoleFilterOption[]>(
+    () => FILTERS.map((f) => ({ key: f.key, label: f.label, count: counts[f.key] })),
+    [counts],
+  );
+
+  const columns = useMemo<AdaptiveColumn<AgentRow>[]>(
     () => [
       {
         id: "name",
         header: "Agent",
         alwaysVisible: true,
-        approxWidth: 280,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <span className="app-glyph">
-              <Bot className="size-4" />
-            </span>
-            <EntityCell label={row.original.client_name} detail={row.original.client_id} />
-          </div>
-        ),
+        primary: true,
+        approxWidth: 220,
+        cell: ({ row }) => <EntityCell label={<span className="font-semibold">{row.original.name}</span>} />,
       },
       {
-        id: "connected_to",
-        header: "Connected to",
+        id: "type",
+        header: "Type",
+        priority: 2,
+        approxWidth: 140,
+        cell: ({ row }) => <span className="text-sm text-foreground">{TYPE_LABEL[row.original.type]}</span>,
+      },
+      {
+        id: "idp",
+        header: "Identity provider",
+        priority: 4,
+        approxWidth: 160,
+        cell: ({ row }) => {
+          const r = row.original;
+          // Only a service account's credential type is known; the registry
+          // doesn't say which IdP signs an agent's users in.
+          if (r.kind !== "service") return dash;
+          const method = authMethodOf(r.sa);
+          return method === "none" ? dash : <span className="text-sm text-foreground">{AUTH_METHOD_LABEL[method]}</span>;
+        },
+      },
+      {
+        id: "access",
+        header: "MCP access",
         priority: 1,
-        approxWidth: 200,
+        approxWidth: 220,
         cell: ({ row }) =>
-          row.original.resource_server_name ? (
-            <span className="text-xs text-slate-700">{row.original.resource_server_name}</span>
+          row.original.kind === "service" ? (
+            <ServiceAccountReach saId={row.original.sa.id} />
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <ClientReach row={row.original} />
           ),
       },
       {
         id: "status",
         header: "Status",
-        priority: 2,
-        approxWidth: 130,
-        cell: ({ row }) => {
-          const s = STATUS_BADGE[row.original.status] ?? {
-            label: row.original.status,
-            variant: "outline" as const,
-          };
-          return <Badge variant={s.variant}>{s.label}</Badge>;
-        },
+        alwaysVisible: true,
+        approxWidth: 230,
+        cell: ({ row }) => (
+          <StatusBadge tone={row.original.status.tone} className={SMALL_TEXT}>
+            {row.original.status.label}
+          </StatusBadge>
+        ),
       },
       {
-        id: "last_token",
-        header: "Last token",
+        id: "last_used",
+        header: "Last used",
         priority: 3,
         approxWidth: 130,
-        cell: ({ row }) => {
-          const ts = row.original.last_token_issued_at
-            ? new Date(row.original.last_token_issued_at)
-            : null;
-          const valid = ts && !Number.isNaN(ts.getTime());
-          return (
-            <span className="text-xs text-muted-foreground">
-              {valid ? formatDistanceToNow(ts, { addSuffix: true }) : "never"}
-            </span>
-          );
-        },
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.original.status.pending && !row.original.lastUsed ? "–" : relativeOrNever(row.original.lastUsed)}
+          </span>
+        ),
       },
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 56,
-        cell: ({ row }) => {
-          const canRevoke =
-            row.original.status !== "revoked" && !!row.original.resource_server_id;
-          return (
-            <div onClick={(e) => e.stopPropagation()}>
-              <ConsoleRowActions
-                items={[
-                  {
-                    label: "Copy client ID",
-                    icon: <ClipboardCopy className="size-4" />,
-                    onSelect: () => {
-                      void navigator.clipboard.writeText(row.original.client_id);
-                      toast.success("Client ID copied");
-                    },
-                  },
-                  {
-                    label: "Revoke connection",
-                    icon: <Ban className="size-4" />,
-                    destructive: true,
-                    disabled: !canRevoke,
-                    onSelect: () => setRevokeTarget(row.original),
-                  },
-                ]}
-              />
-            </div>
-          );
-        },
+        approxWidth: 150,
+        cell: ({ row }) => (
+          <RowAction
+            row={row.original}
+            serverIdByName={serverIdByName}
+            onOpen={() => setSelectedKey(row.original.key)}
+          />
+        ),
       },
     ],
-    [],
+    [serverIdByName],
   );
+
+  const selected = selectedKey ? allRows.find((r) => r.key === selectedKey) ?? null : null;
+  const isLoading = clientsQ.isLoading || saQ.isLoading;
+  const failed = [clientsQ.isError && "clients and agents", saQ.isError && "service accounts"].filter(Boolean);
+  const filtered = !!query || typeFilter !== "all";
 
   return (
     <ConsolePage
       title="Agents"
-      description="AI agents that act on behalf of a logged-in user. Each is a confidential client that signs a user in, then reaches MCP servers via cross-app delegation (ID-JAG). An agent appears below once it connects to its first server."
+      description="AI agents, voice agents and service accounts that call your MCPs."
       actions={
-        <>
-          <Button variant="outline" asChild>
-            <a href={DOCS_URL} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-1.5 size-3.5" />
-              Docs
-            </a>
-          </Button>
-          <Button onClick={() => setRegisterOpen(true)} className="text-white">
+        <Button asChild className="text-white">
+          <Link to="/agents/new">
             <Plus className="mr-1.5 size-3.5" />
             Register agent
-          </Button>
-        </>
+          </Link>
+        </Button>
       }
     >
       <ConsoleFilterBar
         search={query}
         onSearchChange={setQuery}
-        searchPlaceholder="Search by agent name, client ID, or server"
+        searchPlaceholder="Search"
+        filters={filters}
+        activeFilter={typeFilter}
+        onFilterChange={(v) => setTypeFilter(isFilter(v) ? v : "all")}
       />
+
+      {failed.length ? (
+        <p role="alert" className={cn("text-(--color-danger-text)", SMALL_TEXT)}>
+          Couldn't load {failed.join(" or ")}. The list below leaves them out.
+        </p>
+      ) : null}
 
       <TableCard>
         <CardContent variant="flush">
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">Loading agents…</div>
-          ) : agents.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              Loading agents…
+            </div>
+          ) : rows.length === 0 ? (
             <div className="py-16 text-center">
-              <Bot className="mx-auto mb-3 size-7 text-slate-300" />
+              <Bot className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">
-                {query ? "No agents match this search." : "No agents yet"}
+                {filtered ? "Nothing matches this filter." : "No agents yet"}
               </p>
-              {!query && (
+              {filtered ? (
+                <button
+                  type="button"
+                  className={cn("mt-3 font-semibold text-(--color-primary-text) hover:underline", SMALL_TEXT)}
+                  onClick={() => {
+                    setQuery("");
+                    setTypeFilter("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              ) : (
                 <>
-                  <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                    Register an agent to get its client credentials, then point your agent at them.
-                    It shows up here after its first connection to an MCP server.
+                  <p className={cn("mx-auto mt-1 max-w-md text-muted-foreground", SMALL_TEXT)}>
+                    Register an agent to get its credentials and pick the MCP servers it can call.
                   </p>
                   <div className="mt-4 flex justify-center">
-                    <Button size="sm" onClick={() => setRegisterOpen(true)} className="text-white">
-                      <Plus className="mr-1.5 size-3.5" />
-                      Register agent
+                    <Button size="sm" asChild className="text-white">
+                      <Link to="/agents/new">
+                        <Plus className="mr-1.5 size-3.5" />
+                        Register agent
+                      </Link>
                     </Button>
                   </div>
                 </>
@@ -442,24 +501,79 @@ export default function AgentsPage() {
             </div>
           ) : (
             <AdaptiveTable
-              tableId="agents-inventory"
-              data={agents}
+              tableId="agents-all"
+              data={rows}
               columns={columns}
               enableSelection={false}
               enableExpansion={false}
-              getRowId={(c) => `${c.client_id}:${c.resource_server_id}`}
-              pagination={{ pageSize: 15, pageSizeOptions: [15, 30, 50], alwaysVisible: true }}
+              getRowId={(r) => r.key}
+              onRowClick={(r) => setSelectedKey(r.key)}
+              pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />
           )}
         </CardContent>
       </TableCard>
 
-      <RegisterAgentDialog open={registerOpen} onOpenChange={setRegisterOpen} />
+      {selected?.kind === "client" ? (
+        <ClientDrawer
+          open
+          onClose={() => setSelectedKey(null)}
+          name={selected.name}
+          clientId={selected.clientId}
+          connections={selected.connections}
+          subtitle={
+            selected.type === "other"
+              ? "Other client · registered through OAuth"
+              : `${TYPE_LABEL[selected.type]} · acts for a signed-in person`
+          }
+          emptyDescription={
+            selected.local?.servers.length
+              ? `Set up for ${selected.local.servers.join(", ")}. Its first call to each server asks for your approval on that server's Connections tab.`
+              : undefined
+          }
+          identityExtra={
+            selected.local ? (
+              <DetailRow label="Redirect URI" value={selected.local.redirect_uri} mono full />
+            ) : null
+          }
+        >
+          {selected.type === "voice" ? (
+            <DrawerSection label="Voice approvals">
+              <p className={cn("text-muted-foreground", SMALL_TEXT)}>
+                Voice agent sign-ins are approved on a device registered with the AuthSec mobile app.
+              </p>
+              <Button size="sm" variant="outline" className="mt-2" asChild>
+                <Link to="/admin/voice-agent">Manage voice devices</Link>
+              </Button>
+            </DrawerSection>
+          ) : null}
+          {selected.local && selected.connections.length === 0 ? (
+            <DrawerSection label="Listed from this browser">
+              <p className={cn("text-muted-foreground", SMALL_TEXT)}>
+                AuthSec lists an agent once it reaches an MCP server. Until then it shows here only in the
+                browser that registered it.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => {
+                  forgetRegisteredAgent(selected.clientId);
+                  setLocalVersion((v) => v + 1);
+                  setSelectedKey(null);
+                }}
+              >
+                <X className="mr-1.5 size-3.5" /> Remove from this list
+              </Button>
+            </DrawerSection>
+          ) : null}
+        </ClientDrawer>
+      ) : null}
 
-      <RevokeAgentDialog
-        agent={revokeTarget}
-        open={!!revokeTarget}
-        onOpenChange={(v) => !v && setRevokeTarget(null)}
+      <ServiceAccountDetail
+        sa={selected?.kind === "service" ? selected.sa : null}
+        onClose={() => setSelectedKey(null)}
+        onChanged={() => void saQ.refetch()}
       />
     </ConsolePage>
   );

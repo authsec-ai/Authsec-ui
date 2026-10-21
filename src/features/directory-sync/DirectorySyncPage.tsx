@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { syncConfigTarget } from "@/features/users/components/syncConfigForm";
 import {
-  Edit2,
   FolderSync,
   Plus,
   RefreshCw,
@@ -27,7 +26,6 @@ import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -224,34 +222,23 @@ export default function DirectorySyncPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 56,
+        approxWidth: 160,
         cell: ({ row }) => {
           const cfg = row.original;
           return (
-            <div onClick={(e) => e.stopPropagation()}>
-              <ConsoleRowActions
-                items={[
-                  {
-                    label: "Sync now",
-                    icon: <Zap className="size-4" />,
-                    onSelect: () => handleSyncNow(cfg),
-                  },
-                  {
-                    label: "Edit",
-                    icon: <Edit2 className="size-4" />,
-                    onSelect: () =>
-                      cfg.typeLabel === "Entra ID"
-                        ? openEntra(cfg)
-                        : openAD(cfg),
-                  },
-                  {
-                    label: "Delete",
-                    icon: <Trash2 className="size-4" />,
-                    destructive: true,
-                    onSelect: () => handleDelete(cfg),
-                  },
-                ]}
-              />
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-1">
+              <Button variant="outline" size="sm" onClick={() => void handleSyncNow(cfg)}>
+                <Zap className="mr-1 size-3.5" /> Sync now
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label={`Delete ${cfg.config_name}`}
+                onClick={() => void handleDelete(cfg)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
             </div>
           );
         },
@@ -263,7 +250,7 @@ export default function DirectorySyncPage() {
 
   return (
     <ConsolePage
-      title="Directory Sync"
+      title="Directory sync"
       description={
         <>
           Imports users from Active Directory or Entra ID into this workspace
@@ -306,7 +293,7 @@ export default function DirectorySyncPage() {
                   ? "No configurations match your search"
                   : "No directory sync configured"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 {query
                   ? "Try a different search term."
                   : "Connect Active Directory or Entra ID to automatically provision users."}
@@ -330,6 +317,7 @@ export default function DirectorySyncPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(r) => r.id ?? ""}
+              onRowClick={(cfg) => (cfg.typeLabel === "Entra ID" ? openEntra(cfg) : openAD(cfg))}
               pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: true }}
             />
           )}

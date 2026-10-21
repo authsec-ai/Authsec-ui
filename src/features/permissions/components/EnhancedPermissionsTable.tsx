@@ -7,13 +7,7 @@ import {
 import { ResponsiveTableProvider } from "@/components/ui/responsive-table";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Trash2, Shield, Key, MoreHorizontal } from "lucide-react";
+import { Trash2, Shield, Key } from "lucide-react";
 import type { Permission } from "@/app/api/permissionsApi";
 import { useDeletePermissionsMutation } from "@/app/api/permissionsApi";
 import { toast } from "@/lib/toast";
@@ -186,23 +180,18 @@ export function EnhancedPermissionsTable({
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="admin-row-icon-btn h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" visualVariant="row-actions" className="w-48">
-              <DropdownMenuItem
-                onClick={() => handleDeleteClick(row.original)}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="admin-row-icon-btn h-8 w-8 p-0"
+            aria-label="Delete permission"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteClick(row.original);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         ),
         enableSorting: false,
         resizable: false,

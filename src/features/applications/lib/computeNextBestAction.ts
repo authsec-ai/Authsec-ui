@@ -22,11 +22,11 @@ export function computeNextBestAction(
       key: "install-protection",
       headline: "Install protection",
       body:
-        "Add the AuthSec SDK so this application blocks unauthenticated calls and publishes its tool manifest.",
+        "Add the AuthSec SDK so this MCP server blocks unauthenticated calls and publishes its tool manifest.",
       primary: "Install protection",
       secondary: "Copy install prompt",
       noopConsequence:
-        "If you do nothing, this application is unprotected — unauthenticated requests still reach your handler.",
+        "If you do nothing, this MCP isn't enforcing — unauthenticated requests still reach your handler.",
     };
   }
 
@@ -78,7 +78,7 @@ export function computeNextBestAction(
       key: "approve-client",
       headline: "Approve a client",
       body:
-        "Clients that need to call this application are waiting on redirect approval or registration.",
+        "Clients that need to call this MCP server are waiting on redirect approval or registration.",
       primary: "Open Clients",
       secondary: "Allow dynamic registration",
       noopConsequence:
@@ -103,10 +103,10 @@ export function computeNextBestAction(
   if (!launched && readiness.launch.state !== "err") {
     return {
       key: "launch-application",
-      headline: "Launch application",
+      headline: "Launch MCP server",
       body:
         "All gates pass. Publish runtime policy and start enforcing access.",
-      primary: "Launch application",
+      primary: "Launch MCP server",
       secondary: "Re-run final checks",
     };
   }
@@ -124,10 +124,10 @@ export function computeNextBestAction(
   // Active and healthy → keep an eye on activity
   return {
     key: "open",
-    headline: "Application is live",
+    headline: "MCP server is live",
     body: "Watch Activity for post-launch drift events.",
     primary: "View activity",
-    secondary: "Open application",
+    secondary: "Open MCP server",
   };
 }
 

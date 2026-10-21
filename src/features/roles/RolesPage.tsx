@@ -4,29 +4,16 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  KeyRound,
-  Link2,
-  Lock,
-  MoreHorizontal,
-  Pencil,
   Plus,
   Scan,
   Search,
   Shield,
   Sparkles,
   Star,
-  Trash2,
   X,
 } from "lucide-react";
-import toast from "react-hot-toast";
 
 import { useListApplicationRolesQuery, type ApplicationRole } from "@/app/api/accessApi";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ApplicationRoleWizard } from "./components/ApplicationRoleWizard";
 import { ApplicationRoleDrawer } from "./components/ApplicationRoleDrawer";
 
@@ -83,8 +70,6 @@ export function RolesPage() {
     setDefaultFilter("all");
     setPage(1);
   };
-
-  const isProtected = (r: ApplicationRole) => r.is_default || r.source === "generated";
 
   return (
     <div data-cr>
@@ -267,71 +252,13 @@ export function RolesPage() {
                         </td>
                         <td>
                           <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="icon-btn" aria-label="Role actions">
-                                  <MoreHorizontal className="icon" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" data-cr className="min-w-52 p-1">
-                                <DropdownMenuItem
-                                  className="menu-item"
-                                  onSelect={() => navigate(`/applications/${role.application.id}/access`)}
-                                >
-                                  <span className="mi-ic">
-                                    <Scan className="icon-sm" />
-                                  </span>
-                                  Open access
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="menu-item"
-                                  onSelect={() => navigate(`/applications/${role.application.id}/scopes`)}
-                                >
-                                  <span className="mi-ic">
-                                    <KeyRound className="icon-sm" />
-                                  </span>
-                                  Review scopes
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="menu-item"
-                                  onSelect={() => navigate(`/applications/${role.application.id}/role-bindings`)}
-                                >
-                                  <span className="mi-ic">
-                                    <Link2 className="icon-sm" />
-                                  </span>
-                                  View assignments
-                                </DropdownMenuItem>
-                                <div className="menu-sep" />
-                                <DropdownMenuItem
-                                  className="menu-item"
-                                  disabled={role.source === "generated"}
-                                  onSelect={() => navigate(`/applications/${role.application.id}/access`)}
-                                >
-                                  <span className="mi-ic">
-                                    <Pencil className="icon-sm" />
-                                  </span>
-                                  Edit details
-                                  {role.source === "generated" && (
-                                    <span className="mi-lock">
-                                      <Lock className="icon-sm" />
-                                    </span>
-                                  )}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="menu-item danger"
-                                  disabled={isProtected(role)}
-                                  onSelect={() => {
-                                    if (isProtected(role)) return;
-                                    toast("Delete a role from the application's Access page.");
-                                  }}
-                                >
-                                  <span className="mi-ic">
-                                    {isProtected(role) ? <Lock className="icon-sm" /> : <Trash2 className="icon-sm" />}
-                                  </span>
-                                  {isProtected(role) ? "Protected" : "Delete role"}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ height: 30, padding: "0 10px" }}
+                              onClick={() => navigate(`/applications/${role.application.id}/access`)}
+                            >
+                              <Scan className="icon-sm" /> Open access
+                            </button>
                           </div>
                         </td>
                       </tr>

@@ -78,7 +78,7 @@ export function DeleteDomainDialog({
               <Globe className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{domain.domain}</span>
             </div>
-            <div className="mt-2 text-xs text-muted-foreground font-mono">
+            <div className="mt-2 text-[13px] text-muted-foreground font-mono">
               ID: {domain.id}
             </div>
           </div>

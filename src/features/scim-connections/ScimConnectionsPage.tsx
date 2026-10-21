@@ -7,9 +7,7 @@
 
 import { useState, useMemo } from "react";
 import {
-  CheckCircle2,
   Copy,
-  ExternalLink,
   Plus,
   Shield,
   Trash2,
@@ -22,7 +20,6 @@ import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -34,9 +31,7 @@ import {
   useRevokeScimConnectionMutation,
 } from "@/app/api/scimConnectionsApi";
 import config from "@/config";
-import { scopedStorageKey } from "@/utils/scopedStorageKey";
 
-const infoKey = () => scopedStorageKey("scim_connections_info_dismissed_v1");
 
 type ScimConnection = {
   id: string;
@@ -57,11 +52,6 @@ export default function ScimConnectionsPage() {
   const [activeIdp, setActiveIdp] = useState<string>("okta");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string } | null>(null);
   const [query, setQuery] = useState("");
-  const [infoDismissed, setInfoDismissed] = useState(() => {
-    try { return localStorage.getItem(infoKey()) === "1"; } catch { return false; }
-  });
-
-  const dismissInfo = () => { setInfoDismissed(true); try { localStorage.setItem(infoKey(), "1"); } catch { /* storage unavailable; ignore */ } };
 
   const handleCreate = async () => {
     try {
@@ -123,7 +113,7 @@ export default function ScimConnectionsPage() {
               : "—";
           return (
             <EntityCell
-              label={<code style={{ fontSize: 12 }}>{id ? `${id.slice(0, 12)}…` : "—"}</code>}
+              label={<code className="font-mono text-[12.5px]">{id ? `${id.slice(0, 12)}…` : "—"}</code>}
               detail={createdLabel}
             />
           );
@@ -148,47 +138,48 @@ export default function ScimConnectionsPage() {
       },
       {
         id: "endpoint",
-        header: "SCIM Endpoint",
-        approxWidth: 340,
+        header: "SCIM endpoint",
+        approxWidth: 380,
         priority: 1,
-        cell: ({ row }) =>
-          row.original?.status === "active" ? (
-            <span className="ctx-uri" style={{ maxWidth: 320 }}>
-              <code style={{ fontSize: 11 }}>
-                {apiBase}/authsec/uflow/scim/v2/c/{row.original?.id}/Users
+        cell: ({ row }) => {
+          if (row.original?.status !== "active") {
+            return <span style={{ color: "var(--color-text-muted)" }}>—</span>;
+          }
+          const endpoint = `${apiBase}/authsec/uflow/scim/v2/c/${row.original?.id}/Users`;
+          return (
+            <div className="flex min-w-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <code className="truncate font-mono text-[12.5px]" title={endpoint}>
+                {endpoint}
               </code>
-            </span>
-          ) : (
-            <span style={{ color: "var(--color-text-muted)" }}>—</span>
-          ),
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 shrink-0"
+                aria-label="Copy endpoint"
+                onClick={() => void copyToClipboard(endpoint)}
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </div>
+          );
+        },
       },
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 56,
+        approxWidth: 96,
         cell: ({ row }) =>
           row.original?.status === "active" ? (
-            <div onClick={(e) => e.stopPropagation()}>
-              <ConsoleRowActions
-                label="Connection actions"
-                items={[
-                  {
-                    label: "Copy endpoint",
-                    icon: <Copy className="size-4" />,
-                    onSelect: () =>
-                      copyToClipboard(
-                        `${apiBase}/authsec/uflow/scim/v2/c/${row.original?.id}/Users`,
-                      ),
-                  },
-                  {
-                    label: "Revoke",
-                    icon: <Trash2 className="size-4" />,
-                    onSelect: () => setDeleteTarget({ id: row.original?.id }),
-                    destructive: true,
-                  },
-                ]}
-              />
+            <div onClick={(e) => e.stopPropagation()} className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-(--color-danger-text)"
+                onClick={() => setDeleteTarget({ id: row.original?.id })}
+              >
+                Revoke
+              </Button>
             </div>
           ) : null,
       },
@@ -198,7 +189,7 @@ export default function ScimConnectionsPage() {
 
   return (
     <ConsolePage
-      title="SCIM Connections"
+      title="SCIM connections"
       description="Manage SCIM 2.0 provisioning tokens for automated user sync from identity providers."
       actions={
         <Button className="text-white" onClick={handleCreate} disabled={isCreating}>
@@ -216,9 +207,9 @@ export default function ScimConnectionsPage() {
             <p className="db-text">This token will not be shown again. Store it securely.</p>
 
             <div style={{ marginTop: "var(--space-3)" }}>
-              <label style={{ fontSize: 11, color: "var(--color-text-muted)", display: "block", marginBottom: 4 }}>Bearer Token</label>
+              <label style={{ fontSize: 12.5, color: "var(--color-text-muted)", display: "block", marginBottom: 4 }}>Bearer Token</label>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <code style={{ fontSize: 12, background: "var(--color-bg-subtle)", padding: "6px 10px", borderRadius: 6, flex: 1, wordBreak: "break-all", fontFamily: "var(--font-mono)" }}>{newToken.token}</code>
+                <code style={{ fontSize: 12.5, background: "var(--color-bg-subtle)", padding: "6px 10px", borderRadius: 6, flex: 1, wordBreak: "break-all", fontFamily: "var(--font-mono)" }}>{newToken.token}</code>
                 <Button variant="outline" size="sm" style={{ height: 32, padding: "0 10px", flex: "none" }} onClick={() => copyToClipboard(newToken.token)}>
                   <Copy className="size-4" />
                 </Button>
@@ -226,9 +217,9 @@ export default function ScimConnectionsPage() {
             </div>
 
             <div style={{ marginTop: "var(--space-3)" }}>
-              <label style={{ fontSize: 11, color: "var(--color-text-muted)", display: "block", marginBottom: 4 }}>SCIM Endpoint</label>
+              <label style={{ fontSize: 12.5, color: "var(--color-text-muted)", display: "block", marginBottom: 4 }}>SCIM Endpoint</label>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <code style={{ fontSize: 12, background: "var(--color-bg-subtle)", padding: "6px 10px", borderRadius: 6, flex: 1, wordBreak: "break-all", fontFamily: "var(--font-mono)" }}>{newToken.endpoint}</code>
+                <code style={{ fontSize: 12.5, background: "var(--color-bg-subtle)", padding: "6px 10px", borderRadius: 6, flex: 1, wordBreak: "break-all", fontFamily: "var(--font-mono)" }}>{newToken.endpoint}</code>
                 <Button variant="outline" size="sm" style={{ height: 32, padding: "0 10px", flex: "none" }} onClick={() => copyToClipboard(newToken.endpoint)}>
                   <Copy className="size-4" />
                 </Button>
@@ -237,7 +228,7 @@ export default function ScimConnectionsPage() {
 
             {/* IdP paste instructions */}
             <div style={{ marginTop: "var(--space-5)", borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-4)" }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
                 Where to paste in your IdP
               </p>
               {/* Tab strip */}
@@ -254,7 +245,7 @@ export default function ScimConnectionsPage() {
                     style={{
                       height: 28,
                       padding: "0 10px",
-                      fontSize: 12,
+                      fontSize: 12.5,
                       borderRadius: 6,
                       border: "1px solid",
                       borderColor: activeIdp === key ? "var(--color-primary)" : "var(--color-border)",
@@ -280,7 +271,7 @@ export default function ScimConnectionsPage() {
                     style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
                   >
                     {/* Field label hints */}
-                    <p style={{ fontSize: 11.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                    <p style={{ fontSize: 12.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
                       In <strong>{idp.label}</strong>, the endpoint field is called{" "}
                       <strong>"{idp.endpointFieldLabel}"</strong> and the token field is called{" "}
                       <strong>"{idp.tokenFieldLabel}"</strong>.
@@ -301,12 +292,12 @@ export default function ScimConnectionsPage() {
                     {/* Gotchas */}
                     {idp.gotchas.length > 0 && (
                       <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: "var(--space-3)" }}>
-                        <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-warning)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
+                        <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--color-warning)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "var(--space-2)" }}>
                           Common gotchas
                         </p>
                         <ul style={{ margin: 0, paddingLeft: "var(--space-5)", display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
                           {idp.gotchas.map((gotcha, i) => (
-                            <li key={i} style={{ fontSize: 12, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+                            <li key={i} style={{ fontSize: 12.5, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
                               {gotcha}
                             </li>
                           ))}
@@ -323,44 +314,6 @@ export default function ScimConnectionsPage() {
             </Button>
           </div>
           <button className="icon-btn" aria-label="Dismiss" onClick={() => setNewToken(null)} style={{ flex: "none" }}>
-            <X className="icon-sm" />
-          </button>
-        </div>
-      )}
-
-      {/* Info banner */}
-      {!infoDismissed && !newToken && (
-        <div className="decision-banner" style={{ alignItems: "flex-start" }}>
-          <span className="db-icon"><Shield className="icon" /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p className="db-title">SCIM provisioning setup</p>
-            <p className="db-text">
-              Connect your identity provider (Okta, Azure AD, OneLogin) to automatically
-              provision and deprovision users in this workspace.
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2) var(--space-5)", marginTop: "var(--space-3)" }}>
-              {[
-                "Automated user lifecycle",
-                "Group-based access control",
-                "Real-time deprovisioning",
-              ].map((cap) => (
-                <span key={cap} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--color-text-muted)" }}>
-                  <CheckCircle2 className="icon-sm" style={{ color: "var(--color-primary)" }} />
-                  {cap}
-                </span>
-              ))}
-            </div>
-            <a
-              className="btn btn-secondary"
-              href="https://docs.authsec.dev/scim"
-              target="_blank"
-              rel="noreferrer"
-              style={{ height: 32, padding: "0 12px", marginTop: "var(--space-4)" }}
-            >
-              <ExternalLink className="icon-sm" /> Setup guide
-            </a>
-          </div>
-          <button className="icon-btn" aria-label="Dismiss" onClick={dismissInfo} style={{ flex: "none" }}>
             <X className="icon-sm" />
           </button>
         </div>

@@ -27,7 +27,7 @@ export default function RetiredPage({ title }: { title: string }) {
             </li>
             <li>
               <Link to="/iga/connections" className="font-medium text-(--color-primary-text) hover:underline">
-                Connections
+                Accounts
               </Link>{" "}
               <span className="text-(--color-text-muted)">— what is connected and whether it is reporting</span>
             </li>

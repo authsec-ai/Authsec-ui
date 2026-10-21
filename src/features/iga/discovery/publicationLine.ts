@@ -8,7 +8,7 @@
  *   GitHub, Google  the results of the most recent scan that produced any
  *
  * Refresh (AWS Published only) re-pins the lists to the current publication. It
- * never requests a scan: scanning is on Connections.
+ * never requests a scan: scanning is on Accounts.
  */
 
 import { format } from "date-fns";

@@ -1,327 +1,537 @@
 /**
- * `CreateApplicationPage` — protected endpoint + access vocabulary picker.
- * Rebuilt to match the Console Refresh prototype (create-grid: form surfaces,
- * live Resource URI preview, scope-preset cards, "What AuthSec will do" rail),
- * wired to the real preset catalog + create mutation.
+ * `CreateApplicationPage` — Add MCP (route /applications/new). One page:
+ *
+ *   ① Users      identity provider people sign in through
+ *   ② Server     URL → "Check server" adds the MCP as a draft
+ *                (POST /authsec/applications) and reads its tools
+ *                (POST /authsec/applications/:id/rescan)
+ *   ③ Tools      one suggested permission per tool (not written yet)
+ *   ④ SDK        snippet + env with the introspection secret (shown once)
+ *   ⑤ Test       POST /authsec/applications/:id/validate
+ *
+ * Save writes the tool permissions in ONE PUT …/tool-scope-map call and, for
+ * an external identity provider, limits sign-in to it
+ * (POST /authsec/applications/:id/identity-providers). Cancel removes a draft
+ * this page created (DELETE /authsec/applications/:id).
+ *
+ * The draft id lives in the URL (?server=&draft=1) so a reload, or a trip to
+ * "Create new identity provider", resumes instead of creating a duplicate.
  */
 
-import { useMemo, useState, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
-  Check,
-  Copy,
-  ExternalLink,
-  Globe,
-  HelpCircle,
-  Rocket,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ChevronDown, ChevronRight, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { useCreateApplicationMutation } from "@/app/api/applicationsApi";
 import {
-  useListScopePresetsQuery,
-  type ScopePreset,
-  type ScopePresetCategory,
-} from "@/app/api/scopePresetsApi";
-
+  useCreateApplicationMutation,
+  useDeleteApplicationMutation,
+  useGetApplicationQuery,
+  useUpdateApplicationMutation,
+} from "@/app/api/applicationsApi";
 import {
-  buildResourceServerPayload,
-  computeResourceURI,
-  DEFAULT_FORM,
-  type ResourceServerFormState,
-} from "../resource-servers/resource-server-utils";
+  useAddApplicationIDPPolicyMutation,
+  useListApplicationIDPPoliciesQuery,
+} from "@/app/api/authMethodApi";
+import {
+  useGetScopeMatrixQuery,
+  useRescanResourceServerMutation,
+  useUpdateToolScopeMapMutation,
+} from "@/app/api/scopeMatrixApi";
+import { useListScopePresetsQuery } from "@/app/api/scopePresetsApi";
+import { ConsolePage } from "@/components/console/ConsolePage";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AUTHSEC_DIRECTORY, IdentityProviderPicker } from "@/features/identity-providers/IdentityProviderPicker";
 
-type FilterKey = "all" | "common" | "domain" | "custom";
+import { DEFAULT_FORM } from "../resource-servers/resource-server-utils";
+import { McpSdkSection, McpTestSection } from "./create/McpConnectSections";
+import { buildToolMappings, McpToolsSection, type ToolOverrides } from "./create/McpToolsSection";
+import {
+  DarkCode,
+  FieldHelp,
+  FieldLabel,
+  SectionCard,
+  SectionRow,
+  SetupLayout,
+  SidePanel,
+} from "./create/SetupForm";
+import { Notice } from "./create/WizardParts";
+import { deriveServerName, parseServerUrl } from "./create/wizard-utils";
 
-const FILTER_DEFS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "common", label: "Common" },
-  { key: "domain", label: "By domain" },
-  { key: "custom", label: "Custom" },
-];
+type ScanState =
+  | { status: "idle" }
+  | { status: "ok"; key: string; partial: boolean; ms: number; warning?: string }
+  | { status: "token"; key: string; error?: string }
+  | { status: "error"; key: string; message: string };
 
-const CATEGORY_PILL_LABEL: Record<ScopePresetCategory, string> = {
-  common: "Common",
-  domain: "Domain",
-  custom: "Custom",
+type ApiError = {
+  status?: number | string;
+  data?: { code?: string; error?: string; failure_reason?: string };
 };
 
-function presetPillLabel(preset: ScopePreset): string {
-  const map: Record<string, string> = {
-    code_repos: "Code",
-    messaging: "Messaging",
-    file_storage: "Storage",
-    workflow_actions: "Workflow",
-    database: "Database",
-    knowledge_rag: "Knowledge",
-    voice_agent: "Voice",
-    blank: "Custom",
-  };
-  return map[preset.id] ?? CATEGORY_PILL_LABEL[preset.category];
+function apiMessage(err: unknown, fallback: string): string {
+  const e = err as ApiError;
+  return e?.data?.failure_reason ?? e?.data?.error ?? fallback;
 }
-
-const WIZARD_STEPS = [
-  "Generate a one-time <b>introspection secret</b>.",
-  "Create <b>canonical AuthSec scopes</b> from the selected preset.",
-  "Ignore <b>legacy scopes</b> declared by the MCP server.",
-  "Probe <b>protected-resource metadata</b>.",
-  "Import <b>tools</b> from manifest or discovery.",
-  "Create a <b>'viewer' role</b> — empty until you bind scopes to it.",
-];
 
 export default function CreateApplicationPage() {
   const navigate = useNavigate();
-  const [createApplication, { isLoading }] = useCreateApplicationMutation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const serverId = searchParams.get("server");
+  const isDraft = searchParams.get("draft") === "1";
+
+  const [idp, setIdp] = useState<string | null>(null);
+  const [url, setUrl] = useState(() => searchParams.get("url") ?? "");
+  const [name, setName] = useState(() => searchParams.get("name") ?? "");
+  const [nameEdited, setNameEdited] = useState(() => Boolean(searchParams.get("name")));
+  const [presetId, setPresetId] = useState<string>(DEFAULT_FORM.scope_preset_id ?? "blank");
+  const [presetTouched, setPresetTouched] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [scan, setScan] = useState<ScanState>({ status: "idle" });
+  const [scanToken, setScanToken] = useState("");
+  const [secret, setSecret] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<ToolOverrides>({});
+  const [touched, setTouched] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
   const { data: presets = [], isLoading: presetsLoading } = useListScopePresetsQuery();
+  const { data: existing } = useGetApplicationQuery(serverId ?? "", { skip: !serverId });
+  const { data: matrix, isFetching: matrixFetching } = useGetScopeMatrixQuery(serverId ?? "", { skip: !serverId });
+  const { data: idpPolicies } = useListApplicationIDPPoliciesQuery(serverId ?? "", { skip: !serverId });
 
-  const [form, setForm] = useState<ResourceServerFormState>(DEFAULT_FORM);
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [copied, setCopied] = useState(false);
+  const [createServer, { isLoading: creating }] = useCreateApplicationMutation();
+  const [updateServer, { isLoading: updating }] = useUpdateApplicationMutation();
+  const [deleteServer] = useDeleteApplicationMutation();
+  const [rescan, { isLoading: scanning }] = useRescanResourceServerMutation();
+  const [updateMap] = useUpdateToolScopeMapMutation();
+  const [addIdpPolicy] = useAddApplicationIDPPolicyMutation();
 
-  const base = (form.public_base_url || "https://mcp.example.com").trim().replace(/\/+$/, "");
-  const rawPath = (form.protected_base_path || "").trim();
-  const path = rawPath ? (rawPath.startsWith("/") ? rawPath : `/${rawPath}`) : "";
-  const protectedUrl = useMemo(
-    () => computeResourceURI(form.public_base_url, form.protected_base_path),
-    [form.public_base_url, form.protected_base_path],
-  );
+  // Fall back to the catalog's recommended template if the default id is missing.
+  useEffect(() => {
+    if (presetTouched || !presets.length) return;
+    if (presets.some((p) => p.id === presetId)) return;
+    const recommended = presets.find((p) => p.recommended) ?? presets[0];
+    setPresetId(recommended.id);
+  }, [presets, presetId, presetTouched]);
 
-  const visiblePresets = useMemo(
-    () => (filter === "all" ? presets : presets.filter((p) => p.category === filter)),
-    [presets, filter],
-  );
+  // Resuming (reload, or back from "Create new identity provider"): fill the URL and name.
+  useEffect(() => {
+    if (hydrated || !existing) return;
+    const resourceUri = existing.resource_uri || `${existing.public_base_url}${existing.protected_base_path}`;
+    setUrl(resourceUri);
+    setName(existing.name);
+    setNameEdited(true);
+    const parsed = parseServerUrl(resourceUri);
+    if (parsed.ok) setSavedKey(`${parsed.resourceUri}|${existing.name.trim()}`);
+    setHydrated(true);
+  }, [existing, hydrated]);
 
-  const handleField =
-    (key: keyof ResourceServerFormState) => (event: ChangeEvent<HTMLInputElement>) =>
-      setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  // An MCP limited to one provider already shows it.
+  useEffect(() => {
+    if (idp || searchParams.get("idp")) return;
+    const enabled = idpPolicies?.filter((p) => p.enabled) ?? [];
+    if (enabled.length === 1) setIdp(enabled[0].identity_provider_id);
+  }, [idpPolicies, idp, searchParams]);
 
-  const copyUri = () => {
-    navigator.clipboard?.writeText(protectedUrl || "").catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-  };
+  const parsed = parseServerUrl(url);
+  const trimmedName = name.trim();
+  const currentKey = parsed.ok ? `${parsed.resourceUri}|${trimmedName}` : null;
+  const busy = creating || updating || scanning;
+  const scanIsCurrent = scan.status !== "idle" && scan.key === currentKey;
+  const urlError = touched && !parsed.ok ? parsed.error : null;
+  const nameError = touched && !trimmedName ? "Enter a name." : null;
+  const toolCount = matrix?.tools.length ?? 0;
 
-  const handleSubmit = async () => {
-    if (!form.name.trim()) return toast.error("Application name is required.");
-    if (!form.public_base_url.trim()) return toast.error("Public base URL is required.");
-    try {
-      const response = await createApplication(
-        buildResourceServerPayload({ ...form, registration_modes: "dcr\ncimd\nprereg", default_access_enabled: false }),
-      ).unwrap();
-      toast.success("Application created. Now protect it.");
-      navigate(`/applications/${response.id}/setup`, {
-        replace: true,
-        state: { introspectionSecret: response.introspection_secret },
-      });
-    } catch (error) {
-      toast.error(
-        (error as { data?: { error?: string } })?.data?.error ?? "Failed to create application.",
-      );
+  const handleUrl = (value: string) => {
+    setUrl(value);
+    setServerError(null);
+    if (!nameEdited) {
+      const next = parseServerUrl(value);
+      setName(next.ok ? deriveServerName(next.host) : "");
     }
   };
 
+  const checkServer = async (mcpToken?: string) => {
+    setTouched(true);
+    setServerError(null);
+    if (!parsed.ok || !trimmedName || !currentKey) return;
+
+    let id = serverId;
+    try {
+      if (!id) {
+        const created = await createServer({
+          name: trimmedName,
+          public_base_url: parsed.baseUrl,
+          protected_base_path: parsed.path,
+          scopes_supported: [],
+          registration_modes: ["dcr", "cimd", "prereg"],
+          scope_preset_id: presetId && presetId !== "blank" ? presetId : null,
+          default_access_enabled: false,
+        }).unwrap();
+        id = created.id;
+        if (created.introspection_secret) setSecret(created.introspection_secret);
+        const params = new URLSearchParams(searchParams);
+        params.set("server", created.id);
+        params.set("draft", "1");
+        params.delete("url");
+        params.delete("name");
+        setSearchParams(params, { replace: true });
+        setHydrated(true);
+      } else if (savedKey !== currentKey) {
+        await updateServer({
+          id,
+          body: { name: trimmedName, public_base_url: parsed.baseUrl, protected_base_path: parsed.path },
+        }).unwrap();
+      }
+      setSavedKey(currentKey);
+    } catch (err) {
+      setServerError(apiMessage(err, serverId ? "Couldn't update the MCP." : "Couldn't add the MCP."));
+      return;
+    }
+
+    const started = performance.now();
+    try {
+      const response = await rescan({ rsId: id, mcpToken }).unwrap();
+      setScanToken("");
+      setScan({
+        status: "ok",
+        key: currentKey,
+        partial: response.last_scan_status === "partial",
+        ms: Math.round(performance.now() - started),
+        warning: response.result.warnings?.[0] ?? undefined,
+      });
+    } catch (err) {
+      setScanToken("");
+      const e = err as ApiError;
+      if (e?.data?.code === "mcp_token_required" || e?.status === 428) {
+        setScan({
+          status: "token",
+          key: currentKey,
+          error: mcpToken
+            ? apiMessage(err, "The MCP server rejected that token. Paste a fresh token that can call tools/list.")
+            : undefined,
+        });
+        return;
+      }
+      setScan({
+        status: "error",
+        key: currentKey,
+        message: apiMessage(err, "AuthSec couldn't reach the server. Check the URL and that the server is running."),
+      });
+    }
+  };
+
+  const cancel = async () => {
+    if (serverId && isDraft) {
+      try {
+        await deleteServer(serverId).unwrap();
+      } catch {
+        toast.error("Couldn't remove the draft MCP. Delete it from the MCP list.");
+      }
+    }
+    navigate("/applications");
+  };
+
+  const save = async () => {
+    setTouched(true);
+    setSaveError(null);
+    if (!idp) {
+      setSaveError("Choose an identity provider in step 1.");
+      return;
+    }
+    if (!serverId) {
+      setSaveError("Check the server in step 2 first.");
+      return;
+    }
+    if (!parsed.ok || !trimmedName) return;
+    setSaving(true);
+    try {
+      if (currentKey && savedKey !== currentKey) {
+        await updateServer({
+          id: serverId,
+          body: { name: trimmedName, public_base_url: parsed.baseUrl, protected_base_path: parsed.path },
+        }).unwrap();
+        setSavedKey(currentKey);
+      }
+      const mappings = buildToolMappings(matrix, overrides);
+      if (mappings.length > 0) {
+        await updateMap({ rsId: serverId, body: { mappings } }).unwrap();
+        setOverrides({});
+      }
+      if (idp !== AUTHSEC_DIRECTORY && !idpPolicies?.some((p) => p.identity_provider_id === idp && p.enabled)) {
+        await addIdpPolicy({ applicationId: serverId, identity_provider_id: idp, enabled: true }).unwrap();
+      }
+      toast.success(`${trimmedName || "MCP"} saved.`);
+      navigate(`/applications/${serverId}/overview`);
+    } catch (err) {
+      setSaveError(apiMessage(err, "Couldn't save the MCP."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // "Create new identity provider" returns here with the typed URL kept.
+  const returnTo = useMemo(() => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("idp");
+    if (!serverId) {
+      if (url.trim()) params.set("url", url.trim());
+      if (nameEdited && trimmedName) params.set("name", trimmedName);
+    }
+    const qs = params.toString();
+    return qs ? `/applications/new?${qs}` : "/applications/new";
+  }, [searchParams, serverId, url, nameEdited, trimmedName]);
+
+  const onIdpChange = useCallback((value: string) => {
+    setIdp(value);
+    setSaveError(null);
+  }, []);
+
+  const curlTarget = parsed.ok ? parsed.resourceUri : "https://mcp.example.com/mcp";
+
   return (
-    <div data-cr>
-      <div className="console-page">
-        <div className="create-header">
-          <div>
-            <p className="eyebrow">New protected application</p>
-            <h1 className="sh-title">Create application</h1>
-            <p className="sh-desc">
-              Register the endpoint, then pick a starter scope vocabulary. AuthSec guides protection,
-              tool review, access, testing, and launch after creation.
+    <ConsolePage
+      crumbs={[{ label: "MCP", to: "/applications" }, { label: "Add" }]}
+      title="Add MCP"
+      description="One page. Nothing is enforced until you save."
+      actions={
+        <>
+          <Button type="button" variant="ghost" onClick={() => void cancel()} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" className="text-white" onClick={() => void save()} disabled={saving || busy}>
+            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {saving ? "Saving…" : "Save MCP"}
+          </Button>
+        </>
+      }
+    >
+      {saveError ? <Notice tone="danger" title="Not saved.">{saveError}</Notice> : null}
+      <SetupLayout
+        side={
+          <SidePanel
+            title="How it works"
+            items={[
+              { term: "Only the URL is needed", body: "AuthSec reads the tool list from your server." },
+              {
+                term: "Nothing changes until you save",
+                body: "Your server keeps working as it does today. Checking it adds a draft that Cancel removes.",
+              },
+              { term: "Every tool request is checked", body: "A request without a valid token never reaches the tool." },
+              { term: "Users come first", body: "Pick or create the identity provider, then add the server." },
+            ]}
+          >
+            <h3 className="text-[length:var(--font-size-sm)] font-semibold text-(--color-text)">Check it from your terminal</h3>
+            <DarkCode code={`curl -i ${curlTarget}`} />
+            <p className="text-[length:13px] text-(--color-text-muted)">
+              Once the SDK runs, this returns <span className="font-mono">HTTP/1.1 401 Unauthorized</span>.
             </p>
-          </div>
-          <button className="icon-btn" aria-label="Close" onClick={() => navigate("/applications")}>
-            <X className="icon" />
-          </button>
-        </div>
+          </SidePanel>
+        }
+      >
+        <SectionRow>
+          <SectionCard n={1} title="Users">
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="mcp-idp" required>
+                Identity provider
+              </FieldLabel>
+              <IdentityProviderPicker
+                id="mcp-idp"
+                value={idp}
+                onChange={onIdpChange}
+                returnTo={returnTo}
+                invalid={touched && !idp}
+                describedBy="mcp-idp-help"
+              />
+              <FieldHelp id="mcp-idp-help" error={touched && !idp}>
+                {touched && !idp
+                  ? "Choose an identity provider."
+                  : idp === AUTHSEC_DIRECTORY
+                    ? "Users of this MCP sign in with AuthSec accounts. No provider limit is saved."
+                    : "Users of this MCP sign in through this provider."}
+              </FieldHelp>
+            </div>
+          </SectionCard>
 
-        <div className="decision-banner">
-          <span className="db-icon">
-            <Globe className="icon" />
-          </span>
-          <div>
-            <p className="db-title">The Resource URI is the anchor</p>
-            <p className="db-text">
-              Start with the public base URL and protected path. The final Resource URI becomes the
-              anchor for OAuth resource indicators and SDK policy.
-            </p>
-          </div>
-        </div>
-
-        <div className="create-grid">
-          <div className="create-main">
-            <div className="surface">
-              <h2 className="surface-title">
-                Protected endpoint
-                <span className="help-ic" title="Keep OAuth and client details out of the first decision.">
-                  <HelpCircle className="icon-sm" />
-                </span>
-              </h2>
-              <p className="surface-sub">Keep OAuth and client details out of the first decision.</p>
-              <div className="field-grid">
-                <div className="field">
-                  <label className="field-label" htmlFor="fName">
-                    Application name
-                  </label>
-                  <input
-                    id="fName"
-                    className="input"
-                    value={form.name}
-                    onChange={handleField("name")}
-                    placeholder="GitHub MCP Server"
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="fBase">
-                    Public base URL
-                  </label>
-                  <input
-                    id="fBase"
-                    className="input mono"
-                    value={form.public_base_url}
-                    onChange={handleField("public_base_url")}
-                    placeholder="https://mcp.example.com"
-                  />
-                </div>
-                <div className="field full">
-                  <label className="field-label" htmlFor="fPath">
-                    Protected path
-                  </label>
-                  <input
-                    id="fPath"
-                    className="input mono"
-                    value={form.protected_base_path}
-                    onChange={handleField("protected_base_path")}
-                    placeholder="/mcp"
-                  />
-                </div>
+          <SectionCard n={2} title="Server">
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!busy) void checkServer();
+              }}
+            >
+              <div className="space-y-1.5">
+                <FieldLabel htmlFor="mcp-url" required>
+                  Server URL
+                </FieldLabel>
+                <Input
+                  id="mcp-url"
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="font-mono"
+                  value={url}
+                  placeholder="https://mcp.example.com/mcp"
+                  onChange={(event) => handleUrl(event.target.value)}
+                  onBlur={() => url && setTouched(true)}
+                  aria-invalid={urlError ? true : undefined}
+                  aria-describedby="mcp-url-help"
+                />
+                {urlError || (parsed.ok && parsed.usedDefaultPath) ? (
+                  <FieldHelp id="mcp-url-help" error={Boolean(urlError)}>
+                    {urlError ?? `The URL has no path, so AuthSec will use ${parsed.ok ? parsed.resourceUri : ""}.`}
+                  </FieldHelp>
+                ) : null}
               </div>
-              <div className="uri-preview">
-                <div className="up-label">
-                  Resource URI preview
-                  <span className="help-ic" title="Computed anchor — copyable after creation.">
-                    <HelpCircle className="icon-sm" />
-                  </span>
-                </div>
-                <div className="up-value">
-                  <span className="up-uri">
-                    <span className="up-base">{base}</span>
-                    {path || "/mcp"}
-                  </span>
-                  <button className="icon-btn" style={{ width: 30, height: 30 }} aria-label="Copy resource URI" onClick={copyUri}>
-                    {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
+              <div className="space-y-1.5">
+                <FieldLabel htmlFor="mcp-name">Name</FieldLabel>
+                <Input
+                  id="mcp-name"
+                  value={name}
+                  placeholder="support-mcp"
+                  onChange={(event) => {
+                    setNameEdited(true);
+                    setName(event.target.value);
+                  }}
+                  aria-invalid={nameError ? true : undefined}
+                  aria-describedby="mcp-name-help"
+                />
+                <FieldHelp id="mcp-name-help" error={Boolean(nameError)}>
+                  {nameError ?? "Read from the server. You can change it."}
+                </FieldHelp>
+              </div>
+
+              {!serverId ? (
+                <div>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[length:13px] font-medium text-(--color-text-muted) hover:text-(--color-text)"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    aria-expanded={showAdvanced}
+                    aria-controls="mcp-advanced"
+                  >
+                    {showAdvanced ? <ChevronDown className="size-4" aria-hidden /> : <ChevronRight className="size-4" aria-hidden />}
+                    Permission template
                   </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="surface">
-              <h2 className="surface-title">Access vocabulary</h2>
-              <p className="surface-sub">
-                AuthSec generates the canonical scope vocabulary. Server-defined scopes are treated as
-                legacy noise unless they already match this application namespace.
-              </p>
-              <div className="scope-tools">
-                <div className="filter-chips">
-                  {FILTER_DEFS.map((f) => (
-                    <button
-                      key={f.key}
-                      className="fchip"
-                      data-on={filter === f.key}
-                      onClick={() => setFilter(f.key)}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <a className="btn btn-secondary" href="https://docs.authsec.dev/getting-started" target="_blank" rel="noreferrer" style={{ height: 32, padding: "0 12px" }}>
-                  <ExternalLink className="icon-sm" /> Docs
-                </a>
-              </div>
-              <div className="preset-list">
-                {presetsLoading ? (
-                  <div className="step-empty">
-                    <div className="se-title">Loading presets…</div>
-                  </div>
-                ) : visiblePresets.length === 0 ? (
-                  <div className="step-empty">
-                    <div className="se-title">No presets match</div>
-                    <div>Try a different category or start blank.</div>
-                  </div>
-                ) : (
-                  visiblePresets.map((preset) => {
-                    const selected = form.scope_preset_id === preset.id;
-                    const scopesPreview = preset.scopes.map((s) => s.suffix);
-                    return (
-                      <button
-                        key={preset.id}
-                        className="preset"
-                        data-selected={selected}
-                        onClick={() => setForm((prev) => ({ ...prev, scope_preset_id: preset.id }))}
+                  {showAdvanced ? (
+                    <div id="mcp-advanced" className="mt-2 space-y-1.5">
+                      <Select
+                        value={presetId}
+                        onValueChange={(v) => {
+                          setPresetTouched(true);
+                          setPresetId(v);
+                        }}
+                        disabled={presetsLoading}
                       >
-                        <div className="preset-head">
-                          <span className="preset-radio" />
-                          <span className="preset-name">{preset.name}</span>
-                          {preset.recommended && <span className="preset-best">Best</span>}
-                          <span className="preset-cat">{presetPillLabel(preset)}</span>
-                        </div>
-                        {scopesPreview.length ? (
-                          <p className="preset-scopes">
-                            {scopesPreview.map((s, i) => (
-                              <span key={s}>
-                                {i > 0 && <span className="sep"> · </span>}
-                                {s}
-                              </span>
-                            ))}
-                          </p>
-                        ) : (
-                          <p className="preset-scopes blank">no canonical scopes — start blank</p>
-                        )}
-                        <p className="preset-desc">{preset.description}</p>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+                        <SelectTrigger className="w-full" aria-label="Permission template">
+                          <SelectValue placeholder={presetsLoading ? "Loading templates…" : "Choose a template"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {presets.map((preset) => (
+                            <SelectItem key={preset.id} value={preset.id}>
+                              {preset.name}
+                              {preset.recommended ? " (recommended)" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FieldHelp>
+                        {presets.find((p) => p.id === presetId)?.description ??
+                          "The permissions AuthSec creates for this server. The default works for most servers."}
+                      </FieldHelp>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
-            <div className="create-actions">
-              <button className="btn btn-secondary" onClick={() => navigate("/applications")}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleSubmit} disabled={isLoading}>
-                <Rocket className="icon-sm" /> {isLoading ? "Creating…" : "Create and protect"}
-              </button>
-            </div>
-          </div>
+              <Button type="submit" variant="outline" disabled={busy}>
+                {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                {creating ? "Adding…" : updating ? "Updating…" : scanning ? "Reading tools…" : serverId ? "Check again" : "Check server"}
+              </Button>
+            </form>
 
-          <aside className="rail">
-            <div className="rail-card">
-              <h3 className="rail-title">What AuthSec will do</h3>
-              <div className="steps">
-                {WIZARD_STEPS.map((step, i) => (
-                  <div className="step" key={i}>
-                    <span className="step-n">{i + 1}</span>
-                    <span className="step-text" dangerouslySetInnerHTML={{ __html: step }} />
-                  </div>
-                ))}
+            {serverError ? <Notice tone="danger" title="Not checked.">{serverError}</Notice> : null}
+
+            {scanning ? (
+              <Notice tone="loading">Connecting to the server and listing its tools…</Notice>
+            ) : scanIsCurrent && scan.status === "ok" ? (
+              <Notice tone={scan.partial ? "warning" : "success"} title="Connected.">
+                {matrixFetching ? "Counting tools…" : `Tools found: ${toolCount}`} · Scan took {scan.ms} ms
+                {scan.partial ? ". The server doesn't publish AuthSec metadata yet; that's expected until the SDK runs." : null}
+                {scan.warning ? ` ${scan.warning}` : null}
+              </Notice>
+            ) : scanIsCurrent && scan.status === "error" ? (
+              <Notice tone="danger" title="Tools not found.">
+                {scan.message} You can still save and add tools later.
+              </Notice>
+            ) : !scanIsCurrent && serverId && savedKey === currentKey ? (
+              <Notice tone="info">
+                Added as a draft{existing?.tools_count != null ? ` · Tools found: ${existing.tools_count}` : ""}.
+              </Notice>
+            ) : null}
+
+            {scanIsCurrent && scan.status === "token" && !scanning ? (
+              <div className="space-y-3 rounded-lg border border-(--color-border-subtle) p-4">
+                <p className="text-[length:var(--font-size-sm)] text-(--color-text)">
+                  This server needs a token to list its tools. Paste a bearer token that can call{" "}
+                  <code className="font-mono">tools/list</code>. AuthSec uses it for this check only and doesn't store it.
+                </p>
+                <div className="space-y-1.5">
+                  <FieldLabel htmlFor="mcp-scan-token">MCP bearer token</FieldLabel>
+                  <Input
+                    id="mcp-scan-token"
+                    type="password"
+                    autoComplete="off"
+                    className="font-mono"
+                    value={scanToken}
+                    onChange={(event) => setScanToken(event.target.value)}
+                    aria-invalid={scan.error ? true : undefined}
+                    aria-describedby={scan.error ? "mcp-scan-token-error" : undefined}
+                  />
+                  {scan.error ? (
+                    <FieldHelp id="mcp-scan-token-error" error>
+                      {scan.error}
+                    </FieldHelp>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void checkServer(scanToken.trim())}
+                  disabled={busy || !scanToken.trim()}
+                >
+                  <KeyRound className="size-4" aria-hidden />
+                  Read tools with this token
+                </Button>
               </div>
-              <div className="caveat">
-                <span className="cv-icon">
-                  <AlertTriangle className="icon-sm" />
-                </span>
-                <span className="cv-text">
-                  Created scopes aren't permissions until you assign them to a role.
-                </span>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </div>
+            ) : null}
+          </SectionCard>
+        </SectionRow>
+
+        <SectionCard
+          n={3}
+          title="Tools and permissions"
+          aside={serverId && toolCount > 0 ? "Suggested from tool names; change any of them" : undefined}
+          disabled={!serverId}
+        >
+          <McpToolsSection serverId={serverId} overrides={overrides} onOverridesChange={setOverrides} disabled={saving} />
+        </SectionCard>
+
+        <SectionCard n={4} title="SDK Integration" disabled={!serverId}>
+          <McpSdkSection serverId={serverId} secret={secret} onSecretChange={setSecret} />
+        </SectionCard>
+
+        <SectionCard n={5} title="Test Integration" disabled={!serverId}>
+          <McpTestSection serverId={serverId} />
+        </SectionCard>
+      </SetupLayout>
+    </ConsolePage>
   );
 }

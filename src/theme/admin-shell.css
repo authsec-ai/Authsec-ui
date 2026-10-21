@@ -1444,4 +1444,28 @@
   .dark .admin-row-menu-surface [data-slot="dropdown-menu-separator"] {
     background: rgba(255, 255, 255, 0.1) !important;
   }
+
+  /* Brand wash (UX proposal build notes): a soft blue-to-purple wash fades
+     over the top ~520px of the content area only. Cards, tables and the
+     sidebar have their own surface colour, so they cover it. Must stay in this
+     layer: the console-crisp rule above sets the same property !important. */
+  [data-ui-scope="admin-shell"] [data-main-content-area="true"].app-content {
+    background-color: var(--color-canvas) !important;
+    background-image:
+      radial-gradient(120% 520px at 0% 0%, var(--wash-a), transparent 72%),
+      radial-gradient(120% 520px at 100% 0%, var(--wash-b), transparent 72%) !important;
+    background-repeat: no-repeat !important;
+    background-attachment: local !important;
+  }
+  [data-ui-scope="admin-shell"] [data-slot="admin-main-surface"]:has(> * .app-content),
+  [data-ui-scope="admin-shell"] [data-slot="admin-main-surface"]:has(.app-content) {
+    background: var(--color-canvas) !important;
+  }
+
+  /* Agentic IGA rows in the shared sidebar: the second product's accent. */
+  [data-ui-scope="admin-shell"] [data-product="iga"] {
+    --color-primary: var(--color-accent-iga);
+    --color-primary-soft: var(--color-accent-iga-soft);
+    --color-primary-text: var(--color-accent-iga);
+  }
 }

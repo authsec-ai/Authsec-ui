@@ -9,7 +9,6 @@ import {
 import {
   AccessPath,
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
   VerdictCard,
 } from "@/components/console/iam-console";
@@ -498,25 +497,6 @@ export default function ApplicationToolsPage() {
             <span className="text-sm text-muted-foreground">No signal</span>
           ),
       },
-      {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 72,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              { label: "Inspect access", onSelect: () => setSelectedToolId(row.original.id) },
-              {
-                label: row.original.is_public ? "Remove public exposure" : "Review public exposure",
-                onSelect: () => setSelectedToolId(row.original.id),
-                destructive: row.original.is_public,
-              },
-              { label: "Simulate access", onSelect: () => setSelectedToolId(row.original.id) },
-            ]}
-          />
-        ),
-      },
     ],
     [],
   );
@@ -529,7 +509,7 @@ export default function ApplicationToolsPage() {
             Tools
           </h2>
           <p className="max-w-3xl text-sm leading-5 text-muted-foreground">
-            Review every MCP capability this application exposes, what gates it,
+            Review every MCP capability this server exposes, what gates it,
             and which tools are denied until mapped.
           </p>
         </div>
@@ -1133,7 +1113,7 @@ function ToolInspectorDrawer({
                 : decision === "advisory"
                   ? "The MCP server recommends a scope, but recommendations never grant access. Assign it below to make it runtime policy."
                   : decision === "public"
-                    ? "Any authenticated token for this application audience can call this tool."
+                    ? "Any authenticated token for this MCP server audience can call this tool."
                     : "Users need a role that grants one of the assigned scopes."
             }
           />

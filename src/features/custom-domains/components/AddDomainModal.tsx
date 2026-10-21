@@ -139,7 +139,7 @@ export function AddDomainModal({ open, onOpenChange }: AddDomainModalProps) {
               >
                 Set as primary domain
               </Label>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[13px] text-muted-foreground">
                 The primary domain will be used as the default for
                 authentication flows. Only verified domains can be set as
                 primary.

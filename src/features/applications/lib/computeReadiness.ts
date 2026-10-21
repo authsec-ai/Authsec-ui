@@ -105,10 +105,10 @@ export function computeReadiness(server: ResourceServer): Readiness {
 
   // ── Launch ────────────────────────────────────────────────────────────
   const launch: ReadinessArea = launched
-    ? area("ok", "Launched", "Policy is enforced for this application.")
+    ? area("ok", "Enforcing", "AuthSec checks a token before every tool on this MCP runs.")
     : area(
         "warn",
-        "Not launched",
+        "Needs setup",
         "Open Overview to see remaining gates from the setup checklist.",
       );
 

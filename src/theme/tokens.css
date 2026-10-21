@@ -27,6 +27,9 @@
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px rgba(16, 24, 40, 0.025);
   --shadow-md: 0 6px 16px -5px rgba(16, 24, 40, 0.16), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 18px 40px -12px rgba(16, 24, 40, 0.24), 0 2px 6px -2px rgba(16, 24, 40, 0.10);
+  /* The selected item of a segmented control / pill group: a hairline plus a
+     soft lift, so it reads as selected on its track in either theme. */
+  --shadow-pill: 0 0 0 1px var(--color-border-subtle), 0 1px 2px rgba(16, 24, 40, 0.1);
 
   /* Motion */
   --motion-duration-fast: 120ms;
@@ -36,10 +39,10 @@
 
   /* Typography ramp */
   --font-family-sans:
-    "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    "Geist", "Inter", system-ui, "SF Pro Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
     "Helvetica Neue", Arial, sans-serif;
   --font-family-mono:
-    "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
+    "Geist Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -75,18 +78,19 @@
   /* Light mode palette - clean black/white */
   --color-surface-base: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-subtle: #f6f7f9;
+  /* #eef1f4, the proposal's chip/track grey: white must stand out on it. */
+  --color-surface-subtle: #eef1f4;
   --color-surface-inverse: #000000;
 
   /* Text - refined ink ramp (Console Refresh), not pure black */
-  --color-text-primary: #1c1e21;
-  --color-text-secondary: #5f6368;
+  --color-text-primary: #111418;
+  --color-text-secondary: #2f3540;
   /* Button text on colored backgrounds must always be white */
   --color-text-on-dark: #ffffff;
   --color-text-on-primary: #ffffff;
 
   /* Borders — darker, more present for a crisp, defined edge */
-  --color-border-subtle: #d6dadf;
+  --color-border-subtle: #cdd3da;
   --color-border-strong: #b4bac3;
 
   /* Shared brand blue scale (Google-blue tuned) */
@@ -102,11 +106,11 @@
   --brand-blue-900: #174ea6;
 
   /* Primary accent */
-  --color-primary: var(--brand-blue-600);
-  --color-primary-strong: var(--brand-blue-700);
+  --color-primary: var(--brand-blue-700);
+  --color-primary-strong: var(--brand-blue-800);
   --color-primary-soft: var(--brand-blue-50);
   --color-primary-soft-strong: #d6e4fc; /* hover on soft */
-  --color-primary-text: #1a73e8; /* AA text-on-soft */
+  --color-primary-text: #1967d2; /* AA text-on-soft */
 
   /* Status colors */
   --color-success: #22c55e;
@@ -129,18 +133,29 @@
   --color-code: #1a7f43;
 
   /* Refined text hierarchy (additive — does not replace --color-text-primary) */
-  --color-text: #1c1e21;
-  --color-text-muted: #5f6368;
-  --color-text-subtle: #80868b;
+  --color-text: #111418;
+  --color-text-muted: #2f3540;
+  --color-text-subtle: #3d4450;
 
   /* Interaction washes + focus ring */
   --color-hover: rgba(20, 22, 26, 0.045);
   --color-press: rgba(20, 22, 26, 0.07);
-  --color-focus-ring: rgba(26, 115, 232, 0.35);
+  --color-focus-ring: rgba(25, 103, 210, 0.35);
 
   /* Sidebar canvas + quiet-active fill */
-  --color-sidebar-surface: #fafbfc;
+  --color-sidebar-surface: #ffffff;
   --color-sidebar-accent-soft: #eef1f5;
+
+  /* Page canvas + brand wash (UX proposal build notes). The canvas sits behind
+     the content area only; cards, tables and the sidebar use their own surface
+     and cover it. Light mode uses opaque tints: a low-alpha brand colour over
+     #f1f3f6 greys the background instead of adding hue. */
+  --color-canvas: #f1f3f6;
+  --wash-a: #d6e3fa; /* soft blue, from #1967d2 */
+  --wash-b: #e3d9f9; /* soft purple, from #6d28d9 */
+  /* Agentic IGA accent: the second product only. */
+  --color-accent-iga: #6d28d9;
+  --color-accent-iga-soft: #efe9fb;
 
   /* Prototype motion aliases (console-screens.css) */
   --dur-1: var(--motion-duration-fast);
@@ -352,9 +367,11 @@
    * Minimal dark palette - only 3 surface levels
    * All neutrals are pure gray (no color tint)
    */
-  --color-surface-base: #0c0d0f;
-  --color-surface-raised: #16181c;
-  --color-surface-subtle: #131419;
+  --color-surface-base: #0e1013;
+  --color-surface-raised: #171a1f;
+  /* Darker than raised (#171a1f), as in the original ramp: a raised pill or
+     card on a subtle track must read as lifted, not sunken. */
+  --color-surface-subtle: #111317;
   --color-surface-inverse: #ffffff;
 
   /* Dark elevation — crisp border + hairline ring */
@@ -362,22 +379,23 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 12px 32px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 24px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  --shadow-pill: inset 0 0 0 1px var(--color-border-subtle);
 
   /* Text - refined ink ramp (Console Refresh), not pure white */
-  --color-text-primary: #e8eaed;
-  --color-text-secondary: #9aa0a6;
+  --color-text-primary: #f3f5f7;
+  --color-text-secondary: #d0d5db;
   --color-text-on-dark: #ffffff;
 
   /* Borders */
-  --color-border-subtle: #2f333b;
+  --color-border-subtle: #2f353e;
   --color-border-strong: #474d57;
 
   /* Single accent color - blue */
-  --color-primary: var(--brand-blue-300);
+  --color-primary: #5b9bff;
   --color-primary-strong: var(--brand-blue-400);
   --color-primary-soft: #102a56;
   --color-primary-soft-strong: rgba(26, 115, 232, 0.24);
-  --color-primary-text: #7cb1f7; /* lighter for AA on dark */
+  --color-primary-text: #5b9bff; /* lighter for AA on dark */
 
   /* Status colors - muted versions */
   --color-success: #22c55e;
@@ -412,16 +430,22 @@
   --color-info-text: var(--color-primary-text);
   --color-code: #6ee7a8;
 
-  --color-text: #e8eaed;
-  --color-text-muted: #9aa0a6;
-  --color-text-subtle: #6c7176;
+  --color-text: #f3f5f7;
+  --color-text-muted: #d0d5db;
+  --color-text-subtle: #b4bbc4;
 
   --color-hover: rgba(255, 255, 255, 0.055);
   --color-press: rgba(255, 255, 255, 0.09);
   --color-focus-ring: rgba(96, 165, 250, 0.45);
 
-  --color-sidebar-surface: #0f1013;
+  --color-sidebar-surface: #171a1f;
   --color-sidebar-accent-soft: #1d2026;
+
+  --color-canvas: #0e1013;
+  --wash-a: rgba(25, 103, 210, 0.2);
+  --wash-b: rgba(109, 40, 217, 0.18);
+  --color-accent-iga: #8b5cf6;
+  --color-accent-iga-soft: rgba(139, 92, 246, 0.16);
 
   /* Risk severity scale (Roles) — dark */
   --risk-low: #4ade80;       --risk-low-soft: rgba(34, 197, 94, 0.16);    --risk-low-text: #5cd98a;

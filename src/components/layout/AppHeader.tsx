@@ -10,6 +10,7 @@ import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 //   PopoverTrigger,
 // } from "@/components/ui/popover";
 import { Breadcrumb } from "./Breadcrumb";
+import { GlossaryButton } from "./GlossaryButton";
 import { useResponsiveLayout } from "@/hooks/use-mobile";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -119,6 +120,8 @@ export function AppHeader({ onRightSidebarToggle: _onRightSidebarToggle, isRight
           </Popover> */}
 
           {/* Divides search from the theme toggle; with no search there is nothing to divide. */}
+
+          <GlossaryButton />
 
           {/* Theme toggle */}
           <ModeToggle />

@@ -14,9 +14,14 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { connectionsApi, useListDiscoveryConnectionsQuery, type Connection, type ConnectionProvider } from "@/app/api/connectionsApi";
+import { useListAwsConnectorsQuery, useListGcpConnectorsQuery, type CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { useConvertGitHubAppManifestMutation } from "@/app/api/discoveryApi";
 import { useAppDispatch } from "@/app/hooks";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { HowItWorks } from "@/components/console/HowItWorks";
+import { PageAbout } from "@/components/console/PageAbout";
+import { AUTH_METHOD_LABEL } from "@/features/discovery/cloud/gcp/gcpConnectorCopy";
+import { cn } from "@/lib/utils";
 import { ConsoleRowActions, type ConsoleActionItem } from "@/components/console/iam-console";
 import { tableFailure } from "@/components/console/load-failure";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -32,10 +37,13 @@ import {
   StatusBlock,
 } from "./ConnectionParts";
 import { ConnectMoreSources, FilterPills, TableToolbar } from "./ConnectionsListParts";
+import { awsAttrs, gcpAttrs } from "./providerData";
 import {
   PROVIDERS,
   actionsOf,
+  coverageText,
   detailHref,
+  k8sHealthLine,
   discoveryLink,
   graphText,
   hasFriendlyName,
@@ -75,6 +83,62 @@ function graphLine(c: Connection): string {
 function searchText(c: Connection): string {
   return [c.name, c.native_id, providerWord(c.provider), typeWord(c), c.scope_summary].join(" ").toLowerCase();
 }
+
+/**
+ * Where "Fix" goes for an account that needs it: the Overview says what failed
+ * and what to do; a coverage gap is explained on Coverage. Null when nothing
+ * needs fixing (a revoked account is history, not a fault).
+ */
+function fixHref(c: Connection): string | null {
+  const f = statusFilterOf(c);
+  if (f === "attention") return detailHref(c.id);
+  if (f === "partial") return detailHref(c.id, "coverage");
+  return null;
+}
+
+/** The role's name from its ARN: "arn:aws:iam::1:role/path/AuthSecReader" → "AuthSecReader". */
+function roleName(arn: string | undefined): string | null {
+  if (!arn) return null;
+  return arn.slice(arn.lastIndexOf("/") + 1) || arn;
+}
+
+/** A provider's own connector fact: loading, not readable, or the value. */
+function connectorFact(
+  connectors: { data?: CloudConnector[]; isLoading: boolean; isError: boolean },
+  id: string,
+  pick: (c: CloudConnector) => string | null | undefined,
+): string {
+  if (connectors.isLoading) return "…";
+  const found = connectors.data?.find((x) => x.id === id);
+  if (!found) return connectors.isError ? "Could not load" : "—";
+  return pick(found) || "—";
+}
+
+/** The provider tabs' own words for the explainer line above the table. */
+const PROVIDER_COLUMNS: Record<ConnectionProvider, string> = {
+  aws: "Regions · Discovery role · Coverage",
+  gcp: "Reader service account · Sign-in · Scope · Coverage",
+  k8s: "Agent · Namespaces · Coverage",
+  github: "Repositories · Coverage",
+};
+
+const HOW_DISCOVERY_WORKS = [
+  {
+    label: "1 · Connect",
+    title: "An AWS role, a Google Cloud reader, a Kubernetes agent or a GitHub App",
+    body: "Discovery only reads; it does not change your resources.",
+  },
+  {
+    label: "2 · Scan",
+    title: "On demand or on a schedule",
+    body: "Identities, their permissions and the workloads that run as them.",
+  },
+  {
+    label: "3 · Result",
+    title: "Workloads appear in Discovery",
+    body: "Each with an access graph of what it can reach.",
+  },
+];
 
 export default function ConnectionsPage() {
   const navigate = useNavigate();
@@ -192,16 +256,65 @@ export default function ConnectionsPage() {
   }, [all, type, search, status, showRevoked]);
   const inScope = hidingRevoked ? all.length - revokedCount : all.length;
 
-  const filtered = !!search.trim() || type !== null || status !== "all";
+  // The provider tab is a view, not a filter: Clear filters keeps it.
+  const filtered = !!search.trim() || status !== "all";
   const unconnected = PROVIDERS.filter((p) => !all.some((c) => c.provider === p));
-  const clearFilters = () => setSearchParams({}, { replace: true });
+  const clearFilters = () => setSearchParams(type ? { type } : {}, { replace: true });
+
+  // A provider tab shows that provider's own facts, read from its own connector
+  // list — only on that tab, so the All view costs no extra reads.
+  const awsConnectors = useListAwsConnectorsQuery(undefined, { skip: type !== "aws" });
+  const gcpConnectors = useListGcpConnectorsQuery(undefined, { skip: type !== "gcp" });
+
+  const providerColumns = useMemo<AdaptiveColumn<Connection>[]>(() => {
+    const text = (id: string, header: string, priority: number, value: (c: Connection) => string, approxWidth = 170): AdaptiveColumn<Connection> => ({
+      id,
+      header,
+      label: header,
+      priority,
+      approxWidth,
+      cell: ({ row }) => <span className="block truncate text-[13px]" title={value(row.original)}>{value(row.original)}</span>,
+      detail: (c) => value(c),
+    });
+    const coverage = text("coverage_state", "Coverage", 5, (c) => coverageText(c), 150);
+    switch (type) {
+      case "aws":
+        return [
+          text("aws_regions", "Regions", 3, (c) => connectorFact(awsConnectors, c.id, (x) => awsAttrs(x)?.regions?.join(", ") || c.scope_summary)),
+          text("aws_role", "Discovery role", 4, (c) => connectorFact(awsConnectors, c.id, (x) => roleName(awsAttrs(x)?.role_arn))),
+          coverage,
+        ];
+      case "gcp":
+        return [
+          text("gcp_reader", "Reader service account", 3, (c) => connectorFact(gcpConnectors, c.id, (x) => gcpAttrs(x).reader_sa_email), 220),
+          text("gcp_auth", "Sign-in", 4, (c) =>
+            connectorFact(gcpConnectors, c.id, (x) => {
+              const m = gcpAttrs(x).auth_method;
+              return m ? (AUTH_METHOD_LABEL[m] ?? m) : null;
+            }),
+          ),
+          text("gcp_scope", "Scope", 4, (c) => c.scope_summary || "—", 140),
+          coverage,
+        ];
+      case "k8s":
+        return [
+          text("k8s_agent", "Agent", 3, (c) => k8sHealthLine(c), 220),
+          text("k8s_namespaces", "Namespaces", 4, (c) => c.scope_summary || "—", 140),
+          coverage,
+        ];
+      case "github":
+        return [text("github_repos", "Repositories", 3, (c) => c.scope_summary || "—", 160), coverage];
+      default:
+        return [];
+    }
+  }, [type, awsConnectors, gcpConnectors]);
 
   const columns = useMemo<AdaptiveColumn<Connection>[]>(
     () => [
       {
         id: "name",
-        header: "Connection",
-        label: "Connection",
+        header: "Account",
+        label: "Account",
         primary: true,
         alwaysVisible: true,
         minWidth: 220,
@@ -225,6 +338,20 @@ export default function ConnectionsPage() {
           );
         },
       },
+      // All: which provider. A provider tab is one provider, so it has no such column.
+      ...(type
+        ? []
+        : [
+            {
+              id: "provider",
+              header: "Provider",
+              label: "Provider",
+              priority: 1,
+              approxWidth: 120,
+              cell: ({ row }) => <span className="text-[13px]">{providerWord(row.original.provider)}</span>,
+              detail: (c) => providerWord(c.provider),
+            } satisfies AdaptiveColumn<Connection>,
+          ]),
       {
         id: "status",
         header: "Status",
@@ -236,8 +363,8 @@ export default function ConnectionsPage() {
       },
       {
         id: "last_scan",
-        header: "Last scan",
-        label: "Last scan",
+        header: "Last sync",
+        label: "Last sync",
         priority: 2,
         approxWidth: 200,
         // The scan, and under it what the graph made of it.
@@ -251,17 +378,23 @@ export default function ConnectionsPage() {
         },
         detail: (c) => `${scanLine(c)} · ${graphLine(c)}`,
       },
-      {
-        // The id stays "coverage" so saved column choices keep working. The value is
-        // what was chosen to scan; what was actually read is the Coverage tab.
-        id: "coverage",
-        header: "Scope",
-        label: "Scope",
-        priority: 3,
-        approxWidth: 150,
-        cell: ({ row }) => <span className="block truncate text-[13px]">{row.original.scope_summary || "—"}</span>,
-        detail: (c) => c.scope_summary || "—",
-      },
+      // All: the scope chosen to scan. A provider tab names it in its own words instead.
+      ...(type
+        ? []
+        : [
+            {
+              // The id stays "coverage" so saved column choices keep working. The value is
+              // what was chosen to scan; what was actually read is the Coverage tab.
+              id: "coverage",
+              header: "Scope",
+              label: "Scope",
+              priority: 3,
+              approxWidth: 150,
+              cell: ({ row }) => <span className="block truncate text-[13px]">{row.original.scope_summary || "—"}</span>,
+              detail: (c) => c.scope_summary || "—",
+            } satisfies AdaptiveColumn<Connection>,
+          ]),
+      ...providerColumns,
       {
         id: "actions",
         // Named for screen readers; the buttons say what they do (C-08).
@@ -281,10 +414,22 @@ export default function ConnectionsPage() {
           if (a.editScope) items.push({ label: "Edit scope", onSelect: () => navigate(detailHref(c.id, "scope")) });
           if (a.rules) items.push({ label: "Scan rules", onSelect: () => navigate(detailHref(c.id, "rules")) });
           if (a.revoke) items.push({ label: `${revokeWord(c).verb}…`, destructive: true, onSelect: () => setRevokeTarget(c) });
+          // A broken account says so with one button that opens what to do about it.
+          const fix = fixHref(c);
+          if (fix && a.scan) items.splice(1, 0, { label: "Scan now", onSelect: () => void run(c, "scan") });
           return (
             <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
               {busy ? (
                 <PendingWord kind={busy} />
+              ) : fix ? (
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-[length:var(--text-sm)] text-white"
+                  title={statusFilterOf(c) === "partial" ? "Open Coverage: what was not read, and what to do" : "Open the account: what failed, and what to do"}
+                  onClick={() => navigate(fix)}
+                >
+                  Fix
+                </Button>
               ) : c.provider === "k8s" && c.scan.reports_every_seconds ? (
                 <span className="text-xs text-muted-foreground">
                   Reports every {Math.max(1, Math.round(c.scan.reports_every_seconds / 60))} min
@@ -300,21 +445,28 @@ export default function ConnectionsPage() {
         },
       },
     ],
-    [canAdminister, navigate, pending, run],
+    [canAdminister, navigate, pending, run, type, providerColumns],
   );
 
   const firstRun = query.isSuccess && all.length === 0;
 
   const emptyState = filtered ? (
     <div className="space-y-2 py-2">
-      <p>No connections match these filters.</p>
+      <p>No accounts match these filters.</p>
       <Button variant="outline" size="sm" onClick={clearFilters}>
         Clear filters
       </Button>
     </div>
+  ) : type && !all.some((c) => c.provider === type) ? (
+    <div className="space-y-2 py-2">
+      <p>No {providerWord(type)} account is connected.</p>
+      <Button variant="outline" size="sm" onClick={() => setParam("type", null)}>
+        Show all accounts
+      </Button>
+    </div>
   ) : all.length > 0 ? (
     <div className="space-y-2 py-2">
-      <p>Every connection here has been revoked.</p>
+      <p>Every account here has been revoked.</p>
       <Button variant="outline" size="sm" onClick={() => setParam("revoked", "1")}>
         Show revoked ({revokedCount})
       </Button>
@@ -328,34 +480,39 @@ export default function ConnectionsPage() {
       </p>
       {canAdminister || adminLoading ? (
         <Button className="text-[length:var(--text-sm)] text-white" disabled={adminLoading} onClick={() => setPickerOpen(true)}>
-          Add connection
+          Add account or cluster
         </Button>
       ) : adminUnknown ? (
-        <p>Could not check whether you can add a connection. Reload to try again.</p>
+        <p>Could not check whether you can add an account. Reload to try again.</p>
       ) : (
-        <p>An administrator can add a connection.</p>
+        <p>An administrator can add an account.</p>
       )}
     </div>
   );
 
   return (
     <ConsolePage
-      title="Connections"
-      description={
-        <span className="inline-flex flex-wrap items-center gap-1">
-          Connect your cloud accounts, Kubernetes clusters, and GitHub organisations to AuthSec. Discover your AI agents, identify their access
-          permissions, and understand what they can access across your infrastructure.
-        </span>
-      }
+      title="Accounts"
+      description="Cloud accounts, Kubernetes clusters and GitHub organisations that AuthSec scans."
       actions={
         canAdminister || adminLoading ? (
           // Until the server has answered whether this reader can administer, the control is shown but cannot be used.
           <Button className="text-[length:var(--text-sm)] text-white" disabled={adminLoading} onClick={() => setPickerOpen(true)}>
-            Add connection
+            Add account or cluster
           </Button>
         ) : undefined
       }
     >
+      <PageAbout>
+        <strong className="font-semibold">Accounts</strong> are the cloud accounts, Kubernetes clusters and GitHub organisations AuthSec
+        reads to find workloads, the identities they use and what those identities can reach.
+      </PageAbout>
+      <HowItWorks
+        title="How discovery works"
+        subtitle="From an account to an access graph"
+        steps={HOW_DISCOVERY_WORKS}
+        storageKey="iga-accounts-how-discovery-works"
+      />
       {openRules && query.isSuccess && githubConnections.length !== 1 ? (
         <RulesChooser
           connections={githubConnections}
@@ -391,6 +548,15 @@ export default function ConnectionsPage() {
       ) : (
       <TableCard>
         <CardContent variant="flush">
+          <ProviderTabs
+            value={type}
+            onChange={(p) => setParam("type", p)}
+            counts={PROVIDERS.filter((p) => p === type || all.some((c) => c.provider === p)).map((p) => ({
+              provider: p,
+              count: all.filter((c) => c.provider === p).length,
+            }))}
+            total={all.length}
+          />
           <TableToolbar
             // Search and the filters are there as soon as there is a connection to filter.
             controls={all.length >= 1 || filtered}
@@ -399,7 +565,7 @@ export default function ConnectionsPage() {
             onSearch={(v) => setParam("q", v || null)}
             filtered={filtered}
             onClear={clearFilters}
-            countLabel={`${rows.length} of ${inScope} ${inScope === 1 ? "connection" : "connections"}`}
+            countLabel={`${rows.length} of ${inScope} ${inScope === 1 ? "account" : "accounts"}`}
             extra={
               revokedCount > 0 && status === "all" ? (
                 <button
@@ -414,19 +580,6 @@ export default function ConnectionsPage() {
             typeControl={
               <>
                 <FilterPills
-                  label="Type"
-                  value={type ?? "all"}
-                  onChange={(k) => setParam("type", k === "all" ? null : k)}
-                  options={[
-                    { key: "all", label: "All" },
-                    ...PROVIDERS.filter((p) => p === type || all.some((c) => c.provider === p)).map((p) => ({
-                      key: p as string,
-                      label: providerWord(p),
-                      count: all.filter((c) => c.provider === p).length,
-                    })),
-                  ]}
-                />
-                <FilterPills
                   label="Status"
                   value={status}
                   onChange={(k) => setParam("status", k === "all" ? null : k)}
@@ -438,14 +591,15 @@ export default function ConnectionsPage() {
             }
           />
           <AdaptiveTable
-            tableId="iga-connections"
+            // Each provider tab has its own columns, so its own saved column choices.
+            tableId={type ? `iga-connections-${type}` : "iga-connections"}
             sizing="fit"
             // Every field is a column, in the card's details, or on the detail page.
             rowDetails={false}
             cardsBelow={640}
             loading={query.isLoading}
             // Nothing loaded because a request failed: say so, never "none yet".
-            failure={query.isError && !query.data ? tableFailure(query.error, "connections", () => query.refetch(), "discovery:read") : undefined}
+            failure={query.isError && !query.data ? tableFailure(query.error, "accounts", () => query.refetch(), "discovery:read") : undefined}
             emptyState={emptyState}
             columns={columns}
             data={rows}
@@ -479,6 +633,66 @@ export default function ConnectionsPage() {
         onConfirm={() => void confirmRevoke()}
       />
     </ConsolePage>
+  );
+}
+
+/**
+ * All, then one tab per connected provider. All shows the columns every
+ * provider has; a provider tab adds that provider's own (a new cloud only adds
+ * a tab). The tab is kept in the URL (`type`).
+ */
+function ProviderTabs({
+  value,
+  onChange,
+  counts,
+  total,
+}: {
+  value: ConnectionProvider | null;
+  onChange: (p: ConnectionProvider | null) => void;
+  counts: { provider: ConnectionProvider; count: number }[];
+  total: number;
+}) {
+  const tabs: { key: ConnectionProvider | null; label: string; count: number }[] = [
+    { key: null, label: "All", count: total },
+    ...counts.map((c) => ({ key: c.provider, label: providerWord(c.provider), count: c.count })),
+  ];
+  return (
+    <div className="border-b border-(--color-border-subtle) px-4 pt-3">
+      <div role="tablist" aria-label="Provider" className="inline-flex flex-wrap gap-1 rounded-lg bg-(--color-surface-subtle) p-1">
+        {tabs.map((t) => {
+          const on = t.key === value;
+          return (
+            <button
+              key={t.key ?? "all"}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => onChange(t.key)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-focus-ring)",
+                on ? "bg-(--color-surface-raised) text-(--color-text) shadow-(--shadow-xs)" : "text-(--color-text-secondary) hover:text-(--color-text)",
+              )}
+            >
+              {t.label}
+              <span className="tabular-nums text-(--color-text-muted)">{t.count}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="m-0 py-2 text-xs text-(--color-text-muted)">
+        {value ? (
+          <>
+            <strong className="font-semibold text-(--color-text)">{providerWord(value)} columns:</strong> {PROVIDER_COLUMNS[value]}, beside the common
+            Status and Last sync.
+          </>
+        ) : (
+          <>
+            <strong className="font-semibold text-(--color-text)">All providers:</strong> the columns every account has. Pick a provider tab for its own
+            details.
+          </>
+        )}
+      </p>
+    </div>
   );
 }
 

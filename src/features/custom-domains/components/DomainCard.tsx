@@ -9,13 +9,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Globe,
   CheckCircle2,
   Clock,
@@ -23,7 +16,6 @@ import {
   Copy,
   Check,
   Trash2,
-  MoreVertical,
   RefreshCw,
   Key,
   Loader2,
@@ -140,33 +132,28 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
             <span className="font-semibold text-lg">{domain.domain}</span>
           </div>
 
-          {/* Actions Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={isLoading}>
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {domain.is_verified && !domain.is_primary && (
-                <DropdownMenuItem
-                  onClick={handleSetPrimary}
-                  disabled={isSettingPrimary}
-                >
-                  <Star className="h-4 w-4 mr-2" />
-                  Set as Primary
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onDelete(domain)}
-                className="text-destructive focus:text-destructive"
+          <div className="flex items-center gap-1">
+            {domain.is_verified && !domain.is_primary && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSetPrimary}
+                disabled={isLoading || isSettingPrimary}
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Star className="mr-1.5 h-3.5 w-3.5" />
+                Set as primary
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={isLoading}
+              aria-label={`Delete ${domain.domain}`}
+              onClick={() => onDelete(domain)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Status Badges */}
@@ -199,13 +186,13 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
             </Badge>
           )}
 
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-[13px]">
             {domain.kind === "custom" ? "Custom" : "Platform"}
           </Badge>
         </div>
 
         {/* Timestamps */}
-        <div className="text-xs text-muted-foreground mt-2">
+        <div className="text-[13px] text-muted-foreground mt-2">
           Added {formatRelativeTime(domain.created_at)}
           {domain.verified_at && (
             <> • Verified {formatRelativeTime(domain.verified_at)}</>
@@ -222,18 +209,18 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
               DNS Verification Required
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               Add the following TXT record to your DNS configuration to verify
               domain ownership.
             </p>
 
             {/* TXT Record Name */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label className="text-[13px] font-medium text-muted-foreground">
                 TXT Record Name
               </label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs bg-background p-2 rounded border font-mono truncate">
+                <code className="flex-1 text-[13px] bg-background p-2 rounded border font-mono truncate">
                   {domain.verification_txt_name}
                 </code>
                 <TooltipProvider>
@@ -262,11 +249,11 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
 
             {/* TXT Record Value */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label className="text-[13px] font-medium text-muted-foreground">
                 TXT Record Value
               </label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs bg-background p-2 rounded border font-mono truncate">
+                <code className="flex-1 text-[13px] bg-background p-2 rounded border font-mono truncate">
                   {domain.verification_txt_value}
                 </code>
                 <TooltipProvider>
@@ -312,7 +299,7 @@ export function DomainCard({ domain, onDelete }: DomainCardProps) {
               )}
             </Button>
 
-            <p className="text-xs text-muted-foreground text-center">
+            <p className="text-[13px] text-muted-foreground text-center">
               DNS changes may take 5-15 minutes to propagate
             </p>
           </div>

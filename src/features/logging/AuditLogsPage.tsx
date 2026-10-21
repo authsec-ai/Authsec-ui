@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ScrollText, Settings } from "lucide-react";
+import { ChevronDown, Download, ScrollText, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -16,6 +16,7 @@ import type { AuditLog } from "../../types/entities";
 import { useGetAuditLogsQuery } from "../../app/api/logsApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { AuditLogsView } from "./components/audit-logs/AuditLogsView";
+import { downloadJson } from "./components/logFormat";
 
 interface AuditFilters {
   /** Maps to backend `action` param (keyword filter) */
@@ -59,16 +60,7 @@ export function AuditLogsPage() {
     [auditLogs, filters.severity]
   );
 
-  const handleExport = () => {
-    const text = rows.map((log) => JSON.stringify(log, null, 2)).join("\n\n");
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `audit-logs-${new Date().toISOString()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleExport = () => downloadJson(rows, "admin-change-logs");
 
   const setFilter = (patch: Partial<AuditFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -77,13 +69,19 @@ export function AuditLogsPage() {
 
   return (
     <ConsolePage
-      title="Audit Logs"
-      description="Track configuration changes, admin actions, and system modifications across this workspace."
+      title="Admin changes"
+      description="Every change made in this console: who changed what, and whether it worked."
       actions={
-        /* Refresh + Export live inside the log viewer's own control bar. */
-        <Button onClick={() => navigate("/logs/configure")} className="text-white">
-          <Settings className="icon-sm" /> Configure
-        </Button>
+        <>
+          <Button variant="ghost" onClick={() => navigate("/logs/configure")} className="gap-2">
+            <Settings className="h-4 w-4" />
+            Log forwarding
+          </Button>
+          <Button variant="outline" onClick={handleExport} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </>
       }
     >
       <div className="roles-toolbar">
@@ -153,13 +151,13 @@ export function AuditLogsPage() {
           </div>
         </div>
       ) : (
-        // Legacy console-style log viewer: expandable rows, severity icons,
-        // live/paused, its own refresh/export/pagination controls.
+        // The shared log table: Time, Who, Event, Result; rows open to show
+        // every real field of the entry.
         <AuditLogsView
           logs={rows}
-          onExport={handleExport}
+          loading={isLoading}
           onRefresh={() => refetch()}
-          isRefreshing={isLoading || isFetching}
+          isRefreshing={isFetching}
           pagination={data?.pagination}
           onPageChange={(p) => setPage(p)}
         />

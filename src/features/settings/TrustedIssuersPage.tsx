@@ -134,7 +134,7 @@ function CreateIssuerDialog({
               value={form.subject_mapping ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, subject_mapping: e.target.value || undefined }))}
             />
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[12.5px] text-(--color-text-muted)">
               Which claim to use when mapping the assertion subject to a local user.
             </p>
           </div>
@@ -146,10 +146,10 @@ function CreateIssuerDialog({
               value={testAssertion}
               onChange={(e) => setTestAssertion(e.target.value)}
               rows={3}
-              className="font-mono text-xs"
+              className="font-mono text-[13px]"
             />
             {testResult && (
-              <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${testResult.pass ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
+              <div className={`flex items-start gap-2 rounded-md border px-3 py-2 text-[13px] ${testResult.pass ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-red-200 bg-red-50 text-red-800"}`}>
                 {testResult.pass
                   ? <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
                   : <XCircle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
@@ -223,7 +223,7 @@ function RevokeIssuerDialog({
             and immediately revoke all active XAA tokens issued via this issuer.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] text-amber-800">
           Any agent connections granted through this issuer will lose access at their next token introspection.
         </div>
         <DialogFooter>
@@ -295,7 +295,7 @@ export default function TrustedIssuersPage() {
         priority: 2,
         approxWidth: 110,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground font-mono">
+          <span className="text-[13px] text-muted-foreground font-mono">
             {(row.original.allowed_algs ?? ["RS256"]).join(", ")}
           </span>
         ),
@@ -306,7 +306,7 @@ export default function TrustedIssuersPage() {
         priority: 3,
         approxWidth: 70,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[13px] text-muted-foreground">
             {row.original.jit_provisioning ? "On" : "Off"}
           </span>
         ),
@@ -328,7 +328,7 @@ export default function TrustedIssuersPage() {
               Revoke
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground">Revoked</span>
+            <span className="text-[13px] text-muted-foreground">Revoked</span>
           ),
       },
     ],
@@ -337,7 +337,7 @@ export default function TrustedIssuersPage() {
 
   return (
     <ConsolePage
-      title="Trusted Issuers"
+      title="Trusted issuers"
       description="External identity providers whose assertions are accepted for cross-app agent access."
       actions={
         <Button onClick={() => setCreateOpen(true)} className="text-white">
@@ -368,7 +368,7 @@ export default function TrustedIssuersPage() {
           ) : issuers.length === 0 && !query ? (
             <div className="py-16 text-center">
               <p className="text-sm font-medium text-foreground">No trusted issuers yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 Add an external identity provider to enable cross-app agent access.
               </p>
               <Button

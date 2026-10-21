@@ -3,9 +3,9 @@
 import type { PolicyFailure } from "./policyErrors";
 
 const REMEDY_LINKS: Record<string, { label: string; to: string }> = {
-  evidence_untrusted: { label: "Open Connections", to: "/iga/connections" },
-  resource_policy_evidence_incomplete: { label: "Open Connections", to: "/iga/connections" },
-  discovery_unavailable: { label: "Open Connections", to: "/iga/connections" },
+  evidence_untrusted: { label: "Open Accounts", to: "/iga/connections" },
+  resource_policy_evidence_incomplete: { label: "Open Accounts", to: "/iga/connections" },
+  discovery_unavailable: { label: "Open Accounts", to: "/iga/connections" },
 };
 
 /**
@@ -34,7 +34,7 @@ export function remedyFor(f: PolicyFailure): { label: string; to: string } | nul
   if (setup) {
     return hasConn
       ? { label: setup.label, to: `/iga/connections/${encodeURIComponent(conn)}/${setup.tab}` }
-      : { label: "Open Connections", to: "/iga/connections" };
+      : { label: "Open Accounts", to: "/iga/connections" };
   }
   const policy = f.detail?.policy_id;
   if (f.code === "role_controlled_by_policy" && typeof policy === "string" && policy) {

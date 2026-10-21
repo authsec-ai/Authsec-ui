@@ -1,11 +1,12 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
   Check,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -18,7 +19,8 @@ import {
   useListRSBindingsQuery,
 } from "@/app/api/setupWizardApi";
 import { useGetScopeMatrixQuery } from "@/app/api/scopeMatrixApi";
-import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
+import { useListConnectionsQuery } from "@/app/api/agentIdentityApi";
+import { Button } from "@/components/ui/button";
 
 import {
   DecisionBanner,
@@ -27,15 +29,23 @@ import {
 } from "./components/ApplicationConsole";
 import { useApplicationContext } from "./useApplicationContext";
 import { isLaunched } from "./lib/computeReadiness";
+import { isAgentConnection, toolLevel } from "./lib/mcpSignals";
+import {
+  ServerOverviewSummary,
+  type ToolLevelCounts,
+} from "./components/ServerOverviewSummary";
+import { DeleteApplicationDialog } from "./components/DeleteApplicationDialog";
 
 /**
- * Overview — launch readiness and posture for one application.
+ * Overview — one MCP at a glance.
  *
- * Layout: one state banner (the only launch CTA on the page) → launch gates
- * (the setup checklist, humanized, with honest severities) → a compact
- * posture strip. Every number is backend-sourced; the "Activate" checklist
- * step is deliberately not rendered as a gate — activation is the banner's
- * action, not a defect to fix.
+ * Layout: count cards + "Agents with access" (ServerOverviewSummary) → the
+ * state banner (the only launch CTA on the page) → launch gates → "Settings"
+ * (links to the setup sub-pages, and Delete). Before the MCP is enforcing,
+ * every gate is listed; once it is, only gates that still need a look are.
+ * Every number is backend-sourced; the "Activate" checklist step is
+ * deliberately not rendered as a gate — activation is the banner's action,
+ * not a defect to fix.
  */
 
 type GateTone = "ok" | "warn" | "danger" | "task";
@@ -52,7 +62,9 @@ interface GateRow {
 
 export default function ApplicationLaunchPage() {
   const { application } = useApplicationContext();
+  const navigate = useNavigate();
   const launched = isLaunched(application);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const {
     data: checklist,
@@ -62,12 +74,10 @@ export default function ApplicationLaunchPage() {
   const { data: preview } = useGetActivationPreviewQuery(application.id);
   const { data: matrix } = useGetScopeMatrixQuery(application.id);
   const { data: bindingsData } = useListRSBindingsQuery(application.id);
-  const { data: clientsData } = useListWorkspaceClientsQuery({
-    resourceServerId: application.id,
-  });
   const { data: drift } = useGetDriftEventsQuery(application.id, {
     skip: !launched,
   });
+  const { data: connectionsData } = useListConnectionsQuery(application.id);
   const [activate, { isLoading: activating }] =
     useActivateResourceServerMutation();
 
@@ -82,12 +92,30 @@ export default function ApplicationLaunchPage() {
   const boundUsers = new Set(
     (bindingsData?.bindings ?? []).map((b) => b.user_id),
   ).size;
-  const registeredClients = (clientsData ?? []).filter(
-    (c) => c.status !== "revoked",
-  ).length;
-  const pendingClients = (clientsData ?? []).filter(
-    (c) => c.status === "pending_approval",
-  ).length;
+  // Approved connections made by agents (machine credentials are listed on Access).
+  const agents = useMemo(
+    () => connectionsData?.items.filter(isAgentConnection),
+    [connectionsData],
+  );
+
+  // Read / Write / Admin from each tool's runtime-effective scopes.
+  const toolLevels = useMemo<ToolLevelCounts | undefined>(() => {
+    if (!matrix) return undefined;
+    const counts: ToolLevelCounts = { total: 0, read: 0, write: 0, admin: 0, public: 0, none: 0 };
+    for (const tool of matrix.tools) {
+      counts.total += 1;
+      if (tool.is_public) {
+        counts.public += 1;
+        continue;
+      }
+      const level = toolLevel(
+        tool.scopes.filter((s) => s.source === "admin_override").map((s) => s.scope_string),
+      );
+      if (level) counts[level] += 1;
+      else counts.none += 1;
+    }
+    return counts;
+  }, [matrix]);
 
   const highRisk = useMemo(() => {
     const hits: { tool: string; scope: string; risk: string }[] = [];
@@ -122,7 +150,7 @@ export default function ApplicationLaunchPage() {
       rows.push({
         key: "protection",
         tone: "ok",
-        title: "Endpoint protected",
+        title: "Protection check passing",
         detail: `SDK verified on ${host}${
           application.last_validated_at
             ? ` · checked ${new Date(application.last_validated_at).toLocaleDateString()}`
@@ -187,7 +215,7 @@ export default function ApplicationLaunchPage() {
             key: "scopes",
             tone: "ok",
             title: "Scopes defined",
-            detail: `${scopeCount} scope${scopeCount === 1 ? "" : "s"} registered for this application`,
+            detail: `${scopeCount} scope${scopeCount === 1 ? "" : "s"} registered for this MCP`,
             to: `${base}/scopes`,
             linkLabel: "Scopes",
           }
@@ -254,7 +282,7 @@ export default function ApplicationLaunchPage() {
         advisory: true,
         title: `${publicTools} public tool${publicTools === 1 ? "" : "s"}`,
         detail:
-          "Public tools bypass scope checks for any authenticated token with this application audience.",
+          "Public tools bypass scope checks for any authenticated token with this MCP audience.",
         to: `${base}/tools`,
         linkLabel: "Review tools",
       });
@@ -324,12 +352,16 @@ export default function ApplicationLaunchPage() {
 
   const failingGates = gates.filter((g) => g.tone === "danger");
   const advisoryCount = gates.filter((g) => g.advisory).length;
+  // Once enforcing, list only the gates that still need a look.
+  const visibleGates = launched
+    ? gates.filter((g) => g.tone === "danger" || g.advisory)
+    : gates;
 
   const handleLaunch = async () => {
     if (!canActivate || launched) return;
     try {
       await activate(application.id).unwrap();
-      toast.success("Application launched. Runtime policy is active.");
+      toast.success("MCP is enforcing. Runtime policy is active.");
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
       toast.error(apiErr?.data?.error ?? "Launch failed. Resolve blockers and retry.");
@@ -355,20 +387,13 @@ export default function ApplicationLaunchPage() {
         return (
           <DecisionBanner
             tone="warning"
-            title={`Live — ${openItems} item${openItems === 1 ? "" : "s"} worth reviewing`}
-            body="Runtime policy is active. Review the flagged gates below."
+            title={`Enforcing — ${openItems} item${openItems === 1 ? "" : "s"} worth reviewing`}
+            body="Runtime policy is active. Review the flagged items below."
           />
         );
       }
-      return (
-        <DecisionBanner
-          tone="success"
-          title="Live — runtime policy is steady"
-          body="No blockers, public-tool warnings, or drift events need attention."
-          actionLabel="View monitor"
-          actionHref={`/applications/${application.id}/activity`}
-        />
-      );
+      // Enforcing and nothing to review: the count cards say enough.
+      return null;
     }
     if (canActivate) {
       return (
@@ -380,7 +405,7 @@ export default function ApplicationLaunchPage() {
               ? `All launch gates passed · ${advisoryCount} advisor${advisoryCount === 1 ? "y" : "ies"} worth a look before you publish`
               : "All launch gates passed. Publish the current tool, scope, role, and client policy."
           }
-          actionLabel={activating ? "Launching…" : "Launch application"}
+          actionLabel={activating ? "Starting…" : "Start enforcing"}
           onAction={handleLaunch}
           actionDisabled={activating}
           secondaryLabel="Run pre-launch test"
@@ -400,61 +425,95 @@ export default function ApplicationLaunchPage() {
     );
   })();
 
+  const base = `/applications/${application.id}`;
+  const settingsLinks: Array<{ label: string; detail: string; to: string }> = [
+    { label: "Setup", detail: "SDK install and protection check", to: `${base}/setup` },
+    { label: "Tools", detail: "Give each tool a permission", to: `${base}/tools` },
+    { label: "Scopes", detail: "The permissions tools are gated by", to: `${base}/scopes` },
+    { label: "Test sign-in", detail: "Run the live OAuth test", to: `${base}/test` },
+  ];
+
   return (
-    <div className="space-y-4">
+    <div data-cr className="space-y-4">
+      <ServerOverviewSummary
+        applicationId={application.id}
+        tools={toolLevels}
+        agents={agents}
+        usersWithAccess={bindingsData ? boundUsers : undefined}
+      />
+
       {banner}
+
+      {checklistLoading && !checklist ? (
+        <Surface>
+          <div className="flex items-center gap-2 px-5 py-4 text-[length:13.5px] text-(--color-text-muted)">
+            <Loader2 className="size-4 animate-spin" />
+            Reading MCP posture…
+          </div>
+        </Surface>
+      ) : checklistError && !checklist ? (
+        <Surface>
+          <div className="px-5 py-4 text-[length:13.5px] text-(--color-danger-text)">
+            Couldn't load the launch checklist. Reload the page to retry.
+          </div>
+        </Surface>
+      ) : visibleGates.length > 0 ? (
+        <Surface>
+          <div className="px-5 pb-3 pt-4">
+            <h2 className="sec-title">{launched ? "Worth a look" : "Launch gates"}</h2>
+            <p className="mt-0.5 text-[length:13.5px] text-(--color-text-muted)">
+              {launched
+                ? "This MCP is enforcing. These items still deserve a review."
+                : "Everything AuthSec checks before this MCP can start enforcing."}
+            </p>
+          </div>
+          <div className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle)">
+            {visibleGates.map((gate) => (
+              <LaunchGateRow key={gate.key} gate={gate} />
+            ))}
+          </div>
+        </Surface>
+      ) : null}
 
       <Surface>
         <div className="px-5 pb-3 pt-4">
-          <h3 className="text-sm font-semibold text-(--color-text)">Launch gates</h3>
-          <p className="mt-0.5 text-xs text-(--color-text-muted)">
-            Everything AuthSec checks before this application can go live.
-          </p>
+          <h2 className="sec-title">Settings</h2>
         </div>
         <div className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle)">
-          {checklistLoading && !checklist ? (
-            <div className="flex items-center gap-2 px-5 py-4 text-sm text-(--color-text-muted)">
-              <Loader2 className="size-4 animate-spin" />
-              Reading application posture…
+          {settingsLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className="flex items-center gap-4 px-5 py-3 hover:bg-(--color-hover)"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[length:14px] font-semibold text-(--color-text)">{link.label}</div>
+                <div className="text-[length:13px] text-(--color-text-muted)">{link.detail}</div>
+              </div>
+              <ArrowRight className="size-4 shrink-0 text-(--color-text-muted)" />
+            </Link>
+          ))}
+          <div className="flex flex-wrap items-center gap-4 px-5 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[length:14px] font-semibold text-(--color-text)">Delete this MCP</div>
+              <div className="text-[length:13px] text-(--color-text-muted)">
+                Removes its scopes, tools, access policy and credentials. Agents lose access
+                immediately.
+              </div>
             </div>
-          ) : checklistError && !checklist ? (
-            <div className="px-5 py-4 text-sm text-(--color-danger-text)">
-              Couldn't load the launch checklist. Reload the page to retry.
-            </div>
-          ) : (
-            gates.map((gate) => <LaunchGateRow key={gate.key} gate={gate} />)
-          )}
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="mr-1.5 size-4" /> Delete MCP
+            </Button>
+          </div>
         </div>
       </Surface>
 
-      <Surface className="grid grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-(--color-border-subtle) max-xl:[&>*]:border-(--color-border-subtle) max-xl:[&>*:nth-child(even)]:border-l max-xl:[&>*:nth-child(n+3)]:border-t">
-        <PostureCell label="Tools" value={String(totalTools)} sub={`${publicTools} public`} />
-        <PostureCell
-          label="High-risk"
-          value={String(highRisk.length)}
-          valueClass={highRisk.length > 0 ? "text-(--color-warning-text)" : undefined}
-          sub={highRisk.length > 0 ? highRisk[0].scope : "No high or critical scopes"}
-        />
-        <PostureCell
-          label="Users with access"
-          value={String(boundUsers)}
-          sub={
-            pendingClients > 0
-              ? `${pendingClients} pending client${pendingClients === 1 ? "" : "s"}`
-              : `${registeredClients} client${registeredClients === 1 ? "" : "s"}`
-          }
-        />
-        {launched ? (
-          <PostureCell
-            label="Drift"
-            value={String(driftCount)}
-            valueClass={driftCount > 0 ? "text-(--color-warning-text)" : undefined}
-            sub="Open events since launch"
-          />
-        ) : (
-          <PostureCell label="Drift" value="Starts after launch" dim />
-        )}
-      </Surface>
+      <DeleteApplicationDialog
+        application={application}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => navigate("/applications")}
+      />
     </div>
   );
 }
@@ -501,39 +560,6 @@ function LaunchGateRow({ gate }: { gate: GateRow }) {
         {gate.linkLabel}
         <ArrowRight className="size-3.5" />
       </Link>
-    </div>
-  );
-}
-
-function PostureCell({
-  label,
-  value,
-  sub,
-  valueClass,
-  dim,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  valueClass?: string;
-  dim?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5 px-5 py-4">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-(--color-text-subtle)">
-        {label}
-      </span>
-      <span
-        className={cn(
-          dim
-            ? "text-sm font-medium leading-7 text-(--color-text-subtle)"
-            : "text-xl font-semibold text-(--color-text)",
-          valueClass,
-        )}
-      >
-        {value}
-      </span>
-      {sub ? <span className="text-xs text-(--color-text-muted)">{sub}</span> : null}
     </div>
   );
 }

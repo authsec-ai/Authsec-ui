@@ -100,6 +100,7 @@ export default function WorkloadPage() {
         ws={ws}
         listType="workloads"
         kindLabel="Workload"
+        about="One workload AuthSec found running: the identity it runs as, and what that identity is allowed to reach."
         base={base}
         tabs={tabs}
         activeTab={activeTab}

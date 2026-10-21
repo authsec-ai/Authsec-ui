@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { PageAbout } from "@/components/console/PageAbout";
 import { DecisionBanner } from "@/components/console/status";
 import { getWorkspaceId } from "@/utils/workspace";
 
@@ -34,7 +35,7 @@ export function PolicyUnavailable({ reason }: { reason?: string | null }) {
       title="Policy is not available on this server"
       body={
         <>
-          Policies are turned off or still starting here{reason ? ` (${reason})` : ""}. Discovery and Connections are unaffected.
+          Policies are turned off or still starting here{reason ? ` (${reason})` : ""}. Discovery and Accounts are unaffected.
         </>
       }
       actionLabel="Open Discovery"
@@ -48,6 +49,7 @@ export function PolicyShell({
   description,
   actions,
   requires,
+  about,
   children,
 }: {
   title: ReactNode;
@@ -55,6 +57,8 @@ export function PolicyShell({
   actions?: ReactNode;
   /** A feature the view needs beyond the policy product being on. */
   requires?: "access_policies";
+  /** The page's one-line "What is this page?", shown whether or not Policy is served here. */
+  about?: ReactNode;
   children: ReactNode;
 }) {
   const ws = getWorkspaceId() ?? "";
@@ -62,6 +66,7 @@ export function PolicyShell({
   const served = caps.state === "on" && (!requires || caps.feature(requires));
   return (
     <ConsolePage title={title} description={description} actions={served ? actions : undefined}>
+      {about ? <PageAbout>{about}</PageAbout> : null}
       {caps.state === "loading" ? (
         <p role="status" className="text-sm text-(--color-text-muted)">
           Checking what this server provides…

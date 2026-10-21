@@ -9,6 +9,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { useBreadcrumbTail } from "@/components/layout/breadcrumbTail";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { PageAbout } from "@/components/console/PageAbout";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { Button } from "@/components/ui/button";
 import { RuleCatalogPanel } from "@/features/discovery/RuleCatalogPage";
@@ -50,7 +51,7 @@ import { ProviderGlyph } from "./ProviderGlyph";
 
 const BACK = (
   <Button variant="outline" asChild>
-    <Link to="/iga/connections">All connections</Link>
+    <Link to="/iga/connections">All accounts</Link>
   </Button>
 );
 
@@ -63,7 +64,7 @@ export default function ConnectionDetailPage() {
   const { pending, failures, run, dismiss } = useConnectionActions();
   const [revokeOpen, setRevokeOpen] = useState(false);
 
-  useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Connections", href: "/iga/connections" });
+  useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Accounts", href: "/iga/connections" });
 
   // The Scope tab's region list is a live AWS call that takes seconds; start
   // it as soon as an AWS connection opens so the tab is ready when clicked.
@@ -75,15 +76,15 @@ export default function ConnectionDetailPage() {
 
   if (loading) {
     return (
-      <ConsolePage title="Connection" description="Loading…" variant="object">
-        <div className="h-40 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading the connection" />
+      <ConsolePage title="Account" description="Loading…" variant="object">
+        <div className="h-40 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading the account" />
       </ConsolePage>
     );
   }
   if (!c) {
     return (
-      <ConsolePage title="Connection" variant="object">
-        <LoadFailurePanel failure={failure ?? (notFound ? "not_found" : "failed")} subject="this connection" permission="discovery:read" onRetry={() => void refetch()} />
+      <ConsolePage title="Account" variant="object">
+        <LoadFailurePanel failure={failure ?? (notFound ? "not_found" : "failed")} subject="this account" permission="discovery:read" onRetry={() => void refetch()} />
         <div>{BACK}</div>
       </ConsolePage>
     );
@@ -142,7 +143,7 @@ export default function ConnectionDetailPage() {
                   <Link to={discoveryLink(c)}>Open in Discovery</Link>
                 </Button>
               ) : (
-                <Button className="text-[length:var(--text-sm)] text-white" size="sm" disabled title="Discovery has no result for this connection yet. The Overview says what it is waiting for.">
+                <Button className="text-[length:var(--text-sm)] text-white" size="sm" disabled title="Discovery has no result for this account yet. The Overview says what it is waiting for.">
                   Open in Discovery
                 </Button>
               )
@@ -151,9 +152,13 @@ export default function ConnectionDetailPage() {
         </>
       }
     >
+      <PageAbout>
+        One {typeWord(c)} that AuthSec reads: whether AuthSec can still read it, what its last scan saw, and what to fix when something
+        is wrong.
+      </PageAbout>
       {refreshFailed ? (
         <div role="alert" className="rounded-md border-l-2 border-l-(--color-danger-text) bg-(--color-danger-soft) px-4 py-2.5 text-xs">
-          <strong className="font-medium">Could not refresh this connection.</strong> It shows what loaded earlier.{" "}
+          <strong className="font-medium">Could not refresh this account.</strong> It shows what loaded earlier.{" "}
           <button className="underline" onClick={() => void refetch()}>
             Retry
           </button>

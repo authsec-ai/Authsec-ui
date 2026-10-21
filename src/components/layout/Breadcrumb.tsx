@@ -2,6 +2,7 @@ import { useLocation, Link } from "react-router-dom";
 import { ChevronRight, Home } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useBreadcrumbTailValue } from "./breadcrumbTail";
+import { HUBS } from "@/components/console/hubs";
 
 interface BreadcrumbItem {
   label: string;
@@ -17,6 +18,18 @@ interface BreadcrumbItem {
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** The grouped page a route is a tab of ("People" for /settings/team), or
+ *  null. The tab itself is not repeated: the page's tab strip says it. */
+export function hubCrumb(pathname: string): { label: string; href: string } | null {
+  for (const hub of Object.values(HUBS)) {
+    for (const tab of hub.tabs) {
+      const paths = [tab.to, ...(tab.match ?? [])];
+      if (paths.includes(pathname)) return { label: hub.title, href: hub.tabs[0].to };
+    }
+  }
+  return null;
+}
+
 /** "Edit SAML provider" for /identity-providers/saml/edit/:id and the like;
  *  null for any other path. */
 export function identityProviderCrumb(segments: string[]): string | null {
@@ -30,7 +43,13 @@ export function identityProviderCrumb(segments: string[]): string | null {
   return null;
 }
 
-export function Breadcrumb() {
+/**
+ * `variant="page"`: the trail drawn in the page, directly above its content,
+ * for consoles with no top bar (UX proposal: "One breadcrumb, or none").
+ * It reads "Discovery / Workloads / name": no Home icon and no product crumb,
+ * since the sidebar already says both; the last item is the page you are on.
+ */
+export function Breadcrumb({ variant = "header" }: { variant?: "header" | "page" } = {}) {
   const location = useLocation();
   const tail = useBreadcrumbTailValue();
 
@@ -41,14 +60,20 @@ export function Breadcrumb() {
     const objectAt = all[0] === "iga" ? all.findIndex((s) => UUID.test(s)) : -1;
     const segments = objectAt > 0 ? all.slice(0, objectAt) : all;
     const breadcrumbs: BreadcrumbItem[] = [
-      { label: "Dashboard", href: "/", current: pathname === "/" },
+      { label: "Home", href: "/", current: pathname === "/" },
     ];
+
+    const hub = hubCrumb(pathname);
+    if (hub) {
+      breadcrumbs.push({ label: hub.label, current: true });
+      return breadcrumbs;
+    }
 
     // An identity provider's create/edit pages sit under a protocol segment
     // that has no page of its own, and end in an id: name the page instead.
     const idp = identityProviderCrumb(all);
     if (idp) {
-      breadcrumbs.push({ label: "Identity Providers", href: "/identity-providers" });
+      breadcrumbs.push({ label: "Sign-in", href: "/identity-providers" });
       breadcrumbs.push({ label: idp, current: true });
       return breadcrumbs;
     }
@@ -96,13 +121,22 @@ export function Breadcrumb() {
           break;
      
         case "iga":
-          label = "IGA";
+          label = "Agentic IGA";
+          break;
+        case "applications":
+          label = "MCP servers";
+          break;
+        case "new":
+          label = "New";
+          break;
+        case "profile":
+          label = "Your profile";
           break;
         case "external-principals":
           label = "External principals";
           break;
         case "connections":
-          label = "Connections";
+          label = pathname.startsWith("/iga/") ? "Accounts" : "Connections";
           break;
         case "discovery":
           label = "Discovery";
@@ -120,7 +154,7 @@ export function Breadcrumb() {
           label = "Policy";
           break;
         case "agents":
-          label = "Agents Identities";
+          label = "Agents & services";
           break;
         case "services":
           label = "Services";
@@ -179,7 +213,7 @@ export function Breadcrumb() {
       // which name a route, not where the reader came from. The console's own
       // "IGA" crumb stays, so an object page reads Home › IGA › Discovery ›
       // <list> › <object> like every other IGA page (X-01).
-      const keep = breadcrumbs[1]?.label === "IGA" ? 2 : 1;
+      const keep = breadcrumbs[1]?.label === "Agentic IGA" ? 2 : 1;
       breadcrumbs.splice(
         keep,
         breadcrumbs.length - keep,
@@ -204,6 +238,33 @@ export function Breadcrumb() {
 
   const isDashboard = location.pathname === "/" || location.pathname === "/dashboard";
 
+  if (variant === "page") {
+    const items = breadcrumbs.slice(1).filter((b) => b.label !== "Agentic IGA");
+    if (items.length < 2) return null;
+    return (
+      <nav
+        aria-label="Breadcrumb"
+        className="flex flex-wrap items-center gap-1.5 text-[13px] text-(--color-text-muted)"
+      >
+        {items.map((item, index) => (
+          <span key={item.href ?? `${item.label}-${index}`} className="flex items-center gap-1.5">
+            {index > 0 ? <span aria-hidden>/</span> : null}
+            {item.current || !item.href ? (
+              <span aria-current={item.current ? "page" : undefined}>{item.label}</span>
+            ) : (
+              <Link
+                to={item.href}
+                className="text-(--color-primary-text) underline underline-offset-2 hover:decoration-2"
+              >
+                {item.label}
+              </Link>
+            )}
+          </span>
+        ))}
+      </nav>
+    );
+  }
+
   return (
     <nav className="flex items-center space-x-1 text-sm text-foreground">
       <Link to="/" className="flex items-center hover:text-foreground transition-colors">
@@ -213,7 +274,7 @@ export function Breadcrumb() {
       {isDashboard ? (
         <div className="flex items-center space-x-1">
           <ChevronRight className="h-4 w-4" />
-          <span className="font-medium text-foreground">Dashboard</span>
+          <span className="font-medium text-foreground">Home</span>
         </div>
       ) : breadcrumbs.slice(1).map((item, index) => (
         <div key={item.href ?? `${item.label}-${index}`} className="flex items-center space-x-1">

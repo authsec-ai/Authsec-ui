@@ -67,11 +67,11 @@ export default function BrokeringPoliciesCard() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
+    <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) shadow-sm">
+      <div className="flex items-start justify-between gap-2 border-b border-(--color-border-subtle) px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-950">Cross-app brokering</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <h2 className="text-sm font-semibold text-(--color-text)">Cross-app brokering</h2>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
             Permit/deny rules for cross-application ID-JAG issuance &amp; redemption.
             No rules means permit; a <span className="font-semibold">deny</span> wins.
           </p>
@@ -83,7 +83,7 @@ export default function BrokeringPoliciesCard() {
       </div>
 
       {adding && (
-        <div className="grid gap-3 border-b border-slate-100 bg-slate-50/60 p-4 sm:grid-cols-4">
+        <div className="grid gap-3 border-b border-(--color-border-subtle) bg-(--color-surface-subtle) p-4 sm:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Side</Label>
             <Select value={side} onValueChange={(v) => setSide(v as typeof side)}>
@@ -112,7 +112,7 @@ export default function BrokeringPoliciesCard() {
               onChange={(e) => setClientId(e.target.value)}
               placeholder="all clients"
               autoComplete="off"
-              className="h-9 font-mono text-xs"
+              className="h-9 font-mono text-[13px]"
             />
           </div>
           <div className="flex items-end gap-2">
@@ -128,7 +128,7 @@ export default function BrokeringPoliciesCard() {
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Loading rules…</p>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
+          <p className="py-6 text-center text-[13px] text-muted-foreground">
             No brokering rules — all cross-app issuance &amp; redemption is permitted by default.
           </p>
         ) : (
@@ -136,22 +136,22 @@ export default function BrokeringPoliciesCard() {
             {items.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-slate-200 px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-md border border-(--color-border-subtle) px-3 py-2"
               >
                 <div className="flex items-center gap-2 text-sm">
                   <Badge
                     className={cn(
                       "uppercase",
                       p.effect === "deny"
-                        ? "border-red-200 bg-red-50 text-red-700"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                        ? "border-(--color-danger-soft) bg-(--color-danger-soft) text-(--color-danger-text)"
+                        : "border-(--color-success-soft) bg-(--color-success-soft) text-(--color-success-text)",
                     )}
                   >
                     {p.effect === "deny" && <ShieldX className="mr-1 size-3" />}
                     {p.effect}
                   </Badge>
-                  <span className="text-slate-700">{p.side}</span>
-                  <span className="font-mono text-xs text-slate-500">
+                  <span className="text-(--color-text)">{p.side}</span>
+                  <span className="font-mono text-[13px] text-(--color-text-muted)">
                     {p.client_id ? `client ${p.client_id}` : "all clients"}
                   </span>
                 </div>
@@ -159,7 +159,7 @@ export default function BrokeringPoliciesCard() {
                   type="button"
                   onClick={() => void remove(p.id)}
                   aria-label="Remove rule"
-                  className="text-slate-400 hover:text-red-600"
+                  className="text-(--color-text-muted) hover:text-(--color-danger-text)"
                 >
                   <Trash2 className="size-4" />
                 </button>

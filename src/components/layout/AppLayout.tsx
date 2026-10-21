@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 import { Suspense, useEffect, useState } from "react";
 import { PageLoadingSkeleton } from "./PageLoadingSkeleton";
 import { AppSidebar } from "./AppSidebar";
-import { AppHeader } from "./AppHeader";
 import { AppRightSidebar } from "./AppRightSidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ResponsiveSidebarController } from "./ResponsiveSidebarController";
 import { useWizard } from "@/contexts/WizardContext";
 import { useDensity } from "@/contexts/DensityContext";
@@ -20,10 +19,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(520);
   const { isActive: isWizardActive, isCompleted: isWizardCompleted, resetCompletion } = useWizard();
   const { density } = useDensity();
-
-  const handleRightSidebarToggle = () => {
-    setIsRightSidebarOpen(!isRightSidebarOpen);
-  };
 
   const handleRightSidebarClose = () => {
     setIsRightSidebarOpen(false);
@@ -83,13 +78,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Main Content Area */}
           <div data-slot="admin-main-surface" className="flex-1 flex flex-col min-w-0">
-            <AppHeader
-              onRightSidebarToggle={handleRightSidebarToggle}
-              isRightSidebarOpen={isRightSidebarOpen}
-            />
+            {/* No top bar (UX proposal): the page heading names the page and
+                the sidebar carries the rest. A phone, where the sidebar is a
+                drawer, gets a slim bar with the button that opens it. */}
+            <div className="flex h-12 shrink-0 items-center gap-2 border-b border-(--color-border-subtle) bg-(--color-surface-raised) px-3 md:hidden">
+              <SidebarTrigger />
+              <span className="text-[15px] font-bold text-(--color-text)">AuthSec</span>
+            </div>
             <div className="flex-1 overflow-hidden">
               <div
-                className="h-full w-full overflow-y-auto scrollbar-hide"
+                className="app-content h-full w-full overflow-y-auto scrollbar-hide"
                 data-main-content-area="true"
               >
                 <Suspense fallback={<PageLoadingSkeleton />}>

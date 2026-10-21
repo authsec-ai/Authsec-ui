@@ -10,8 +10,9 @@
 import { NotFoundState } from "@/components/shared/NotFoundState";
 import { isNotFoundError } from "@/lib/error-utils";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronDown, ChevronUp, Cpu, Loader2, MoreVertical, Plus, ShieldOff, Star, UserPlus, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Cpu, Loader2, Plus, ShieldOff, Star, UserPlus, Users } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,6 @@ import {
 } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 // TableCard removed — outer card IS the single visual boundary
@@ -338,29 +338,23 @@ function RoleCard({
           {role.permissions} {role.permissions === 1 ? "scope" : "scopes"}
         </span>
       </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            disabled={saving}
-            aria-label={`Actions for ${formatApplicationRoleName(role.name)}`}
-            className="flex shrink-0 items-center justify-center rounded-r-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            <MoreVertical className="size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {isDefault ? (
-            <DropdownMenuItem onSelect={onClearDefault}>
-              Clear default (close posture)
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onSelect={onMakeDefault}>
-              Make default role
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* The default-role decision shows on the selected role only, as a
+          visible button — no overflow menu. */}
+      {selected ? (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={isDefault ? onClearDefault : onMakeDefault}
+          title={
+            isDefault
+              ? "New users get no role on first sign-in (closed posture)."
+              : "New users get this role on first sign-in."
+          }
+          className="shrink-0 self-center rounded px-2.5 py-1 text-[length:12.5px] font-semibold text-(--color-primary-text) hover:underline disabled:opacity-50"
+        >
+          {isDefault ? "Clear default" : "Make default"}
+        </button>
+      ) : null}
     </li>
   );
 }
@@ -758,7 +752,7 @@ function ThreeColumnMatrix({
               <h3 className="text-sm font-semibold text-foreground">
                 Available scopes
               </h3>
-              <HelpTooltip content="All scopes that exist for this Application. They can exist without being granted." />
+              <HelpTooltip content="All scopes that exist for this MCP server. They can exist without being granted." />
             </div>
             <button
               type="button"
@@ -1118,29 +1112,30 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 52,
+        approxWidth: 100,
+        // One visible action instead of a one-item overflow menu.
         cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "Revoke access",
-                disabled: deleting,
-                destructive: true,
-                onSelect: async () => {
-                  try {
-                    await deleteAssignment({
-                      rsId: applicationId,
-                      assignmentId: row.original.id,
-                    }).unwrap();
-                    toast.success("Access revoked.");
-                  } catch (err) {
-                    const apiErr = err as { data?: { error?: string } };
-                    toast.error(apiErr?.data?.error ?? "Couldn't revoke access.");
-                  }
-                },
-              },
-            ]}
-          />
+          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              onClick={async () => {
+                try {
+                  await deleteAssignment({
+                    rsId: applicationId,
+                    assignmentId: row.original.id,
+                  }).unwrap();
+                  toast.success("Access revoked.");
+                } catch (err) {
+                  const apiErr = err as { data?: { error?: string } };
+                  toast.error(apiErr?.data?.error ?? "Couldn't revoke access.");
+                }
+              }}
+            >
+              Revoke
+            </Button>
+          </div>
         ),
       },
     ],
@@ -1301,11 +1296,37 @@ function WhoHasAccessPanel({ applicationId }: { applicationId: string }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+/** The Access sub-pages that aren't top-level tabs, reachable from here. */
+const ACCESS_LINKS: Array<{ key: string; label: string }> = [
+  { key: "tools", label: "Tools" },
+  { key: "scopes", label: "Scopes" },
+  { key: "roles", label: "Roles" },
+  { key: "clients", label: "Clients" },
+  { key: "connections", label: "Connections & requests" },
+  { key: "consent-grants", label: "Consent grants" },
+];
+
 export default function ApplicationAccessPageV2() {
   const { application } = useApplicationContext();
 
   return (
     <div className="space-y-6">
+      <nav
+        aria-label="More access settings"
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:13.5px]"
+      >
+        <span className="text-(--color-text-muted)">Also on this MCP:</span>
+        {ACCESS_LINKS.map((l) => (
+          <Link
+            key={l.key}
+            to={`/applications/${application.id}/${l.key}`}
+            className="font-medium text-(--color-primary-text) underline-offset-2 hover:underline"
+          >
+            {l.label}
+          </Link>
+        ))}
+      </nav>
+
       <ThreeColumnMatrix applicationId={application.id} />
 
       <div>

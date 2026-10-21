@@ -74,7 +74,7 @@ import { readSavedLayout, writeSavedLayout } from "./savedLayout";
 import { SelectionCard, type SelectionActions, type SelectionSubject } from "./SelectionCard";
 import { StatusBar } from "./StatusBar";
 import { useWorkspaceSize } from "./useWorkspaceSize";
-import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
+import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge, type VisualNode } from "./types";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -699,7 +699,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     const run = ++layoutRun.current;
     const key = currentKey;
     const layer: "first" | "last" | undefined = refType(root) === "workload" ? "first" : refType(root) === "resource" ? "last" : undefined;
-    const nodes = visual.nodes.map((v) => ({
+    const nodes = groupResourcesByType(visual.nodes).map((v) => ({
       id: v.id,
       size: sizes.get(v.id)!,
       layer: v.id === rootId ? layer : undefined,
@@ -1334,6 +1334,38 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
       {evidencePanel && !inline ? evidencePanel : null}
     </div>
   );
+}
+
+/**
+ * The resource column, grouped by resource type: ELK keeps the order nodes are
+ * given in (`considerModelOrder`), so resources of one type (every SSM
+ * parameter, every S3 bucket) stack together and the column reads type by
+ * type. Only the resource column's own slots are reordered, stably; every
+ * other node keeps its place. The type is the server's (`type`, else the
+ * service); nothing is invented.
+ */
+function groupResourcesByType(nodes: VisualNode[]): VisualNode[] {
+  const RESOURCE_COLUMN = 3;
+  const slots: number[] = [];
+  nodes.forEach((v, i) => {
+    if (!v.overflow && columnOfKind(v.members[0].kind) === RESOURCE_COLUMN) slots.push(i);
+  });
+  if (slots.length < 2) return nodes;
+  const typeKey = (v: VisualNode) => {
+    const m = v.members[0];
+    const t = m.type && m.type !== "unknown" ? m.type : "";
+    // Within a type, specific resources before patterns (a pattern can be a wildcard).
+    return `${m.kind === "selector" ? 1 : 0}|${t}`;
+  };
+  const sorted = slots
+    .map((i, order) => ({ v: nodes[i], order }))
+    .sort((a, b) => typeKey(a.v).localeCompare(typeKey(b.v)) || a.order - b.order)
+    .map((x) => x.v);
+  const out = [...nodes];
+  slots.forEach((slot, k) => {
+    out[slot] = sorted[k];
+  });
+  return out;
 }
 
 /** The layout may run once this session's root has been ingested. */

@@ -1,247 +1,259 @@
-import { useMemo } from "react";
-import {
-  Activity,
-  ExternalLink,
-  KeyRound,
-  MoreHorizontal,
-  PlayCircle,
-  ShieldCheck,
-  Trash2,
-  Users,
-  Wrench,
-} from "lucide-react";
+/**
+ * `ApplicationsTable` — the MCP list card: status pills + search in the card
+ * header, then one row per MCP. No overflow menu: a row that needs setup
+ * shows a "Finish setup" button; every other row shows nothing and opens the
+ * MCP on click (delete and the setup sub-pages live on the MCP page).
+ *
+ * Per-row columns that the list endpoint doesn't carry (identity provider,
+ * tools with a permission, agents) are read per row from the same endpoints
+ * the MCP page uses, so RTK Query shares the cache between the two.
+ */
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useMemo, type ReactNode } from "react";
+import { Search } from "lucide-react";
+
+import { useGetActivationPreviewQuery } from "@/app/api/setupWizardApi";
+import { useListConnectionsQuery } from "@/app/api/agentIdentityApi";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
-import {
-  AdaptiveTable,
-  type AdaptiveColumn,
-} from "@/components/ui/adaptive-table";
+import { Input } from "@/components/ui/input";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { TableCard } from "@/theme/components/cards";
+import { cn } from "@/lib/utils";
+
 import type { Application } from "../types";
-import type { computeReadiness } from "../lib/computeReadiness";
 import {
-  StatusBadge,
-  toneFromReadiness,
-} from "./ApplicationConsole";
+  isAgentConnection,
+  mcpStatusBadgeClass,
+  useMcpIdentityProviderLabel,
+  type McpStatus,
+} from "../lib/mcpSignals";
+
+export type McpStatusFilter = "all" | "enforcing" | "setup";
 
 export interface ApplicationTableRow {
   application: Application;
-  readiness: ReturnType<typeof computeReadiness>;
-  next: {
-    label: string;
-    href: string;
-    primary: boolean;
-  };
+  status: McpStatus;
+  /** Where "Finish setup" continues — the first unfinished setup step. */
+  setupHref: string;
 }
 
-function readinessCopy(row: ApplicationTableRow) {
-  if (row.readiness.launch.state === "ok") return "Ready to launch";
-  if (row.readiness.protection.state !== "ok") return "Protection not verified";
-  if (row.readiness.tools.state !== "ok") return "Tools need review";
-  if (row.readiness.access.state !== "ok") return "Access needs setup";
-  return row.readiness.launch.status;
+const MUTED = "text-[length:13.5px] text-(--color-text-muted)";
+
+function IdentityProviderCell({ applicationId }: { applicationId: string }) {
+  const { label, title } = useMcpIdentityProviderLabel(applicationId);
+  return (
+    <span className="text-[length:13.5px] text-(--color-text)" title={title}>
+      {label ?? "—"}
+    </span>
+  );
 }
 
-function riskTone(row: ApplicationTableRow): "danger" | "warning" | "success" | "neutral" {
-  if (row.readiness.launch.state === "err" || row.readiness.tools.state === "err") {
-    return "danger";
+function ToolsWithPermissionCell({ application }: { application: Application }) {
+  const { data, isError } = useGetActivationPreviewQuery(application.id);
+  if (data) {
+    return (
+      <span className="text-[length:13.5px] tabular-nums text-(--color-text)">
+        {data.tools.mapped} of {data.tools.total}
+      </span>
+    );
   }
-  if (row.readiness.tools.state === "warn" || row.readiness.launch.state === "warn") {
-    return "warning";
+  // Preview unavailable (e.g. before the first tool scan): show what the list knows.
+  if (isError && typeof application.tools_count === "number") {
+    return (
+      <span className={MUTED} title="Permission mapping isn't available yet">
+        — of {application.tools_count}
+      </span>
+    );
   }
-  if (row.readiness.launch.state === "ok") return "success";
-  return "neutral";
+  return <span className={MUTED}>—</span>;
 }
 
-function lastSignal(application: Application) {
-  if (application.last_scan_completed_at) {
-    return `Manifest ${new Date(application.last_scan_completed_at).toLocaleDateString()}`;
-  }
-  if (application.last_validated_at) {
-    return `Checked ${new Date(application.last_validated_at).toLocaleDateString()}`;
-  }
-  return "No runtime signal";
+function AgentsCell({ applicationId }: { applicationId: string }) {
+  const { data } = useListConnectionsQuery(applicationId);
+  if (!data) return <span className={MUTED}>—</span>;
+  const count = data.items.filter(isAgentConnection).length;
+  return <span className="text-[length:13.5px] tabular-nums text-(--color-text)">{count}</span>;
 }
 
-const ROW_ACTIONS: Array<{
-  key: string;
-  label: string;
-  tab: string;
-  icon: typeof ShieldCheck;
-}> = [
-  { key: "overview", label: "Open overview", tab: "overview", icon: ExternalLink },
-  { key: "setup", label: "Setup", tab: "setup", icon: ShieldCheck },
-  { key: "tools", label: "Review tools", tab: "tools", icon: Wrench },
-  { key: "access", label: "Manage access", tab: "access", icon: KeyRound },
-  { key: "clients", label: "Clients", tab: "clients", icon: Users },
-  { key: "test", label: "Run test login", tab: "test", icon: PlayCircle },
-  { key: "activity", label: "Monitor", tab: "activity", icon: Activity },
-];
+function FilterPills({
+  value,
+  onChange,
+  options,
+}: {
+  value: McpStatusFilter;
+  onChange: (value: McpStatusFilter) => void;
+  options: Array<{ key: McpStatusFilter; label: string; count: number }>;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Filter by status"
+      className="inline-flex items-center gap-0.5 rounded-lg bg-(--color-surface-subtle) p-1"
+    >
+      {options.map((o) => {
+        const active = o.key === value;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.key)}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[length:13.5px] transition-colors",
+              active
+                ? "bg-(--color-surface-raised) font-semibold text-(--color-text) shadow-(--shadow-pill)"
+                : "font-medium text-(--color-text-muted) hover:text-(--color-text)",
+            )}
+          >
+            {o.label}
+            <span className="tabular-nums text-(--color-text-muted)">{o.count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ApplicationsTable({
   rows,
+  counts,
+  filter,
+  onFilterChange,
+  search,
+  onSearchChange,
   onOpenApplication,
-  onNavigateToTab,
-  onDeleteApplication,
+  onFinishSetup,
+  emptyState,
 }: {
   rows: ApplicationTableRow[];
+  counts: Record<McpStatusFilter, number>;
+  filter: McpStatusFilter;
+  onFilterChange: (value: McpStatusFilter) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
   onOpenApplication: (application: Application) => void;
-  onNavigateToTab: (applicationId: string, tab: string) => void;
-  onDeleteApplication: (application: Application) => void;
+  onFinishSetup: (row: ApplicationTableRow) => void;
+  /** Rendered in place of the table when there are no rows to show. */
+  emptyState?: ReactNode;
 }) {
   const columns = useMemo<AdaptiveColumn<ApplicationTableRow>[]>(
     () => [
       {
-        id: "application",
-        header: "Application",
+        id: "mcp",
+        header: "MCP",
         alwaysVisible: true,
         approxWidth: 300,
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-(--color-text)">
-              {row.original.application.name}
-            </div>
-            <div className="mt-1 truncate font-mono text-[12px] text-(--color-text-subtle)">
-              {row.original.application.resource_uri}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: "readiness",
-        header: "Readiness",
-        priority: 1,
-        approxWidth: 180,
-        cell: ({ row }) => (
-          <StatusBadge tone={toneFromReadiness(row.original.readiness.launch.state)}>
-            {readinessCopy(row.original)}
-          </StatusBadge>
-        ),
-      },
-      {
-        id: "risk",
-        header: "Risk",
-        priority: 2,
-        approxWidth: 140,
         cell: ({ row }) => {
-          const tone = riskTone(row.original);
+          const a = row.original.application;
           return (
-            <StatusBadge tone={tone}>
-              {tone === "danger" ? "High" : tone === "warning" ? "Needs review" : "Low"}
-            </StatusBadge>
+            <div className="min-w-0">
+              <div className="truncate text-[length:14px] font-semibold text-(--color-text)" title={a.name}>
+                {a.name}
+              </div>
+              {a.resource_uri ? (
+                <div
+                  className="mt-0.5 truncate font-mono text-[length:12.5px] text-(--color-text-muted)"
+                  title={a.resource_uri}
+                >
+                  {a.resource_uri}
+                </div>
+              ) : null}
+            </div>
           );
         },
       },
       {
-        id: "users",
-        header: "Users",
-        priority: 3,
-        approxWidth: 100,
+        id: "status",
+        header: "Status",
+        priority: 1,
+        approxWidth: 140,
         cell: ({ row }) => (
-          <span className="text-sm text-(--color-text)">
-            {row.original.application.end_users_count ?? 0}
+          <span className={mcpStatusBadgeClass(row.original.status)}>
+            <span className="bdot" />
+            {row.original.status.label}
           </span>
         ),
       },
       {
-        id: "lastSignal",
-        header: "Last signal",
+        id: "idp",
+        header: "Identity provider",
+        priority: 2,
+        approxWidth: 170,
+        cell: ({ row }) => <IdentityProviderCell applicationId={row.original.application.id} />,
+      },
+      {
+        id: "tools",
+        header: "Tools with a permission",
+        priority: 3,
+        approxWidth: 170,
+        cell: ({ row }) => <ToolsWithPermissionCell application={row.original.application} />,
+      },
+      {
+        id: "agents",
+        header: "Agents",
         priority: 4,
-        approxWidth: 190,
-        cell: ({ row }) => (
-          <span className="text-sm text-(--color-text-muted)">{lastSignal(row.original.application)}</span>
-        ),
+        approxWidth: 90,
+        cell: ({ row }) => <AgentsCell applicationId={row.original.application.id} />,
       },
       {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 72,
+        approxWidth: 130,
         enableHiding: false,
-        cell: ({ row }) => (
-          <ApplicationActions
-            row={row.original}
-            onNavigateToTab={onNavigateToTab}
-            onDeleteApplication={onDeleteApplication}
-          />
-        ),
+        cell: ({ row }) =>
+          row.original.status.enforcing ? null : (
+            <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+              <Button size="sm" className="text-white" onClick={() => onFinishSetup(row.original)}>
+                Finish setup
+              </Button>
+            </div>
+          ),
       },
     ],
-    [onDeleteApplication, onNavigateToTab],
+    [onFinishSetup],
   );
 
   return (
     <TableCard>
-      <CardContent variant="flush">
-        <AdaptiveTable
-          tableId="applications"
-          data={rows}
-          columns={columns}
-          enableSelection={false}
-          enableExpansion={false}
-          onRowClick={(row) => onOpenApplication(row.application)}
-          getRowId={(row) => row.application.id}
-          pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25, 50], alwaysVisible: rows.length > 10 }}
+      <div className="flex flex-col gap-3 border-b border-(--color-border-subtle) px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <FilterPills
+          value={filter}
+          onChange={onFilterChange}
+          options={[
+            { key: "all", label: "All", count: counts.all },
+            { key: "enforcing", label: "Enforcing", count: counts.enforcing },
+            { key: "setup", label: "Needs setup", count: counts.setup },
+          ]}
         />
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-(--color-text-muted)" />
+          <Input
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search"
+            aria-label="Search MCPs"
+            className="h-9 pl-9"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+      </div>
+      <CardContent variant="flush">
+        {emptyState ?? (
+          <AdaptiveTable
+            tableId="applications"
+            data={rows}
+            columns={columns}
+            enableSelection={false}
+            enableExpansion={false}
+            onRowClick={(row) => onOpenApplication(row.application)}
+            getRowId={(row) => row.application.id}
+            pagination={{ pageSize: 20, pageSizeOptions: [20, 50, 100], alwaysVisible: rows.length > 20 }}
+          />
+        )}
       </CardContent>
     </TableCard>
-  );
-}
-
-function ApplicationActions({
-  row,
-  onNavigateToTab,
-  onDeleteApplication,
-}: {
-  row: ApplicationTableRow;
-  onNavigateToTab: (applicationId: string, tab: string) => void;
-  onDeleteApplication: (application: Application) => void;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={`Actions for ${row.application.name}`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreHorizontal className="size-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-        <DropdownMenuLabel className="max-w-48 truncate text-(--color-text-subtle)">
-          {row.application.name}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {ROW_ACTIONS.map(({ key, label, tab, icon: Icon }) => (
-          <DropdownMenuItem
-            key={key}
-            onSelect={() => onNavigateToTab(row.application.id, tab)}
-          >
-            <Icon className="size-4 text-(--color-text-muted)" />
-            {label}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={() => onDeleteApplication(row.application)}
-        >
-          <Trash2 className="size-4" />
-          Delete application
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

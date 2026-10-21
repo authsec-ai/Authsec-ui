@@ -16,6 +16,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { Search } from "lucide-react";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { PageAbout } from "@/components/console/PageAbout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -65,7 +66,7 @@ const KIND_GROUPS: { key: string; label: string; kinds: LogKind[] }[] = [
   { key: "scan", label: "Scans", kinds: ["scan_queued", "scan_running", "scan_finished", "scan_failed"] },
   { key: "published", label: "Publications", kinds: ["publication_published"] },
   { key: "classified", label: "Classifications", kinds: ["classification_decided"] },
-  { key: "connection", label: "Connections", kinds: ["connection_added", "connection_revoked"] },
+  { key: "connection", label: "Accounts", kinds: ["connection_added", "connection_revoked"] },
   { key: "sighting", label: "Sightings", kinds: ["sighting_seen"] },
   { key: "signin", label: "Sign-ins", kinds: ["sign_in"] },
 ];
@@ -167,6 +168,10 @@ function LogsPreviewPage() {
       }
       description="Scans, publications, classifications and sign-ins, newest first."
     >
+      <PageAbout>
+        A preview of how <strong className="font-semibold">Logs</strong> will show scans, syncs and access events. Every event below is a
+        sample; none came from your workspace.
+      </PageAbout>
       {failures.length && kindGroup !== "failed" ? (
         <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-2">
           <IgaBadge tone="warning">

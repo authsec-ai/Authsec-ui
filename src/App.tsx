@@ -28,6 +28,11 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 const EndUsersPage = React.lazy(() => import("./features/end-users/EndUsersPage"));
 const TeamPage = React.lazy(() => import("./features/team/TeamPage"));
 const TrustedIssuersPage = React.lazy(() => import("./features/settings/TrustedIssuersPage"));
+const WorkspaceSettingsPage = React.lazy(() => import("./features/settings/WorkspaceSettingsPage").then((m) => ({ default: m.WorkspaceSettingsPage })));
+const RegisterAgentPage = React.lazy(() => import("./features/agents/RegisterAgentPage"));
+const CreateServiceAccountPage = React.lazy(() => import("./features/service-accounts/CreateServiceAccountPage"));
+const ProfilePage = React.lazy(() => import("./features/profile/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+import { ConsoleHub } from "./components/console/ConsoleHub";
 
 
 const DevBypassPage = import.meta.env.DEV
@@ -81,9 +86,9 @@ const GoogleOAuthCallbackPage = React.lazy(() => import("./features/discovery/cl
 import { IgaLayout } from "./components/layout/IgaLayout";
 const AdminVoiceAgentPage = React.lazy(() => import("./features/voice-auth/AdminVoiceAgentPage").then((m) => ({ default: m.AdminVoiceAgentPage })));
 const LogsConfigurationPage = React.lazy(() => import("./features/logging/LogsConfigurationPage").then((m) => ({ default: m.LogsConfigurationPage })));
-const AuthLogsPage = React.lazy(() => import("./features/logging/AuthLogsPage").then((m) => ({ default: m.AuthLogsPage })));
-const AuditLogsPage = React.lazy(() => import("./features/logging/AuditLogsPage").then((m) => ({ default: m.AuditLogsPage })));
-const M2MLogsPage = React.lazy(() => import("./features/logging/M2MLogsPage").then((m) => ({ default: m.M2MLogsPage })));
+const ConsoleLogsPage = React.lazy(() => import("./features/logging/LogsPage"));
+const AuthenticationPoliciesPage = React.lazy(() => import("./features/policies/AuthenticationPoliciesPage"));
+const NewIdentityProviderPage = React.lazy(() => import("./features/identity-providers/NewIdentityProviderPage"));
 const ScimConnectionsPage = React.lazy(() => import("./features/scim-connections/ScimConnectionsPage"));
 const DirectorySyncPage = React.lazy(() => import("./features/directory-sync/DirectorySyncPage"));
 const RolesPage = React.lazy(() => import("./features/roles/RolesPage").then((m) => ({ default: m.RolesPage })));
@@ -985,7 +990,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <EndUsersPage />
+                          <ConsoleHub id="users">
+                            <EndUsersPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1005,7 +1012,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AccessControlPage initialTab="roles" />
+                          <ConsoleHub id="policies">
+                            <AccessControlPage initialTab="roles" />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1015,7 +1024,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AccessControlPage initialTab="scopes" />
+                          <ConsoleHub id="policies">
+                            <AccessControlPage initialTab="scopes" />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1025,7 +1036,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AccessControlPage initialTab="assignments" />
+                          <ConsoleHub id="policies">
+                            <AccessControlPage initialTab="assignments" />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1050,7 +1063,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <TeamPage />
+                          <ConsoleHub id="users">
+                            <TeamPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1060,11 +1075,62 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <TrustedIssuersPage />
+                          <ConsoleHub id="settings">
+                            <TrustedIssuersPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ConsoleHub id="settings">
+                            <WorkspaceSettingsPage />
+                          </ConsoleHub>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ProfilePage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Setup flows for Agents & services. Not inside the hub: they are
+                      full-page wizards, not tabs. */}
+                  <Route
+                    path="/agents/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <RegisterAgentPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/service-accounts/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <CreateServiceAccountPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Plain-word addresses for the grouped pages. */}
+                  <Route path="/home" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/mcp-servers" element={<Navigate to="/applications" replace />} />
+                  <Route path="/people" element={<Navigate to="/end-users" replace />} />
+                  <Route path="/sign-in-methods" element={<Navigate to="/identity-providers" replace />} />
                   {import.meta.env.DEV && DevBypassPage && (
                     <Route
                       path="/dev/bypass"
@@ -1288,7 +1354,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AuthenticationPage />
+                          <ConsoleHub id="users">
+                            <AuthenticationPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1364,7 +1432,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <ScimConnectionsPage />
+                          <ConsoleHub id="settings">
+                            <ScimConnectionsPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1375,45 +1445,53 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <DirectorySyncPage />
+                          <ConsoleHub id="settings">
+                            <DirectorySyncPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
                   />
 
+                  {/* Logs: one page, every event type as a filter (UX proposal).
+                      The old per-type addresses open it on that type. */}
                   <Route
                     path="/logs"
-                    element={<Navigate to="/logs/auth" replace />}
-                  />
-
-                  <Route
-                    path="/logs/auth"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AuthLogsPage />
+                          <ConsoleLogsPage />
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/logs/auth" element={<Navigate to="/logs?type=sign-in" replace />} />
+                  <Route path="/logs/audit" element={<Navigate to="/logs?type=admin-change" replace />} />
+                  <Route path="/logs/m2m" element={<Navigate to="/logs?type=machine-token" replace />} />
+
+                  {/* Policies: authentication rules, roles, permissions. */}
+                  <Route path="/policies" element={<Navigate to="/policies/authentication" replace />} />
+                  <Route
+                    path="/policies/authentication"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <AppLayout>
+                          <ConsoleHub id="policies">
+                            <AuthenticationPoliciesPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
                   />
 
+                  {/* New identity provider: opened from Add MCP, Register agent
+                      or Users; "Save and return" goes back with it selected. */}
                   <Route
-                    path="/logs/audit"
+                    path="/identity-providers/new"
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <AuditLogsPage />
-                        </AppLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  <Route
-                    path="/logs/m2m"
-                    element={
-                      <ProtectedRoute requireProject>
-                        <AppLayout>
-                          <M2MLogsPage />
+                          <NewIdentityProviderPage />
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1424,7 +1502,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <LogsConfigurationPage />
+                          <ConsoleHub id="settings">
+                            <LogsConfigurationPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }
@@ -1520,7 +1600,9 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <AppLayout>
-                          <CustomDomainsPage />
+                          <ConsoleHub id="settings">
+                            <CustomDomainsPage />
+                          </ConsoleHub>
                         </AppLayout>
                       </ProtectedRoute>
                     }

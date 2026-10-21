@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
+import { useConsoleHub } from "./hub-context";
 
 /**
  * `ConsolePage` — the single canonical shell for every workspace console page.
@@ -18,8 +21,37 @@ import type { ReactNode } from "react";
  * Body content is whatever the page needs — typically a <ConsoleFilterBar />
  * followed by a <TableCard> wrapping an <AdaptiveTable />.
  */
+export interface Crumb {
+  label: string;
+  /** Omit on the last crumb: the page you are on. */
+  to?: string;
+}
+
+/**
+ * "MCP / Add" above the heading. One breadcrumb or none (UX proposal): a
+ * top-level page has none, since its heading already names it; only a page
+ * one level deep shows one.
+ */
+export function PageCrumbs({ crumbs }: { crumbs: Crumb[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="sh-crumbs">
+      {crumbs.map((c, i) => (
+        <Fragment key={`${c.label}-${i}`}>
+          {i > 0 ? <span aria-hidden>/</span> : null}
+          {c.to ? (
+            <Link to={c.to}>{c.label}</Link>
+          ) : (
+            <span aria-current="page">{c.label}</span>
+          )}
+        </Fragment>
+      ))}
+    </nav>
+  );
+}
+
 export function ConsolePage({
   title,
+  crumbs,
   description,
   actions,
   variant = "default",
@@ -27,6 +59,8 @@ export function ConsolePage({
   children,
 }: {
   title: ReactNode;
+  /** Breadcrumb above the heading, for a page one level deep only. */
+  crumbs?: Crumb[];
   /** One-line page description. Kept short — the CSS caps the line length. */
   description?: ReactNode;
   /** Right-aligned header actions (e.g. Docs + a primary Create button). */
@@ -49,11 +83,25 @@ export function ConsolePage({
   skin?: string;
   children: ReactNode;
 }) {
+  const hub = useConsoleHub();
+  // Hosted as a tab of a ConsoleHub: the hub already renders the shell and
+  // the page title, so emit only the body and hand the actions to the hub.
+  if (hub) {
+    return (
+      <div data-skin={skin}>
+        {actions && hub.actionsSlot
+          ? createPortal(<div className="flex shrink-0 items-center gap-2">{actions}</div>, hub.actionsSlot)
+          : null}
+        <div className="space-y-4">{children}</div>
+      </div>
+    );
+  }
   return (
     <div data-cr data-skin={skin}>
       <div className={variant === "object" ? "console-page console-page--object" : "console-page"}>
         <header className="section-header">
           <div className={variant === "object" ? "sh-main min-w-0" : "min-w-0"}>
+            {crumbs?.length ? <PageCrumbs crumbs={crumbs} /> : null}
             <h1 className="sh-title">{title}</h1>
             {description ? <p className="sh-desc">{description}</p> : null}
           </div>

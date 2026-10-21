@@ -88,7 +88,7 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
         body="Applying may still be refused. Retry, or check AWS access."
         actionLabel="Retry"
         onAction={() => void q.refetch()}
-        secondaryLabel="Open Connections"
+        secondaryLabel="Open Accounts"
         secondaryHref="/iga/connections"
       />
     );
@@ -101,13 +101,13 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
   const body = !r.available
     ? r.reason || "Applying policies is turned off on this server."
     : accounts.length === 0
-      ? "No AWS account is connected yet. Connect one in Connections first."
+      ? "No AWS account is connected yet. Connect one in Accounts first."
       : `${notReady.length === 1 ? `Account ${notReady[0].account_id} needs` : `Accounts ${notReady.map((a) => a.account_id).join(", ")} need`} AWS access set up before AuthSec can apply policies there. Until then AuthSec can read ${notReady.length === 1 ? "it" : "them"} but not change ${notReady.length === 1 ? "it" : "them"}. ${[...new Set(notReady.map((a) => readinessWords(a.reason)))].map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(". ")}.`;
   return (
     <SetupNotice
       title="AWS access is not set up yet"
       body={body}
-      actionLabel={r.available && accounts.length > 0 ? "Open Connections" : undefined}
+      actionLabel={r.available && accounts.length > 0 ? "Open Accounts" : undefined}
       actionHref={r.available && accounts.length > 0 ? "/iga/connections" : undefined}
     />
   );

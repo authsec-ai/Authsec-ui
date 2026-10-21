@@ -136,7 +136,7 @@ function SourceRow({
               {github.name || github.native_id}
             </Link>
           ) : (
-            "not in the connections list"
+            "not in the accounts list"
           )}
           {" · "}mapped <Timestamp iso={source.created_at} />
         </p>
@@ -294,7 +294,7 @@ export default function IacSection() {
           <p className="text-[13px] text-(--color-text-muted)">
             Repositories are mapped per AWS account. Connect an account first, then come back here.{" "}
             <Link to="/iga/connections" className="font-medium text-(--color-primary-text) underline">
-              Open Connections
+              Open Accounts
             </Link>
           </p>
         </Panel>

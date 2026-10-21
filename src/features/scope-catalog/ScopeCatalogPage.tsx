@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Link2, Plus, Trash2 } from "lucide-react";
+import { Link2, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/select";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
@@ -184,34 +183,28 @@ export default function ScopeCatalogPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 76,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              row.original.application
-                ? {
-                    label: "Open application access",
-                    icon: <KeyRound className="size-4" />,
-                    onSelect: () => navigate(`/applications/${row.original.application?.id}/access`),
-                  }
-                : {
-                    label: "Attach to application",
-                    icon: <Link2 className="size-4" />,
-                    onSelect: () => {
-                      setAttachCatalogId(row.original.id);
-                      setAttachOpen(true);
-                    },
-                  },
-              {
-                label: "Preview removal",
-                icon: <Trash2 className="size-4" />,
-                destructive: true,
-                disabled: true,
-                onSelect: () => undefined,
-              },
-            ]}
-          />
-        ),
+        approxWidth: 120,
+        cell: ({ row }) =>
+          row.original.application ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/applications/${row.original.application?.id}/access`)}
+            >
+              Open access
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAttachCatalogId(row.original.id);
+                setAttachOpen(true);
+              }}
+            >
+              Attach
+            </Button>
+          ),
       },
     ],
     [navigate],

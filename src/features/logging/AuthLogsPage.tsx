@@ -4,16 +4,16 @@ import { motion } from "framer-motion";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import type { AuthLog } from "../../types/entities";
-import { Settings, X, AlertCircle } from "lucide-react";
+import { Download, Settings, X, AlertCircle } from "lucide-react";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
   AuthLogsView,
-  AuthLogsViewSkeleton,
   AuthLogsFilterCard,
   UserAttributeSelectorModal,
   type UserAttribute,
 } from "./components/auth-logs";
 import type { AuthLogsFilterParams } from "./components/auth-logs/AuthLogsFilterCard";
+import { downloadJson } from "./components/logFormat";
 import { useGetLogsQuery } from "../../app/api/logsApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { Alert, AlertDescription } from "../../components/ui/alert";
@@ -78,18 +78,7 @@ export function AuthLogsPage() {
     });
   }, [apiLogs, userSelection]);
 
-  const handleExport = () => {
-    const logText = filteredLogs
-      .map((log) => JSON.stringify(log, null, 2))
-      .join("\n\n");
-    const blob = new Blob([logText], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `auth-logs-${new Date().toISOString()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleExport = () => downloadJson(filteredLogs, "sign-in-logs");
 
   const handleFiltersChange = (newFilters: AuthLogsFilterParams) => {
     setFilters(newFilters);
@@ -112,17 +101,24 @@ export function AuthLogsPage() {
 
   return (
     <ConsolePage
-      title="Auth Logs"
-      description="Monitor authentication attempts across this workspace"
+      title="Sign-ins"
+      description="Every time a person or agent signs in: who, how, and whether it worked."
       actions={
-        <Button
-          onClick={() => navigate("/logs/configure")}
-          className="gap-2 text-white"
-          data-tour-id="logs-configure"
-        >
-          <Settings className="h-4 w-4" />
-          Configure Logs
-        </Button>
+        <>
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/logs/configure")}
+            className="gap-2"
+            data-tour-id="logs-configure"
+          >
+            <Settings className="h-4 w-4" />
+            Log forwarding
+          </Button>
+          <Button variant="outline" onClick={handleExport} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </>
       }
     >
       <div className="space-y-6">
@@ -182,18 +178,14 @@ export function AuthLogsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
         >
-          {isLoading ? (
-            <AuthLogsViewSkeleton />
-          ) : (
-            <AuthLogsView
-              logs={filteredLogs}
-              onExport={handleExport}
-              onRefresh={refetch}
-              isRefreshing={isFetching}
-              pagination={pagination}
-              onPageChange={handlePageChange}
-            />
-          )}
+          <AuthLogsView
+            logs={filteredLogs}
+            loading={isLoading}
+            onRefresh={refetch}
+            isRefreshing={isFetching}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+          />
         </motion.div>
       </div>
 

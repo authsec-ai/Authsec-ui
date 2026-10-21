@@ -24,6 +24,7 @@ import { format } from "date-fns";
 import { Info, Network } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { PageAbout } from "@/components/console/PageAbout";
 import { DecisionBanner, StatusBadge, type ConsoleTone } from "@/components/console/status";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
@@ -121,6 +122,7 @@ export function ObjectShell({
   object,
   vanished = false,
   permission,
+  about,
   children,
 }: {
   ws: string;
@@ -146,6 +148,11 @@ export function ObjectShell({
   vanished?: boolean;
   /** The permission a 403 on this page's own reads names (default iga:read, the graph's). */
   permission?: string;
+  /**
+   * The page's one-line "What is this page?". On the Access Graph tab the line
+   * says how to read the graph instead.
+   */
+  about?: ReactNode;
   children: ReactNode;
 }) {
   // A gated tab is offered only once the deployment is known to serve it.
@@ -180,6 +187,23 @@ export function ObjectShell({
     </TableCard>
   );
 
+  const aboutLine =
+    key === "graph" ? (
+      provider === "k8s" ? (
+        <>
+          The <strong className="font-semibold">Access Graph</strong> reads left to right: the workload, the ServiceAccount it runs as, and the
+          rules its bindings grant, each rule naming its verbs and resources. A wildcard rule has a red dashed outline.
+        </>
+      ) : (
+        <>
+          The <strong className="font-semibold">Access Graph</strong> reads left to right: the workload, the identity it runs as, what that
+          identity&rsquo;s policies allow (the actions are on each line) and the resource with its type. A wildcard has a red dashed outline.
+        </>
+      )
+    ) : (
+      about
+    );
+
   let body: ReactNode;
   if (activeTab.state === "unknown") body = panel({ kind: "not_found" });
   else if (!object && failure) body = panel(failure);
@@ -187,6 +211,7 @@ export function ObjectShell({
   else
     body = (
       <>
+        {aboutLine ? <PageAbout>{aboutLine}</PageAbout> : null}
         {vanished ? (
           <DecisionBanner
             tone="neutral"

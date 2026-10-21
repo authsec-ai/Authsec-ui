@@ -1,35 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+/**
+ * /service-accounts — machine principals that call MCP servers with no person
+ * signed in. Also listed on /agents; this page keeps the full management view.
+ * Row click opens the drawer (edit, rotate secret, delete); there are no row menus.
+ */
+
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ClipboardCopy, ExternalLink, KeyRound, Pencil, Plus, RotateCcw, Server, Trash2 } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { ExternalLink, Plus, Server } from "lucide-react";
 
 import {
   useListWorkspaceServiceAccountsQuery,
-  useCreateWorkspaceServiceAccountMutation,
-  useUpdateWorkspaceServiceAccountMutation,
-  useDeleteWorkspaceServiceAccountMutation,
-  useProvisionWorkloadCredentialMutation,
-  useRotateWorkloadCredentialMutation,
-  useListServiceAccountAccessQuery,
   type WorkspaceServiceAccount,
 } from "@/app/api/agentIdentityApi";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   DensityToggle,
   EntityCell,
   type ConsoleFilterOption,
@@ -37,37 +25,14 @@ import {
 import { MetricStrip } from "@/components/console/MetricStrip";
 import { TableCard } from "@/theme/components/cards";
 import { ConsolePage } from "@/components/console/ConsolePage";
-import {
-  DrawerHeader,
-  DrawerBody,
-  DrawerSection,
-  DetailGrid,
-  DetailRow,
-  CopyField,
-  DrawerEmpty,
-  DrawerFooter,
-} from "@/components/console/detail";
-import { RightDrawer } from "@/components/primitives/RightDrawer";
-import { formatRoleName } from "@/utils/roleName";
+import { StatusBadge } from "@/components/console/status";
+
+import { ServiceAccountDetail, ServiceAccountReach } from "./components/ServiceAccountDetail";
+import { AUTH_METHOD_LABEL, SA_STATUS, authMethodOf, saStatusOf } from "./components/serviceAccountStatus";
 
 const DOCS_URL = "https://docs.authsec.dev/getting-started";
-
-// ── Auth-method helpers ───────────────────────────────────────────────────────
-
-type AuthMethod = "credential" | "kubernetes" | "none";
-
-function authMethodOf(sa: WorkspaceServiceAccount): AuthMethod {
-  if (sa.spiffe_id) return "kubernetes";
-  if (sa.oauth_client_id) return "credential";
-  return "none";
-}
-
-const AUTH_BADGE: Record<AuthMethod, { label: string; variant: "default" | "outline" | "secondary" }> =
-  {
-    credential: { label: "Secret / JWT", variant: "default" },
-    kubernetes: { label: "Kubernetes", variant: "secondary" },
-    none: { label: "No credential", variant: "outline" },
-  };
+const SMALL_TEXT = "text-[length:var(--font-size-body-xs)]";
+const CREATE_URL = "/agents/new?type=service";
 
 // ── Filter definitions ────────────────────────────────────────────────────────
 
@@ -75,7 +40,7 @@ type FilterKey = "all" | "credential" | "kubernetes" | "no_credential";
 
 const FILTER_DEFS: ConsoleFilterOption[] = [
   { key: "all", label: "All" },
-  { key: "credential", label: "Credential (M2M)" },
+  { key: "credential", label: "Client secret / JWT" },
   { key: "kubernetes", label: "Kubernetes" },
   { key: "no_credential", label: "No credential" },
 ];
@@ -93,695 +58,13 @@ function applyFilter(items: WorkspaceServiceAccount[], filter: FilterKey): Works
   }
 }
 
-// ── Create wizard ─────────────────────────────────────────────────────────────
-
-type WizardAuthChoice = "secret" | "jwks" | "kubernetes";
-type WizardStep = "form" | "result";
-
-const AUTH_CHOICE_CARDS: {
-  method: WizardAuthChoice;
-  title: string;
-  desc: string;
-}[] = [
-  {
-    method: "secret",
-    title: "Client secret",
-    desc: "Generates a client_id + secret. Use with the client_credentials grant for any server-to-server call.",
-  },
-  {
-    method: "jwks",
-    title: "Private-key JWT",
-    desc: "You supply a JWKS URI. AuthSec verifies your private-key signature — no shared secret to rotate.",
-  },
-  {
-    method: "kubernetes",
-    title: "Kubernetes / SPIFFE",
-    desc: "Your pod presents a SPIFFE SVID at runtime. Configured per MCP server, not here. Guidance only.",
-  },
-];
-
-interface CreateResult {
-  sa: WorkspaceServiceAccount;
-  authChoice: WizardAuthChoice;
-  credential?: { client_id: string; auth_method: string; client_secret?: string };
-}
-
-function CreateServiceAccountDialog({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onCreated: (sa: WorkspaceServiceAccount) => void;
-}) {
-  const [step, setStep] = useState<WizardStep>("form");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [ownerEmail, setOwnerEmail] = useState("");
-  const [ownerTeam, setOwnerTeam] = useState("");
-  const [authChoice, setAuthChoice] = useState<WizardAuthChoice>("secret");
-  const [jwksUri, setJwksUri] = useState("");
-  const [result, setResult] = useState<CreateResult | null>(null);
-  const [createSA, { isLoading: creating }] = useCreateWorkspaceServiceAccountMutation();
-  const [provisionCred, { isLoading: provisioning }] = useProvisionWorkloadCredentialMutation();
-  const isLoading = creating || provisioning;
-
-  const reset = () => {
-    setStep("form");
-    setName("");
-    setDescription("");
-    setOwnerEmail("");
-    setOwnerTeam("");
-    setAuthChoice("secret");
-    setJwksUri("");
-    setResult(null);
-  };
-
-  const handleCreate = async () => {
-    if (!name.trim()) {
-      toast.error("Name is required.");
-      return;
-    }
-    if (!ownerEmail.trim()) {
-      toast.error("An accountable owner is required for every agent.");
-      return;
-    }
-    if (authChoice === "jwks" && !jwksUri.trim()) {
-      toast.error("JWKS URI is required for private-key JWT.");
-      return;
-    }
-    try {
-      const sa = await createSA({
-        name: name.trim(),
-        owner_email: ownerEmail.trim(),
-        ...(ownerTeam.trim() ? { owner_team: ownerTeam.trim() } : {}),
-        ...(description.trim() ? { description: description.trim() } : {}),
-      }).unwrap();
-
-      let credential: CreateResult["credential"] | undefined;
-      if (authChoice === "secret") {
-        credential = await provisionCred({ saId: sa.id, use_client_secret: true }).unwrap();
-      } else if (authChoice === "jwks") {
-        credential = await provisionCred({ saId: sa.id, jwks_uri: jwksUri.trim() }).unwrap();
-      }
-
-      setResult({ sa, authChoice, credential });
-      setStep("result");
-      onCreated(sa);
-      toast.success("Service account created.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't create service account.");
-    }
-  };
-
-  const copy = (val: string) => {
-    void navigator.clipboard.writeText(val);
-    toast.success("Copied");
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) reset();
-        onOpenChange(v);
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create service account</DialogTitle>
-          <DialogDescription>
-            {step === "form"
-              ? "A service account is a machine principal. Pick an auth method — you can change it later."
-              : "Save these values now — the secret won't be shown again."}
-          </DialogDescription>
-        </DialogHeader>
-
-        {step === "form" ? (
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="sa-name">Name</Label>
-              <Input
-                id="sa-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="data-pipeline-worker"
-                autoComplete="off"
-                className="h-9"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sa-owner">Owner email *</Label>
-              <Input
-                id="sa-owner"
-                type="email"
-                value={ownerEmail}
-                onChange={(e) => setOwnerEmail(e.target.value)}
-                placeholder="priya@acme.com"
-                autoComplete="off"
-                className="h-9"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Accountable human for everything this agent does — including actions with no
-                human in the loop. Required.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-team">Team</Label>
-                <Input
-                  id="sa-team"
-                  value={ownerTeam}
-                  onChange={(e) => setOwnerTeam(e.target.value)}
-                  placeholder="Optional"
-                  autoComplete="off"
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-desc">Description</Label>
-                <Input
-                  id="sa-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional"
-                  autoComplete="off"
-                  className="h-9"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Auth method</Label>
-              <div className="space-y-2">
-                {AUTH_CHOICE_CARDS.map((card) => (
-                  <button
-                    key={card.method}
-                    type="button"
-                    onClick={() => setAuthChoice(card.method)}
-                    className={[
-                      "w-full rounded-lg border px-4 py-3 text-left transition-colors",
-                      authChoice === card.method
-                        ? "border-[var(--component-button-primary-bg)] bg-blue-500/10"
-                        : "border-border hover:border-[var(--color-border-strong)]",
-                    ].join(" ")}
-                  >
-                    <p className="text-sm font-medium text-foreground">{card.title}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{card.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {authChoice === "jwks" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="sa-jwks">JWKS URI</Label>
-                <Input
-                  id="sa-jwks"
-                  value={jwksUri}
-                  onChange={(e) => setJwksUri(e.target.value)}
-                  placeholder="https://example.com/.well-known/jwks.json"
-                  autoComplete="off"
-                  className="h-9 font-mono text-xs"
-                />
-              </div>
-            )}
-
-            <DialogFooter className="pt-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  reset();
-                  onOpenChange(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => void handleCreate()}
-                disabled={!name.trim() || !ownerEmail.trim() || isLoading}
-                className="text-white"
-              >
-                {isLoading ? "Creating…" : "Create service account"}
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : result ? (
-          <div className="space-y-3 py-2">
-            {result.authChoice === "secret" && result.credential ? (
-              <>
-                {(
-                  [
-                    ["CLIENT_ID", result.credential.client_id],
-                    ["CLIENT_SECRET", result.credential.client_secret ?? ""],
-                  ] as const
-                ).map(([label, val]) => (
-                  <div key={label} className="space-y-1">
-                    <Label>{label}</Label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
-                        {val}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => copy(val)}
-                      >
-                        <ClipboardCopy className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
-                  Use <span className="font-mono text-[11px]">client_credentials</span> grant with{" "}
-                  <span className="font-mono text-[11px]">client_secret_basic</span> auth.
-                  Grant this service account access to an MCP server from its{" "}
-                  <span className="font-medium">Access Assignments</span> tab.
-                </div>
-              </>
-            ) : result.authChoice === "jwks" && result.credential ? (
-              <>
-                <div className="space-y-1">
-                  <Label>CLIENT_ID</Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
-                      {result.credential.client_id}
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => copy(result.credential!.client_id)}>
-                      <ClipboardCopy className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
-                  Sign a <span className="font-mono text-[11px]">client_assertion</span> JWT with
-                  your private key and pass it as{" "}
-                  <span className="font-mono text-[11px]">client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer</span>.{" "}
-                  <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5">
-                    Docs <ExternalLink className="size-3" />
-                  </a>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">Service account created — no credential provisioned.</p>
-                Kubernetes/SPIFFE identity is configured <span className="font-medium">per MCP server</span>,
-                not at the workspace level. Go to the MCP server's{" "}
-                <span className="font-medium">Workloads</span> tab and grant this service account
-                access. At runtime your pod presents its SPIFFE SVID.{" "}
-                <a href={DOCS_URL} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5">
-                  SPIFFE guide <ExternalLink className="size-3" />
-                </a>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button
-                onClick={() => {
-                  reset();
-                  onOpenChange(false);
-                }}
-                className="text-white"
-              >
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Detail drawer ─────────────────────────────────────────────────────────────
-
-function ServiceAccountDrawer({
-  sa,
-  open,
-  onClose,
-  onEdit,
-  onDelete,
-}: {
-  sa: WorkspaceServiceAccount | null;
-  open: boolean;
-  onClose: () => void;
-  onEdit: (sa: WorkspaceServiceAccount) => void;
-  onDelete: (sa: WorkspaceServiceAccount) => void;
-}) {
-  const { data: accessData, isLoading: accessLoading } = useListServiceAccountAccessQuery(
-    sa?.id ?? "",
-    { skip: !sa },
-  );
-
-  if (!sa) return null;
-  const method = authMethodOf(sa);
-  const badge = AUTH_BADGE[method];
-
-  return (
-    <RightDrawer
-      open={open}
-      onClose={onClose}
-      ariaTitle={sa.name}
-      ariaDescription="Service account details and access grants"
-    >
-      <DrawerHeader
-        title={sa.name}
-        subtitle={sa.description || "Service account · M2M principal"}
-        badge={<Badge variant={badge.variant}>{badge.label}</Badge>}
-      />
-
-      <DrawerBody>
-        <DrawerSection label="Identity">
-          <DetailGrid>
-            {sa.oauth_client_id && <CopyField label="Client ID" value={sa.oauth_client_id} />}
-            {sa.spiffe_id && <CopyField label="SPIFFE ID" value={sa.spiffe_id} />}
-            {sa.owner_email && <DetailRow label="Owner" value={sa.owner_email} full />}
-            {sa.owner_team && <DetailRow label="Team" value={sa.owner_team} full />}
-            <DetailRow
-              label="Created"
-              value={formatDistanceToNow(new Date(sa.created_at), { addSuffix: true })}
-            />
-            <DetailRow
-              label="Last seen"
-              value={
-                sa.last_seen_at
-                  ? formatDistanceToNow(new Date(sa.last_seen_at), { addSuffix: true })
-                  : "never"
-              }
-            />
-          </DetailGrid>
-        </DrawerSection>
-
-        <DrawerSection label="Access grants">
-          {accessLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : !accessData?.items.length ? (
-            <DrawerEmpty
-              icon={<KeyRound />}
-              title="No access grants yet"
-              description="Grant this service account access from an MCP server's Access tab."
-            />
-          ) : (
-            <div className="space-y-2">
-              {accessData.items.map((item) => {
-                const fmt = formatRoleName(item.role_name);
-                return (
-                <div
-                  key={`${item.resource_server_id}:${item.role_id}`}
-                  className="rounded-lg border p-3"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground truncate">{item.resource_server_name}</p>
-                    <Badge variant="secondary" className="shrink-0 capitalize">{fmt.badge || fmt.primary}</Badge>
-                  </div>
-                  {item.effective_scopes.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {item.effective_scopes.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                );
-              })}
-            </div>
-          )}
-        </DrawerSection>
-      </DrawerBody>
-
-      <DrawerFooter>
-        <Button variant="outline" className="flex-1" onClick={() => onEdit(sa)}>
-          <Pencil className="mr-1.5 size-3.5" /> Edit
-        </Button>
-        {method === "credential" && <RotateSecretButton sa={sa} />}
-        <Button
-          variant="outline"
-          aria-label="Delete service account"
-          className="text-(--color-danger-text)"
-          onClick={() => onDelete(sa)}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      </DrawerFooter>
-    </RightDrawer>
-  );
-}
-
-// ── Rotate secret ───────────────────────────────────────────────────────────
-
-function RotateSecretButton({ sa }: { sa: WorkspaceServiceAccount }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [newSecret, setNewSecret] = useState<{ client_id: string; client_secret: string } | null>(
-    null,
-  );
-  const [rotate, { isLoading }] = useRotateWorkloadCredentialMutation();
-
-  const copy = (val: string) => {
-    void navigator.clipboard.writeText(val);
-    toast.success("Copied");
-  };
-
-  const submit = async () => {
-    try {
-      const res = await rotate({ saId: sa.id }).unwrap();
-      if (res.client_secret) {
-        setNewSecret({ client_id: res.client_id, client_secret: res.client_secret });
-      }
-      setConfirmOpen(false);
-      toast.success("Secret rotated. The previous secret no longer works.");
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't rotate the secret.");
-    }
-  };
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        aria-label="Rotate client secret"
-        title="Rotate client secret"
-        onClick={() => setConfirmOpen(true)}
-      >
-        <RotateCcw className="size-3.5" />
-      </Button>
-
-      {/* Confirm */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Rotate client secret?</DialogTitle>
-            <DialogDescription>
-              A new secret is generated and the current one stops working immediately. The{" "}
-              <span className="font-medium">client ID stays the same</span>, so existing access
-              grants keep working — you only need to update the secret wherever this account
-              authenticates. The new secret is shown once.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
-          <DialogFooter className="pt-2">
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void submit()} disabled={isLoading} className="text-white">
-              <RotateCcw className="mr-1.5 size-3.5" />
-              {isLoading ? "Rotating…" : "Rotate secret"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Show new secret once */}
-      <Dialog open={!!newSecret} onOpenChange={(v) => !v && setNewSecret(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New client secret</DialogTitle>
-            <DialogDescription>
-              Copy it now — it won't be shown again. The previous secret is already revoked.
-            </DialogDescription>
-          </DialogHeader>
-          {newSecret && (
-            <div className="space-y-3 py-1">
-              {(
-                [
-                  ["CLIENT_ID", newSecret.client_id],
-                  ["CLIENT_SECRET", newSecret.client_secret],
-                ] as const
-              ).map(([label, val]) => (
-                <div key={label} className="space-y-1">
-                  <Label>{label}</Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">
-                      {val}
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => copy(val)}>
-                      <ClipboardCopy className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <DialogFooter>
-            <Button onClick={() => setNewSecret(null)} className="text-white">
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-// ── Edit dialog ───────────────────────────────────────────────────────────────
-
-function EditServiceAccountDialog({
-  sa,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  sa: WorkspaceServiceAccount | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [update, { isLoading }] = useUpdateWorkspaceServiceAccountMutation();
-
-  // Sync form when the target changes.
-  useEffect(() => {
-    if (sa) {
-      setName(sa.name);
-      setDescription(sa.description ?? "");
-    }
-  }, [sa]);
-
-  const submit = async () => {
-    if (!sa) return;
-    if (!name.trim()) {
-      toast.error("Name is required.");
-      return;
-    }
-    try {
-      await update({ saId: sa.id, name: name.trim(), description: description.trim() }).unwrap();
-      toast.success("Service account updated.");
-      onSaved();
-      onOpenChange(false);
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't update service account.");
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit service account</DialogTitle>
-          <DialogDescription>Rename or re-describe this service account.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-sa-name">Name</Label>
-            <Input id="edit-sa-name" value={name} onChange={(e) => setName(e.target.value)} className="h-9" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-sa-desc">Description</Label>
-            <Input
-              id="edit-sa-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional"
-              className="h-9"
-            />
-          </div>
-          <DialogFooter className="pt-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void submit()} disabled={!name.trim() || isLoading} className="text-white">
-              {isLoading ? "Saving…" : "Save changes"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── Delete confirm ──────────────────────────────────────────────────────────────
-
-function DeleteServiceAccountDialog({
-  sa,
-  open,
-  onOpenChange,
-  onDeleted,
-}: {
-  sa: WorkspaceServiceAccount | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  onDeleted: () => void;
-}) {
-  const [remove, { isLoading }] = useDeleteWorkspaceServiceAccountMutation();
-
-  const submit = async () => {
-    if (!sa) return;
-    try {
-      await remove(sa.id).unwrap();
-      toast.success("Service account deleted.");
-      onDeleted();
-      onOpenChange(false);
-    } catch (err) {
-      const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't delete service account.");
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Delete service account?</DialogTitle>
-          <DialogDescription>
-            This permanently removes the service account and its credentials. Any server-to-server
-            call using it will stop working. This can't be undone.
-          </DialogDescription>
-        </DialogHeader>
-        {sa && (
-          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{sa.name}</div>
-        )}
-        <DialogFooter className="pt-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={() => void submit()} disabled={isLoading}>
-            <Trash2 className="mr-1.5 size-3.5" />
-            {isLoading ? "Deleting…" : "Delete"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ServiceAccountsPage() {
   const { data, isLoading, refetch } = useListWorkspaceServiceAccountsQuery();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
-  const [createOpen, setCreateOpen] = useState(false);
   const [selectedSA, setSelectedSA] = useState<WorkspaceServiceAccount | null>(null);
-  const [editSA, setEditSA] = useState<WorkspaceServiceAccount | null>(null);
-  const [deleteSA, setDeleteSA] = useState<WorkspaceServiceAccount | null>(null);
 
   const items = useMemo(() => {
     let list = applyFilter(data ?? [], activeFilter);
@@ -818,7 +101,7 @@ export default function ServiceAccountsPage() {
     () => [
       {
         id: "name",
-        header: "Service account",
+        header: "Name",
         alwaysVisible: true,
         approxWidth: 280,
         cell: ({ row }) => (
@@ -826,64 +109,55 @@ export default function ServiceAccountsPage() {
             <span className="app-glyph">
               <Server className="size-4" />
             </span>
-            <EntityCell label={row.original.name} detail={row.original.oauth_client_id ?? row.original.spiffe_id} />
+            <EntityCell
+              label={<span className="font-semibold">{row.original.name}</span>}
+              detail={row.original.oauth_client_id ?? row.original.spiffe_id}
+            />
           </div>
         ),
       },
       {
-        id: "auth_method",
-        header: "Auth method",
-        priority: 1,
-        approxWidth: 140,
-        cell: ({ row }) => {
-          const m = authMethodOf(row.original);
-          const b = AUTH_BADGE[m];
-          return <Badge variant={b.variant}>{b.label}</Badge>;
-        },
-      },
-      {
-        id: "owner",
-        header: "Owner",
-        priority: 2,
-        approxWidth: 160,
-        cell: ({ row }) =>
-          row.original.owner_email ? (
-            <span className="text-xs text-muted-foreground">{row.original.owner_email}</span>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          ),
-      },
-      {
-        id: "last_seen",
-        header: "Last seen",
+        id: "auth",
+        header: "Identity provider",
         priority: 3,
-        approxWidth: 130,
+        approxWidth: 170,
+        cell: ({ row }) => <span className="text-sm text-foreground">{AUTH_METHOD_LABEL[authMethodOf(row.original)]}</span>,
+      },
+      {
+        id: "can_reach",
+        header: "MCP access",
+        priority: 1,
+        approxWidth: 200,
+        cell: ({ row }) => <ServiceAccountReach saId={row.original.id} />,
+      },
+      {
+        id: "status",
+        header: "Status",
+        priority: 2,
+        approxWidth: 170,
         cell: ({ row }) => {
-          const ts = row.original.last_seen_at ? new Date(row.original.last_seen_at) : null;
-          const valid = ts && !Number.isNaN(ts.getTime());
+          const st = SA_STATUS[saStatusOf(row.original)];
           return (
-            <span className="text-xs text-muted-foreground">
-              {valid ? formatDistanceToNow(ts, { addSuffix: true }) : "never"}
-            </span>
+            <StatusBadge tone={st.tone} className={SMALL_TEXT}>
+              {st.label}
+            </StatusBadge>
           );
         },
       },
       {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 56,
-        cell: ({ row }) => (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ConsoleRowActions
-              items={[
-                { label: "View details", icon: <KeyRound className="size-4" />, onSelect: () => setSelectedSA(row.original) },
-                { label: "Edit", icon: <Pencil className="size-4" />, onSelect: () => setEditSA(row.original) },
-                { label: "Delete", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setDeleteSA(row.original) },
-              ]}
-            />
-          </div>
-        ),
+        id: "last_used",
+        header: "Last used",
+        priority: 4,
+        approxWidth: 120,
+        cell: ({ row }) => {
+          const ts = row.original.last_seen_at ? new Date(row.original.last_seen_at) : null;
+          const valid = ts && !Number.isNaN(ts.getTime());
+          return (
+            <span className="text-sm text-muted-foreground">
+              {valid ? formatDistanceToNow(ts, { addSuffix: true }) : "Never"}
+            </span>
+          );
+        },
       },
     ],
     [],
@@ -891,8 +165,9 @@ export default function ServiceAccountsPage() {
 
   return (
     <ConsolePage
-      title="Service Accounts"
-      description="Machine principals for server-to-server (M2M) calls. Each service account holds a credential — client secret, private-key JWT, or Kubernetes SPIFFE SVID — and is granted access to specific MCP servers independently of any user session."
+      crumbs={[{ label: "Agents", to: "/agents" }, { label: "Service accounts" }]}
+      title="Service accounts"
+      description="Machine identities that call MCP servers with no person signed in, using a client secret, a private-key JWT or a Kubernetes token."
       actions={
         <>
           <Button variant="outline" asChild>
@@ -901,18 +176,20 @@ export default function ServiceAccountsPage() {
               Docs
             </a>
           </Button>
-          <Button onClick={() => setCreateOpen(true)} className="text-white">
-            <Plus className="mr-1.5 size-3.5" />
-            Create service account
+          <Button asChild className="text-white">
+            <Link to={CREATE_URL}>
+              <Plus className="mr-1.5 size-3.5" />
+              Create service account
+            </Link>
           </Button>
         </>
       }
     >
       <MetricStrip
-        aria-label="Service account health"
+        aria-label="Service account counts"
         items={[
           { key: "total", label: "accounts", value: metrics.total, tone: "primary" },
-          { key: "active", label: "healthy", value: metrics.active, tone: "success" },
+          { key: "active", label: "active", value: metrics.active, tone: "success" },
           { key: "disabled", label: "disabled", value: metrics.disabled, tone: metrics.disabled > 0 ? "warning" : "neutral" },
         ]}
       />
@@ -943,14 +220,16 @@ export default function ServiceAccountsPage() {
               </p>
               {!query && activeFilter === "all" && (
                 <>
-                  <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                    Create a service account to get credentials for your server-to-server flows.
-                    Then grant it access to an MCP server from that server's Access Assignments tab.
+                  <p className={`mx-auto mt-1 max-w-md text-muted-foreground ${SMALL_TEXT}`}>
+                    Create a service account to get credentials for your server-to-server flows and
+                    pick the MCP servers it can call, in one flow.
                   </p>
                   <div className="mt-4 flex justify-center">
-                    <Button size="sm" onClick={() => setCreateOpen(true)} className="text-white">
-                      <Plus className="mr-1.5 size-3.5" />
-                      Create service account
+                    <Button size="sm" asChild className="text-white">
+                      <Link to={CREATE_URL}>
+                        <Plus className="mr-1.5 size-3.5" />
+                        Create service account
+                      </Link>
                     </Button>
                   </div>
                 </>
@@ -971,39 +250,7 @@ export default function ServiceAccountsPage() {
         </CardContent>
       </TableCard>
 
-      <CreateServiceAccountDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={() => void refetch()}
-      />
-
-      <ServiceAccountDrawer
-        sa={selectedSA}
-        open={!!selectedSA}
-        onClose={() => setSelectedSA(null)}
-        onEdit={(sa) => {
-          setSelectedSA(null);
-          setEditSA(sa);
-        }}
-        onDelete={(sa) => {
-          setSelectedSA(null);
-          setDeleteSA(sa);
-        }}
-      />
-
-      <EditServiceAccountDialog
-        sa={editSA}
-        open={!!editSA}
-        onOpenChange={(v) => !v && setEditSA(null)}
-        onSaved={() => void refetch()}
-      />
-
-      <DeleteServiceAccountDialog
-        sa={deleteSA}
-        open={!!deleteSA}
-        onOpenChange={(v) => !v && setDeleteSA(null)}
-        onDeleted={() => void refetch()}
-      />
+      <ServiceAccountDetail sa={selectedSA} onClose={() => setSelectedSA(null)} onChanged={() => void refetch()} />
     </ConsolePage>
   );
 }

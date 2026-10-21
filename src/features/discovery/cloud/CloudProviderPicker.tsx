@@ -72,7 +72,7 @@ export function CloudProviderPicker({
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(v) : close())}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Add a connection</DialogTitle>
+          <DialogTitle>Add an account or cluster</DialogTitle>
           <DialogDescription>
             Choose what you want AuthSec to discover from.
           </DialogDescription>

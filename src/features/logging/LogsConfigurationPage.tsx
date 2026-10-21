@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ConsolePage } from "../../components/console/ConsolePage";
 import { Button } from "../../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../../components/ui/alert";
 import {
@@ -136,34 +137,12 @@ export function LogsConfigurationPage() {
   };
 
   return (
-    <div className="min-h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-neutral-950 dark:via-neutral-950 dark:to-neutral-900">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-30 w-full border-b border-slate-200 dark:border-neutral-900/70 bg-white/95 dark:bg-neutral-950/95 backdrop-blur">
-        <div className="flex items-center justify-between px-6 md:px-10 py-5">
-          <div className="flex items-center gap-4">
-            {/* <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/logs")}
-              className="shrink-0 text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-neutral-900/70"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1" />
-            </Button> */}
-            <div className="flex flex-col items-start gap-2 max-w-2xl">
-              <h1 className="text-2xl md:text-2xl font-semibold text-slate-900 dark:text-zinc-100 tracking-tight">
-                Logs Configuration
-              </h1>
-              <p className="text-sm md:text-base text-slate-600 dark:text-zinc-500 leading-relaxed">
-                Configure output destinations for your logs: Splunk, HTTP
-                endpoints, Syslog servers, or Elasticsearch.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <ConsolePage
+      title="Log forwarding"
+      description="Send your logs to Splunk, Syslog, Elasticsearch or Fluent Bit."
+    >
       {banner && (
-        <div className="w-full   mx-auto px-6 md:px-8 pt-6">
+        <div>
           <Alert className="relative border border-emerald-500/30 bg-emerald-500/5 backdrop-blur-sm">
             <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
             <AlertTitle className="text-slate-900 dark:text-zinc-100">
@@ -199,7 +178,7 @@ export function LogsConfigurationPage() {
         </div>
       )}
 
-      <div className="w-full   mx-auto px-6 md:px-8 py-8 space-y-8">
+      <div className="w-full space-y-8">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex w-full flex-wrap gap-2 rounded-full border border-slate-200 dark:border-neutral-800/70 bg-slate-50 dark:bg-neutral-950/70 p-1 mb-8">
             <TabsTrigger
@@ -325,6 +304,6 @@ export function LogsConfigurationPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </ConsolePage>
   );
 }

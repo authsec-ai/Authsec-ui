@@ -17,10 +17,10 @@ export default function NotFoundPage() {
       <h1 className="text-2xl font-semibold text-foreground">Page not found</h1>
       <p className="max-w-md text-sm text-muted-foreground">
         The page you're looking for doesn't exist or may have moved. Check the
-        URL, or head back to the dashboard.
+        URL, or head back to Home.
       </p>
       <Button asChild className="mt-2 text-white">
-        <Link to="/dashboard">Go to dashboard</Link>
+        <Link to="/dashboard">Go to Home</Link>
       </Button>
     </div>
   );

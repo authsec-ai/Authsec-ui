@@ -202,7 +202,7 @@ export default function ScanDetailPage() {
   useBreadcrumbTail(c ? detailHref(id) : null, c ? "Scan" : null, {
     label: c?.name ?? "",
     href: detailHref(id),
-    parent: { label: "Connections", href: "/iga/connections" },
+    parent: { label: "Accounts", href: "/iga/connections" },
   });
   const back = useMemo(
     () => (
@@ -225,10 +225,10 @@ export default function ScanDetailPage() {
   if (!c) {
     return (
       <ConsolePage title="Scan" variant="object">
-        <LoadFailurePanel failure={failure ?? (notFound ? "not_found" : "failed")} subject="this connection" permission="discovery:read" onRetry={() => void refetch()} />
+        <LoadFailurePanel failure={failure ?? (notFound ? "not_found" : "failed")} subject="this account" permission="discovery:read" onRetry={() => void refetch()} />
         <div>
           <Button variant="outline" asChild>
-            <Link to="/iga/connections">All connections</Link>
+            <Link to="/iga/connections">All accounts</Link>
           </Button>
         </div>
       </ConsolePage>

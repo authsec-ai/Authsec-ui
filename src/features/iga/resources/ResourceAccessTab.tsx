@@ -15,10 +15,12 @@ import {
   igaGraphApi,
   objectPath,
   refId,
+  useGetGraphIdentityUsedByQuery,
   useGetGraphResourceAccessQuery,
   type AccessRow,
   type GraphListMeta,
   type ResourceDetail,
+  type IdentitySummary,
   type RestrictionRow,
 } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
@@ -80,10 +82,59 @@ function Restrictions({
   );
 }
 
+/** How many workloads a holder row names before "+N more". */
+const WORKLOADS_SHOWN = 3;
+
+/**
+ * The reverse step from an identity to the workloads that run as it, so the
+ * list answers "which agents and identities reach this?" in one place. Reads
+ * the identity's own Used by (first page, the same read its Used by tab
+ * makes), at the publication this page is pinned to. Direct bindings only:
+ * a workload that reaches the role through another role is on the Access
+ * Graph, not here.
+ */
+function HolderWorkloads({ ws, rev, epoch, holder, from }: { ws: string; rev: number | null; epoch: number; holder: IdentitySummary; from: From }) {
+  const q = useGetGraphIdentityUsedByQuery({ ws, rev, key: String(epoch), id: refId(holder.ref) });
+  const section = q.currentData?.data.workloads;
+  let text: ReactNode;
+  if (q.isError) text = "Could not load the workloads that run as it.";
+  else if (!section) text = "Loading the workloads that run as it…";
+  else if (!section.items.length) text = "No workload runs as it directly.";
+  else {
+    const shown = section.items.slice(0, WORKLOADS_SHOWN);
+    const total = section.total_known && section.total != null ? section.total : null;
+    const rest = total != null ? total - shown.length : section.items.length - shown.length;
+    const more = rest > 0 ? ` +${rest} more` : section.next_cursor ? " and more" : "";
+    text = (
+      <>
+        Workloads that run as it:{" "}
+        {shown.map((w, i) => {
+          const path = objectPath(w.workload.ref);
+          return (
+            <span key={w.claim}>
+              {i > 0 ? ", " : null}
+              {path ? (
+                <Link {...viaLink(path, from)} className="font-medium text-(--color-primary-text) hover:underline">
+                  {w.workload.name}
+                </Link>
+              ) : (
+                <span className="font-medium text-(--color-text)">{w.workload.name}</span>
+              )}
+            </span>
+          );
+        })}
+        {more}
+      </>
+    );
+  }
+  return <p className="text-xs text-(--color-text-muted)">{text}</p>;
+}
+
 export function ResourceAccessTab({ ws, resource }: { ws: string; resource: ResourceDetail }) {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const paging = usePaging("resource-access", epoch);
+  const pinnedRev = rev ?? null;
   const args = { ws, rev, key: paging.cacheKey, id: refId(resource.ref), cursor: paging.cursor };
   const q = useGetGraphResourceAccessQuery(args);
   const failure = classifyGraphError(q.error);
@@ -148,6 +199,8 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
                     </span>
                   }
                 />
+                {/* Only a role is run as by a workload; a user or a group never is. */}
+                {a.holder.kind === "iam_role" ? <HolderWorkloads ws={ws} rev={pinnedRev} epoch={epoch} holder={a.holder} from={from} /> : null}
                 {a.via_group ? (
                   <p className="text-xs text-(--color-text-muted)">
                     Through group{" "}
@@ -197,7 +250,7 @@ export function ResourceAccessTab({ ws, resource }: { ws: string; resource: Reso
       {q.currentData?.meta.coverage?.length ? (
         <CoverageSummary subject="holders" ws={ws} gaps={q.currentData.meta.coverage} accountName={(id) => id} />
       ) : null}
-      <Panel title="Who is allowed to use it" flush>
+      <Panel title="Who is allowed to use it" description="Every identity a policy grants access to this, the workloads that run as it, the actions and the statement that grants them." flush>
         {access}
       </Panel>
       {whole ? (

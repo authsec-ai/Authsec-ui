@@ -331,7 +331,7 @@ export default function EnforcementSection() {
         <p className="text-[13px] text-(--color-text-muted)">
           Enforcement is set up per AWS account. Connect an account first, then come back here.{" "}
           <Link to="/iga/connections" className="font-medium text-(--color-primary-text) underline">
-            Open Connections
+            Open Accounts
           </Link>
         </p>
       </Panel>

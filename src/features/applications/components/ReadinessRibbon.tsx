@@ -57,7 +57,7 @@ export function ReadinessRibbon({
 
   return (
     <nav
-      aria-label="Application readiness"
+      aria-label="MCP server readiness"
       data-slot="readiness-ribbon"
       className={cn(
         "flex w-full items-stretch divide-x divide-border overflow-hidden rounded-md border border-border bg-card",

@@ -1,6 +1,8 @@
 /**
  * `ApplicationLayout` — the chrome that wraps every Application detail
- * tab. Renders ApplicationHeader → ReadinessRibbon → DetailTabs → Outlet.
+ * tab (the MCP page). Renders ApplicationHeader (breadcrumb, name, chips,
+ * primary action) → DetailTabs (Overview · Access · Activity) → Outlet.
+ * No "What is this page?" strip here: the list page explains what an MCP is.
  *
  * The chrome mounts ONCE per application; tab navigation only swaps the
  * `<Outlet>` so we never re-fetch the application or refit the header.
@@ -14,7 +16,6 @@ import { Outlet, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useGetApplicationQuery } from "@/app/api/applicationsApi";
-import { useListAccessRequestsQuery } from "@/app/api/agentIdentityApi";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import { Card } from "@/components/ui/card";
 import { NotFoundState } from "@/components/shared/NotFoundState";
@@ -31,13 +32,6 @@ export default function ApplicationLayout() {
   const { data: application, isLoading, error } = useGetApplicationQuery(id ?? "", {
     skip: !id,
   });
-  // Lightweight pending count for the Requests tab badge — skipped until app loads.
-  const { data: requestsData } = useListAccessRequestsQuery(application?.id ?? "", {
-    skip: !application?.id,
-  });
-  const pendingRequestCount = (requestsData?.items ?? []).filter(
-    (r) => r.status === "pending",
-  ).length;
   const { data: clientsData } = useListWorkspaceClientsQuery(
     application?.id ? { resourceServerId: application.id } : undefined,
     { skip: !application?.id },
@@ -50,7 +44,7 @@ export default function ApplicationLayout() {
     return (
       <div className="p-6">
         <Card className="p-6 text-sm text-muted-foreground">
-          Missing application ID.
+          Missing MCP ID.
         </Card>
       </div>
     );
@@ -60,7 +54,7 @@ export default function ApplicationLayout() {
     return (
       <div className="flex min-h-[40vh] items-center justify-center p-6 text-sm text-muted-foreground">
         <Loader2 className="mr-2 size-4 animate-spin" />
-        Loading application…
+        Loading MCP…
       </div>
     );
   }
@@ -69,7 +63,7 @@ export default function ApplicationLayout() {
     return (
       <div className="p-6">
         <Card>
-          <NotFoundState subject="application" backTo="/applications" backLabel="Back to applications" />
+          <NotFoundState subject="MCP" backTo="/applications" backLabel="Back to MCP" />
         </Card>
       </div>
     );
@@ -79,7 +73,7 @@ export default function ApplicationLayout() {
     return (
       <div className="p-6">
         <Card className="p-6 text-sm text-[var(--color-danger)]">
-          Couldn't load this application. Try again in a moment.
+          Couldn't load this MCP. Try again in a moment.
         </Card>
       </div>
     );
@@ -95,13 +89,11 @@ export default function ApplicationLayout() {
           <div className="tabbar-wrap">
             <ApplicationDetailTabs
               applicationId={application.id}
-              readiness={readiness}
-              pendingRequestCount={pendingRequestCount}
               pendingClientCount={pendingClientCount}
             />
           </div>
         </div>
-        <div style={{ marginTop: "var(--space-7)" }}>
+        <div>
           <Outlet
             context={{ application, readiness } satisfies ApplicationOutletContext}
           />

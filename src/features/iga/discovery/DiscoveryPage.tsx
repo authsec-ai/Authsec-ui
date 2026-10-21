@@ -16,6 +16,8 @@ import { RefreshCw } from "lucide-react";
 
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { HowItWorks } from "@/components/console/HowItWorks";
+import { PageAbout } from "@/components/console/PageAbout";
 import { DecisionBanner } from "@/components/console/status";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,19 @@ const DESCRIPTION = (
     <InfoTip label="About access shown here">This shows the access that has been written down in AWS. AuthSec has not tested whether a real request would be allowed or blocked.</InfoTip>
   </span>
 );
+
+/**
+ * How every access graph reads, before the list that opens one. The four
+ * columns are the graph's own (`graph/layout.ts` columnOfKind): the Summary
+ * view draws the third as the actions on the line, Detailed draws each
+ * statement as a card.
+ */
+const READING_A_GRAPH = [
+  { label: "1 · Workload", title: "The running code", body: "An AI agent, a function, a task or a pod." },
+  { label: "2 · Identity", title: "What it runs as", body: "An IAM role or user, or a Kubernetes ServiceAccount." },
+  { label: "3 · Permission", title: "What it is allowed to do", body: "The actions a policy statement or RBAC rule lists, shown on the line." },
+  { label: "4 · Resource", title: "What it reaches", body: "The resource or pattern, with its type; a Kubernetes rule names its resources itself. A wildcard has a red dashed outline." },
+];
 
 export default function DiscoveryPage() {
   const ws = getWorkspaceId() ?? "";
@@ -215,12 +230,12 @@ export default function DiscoveryPage() {
   /* ----------------------------------- body ---------------------------------- */
   let body;
   if (connQ.isLoading) {
-    body = <div className="h-40 animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading connections" />;
+    body = <div className="h-40 animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading accounts" />;
   } else if (connectionsFailed) {
     const f = loadFailureOf(connQ.error);
     body = (
       <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
-        <FailurePanel failure={f === "forbidden" ? { kind: "unauthorized" } : { kind: "failed" }} subject="connections" permission="discovery:read" onRetry={() => void connQ.refetch()} />
+        <FailurePanel failure={f === "forbidden" ? { kind: "unauthorized" } : { kind: "failed" }} subject="accounts" permission="discovery:read" onRetry={() => void connQ.refetch()} />
       </div>
     );
   } else if (!connected.length) {
@@ -229,7 +244,7 @@ export default function DiscoveryPage() {
         tone="info"
         title="Connect a source to start"
         body="Connect an AWS account, Google Cloud project, Kubernetes cluster or GitHub organization to see what it contains."
-        actionLabel="Open Connections"
+        actionLabel="Open Accounts"
         actionHref="/iga/connections"
       />
     );
@@ -312,6 +327,17 @@ export default function DiscoveryPage() {
       }
     >
       <LiveRegion />
+      <PageAbout>
+        <strong className="font-semibold">Discovery</strong> lists the workloads, identities and resources found in your accounts. Open one to
+        see what it can reach.
+      </PageAbout>
+      <HowItWorks
+        title="Reading an access graph"
+        subtitle="Every graph reads left to right in four columns"
+        steps={READING_A_GRAPH}
+        variant="flow"
+        storageKey="iga-discovery-reading-a-graph"
+      />
       {provider && connected.includes(provider) && ready && (discrepancy || (provider === "k8s" && overview.counts.sightings)) ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           {discrepancy ? <p className="text-(--color-warning-text)">{discrepancy}</p> : null}
@@ -324,7 +350,7 @@ export default function DiscoveryPage() {
       ) : null}
       {connQ.isError && connQ.data ? (
         <p role="status" className="text-xs text-(--color-warning-text)">
-          Connections could not be refreshed, so the last read is shown.
+          Accounts could not be refreshed, so the last read is shown.
         </p>
       ) : null}
       {awsPublished && stale ? <RevisionBanner currentPublishedAt={stale.currentPublishedAt} onRefresh={refresh} /> : null}

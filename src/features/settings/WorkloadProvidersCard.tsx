@@ -83,11 +83,11 @@ export default function WorkloadProvidersCard() {
   };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
+    <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) shadow-sm">
+      <div className="flex items-start justify-between gap-2 border-b border-(--color-border-subtle) px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-950">Workload identity providers</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <h2 className="text-sm font-semibold text-(--color-text)">Workload identity providers</h2>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
             Issuers your workloads authenticate with — SPIRE trust domains (any
             cluster) and OIDC federation (e.g. GitHub Actions). No secrets.
           </p>
@@ -99,7 +99,7 @@ export default function WorkloadProvidersCard() {
       </div>
 
       {adding && (
-        <div className="space-y-3 border-b border-slate-100 bg-slate-50/60 p-4">
+        <div className="space-y-3 border-b border-(--color-border-subtle) bg-(--color-surface-subtle) p-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="wip-name">Name</Label>
@@ -120,7 +120,7 @@ export default function WorkloadProvidersCard() {
               <Label htmlFor="wip-iss">Issuer URL</Label>
               <Input id="wip-iss" value={issuer} onChange={(e) => setIssuer(e.target.value)}
                 placeholder={kind === "oidc" ? "https://token.actions.githubusercontent.com" : "https://spire.app.authsec.ai"}
-                autoComplete="off" className="h-9 font-mono text-xs" />
+                autoComplete="off" className="h-9 font-mono text-[13px]" />
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -128,19 +128,19 @@ export default function WorkloadProvidersCard() {
               <div className="space-y-1.5">
                 <Label htmlFor="wip-td">Trust domain</Label>
                 <Input id="wip-td" value={trustDomain} onChange={(e) => setTrustDomain(e.target.value)}
-                  placeholder="spire.app.authsec.ai" autoComplete="off" className="h-9 font-mono text-xs" />
+                  placeholder="spire.app.authsec.ai" autoComplete="off" className="h-9 font-mono text-[13px]" />
               </div>
             ) : (
               <div className="space-y-1.5">
                 <Label htmlFor="wip-sub">Subject claim</Label>
                 <Input id="wip-sub" value={subjectClaim} onChange={(e) => setSubjectClaim(e.target.value)}
-                  placeholder="sub (default)" autoComplete="off" className="h-9 font-mono text-xs" />
+                  placeholder="sub (default)" autoComplete="off" className="h-9 font-mono text-[13px]" />
               </div>
             )}
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="wip-aud">Allowed audiences (optional, space/comma separated)</Label>
               <Input id="wip-aud" value={audiences} onChange={(e) => setAudiences(e.target.value)}
-                placeholder="defaults to this token endpoint" autoComplete="off" className="h-9 font-mono text-xs" />
+                placeholder="defaults to this token endpoint" autoComplete="off" className="h-9 font-mono text-[13px]" />
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -156,23 +156,23 @@ export default function WorkloadProvidersCard() {
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Loading providers…</p>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
+          <p className="py-6 text-center text-[13px] text-muted-foreground">
             No providers yet — workloads can't authenticate via SPIFFE/OIDC until one is added.
           </p>
         ) : (
           <ul className="space-y-1.5">
             {items.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-slate-200 px-3 py-2">
+              <li key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-(--color-border-subtle) px-3 py-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <Server className="size-3.5 text-slate-400" />
-                    <span className="text-sm font-medium text-slate-950">{p.name}</span>
-                    <Badge variant="outline" className="text-[10px] uppercase">{p.kind}</Badge>
+                    <Server className="size-3.5 text-(--color-text-muted)" />
+                    <span className="text-sm font-medium text-(--color-text)">{p.name}</span>
+                    <Badge variant="outline" className="text-[12.5px] uppercase">{p.kind}</Badge>
                   </div>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-slate-500">{p.issuer}</p>
+                  <p className="mt-0.5 truncate font-mono text-[12.5px] text-(--color-text-muted)">{p.issuer}</p>
                 </div>
                 <button type="button" onClick={() => void del(p.id)} aria-label="Remove provider"
-                  className="text-slate-400 hover:text-red-600">
+                  className="text-(--color-text-muted) hover:text-(--color-danger-text)">
                   <Trash2 className="size-4" />
                 </button>
               </li>

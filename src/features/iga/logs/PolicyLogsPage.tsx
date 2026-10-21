@@ -28,6 +28,7 @@ import {
   type GovEventView,
 } from "@/app/api/igaPolicyReadsApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { PageAbout } from "@/components/console/PageAbout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -231,6 +232,10 @@ export function PolicyLogsPage({ ws }: { ws: string }) {
         </div>
       }
     >
+      <PageAbout>
+        <strong className="font-semibold">Logs</strong> is the record of what policy did in this workspace and who did it, searchable and
+        exportable.
+      </PageAbout>
       <p id="logs-export-note" className="text-xs leading-relaxed text-(--color-text-muted)">
         {exportBlocked ?? "An export is a point-in-time file of the recorded events that match these filters, oldest first. If the connection fails partway it can end short, so do not treat it as proof that every event is in it."}
       </p>

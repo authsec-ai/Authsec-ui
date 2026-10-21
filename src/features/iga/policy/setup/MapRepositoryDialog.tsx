@@ -169,7 +169,7 @@ export function MapRepositoryDialog({
         <p className="text-(--color-warning-text)">
           No GitHub connection exists in this workspace.{" "}
           <Link to="/iga/connections" className="font-medium underline">
-            Open Connections
+            Open Accounts
           </Link>{" "}
           to add one, then map a repository.
         </p>

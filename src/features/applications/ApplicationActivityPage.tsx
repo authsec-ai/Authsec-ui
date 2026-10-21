@@ -65,26 +65,17 @@ export default function ApplicationActivityPage() {
 
   return (
     <div className="space-y-4">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">
-          Activity
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Post-launch drift events from{" "}
-          <code className="font-mono text-xs">
-            GET /authsec/applications/{application.id}/drift-events
-          </code>
-          . Detailed runtime metrics (policy health, denied calls,
-          insufficient_scope errors) require backend endpoints we don't
-          have yet — they're not surfaced here until they do.
-        </p>
-      </header>
+      <p className="text-[length:13.5px] text-muted-foreground">
+        Changes to this MCP&apos;s tools since it started enforcing: new, changed or removed
+        tools and failed manifest fetches. Per-request activity (allowed and denied tool calls)
+        isn&apos;t recorded per MCP yet, so it isn&apos;t shown here.
+      </p>
 
       {!launched && (
         <DecisionBanner
           tone="warning"
-          title="Application not launched"
-          body="Drift only accumulates after activation. Complete launch before monitoring runtime policy changes."
+          title="This MCP needs setup"
+          body="Changes are tracked once the MCP is enforcing. Finish setup from the Overview."
           actionLabel="Open overview"
           actionHref={`/applications/${application.id}/overview`}
         />

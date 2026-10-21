@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/button";
-import { Settings, AlertCircle } from "lucide-react";
+import { Download, Settings, AlertCircle } from "lucide-react";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
   M2MLogsView,
-  M2MLogsViewSkeleton,
   M2MLogsFilterCard,
 } from "./components/m2m-logs";
+import { downloadJson } from "./components/logFormat";
 import { useGetM2MLogsQuery } from "../../app/api/logsApi";
 import { SessionManager } from "../../utils/sessionManager";
 import { Alert, AlertDescription } from "../../components/ui/alert";
@@ -41,18 +41,7 @@ export function M2MLogsPage() {
   const m2mLogs = data?.logs ?? [];
   const pagination = data?.pagination;
 
-  const handleExport = () => {
-    const logText = m2mLogs
-      .map((log) => JSON.stringify(log, null, 2))
-      .join("\n\n");
-    const blob = new Blob([logText], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `m2m-logs-${new Date().toISOString()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const handleExport = () => downloadJson(m2mLogs, "machine-token-logs");
 
   const handleFiltersChange = (newFilters: M2MLogsFilterParams) => {
     setFilters(newFilters);
@@ -65,16 +54,19 @@ export function M2MLogsPage() {
 
   return (
     <ConsolePage
-      title="M2M Logs"
-      description="Monitor service-to-service token issuance and PDP decisions"
+      title="Machine tokens"
+      description="Every token a service account asked for: which MCP server, which scopes, and whether it was issued."
       actions={
-        <Button
-          onClick={() => navigate("/logs/configure")}
-          className="gap-2 text-white"
-        >
-          <Settings className="h-4 w-4" />
-          Configure Logs
-        </Button>
+        <>
+          <Button variant="ghost" onClick={() => navigate("/logs/configure")} className="gap-2">
+            <Settings className="h-4 w-4" />
+            Log forwarding
+          </Button>
+          <Button variant="outline" onClick={handleExport} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </>
       }
     >
       <div className="space-y-6">
@@ -107,18 +99,14 @@ export function M2MLogsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
         >
-          {isLoading ? (
-            <M2MLogsViewSkeleton />
-          ) : (
-            <M2MLogsView
-              logs={m2mLogs}
-              onExport={handleExport}
-              onRefresh={refetch}
-              isRefreshing={isFetching}
-              pagination={pagination}
-              onPageChange={handlePageChange}
-            />
-          )}
+          <M2MLogsView
+            logs={m2mLogs}
+            loading={isLoading}
+            onRefresh={refetch}
+            isRefreshing={isFetching}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+          />
         </motion.div>
       </div>
     </ConsolePage>

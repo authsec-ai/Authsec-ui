@@ -100,7 +100,7 @@ export function TableToolbar({
               value={search}
               onChange={(e) => onSearch(e.target.value)}
               placeholder="Search name or ID"
-              aria-label="Search connections"
+              aria-label="Search accounts"
               className="h-9 pl-9"
               autoComplete="off"
               spellCheck={false}

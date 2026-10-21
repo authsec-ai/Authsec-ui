@@ -260,6 +260,12 @@ export default function PoliciesListPage() {
   return (
     <PolicyShell
       title="Policy"
+      about={
+        <>
+          <strong className="font-semibold">Policy</strong> lists the rules that allow or block what your workloads can reach, for how long, and
+          whether AuthSec has applied them.
+        </>
+      }
       description="Control what your AI agents can access and when. Allow or block access for a set period. AuthSec enforces each policy and removes temporary access automatically when it ends."
       requires="access_policies"
       actions={

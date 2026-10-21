@@ -47,7 +47,7 @@ export function DensityToggle({ className }: { className?: string }) {
             className={cn(
               "h-7 rounded px-2.5 text-xs font-medium capitalize transition-colors",
               active
-                ? "bg-(--color-surface-raised) text-(--color-text) shadow-(--shadow-xs)"
+                ? "bg-(--color-surface-raised) font-semibold text-(--color-text) shadow-(--shadow-pill)"
                 : "text-(--color-text-muted) hover:text-(--color-text)",
             )}
           >

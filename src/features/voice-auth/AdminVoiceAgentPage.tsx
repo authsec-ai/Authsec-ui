@@ -11,9 +11,17 @@ import {
   Smartphone,
   Trash2,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { ConsolePage } from "@/components/console/ConsolePage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -27,6 +35,8 @@ import {
   useGetAdminTotpDevicesQuery,
 } from "@/app/api/adminVoiceAgentApi";
 
+const SMALL_TEXT = "text-[length:var(--font-size-body-xs)]";
+
 const formatTimestamp = (value?: number | null) => {
   if (!value) return "Never";
   const milliseconds = value > 1e12 ? value : value * 1000;
@@ -38,7 +48,7 @@ const formatTimestamp = (value?: number | null) => {
 };
 
 const formatLastUsed = (value?: number | null) => {
-  if (!value) return "Not used yet";
+  if (!value) return "never";
   const milliseconds = value > 1e12 ? value : value * 1000;
   return new Date(milliseconds).toLocaleString("en-US", {
     month: "short",
@@ -58,6 +68,7 @@ const getPlatformLabel = (platform?: string) => {
 
 export function AdminVoiceAgentPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDevice, setConfirmDevice] = useState<{ id: string; name: string } | null>(null);
 
   const {
     data: cibaData,
@@ -85,8 +96,8 @@ export function AdminVoiceAgentPage() {
     refetchTotp();
   };
 
-  const handleDeleteDevice = async (deviceId: string, deviceName: string) => {
-    if (!confirm(`Deactivate "${deviceName}"?`)) return;
+  const handleDeleteDevice = async (deviceId: string) => {
+    setConfirmDevice(null);
     setDeletingId(deviceId);
     try {
       await deleteCibaDevice({ deviceId }).unwrap();
@@ -100,22 +111,22 @@ export function AdminVoiceAgentPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <PageHeader
-        title="Voice Agent Access"
-        description="Register your admin account for voice approvals using the AuthSec mobile app."
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshAll}
-            disabled={isFetchingCiba || isFetchingTotp}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isFetchingCiba || isFetchingTotp ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        }
-      />
+    <ConsolePage
+      crumbs={[{ label: "Agents", to: "/agents" }, { label: "Voice agents" }]}
+      title="Voice agents"
+      description="Register your admin account for voice approvals using the AuthSec mobile app."
+      actions={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshAll}
+          disabled={isFetchingCiba || isFetchingTotp}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${isFetchingCiba || isFetchingTotp ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      }
+    >
 
       <div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
         <Card>
@@ -144,16 +155,16 @@ export function AdminVoiceAgentPage() {
               },
             ].map((step, index) => (
               <div key={step.title} className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                <div className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary ${SMALL_TEXT}`}>
                   {index + 1}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground">{step.title}</p>
-                  <p className="text-xs text-muted-foreground">{step.detail}</p>
+                  <p className={`text-muted-foreground ${SMALL_TEXT}`}>{step.detail}</p>
                 </div>
               </div>
             ))}
-            <div className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+            <div className={`rounded-lg border border-dashed border-border/70 bg-muted/20 p-3 text-muted-foreground ${SMALL_TEXT}`}>
               Tip: Use a dedicated admin device so approvals are fast and consistent across voice agents.
             </div>
           </CardContent>
@@ -178,7 +189,7 @@ export function AdminVoiceAgentPage() {
             )}
 
             {!isLoadingCiba && cibaError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className={`rounded-lg border border-transparent bg-(--color-danger-soft) p-3 text-(--color-danger-text) ${SMALL_TEXT}`}>
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
                   Failed to load voice devices.
@@ -217,17 +228,17 @@ export function AdminVoiceAgentPage() {
                             {device.device_name}
                           </p>
                           {device.is_active && (
-                            <Badge variant="secondary" className="text-[10px] uppercase">
+                            <Badge variant="secondary" className={SMALL_TEXT}>
                               Active
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className={`text-muted-foreground ${SMALL_TEXT}`}>
                           {getPlatformLabel(device.platform)}
                           {device.device_model ? ` • ${device.device_model}` : ""}
                           {device.app_version ? ` • App ${device.app_version}` : ""}
                         </p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className={`text-muted-foreground ${SMALL_TEXT}`}>
                           Added {formatTimestamp(device.created_at)} • Last used{" "}
                           {formatLastUsed(device.last_used)}
                         </p>
@@ -236,9 +247,9 @@ export function AdminVoiceAgentPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteDevice(device.id, device.device_name)}
+                      onClick={() => setConfirmDevice({ id: device.id, name: device.device_name })}
                       disabled={deletingId === device.id}
-                      className="text-muted-foreground hover:text-red-600"
+                      className="text-muted-foreground hover:text-(--color-danger-text)"
                     >
                       {deletingId === device.id ? (
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -276,7 +287,7 @@ export function AdminVoiceAgentPage() {
           )}
 
           {!isLoadingTotp && totpError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            <div className={`rounded-lg border border-transparent bg-(--color-danger-soft) p-3 text-(--color-danger-text) ${SMALL_TEXT}`}>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 Failed to load TOTP devices.
@@ -308,12 +319,12 @@ export function AdminVoiceAgentPage() {
                 >
                   <div>
                     <p className="text-sm font-semibold text-foreground">{device.device_name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className={`text-muted-foreground ${SMALL_TEXT}`}>
                       {device.device_type} • Added {formatTimestamp(device.created_at)}
                     </p>
                   </div>
                   {device.is_primary && (
-                    <Badge variant="secondary" className="text-[10px] uppercase">
+                    <Badge variant="secondary" className={SMALL_TEXT}>
                       Primary
                     </Badge>
                   )}
@@ -323,6 +334,30 @@ export function AdminVoiceAgentPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+
+      <Dialog open={!!confirmDevice} onOpenChange={(v) => !v && setConfirmDevice(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Deactivate this device?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">{confirmDevice?.name}</span> stops receiving
+              voice approval requests.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
+            <Button variant="ghost" onClick={() => setConfirmDevice(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => confirmDevice && void handleDeleteDevice(confirmDevice.id)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Deactivate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </ConsolePage>
   );
 }

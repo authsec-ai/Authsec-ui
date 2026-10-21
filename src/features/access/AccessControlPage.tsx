@@ -1,10 +1,16 @@
 /**
  * AccessControlPage — workspace-level access management (AuthZ).
  *
- * Route-driven via `initialTab` (sidebar links point here):
- *   roles       — workspace / app-scoped AuthSec roles
- *   scopes      — cross-workspace scope catalog
- *   assignments — role bindings
+ * Route-driven via `initialTab` (each is a tab of the Policies page):
+ *   roles       — Roles: workspace / MCP-server roles
+ *   scopes      — Scopes: the OAuth scope catalog ("Scope" at the token layer,
+ *                 per the AGENTS.md term map; "Permission" stays for RBAC)
+ *   assignments — Who has what: role bindings
+ *
+ * Roles' main button is "Add role"; Scopes and Who has what open the
+ * assign-role wizard ("Give access"). Rows carry no overflow menu: a row opens
+ * its drawer, where giving and deleting live. Key column headers carry a
+ * dotted underline that explains the word on hover.
  *
  * Rendered on the canonical console standard: <ConsolePage> shell +
  * <ConsoleFilterBar> + <TableCard>/<AdaptiveTable>. Detail drawers + dialogs
@@ -40,7 +46,6 @@ import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -52,6 +57,7 @@ import { toast } from "@/lib/toast";
 import { useListResourceServersQuery } from "@/app/api/resourceServersApi";
 import {
   useGetAuthSecRolesQuery,
+  useGetAuthSecRoleDetailQuery,
   useAddUserDefinedRolesMutation,
   useDeleteUserDefinedRolesMutation,
   roleDeleteErrorMessage,
@@ -67,6 +73,7 @@ import {
 } from "@/app/api/accessApi";
 
 import AssignRoleWizard from "./AssignRoleWizard";
+import { ACCESS_TERMS, Term } from "./Term";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface AuthSecRole {
@@ -122,8 +129,55 @@ function KindChip({ appScoped }: { appScoped: boolean }) {
   );
 }
 
+/**
+ * A role's own name and the MCP server it applies on. Auto-generated MCP
+ * server roles are named `rs-{uuid}:{type}`; the type is the role and the
+ * uuid the server. Every other role applies on the whole workspace.
+ */
+function roleParts(name: string, appMap: Map<string, string>): { role: string; server: string | null } {
+  const fmt = formatRoleName(name, appMap);
+  if (!fmt.isAppScoped) return { role: name, server: "All MCPs" };
+  // Server resolved: primary is its name, badge the role type.
+  if (fmt.badge && fmt.badge !== "App-scoped") return { role: fmt.badge, server: fmt.primary };
+  // Server not found among this workspace's MCP servers.
+  return { role: fmt.primary, server: null };
+}
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function GiveAccessButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button onClick={onClick} className="text-white">
+      <Plus className="mr-1.5 size-3.5" /> Give access
+    </Button>
+  );
+}
+
 function LoadingState({ label }: { label: string }) {
   return <div className="py-16 text-center text-sm text-muted-foreground">{label}</div>;
+}
+
+/** A role's permissions, mono and joined with " · " (from the role's detail). */
+function RolePermissionsCell({ role }: { role: AuthSecRole }) {
+  const { data, isLoading, isError } = useGetAuthSecRoleDetailQuery(role.id);
+  if (isLoading) return <span className="text-[13px] text-muted-foreground">…</span>;
+  const perms = data?.permissions ?? [];
+  if (isError || (!data && (role.permissions_count ?? 0) > 0)) {
+    return (
+      <span className="text-[13px] text-muted-foreground">
+        {plural(role.permissions_count ?? 0, "permission", "permissions")}
+      </span>
+    );
+  }
+  if (perms.length === 0) return <span className="text-[13px] text-muted-foreground">None yet</span>;
+  const text = perms.join(" · ");
+  return (
+    <span className="block truncate font-mono text-[13px] text-foreground" title={text}>
+      {text}
+    </span>
+  );
 }
 
 // ─── Roles tab ────────────────────────────────────────────────────────────────
@@ -150,6 +204,32 @@ function RolesTab({
     return m;
   }, [resourceServers]);
 
+  // Service accounts holding each role. The role list counts only people
+  // (`users_assigned`); service-account bindings come from the bindings list.
+  const { data: bindings } = useListBindingsQuery({ audience: "admin" });
+  const serviceAccountsByRole = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    (bindings ?? []).forEach((b) => {
+      if (!b.service_account_id) return;
+      const set = m.get(b.role_id) ?? new Set<string>();
+      set.add(b.service_account_id);
+      m.set(b.role_id, set);
+    });
+    return m;
+  }, [bindings]);
+  const givenToLabel = useCallback(
+    (r: AuthSecRole) => {
+      const people = r.users_assigned ?? 0;
+      const services = serviceAccountsByRole.get(r.id)?.size ?? 0;
+      const parts = [
+        people > 0 ? plural(people, "user", "users") : null,
+        services > 0 ? plural(services, "service account", "service accounts") : null,
+      ].filter(Boolean);
+      return parts.length ? parts.join(" · ") : "No one yet";
+    },
+    [serviceAccountsByRole],
+  );
+
   const [addRole, addRoleState] = useAddUserDefinedRolesMutation();
   const [deleteRoles] = useDeleteUserDefinedRolesMutation();
 
@@ -173,8 +253,8 @@ function RolesTab({
     const app = list.filter((r) => formatRoleName(r.name, appMap).isAppScoped).length;
     return [
       { key: "all", label: "All", count: list.length },
-      { key: "workspace", label: "Workspace", count: list.length - app },
-      { key: "app", label: "App-scoped", count: app },
+      { key: "workspace", label: "All MCPs", count: list.length - app },
+      { key: "app", label: "One MCP server", count: app },
     ];
   }, [roles, appMap]);
 
@@ -215,79 +295,54 @@ function RolesTab({
     () => [
       {
         id: "name",
-        header: "Role",
+        header: () => <Term meaning={ACCESS_TERMS.role}>Role</Term>,
+        label: "Role",
         alwaysVisible: true,
-        approxWidth: 320,
-        cell: ({ row }) => {
-          const fmt = formatRoleName(row.original.name, appMap);
-          return (
-            <EntityCell
-              label={fmt.primary}
-              detail={row.original.description}
-              badge={fmt.badge ? <span className="role-tag generated">{fmt.badge}</span> : undefined}
-            />
-          );
-        },
+        approxWidth: 200,
+        cell: ({ row }) => (
+          <EntityCell
+            label={roleParts(row.original.name, appMap).role}
+            badge={isBuiltInRole(row.original) ? <span className="role-tag generated">Built-in</span> : undefined}
+          />
+        ),
       },
       {
-        id: "kind",
-        header: "Kind",
+        id: "server",
+        header: () => <Term meaning={ACCESS_TERMS.mcpServer}>MCP</Term>,
+        label: "MCP",
         priority: 1,
         approxWidth: 160,
-        cell: ({ row }) => <KindChip appScoped={formatRoleName(row.original.name, appMap).isAppScoped} />,
-      },
-      {
-        id: "users",
-        header: "Users",
-        priority: 3,
-        approxWidth: 90,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground tabular-nums">{row.original.users_assigned ?? 0}</span>
+          <span className="text-sm text-foreground">{roleParts(row.original.name, appMap).server ?? "—"}</span>
         ),
       },
       {
         id: "perms",
-        header: "Permissions",
-        priority: 2,
-        approxWidth: 120,
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground tabular-nums">{row.original.permissions_count ?? 0}</span>
-        ),
+        header: () => <Term meaning={ACCESS_TERMS.permission}>Permissions</Term>,
+        label: "Permissions",
+        priority: 3,
+        approxWidth: 320,
+        cell: ({ row }) => <RolePermissionsCell role={row.original} />,
       },
       {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 56,
-        cell: ({ row }) => (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ConsoleRowActions
-              items={[
-                { label: "View details", icon: <KeyRound className="size-4" />, onSelect: () => setSelectedRole(row.original) },
-                { label: "Assign users", icon: <UserPlus className="size-4" />, onSelect: () => onAssignUsers(row.original.id) },
-                {
-                  label: isBuiltInRole(row.original) ? "Built-in role" : "Delete role",
-                  icon: <Trash2 className="size-4" />,
-                  destructive: true,
-                  disabled: isBuiltInRole(row.original),
-                  onSelect: () => setConfirmDelete(row.original),
-                },
-              ]}
-            />
-          </div>
-        ),
+        id: "givenTo",
+        header: () => <Term meaning={ACCESS_TERMS.givenTo}>Given to</Term>,
+        label: "Given to",
+        priority: 2,
+        approxWidth: 180,
+        cell: ({ row }) => <span className="text-sm text-foreground">{givenToLabel(row.original)}</span>,
       },
     ],
-    [appMap, onAssignUsers],
+    [appMap, givenToLabel],
   );
 
   return (
     <ConsolePage
       title="Roles"
-      description="Workspace and application-scoped roles bundle permissions you can assign to operators and end users."
+      description="A role is a named set of permissions. Give it to people and service accounts, on the whole workspace or one MCP server."
       actions={
-        <Button onClick={() => setShowCreateDialog(true)} className="text-white">
-          <Plus className="mr-1.5 size-3.5" /> Create role
+        <Button className="text-white" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="mr-1.5 size-3.5" /> Add role
         </Button>
       }
     >
@@ -310,7 +365,7 @@ function RolesTab({
               <p className="text-sm font-medium text-foreground">
                 {search || kindFilter !== "all" ? "No roles match" : "No roles yet"}
               </p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
                 {search || kindFilter !== "all"
                   ? "Try a different search term or filter."
                   : "Create your first role to start bundling permissions."}
@@ -318,7 +373,7 @@ function RolesTab({
               {!search && kindFilter === "all" && (
                 <div className="mt-4 flex justify-center">
                   <Button size="sm" onClick={() => setShowCreateDialog(true)} className="text-white">
-                    <Plus className="mr-1.5 size-3.5" /> Create role
+                    <Plus className="mr-1.5 size-3.5" /> Add role
                   </Button>
                 </div>
               )}
@@ -344,7 +399,7 @@ function RolesTab({
           <SheetTitle className="sr-only">
             {selectedFmt ? `${selectedFmt.primary} — role details` : "Role details"}
           </SheetTitle>
-          <SheetDescription className="sr-only">Inspect this role's scopes and bindings.</SheetDescription>
+          <SheetDescription className="sr-only">Inspect this role's permissions and who holds it.</SheetDescription>
           {selectedRole && selectedFmt && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">
@@ -357,7 +412,9 @@ function RolesTab({
                 <div style={{ marginTop: 8 }}>
                   <div className="drawer-email" style={{ fontSize: 18 }}>{selectedFmt.primary}</div>
                   <div className="drawer-username" style={{ fontFamily: "var(--font-family-sans)" }}>
-                    {selectedFmt.isAppScoped ? "Application role" : "Workspace-wide · operator permissions"}
+                    {selectedFmt.isAppScoped
+                      ? `Role on ${roleParts(selectedRole.name, appMap).server ?? "one MCP server"}`
+                      : "Role on the whole workspace"}
                   </div>
                 </div>
               </div>
@@ -365,7 +422,7 @@ function RolesTab({
                 <div className="role-summary">
                   <div className="summary-stat-grid">
                     <div className="stat-card">
-                      <div className="sc-k">Assigned users</div>
+                      <div className="sc-k">People</div>
                       <div className="sc-v">{selectedRole.users_assigned ?? 0}</div>
                     </div>
                     <div className="stat-card">
@@ -383,8 +440,8 @@ function RolesTab({
                         </div>
                       )}
                       <div className="detail">
-                        <span className="detail-k">Kind</span>
-                        <span className="detail-v">{selectedFmt.isAppScoped ? "App-scoped" : "Workspace"}</span>
+                        <span className="detail-k">MCP server</span>
+                        <span className="detail-v">{roleParts(selectedRole.name, appMap).server ?? "—"}</span>
                       </div>
                       <div className="detail">
                         <span className="detail-k">Created</span>
@@ -396,7 +453,7 @@ function RolesTab({
               </div>
               <div className="drawer-foot">
                 <Button className="text-white" style={{ flex: 1 }} onClick={() => onAssignUsers(selectedRole.id)}>
-                  <UserPlus className="mr-1.5 size-3.5" /> Assign users
+                  <UserPlus className="mr-1.5 size-3.5" /> Give this role
                 </Button>
                 <Button
                   variant="outline"
@@ -419,7 +476,7 @@ function RolesTab({
           <DialogHeader>
             <DialogTitle>Create role</DialogTitle>
             <DialogDescription>
-              Name the role, then add permissions and assign users afterwards.
+              Name the role, then add permissions and give it to people afterwards.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -485,12 +542,12 @@ function ConfirmDeleteDialog({
         <DialogHeader>
           <DialogTitle>Delete role?</DialogTitle>
           <DialogDescription>
-            This removes the role and its bindings. Active sessions relying on it lose access. This
-            can't be undone.
+            This removes the role from everyone who holds it. Active sessions relying on it lose
+            access. This can't be undone.
           </DialogDescription>
         </DialogHeader>
         {role && (
-          <div className="rounded-md bg-muted px-3 py-2 font-mono text-xs break-all">{role.name}</div>
+          <div className="rounded-md bg-muted px-3 py-2 font-mono text-[13px] break-all">{role.name}</div>
         )}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={onCancel}>Cancel</Button>
@@ -504,7 +561,7 @@ function ConfirmDeleteDialog({
 }
 
 // ─── Scopes tab ───────────────────────────────────────────────────────────────
-function ScopesTab() {
+function ScopesTab({ onGiveAccess }: { onGiveAccess: () => void }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ScopeCatalogEntry | null>(null);
   const { data: scopeData, isLoading } = useListScopeCatalogQuery({ kind: "all" });
@@ -525,23 +582,26 @@ function ScopesTab() {
     () => [
       {
         id: "scope",
-        header: "Scope",
+        header: () => <Term meaning={ACCESS_TERMS.scope}>Scope</Term>,
+        label: "Scope",
         alwaysVisible: true,
         approxWidth: 320,
         cell: ({ row }) => (
-          <EntityCell label={<span className="font-mono">{row.original.scope_string}</span>} detail={row.original.display_name} />
+          <span className="font-mono text-[13px] text-foreground">{row.original.scope_string}</span>
         ),
       },
       {
         id: "application",
-        header: "Application",
+        header: () => <Term meaning={ACCESS_TERMS.mcpServer}>MCP server</Term>,
+        label: "MCP server",
         priority: 1,
         approxWidth: 180,
-        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.application?.name ?? "—"}</span>,
+        cell: ({ row }) => <span className="text-sm text-foreground">{row.original.application?.name ?? "—"}</span>,
       },
       {
         id: "risk",
-        header: "Risk",
+        header: () => <Term meaning={ACCESS_TERMS.risk}>Risk</Term>,
+        label: "Risk",
         priority: 2,
         approxWidth: 120,
         cell: ({ row }) => (
@@ -552,12 +612,13 @@ function ScopesTab() {
         ),
       },
       {
-        id: "tools",
-        header: "Tools",
-        priority: 3,
-        approxWidth: 90,
+        id: "roles",
+        header: () => <Term meaning={ACCESS_TERMS.inRoles}>In roles</Term>,
+        label: "In roles",
+        priority: 4,
+        approxWidth: 100,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground tabular-nums">{row.original.tools_count ?? 0}</span>
+          <span className="text-sm tabular-nums text-foreground">{row.original.roles_count ?? 0}</span>
         ),
       },
     ],
@@ -567,7 +628,8 @@ function ScopesTab() {
   return (
     <ConsolePage
       title="Scopes"
-      description="The canonical OAuth scope vocabulary across this workspace's applications. Scopes become permissions once bound to a role."
+      description="Each scope allows one kind of action on one MCP server, written as server:action. Put scopes in a role to give them out."
+      actions={<GiveAccessButton onClick={onGiveAccess} />}
     >
       <ConsoleFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search scopes" />
 
@@ -579,8 +641,8 @@ function ScopesTab() {
             <div className="py-16 text-center">
               <KeyRound className="mx-auto mb-3 size-7 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">{search ? "No scopes match" : "No scopes yet"}</p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                {search ? "Try a different search term." : "Scopes appear as you protect applications."}
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
+                {search ? "Try a different search term." : "Scopes appear as you protect MCP servers."}
               </p>
             </div>
           ) : (
@@ -603,7 +665,7 @@ function ScopesTab() {
           <SheetTitle className="sr-only">
             {selected ? `${selected.display_name || selected.scope_string} — scope details` : "Scope details"}
           </SheetTitle>
-          <SheetDescription className="sr-only">Inspect this scope's risk, roles, and bindings.</SheetDescription>
+          <SheetDescription className="sr-only">Inspect this scope's risk, MCP server and tools.</SheetDescription>
           {selected && (
             <div className="flex h-full flex-col" style={{ background: "var(--color-surface-raised)" }}>
               <div className="drawer-head">
@@ -628,7 +690,7 @@ function ScopesTab() {
                   <p className="drawer-section-label">Overview</p>
                   <div className="detail-grid">
                     <div className="detail full">
-                      <span className="detail-k">Scope string</span>
+                      <span className="detail-k">Scope</span>
                       <span className="detail-v mono">{selected.scope_string}</span>
                     </div>
                     {selected.description && (
@@ -638,7 +700,7 @@ function ScopesTab() {
                       </div>
                     )}
                     <div className="detail">
-                      <span className="detail-k">Application</span>
+                      <span className="detail-k">MCP server</span>
                       <span className="detail-v">{selected.application?.name ?? "—"}</span>
                     </div>
                     <div className="detail">
@@ -648,6 +710,10 @@ function ScopesTab() {
                     <div className="detail">
                       <span className="detail-k">Tools</span>
                       <span className="detail-v">{selected.tools_count ?? 0}</span>
+                    </div>
+                    <div className="detail">
+                      <span className="detail-k">In roles</span>
+                      <span className="detail-v">{selected.roles_count ?? 0}</span>
                     </div>
                   </div>
                 </div>
@@ -678,7 +744,7 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
     if (!search) return list;
     const s = search.toLowerCase();
     return list.filter((b) =>
-      [b.email, b.username, b.user_id, b.role_name, b.application?.name, b.source]
+      [b.email, b.username, b.user_id, b.service_account_id, b.role_name, b.application?.name, b.source]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(s)),
     );
@@ -709,54 +775,57 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
     () => [
       {
         id: "user",
-        header: "User",
+        header: () => <Term meaning={ACCESS_TERMS.who}>Who</Term>,
+        label: "Who",
         alwaysVisible: true,
         approxWidth: 260,
-        cell: ({ row }) => (
-          <span className="text-sm text-foreground">{row.original.email ?? row.original.username ?? row.original.user_id ?? "—"}</span>
-        ),
-      },
-      {
-        id: "role",
-        header: "Role",
-        priority: 1,
-        approxWidth: 200,
         cell: ({ row }) => {
-          const fmt = formatRoleName(row.original.role_name, appMap);
-          return (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-sm font-medium text-foreground">{fmt.primary}</span>
-              {fmt.badge && <span className="role-tag generated">{fmt.badge}</span>}
-            </span>
-          );
+          const b = row.original;
+          const person = b.email ?? b.username ?? b.user_id;
+          if (!person && b.service_account_id) {
+            return <EntityCell label={b.service_account_id} detail="Service account" />;
+          }
+          return <span className="text-sm text-foreground">{person ?? "—"}</span>;
         },
       },
       {
+        id: "role",
+        header: () => <Term meaning={ACCESS_TERMS.role}>Role</Term>,
+        label: "Role",
+        priority: 1,
+        approxWidth: 200,
+        cell: ({ row }) => (
+          <span className="text-sm font-medium text-foreground">{roleParts(row.original.role_name, appMap).role}</span>
+        ),
+      },
+      {
         id: "application",
-        header: "Application",
+        header: () => <Term meaning={ACCESS_TERMS.mcpServer}>MCP server</Term>,
+        label: "MCP server",
         priority: 2,
         approxWidth: 180,
-        cell: ({ row }) =>
-          row.original.application?.name ? (
-            <span className="text-xs text-muted-foreground">{row.original.application.name}</span>
-          ) : (
-            <span className="text-xs text-muted-foreground">Workspace-wide</span>
-          ),
+        cell: ({ row }) => (
+          <span className="text-[13px] text-muted-foreground">
+            {row.original.application?.name ?? roleParts(row.original.role_name, appMap).server ?? "—"}
+          </span>
+        ),
       },
       {
         id: "source",
-        header: "Source",
+        header: () => <Term meaning={ACCESS_TERMS.source}>Source</Term>,
+        label: "Source",
         priority: 4,
         approxWidth: 120,
-        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.original.source ?? "—"}</span>,
+        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.source ?? "—"}</span>,
       },
       {
         id: "expires",
-        header: "Expires",
+        header: () => <Term meaning={ACCESS_TERMS.expires}>Expires</Term>,
+        label: "Expires",
         priority: 3,
         approxWidth: 120,
         cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground">{row.original.expires_at ? formatDate(row.original.expires_at) : "Never"}</span>
+          <span className="text-[13px] text-muted-foreground">{row.original.expires_at ? formatDate(row.original.expires_at) : "Never"}</span>
         ),
       },
       {
@@ -781,35 +850,31 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
 
   return (
     <ConsolePage
-      title="Assignments"
-      description="Role bindings grant a user a role — workspace-wide or scoped to a single application."
-      actions={
-        <Button onClick={onNewAssignment} className="text-white">
-          <Plus className="mr-1.5 size-3.5" /> New assignment
-        </Button>
-      }
+      title="Who has what"
+      description="Every role given out: who holds it, on the whole workspace or one MCP server, and until when."
+      actions={<GiveAccessButton onClick={onNewAssignment} />}
     >
       <ConsoleFilterBar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search users, roles, applications, or sources"
+        searchPlaceholder="Search people, roles, MCP servers or sources"
       />
 
       <TableCard>
         <CardContent variant="flush">
           {isLoading ? (
-            <LoadingState label="Loading assignments…" />
+            <LoadingState label="Loading who has what…" />
           ) : rows.length === 0 ? (
             <div className="py-16 text-center">
               <KeyRound className="mx-auto mb-3 size-7 text-muted-foreground/50" />
-              <p className="text-sm font-medium text-foreground">{search ? "No assignments match" : "No assignments yet"}</p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                {search ? "Try a different search term." : "Assign a role to a user to grant access."}
+              <p className="text-sm font-medium text-foreground">{search ? "Nothing matches" : "No one has a role yet"}</p>
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
+                {search ? "Try a different search term." : "Give someone a role to give them access."}
               </p>
               {!search && (
                 <div className="mt-4 flex justify-center">
                   <Button size="sm" onClick={onNewAssignment} className="text-white">
-                    <Plus className="mr-1.5 size-3.5" /> New assignment
+                    <Plus className="mr-1.5 size-3.5" /> Give access
                   </Button>
                 </div>
               )}
@@ -831,7 +896,7 @@ function AssignmentsTab({ onNewAssignment }: { onNewAssignment: () => void }) {
       <Dialog open={!!confirmRevokeId} onOpenChange={(o) => !o && setConfirmRevokeId(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Revoke role assignment?</DialogTitle>
+            <DialogTitle>Revoke this role?</DialogTitle>
           <DialogDescription>
             {confirmRevoke ? (
               <>
@@ -874,7 +939,7 @@ export default function AccessControlPage({ initialTab = "roles" }: AccessContro
 
   if (!workspaceId) {
     return (
-      <ConsolePage title="Access control">
+      <ConsolePage title="Access">
         <p className="text-sm text-muted-foreground">
           No workspace selected. Switch to a workspace to manage access control.
         </p>
@@ -884,8 +949,10 @@ export default function AccessControlPage({ initialTab = "roles" }: AccessContro
 
   return (
     <>
-      {initialTab === "roles" && <RolesTab workspaceId={workspaceId} onAssignUsers={handleAssignUsers} />}
-      {initialTab === "scopes" && <ScopesTab />}
+      {initialTab === "roles" && (
+        <RolesTab workspaceId={workspaceId} onAssignUsers={handleAssignUsers} />
+      )}
+      {initialTab === "scopes" && <ScopesTab onGiveAccess={() => setWizardOpen(true)} />}
       {initialTab === "assignments" && <AssignmentsTab onNewAssignment={() => setWizardOpen(true)} />}
 
       <AssignRoleWizard

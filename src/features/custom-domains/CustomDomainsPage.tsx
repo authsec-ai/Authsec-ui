@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardContent } from "@/components/ui/card";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { ConsolePage } from "@/components/console/ConsolePage";
 import { PageInfoBanner } from "@/components/shared/PageInfoBanner";
 import { TableCard } from "@/theme/components/cards";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
@@ -77,31 +77,29 @@ export function CustomDomainsPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="space-y-4 p-6 max-w-10xl mx-auto">
-        {/* Header */}
-        <PageHeader
-          title="Custom Domains"
-          description="Manage custom domains for branded authentication experiences"
-          actions={
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
-                />
-              </Button>
-              <Button onClick={handleAddDomain}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Domain
-              </Button>
-            </div>
-          }
-        />
+    <ConsolePage
+      title="Custom domains"
+      description="Manage custom domains for branded authentication experiences"
+      actions={
+        <>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            aria-label="Refresh domains"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`}
+            />
+          </Button>
+          <Button onClick={handleAddDomain} className="text-white">
+            <Plus className="h-4 w-4 mr-2" />
+            Add domain
+          </Button>
+        </>
+      }
+    >
 
         {/* Info Banner */}
         <PageInfoBanner
@@ -221,7 +219,6 @@ export function CustomDomainsPage() {
             )}
           </CardContent>
         </TableCard>
-      </div>
 
       {/* Modals */}
       <AddDomainModal open={addModalOpen} onOpenChange={setAddModalOpen} />
@@ -234,6 +231,6 @@ export function CustomDomainsPage() {
         domain={deleteDialog.domain}
         onSuccess={handleDeleteClose}
       />
-    </div>
+    </ConsolePage>
   );
 }

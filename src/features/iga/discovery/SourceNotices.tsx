@@ -36,7 +36,7 @@ export function SourceNotices({ notices }: { notices: Notice[] }) {
         {notices.length > SHOWN ? (
           <li className="px-4 py-2 text-sm">
             <Link to="/iga/connections" className="font-semibold text-(--color-primary-text) hover:underline">
-              {notices.length - SHOWN} more on Connections
+              {notices.length - SHOWN} more on Accounts
             </Link>
           </li>
         ) : null}

@@ -26,7 +26,7 @@ export function KubernetesPolicyNote({ clusterConnectionHref = CONNECTIONS }: { 
         <>
           {" "}
           <Link to={clusterConnectionHref} className="font-medium text-(--color-primary-text) hover:underline">
-            Open Connections
+            Open Accounts
           </Link>
         </>
       ) : null}

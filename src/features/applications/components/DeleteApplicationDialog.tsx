@@ -38,7 +38,7 @@ export function DeleteApplicationDialog({
       onDeleted?.();
     } catch (err) {
       const apiErr = err as { data?: { error?: string } };
-      toast.error(apiErr?.data?.error ?? "Couldn't delete application.");
+      toast.error(apiErr?.data?.error ?? "Couldn't delete this MCP.");
     }
   };
 
@@ -51,9 +51,9 @@ export function DeleteApplicationDialog({
     >
       <DialogContent data-cr className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete application?</DialogTitle>
+          <DialogTitle>Delete MCP?</DialogTitle>
           <DialogDescription>
-            This permanently removes <strong>{application?.name ?? "this application"}</strong>,
+            This permanently removes <strong>{application?.name ?? "this MCP"}</strong>,
             its OAuth scopes, imported tools, access policy, and introspection
             credentials. Active clients lose access immediately.
           </DialogDescription>
@@ -77,7 +77,7 @@ export function DeleteApplicationDialog({
             disabled={isLoading || !application}
           >
             <Trash2 className="mr-1.5 size-4" />
-            {isLoading ? "Deleting…" : "Delete application"}
+            {isLoading ? "Deleting…" : "Delete MCP"}
           </Button>
         </DialogFooter>
       </DialogContent>

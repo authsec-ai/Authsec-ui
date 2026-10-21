@@ -27,7 +27,7 @@ import { Surface } from "./ApplicationConsole";
 import { cn } from "@/lib/utils";
 
 const CHECK_LABEL: Record<string, string> = {
-  not_self_delegation: "Agent is distinct from this Application",
+  not_self_delegation: "Agent is distinct from this MCP server",
   connection_approved: "Connection approved for this server",
   brokering_permitted: "Brokering permits redemption",
 };

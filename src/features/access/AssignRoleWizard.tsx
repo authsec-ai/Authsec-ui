@@ -15,6 +15,7 @@ import { Check, ChevronLeft, ChevronRight, User, Shield, Globe, Clock, Clipboard
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -85,7 +86,7 @@ function parseRoleName(
 const STEPS = [
   { label: "Users",  icon: User },
   { label: "Role",   icon: Shield },
-  { label: "Scope",  icon: Globe },
+  { label: "Where",  icon: Globe },
   { label: "Expiry", icon: Clock },
   { label: "Review", icon: ClipboardCheck },
 ];
@@ -132,7 +133,7 @@ function StepHeader({ step }: { step: number }) {
       <h3 className="text-base font-semibold text-slate-900 mt-0.5">
         {STEPS[step].label === "Users"   && "Select users"}
         {STEPS[step].label === "Role"    && "Select role"}
-        {STEPS[step].label === "Scope"   && "Choose scope"}
+        {STEPS[step].label === "Where"   && "Choose where it applies"}
         {STEPS[step].label === "Expiry"  && "Set expiry"}
         {STEPS[step].label === "Review"  && "Review & confirm"}
       </h3>
@@ -380,13 +381,13 @@ function StepScope({
   const options: { value: "workspace" | "application"; label: string; desc: string }[] = [
     {
       value: "workspace",
-      label: "Workspace-wide",
-      desc: "Role applies across all applications in this workspace.",
+      label: "Whole workspace",
+      desc: "The role applies on every MCP server in this workspace.",
     },
     {
       value: "application",
-      label: "Application-specific",
-      desc: "Role applies only to the selected application.",
+      label: "One MCP server",
+      desc: "The role applies only on the MCP server you choose.",
     },
   ];
 
@@ -439,7 +440,7 @@ function StepScope({
           ) : (
             <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-40 overflow-y-auto">
               {applications.length === 0 ? (
-                <p className="text-center py-6 text-sm text-slate-400">No applications found.</p>
+                <p className="text-center py-6 text-sm text-slate-400">No MCP servers found.</p>
               ) : (
                 applications.map((app) => {
                   const isSelected = selectedApplicationId === app.id;
@@ -624,7 +625,7 @@ function StepReview({
       <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs space-y-2">
         {[
           { key: "Role",   val: roleName },
-          { key: "Scope",  val: scopeType === "application" && selectedApp ? selectedApp.name : "Workspace-wide" },
+          { key: "Where",  val: scopeType === "application" && selectedApp ? selectedApp.name : "Whole workspace" },
           { key: "Expiry", val: expiry === "never" ? "No expiry" : expiryLabel },
         ].map(({ key, val }) => (
           <div key={key} className="flex items-center justify-between gap-4">
@@ -740,7 +741,7 @@ export default function AssignRoleWizard({
             await Promise.all(createdIds.map((id) => deleteBinding(id).unwrap()));
             toast.success("Assignment undone");
           } catch {
-            toast.error("Failed to undo — revoke manually from Assignments tab");
+            toast.error("Failed to undo — revoke it on the Who has what tab");
           }
         },
       });
@@ -762,7 +763,10 @@ export default function AssignRoleWizard({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle className="text-center text-lg font-semibold">Assign Role</DialogTitle>
+          <DialogTitle className="text-center text-lg font-semibold">Give access</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose who gets access, pick a role, then choose where and for how long.
+          </DialogDescription>
         </DialogHeader>
 
         <StepIndicator current={step} />

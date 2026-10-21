@@ -365,7 +365,7 @@ export default function ApplicationSetupPage() {
         <p className="text-sm text-slate-600">
           Unauthenticated calls should return a Bearer challenge. Once your
           SDK publishes a manifest, both checks turn green and{" "}
-          <strong>Launch application</strong> unlocks.
+          <strong>Launch MCP server</strong> unlocks.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <CheckTile
@@ -474,7 +474,7 @@ export default function ApplicationSetupPage() {
         </div>
         {regModes.length === 0 && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
-            No registration mode is enabled — no clients can connect to this application.
+            No registration mode is enabled — no clients can connect to this MCP server.
           </p>
         )}
       </div>

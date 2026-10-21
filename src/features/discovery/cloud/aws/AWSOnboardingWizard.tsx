@@ -503,7 +503,7 @@ export function AWSOnboardingWizard({
               </p>
               {scanStarted ? (
                 <p className="text-xs text-(--color-success-text)">
-                  Scan queued — it runs in the background. Open this account from the Connections
+                  Scan queued — it runs in the background. Open this account from the Accounts
                   list to follow it.
                 </p>
               ) : (

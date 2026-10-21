@@ -78,6 +78,7 @@ export default function ResourcePage() {
       ws={ws}
       listType="resources"
       kindLabel="Resource"
+      about="One resource a policy names. Who can access lists every identity granted access to it and the workloads that run as them."
       base={`/iga/resources/${encodeURIComponent(id)}`}
       tabs={tabs}
       activeTab={activeTab}

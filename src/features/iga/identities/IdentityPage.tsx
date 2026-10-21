@@ -81,6 +81,7 @@ export default function IdentityPage() {
       ws={ws}
       listType="identities"
       kindLabel="Identity"
+      about="One identity: the workloads that run as it, and what its policies allow it to reach."
       base={base}
       tabs={tabs}
       activeTab={activeTab}

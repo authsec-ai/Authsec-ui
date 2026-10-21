@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
@@ -317,16 +316,20 @@ function RequestsSection({ rsId }: { rsId: string }) {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 52,
+        approxWidth: 190,
+        // A pending request is a decision: show it on the row. Handled
+        // requests have nothing to do, so they show nothing.
         cell: ({ row }) => {
-          const isPending = row.original.status === "pending";
+          if (row.original.status !== "pending") return null;
           return (
-            <ConsoleRowActions
-              items={[
-                { label: "Approve with role", disabled: !isPending, onSelect: () => setApproveTarget(row.original) },
-                { label: "Deny", disabled: !isPending, destructive: true, onSelect: () => setDenyTarget(row.original) },
-              ]}
-            />
+            <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button variant="outline" size="sm" onClick={() => setDenyTarget(row.original)}>
+                Deny
+              </Button>
+              <Button size="sm" className="text-white" onClick={() => setApproveTarget(row.original)}>
+                Approve
+              </Button>
+            </div>
           );
         },
       },
@@ -367,7 +370,7 @@ function RequestsSection({ rsId }: { rsId: string }) {
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {statusFilter === "all"
-                  ? "Requests appear here when an agent tries to connect to this application."
+                  ? "Requests appear here when an agent tries to connect to this MCP server."
                   : "All requests have been handled."}
               </p>
             </div>
@@ -508,15 +511,17 @@ function ConnectionsSection({ rsId }: { rsId: string }) {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 52,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "Revoke connection",
-                disabled: revoking || row.original.status === "revoked",
-                destructive: true,
-                onSelect: async () => {
+        approxWidth: 100,
+        // One visible action instead of a one-item overflow menu; revoked
+        // connections have nothing left to do.
+        cell: ({ row }) =>
+          row.original.status === "revoked" ? null : (
+            <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={revoking}
+                onClick={async () => {
                   try {
                     await revokeConnection({ rsId, connectionId: row.original.connection_id }).unwrap();
                     toast.success("Connection revoked.");
@@ -524,11 +529,12 @@ function ConnectionsSection({ rsId }: { rsId: string }) {
                     const apiErr = err as { data?: { error?: string } };
                     toast.error(apiErr?.data?.error ?? "Couldn't revoke connection.");
                   }
-                },
-              },
-            ]}
-          />
-        ),
+                }}
+              >
+                Revoke
+              </Button>
+            </div>
+          ),
       },
     ],
     [rsId, revokeConnection, revoking],

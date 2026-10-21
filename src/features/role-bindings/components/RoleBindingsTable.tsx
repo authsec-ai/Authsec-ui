@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { KeyRound, ShieldOff } from "lucide-react";
 
 import {
   useListBindingsQuery,
@@ -8,6 +7,7 @@ import {
   type RbacAudience,
 } from "@/app/api/bindingsApi";
 import { useDeleteRSBindingMutation } from "@/app/api/setupWizardApi";
+import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import {
   type AdaptiveColumn,
 } from "@/components/ui/adaptive-table";
 import {
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { MapRoleToScopeModal } from "./MapRoleToScopeModal";
@@ -149,45 +148,35 @@ export function RoleBindingsTable({
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 72,
+        approxWidth: 110,
         cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "View effective access",
-                icon: <KeyRound className="size-4" />,
-                onSelect: () =>
-                  navigate(`/end-users/${row.original.user_id || row.original.user?.id}`),
-              },
-              {
-                label: "Change role",
-                onSelect: () => navigate(`/applications/${row.original.application?.id}/access`),
-              },
-              {
-                label: "Remove access",
-                icon: <ShieldOff className="size-4" />,
-                disabled: deleting,
-                destructive: true,
-                onSelect: async () => {
-                  try {
-                    await deleteBinding({
-                      rsId: row.original.application?.id || "",
-                      bindingId: row.original.id,
-                    }).unwrap();
-                    toast.success("Application access removed.");
-                    refetch();
-                  } catch (err) {
-                    const apiErr = err as { data?: { error?: string } };
-                    toast.error(apiErr?.data?.error ?? "Couldn't remove binding.");
-                  }
-                },
-              },
-            ]}
-          />
+          <div onClick={(e) => e.stopPropagation()} className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-(--color-danger-text)"
+              disabled={deleting}
+              onClick={async () => {
+                try {
+                  await deleteBinding({
+                    rsId: row.original.application?.id || "",
+                    bindingId: row.original.id,
+                  }).unwrap();
+                  toast.success("Application access removed.");
+                  refetch();
+                } catch (err) {
+                  const apiErr = err as { data?: { error?: string } };
+                  toast.error(apiErr?.data?.error ?? "Couldn't remove binding.");
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </div>
         ),
       },
     ],
-    [deleteBinding, deleting, navigate, refetch],
+    [deleteBinding, deleting, refetch],
   );
 
   return (
@@ -205,6 +194,10 @@ export function RoleBindingsTable({
               columns={columns}
               enableSelection={false}
               enableExpansion={false}
+              onRowClick={(b) => {
+                const userId = b.user_id || b.user?.id;
+                if (userId) navigate(`/end-users/${userId}`);
+              }}
               pagination={{
                 pageSize: 10,
                 pageSizeOptions: [5, 10, 25, 50, 100],

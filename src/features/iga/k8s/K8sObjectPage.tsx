@@ -236,6 +236,11 @@ function K8sObject({ kind, id, tab }: { kind: "workload" | "identity"; id: strin
       listType={isWorkload ? "workloads" : "identities"}
       provider="k8s"
       kindLabel={isWorkload ? "Workload" : "ServiceAccount"}
+      about={
+        isWorkload
+          ? "One Kubernetes workload: the ServiceAccount it runs as, and what that ServiceAccount's RBAC rules allow."
+          : "One Kubernetes ServiceAccount: the workloads that run as it, and what its RBAC rules allow."
+      }
       base={`/iga/k8s/${kind}/${encodeURIComponent(id)}`}
       tabs={TABS}
       activeTab={activeTab}

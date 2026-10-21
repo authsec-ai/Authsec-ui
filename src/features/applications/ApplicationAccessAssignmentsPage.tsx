@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/adaptive-table";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
 } from "@/components/console/iam-console";
 import { TableCard } from "@/theme/components/cards";
@@ -255,29 +254,30 @@ export default function ApplicationAccessAssignmentsPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 52,
+        approxWidth: 100,
+        // One visible action instead of a one-item overflow menu.
         cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "Revoke access",
-                disabled: deleting,
-                destructive: true,
-                onSelect: async () => {
-                  try {
-                    await deleteAssignment({
-                      rsId: application.id,
-                      assignmentId: row.original.id,
-                    }).unwrap();
-                    toast.success("Access revoked.");
-                  } catch (err) {
-                    const apiErr = err as { data?: { error?: string } };
-                    toast.error(apiErr?.data?.error ?? "Couldn't revoke access.");
-                  }
-                },
-              },
-            ]}
-          />
+          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              onClick={async () => {
+                try {
+                  await deleteAssignment({
+                    rsId: application.id,
+                    assignmentId: row.original.id,
+                  }).unwrap();
+                  toast.success("Access revoked.");
+                } catch (err) {
+                  const apiErr = err as { data?: { error?: string } };
+                  toast.error(apiErr?.data?.error ?? "Couldn't revoke access.");
+                }
+              }}
+            >
+              Revoke
+            </Button>
+          </div>
         ),
       },
     ],

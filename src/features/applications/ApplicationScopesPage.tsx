@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 
 import {
   useCreateResourceServerScopeMutation,
@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import {
   ConsoleFilterBar,
-  ConsoleRowActions,
   EntityCell,
   ImpactPreviewDialog,
 } from "@/components/console/iam-console";
@@ -198,31 +197,28 @@ export default function ApplicationScopesPage() {
         id: "actions",
         header: "",
         alwaysVisible: true,
-        approxWidth: 90,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "Edit",
-                icon: <Pencil className="size-4" />,
-                onSelect: () => setEditScopeId(row.original.id),
-              },
-              {
-                label: "View tools",
-                onSelect: () => {
-                  setQuery(row.original.scope_string);
-                },
-              },
-              {
-                label: "Delete unused label",
-                icon: <Trash2 className="size-4" />,
-                onSelect: () => setDeleteTarget(row.original),
-                disabled: deleting,
-                destructive: true,
-              },
-            ]}
-          />
-        ),
+        approxWidth: 110,
+        // No overflow menu: the row opens the scope (edit + delete live
+        // there). A scope no tool uses is cleanup worth doing, so that row
+        // shows its Delete button.
+        cell: ({ row }) => {
+          const unused =
+            (row.original.tools_count ?? toolCountByScopeID.get(row.original.id) ?? 0) === 0;
+          if (!unused) return null;
+          return (
+            <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={deleting}
+                onClick={() => setDeleteTarget(row.original)}
+              >
+                <Trash2 className="mr-1.5 size-3.5" />
+                Delete
+              </Button>
+            </div>
+          );
+        },
       },
     ],
     [deleting, toolCountByScopeID],
@@ -261,7 +257,7 @@ export default function ApplicationScopesPage() {
               <PopoverContent align="end" className="w-[min(92vw,34rem)] p-4">
                 <div className="space-y-4">
                   <div>
-                    <h2 className="text-sm font-semibold">Create application scope</h2>
+                    <h2 className="text-sm font-semibold">Create scope</h2>
                     <p className="text-xs text-muted-foreground">
                       Scopes are enforced only for {application.name}.
                     </p>
@@ -328,6 +324,7 @@ export default function ApplicationScopesPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(scope) => scope.id}
+              onRowClick={(scope) => setEditScopeId(scope.id)}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
           )}

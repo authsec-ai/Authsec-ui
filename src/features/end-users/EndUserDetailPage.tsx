@@ -8,10 +8,7 @@ import {
 } from "@/components/ui/adaptive-table";
 import { Badge } from "@/components/ui/badge";
 import { CardContent } from "@/components/ui/card";
-import {
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
+import { EntityCell } from "@/components/console/iam-console";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableCard } from "@/theme/components/cards";
 import { resolveWorkspaceId } from "@/utils/workspace";
@@ -57,32 +54,8 @@ export default function EndUserDetailPage() {
           <span>{row.original.scopes_count} scope{row.original.scopes_count === 1 ? "" : "s"}</span>
         ),
       },
-      {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 76,
-        cell: ({ row }) => (
-          <ConsoleRowActions
-            items={[
-              {
-                label: "Open application access",
-                onSelect: () => navigate(`/applications/${row.original.application_id}/access`),
-              },
-              {
-                label: "Review assignments",
-                onSelect: () => navigate(`/applications/${row.original.application_id}/role-bindings`),
-              },
-              {
-                label: "View consent grants",
-                onSelect: () => navigate(`/applications/${row.original.application_id}/consent-grants`),
-              },
-            ]}
-          />
-        ),
-      },
     ],
-    [navigate],
+    [],
   );
 
   return (
@@ -135,6 +108,7 @@ export default function EndUserDetailPage() {
               enableSelection={false}
               enableExpansion={false}
               getRowId={(application) => application.binding_id}
+              onRowClick={(application) => navigate(`/applications/${application.application_id}/access`)}
               pagination={{ pageSize: 10, pageSizeOptions: [5, 10, 25], alwaysVisible: true }}
             />
           )}

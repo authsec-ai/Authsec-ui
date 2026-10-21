@@ -243,12 +243,12 @@ export function InventoryEmptyState({
       icon = <Radar />;
       title = gcp ? "No Google Cloud project connected" : "No AWS account connected";
       body = gcp
-        ? "Connect a Google Cloud project from Connections to discover the service accounts in it."
-        : "Connect an AWS account from Connections to discover the IAM identities, permissions and compute in it. AuthSec connects through a read-only role you create and control.";
+        ? "Connect a Google Cloud project from Accounts to discover the service accounts in it."
+        : "Connect an AWS account from Accounts to discover the IAM identities, permissions and compute in it. AuthSec connects through a read-only role you create and control.";
       action = (
         <Button asChild size="sm" variant="outline">
           <Link to="/iga/connections">
-            Go to Connections
+            Go to Accounts
             <ExternalLink className="ml-1.5 size-3.5" />
           </Link>
         </Button>
@@ -257,11 +257,11 @@ export function InventoryEmptyState({
 
     case "never_scanned":
       title = "Not scanned yet";
-      body = `The connection is proven but nothing has been discovered — scanning is a separate step, started from Connections. Once a scan has finished, ${noun} appear here.`;
+      body = `The connection is proven but nothing has been discovered — scanning is a separate step, started from Accounts. Once a scan has finished, ${noun} appear here.`;
       action = (
         <Button asChild size="sm" variant="outline">
           <Link to={reason.connectorId ? `/iga/connections/${encodeURIComponent(reason.connectorId)}` : "/iga/connections"}>
-            {reason.connectorId ? "View connection" : "Open Connections"}
+            {reason.connectorId ? "View account" : "Open Accounts"}
           </Link>
         </Button>
       );
@@ -275,7 +275,7 @@ export function InventoryEmptyState({
     case "coverage_incomplete":
       icon = <AlertTriangle />;
       title = "The last scan could not read everything";
-      body = `At least one ${gcp ? "surface" : "IAM surface"} was denied or throttled, so this list is a floor rather than a total. Nothing here means the ${gcp ? "project" : "account"} has none — it means the scan could not look everywhere. Check the connection's coverage in Connections.`;
+      body = `At least one ${gcp ? "surface" : "IAM surface"} was denied or throttled, so this list is a floor rather than a total. Nothing here means the ${gcp ? "project" : "account"} has none — it means the scan could not look everywhere. Check the connection's coverage in Accounts.`;
       break;
 
     case "stale_stack":

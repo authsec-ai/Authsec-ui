@@ -519,7 +519,7 @@ export default function PolicyFormPage() {
                       </p>
                       {readiness.available && !readiness.failed ? (
                         <Link to="/iga/connections" className="ml-6 inline-flex items-center gap-1 text-xs font-semibold text-(--color-primary-text) hover:underline">
-                          Open Connections
+                          Open Accounts
                           <ArrowRight aria-hidden="true" className="size-3.5" />
                         </Link>
                       ) : null}

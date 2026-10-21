@@ -250,40 +250,58 @@
 }
 
 
-/* The page canvas. `[data-cr]` is ConsolePage's root, which every IGA page
-   renders through (directly, or via IgaPage). Painted here rather than on the
-   shell so the sidebar and header keep their own surfaces. */
-[data-shell="iga"] [data-cr] {
-  background: #f8fafc;
-  min-height: 100%;
+/* The page canvas and brand wash. Same mechanism as Core AuthSec (the
+   `.app-content` rule in admin-shell.css paints --color-canvas plus two
+   radial washes over the top ~520px of the content area), but in the Agentic
+   IGA accent (#6d28d9 light / #8b5cf6 dark): the second product's colour,
+   used for this product only. Light mode uses opaque tints for the same
+   reason as AuthSec: a low-alpha accent greys the canvas instead of adding
+   hue. Dark mode keeps the accent with alpha. */
+[data-shell="iga"] {
+  --color-canvas: #f8fafc;
+  --wash-a: #e3d9f9; /* soft violet, from #6d28d9 */
+  --wash-b: #ece5fd; /* lighter violet, from #8b5cf6 */
 }
 
-.dark [data-shell="iga"] [data-cr],
-[data-theme="dark"] [data-shell="iga"] [data-cr] {
-  background: #0f1318;
+.dark [data-shell="iga"],
+[data-theme="dark"] [data-shell="iga"] {
+  --color-canvas: #0f1318;
+  --wash-a: rgba(109, 40, 217, 0.22);
+  --wash-b: rgba(139, 92, 246, 0.16);
+}
+
+/* `[data-cr]` is ConsolePage's root, which every IGA page renders through.
+   It used to paint the canvas itself; it is transparent now so the wash on
+   the content area behind it shows. Cards and tables keep their own surface
+   and cover the wash. Dialogs and drawers portal outside this shell, so
+   they are unaffected. */
+[data-shell="iga"] [data-cr] {
+  background: transparent;
+  min-height: 100%;
 }
 
 /* ====================================================================
    PAGE HEADER  (spec §5)
    ==================================================================== */
 
+/* Same heading as the AuthSec console (console-screens.css): page heading
+   30px bold, description 15px muted. The two products share one type scale
+   (UX proposal build notes), so these must stay in step with it. */
 [data-shell="iga"] .sh-title {
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 32px;
-  letter-spacing: -0.018em;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--color-text);
   margin: 0 0 4px;
 }
 
-/* One line of description: the copy is written to fit, and the cap keeps a
-   long one from pushing the page down. */
 [data-shell="iga"] .sh-desc {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 1.5;
   color: var(--color-text-muted);
-  max-width: 80ch;
+  max-width: 720px;
 }
 
 [data-shell="iga"] .section-header {

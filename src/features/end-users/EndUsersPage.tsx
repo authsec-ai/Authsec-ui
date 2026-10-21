@@ -18,12 +18,11 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
+import { ConsoleFilterBar, EntityCell } from "@/components/console/iam-console";
 import { ConsolePage } from "@/components/console/ConsolePage";
+import { useUnifiedProviders } from "@/features/authentication/hooks/useUnifiedProviders";
+import { ConnectIdpButton } from "./ConnectIdpButton";
+import { providerDisplayName, useSignInSources } from "./signInSources";
 import { TableCard } from "@/theme/components/cards";
 import {
   useListEndUsersQuery,
@@ -60,6 +59,22 @@ const AV_GRADIENTS = [
 
 function userLabel(user: TenantEndUserState): string {
   return user.user_email ?? user.user_username ?? user.user_id;
+}
+
+/** The person's name when the identity carries one, else their email or username. */
+function userName(user: TenantEndUserState): string {
+  const name = user.user_name?.trim();
+  return name && name !== "Not Provided" ? name : userLabel(user);
+}
+
+/** "viewer on support-mcp", one per role the user holds on an MCP server. */
+function userRoles(user: TenantEndUserState): string[] {
+  const seen = new Set<string>();
+  (user.applications ?? []).forEach((a) => {
+    const role = a.role_label || a.role_name;
+    if (role) seen.add(`${role} on ${a.name}`);
+  });
+  return Array.from(seen);
 }
 
 function userInitials(user: TenantEndUserState): string {
@@ -212,7 +227,7 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
     <div className="space-y-3">
       {applications.length > 1 && (
         <Select value={effectiveAppId} onValueChange={setSelectedAppId}>
-          <SelectTrigger className="h-8 text-xs">
+          <SelectTrigger className="h-8 text-[13px]">
             <SelectValue placeholder="Select application" />
           </SelectTrigger>
           <SelectContent>
@@ -270,7 +285,7 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
               </p>
               {grantedScopes.length > 0 && (
                 <div style={{ marginBottom: ungrantedScopes.length > 0 ? 12 : 0 }}>
-                  <p style={{ fontSize: 12, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
+                  <p style={{ fontSize: 12.5, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
                     Granted · {grantedScopes.length}
                   </p>
                   <div className="scope-chips">
@@ -285,7 +300,7 @@ function UserAccessSection({ user }: { user: TenantEndUserState }) {
               )}
               {ungrantedScopes.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 12, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
+                  <p style={{ fontSize: 12.5, color: "var(--color-text-subtle)", margin: "0 0 6px" }}>
                     Not granted · {ungrantedScopes.length}
                   </p>
                   <div className="scope-chips">
@@ -361,7 +376,7 @@ function UserDetailDrawer({
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button className="btn btn-secondary" style={{ height: 34, padding: "0 12px" }} onClick={() => setAssignOpen(true)}>
-            <Plus className="icon-sm" /> Assign role
+            <Plus className="icon-sm" /> Give access
           </button>
           {user.status === "active" ? (
             <button
@@ -482,7 +497,6 @@ function UserDetailDrawer({
 
 export default function EndUsersPage() {
   const workspaceId = resolveWorkspaceId();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<EndUserStatus | "all">("all");
   const [selectedUser, setSelectedUser] = useState<TenantEndUserState | null>(null);
@@ -495,6 +509,9 @@ export default function EndUsersPage() {
     },
     { skip: !workspaceId },
   );
+
+  const signIn = useSignInSources(workspaceId);
+  const { providers: idps } = useUnifiedProviders({ workspace_id: workspaceId ?? "" });
 
   const [suspend, suspendState] = useSuspendEndUserMutation();
   const [reactivate, reactivateState] = useReactivateEndUserMutation();
@@ -545,9 +562,9 @@ export default function EndUsersPage() {
     () => [
       {
         id: "user",
-        header: "User",
+        header: "Name",
         alwaysVisible: true,
-        approxWidth: 280,
+        approxWidth: 220,
         cell: ({ row }) => {
           const u = row.original;
           return (
@@ -556,91 +573,76 @@ export default function EndUsersPage() {
                 {userInitials(u)}
               </span>
               <EntityCell
-                label={userLabel(u)}
-                detail={`@${u.user_username ?? u.user_id}`}
-                monoDetail
+                label={userName(u)}
+                badge={u.status === "suspended" ? <StatusPill status={u.status} /> : undefined}
               />
             </div>
           );
         },
       },
       {
-        id: "status",
-        header: "Status",
+        id: "email",
+        header: "Email",
         priority: 1,
-        approxWidth: 120,
-        cell: ({ row }) => <StatusPill status={row.original.status} />,
+        approxWidth: 220,
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.original.user_email ?? "—"}</span>
+        ),
       },
       {
-        id: "apps",
-        header: "Apps",
-        priority: 3,
-        approxWidth: 80,
-        className: "text-right",
+        id: "idp",
+        header: "Identity provider",
+        priority: 2,
+        approxWidth: 200,
         cell: ({ row }) => {
-          const count = row.original.applications_count ?? row.original.applications?.length ?? 0;
+          const u = row.original;
+          const src = signIn.lookup(u.user_id, u.user_email);
+          if (!src) {
+            return <span className="text-[13px] text-muted-foreground">{signIn.loaded ? "—" : ""}</span>;
+          }
+          const name = src.provider ? providerDisplayName(src.provider, idps) : "Email and password";
           return (
-            <span className={cn("num-cell col-apps text-xs tabular-nums text-muted-foreground", count === 0 && "zero")}>
-              {count}
+            <span className="text-sm text-foreground">
+              {name}
+              {src.addedBy ? <span className="text-muted-foreground"> · added by {src.addedBy}</span> : null}
+            </span>
+          );
+        },
+      },
+      {
+        id: "roles",
+        header: "Roles",
+        priority: 3,
+        approxWidth: 220,
+        cell: ({ row }) => {
+          const roles = userRoles(row.original);
+          if (roles.length === 0) {
+            return <span className="text-[13px] text-muted-foreground">No roles yet</span>;
+          }
+          const text = roles.join(", ");
+          return (
+            <span className="block truncate text-sm text-foreground" title={text}>
+              {text}
             </span>
           );
         },
       },
       {
         id: "lastActive",
-        header: "Last active",
-        priority: 2,
+        header: "Last sign-in",
+        priority: 4,
         approxWidth: 140,
-        cell: ({ row }) => (
-          <span
-            className="time-cell text-xs text-muted-foreground"
-            title={formatDateTime(row.original.last_seen_at)}
-          >
-            {formatRelativeTime(row.original.last_seen_at)}
-          </span>
-        ),
-      },
-      {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 56,
         cell: ({ row }) => {
-          const u = row.original;
+          const at = row.original.user_last_login ?? row.original.last_seen_at;
           return (
-            <div onClick={(e) => e.stopPropagation()}>
-              <ConsoleRowActions
-                items={[
-                  {
-                    label: "View details",
-                    onSelect: () => setSelectedUser(u),
-                  },
-                  {
-                    label: "View effective access",
-                    icon: <Network className="size-4" />,
-                    onSelect: () => navigate(`/authz/effective-access?user_id=${u.user_id}`),
-                  },
-                  u.status === "active"
-                    ? {
-                        label: "Suspend",
-                        icon: <ShieldOff className="size-4" />,
-                        onSelect: () => handleSuspend(u.user_id),
-                        disabled: suspendState.isLoading,
-                      }
-                    : {
-                        label: "Reactivate",
-                        icon: <ShieldCheck className="size-4" />,
-                        onSelect: () => handleReactivate(u.user_id),
-                        disabled: reactivateState.isLoading,
-                      },
-                ]}
-              />
-            </div>
+            <span className="time-cell text-[13px] text-muted-foreground" title={formatDateTime(at)}>
+              {formatRelativeTime(at)}
+            </span>
           );
         },
       },
     ],
-    [handleSuspend, handleReactivate, suspendState.isLoading, reactivateState.isLoading, navigate],
+    [signIn, idps],
   );
 
   if (!workspaceId) {
@@ -649,8 +651,9 @@ export default function EndUsersPage() {
 
   return (
     <ConsolePage
-      title="User Identities"
-      description="Consumers of this workspace's published Applications. They connect via OAuth — not workspace members."
+      title="End users"
+      description="People who use your MCP servers through agents. They sign in with OAuth and can't open this console."
+      actions={<ConnectIdpButton />}
     >
       <ConsoleFilterBar
         search={search}
@@ -673,10 +676,10 @@ export default function EndUsersPage() {
               <p className="text-sm font-medium text-foreground">
                 {search || statusFilter !== "all" ? "No matching users" : "No end users yet"}
               </p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
                 {search || statusFilter !== "all"
                   ? "Try a different search term or clear the active filters."
-                  : "When someone authorizes one of this workspace's Applications via OAuth, they'll appear here."}
+                  : "When someone signs in to one of your MCP servers through an agent, they appear here."}
               </p>
               {!search && statusFilter === "all" && (
                 <div className="mt-4 flex justify-center">

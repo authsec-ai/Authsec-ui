@@ -11,7 +11,7 @@ export default function ApplicationClientsPage() {
           Clients
         </h2>
         <p className="text-sm text-muted-foreground">
-          OAuth clients with access to this application. Approve pending requests,
+          OAuth clients with access to this MCP server. Approve pending requests,
           revoke access, and pre-register new clients from this view.
           Revoking affects only this workspace.
         </p>

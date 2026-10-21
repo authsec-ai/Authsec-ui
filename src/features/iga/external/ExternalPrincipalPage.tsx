@@ -211,6 +211,7 @@ export default function ExternalPrincipalPage() {
       ws={ws}
       listType="identities"
       kindLabel="External principal"
+      about="Someone outside your connected accounts that a trust policy lets in, and the roles they may use."
       base={`/iga/external-principals/${encodeURIComponent(id)}`}
       tabs={tabs}
       activeTab={activeTab}

@@ -36,11 +36,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import {
-  ConsoleFilterBar,
-  ConsoleRowActions,
-  EntityCell,
-} from "@/components/console/iam-console";
+import { ConsoleFilterBar, EntityCell } from "@/components/console/iam-console";
+import { ConnectIdpButton } from "@/features/end-users/ConnectIdpButton";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { TableCard } from "@/theme/components/cards";
 import { toast } from "@/lib/toast";
@@ -280,51 +277,8 @@ export function TeamPage() {
           <span className="time-cell">{formatDate(row.original.joined_at)}</span>
         ),
       },
-      {
-        id: "actions",
-        header: "",
-        alwaysVisible: true,
-        approxWidth: 56,
-        cell: ({ row }) => {
-          const m = row.original;
-          return (
-            <div onClick={(e) => e.stopPropagation()}>
-              <ConsoleRowActions
-                items={[
-                  {
-                    label: "View details",
-                    icon: <UserCog className="size-4" />,
-                    onSelect: () => setSelected(m),
-                  },
-                  ...(m.status === "suspended"
-                    ? [
-                        {
-                          label: "Reactivate",
-                          icon: <ShieldCheck className="size-4" />,
-                          onSelect: () => handleReactivate(m.user_id),
-                        },
-                      ]
-                    : [
-                        {
-                          label: "Suspend",
-                          icon: <ShieldOff className="size-4" />,
-                          onSelect: () => handleSuspend(m.user_id),
-                        },
-                      ]),
-                  {
-                    label: "Remove",
-                    icon: <Trash2 className="size-4" />,
-                    destructive: true,
-                    onSelect: () => setConfirmRemove(m),
-                  },
-                ]}
-              />
-            </div>
-          );
-        },
-      },
     ],
-    [handleReactivate, handleSuspend],
+    [],
   );
 
   if (!workspaceId) {
@@ -334,11 +288,14 @@ export function TeamPage() {
   return (
     <ConsolePage
       title="Team"
-      description="Workspace operators and their access."
+      description="The people who manage this console: they protect MCP servers, give access and read logs."
       actions={
-        <Button className="text-white" onClick={() => setInviteOpen(true)}>
-          <UserPlus className="mr-1.5 size-3.5" /> Invite member
-        </Button>
+        <>
+          <Button variant="outline" onClick={() => setInviteOpen(true)}>
+            <UserPlus className="mr-1.5 size-3.5" /> Invite team member
+          </Button>
+          <ConnectIdpButton />
+        </>
       }
     >
       <InviteUserModal
@@ -369,10 +326,10 @@ export function TeamPage() {
               <p className="text-sm font-medium text-foreground">
                 {search.trim() || statusFilter !== "all" ? "No members match" : "No team members yet"}
               </p>
-              <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">
                 {search.trim() || statusFilter !== "all"
                   ? "Try a different search term or clear the active filters."
-                  : "Invite users to your workspace to give them operator access."}
+                  : "Invite a team member to help manage this console."}
               </p>
               {(search.trim() || statusFilter !== "all") && (
                 <div className="mt-4 flex justify-center">
@@ -401,7 +358,7 @@ export function TeamPage() {
         </CardContent>
       </TableCard>
 
-      <p className="text-xs text-muted-foreground">{total} member{total === 1 ? "" : "s"} in this workspace.</p>
+      <p className="text-[13px] text-muted-foreground">{total} member{total === 1 ? "" : "s"} in this workspace.</p>
 
       {/* Detail drawer */}
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
