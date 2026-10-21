@@ -60,7 +60,7 @@ export function AzureDiscoverySummary() {
     if (q.data && !q.data.projectionEnabled) {
       return (
         <p className={`text-xs ${MUTED}`} role="status">
-          The Azure summary is not available: AuthSec's graph projection (IGA_GRAPH_PROJECTION) is off in this deployment.
+          The Azure summary is not available yet: AuthSec's graph is not ready on this server.
         </p>
       );
     }

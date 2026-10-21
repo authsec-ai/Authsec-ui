@@ -1550,7 +1550,7 @@ export interface AzureGraphCount {
 
 export interface AzureGraphSummary {
   rows: AzureGraphCount[];
-  /** False when IGA_GRAPH_PROJECTION is off: nothing is projected, so every count is 0. */
+  /** False while the graph is not ready: nothing is projected yet, so every count is 0. */
   projectionEnabled: boolean;
 }
 

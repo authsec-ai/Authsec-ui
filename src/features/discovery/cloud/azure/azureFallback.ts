@@ -1,5 +1,5 @@
 /**
- * While the shared graph is unavailable (IGA_GRAPH_PROJECTION off), Azure's
+ * While the shared graph is unavailable (its schema not yet verified), Azure's
  * Identities, Resources and Workloads are read from the Azure discovery routes
  * (`/authsec/discovery/azure/{identities,resources,workloads}`), which read the
  * scan tables directly -- as AWS's "Latest collected" does. Those routes filter

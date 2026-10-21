@@ -8,7 +8,7 @@
  * publication number), so what a row is "as of" is the discovery run that last
  * confirmed it.
  *
- * While the graph is unavailable (IGA_GRAPH_PROJECTION off), the same three
+ * While the graph is unavailable (not yet ready), the same three
  * lists are read from the Azure scan tables by AzureScanTablesScreen.
  */
 
@@ -252,7 +252,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
 
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" onClear={() => p.url.patch({ source: null })} />;
   if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} onClear={() => p.url.patch({ source: null })} />;
-  // The graph is off (IGA_GRAPH_PROJECTION) or not deployed: read the same objects from the scan tables instead.
+  // The graph is not ready or not deployed: read the same objects from the scan tables instead.
   if (classifyGraphError(list.error)?.kind === "unavailable") return <AzureScanTablesScreen {...p} cls={type} />;
 
   return (

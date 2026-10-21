@@ -106,7 +106,7 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const azureOn = provider === "azure";
   const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
   const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", scope: scopeId, q }, { skip: !azureOn || blocked });
-  // The graph off (IGA_GRAPH_PROJECTION): the lists read the scan tables, and so do their counts.
+  // The graph not ready: the lists read the scan tables, and so do their counts.
   const azGraphOff = azureOn && classifyGraphError(azSummary.error)?.kind === "unavailable";
   const fbId = azureFallbackScope(azureConnectors, "identities", scopeId);
   const fbRes = azureFallbackScope(azureConnectors, "resources", scopeId);

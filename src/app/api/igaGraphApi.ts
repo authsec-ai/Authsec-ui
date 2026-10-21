@@ -1160,7 +1160,7 @@ export type GraphFeature =
 
 /**
  * The `policy` block of /capabilities (SPEC-iga-phase3-policy.md §4.3): the
- * IGA_POLICY gate, one flag per feature with a reason for every false one, and
+ * policy gate, one flag per feature with a reason for every false one, and
  * provider support. Optional: a backend that predates Phase 3 omits it.
  */
 export interface PolicyCapabilities {
@@ -1176,9 +1176,8 @@ export interface PolicyCapabilities {
   enforcement: boolean;
   slack: boolean;
   /**
-   * Block or allow roles on a resource for a time. Absent while IGA_POLICY_R2 is
-   * off or on a backend without it. The shipped backend sends `{available, reason}`;
-   * a boolean is accepted too so an older build (staging) still reads correctly.
+   * Block or allow roles on a resource for a time. Absent on a backend without
+   * them. The backend sends `{available, reason}`; a boolean is accepted too.
    */
   access_policies?: { available: boolean; reason?: string | null } | boolean;
   reasons: Record<string, string>;

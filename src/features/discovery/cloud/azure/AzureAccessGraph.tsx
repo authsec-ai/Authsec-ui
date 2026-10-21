@@ -358,7 +358,7 @@ export function AzureAccessGraph({ objectId, name, startRef }: { objectId?: stri
       ) : q.isError ? (
         loadFailureOf(q.error) === "not_found" ? (
           <InventoryNotice icon={<Info />}>
-            This object is not in the access graph yet. Graph projection must be on (IGA_GRAPH_PROJECTION) and a scan must have finished since.
+            This object is not in the access graph yet. It appears once a scan has finished and been projected into the graph.
           </InventoryNotice>
         ) : (
           <LoadFailurePanel failure={loadFailureOf(q.error) ?? "failed"} subject="the access graph" permission="discovery:read" onRetry={() => void q.refetch()} />

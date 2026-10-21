@@ -1,6 +1,6 @@
 /**
  * Azure Identities, Resources and Workloads while the shared graph is
- * unavailable (IGA_GRAPH_PROJECTION off): read from the Azure discovery routes,
+ * unavailable (not yet ready): read from the Azure discovery routes,
  * which serve the scan tables directly, as AWS's "Latest collected" does. The
  * inventory screen hands over to this one only when the graph answers
  * `graph_unavailable`; once the graph is on, the inventory is read again.
@@ -227,7 +227,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       notices={
         <div className="space-y-1 text-xs text-(--color-text-muted)" role="status">
           <p>
-            Read straight from the latest Azure scan: AuthSec's graph is not available in this deployment (IGA_GRAPH_PROJECTION is off), so these {NOUN[cls]} are not
+            Read straight from the latest Azure scan: AuthSec's graph is not ready on this server yet, so these {NOUN[cls]} are not
             counted against the graph or linked to an Access Graph.
           </p>
           {truncated ? <p>Showing the first {loaded.length.toLocaleString()} of {total.toLocaleString()}. Search or filter to narrow them.</p> : null}
