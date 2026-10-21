@@ -65,16 +65,16 @@ const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "activity", label: "Activity", path: "/activity" },
   { key: "workloads", label: "Workloads", path: "/workloads" },
   { key: "evidence", label: "Evidence", path: "/evidence" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
   { key: "access", label: "Who can access", path: "/access" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
