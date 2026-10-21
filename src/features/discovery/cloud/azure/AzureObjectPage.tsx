@@ -14,6 +14,9 @@
  *     ARM id (attrs.native_id); the record is the resources list searched for it.
  *   - workload: `:id` is the IGA uuid. The graph root `workload:<id>` carries only
  *     its name and region, so the record is the workloads list matched on both.
+ *   - resource or workload by ARM id: `:id` is the ARM id itself ("/subscriptions/…"),
+ *     linked from the scan-table lists while the graph is off. No graph read is
+ *     needed: the record is the list searched for that id.
  */
 
 import { useParams } from "react-router-dom";
@@ -40,6 +43,7 @@ import {
   IdentityAccessTab,
   IdentityActivityTab,
   IdentityCredentialsTab,
+  IdentityEvidenceTab,
   IdentityOverview,
   IdentityTokensTab,
   IdentityWorkloadsTab,
@@ -58,6 +62,7 @@ const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "token-access", label: "Token access", path: "/token-access" },
   { key: "activity", label: "Activity", path: "/activity" },
   { key: "workloads", label: "Workloads", path: "/workloads" },
+  { key: "evidence", label: "Evidence", path: "/evidence" },
   { key: "graph", label: "Access Graph", path: "/graph" },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
@@ -108,31 +113,34 @@ function failureOf(error: Parameters<typeof loadFailureOf>[0]): GraphFailure | n
 function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | undefined }) {
   const ws = getWorkspaceId() ?? "";
   const isIdentity = kind === "identity";
+  // An ARM id in the URL (from the scan-table lists) needs no graph read.
+  const byArmId = !isIdentity && id.startsWith("/");
 
   // The graph root: for resources and workloads it also names the native id / name+region the lists are searched by.
-  const rootQ = useGetAzureNeighbourhoodQuery(`${kind}:${id}`, { skip: isIdentity || !id });
+  const rootQ = useGetAzureNeighbourhoodQuery(`${kind}:${id}`, { skip: isIdentity || byArmId || !id });
   const rootNode = rootQ.data?.nodes.find((n) => n.ref === rootQ.data?.root);
-  const native = isIdentity ? id.toLowerCase() : kind === "resource" ? str(rootNode?.attrs?.native_id)?.toLowerCase() : undefined;
-  const workloadName = kind === "workload" ? rootNode?.label : undefined;
-  const workloadRegion = kind === "workload" ? str(rootNode?.attrs?.region) : undefined;
+  const native = isIdentity || byArmId ? id.toLowerCase() : kind === "resource" ? str(rootNode?.attrs?.native_id)?.toLowerCase() : undefined;
+  const workloadName = kind === "workload" && !byArmId ? rootNode?.label : undefined;
+  const workloadRegion = kind === "workload" && !byArmId ? str(rootNode?.attrs?.region) : undefined;
+  const workloadQ = byArmId ? native : workloadName;
 
   const idQ = useListAzureIdentitiesQuery({ q: native, limit: 10 }, { skip: !isIdentity || !native });
   const resQ = useListAzureResourcesQuery({ q: native, limit: 10 }, { skip: kind !== "resource" || !native });
-  const wlQ = useListAzureWorkloadsQuery({ q: workloadName, limit: 100 }, { skip: kind !== "workload" || !workloadName });
+  const wlQ = useListAzureWorkloadsQuery({ q: workloadQ, limit: 100 }, { skip: kind !== "workload" || !workloadQ });
   const connectorsQ = useListAzureConnectorsQuery();
 
   const identity: AzureIdentity | undefined = idQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
   const resource: AzureResource | undefined = resQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
-  const workload: AzureWorkload | undefined = wlQ.data?.rows.find(
-    (w) => w.name.toLowerCase() === workloadName?.toLowerCase() && (!workloadRegion || w.region === workloadRegion),
+  const workload: AzureWorkload | undefined = wlQ.data?.rows.find((w) =>
+    byArmId ? w.native_id.toLowerCase() === native : w.name.toLowerCase() === workloadName?.toLowerCase() && (!workloadRegion || w.region === workloadRegion),
   );
   const record = identity ?? resource ?? workload;
   const listQ = isIdentity ? idQ : kind === "resource" ? resQ : wlQ;
   const listDone = listQ.isSuccess;
 
-  const failure: GraphFailure | null = failureOf(isIdentity ? idQ.error : (rootQ.error ?? listQ.error)) ?? (listDone && !record ? { kind: "not_found" } : null);
+  const failure: GraphFailure | null = failureOf(isIdentity || byArmId ? listQ.error : (rootQ.error ?? listQ.error)) ?? (listDone && !record ? { kind: "not_found" } : null);
   const retry = () => {
-    if (!isIdentity) void rootQ.refetch();
+    if (!isIdentity && !byArmId) void rootQ.refetch();
     void listQ.refetch();
   };
 
@@ -195,6 +203,8 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
           <IdentityActivityTab id={identity.id} />
         ) : active === "workloads" ? (
           <IdentityWorkloadsTab id={identity.id} />
+        ) : active === "evidence" ? (
+          <IdentityEvidenceTab objectId={identity.native_id} />
         ) : null;
     } else if (resource && active === "access") {
       body = <ResourceAccessTab resourceId={resource.id} />;

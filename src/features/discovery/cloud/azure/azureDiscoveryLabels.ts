@@ -83,13 +83,178 @@ export function mechanismLabel(m: string): string {
   return MECHANISM_LABEL[m] ?? m;
 }
 
-/** An ARM resource type ("microsoft.keyvault/vaults") as its last segment
- * ("vaults") with the provider namespace beside it; the raw type is always in
- * the row's detail. */
+/** The ARM resource types Azure discovery reads, in Microsoft's own product
+ * names. Keys are lowercased, as the backend writes types. */
+const ARM_TYPE_NAME: Record<string, string> = {
+  "microsoft.keyvault/vaults": "Key Vault",
+  "microsoft.keyvault/managedhsms": "Key Vault Managed HSM",
+  "microsoft.storage/storageaccounts": "Storage account",
+  "microsoft.sql/servers": "SQL server",
+  "microsoft.sql/servers/databases": "SQL database",
+  "microsoft.sql/managedinstances": "SQL Managed Instance",
+  "microsoft.dbforpostgresql/servers": "Azure Database for PostgreSQL server",
+  "microsoft.dbforpostgresql/flexibleservers": "Azure Database for PostgreSQL flexible server",
+  "microsoft.dbformysql/servers": "Azure Database for MySQL server",
+  "microsoft.dbformysql/flexibleservers": "Azure Database for MySQL flexible server",
+  "microsoft.documentdb/databaseaccounts": "Azure Cosmos DB account",
+  "microsoft.cache/redis": "Azure Cache for Redis",
+  "microsoft.servicebus/namespaces": "Service Bus namespace",
+  "microsoft.eventhub/namespaces": "Event Hubs namespace",
+  "microsoft.eventgrid/topics": "Event Grid topic",
+  "microsoft.search/searchservices": "Azure AI Search service",
+  "microsoft.containerregistry/registries": "Container registry",
+  "microsoft.containerinstance/containergroups": "Container instance",
+  "microsoft.containerservice/managedclusters": "AKS cluster",
+  "microsoft.compute/virtualmachines": "Virtual machine",
+  "microsoft.compute/virtualmachinescalesets": "Virtual machine scale set",
+  "microsoft.web/sites": "App Service or Function app",
+  "microsoft.app/containerapps": "Container app",
+  "microsoft.app/jobs": "Container Apps job",
+  "microsoft.logic/workflows": "Logic app",
+  "microsoft.botservice/botservices": "Azure Bot",
+  "microsoft.cognitiveservices/accounts": "Foundry or Azure AI services account",
+  "microsoft.cognitiveservices/accounts/projects": "Foundry project",
+  "microsoft.machinelearningservices/workspaces": "Machine Learning workspace",
+  "microsoft.managedidentity/userassignedidentities": "User-assigned managed identity",
+  "microsoft.network/publicipaddresses": "Public IP address",
+  "microsoft.network/networkinterfaces": "Network interface",
+  "microsoft.network/networksecuritygroups": "Network security group",
+  "microsoft.network/virtualnetworks": "Virtual network",
+  "microsoft.network/virtualnetworkgateways": "Virtual network gateway",
+  "microsoft.network/natgateways": "NAT gateway",
+  "microsoft.network/networkwatchers": "Network Watcher",
+  "microsoft.network/loadbalancers": "Load balancer",
+  "microsoft.network/applicationgateways": "Application gateway",
+  "microsoft.network/privateendpoints": "Private endpoint",
+  "microsoft.network/privatednszones": "Private DNS zone",
+  "microsoft.network/dnszones": "DNS zone",
+  "microsoft.network/routetables": "Route table",
+  "microsoft.network/bastionhosts": "Azure Bastion",
+  "microsoft.compute/disks": "Managed disk",
+  "microsoft.compute/snapshots": "Disk snapshot",
+  "microsoft.compute/sshpublickeys": "SSH public key",
+  "microsoft.compute/availabilitysets": "Availability set",
+  "microsoft.web/serverfarms": "App Service plan",
+  "microsoft.insights/components": "Application Insights",
+  "microsoft.operationalinsights/workspaces": "Log Analytics workspace",
+};
+
+/** An ARM resource type ("microsoft.keyvault/vaults") in words: Microsoft's
+ * product name when it is one discovery reads ("Key Vault"), else its last
+ * segment with the provider namespace beside it ("vaults (keyvault)"). The raw
+ * type is always in the row's detail. */
 export function armTypeLabel(type: string): string {
+  const known = ARM_TYPE_NAME[type.toLowerCase()];
+  if (known) return known;
   const [ns, ...rest] = type.split("/");
   if (!rest.length) return type;
   return `${rest.join("/")} (${ns.replace(/^microsoft\./i, "")})`;
+}
+
+/** What each coverage surface of an Azure scan reads, in Microsoft's terms.
+ * Keys are the backend's `Surface*` names; an unknown key shows as written. */
+const SURFACE_LABEL: Record<string, string> = {
+  users: "Users",
+  groups: "Groups",
+  group_members: "Group memberships",
+  applications: "Applications (app registrations)",
+  service_principals: "Service principals (enterprise applications)",
+  directory_roles: "Microsoft Entra role assignments",
+  app_role_assignments: "Application permissions",
+  delegated_permission_grants: "Delegated permissions",
+  federated_credentials: "Federated identity credentials",
+  sign_in_activity: "Sign-in activity",
+  credential_activity: "Credential sign-in activity",
+  sign_ins: "Service principal sign-ins",
+  licenses: "Licences",
+  app_management_policies: "App management policies",
+  conditional_access: "Conditional Access policies",
+  agent_identities: "Agent identities",
+  agent_blueprints: "Agent identity blueprints",
+  agent_blueprint_principals: "Agent identity blueprint principals",
+  agent_users: "Agents' user accounts",
+  owners: "Owners",
+  agent_sponsors: "Agent sponsors",
+  agent_inheritable_permissions: "Agent inheritable permissions",
+  agent_registry: "Microsoft 365 agent registry (Copilot packages)",
+  agent_audit: "Agent audit log",
+  teams_apps: "Teams apps with a bot (Copilot Studio agents and custom bots)",
+  resources: "Resources",
+  resource_containers: "Subscription and resource group tags",
+  role_assignments: "Azure role assignments",
+  key_vault_access_policies: "Key Vault access policies",
+  workloads: "Resources running as a managed identity",
+  managed_identity_federated_credentials: "Managed identity federated identity credentials",
+  foundry: "Microsoft Foundry",
+  foundry_agents: "Microsoft Foundry project agents (data plane)",
+  public_ips: "Public IP addresses",
+  activity_log: "Azure Activity Log",
+};
+
+export function surfaceLabel(key: string): string {
+  return SURFACE_LABEL[key] ?? key.replace(/_/g, " ");
+}
+
+/** `iga_entitlements.native_grant_kind` of an Azure entitlement. */
+const ENTITLEMENT_KIND_LABEL: Record<string, string> = {
+  entra_app_role: "Application permission",
+  entra_delegated_scope: "Delegated permission",
+  entra_directory_role: "Microsoft Entra role",
+  key_vault_access_policy: "Key Vault access policy",
+  azure_role_definition: "Azure role",
+};
+
+/** `iga_access_edges.path_kind` of an Azure grant. */
+const GRANT_PATH_LABEL: Record<string, string> = {
+  entra_app_permission: "Application permission",
+  entra_delegated_permission: "Delegated permission",
+  entra_directory_role: "Microsoft Entra role assignment",
+  key_vault_access_policy: "Key Vault access policy",
+  azure_rbac: "Azure role assignment",
+};
+
+/** `iga_relationship.relationship_type` written by Azure discovery. */
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  member_of: "Group membership",
+  executes_as: "Resource runs as an identity",
+  can_assume: "Can obtain another identity's tokens",
+};
+
+const CREDENTIAL_KIND_LABEL: Record<string, string> = { entra_client_secret: "Client secret", entra_certificate: "Certificate" };
+
+/** One kind of one table of the Azure graph summary, in words. */
+export function graphKindLabel(table: string, kind: string): string {
+  switch (table) {
+    case "identity":
+      return identityKindLabel(kind);
+    case "resource":
+      return ENTITLEMENT_KIND_LABEL[kind] ?? armTypeLabel(kind);
+    case "workload":
+      return armTypeLabel(kind);
+    case "entitlement":
+      return ENTITLEMENT_KIND_LABEL[kind] ?? kind;
+    case "credential":
+      return CREDENTIAL_KIND_LABEL[kind] ?? kind;
+    case "access_edge":
+      return GRANT_PATH_LABEL[kind] ?? kind;
+    case "relationship":
+      return RELATIONSHIP_LABEL[kind] ?? kind;
+    default:
+      return kind;
+  }
+}
+
+/** `attrs.foundry_kind` of a Foundry workload. */
+const FOUNDRY_KIND_LABEL: Record<string, string> = {
+  account: "Foundry resource",
+  project: "Foundry project",
+  hub: "Foundry hub",
+  hub_project: "Hub-based project",
+  ml_workspace: "Machine Learning workspace",
+};
+
+export function foundryKindLabel(kind: string | undefined, runtimeKind: string): string {
+  return (kind && FOUNDRY_KIND_LABEL[kind]) || armTypeLabel(runtimeKind);
 }
 
 /** A connector's name for the Source filter and the Subscription column. */

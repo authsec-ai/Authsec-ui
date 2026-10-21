@@ -14,6 +14,7 @@ import {
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { CloudPill } from "@/features/discovery/cloud/CloudPill";
+import { surfaceLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
@@ -90,45 +91,8 @@ const SURFACE_TONE: Record<string, "success" | "info" | "warning" | "danger" | "
   unknown: "muted",
 };
 
-/** What each coverage surface reads, in Microsoft's terms. Unknown keys show as written. */
-const SURFACE_LABEL: Record<string, string> = {
-  users: "Users",
-  groups: "Groups",
-  group_members: "Group memberships",
-  applications: "Applications (app registrations)",
-  service_principals: "Service principals (enterprise applications)",
-  directory_roles: "Microsoft Entra role assignments",
-  app_role_assignments: "Application permissions",
-  delegated_permission_grants: "Delegated permissions",
-  federated_credentials: "Federated identity credentials",
-  sign_in_activity: "Sign-in activity",
-  credential_activity: "Credential sign-in activity",
-  sign_ins: "Service principal sign-ins",
-  licenses: "Licences",
-  app_management_policies: "App management policies",
-  conditional_access: "Conditional Access policies",
-  agent_identities: "Agent identities",
-  agent_blueprints: "Agent identity blueprints",
-  agent_blueprint_principals: "Agent identity blueprint principals",
-  agent_users: "Agents' user accounts",
-  owners: "Owners",
-  agent_sponsors: "Agent sponsors",
-  agent_inheritable_permissions: "Agent inheritable permissions",
-  agent_registry: "Microsoft 365 agent registry (Copilot packages)",
-  agent_audit: "Agent audit log",
-  resources: "Resources",
-  resource_containers: "Subscription and resource group tags",
-  role_assignments: "Azure role assignments",
-  key_vault_access_policies: "Key Vault access policies",
-  workloads: "Resources running as a managed identity",
-  managed_identity_federated_credentials: "Managed identity federated identity credentials",
-  foundry: "Microsoft Foundry",
-  public_ips: "Public IP addresses",
-  activity_log: "Azure Activity Log",
-};
-
 function SurfaceList({ connector }: { connector: CloudConnector }) {
-  const label = (k: string) => SURFACE_LABEL[k] ?? k.replace(/_/g, " ");
+  const label = surfaceLabel;
   const surfaces = Object.entries(connector.coverage?.surfaces ?? {}).sort(([a], [b]) => label(a).localeCompare(label(b)));
   if (connector.coverage?.status === "running" && surfaces.every(([, s]) => s.state === "unknown")) {
     return <p className="text-[13px] text-(--color-text-muted)">A scan is running. Coverage is written when it finishes.</p>;

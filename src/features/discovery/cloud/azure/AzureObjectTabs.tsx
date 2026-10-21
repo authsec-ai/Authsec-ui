@@ -7,11 +7,13 @@
 import { Link } from "react-router-dom";
 
 import {
+  useListAzureEvidenceQuery,
   useListAzureFederationQuery,
   useListAzureGrantsQuery,
   useListAzureSecretsQuery,
   useListAzureUsageQuery,
   useListAzureWorkloadsQuery,
+  type AzureEvidence,
   type AzureFederationEdge,
   type AzureGrant,
   type AzureIdentity,
@@ -26,7 +28,7 @@ import { Fact, Facts, Panel, CopyValue } from "@/features/iga/shared/components/
 
 import { CloudPill } from "../CloudPill";
 import { AttrFacts, DrawerList, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { armTypeLabel, connectorLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf } from "./azureDiscoveryLabels";
+import { armTypeLabel, connectorLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf, surfaceLabel } from "./azureDiscoveryLabels";
 
 /** Attributes shown in their own sections rather than as raw facts. */
 const SHOWN_ELSEWHERE = ["owners", "sponsors", "created_by", "audit_changes", "agent_listed"];
@@ -178,6 +180,59 @@ export function IdentityWorkloadsTab({ id }: { id: string }) {
   return (
     <Panel title="Workloads running as this identity" count={q.data ? `${q.data.rows.length}` : undefined}>
       <DrawerList query={q} empty="No workload was recorded running as this identity." render={(w: AzureWorkload) => <WorkloadLine w={w} />} />
+    </Panel>
+  );
+}
+
+const SURFACE_STATE_TONE: Record<string, "success" | "warning" | "danger" | "muted"> = { reached: "success", partial: "warning", denied: "danger", throttled: "warning" };
+
+function EvidenceLine({ e }: { e: AzureEvidence }) {
+  const facts = e.facts && typeof e.facts === "object" ? e.facts : {};
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="font-medium">{surfaceLabel(e.surface)}</span>
+          <CloudPill tone="muted" dot={false}>
+            {e.subject === "grant" ? "A grant it holds" : "The object itself"}
+          </CloudPill>
+          {e.surface_state ? (
+            <CloudPill tone={SURFACE_STATE_TONE[e.surface_state] ?? "muted"} dot={false}>
+              {e.surface_state.replace(/_/g, " ")}
+            </CloudPill>
+          ) : null}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Confirmed {e.confirmation_count} {e.confirmation_count === 1 ? "time" : "times"} · last <RelativeDate iso={e.last_confirmed_at ?? e.observed_at} />
+        </span>
+      </div>
+      <p className="break-all font-mono text-xs text-muted-foreground">{e.source_api}</p>
+      <p className="text-xs text-muted-foreground">
+        First observed <RelativeDate iso={e.observed_at} />
+        {e.subject_native_id ? <span className="break-all"> · {e.subject_native_id}</span> : null}
+      </p>
+      {Object.keys(facts).length ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-(--color-primary-text)">Facts as recorded</summary>
+          <div className="mt-2">
+            <AttrFacts attrs={facts} />
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+/** `objectId` is the Entra object id: evidence is keyed by it, not by the legacy cloud id. */
+export function IdentityEvidenceTab({ objectId }: { objectId: string }) {
+  const q = useListAzureEvidenceQuery({ object_id: objectId, limit: LIST_LIMIT });
+  return (
+    <Panel
+      title="Evidence"
+      count={q.data ? `${q.data.rows.length}` : undefined}
+      description="Every observation behind this object and its grants: which Microsoft API returned it, how many scans confirmed it, and the facts recorded (sanitized: never a secret value)."
+    >
+      <DrawerList query={q} empty="No observation was recorded for this object yet. Evidence is written when a scan pass finishes." render={(e: AzureEvidence) => <EvidenceLine e={e} />} />
     </Panel>
   );
 }

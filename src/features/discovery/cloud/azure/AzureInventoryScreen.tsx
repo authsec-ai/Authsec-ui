@@ -7,6 +7,9 @@
  * shared preview beside the list. Azure writes are UNREVISIONED (read live, no
  * publication number), so what a row is "as of" is the discovery run that last
  * confirmed it.
+ *
+ * While the graph is unavailable (IGA_GRAPH_PROJECTION off), the same three
+ * lists are read from the Azure scan tables by AzureScanTablesScreen.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -31,7 +34,10 @@ import { ConfirmedValue, PreviewLayout, type PreviewModel } from "@/features/iga
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 import { resolvePagedView, useRestartOnListingChanged, type PagedView } from "@/features/iga/shared/listView";
 import { usePaging, useRestoreScroll } from "@/features/iga/shared/paging";
+import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { TableCard } from "@/theme/components/cards";
+
+import AzureScanTablesScreen from "./AzureScanTablesScreen";
 
 import { agentTypeLabel } from "./azureDiscoveryLabels";
 import { inventoryKindLabel, tenantName, tenantScopeId } from "./azureInventoryLabels";
@@ -246,6 +252,8 @@ export default function AzureInventoryScreen(p: ScreenProps) {
 
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" onClear={() => p.url.patch({ source: null })} />;
   if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} onClear={() => p.url.patch({ source: null })} />;
+  // The graph is off (IGA_GRAPH_PROJECTION) or not deployed: read the same objects from the scan tables instead.
+  if (classifyGraphError(list.error)?.kind === "unavailable") return <AzureScanTablesScreen {...p} cls={type} />;
 
   return (
     <ScreenFrame

@@ -15,6 +15,8 @@
 
 import {
   useListAzureIdentitiesQuery,
+  useListAzureResourcesQuery,
+  useListAzureWorkloadsQuery,
   type CloudConnector,
   useListAwsIdentityPageQuery,
   useListAwsResourcesQuery,
@@ -24,6 +26,8 @@ import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { useListGraphIdentitiesQuery, useListGraphResourcesQuery, useListGraphWorkloadsQuery } from "@/app/api/igaGraphApi";
 import { useGetInventorySummaryQuery, useListInventoryQuery } from "@/app/api/igaInventoryApi";
 import { azureSourceFor } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { azureFallbackScope } from "@/features/discovery/cloud/azure/azureFallback";
+import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { useListK8sClustersQuery } from "@/app/api/k8sGraphApi";
 
 import { COUNT_LOADING, COUNT_UNAVAILABLE, countOfExact, countOfMeta, type CountValue } from "../shared/components/countValue";
@@ -102,8 +106,20 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const azureOn = provider === "azure";
   const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
   const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", scope: scopeId, q }, { skip: !azureOn || blocked });
+  // The graph off (IGA_GRAPH_PROJECTION): the lists read the scan tables, and so do their counts.
+  const azGraphOff = azureOn && classifyGraphError(azSummary.error)?.kind === "unavailable";
+  const fbId = azureFallbackScope(azureConnectors, "identities", scopeId);
+  const fbRes = azureFallbackScope(azureConnectors, "resources", scopeId);
+  const fbWl = azureFallbackScope(azureConnectors, "workloads", scopeId);
+  const fi = useListAzureIdentitiesQuery({ limit: 1, connector_id: fbId.connectorId, q }, { skip: !azGraphOff || !fbId.exact });
+  const fr = useListAzureResourcesQuery({ limit: 1, connector_id: fbRes.connectorId, q }, { skip: !azGraphOff || !fbRes.exact });
+  const fw = useListAzureWorkloadsQuery({ limit: 1, connector_id: fbWl.connectorId, q }, { skip: !azGraphOff || !fbWl.exact });
+  const fallbackCount = (c: "identities" | "resources" | "workloads"): CountValue => {
+    const [scoped, query] = c === "identities" ? [fbId, fi] : c === "resources" ? [fbRes, fr] : [fbWl, fw];
+    return scoped.exact ? pageCount(query.data, query.isError) : COUNT_UNAVAILABLE;
+  };
   const azCount = (c: "identities" | "resources" | "workloads"): CountValue =>
-    azSummary.data ? countOfExact(azSummary.data.data[c]) : azSummary.isError ? COUNT_UNAVAILABLE : COUNT_LOADING;
+    azGraphOff ? fallbackCount(c) : azSummary.data ? countOfExact(azSummary.data.data[c]) : azSummary.isError ? COUNT_UNAVAILABLE : COUNT_LOADING;
 
   /* ---- Sightings ---- */
   const sightingsOn = (provider === "k8s" || provider === "github" || provider === "azure") && !blocked;

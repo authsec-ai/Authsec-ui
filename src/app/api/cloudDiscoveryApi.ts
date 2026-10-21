@@ -1502,6 +1502,58 @@ export interface AzureBlastRadius {
   grants: AzureReachGrant[];
 }
 
+/** A Foundry project's managed identity that a federated credential names as
+ * its subject: the identity holding that credential and, when the holder is an
+ * agent identity blueprint, the agent identity whose tokens it obtains. */
+export interface AzureFoundryTrust {
+  principal_id: string;
+  trusted_identity_id: string;
+  trusted_name: string;
+  trusted_kind: string;
+  trusted_agent_type: string;
+  agent_identity_id?: string | null;
+  agent_name?: string;
+  agent_object_id?: string;
+}
+
+/** `/azure/foundry`: Foundry resources, projects, hubs and Machine Learning
+ * workspaces (as workloads), and what their managed identities are trusted by. */
+export interface AzureFoundry {
+  rows: AzureWorkload[];
+  trusts: AzureFoundryTrust[];
+  total: number;
+}
+
+/** One observation behind an Entra object or one of its grants: which
+ * Microsoft API returned it, in which scan, and the facts as recorded. */
+export interface AzureEvidence {
+  id: string;
+  subject: "identity" | "grant" | string;
+  subject_native_id: string;
+  source_api: string;
+  surface: string;
+  surface_state: string;
+  scan_run_id: string;
+  observed_at: string;
+  last_confirmed_at?: string | null;
+  confirmation_count: number;
+  facts: Record<string, unknown> | null;
+}
+
+/** One count of the Azure rows of the shared IGA graph: a table, a kind, a state. */
+export interface AzureGraphCount {
+  table: string;
+  kind: string;
+  state: string;
+  count: number;
+}
+
+export interface AzureGraphSummary {
+  rows: AzureGraphCount[];
+  /** False when IGA_GRAPH_PROJECTION is off: nothing is projected, so every count is 0. */
+  projectionEnabled: boolean;
+}
+
 function azureListParams(a: AzureListArgs): Record<string, string | number> {
   const p: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(a)) if (v !== undefined && v !== "") p[k] = v;
@@ -2249,6 +2301,28 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       query: (a) => ({ url: "/authsec/discovery/azure/usage", method: "GET", params: azureListParams(a) }),
       transformResponse: (r: CloudListEnvelope<AzureUsage>, _m, arg) => toCloudPage(r, arg),
     }),
+
+    listAzureFoundry: builder.query<AzureFoundry, { connector_id?: string } | void>({
+      query: (a) => ({ url: "/authsec/discovery/azure/foundry", method: "GET", params: azureListParams(a ?? {}) }),
+      transformResponse: (r: { data: AzureWorkload[] | null; trusts: AzureFoundryTrust[] | null; meta?: { total?: number } }) => ({
+        rows: r.data ?? [],
+        trusts: r.trusts ?? [],
+        total: r.meta?.total ?? r.data?.length ?? 0,
+      }),
+    }),
+
+    listAzureEvidence: builder.query<CloudPage<AzureEvidence>, { object_id: string; limit?: number }>({
+      query: (a) => ({ url: "/authsec/discovery/azure/evidence", method: "GET", params: azureListParams(a) }),
+      transformResponse: (r: CloudListEnvelope<AzureEvidence>, _m, arg) => toCloudPage(r, arg),
+    }),
+
+    getAzureGraphSummary: builder.query<AzureGraphSummary, void>({
+      query: () => ({ url: "/authsec/discovery/azure/graph/summary", method: "GET" }),
+      transformResponse: (r: { data: AzureGraphCount[] | null; meta?: { projection_enabled?: boolean } }) => ({
+        rows: r.data ?? [],
+        projectionEnabled: r.meta?.projection_enabled !== false,
+      }),
+    }),
   }),
 });
 
@@ -2307,4 +2381,7 @@ export const {
   useListAzureUsageQuery,
   useGetAzureNeighbourhoodQuery,
   useGetAzureReachQuery,
+  useListAzureFoundryQuery,
+  useListAzureEvidenceQuery,
+  useGetAzureGraphSummaryQuery,
 } = cloudDiscoveryApi;

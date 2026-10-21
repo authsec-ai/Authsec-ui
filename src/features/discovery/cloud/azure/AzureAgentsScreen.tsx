@@ -1,7 +1,9 @@
 /**
  * Azure Agents: Microsoft Entra Agent ID objects in one place, laid out the way
  * the Entra admin center lists them (agent identity, its blueprint, owners and
- * sponsors, status, created). Counts and facts only; nothing is rated.
+ * sponsors, status, created), and Microsoft Foundry (its resources, projects,
+ * model deployments and agent applications). Counts and facts only; nothing is
+ * rated.
  */
 
 import { useMemo, useState } from "react";
@@ -9,6 +11,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   AWS_DISCOVERY_MAX_LIMIT,
+  useListAzureFoundryQuery,
   useListAzureIdentitiesQuery,
   type AzureIdentity,
   type CloudConnector,
@@ -22,9 +25,11 @@ import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { CopyableId } from "../aws/AWSInventoryCells";
 import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
+import { AzureFoundryView } from "./AzureFoundryView";
+import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
 import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
 
-type View = "identities" | "blueprints";
+type View = "identities" | "blueprints" | "foundry";
 
 const KIND_ARGS = {
   identities: { kind: "entra_agent_identity" },
@@ -73,7 +78,8 @@ function Tile({ label, value, active, onClick, title }: { label: string; value: 
 
 export default function AzureAgentsScreen({ connectors }: { connectors: CloudConnector[] }) {
   const [params, setParams] = useSearchParams();
-  const view: View = params.get("agents") === "blueprints" ? "blueprints" : "identities";
+  const agentsParam = params.get("agents");
+  const view: View = agentsParam === "blueprints" ? "blueprints" : agentsParam === "foundry" ? "foundry" : "identities";
   const source = params.get("source");
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
@@ -95,7 +101,17 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   const cPrincipals = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.principals, limit: 1 });
   const cUsers = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.users, limit: 1 });
 
-  const q = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS[view], limit: AWS_DISCOVERY_MAX_LIMIT });
+  // Foundry is read once for every tenant: its rows belong to subscriptions, so
+  // the tenant chosen above narrows them by the subscriptions under it.
+  const foundryQ = useListAzureFoundryQuery();
+  const foundry = useMemo(() => {
+    const tenant = connectors.find((c) => c.id === connectorId);
+    const rows = foundryRowsOf(foundryQ.data?.rows ?? [], connectors, tenant);
+    return groupFoundry(rows, foundryQ.data?.trusts ?? []);
+  }, [foundryQ.data, connectors, connectorId]);
+  const foundryTotals = foundryCounts(foundry);
+
+  const q = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS[view === "foundry" ? "identities" : view], limit: AWS_DISCOVERY_MAX_LIMIT }, { skip: view === "foundry" });
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -216,10 +232,11 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   );
 
   const noun = view === "identities" ? "agent identities" : "agent identity blueprints";
+  const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />;
   return (
     <div className="space-y-4 p-4">
       <AllAgentsNote onOpen={() => setParam("type", "sightings")} />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Tile
           label="Agent identities"
           value={cIdentities.data?.total}
@@ -241,51 +258,74 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           title="Open them in Identities"
         />
         <Tile label="Agents' user accounts" value={cUsers.data?.total} onClick={() => toIdentities("entra_agent_user")} title="Open them in Identities" />
+        <Tile
+          label="Microsoft Foundry"
+          value={foundryQ.data ? foundryTotals.objects : undefined}
+          active={view === "foundry"}
+          onClick={() => setParam("agents", "foundry")}
+          title="Show Foundry resources, projects, model deployments and agent applications"
+        />
       </div>
 
-      <InventoryToolbar
-        search={search}
-        onSearchChange={setSearch}
-        searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
-        controls={<AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />}
-        applied={connectorId ? [{ key: "source", label: `Source: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
-        onClearAll={() => {
-          setParam("source", null);
-          setSearch("");
-        }}
-        shown={filtered.length}
-        total={rows.length}
-        noun={noun}
-      />
+      {view === "foundry" ? (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-(--color-text-muted)">
+              {foundryQ.data
+                ? `${foundryTotals.objects} Foundry ${foundryTotals.objects === 1 ? "object" : "objects"} · ${foundryTotals.projects} ${foundryTotals.projects === 1 ? "project" : "projects"} · ${foundryTotals.deployments} model ${foundryTotals.deployments === 1 ? "deployment" : "deployments"} · ${foundryTotals.agentApplications} agent ${foundryTotals.agentApplications === 1 ? "application" : "applications"} (${foundryTotals.agents} ${foundryTotals.agents === 1 ? "agent" : "agents"})`
+                : "Reading Microsoft Foundry…"}
+            </p>
+            {sourceSelect}
+          </div>
+          <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
+        </>
+      ) : (
+        <>
+          <InventoryToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
+            controls={sourceSelect}
+            applied={connectorId ? [{ key: "source", label: `Source: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
+            onClearAll={() => {
+              setParam("source", null);
+              setSearch("");
+            }}
+            shown={filtered.length}
+            total={rows.length}
+            noun={noun}
+          />
 
-      <ListFrame
-        loading={q.isLoading}
-        failed={q.isError && !rows.length}
-        error={q.error}
-        onRetry={() => void q.refetch()}
-        empty={!rows.length}
-        noMatch={!filtered.length}
-        emptyText={
-          view === "identities"
-            ? "No agent identity was recorded. Agent identities are read with AgentIdentity.Read.All; the connection's Coverage tab says whether that read ran."
-            : "No agent identity blueprint was recorded. Blueprints are read with AgentIdentityBlueprint.Read.All; the connection's Coverage tab says whether that read ran."
-        }
-      >
-        <AdaptiveTable
-          key={view}
-          sizing="fit"
-          cardsBelow={640}
-          tableId={`azure-agents-${view}`}
-          columns={view === "identities" ? identityColumns : blueprintColumns}
-          data={filtered}
-          getRowId={(r) => r.id}
-          enableSelection={false}
-          enableExpansion={false}
-          rowDetails={false}
-          onRowClick={(r) => navigate(detailHref(r))}
-          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
-        />
-      </ListFrame>
+          <ListFrame
+            loading={q.isLoading}
+            failed={q.isError && !rows.length}
+            error={q.error}
+            onRetry={() => void q.refetch()}
+            empty={!rows.length}
+            noMatch={!filtered.length}
+            emptyText={
+              view === "identities"
+                ? "No agent identity was recorded. Agent identities are read with AgentIdentity.Read.All; the connection's Coverage tab says whether that read ran."
+                : "No agent identity blueprint was recorded. Blueprints are read with AgentIdentityBlueprint.Read.All; the connection's Coverage tab says whether that read ran."
+            }
+          >
+            <AdaptiveTable
+              key={view}
+              sizing="fit"
+              cardsBelow={640}
+              tableId={`azure-agents-${view}`}
+              columns={view === "identities" ? identityColumns : blueprintColumns}
+              data={filtered}
+              getRowId={(r) => r.id}
+              enableSelection={false}
+              enableExpansion={false}
+              rowDetails={false}
+              onRowClick={(r) => navigate(detailHref(r))}
+              pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+            />
+          </ListFrame>
+        </>
+      )}
     </div>
   );
 }

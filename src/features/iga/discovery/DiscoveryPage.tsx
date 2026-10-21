@@ -17,6 +17,7 @@ import { RefreshCw } from "lucide-react";
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
 import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
+import { AzureDiscoverySummary } from "@/features/discovery/cloud/azure/AzureDiscoverySummary";
 import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -285,6 +286,15 @@ export default function DiscoveryPage() {
         </div>
       </div>
     );
+    // Azure: everything discovery recorded, counted, above whichever list is open.
+    if (provider === "azure") {
+      body = (
+        <div className="space-y-3">
+          <AzureDiscoverySummary />
+          {body}
+        </div>
+      );
+    }
   }
 
   return (
