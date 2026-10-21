@@ -1,12 +1,14 @@
 /**
- * Azure Identities, Resources and Workloads while the shared graph is
- * unavailable (IGA_GRAPH_PROJECTION off): read from the Azure discovery routes,
+ * Azure Identities, Resources and Workloads while the access graph is
+ * unavailable: read from the Azure discovery routes,
  * which serve the scan tables directly, as AWS's "Latest collected" does. The
  * inventory screen hands over to this one only when the graph answers
  * `graph_unavailable`; once the graph is on, the inventory is read again.
  *
  * Up to AWS_DISCOVERY_MAX_LIMIT rows are read per filter, the server's search,
- * kind and connector filters applied; the table pages them. Facts only.
+ * kind and connector filters applied; this screen pages them, 25 / 50 / 100 a
+ * page as AWS's lists do (cards included: a phone-width list pages as well).
+ * Facts only.
  */
 
 import { useMemo } from "react";
@@ -24,19 +26,23 @@ import {
   type CloudConnector,
 } from "@/app/api/cloudDiscoveryApi";
 import type { InventoryClass } from "@/app/api/igaInventoryApi";
-import { EntityCell } from "@/components/console/iam-console";
+import { ConsoleRowActions } from "@/components/console/iam-console";
 import { StatusBadge } from "@/components/console/status";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import { RowName } from "@/features/iga/discovery/DiscoveryTable";
 import type { FacetSpec } from "@/features/iga/discovery/FacetBar";
 import { sourceFacet } from "@/features/iga/discovery/facets";
 import { ScreenFrame } from "@/features/iga/discovery/ScreenFrame";
 import type { ScreenProps } from "@/features/iga/discovery/screenTypes";
+import { CursorPager } from "@/features/iga/shared/components/CursorPager";
+import type { CountValue } from "@/features/iga/shared/components/countValue";
+import { copyToClipboard } from "@/lib/clipboard";
 
-import { CopyableId } from "../aws/AWSInventoryCells";
 import { ListFrame, RelativeDate } from "./AzureDiscoveryShared";
 import { agentTypeLabel, connectorLabel, IDENTITY_FILTERS, identityKindLabel } from "./azureDiscoveryLabels";
 import { azureFallbackScope, identityFilterArgs, scanTablesHref } from "./azureFallback";
 import { inventoryKindLabel, tenantName, tenantScopeId } from "./azureInventoryLabels";
+import { pageSizeParam, parsePageSize, useClientPaging } from "./azurePaging";
 
 type Row = AzureIdentity | AzureResource | AzureWorkload;
 
@@ -56,6 +62,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
   const { cls } = p;
   const navigate = useNavigate();
   const kind = p.url.get("kind");
+  const pageSize = parsePageSize(p.url.get("size"));
+  const setPageSize = (n: number) => p.url.patch({ size: pageSizeParam(n) });
   const connectorsQ = useListAzureConnectorsQuery();
   const connectors = useMemo(() => connectorsQ.data ?? [], [connectorsQ.data]);
   const byId = useMemo(() => new Map(connectors.map((c) => [c.id, c] as const)), [connectors]);
@@ -84,17 +92,23 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
   const rows = useMemo(() => (scope.connectorIds ? loaded.filter((r) => scope.connectorIds!.has(r.connector_id)) : loaded), [loaded, scope.connectorIds]);
   const total = q.data?.total ?? 0;
   const truncated = !!q.data && q.data.totalKnown && total > loaded.length;
+  const manyTenants = tenants.size > 1;
+  const paged = useClientPaging(rows, pageSize, `${cls}|${p.url.q}|${kind ?? ""}|${tenantId ?? ""}|${pageSize}`);
 
   const kindOptions = useMemo(() => {
     if (cls === "identities") return IDENTITY_FILTERS.map((f) => ({ value: f.key, label: f.label }));
-    const source = (cls === "resources" ? resKindsQ.data?.rows : wlKindsQ.data?.rows) as Row[] | undefined;
+    const kindsRead = cls === "resources" ? resKindsQ.data : wlKindsQ.data;
+    const source = kindsRead?.rows as Row[] | undefined;
+    // Counts over a capped read are lower bounds: never say "exact" about rows that were not read.
+    const capped = !!kindsRead && kindsRead.totalKnown && kindsRead.total > kindsRead.rows.length;
     const counts = new Map<string, number>();
     for (const r of source ?? []) counts.set(rowKind(cls, r), (counts.get(rowKind(cls, r)) ?? 0) + 1);
     if (kind && !counts.has(kind)) counts.set(kind, 0);
     return [...counts.entries()]
-      .map(([value, n]) => ({ value, label: inventoryKindLabel(cls, value), count: { kind: "exact" as const, value: n } }))
+      .map(([value, n]) => ({ value, label: inventoryKindLabel(cls, value), count: (capped ? { kind: "at_least", value: n } : { kind: "exact", value: n }) as CountValue }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [cls, kind, resKindsQ.data, wlKindsQ.data]);
+  const selectedTenantName = p.scope.kind === "one" ? p.scope.source.label : undefined;
 
   const tenantOf = (c: CloudConnector | undefined): string => {
     if (!c) return "Unknown";
@@ -115,14 +129,13 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
         const r = row.original;
         const agent = cls === "identities" ? agentTypeLabel(r as AzureIdentity) : undefined;
         return (
-          <EntityCell
-            label={<span className="font-medium">{r.name || r.native_id}</span>}
-            detail={
-              <span className="flex flex-col gap-0.5">
-                <span className={MUTED}>{[inventoryKindLabel(cls, rowKind(cls, r)), agent].filter(Boolean).join(" · ")}</span>
-                <CopyableId value={r.native_id} label={cls === "identities" ? "Object ID" : "Resource ID"} />
-              </span>
-            }
+          <RowName
+            to={scanTablesHref(cls, r)}
+            name={r.name || r.native_id}
+            rowKey={r.id}
+            selected={false}
+            context={[inventoryKindLabel(cls, rowKind(cls, r)), agent]}
+            account={manyTenants ? tenantOf(byId.get(r.connector_id)) : null}
           />
         );
       },
@@ -176,7 +189,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       },
     };
     const tenant: AdaptiveColumn<Row> = {
-      id: "tenant",
+      id: "account",
       header: "Tenant",
       priority: 5,
       approxWidth: 150,
@@ -189,11 +202,28 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       approxWidth: 130,
       cell: ({ row }) => <RelativeDate iso={row.original.last_seen_at} />,
     };
-    if (cls === "identities") return [name, state, signIn, tenant, seen];
-    if (cls === "workloads") return [name, subscription, region, runsAs, tenant, seen];
-    return [name, subscription, tenant, seen];
+    const actions: AdaptiveColumn<Row> = {
+      id: "actions",
+      header: "",
+      alwaysVisible: true,
+      approxWidth: 64,
+      cell: ({ row }) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConsoleRowActions
+            items={[
+              { label: "Open details", onSelect: () => navigate(scanTablesHref(cls, row.original)) },
+              { label: cls === "identities" ? "Copy object ID" : "Copy resource ID", onSelect: () => void copyToClipboard(row.original.native_id, cls === "identities" ? "Object ID" : "Resource ID") },
+            ]}
+          />
+        </div>
+      ),
+    };
+    const tenantCols = manyTenants ? [tenant] : [];
+    if (cls === "identities") return [name, state, signIn, ...tenantCols, seen, actions];
+    if (cls === "workloads") return [name, subscription, region, runsAs, ...tenantCols, seen, actions];
+    return [name, subscription, ...tenantCols, seen, actions];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cls, byId, connectors]);
+  }, [cls, byId, connectors, manyTenants]);
 
   const specs: FacetSpec[] = [
     {
@@ -227,8 +257,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       notices={
         <div className="space-y-1 text-xs text-(--color-text-muted)" role="status">
           <p>
-            Read straight from the latest Azure scan: AuthSec's graph is not available in this deployment (IGA_GRAPH_PROJECTION is off), so these {NOUN[cls]} are not
-            counted against the graph or linked to an Access Graph.
+            Read straight from the latest Azure scan. The access graph is not turned on for this workspace yet, so these {NOUN[cls]} are listed without graph counts and have no
+            Access Graph.
           </p>
           {truncated ? <p>Showing the first {loaded.length.toLocaleString()} of {total.toLocaleString()}. Search or filter to narrow them.</p> : null}
           {!scope.exact ? <p>Narrowed to this tenant after reading the first {loaded.length.toLocaleString()} rows of every tenant: choose Every tenant, or search, to see the rest.</p> : null}
@@ -244,7 +274,9 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
           empty={!rows.length}
           noMatch={false}
           emptyText={
-            filtered
+            !rows.length && loaded.length && !scope.exact
+              ? `None of the first ${loaded.length.toLocaleString()} ${NOUN[cls]} read belong to ${selectedTenantName ?? "this tenant"}. Choose Every tenant, or search, to look further.`
+              : filtered
               ? `No ${NOUN[cls]} match this search or filter.`
               : `No ${NOUN[cls]} were recorded. If a scan is still running they appear when it finishes; the connection's Coverage tab says what each part of the scan could read.`
           }
@@ -255,13 +287,23 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
             cardsBelow={640}
             tableId={`azure-scan-${cls}`}
             columns={columns}
-            data={rows}
+            data={paged.pageRows}
             getRowId={(r) => r.id}
             enableSelection={false}
             enableExpansion={false}
+            enableSorting={false}
+            enablePagination={false}
             rowDetails={false}
             onRowClick={(r) => navigate(scanTablesHref(cls, r))}
-            pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+          />
+          <CursorPager
+            meta={paged.meta}
+            pageIndex={paged.pageIndex}
+            rowsOnPage={paged.pageRows.length}
+            onPrev={paged.onPrev}
+            onNext={paged.onNext}
+            pageSize={pageSize}
+            onPageSize={setPageSize}
           />
         </ListFrame>
       )}

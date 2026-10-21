@@ -31,10 +31,7 @@ function SectionTable({ s }: { s: SummarySection }) {
       <tbody className="divide-y divide-(--color-border-subtle)">
         {s.kinds.map((k) => (
           <tr key={k.kind} className="align-top">
-            <td className="py-1.5 pr-2">
-              <span className="block">{k.label}</span>
-              {k.label !== k.kind ? <span className={`block break-all font-mono text-[11px] ${MUTED}`}>{k.kind}</span> : null}
-            </td>
+            <td className="py-1.5 pr-2">{k.label}</td>
             <td className="py-1.5 text-right tabular-nums">{fmt(k.present)}</td>
             <td className={`py-1.5 pl-3 text-xs ${MUTED}`}>
               {k.byState.map((st) => (
@@ -55,17 +52,10 @@ export function AzureDiscoverySummary() {
   const [open, setOpen] = useState(false);
   const sections = useMemo(() => summarizeGraph(q.data?.rows ?? []), [q.data]);
 
-  // A failed or empty read says nothing here: the lists below carry their own states.
-  if (!q.data || !sections.length) {
-    if (q.data && !q.data.projectionEnabled) {
-      return (
-        <p className={`text-xs ${MUTED}`} role="status">
-          The Azure summary is not available: AuthSec's graph projection (IGA_GRAPH_PROJECTION) is off in this deployment.
-        </p>
-      );
-    }
-    return null;
-  }
+  // The strip holds its place while it loads, so the lists do not jump when it arrives.
+  if (q.isLoading) return <div className="h-[42px] animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-hidden="true" />;
+  // A failed or empty read, or a graph that is off, says nothing here: the lists below carry their own states.
+  if (!q.data || !sections.length) return null;
 
   return (
     <>

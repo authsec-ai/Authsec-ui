@@ -16,10 +16,14 @@ import { RefreshCw } from "lucide-react";
 
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
+import { igaInventoryApi } from "@/app/api/igaInventoryApi";
+import { useAppDispatch } from "@/app/hooks";
+import { AzureCoverageSummary } from "@/features/discovery/cloud/azure/AzureCoverageSummary";
 import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
 import { AzureDiscoverySummary } from "@/features/discovery/cloud/azure/AzureDiscoverySummary";
 import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { tenantName, tenantScopeId } from "@/features/discovery/cloud/azure/azureInventoryLabels";
 import { ConsolePage } from "@/components/console/ConsolePage";
 import { DecisionBanner } from "@/components/console/status";
 import { loadFailureOf } from "@/components/console/load-failure";
@@ -53,15 +57,19 @@ import PublishedScreen from "./PublishedScreen";
 import SightingsScreen from "./SightingsScreen";
 import { InfoTip } from "../shared/components/InfoTip";
 
-const DESCRIPTION = (
+const describe = (provider: DiscoveryProvider | undefined) => (
   <span className="inline-flex items-center gap-1">
     Workloads, identities and resources found in your connected sources.
-    <InfoTip label="About access shown here">This shows the access that has been written down in AWS. AuthSec has not tested whether a real request would be allowed or blocked.</InfoTip>
+    <InfoTip label="About access shown here">
+      This shows the access that has been written down in {provider === "azure" ? "Microsoft Azure" : provider === "gcp" ? "Google Cloud" : provider === "k8s" ? "Kubernetes" : provider === "github" ? "GitHub" : "AWS"}.
+      AuthSec has not tested whether a real request would be allowed or blocked.
+    </InfoTip>
   </span>
 );
 
 export default function DiscoveryPage() {
   const ws = getWorkspaceId() ?? "";
+  const dispatch = useAppDispatch();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const url = useDiscoveryUrl();
   useSlashToSearch();
@@ -73,6 +81,12 @@ export default function DiscoveryPage() {
   const azureQ = useListAzureConnectorsQuery();
   const azureConnectors = useMemo(() => azureQ.data ?? [], [azureQ.data]);
   const azureConnected = azureConnectors.some((c) => c.scope_kind === "tenant" && c.status !== "revoked");
+  // The shared list names an Azure tenant by its id. Sources, notices and filters say it by the
+  // tenant's name, or a short id, never the whole GUID.
+  const namedConnections = useMemo(() => {
+    const tenants = new Map(azureConnectors.filter((c) => c.scope_kind === "tenant").map((c) => [tenantScopeId(c), c] as const));
+    return connections.map((c) => (c.provider === "azure" ? { ...c, name: tenantName(tenants.get(c.scope_id.toLowerCase()), c.name || c.native_id) } : c));
+  }, [connections, azureConnectors]);
   const connected = useMemo(() => {
     const base = connectedProviders(connections);
     return azureConnected && !base.includes("azure") ? DISCOVERY_PROVIDERS.filter((p) => p === "azure" || base.includes(p)) : base;
@@ -104,7 +118,7 @@ export default function DiscoveryPage() {
 
   // Nothing is read for a provider the workspace has no connection to.
   const active: DiscoveryProvider | undefined = provider && connected.includes(provider) ? provider : undefined;
-  const sources = useMemo(() => (active ? sourcesOf(connections, active) : []), [connections, active]);
+  const sources = useMemo(() => (active ? sourcesOf(namedConnections, active) : []), [namedConnections, active]);
   const needsScopeId = (active === "aws" && view === "published") || active === "k8s" || active === "azure";
   const scope = resolveSource(sources, url.source, needsScopeId);
   const scoped = scope.kind === "one" || scope.kind === "no_rows" ? [scope.source.connection] : scope.kind === "all" ? sources.map((s) => s.connection) : [];
@@ -287,7 +301,7 @@ export default function DiscoveryPage() {
       </div>
     );
     // Azure: everything discovery recorded, counted, above whichever list is open.
-    if (provider === "azure") {
+    if (provider === "azure" && scope.kind === "all" && (type === "identities" || type === "resources" || type === "workloads")) {
       body = (
         <div className="space-y-3">
           <AzureDiscoverySummary />
@@ -300,7 +314,7 @@ export default function DiscoveryPage() {
   return (
     <ConsolePage
       title="Discovery"
-      description={DESCRIPTION}
+      description={describe(provider)}
       actions={
         connected.length ? (
           // One summary card: the provider, and what its lists are read at.
@@ -317,6 +331,22 @@ export default function DiscoveryPage() {
                   {onLatest ? (
                     <Button variant="outline" size="sm" className="h-9 px-3" onClick={() => switchTo({ provider, type, view: "published" })}>
                       Back to Published
+                    </Button>
+                  ) : null}
+                  {provider === "azure" ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-9"
+                      onClick={() => {
+                        void connQ.refetch();
+                        void azureQ.refetch();
+                        dispatch(igaInventoryApi.util.invalidateTags([{ type: "IgaGraph", id: "INVENTORY" }]));
+                      }}
+                      aria-label="Refresh"
+                      title="Re-read the lists. This does not request a scan."
+                    >
+                      <RefreshCw className="size-3.5" aria-hidden="true" />
                     </Button>
                   ) : null}
                   {awsPublished && overview.publication?.publishedAt ? (
@@ -356,6 +386,7 @@ export default function DiscoveryPage() {
       ) : null}
       {awsPublished && stale ? <RevisionBanner currentPublishedAt={stale.currentPublishedAt} onRefresh={refresh} /> : null}
       {ready ? <SourceNotices notices={notices} /> : null}
+      {ready && provider === "azure" ? <AzureCoverageSummary connections={scoped} /> : null}
       {body}
     </ConsolePage>
   );
