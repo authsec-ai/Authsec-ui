@@ -26,6 +26,36 @@ export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
   declares: "declares",
 };
 
+/** A line of an Azure graph: every edge of the Azure neighbourhood read says `provider: azure`. */
+export function isAzureEdge(e: VisualEdge): boolean {
+  return e.members[0]?.provider === "azure";
+}
+
+/**
+ * What an Azure line means. The line's own label says which (the role, "owner", "agent blueprint"
+ * ...); this says what kind of fact it is, and what it is not.
+ */
+const AZURE_EDGE_MEANING: Partial<Record<VisualEdgeKind, string>> = {
+  grant: "A role or permission held on this scope or resource. Assigned access, not evaluated: Azure deny assignments and conditions are not applied.",
+  member_of: "The identity is a member of the group, so the group's roles and permissions reach it too.",
+  can_assume:
+    "It can act as, or be acted on by, the other identity: an owner who can add a credential, an agent identity blueprint, a federated credential, or the service principal of an app registration.",
+  executes_as: "The workload runs as this identity, so it holds its roles and permissions.",
+};
+
+const AZURE_EDGE_DEFAULT: Partial<Record<VisualEdgeKind, string>> = {
+  grant: "has access",
+  member_of: "member of",
+  can_assume: "can act as",
+  executes_as: "runs as",
+};
+
+/** The word on an Azure line: its own label, or how many grants a grouped line stands for. */
+function azureEdgeVerb(e: VisualEdge): string {
+  if (e.kind === "grant" && e.members.length > 1) return `${e.members.length} roles and permissions`;
+  return e.members[0]?.label || AZURE_EDGE_DEFAULT[e.kind] || EDGE_LABEL[e.kind];
+}
+
 /** What each relationship means, in one sentence's worth, for the legend and the selection card. */
 export const EDGE_MEANING: Record<VisualEdgeKind, string> = {
   executes_as: "The workload is configured to run as this identity. For ECS this is the task role: what the application code runs as.",
@@ -56,6 +86,7 @@ export function isK8sEdge(e: VisualEdge): boolean {
 
 /** What a line means: the AWS definition, or the Kubernetes one for a Kubernetes line. */
 export function edgeMeaning(e: VisualEdge): string {
+  if (isAzureEdge(e)) return AZURE_EDGE_MEANING[e.kind] ?? EDGE_MEANING[e.kind];
   return (isK8sEdge(e) ? K8S_EDGE_MEANING[e.kind] : undefined) ?? EDGE_MEANING[e.kind];
 }
 
@@ -89,6 +120,8 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
  * forward `can_assume` as the roles it may assume.
  */
 export function frontierLabel(f: GraphFrontier, k8s = false): string {
+  // An Azure card has one control: the object's own neighbourhood (`azure/azureGraphAdapter`).
+  if (f.expand === "azure") return "Load its connections";
   const n = f.more.exact && f.more.count != null ? f.more.count : null;
   if (k8s && f.edge === "grant") return n != null ? `Load ${n} more ${n === 1 ? "rule" : "rules"}` : "Load more rules";
   if (k8s && f.edge === "executes_as" && f.direction === "forward") return "Load the ServiceAccount it runs as";
@@ -145,6 +178,15 @@ export const KIND_LABEL: Record<GraphNodeKind, string> = {
   exact: RESOURCE_KIND_LABEL.exact,
   selector: RESOURCE_KIND_LABEL.selector,
   external: RESOURCE_KIND_LABEL.external,
+  entra_user: "User",
+  entra_group: "Group",
+  entra_application: "App registration",
+  entra_service_principal: "Service principal",
+  entra_managed_identity: "Managed identity",
+  entra_agent_identity: "Agent identity",
+  entra_agent_user: "Agent user",
+  azure_resource: "Resource",
+  azure_scope: "Scope",
 };
 
 /**
@@ -180,6 +222,7 @@ export function markedLimitations(e: VisualEdge): EvidenceLimitation[] {
 }
 
 export function edgeVerb(e: VisualEdge): string {
+  if (isAzureEdge(e)) return azureEdgeVerb(e);
   if (isK8sEdge(e)) {
     // The binding is the label: it is what decides where the role's rules apply.
     if (e.kind === "executes_as") return e.members.every((m) => m.basis === "observed") ? "runs as" : "configured to run as";

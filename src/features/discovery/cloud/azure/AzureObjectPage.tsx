@@ -38,7 +38,9 @@ import { dayText } from "@/features/iga/shared/labels";
 import { activeTabOf } from "@/features/iga/shared/links";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AzureAccessGraph } from "./AzureAccessGraph";
+import { Info } from "lucide-react";
+import { InventoryNotice } from "../aws/AWSInventoryNotices";
+import { AzureGraphPanel } from "./AzureGraphPanel";
 import {
   IdentityAccessTab,
   IdentityActivityTab,
@@ -63,16 +65,16 @@ const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "activity", label: "Activity", path: "/activity" },
   { key: "workloads", label: "Workloads", path: "/workloads" },
   { key: "evidence", label: "Evidence", path: "/evidence" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
   { key: "access", label: "Who can access", path: "/access" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
@@ -190,7 +192,13 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         <WorkloadOverview workload={workload} subscription={connector} identityHref={runsAsObjectId ? `/iga/azure/identity/${encodeURIComponent(runsAsObjectId)}` : undefined} />
       ) : null;
     } else if (active === "graph") {
-      body = <AzureAccessGraph name={name} objectId={kind === "identity" ? id : undefined} startRef={kind === "identity" ? undefined : `${kind}:${id}`} />;
+      body = byArmId ? (
+        <InventoryNotice icon={<Info />}>
+          The access graph is not available for this object yet. It was opened from the scan tables, which carry no graph reference. Open it from Discovery once graph projection is on.
+        </InventoryNotice>
+      ) : (
+        <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />
+      );
     } else if (identity) {
       body =
         active === "access" ? (

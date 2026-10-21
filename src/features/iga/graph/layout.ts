@@ -75,6 +75,13 @@ export function columnOfKind(kind: string): number {
     case "k8s_service_account":
     case "k8s_user":
     case "k8s_group":
+    case "entra_user":
+    case "entra_group":
+    case "entra_application":
+    case "entra_service_principal":
+    case "entra_managed_identity":
+    case "entra_agent_identity":
+    case "entra_agent_user":
       return 1;
     case "statement":
       return 2;

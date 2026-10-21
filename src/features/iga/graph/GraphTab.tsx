@@ -41,6 +41,8 @@ import { useAppDispatch } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { azureObjectPath, useAzureGraphExpansion, useAzureGraphRoot } from "@/features/discovery/cloud/azure/azureGraphAdapter";
+
 import { k8sNodePath } from "../k8s/links";
 import { viaLink } from "../shared/links";
 import { useEvidence, withoutMark } from "../evidence/useEvidence";
@@ -102,8 +104,11 @@ type GraphTabProps = {
    * `rev`, never marks the workspace's pin stale and never shows "newer
    * publication"; `meta.rev` on its answers (the AWS publication current in the
    * snapshot) is ignored. Paths to a resource are not offered. Default `aws`.
+   *
+   * `azure`: unrevisioned like Kubernetes, and read from the Azure neighbourhood endpoint through
+   * `azure/azureGraphAdapter`. It has no statements, so one view, one direction and no Paths.
    */
-  provider?: "aws" | "k8s";
+  provider?: "aws" | "k8s" | "azure";
 };
 
 /**
@@ -139,11 +144,21 @@ const DENSE_EDGES = 40;
 
 export default function GraphTab(props: GraphTabProps) {
   const [params] = useSearchParams();
-  const direction = refType(props.root) === "resource" ? "reverse" : params.get("direction") === "reverse" && refType(props.root) === "identity" ? "reverse" : "forward";
+  const direction =
+    props.provider === "azure"
+      ? "forward"
+      : refType(props.root) === "resource"
+        ? "reverse"
+        : params.get("direction") === "reverse" && refType(props.root) === "identity"
+          ? "reverse"
+          : "forward";
   return <GraphInvestigation key={`${graphSessionGeneration()}|${props.ws}|${props.provider ?? "aws"}|${props.root}|${direction}`} {...props} direction={direction} />;
 }
 function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }: GraphTabProps & { direction: GraphDirection }) {
   const k8s = provider === "k8s";
+  const azure = provider === "azure";
+  // Kubernetes and Azure answers are unrevisioned; everything about the pin and revision is for AWS alone.
+  const live = k8s || azure;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   // Selection edits replace the entry and keep its history state: the
@@ -152,17 +167,17 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   const dispatch = useAppDispatch();
   const evidence = useEvidence();
   const pinned = useGraphRevision(ws);
-  // A Kubernetes answer is unrevisioned: it neither reads nor moves the workspace's pin. Its own
+  // A live answer is unrevisioned: it neither reads nor moves the workspace's pin. Its own
   // Refresh is a local epoch, which re-reads and replays the expansions exactly as an AWS one does.
-  const [k8sEpoch, setK8sEpoch] = useState(0);
-  const rev = k8s ? null : pinned.rev;
-  const epoch = k8s ? k8sEpoch : pinned.epoch;
-  const stale = k8s ? null : pinned.stale;
+  const [liveEpoch, setLiveEpoch] = useState(0);
+  const rev = live ? null : pinned.rev;
+  const epoch = live ? liveEpoch : pinned.epoch;
+  const stale = live ? null : pinned.stale;
   const markStale = pinned.markStale;
   const awsRefresh = pinned.refresh;
-  // Whether a read may go out: an AWS investigation waits for its revision to be pinned; a Kubernetes one has none.
-  const readable = k8s || rev != null;
-  const refresh = useCallback(() => (k8s ? setK8sEpoch((e) => e + 1) : awsRefresh()), [k8s, awsRefresh]);
+  // Whether a read may go out: an AWS investigation waits for its revision to be pinned; a live one has none.
+  const readable = live || rev != null;
+  const refresh = useCallback(() => (live ? setLiveEpoch((e) => e + 1) : awsRefresh()), [live, awsRefresh]);
   const narrow = useMediaQuery("(max-width: 767px)");
 
   const isIdentity = refType(root) === "identity";
@@ -190,10 +205,13 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   /* ------------------------------ initial load ----------------------------- */
 
   const rootArgs = { ws, rev, key: String(epoch), root, direction, assume_hops: 2 };
-  const rootQuery = useGetGraphNeighbourhoodQuery(rootArgs);
+  // Azure reads its own neighbourhood endpoint; the shared read is skipped for it, as the Azure one is for the rest.
+  const sharedRoot = useGetGraphNeighbourhoodQuery(rootArgs, { skip: azure });
+  const azureRoot = useAzureGraphRoot(root, !azure);
+  const rootQuery = azure ? azureRoot : sharedRoot;
   const rootFailure = classifyGraphError(rootQuery.error);
   // A Kubernetes answer carries the AWS publication current in its snapshot as meta.rev: it must not pin or move the workspace's.
-  useTrackRevision(ws, k8s ? undefined : rootQuery.currentData, k8s ? null : rootFailure, (r, d) =>
+  useTrackRevision(ws, live ? undefined : rootQuery.currentData, live ? null : rootFailure, (r, d) =>
     dispatch(igaGraphApi.util.upsertQueryData("getGraphNeighbourhood", { ...rootArgs, rev: r }, d)),
   );
 
@@ -258,7 +276,10 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootQuery.currentData, root, direction, epoch, ws, dispatchModel]);
 
-  const [triggerExpand] = useLazyGetGraphExpansionQuery();
+  const [triggerSharedExpand] = useLazyGetGraphExpansionQuery();
+  const triggerAzureExpand = useAzureGraphExpansion(root);
+  // The same call either way: the shared lazy read, or an Azure node's own neighbourhood.
+  const triggerExpand = azure ? triggerAzureExpand : triggerSharedExpand;
 
   // Replays the previous investigation's expansions once the new root has
   // settled, in the order they originally happened (an ancestor before its
@@ -304,7 +325,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           }).unwrap();
           if (cancelled) return;
           if (cancelledReplayKeys.current.has(item.key)) break;
-          if (!k8s && res.meta.rev !== rev) { markStale({ currentRev: res.meta.rev ?? undefined }); replayQueueRef.current = queue.slice(next); next = queue.length; return; }
+          if (!live && res.meta.rev !== rev) { markStale({ currentRev: res.meta.rev ?? undefined }); replayQueueRef.current = queue.slice(next); next = queue.length; return; }
           dispatchModel({ type: "expand-success", key: item.key, data: res.data });
           for (const node of res.data.nodes) replayNodes.add(node.ref);
           const nextCursor = res.data.next_cursor;
@@ -335,7 +356,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
       cancelled = true;
       if (next < queue.length) replayQueueRef.current = [...queue.slice(next), ...replayQueueRef.current].filter((item) => !cancelledKeys.has(item.key));
     };
-  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, readable, k8s, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
+  }, [model.root, model.generationKey, rootQuery.isFetching, rootQuery.currentData, ws, rev, readable, live, epoch, stale, currentKey, triggerExpand, dispatchModel, markStale]);
 
 
   /* -------------------------------- expansion -------------------------------- */
@@ -356,7 +377,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           // The investigation has moved to a different root, direction or
           // revision since this was requested: drop it (review item 3).
           if (!mounted.current || currentKeyRef.current !== requestKey || expansionAttempts.current.get(key) !== attempt) return;
-          if (!k8s && res.meta.rev != null && rev != null && res.meta.rev > rev) {
+          if (!live && res.meta.rev != null && rev != null && res.meta.rev > rev) {
             // Answered at a newer revision than the one pinned: never merged
             // (review item 2) — mark stale and clear the read in flight, so
             // the control reads "paused" rather than "Could not load".
@@ -379,7 +400,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           announce("Could not load. Retry");
         });
     },
-    [stale, ws, rev, readable, k8s, epoch, currentKey, triggerExpand, dispatchModel, markStale],
+    [stale, ws, rev, readable, live, epoch, currentKey, triggerExpand, dispatchModel, markStale],
   );
 
   const handleLoadMore = useCallback(
@@ -423,7 +444,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   /* ---------------------------------- path ----------------------------------- */
 
   // Paths to a resource are not offered for Kubernetes: a rule names resource types, never an instance.
-  const targetRef = k8s ? null : (params.get("target") as GraphRef | null);
+  const targetRef = live ? null : (params.get("target") as GraphRef | null);
   const lastGoodPathTargetRef = useRef<string | null>(null);
   const sameTargetAsShown = targetRef !== null && lastGoodPathTargetRef.current === `${root}|${targetRef}`;
   const pathArgs = { ws, rev, key: String(epoch), from: root, to: targetRef ?? root };
@@ -494,7 +515,9 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   // default), Detailed (every statement drawn) or Paths. `as=canvas` from an
   // older link means Overview.
   const asParam = params.get("as");
-  const view: "overview" | "detailed" | "paths" = k8s
+  const view: "overview" | "detailed" | "paths" = azure
+    ? "overview"
+    : k8s
     ? asParam === "detailed"
       ? "detailed"
       : "overview"
@@ -880,13 +903,19 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
         if (path) navigate(path);
         return;
       }
+      if (azure) {
+        // An Azure object has its own page too (a scope or a federated credential has none).
+        const path = azureObjectPath(modelRef.current.nodes.get(ref));
+        if (path) navigate(path);
+        return;
+      }
       const path = objectPath(ref);
       if (path) {
         const link = viaLink(path, { ref: root, name: rootName });
         navigate(link.to, { state: link.state });
       }
     },
-    [navigate, k8s, root, rootName, visual.nodes, model.revealedWorkloads, dispatchModel],
+    [navigate, k8s, azure, root, rootName, visual.nodes, model.revealedWorkloads, dispatchModel],
   );
 
   const focusHere = useCallback(
@@ -896,13 +925,18 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
         if (path) navigate(path);
         return;
       }
+      if (azure) {
+        const path = azureObjectPath(modelRef.current.nodes.get(ref), "graph");
+        if (path) navigate(path);
+        return;
+      }
       const path = objectPath(ref);
       if (path && refType(ref) !== "external_principal") {
         const link = viaLink(`${path}/graph`, { ref: root, name: rootName });
         navigate(link.to, { state: link.state });
       }
     },
-    [navigate, k8s, root, rootName],
+    [navigate, k8s, azure, root, rootName],
   );
 
   const generationKey = model.generationKey;
@@ -1054,7 +1088,13 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   if (visual.limited && !showPaths)
     notices.push({ key: "limit", tone: "warning", text: `Display limit: ${visual.nodes.length} objects and ${visual.edges.length} relationships are drawn (maximum 150 / 300). Paths lists everything loaded.`, action: { label: "Open Paths", run: () => setView("paths") } });
   if (model.truncated)
-    notices.push({ key: "truncated", tone: "warning", text: `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls to fetch them.` });
+    notices.push({
+      key: "truncated",
+      tone: "warning",
+      text: azure
+        ? `Azure shows up to 40 of each kind of relationship, most sensitive first.${model.truncated.detail ? ` This object has ${model.truncated.detail}.` : ""} Open a connected object and use its Load control to see more of the graph around it.`
+        : `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls to fetch them.`,
+    });
 
   const noRelationships = rootReady && model.laidOut && visual.edges.length === 0 && visual.nodes.length <= 1;
   const rootFrontier = frontierMap.get(root) ?? [];
@@ -1080,7 +1120,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   if (hardFailure || (firstLoad && rootFailure)) {
     body = (
       <div className="p-4">
-        <GraphStatePanel failure={rootFailure!} subject="this graph" onRetry={() => void rootQuery.refetch()} onRefresh={refresh} source={k8s ? "the identity graph" : undefined} />
+        <GraphStatePanel failure={rootFailure!} subject="this graph" onRetry={() => void rootQuery.refetch()} onRefresh={refresh} source={azure ? "the Azure access graph" : k8s ? "the identity graph" : undefined} permission={azure ? "discovery:read" : undefined} />
       </div>
     );
   } else if (firstLoad) {
@@ -1180,7 +1220,9 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           <div role="status" className="absolute inset-x-0 top-6 mx-auto w-fit max-w-md rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised) px-4 py-3 text-center text-sm shadow-(--shadow-xs)">
             {rootFrontier.length
               ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
-              : k8s
+              : azure
+                ? `No relationships are recorded for ${rootName}. That is what the latest Azure scan read: where a scan was partial, some may be missing, and that is not the same as having none.`
+                : k8s
                 ? `The latest sweep recorded no relationships for ${rootName}. That is what the sweep read — where it was partial, some may be missing, and that is not the same as having none.`
                 : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
           </div>
@@ -1201,6 +1243,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
       aria-label={expanded ? `Access Graph of ${rootName}` : undefined}
     >
       <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
+        {azure ? null : (
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
           <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
             Summary
@@ -1214,7 +1257,8 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             </button>
           )}
         </div>
-        {isIdentity ? (
+        )}
+        {isIdentity && !azure ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
             <span className="text-(--color-text-muted)">Direction</span>
             <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
@@ -1329,6 +1373,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
           onZoomOut={() => canvasApi.current?.zoomOut()}
           canvas={!showPaths}
           k8s={k8s}
+          azure={azure}
         />
       ) : null}
       {evidencePanel && !inline ? evidencePanel : null}
