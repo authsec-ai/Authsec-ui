@@ -18,8 +18,6 @@
 
 import type { GraphFrontier, GraphNode, GraphNodeKind } from "@/app/api/igaGraphApi";
 
-import { agentTypeLabel, armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
-
 import { RUNTIME_LABEL, accountLabel, limitationText } from "../shared/labels";
 import { parseAnchor, roleKindWord, ruleFlags, sameScope, scopeBadge, scopeOfBinding, workloadKindWord, type Scope } from "../k8s/rules";
 import { KIND_LABEL, dominantRelState, frontierLabel, mixedStateText } from "./graphLabels";
@@ -137,15 +135,6 @@ const ICON_OF: Record<GraphNodeKind, NodeIcon> = {
   exact: "resource",
   selector: "selector",
   external: "resource",
-  entra_user: "user",
-  entra_group: "group",
-  entra_application: "service_account",
-  entra_service_principal: "service_account",
-  entra_managed_identity: "service_account",
-  entra_agent_identity: "service_account",
-  entra_agent_user: "user",
-  azure_resource: "resource",
-  azure_scope: "selector",
 };
 
 const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
@@ -161,15 +150,6 @@ const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
   exact: "resource",
   selector: "resource",
   external: "external",
-  entra_user: "identity",
-  entra_group: "identity",
-  entra_application: "identity",
-  entra_service_principal: "identity",
-  entra_managed_identity: "identity",
-  entra_agent_identity: "identity",
-  entra_agent_user: "identity",
-  azure_resource: "resource",
-  azure_scope: "resource",
 };
 
 const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
@@ -199,15 +179,6 @@ const NOUN_OF: Partial<Record<GraphNodeKind, [string, string]>> = {
   selector: ["selector", "selectors"],
   external: ["resource", "resources"],
   external_principal: ["principal", "principals"],
-  entra_user: ["user", "users"],
-  entra_group: ["group", "groups"],
-  entra_application: ["app registration", "app registrations"],
-  entra_service_principal: ["service principal", "service principals"],
-  entra_managed_identity: ["managed identity", "managed identities"],
-  entra_agent_identity: ["agent identity", "agent identities"],
-  entra_agent_user: ["agent user", "agent users"],
-  azure_resource: ["resource", "resources"],
-  azure_scope: ["scope", "scopes"],
 };
 
 function plural(kind: GraphNodeKind, n: number) {
@@ -325,7 +296,6 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
   }
 
   if (k8s) return describeK8s(v);
-  if (first.provider === "azure") return describeAzure(v);
 
   const indicators: Indicator[] = [];
   const state = dominantRelState(v.members.map((m) => m.state ?? "current"));
@@ -385,55 +355,6 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
       ? [...new Set(v.members.map((m) => m.policy).filter(Boolean))].join(", ") || null
       : contextOf(first),
     indicators: badges,
-    notes: indicators,
-    frontier: v.frontier.slice(0, MAX_FRONTIER_ROWS),
-    frontierHidden: Math.max(0, v.frontier.length - MAX_FRONTIER_ROWS),
-  };
-}
-
-/**
- * An Azure card: an Entra identity, a workload, a federated credential, an ARM resource or the
- * scope a role is assigned at. The header says what it is in Microsoft's words; the line under
- * the name is what identifies it (a UPN, an app id, the issuer, the scope).
- */
-function describeAzure(v: VisualNode): NodeDescription {
-  const first = v.members[0];
-  const indicators: Indicator[] = [];
-  if (first.attrs?.["enabled"] === false)
-    indicators.push({ key: "disabled", text: "disabled", long: "The account is disabled in Microsoft Entra ID", tone: "warning" });
-
-  let type: string;
-  let context: string | null = first.sublabel ?? null;
-  switch (first.kind) {
-    case "workload": {
-      const region = first.attrs?.["region"];
-      type = first.sublabel ? `Workload · ${armTypeLabel(first.sublabel)}` : "Workload · Azure";
-      context = typeof region === "string" && region ? `Region ${region}` : null;
-      break;
-    }
-    case "external_principal":
-      type = "External · Federated credential";
-      context = first.sublabel ? `Issuer ${first.sublabel}` : null;
-      break;
-    case "azure_resource":
-      type = `Resource · ${first.sublabel ? graphKindLabel("resource", first.sublabel) : "Azure resource"}`;
-      context = null;
-      break;
-    case "azure_scope":
-      type = "Scope";
-      break;
-    default: {
-      const agent = agentTypeLabel({ attrs: first.attrs ?? {} });
-      type = `Identity · ${agent ?? identityKindLabel(first.kind)}`;
-    }
-  }
-  return {
-    icon: ICON_OF[first.kind],
-    category: CATEGORY_OF[first.kind],
-    title: first.label,
-    type,
-    context,
-    indicators,
     notes: indicators,
     frontier: v.frontier.slice(0, MAX_FRONTIER_ROWS),
     frontierHidden: Math.max(0, v.frontier.length - MAX_FRONTIER_ROWS),

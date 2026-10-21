@@ -681,26 +681,9 @@ export type GraphNodeKind =
   | "workload"
   | IdentityKind
   | K8sIdentityKind
-  | AzureNodeKind
   | "external_principal"
   | "statement"
   | ResourceKind;
-
-/**
- * An Azure graph node, from the Azure neighbourhood read (`azure/azureGraphAdapter.ts`): an Entra
- * identity by its account kind, or an ARM resource or a grant's scope. Workloads and external
- * principals reuse their shared kinds.
- */
-export type AzureNodeKind =
-  | "entra_user"
-  | "entra_group"
-  | "entra_application"
-  | "entra_service_principal"
-  | "entra_managed_identity"
-  | "entra_agent_identity"
-  | "entra_agent_user"
-  | "azure_resource"
-  | "azure_scope";
 
 /** A Kubernetes identity node: a ServiceAccount, or a User or Group a binding names. */
 export type K8sIdentityKind = "k8s_service_account" | "k8s_user" | "k8s_group";
@@ -775,19 +758,11 @@ export interface GraphNode {
    * the namespace, null for a cluster-scoped object; `native_id` is
    * `namespace/name`; `k8s_rule` is a rule node's PolicyRule.
    */
-  provider?: "k8s" | "azure";
+  provider?: "k8s";
   scope?: K8sScope;
   sub_scope?: string | null;
   native_id?: string;
   k8s_rule?: K8sRule;
-  /**
-   * Azure nodes only (`azure/azureGraphAdapter.ts`): the neighbourhood read's own sublabel (a
-   * UPN, an app id, an ARM type), sensitivity and attrs. `attrs.object_id` is an identity's Entra
-   * object id, which its page is keyed by.
-   */
-  sublabel?: string;
-  sensitivity?: string;
-  attrs?: Record<string, unknown>;
   limitations: EvidenceLimitation[];
 }
 
@@ -811,15 +786,10 @@ export interface GraphEdge {
    * reaches the identity through, and the role it belongs to (`policy_ref`,
    * `policy_kind` k8s_role | k8s_cluster_role).
    */
-  provider?: "k8s" | "azure";
+  provider?: "k8s";
   policy_ref?: GraphRef;
   policy_kind?: "k8s_role" | "k8s_cluster_role";
   assignment?: K8sAssignment;
-  /** Azure edges only: the neighbourhood read's own words for the line, and what it says of it. */
-  label?: string;
-  sensitivity?: string;
-  path_kind?: string;
-  conclusion?: string;
   limitations: EvidenceLimitation[];
 }
 
@@ -835,8 +805,6 @@ export interface GraphFrontier {
 
 export interface GraphTruncation {
   bound_by: "nodes" | "edges" | "assume_hops" | "time";
-  /** Azure only: what the per-kind cap left out, in words ("445 roles and permissions"). */
-  detail?: string;
 }
 
 export interface GraphNeighbourhood {

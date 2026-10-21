@@ -68,15 +68,6 @@ const nodeTypes = {
   exact: GraphNodeView,
   selector: GraphNodeView,
   external: GraphNodeView,
-  entra_user: GraphNodeView,
-  entra_group: GraphNodeView,
-  entra_application: GraphNodeView,
-  entra_service_principal: GraphNodeView,
-  entra_managed_identity: GraphNodeView,
-  entra_agent_identity: GraphNodeView,
-  entra_agent_user: GraphNodeView,
-  azure_resource: GraphNodeView,
-  azure_scope: GraphNodeView,
 };
 
 const edgeTypes = { graphEdge: GraphEdgeView };
