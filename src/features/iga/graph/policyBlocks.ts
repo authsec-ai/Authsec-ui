@@ -6,10 +6,16 @@
  * needs no rescan: this reads it and says, per card and per line, what is
  * blocked.
  *
- *   role card      "Blocked" while a Block policy names the role
- *   resource card  "Blocked for N roles" while one covers the bucket or path
- *   declares line  blocked (the policy covers all access to that path) or
- *                  partly blocked (some actions, or part of the path)
+ *   role / identity card  "Blocked" while a Block policy names it
+ *   resource card         "Blocked for N roles" while one covers the bucket or
+ *                         path, or names the Azure resource
+ *   declares / grant line blocked (the policy covers all access to that path or
+ *                         resource) or partly blocked (some actions, or part of
+ *                         the path)
+ *
+ * An Azure block removes the identity's role assignments on the resource, so
+ * once a rescan has run the line it blocked is no longer drawn; the cards keep
+ * saying so from AuthSec's record.
  *
  * Only policies in force count: applying, active, scheduled (in AWS, waiting
  * for its window) and changed-in-AWS (AuthSec is putting it back). Allow
@@ -22,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { bucketOf, pathInBucket } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, providerOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 const IN_FORCE = new Set(["applying", "active", "scheduled", "drift"]);
@@ -53,8 +59,19 @@ const NONE: GraphBlocks = {
   forResource: () => [],
 };
 
-/** How a policy covers a resource's text (an S3 ARN): not at all, fully, or partly. */
-function coverage(p: AccessPolicy, text: string | undefined): "none" | "full" | "partial" {
+/** Whether a graph node is an identity an access policy can name: an IAM role, or an Azure service principal, managed identity or agent identity. */
+export function isPolicyHolder(n: GraphNode | undefined): boolean {
+  if (!n) return false;
+  return n.provider === "azure" ? AZURE_TARGET_KINDS.has(String(n.kind)) : n.kind === "iam_role";
+}
+
+/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 ARN; Azure by the resource itself. */
+function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
+  if (providerOf(p.resource) === "azure") {
+    if (n?.provider !== "azure" || n.kind !== "azure_resource" || refId(n.ref) !== p.resource.resource_id) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  const text = textOf(n);
   const b = bucketOf(text ?? "");
   if (!b || b.bucket !== p.resource.bucket) return "none";
   const path = pathInBucket(text ?? "");
@@ -86,7 +103,7 @@ export function useGraphBlocks(): GraphBlocks {
     if (!on || !live.length) return NONE;
     const naming = (id: string) => live.filter((p) => p.roles.some((r) => r.identity_account_id === id));
     const covering = (n: GraphNode) =>
-      live.map((p) => ({ p, c: coverage(p, textOf(n)) })).filter((x): x is { p: AccessPolicy; c: "full" | "partial" } => x.c !== "none");
+      live.map((p) => ({ p, c: coverage(p, n) })).filter((x): x is { p: AccessPolicy; c: "full" | "partial" } => x.c !== "none");
     return {
       roleBlocks: (id) => mark(naming(id).map((p) => ({ p, c: p.access.includes("all") ? "full" : "partial" }))),
       resourceBlocks: (n) => {
@@ -96,7 +113,7 @@ export function useGraphBlocks(): GraphBlocks {
         return { ...m, roles: roles.size };
       },
       lineBlock: (from, to) => {
-        if (!from || !to || from.kind !== "iam_role") return null;
+        if (!from || !to || !isPolicyHolder(from)) return null;
         const id = refId(from.ref);
         return mark(covering(to).filter((x) => x.p.roles.some((r) => r.identity_account_id === id)));
       },

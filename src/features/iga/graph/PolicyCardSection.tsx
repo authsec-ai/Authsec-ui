@@ -14,6 +14,20 @@
  *   Kubernetes      the shared "not yet supported" note
  *   statement       nothing: a statement is evidence, not something to govern
  *
+ * Azure, the same way (SPEC-access-policies.md §2.4):
+ *   service principal, managed identity, agent identity
+ *                   main button: a policy for this identity; policies in force
+ *   ARM resource    main button: a policy on this resource; the identities drawn
+ *                   holding a role on it are shortcuts that fill them in too
+ *   grant line      main button: a policy for that identity on that resource
+ *   workload        points at the identity it runs as
+ *   user, group     one line: policies change service principals, managed
+ *                   identities and agent identities, not users or groups
+ *   scope           one line: a policy is on one resource; a role given on a
+ *                   subscription or resource group cannot be blocked from here
+ *   other resource  one line: an app permission or delegated scope cannot be
+ *                   named
+ *
  * Nothing renders, and no button is offered, while the policy product is off.
  */
 
@@ -28,8 +42,9 @@ import { getWorkspaceId } from "@/utils/workspace";
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
 import { bucketOf, whenText } from "../policy/access/model";
+import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
-import { useGraphBlocks } from "./policyBlocks";
+import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
 import type { SelectionSubject } from "./SelectionCard";
 import type { VisualEdge } from "./types";
 
@@ -41,7 +56,7 @@ export interface PolicyAction {
   to: string;
 }
 
-function newPolicyHref(query: { identity_account_id?: string; resource_id?: string }) {
+function newPolicyHref(query: { identity_account_id?: string; resource_id?: string; provider?: "azure" }) {
   const qs = new URLSearchParams(Object.entries(query).filter((kv): kv is [string, string] => !!kv[1])).toString();
   return `/iga/policy/new?${qs}`;
 }
@@ -97,6 +112,7 @@ export function usePolicyCard({
 
   if (subject.kind === "edge") {
     const e = subject.edge;
+    if (e.kind === "grant" && e.members[0]?.provider === "azure") return azureLine(e, nodes);
     if (e.kind !== "declares") return none;
     const holder = nodes.get(e.from as GraphRef);
     if (holder?.kind !== "iam_role") return none;
@@ -115,6 +131,7 @@ export function usePolicyCard({
   const first = v.members[0];
   if (!first || v.overflow || v.members.length > 1) return none;
   if (first.provider === "k8s") return { section: <KubernetesPolicyNote />, action: null };
+  if (first.provider === "azure") return azureCard(first, v.id, edges, nodes, onSelectNode);
 
   switch (first.kind) {
     case "iam_role": {
@@ -282,3 +299,175 @@ function BucketSection({
     </Section>
   );
 }
+
+/* ---------------------------------- azure --------------------------------- */
+
+/** An ARM resource a policy can be on: not an app permission or delegated scope (no ARM id), not a scope. */
+function azureArmId(n: GraphNode): string | null {
+  const id = n.attrs?.["native_id"];
+  return n.kind === "azure_resource" && typeof id === "string" && /^\/subscriptions\/.+\/providers\//i.test(id) ? id : null;
+}
+
+/** A grant line from an identity to a resource: a policy for that identity on that resource. */
+function azureLine(e: VisualEdge, nodes: Map<GraphRef, GraphNode>): { section: ReactNode; action: PolicyAction | null } {
+  const holder = nodes.get(e.from as GraphRef);
+  const target = nodes.get(e.to as GraphRef);
+  if (!isPolicyHolder(holder) || !holder) return { section: null, action: null };
+  const onResource = target && azureArmId(target) ? refId(target.ref) : undefined;
+  return {
+    section: null,
+    action: { label: "New access policy", to: newPolicyHref({ provider: "azure", identity_account_id: refId(holder.ref), resource_id: onResource }) },
+  };
+}
+
+function azureCard(
+  first: GraphNode,
+  visualId: string,
+  edges: VisualEdge[],
+  nodes: Map<GraphRef, GraphNode>,
+  onSelectNode: (id: string) => void,
+): { section: ReactNode; action: PolicyAction | null } {
+  const kind = String(first.kind);
+  if (isPolicyHolder(first)) {
+    const id = refId(first.ref);
+    return {
+      section: <AzureIdentitySection identityId={id} />,
+      action: { label: "New access policy", to: newPolicyHref({ provider: "azure", identity_account_id: id }) },
+    };
+  }
+  if (kind === "workload") {
+    const runs = edges.find((e) => e.kind === "executes_as" && e.members.some((m) => m.from === first.ref));
+    const identity = runs ? nodes.get(runs.members[0].to) : undefined;
+    return {
+      section: (
+        <Section>
+          <p className={note}>
+            A workload has no policy of its own. A policy on the identity it runs as applies to it, and to everything else that runs as that identity.
+          </p>
+          {isPolicyHolder(identity) && identity && runs ? (
+            <button
+              type="button"
+              onClick={() => onSelectNode(runs.to)}
+              className="flex w-full items-center gap-2 rounded-md border border-(--color-border-subtle) px-2.5 py-2 text-left text-[13px] hover:border-(--color-primary) hover:bg-(--color-primary-soft)"
+            >
+              <span className="min-w-0 flex-1 truncate font-medium text-(--color-text)">{identity.label}</span>
+              <span className="shrink-0 text-xs text-(--color-primary-text)">Select identity</span>
+            </button>
+          ) : null}
+        </Section>
+      ),
+      action: null,
+    };
+  }
+  if (kind === "azure_scope") {
+    return {
+      section: (
+        <Section>
+          <p className={note}>A policy is set on one resource. A role given on a whole subscription or resource group cannot be blocked from here.</p>
+        </Section>
+      ),
+      action: null,
+    };
+  }
+  if (kind === "azure_resource") {
+    if (!azureArmId(first)) {
+      return {
+        section: (
+          <Section>
+            <p className={note}>Access policies cover Azure resources such as storage accounts and key vaults, so none can be set on an app permission.</p>
+          </Section>
+        ),
+        action: null,
+      };
+    }
+    const resourceId = refId(first.ref);
+    return {
+      section: <AzureResourceSection id={visualId} node={first} resourceId={resourceId} edges={edges} nodes={nodes} />,
+      action: { label: "New access policy", to: newPolicyHref({ provider: "azure", resource_id: resourceId }) },
+    };
+  }
+  // Users, groups, applications and the rest of Entra.
+  return {
+    section: (
+      <Section>
+        <p className={note}>
+          Access policies change service principals, managed identities and agent identities, not {identityKindLabel(kind).toLowerCase()}s.
+        </p>
+      </Section>
+    ),
+    action: null,
+  };
+}
+
+function AzureIdentitySection({ identityId }: { identityId: string }) {
+  const blocks = useGraphBlocks();
+  const inForce = blocks.forRole(identityId);
+  return (
+    <Section>
+      <InForce policies={inForce} />
+      <p className={note}>
+        {inForce.length
+          ? "Add another to block or allow this identity on an Azure resource for a set window."
+          : "Block or allow this identity on an Azure resource for a set window. AuthSec changes its role assignments and undoes it at the end."}
+      </p>
+    </Section>
+  );
+}
+
+/** The identities this canvas draws holding a role on the resource: grant lines into it, from identities a policy can name. */
+function azureHolders(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>): GraphNode[] {
+  const out = new Map<string, GraphNode>();
+  for (const e of edges) {
+    if (e.kind !== "grant" || e.to !== id) continue;
+    const n = nodes.get(e.from as GraphRef);
+    if (n && isPolicyHolder(n)) out.set(n.ref, n);
+  }
+  return [...out.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function AzureResourceSection({
+  id,
+  node,
+  resourceId,
+  edges,
+  nodes,
+}: {
+  id: string;
+  node: GraphNode;
+  resourceId: string;
+  edges: VisualEdge[];
+  nodes: Map<GraphRef, GraphNode>;
+}) {
+  const blocks = useGraphBlocks();
+  const holders = azureHolders(id, edges, nodes);
+  const shown = holders.slice(0, ROLES_SHOWN);
+  return (
+    <Section>
+      <InForce policies={blocks.forResource(node)} />
+      <p className={note}>Block or allow an identity&rsquo;s access to {node.label} for a set window.</p>
+      {shown.length ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-(--color-text)">Start from an identity that holds a role on it</p>
+          <ul className="divide-y divide-(--color-border-subtle) overflow-hidden rounded-md border border-(--color-border-subtle)">
+            {shown.map((r) => (
+              <li key={r.ref}>
+                <Link
+                  to={newPolicyHref({ provider: "azure", identity_account_id: refId(r.ref), resource_id: resourceId })}
+                  aria-label={`New access policy for ${r.label} on ${node.label}`}
+                  className="group flex items-center gap-2 px-2.5 py-2 text-[13px] hover:bg-(--color-primary-soft)"
+                >
+                  <span className="min-w-0 flex-1 truncate font-medium text-(--color-text) group-hover:text-(--color-primary-text)" title={r.label}>
+                    {r.label}
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-(--color-text-muted) group-hover:text-(--color-primary-text)" aria-hidden="true" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {holders.length > shown.length ? <p className={note}>{holders.length - shown.length} more drawn on the canvas.</p> : null}
+        </div>
+      ) : null}
+    </Section>
+  );
+}
+

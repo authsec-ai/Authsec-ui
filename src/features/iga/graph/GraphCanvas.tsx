@@ -49,7 +49,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { GraphEdgeView, type GraphEdgeData, type RFGraphEdge } from "./edges";
-import { useGraphBlocks, type GraphBlocks } from "./policyBlocks";
+import { isPolicyHolder, useGraphBlocks, type GraphBlocks } from "./policyBlocks";
 import { GraphNodeView, type FrontierControl, type GraphNodeData, type RFGraphNode } from "./nodes";
 import type { Position, Size } from "./layout";
 import type { NodeCategory, NodeDescription } from "./nodeView";
@@ -273,8 +273,9 @@ function GraphCanvasInner({
           const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * (showEdgeLabels ? 24 : 14);
           const selected = selection?.kind === "edge" && selection.id === e.id;
           const highlighted = highlightedEdgeIds?.has(e.id) ?? false;
+          // AWS draws access as a declares line; Azure as a grant line straight to the resource.
           const block =
-            e.kind === "declares"
+            e.kind === "declares" || (e.kind === "grant" && e.members[0]?.provider === "azure")
               ? (byId.get(e.to)?.members ?? []).map((t) => blocks.lineBlock(byId.get(e.from)?.members[0], t)).find(Boolean) ?? null
               : null;
           const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels, block };
@@ -580,17 +581,18 @@ function GraphCanvasInner({
   );
 }
 
-/** The card's block chip: a role a Block policy names, or a resource one covers. */
+/** The card's block chip: a role or Azure identity a Block policy names, or a resource one covers. */
 function blockNote(v: VisualNode, blocks: GraphBlocks): GraphNodeData["block"] {
   const first = v.members[0];
   if (!first) return undefined;
-  if (first.kind === "iam_role") {
+  if (isPolicyHolder(first)) {
     const m = blocks.roleBlocks(refId(first.ref));
     return m ? { text: m.full ? "Blocked" : "Partly blocked", long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
   }
-  if (first.kind === "exact" || first.kind === "selector") {
+  if (first.kind === "exact" || first.kind === "selector" || first.kind === "azure_resource") {
     const m = v.members.map((n) => blocks.resourceBlocks(n)).find(Boolean);
-    return m ? { text: `Blocked for ${m.roles} ${m.roles === 1 ? "role" : "roles"}`, long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
+    const who = first.provider === "azure" ? (m?.roles === 1 ? "identity" : "identities") : m?.roles === 1 ? "role" : "roles";
+    return m ? { text: `Blocked for ${m.roles} ${who}`, long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
   }
   return undefined;
 }
