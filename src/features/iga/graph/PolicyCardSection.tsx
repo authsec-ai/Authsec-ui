@@ -306,8 +306,8 @@ function BucketSection({
 
 /** An ARM resource a policy can be on: not an app permission or delegated scope (no ARM id), not a scope. */
 function azureArmId(n: GraphNode): string | null {
-  const id = n.attrs?.["native_id"];
-  return n.kind === "azure_resource" && typeof id === "string" && /^\/subscriptions\/.+\/providers\//i.test(id) ? id : null;
+  const id = n.native_id;
+  return n.kind === "azure_resource" && id && /^\/subscriptions\/.+\/providers\//i.test(id) ? id : null;
 }
 
 /** A summary line from an identity to a resource: a policy for that identity on that resource. */

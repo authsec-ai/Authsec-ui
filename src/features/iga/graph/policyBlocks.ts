@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, providerOf } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, pathInBucket } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 const IN_FORCE = new Set(["applying", "active", "scheduled", "drift"]);
@@ -67,7 +67,7 @@ export function isPolicyHolder(n: GraphNode | undefined): boolean {
 
 /** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 ARN; Azure by the resource itself. */
 function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
-  if (providerOf(p.resource) === "azure") {
+  if (p.resource.provider === "azure") {
     if (n?.provider !== "azure" || n.kind !== "azure_resource" || refId(n.ref) !== p.resource.resource_id) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }

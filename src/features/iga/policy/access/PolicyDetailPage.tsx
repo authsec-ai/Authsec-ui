@@ -37,7 +37,6 @@ import {
   eventLabel,
   isOver,
   policySentence,
-  providerOf,
   resourceText,
   whoWord,
   whenText,
@@ -83,7 +82,7 @@ export default function PolicyDetailPage() {
     );
   }
 
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const cloud = CLOUD[provider].label;
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -175,7 +174,7 @@ export default function PolicyDetailPage() {
 function Overview({ p }: { p: AccessPolicyDetail }) {
   const progress = windowProgress(p);
   const length = windowLength(p);
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const azure = provider === "azure";
   const Who = whoWord(provider, 2);
   return (
@@ -255,7 +254,7 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
 /* ------------------------------- in the cloud ------------------------------ */
 
 function InCloud({ p }: { p: AccessPolicyDetail }) {
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const cloud = CLOUD[provider].label;
   const [showEarlier, setShowEarlier] = useState(false);
   // deployments[] carries rows from older versions and past runs, newest first.
@@ -318,7 +317,7 @@ function DeploymentCard({
   doc: AccessPolicyDetail["documents"][number] | undefined;
   earlier?: boolean;
 }) {
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const azure = provider === "azure";
   const cloud = CLOUD[provider].label;
   const v = deploymentView(d.state, provider, p.effect);
@@ -389,7 +388,7 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
                   {relTime(e.occurred_at)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-(--color-text)">{eventLabel(e, { provider: providerOf(p.resource), effect: p.effect })}</span>
+                  <span className="block text-[13px] text-(--color-text)">{eventLabel(e, { provider: p.resource.provider, effect: p.effect })}</span>
                   <span className="block text-xs text-(--color-text-muted)">{e.actor_kind === "system" ? "AuthSec" : "A member"}</span>
                 </span>
               </li>
@@ -398,7 +397,7 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
         )}
       </Panel>
 
-      <Panel title="Versions" count={p.versions.length} description={`A version never changes once applied. Applying a new one replaces it in ${CLOUD[providerOf(p.resource)].label}.`}>
+      <Panel title="Versions" count={p.versions.length} description={`A version never changes once applied. Applying a new one replaces it in ${CLOUD[p.resource.provider].label}.`}>
         <ul className="divide-y divide-(--color-border-subtle)">
           {p.versions.map((v) => (
             <li key={v.version_no} className="flex items-baseline gap-3 py-2 first:pt-0 last:pb-0">

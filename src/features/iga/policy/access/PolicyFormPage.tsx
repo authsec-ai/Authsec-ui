@@ -326,8 +326,7 @@ export default function PolicyFormPage() {
   const who = whoWord(draft.provider, draft.roles.length);
   const blurbs = accessBlurbs(draft.provider, draft.resource?.arn);
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
-  // Azure readiness is known only when the server reports it; otherwise the preview's blocker says.
-  const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && readiness.known && !readiness.ready);
+  const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
   const notes = (shown?.warnings ?? []).filter((w) => w.code !== "other_paths");
   const workloads = [...new Set((shown?.also_affected ?? []).flatMap((a) => a.workloads.map((w) => w.name)))];
@@ -621,7 +620,7 @@ export default function PolicyFormPage() {
                 </div>
 
                 <ul className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle) text-[13px]">
-                  {readiness.loading || (!aws && (!readiness.known || !draft.resource)) ? null : readiness.ready ? (
+                  {readiness.loading || (!aws && !draft.resource) ? null : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
                       {aws ? "AuthSec can change IAM in this account." : `AuthSec can change role assignments in subscription ${readiness.scopes[0]?.name ?? draft.resource?.subscription ?? ""}.`}

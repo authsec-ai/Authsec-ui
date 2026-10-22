@@ -195,10 +195,8 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
   if (!r) return null;
   const accounts = accountId ? r.accounts.filter((a) => a.account_id === accountId) : r.accounts;
   const notReady = accounts.filter((a) => !a.ready);
-  const subs = accountId ? [] : r.azure_subscriptions ?? [];
+  const subs = accountId ? [] : r.azure_subscriptions;
   const subsNotReady = subs.filter((s) => !s.ready);
-  // No AWS account, and a server that does not report Azure subscriptions: nothing true to say about Azure.
-  if (r.available && accounts.length === 0 && !r.azure_subscriptions) return null;
   if (r.available && accounts.length === 0 && subs.length > 0) {
     // An Azure-only workspace: say only what Azure needs.
     return subsNotReady.length ? (

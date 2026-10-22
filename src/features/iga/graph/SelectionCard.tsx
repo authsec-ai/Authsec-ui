@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { azureObjectPath } from "@/features/discovery/cloud/azure/azureGraphLinks";
-import { agentTypeLabel, armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
 import { accountWithId, limitationText } from "../shared/labels";
 import { bindingKindWord, groupWords, parseAnchor, roleKindWord, ruleFlags, scopeBadge, scopeOfBinding, workloadKindWord } from "../k8s/rules";
@@ -153,8 +153,6 @@ function k8sNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edges
   return { d, sentence, facts, why: { basis: null as Basis | null, at: first.last_confirmed_at } };
 }
 
-const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
-
 /**
  * An Azure card, in the sentence the inspector reads. Microsoft Entra and Azure Resource Manager
  * report what is assigned; nothing here says what a request would be allowed to do.
@@ -162,7 +160,6 @@ const str = (v: unknown): string | null => (typeof v === "string" && v ? v : nul
 function azureNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>) {
   const first = v.members[0];
   const { out, name } = relatives(v, edges, nodes);
-  const attrs = first.attrs ?? {};
   const facts: [string, ReactNode][] = [];
   let sentence: string;
 
@@ -172,21 +169,20 @@ function azureNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edg
       sentence = runs
         ? `${d.type.replace("Workload · ", "An Azure ")} that runs as ${name(runs.to)}.`
         : "An Azure workload. The identity it runs as is not loaded.";
-      if (str(attrs["region"])) facts.push(["Region", str(attrs["region"])]);
       break;
     }
     case "external_principal":
       sentence = "A federated credential: Microsoft Entra ID trusts tokens from this issuer and subject to act as the identity it is set on.";
-      facts.push(["Subject", <WrapId className="font-mono text-xs">{first.label}</WrapId>]);
-      if (first.sublabel) facts.push(["Issuer", <WrapId className="font-mono text-xs">{first.sublabel}</WrapId>]);
+      facts.push(["Subject", <WrapId className="font-mono text-xs">{first.subject ?? first.label}</WrapId>]);
+      if (first.issuer) facts.push(["Issuer", <WrapId className="font-mono text-xs">{first.issuer}</WrapId>]);
       break;
     case "azure_resource":
-      sentence = `An Azure resource${first.sublabel ? `: ${armTypeLabel(first.sublabel)}` : ""}. Roles and permissions held on it are the lines that reach it.`;
-      if (first.sensitivity) facts.push(["Sensitivity", first.sensitivity]);
+      sentence = `An Azure resource${first.type ? `: ${armTypeLabel(first.type)}` : ""}. Roles and permissions held on it are the lines that reach it.`;
+      if (first.native_id) facts.push(["Resource ID", <WrapId className="font-mono text-xs">{first.native_id}</WrapId>]);
       break;
     case "azure_scope":
       sentence = "The scope a role or permission is assigned at. It applies to everything inside it.";
-      if (first.sublabel) facts.push(["Covers", first.sublabel]);
+      if (first.native_id) facts.push(["Covers", first.native_id]);
       break;
     case "statement": {
       // A role assignment (D-114): what the role allows, on the scope it is assigned at.
@@ -198,16 +194,8 @@ function azureNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edg
       break;
     }
     default: {
-      const agent = agentTypeLabel({ attrs });
-      const kind = identityKindLabel(first.kind);
-      sentence = `A Microsoft Entra ${agent ? `${agent.toLowerCase()} (${kind.toLowerCase()})` : kind.toLowerCase()}.`;
-      const objectId = str(attrs["object_id"]) ?? str(first.native_id);
-      const upn = str(attrs["user_principal_name"]);
-      const appId = str(attrs["app_id"]);
-      if (objectId) facts.push(["Object ID", <WrapId className="font-mono text-xs">{objectId}</WrapId>]);
-      if (upn) facts.push(["Sign-in name", upn]);
-      else if (appId) facts.push(["App ID", <WrapId className="font-mono text-xs">{appId}</WrapId>]);
-      if (typeof attrs["enabled"] === "boolean") facts.push(["Enabled", attrs["enabled"] ? "Yes" : "No"]);
+      sentence = `A Microsoft Entra ${identityKindLabel(first.kind).toLowerCase()}.`;
+      if (first.native_id) facts.push(["Object ID", <WrapId className="font-mono text-xs">{first.native_id}</WrapId>]);
       const members = out("member_of").length;
       if (members) facts.push(["Member of", `${members} loaded group${members === 1 ? "" : "s"}`]);
     }

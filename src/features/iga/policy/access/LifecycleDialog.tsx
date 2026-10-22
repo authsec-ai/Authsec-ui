@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 
 import { PolicyActionError, usePolicyAction } from "../shared";
-import { CLOUD, providerOf, whoWord } from "./model";
+import { CLOUD, whoWord } from "./model";
 
 export type LifecycleAction = "pause" | "resume" | "end";
 
@@ -32,7 +32,7 @@ const COPY: Record<LifecycleAction, { title: string; button: string; reasonRequi
 
 /** The toast once the server has accepted the action. */
 function doneText(action: LifecycleAction, p: AccessPolicy): string {
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const cloud = CLOUD[provider].label;
   const restores = provider === "azure" && p.effect === "block";
   if (action === "resume") return `Resumed. AuthSec is applying it in ${cloud} again.`;
@@ -41,7 +41,7 @@ function doneText(action: LifecycleAction, p: AccessPolicy): string {
 }
 
 function body(action: LifecycleAction, p: AccessPolicy): string {
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   const roles = p.roles.length === 1 ? p.roles[0].name : `${p.roles.length} ${whoWord(provider, 2)}`;
   const effect = p.effect === "block" ? "The block is lifted" : "The extra access is removed";
   switch (action) {

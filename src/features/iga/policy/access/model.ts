@@ -35,11 +35,6 @@ export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlur
   azure: { label: "Azure", who: "identity", whoPlural: "identities" },
 };
 
-/** A policy's cloud; a draft's resource without one is AWS (the form's default). */
-export function providerOf(r: { provider?: AccessProvider }): AccessProvider {
-  return r.provider ?? "aws";
-}
-
 /** "role" / "roles", "identity" / "identities". */
 export function whoWord(provider: AccessProvider, n = 1): string {
   return n === 1 ? CLOUD[provider].who : CLOUD[provider].whoPlural;
@@ -202,7 +197,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
-  if (providerOf(r) === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
+  if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -415,7 +410,7 @@ export function emptyDraft(initial?: { provider?: AccessProvider; effect?: Acces
 /** An edit starts from the policy as it is now. */
 export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   const fallbackEnd = toLocalInput(new Date(minute(new Date()).getTime() + 24 * 3_600_000));
-  const provider = providerOf(p.resource);
+  const provider = p.resource.provider;
   return {
     provider,
     effect: p.effect,

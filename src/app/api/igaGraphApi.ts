@@ -52,16 +52,15 @@ export function refType(ref: GraphRef): GraphObjectType | GraphClaimType {
 /**
  * Azure nodes of the shared read (D-114) in the kinds the graph draws them as.
  * The server states a resource's kind as its ARM type and a scope's as
- * `scope`; the canvas draws them as `azure_resource` (its type as the sublabel,
- * its ARM id in attrs.native_id) and `azure_scope` (its path as the sublabel).
- * A role assignment is already a `statement`.
+ * `scope`; the canvas draws them as `azure_resource` (the ARM type kept as its
+ * `type`) and `azure_scope`. Their ARM id or path is their native_id; a role
+ * assignment is already a `statement`.
  */
 function azureKinds(n: GraphNode): GraphNode {
   if (n.provider !== "azure") return n;
   const type: string = refType(n.ref);
-  if (type === "resource") return { ...n, kind: "azure_resource", sublabel: String(n.kind), attrs: { ...n.attrs, native_id: n.native_id } };
-  if (type === "scope") return { ...n, kind: "azure_scope", sublabel: n.native_id };
-  if (type === "workload") return { ...n, sublabel: n.runtime_kind };
+  if (type === "resource") return { ...n, kind: "azure_resource", type: String(n.kind) };
+  if (type === "scope") return { ...n, kind: "azure_scope" };
   return n;
 }
 
@@ -807,14 +806,6 @@ export interface GraphNode {
   native_id?: string;
   k8s_rule?: K8sRule;
   azure_role?: AzureRoleAssignment;
-  /**
-   * Azure nodes only, set as the read arrives (`azureKinds`): a resource's ARM type or a
-   * scope's path as the sublabel, and a resource's ARM id as attrs.native_id. An identity's
-   * Entra object id, which its page is keyed by, is its native_id.
-   */
-  sublabel?: string;
-  sensitivity?: string;
-  attrs?: Record<string, unknown>;
   limitations: EvidenceLimitation[];
 }
 

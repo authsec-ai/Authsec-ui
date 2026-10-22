@@ -37,12 +37,14 @@ import type { GraphFailure } from "@/features/iga/shared/graphErrors";
 import { dayText } from "@/features/iga/shared/labels";
 import { activeTabOf } from "@/features/iga/shared/links";
 import { getWorkspaceId } from "@/utils/workspace";
+import { refId } from "@/app/api/igaGraphApi";
 import { AzurePolicySection } from "@/features/iga/policy/DiscoveryPolicySection";
 import { AZURE_TARGET_KINDS } from "@/features/iga/policy/access/model";
 
 import { Info } from "lucide-react";
 import { InventoryNotice } from "../aws/AWSInventoryNotices";
 import { AzureGraphPanel } from "./AzureGraphPanel";
+import { useAzureIdentityRef } from "./azureGraphLinks";
 import {
   IdentityAccessTab,
   IdentityActivityTab,
@@ -139,11 +141,9 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
     byArmId ? w.native_id.toLowerCase() === native : w.name.toLowerCase() === workloadName?.toLowerCase() && (!workloadRegion || w.region === workloadRegion),
   );
   const record = identity ?? resource ?? workload;
-  // A policy names AuthSec's id for the object: a resource's is in the URL; an
-  // identity's is the graph root its Entra object id resolves to.
-  const policyIdentityQ = useGetAzureNeighbourhoodQuery(`object:${id}`, { skip: !isIdentity || !identity || !AZURE_TARGET_KINDS.has(identity.kind) });
-  const policyIgaId =
-    kind === "resource" && !byArmId ? id : isIdentity ? policyIdentityQ.data?.root.replace(/^identity:/, "") : undefined;
+  // A policy names AuthSec's id for the object: a resource's is in the URL; an identity's is found by its Entra object id.
+  const policyIdentity = useAzureIdentityRef(ws, isIdentity && identity && AZURE_TARGET_KINDS.has(identity.kind) ? id : undefined);
+  const policyIgaId = kind === "resource" && !byArmId ? id : policyIdentity.ref ? refId(policyIdentity.ref) : undefined;
   const listQ = isIdentity ? idQ : kind === "resource" ? resQ : wlQ;
   const listDone = listQ.isSuccess;
 

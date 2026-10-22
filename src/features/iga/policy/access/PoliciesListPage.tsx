@@ -30,7 +30,7 @@ import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { PolicyLoadFailure, PolicyShell, classifyPolicyError, usePolicyPermission } from "../shared";
 import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
-import { CLOUD, STATUS, STATUS_ORDER, accessText, providerOf, resourceText, whenText, windowText } from "./model";
+import { CLOUD, STATUS, STATUS_ORDER, accessText, resourceText, whenText, windowText } from "./model";
 import { EffectChip, PolicyStatusChip, ReadinessBanner } from "./parts";
 
 const PAGE = 200;
@@ -81,11 +81,11 @@ export default function PoliciesListPage() {
     return c;
   }, [all]);
   const rows = useMemo(
-    () => all.filter((p) => (!status || p.status === status) && (!cloud || providerOf(p.resource) === cloud)),
+    () => all.filter((p) => (!status || p.status === status) && (!cloud || p.resource.provider === cloud)),
     [all, status, cloud],
   );
   // The cloud filter is offered once policies of both clouds exist.
-  const clouds = useMemo(() => new Set(all.map((p) => providerOf(p.resource))), [all]);
+  const clouds = useMemo(() => new Set(all.map((p) => p.resource.provider)), [all]);
 
   const [lifecycle, setLifecycle] = useState<{ policy: AccessPolicy; action: LifecycleAction } | null>(null);
   const [deleting, setDeleting] = useState<AccessPolicy | null>(null);
@@ -104,7 +104,7 @@ export default function PoliciesListPage() {
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-3">
             {/* Policies of every cloud share this list; the mark says which one this is. */}
-            <ProviderGlyph provider={providerOf(row.original.resource)} className="shrink-0" />
+            <ProviderGlyph provider={row.original.resource.provider} className="shrink-0" />
             <div className="min-w-0">
               <Link
                 to={`/iga/policy/${row.original.id}`}

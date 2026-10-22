@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { PolicyActionError, usePolicyAction } from "../shared";
-import { CLOUD, providerOf } from "./model";
+import { CLOUD } from "./model";
 
 export function DeletePolicyDialog({
   policy,
@@ -52,7 +52,7 @@ export function DeletePolicyDialog({
         <DialogHeader>
           <DialogTitle>Delete this policy?</DialogTitle>
           <DialogDescription>
-            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in {CLOUD[providerOf(policy.resource)].label}. What it did stays in the Logs.
+            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in {CLOUD[policy.resource.provider].label}. What it did stays in the Logs.
           </DialogDescription>
         </DialogHeader>
         <PolicyActionError failure={act.failure} />

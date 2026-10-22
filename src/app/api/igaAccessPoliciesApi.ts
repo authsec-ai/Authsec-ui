@@ -214,8 +214,7 @@ export interface AccessReadiness {
   available: boolean;
   reason: string;
   accounts: AccessReadinessAccount[];
-  /** Absent from a backend that predates Azure readiness. */
-  azure_subscriptions?: AccessReadinessSubscription[];
+  azure_subscriptions: AccessReadinessSubscription[];
 }
 
 export interface ListAccessPoliciesArgs extends WsArg, PageArgs {

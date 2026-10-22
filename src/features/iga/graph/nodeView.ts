@@ -18,7 +18,7 @@
 
 import type { GraphFrontier, GraphNode, GraphNodeKind } from "@/app/api/igaGraphApi";
 
-import { agentTypeLabel, armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
 import { RUNTIME_LABEL, accountLabel, limitationText } from "../shared/labels";
 import { parseAnchor, roleKindWord, ruleFlags, sameScope, scopeBadge, scopeOfBinding, workloadKindWord, type Scope } from "../k8s/rules";
@@ -392,45 +392,38 @@ export function describeNode(v: VisualNode, rootAccountId: string | null): NodeD
 }
 
 /**
- * An Azure card: an Entra identity, a workload, a federated credential, an ARM resource or the
- * scope a role is assigned at. The header says what it is in Microsoft's words; the line under
- * the name is what identifies it (a UPN, an app id, the issuer, the scope).
+ * An Azure card: an Entra identity, a workload, a federated credential, an ARM resource, a role
+ * assignment or the scope a role is assigned at. The header says what it is in Microsoft's words;
+ * the line under the name is what places it (the issuer, the scope, the subscription).
  */
 function describeAzure(v: VisualNode): NodeDescription {
   const first = v.members[0];
   const indicators: Indicator[] = [];
-  if (first.attrs?.["enabled"] === false)
-    indicators.push({ key: "disabled", text: "disabled", long: "The account is disabled in Microsoft Entra ID", tone: "warning" });
 
   let type: string;
-  let context: string | null = first.sublabel ?? null;
+  let context: string | null = null;
   switch (first.kind) {
-    case "workload": {
-      const region = first.attrs?.["region"];
-      type = first.sublabel ? `Workload · ${armTypeLabel(first.sublabel)}` : "Workload · Azure";
-      context = typeof region === "string" && region ? `Region ${region}` : null;
+    case "workload":
+      type = first.runtime_kind ? `Workload · ${armTypeLabel(first.runtime_kind)}` : "Workload · Azure";
       break;
-    }
     case "external_principal":
       type = "External · Federated credential";
-      context = first.sublabel ? `Issuer ${first.sublabel}` : null;
+      context = first.issuer ? `Issuer ${first.issuer}` : null;
       break;
     case "azure_resource":
-      type = `Resource · ${first.sublabel ? graphKindLabel("resource", first.sublabel) : "Azure resource"}`;
-      context = null;
+      type = `Resource · ${first.type ? graphKindLabel("resource", first.type) : "Azure resource"}`;
       break;
     case "azure_scope":
       type = "Scope";
+      context = first.native_id ?? null;
       break;
     case "statement":
       // A role assignment (D-114): the role it assigns, in the subscription it is in.
       type = v.members.length > 1 ? `${v.members.length} role assignments` : `Role assignment · ${graphKindLabel("access_edge", first.azure_role?.grant_kind ?? "azure_rbac")}`;
       context = first.sub_scope ? `Subscription ${first.sub_scope}` : null;
       break;
-    default: {
-      const agent = agentTypeLabel({ attrs: first.attrs ?? {} });
-      type = `Identity · ${agent ?? identityKindLabel(first.kind)}`;
-    }
+    default:
+      type = `Identity · ${identityKindLabel(first.kind)}`;
   }
   return {
     icon: ICON_OF[first.kind],

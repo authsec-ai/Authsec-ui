@@ -4,13 +4,12 @@
  * object can reach.
  *
  * A resource or workload page is keyed by AuthSec's id, which is the graph's own. An identity page
- * is keyed by its Entra object id, so the graph's ref for it is found in the inventory, whose
- * native id for an Azure identity is that object id.
+ * is keyed by its Entra object id, so the graph's ref for it is found in the inventory
+ * (`useAzureIdentityRef`).
  */
 
 import { Info } from "lucide-react";
 
-import { useListInventoryQuery } from "@/app/api/igaInventoryApi";
 import type { GraphRef } from "@/app/api/igaGraphApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
@@ -20,13 +19,13 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { InventoryNotice } from "../aws/AWSInventoryNotices";
 import { AzureReachPanel } from "./AzureReachPanel";
+import { useAzureIdentityRef } from "./azureGraphLinks";
 
 export function AzureGraphPanel({ kind, id, name, objectId }: { kind: "identity" | "resource" | "workload"; id: string; name: string; objectId?: string }) {
   const ws = getWorkspaceId() ?? "";
   const isIdentity = kind === "identity";
-  const q = useListInventoryQuery({ ws, class: "identities", provider: "azure", q: id, limit: 10 }, { skip: !isIdentity });
-  const row = q.data?.data.find((r) => r.native_id.toLowerCase() === id.toLowerCase());
-  const root: GraphRef | undefined = isIdentity ? row?.ref : (`${kind}:${id}` as GraphRef);
+  const { ref, query: q } = useAzureIdentityRef(ws, isIdentity ? id : undefined);
+  const root: GraphRef | undefined = isIdentity ? ref : (`${kind}:${id}` as GraphRef);
   const failure = q.isError ? (loadFailureOf(q.error) ?? "failed") : null;
 
   return (

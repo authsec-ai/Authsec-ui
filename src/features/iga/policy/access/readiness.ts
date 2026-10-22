@@ -17,32 +17,25 @@ export function readinessWords(reason: string): string {
   return READINESS_WORDS[reason] ?? (reason ? reason.replace(/_/g, " ") : "AWS access is not ready");
 }
 
-/**
- * The readiness of the workspace's AWS accounts or Azure subscriptions, for one
- * when `scopeId` (an account or subscription id) is given. `known` is false for
- * Azure on a backend that does not report subscriptions: the preview's blocker
- * then says whether AuthSec can change it.
- */
+/** The readiness of the workspace's AWS accounts or Azure subscriptions, for one when `scopeId` (an account or subscription id) is given. */
 export function useAccessReadiness(ws: string, scopeId?: string, provider: AccessProvider = "aws") {
   const q = useGetAccessReadinessQuery({ ws });
   const r = q.data?.data;
   const all = r
     ? provider === "aws"
       ? r.accounts.map((a) => ({ id: a.account_id, name: a.account_id, ready: a.ready, reason: a.reason }))
-      : (r.azure_subscriptions ?? []).map((s) => ({ id: s.subscription_id, name: s.name || s.subscription_id, ready: s.ready, reason: s.reason }))
+      : r.azure_subscriptions.map((s) => ({ id: s.subscription_id, name: s.name || s.subscription_id, ready: s.ready, reason: s.reason }))
     : [];
   const scopes = scopeId ? all.filter((a) => a.id.toLowerCase() === scopeId.toLowerCase()) : all;
   const notReady = scopes.filter((a) => !a.ready);
-  const known = provider === "aws" || !!r?.azure_subscriptions;
   return {
     loading: q.isLoading,
     failed: q.isError && classifyPolicyError(q.error)?.kind !== "unavailable",
     available: r?.available ?? false,
     reason: r?.reason ?? "",
-    known,
     scopes,
     notReady,
-    ready: !!r && r.available && known && scopes.length > 0 && notReady.length === 0,
+    ready: !!r && r.available && scopes.length > 0 && notReady.length === 0,
     refetch: () => void q.refetch(),
   };
 }
