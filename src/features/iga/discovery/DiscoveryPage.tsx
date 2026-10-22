@@ -19,7 +19,6 @@ import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
 import { igaInventoryApi } from "@/app/api/igaInventoryApi";
 import { useAppDispatch } from "@/app/hooks";
 import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
-import { AzureDiscoverySummary } from "@/features/discovery/cloud/azure/AzureDiscoverySummary";
 import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { tenantName, tenantScopeId } from "@/features/discovery/cloud/azure/azureInventoryLabels";
@@ -299,15 +298,6 @@ export default function DiscoveryPage() {
         </div>
       </div>
     );
-    // Azure: everything discovery recorded, counted, above whichever list is open.
-    if (provider === "azure" && scope.kind === "all" && (type === "identities" || type === "resources" || type === "workloads")) {
-      body = (
-        <div className="space-y-3">
-          <AzureDiscoverySummary />
-          {body}
-        </div>
-      );
-    }
   }
 
   return (
