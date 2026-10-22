@@ -35,6 +35,7 @@ import {
   accessText,
   deploymentView,
   eventLabel,
+  isOver,
   policySentence,
   providerOf,
   resourceText,
@@ -48,7 +49,7 @@ import { EffectChip, PolicyChange, PolicyStatusChip } from "./parts";
 
 type Tab = "overview" | "cloud" | "history";
 
-const MOVING = new Set(["applying", "drift"]);
+const MOVING = new Set(["applying", "drift", "ending"]);
 /** Deployment states in which the cloud still holds the policy's change, or AuthSec is putting it in or taking it out. */
 const HELD = ["approved", "deploying", "active", "outcome_unknown", "expiring"];
 
@@ -64,9 +65,7 @@ export default function PolicyDetailPage() {
   const [poll, setPoll] = useState(60_000);
   const q = useGetAccessPolicyQuery({ ws, id }, { pollingInterval: poll, skipPollingIfUnfocused: true });
   const p = q.data?.data;
-  // Ended, but AuthSec is still undoing it (an Azure block restoring access): it reads "Ending" until done.
-  const ending = !!p && p.status === "ended" && p.deployments.some((d) => d.state === "expiring");
-  const nextPoll = p && (MOVING.has(p.status) || ending) ? 10_000 : 60_000;
+  const nextPoll = p && MOVING.has(p.status) ? 10_000 : 60_000;
   if (nextPoll !== poll) setPoll(nextPoll);
   const failure = classifyPolicyError(q.error);
 
@@ -91,13 +90,11 @@ export default function PolicyDetailPage() {
     { key: "cloud", label: `In ${cloud}` },
     { key: "history", label: "History" },
   ];
-  const live = p.status !== "ended";
+  const live = !isOver(p.status);
   // The cloud still holds the policy's change while any deployment is on its way in, in, or on its way out.
-  const stillHeld = p.deployments.some((d) => HELD.includes(d.state));
-  // The server's status_reason names AWS for every policy today; an Azure one says it in its own words.
-  const azureNote = p.status === "paused" ? (p.effect === "block" ? "Access restored in Azure while paused" : "Removed from Azure while paused") : "";
+  const stillHeld = p.status === "ending" || p.deployments.some((d) => HELD.includes(d.state));
   // Ended and paused policies say where AuthSec is, in one quiet line by the status chip.
-  const quietNote = (p.status === "ended" || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
+  const quietNote = (isOver(p.status) || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
   const actions =
     enforce.offered && live ? (
       <div className="flex flex-wrap gap-2">
@@ -127,25 +124,15 @@ export default function PolicyDetailPage() {
     <PolicyShell title={p.name} description={policySentence(p)} actions={actions} requires="access_policies">
       <div className="flex flex-wrap items-center gap-2">
         <EffectChip effect={p.effect} />
-        {ending ? (
-          <IgaBadge tone="info" title={`AuthSec is undoing it in ${cloud}.`}>
-            Ending
-          </IgaBadge>
-        ) : (
-          <PolicyStatusChip status={p.status} />
-        )}
-        <span className="text-xs text-(--color-text-muted)">
-          {ending ? (provider === "azure" && p.effect === "block" ? "Restoring access in Azure…" : `Removing it from ${cloud}…`) : whenText(p)}
-        </span>
-        {(provider === "azure" ? azureNote : quietNote) && !ending ? (
-          <span className="text-xs text-(--color-text-secondary)">· {provider === "azure" ? azureNote : quietNote}</span>
-        ) : null}
+        <PolicyStatusChip status={p.status} />
+        <span className="text-xs text-(--color-text-muted)">{whenText(p)}</span>
+        {quietNote ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
         <Link to="/iga/policy" className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>
       </div>
 
-      {p.status === "failed" || p.status === "drift" || (p.status_reason && !["applying", "ended", "paused"].includes(p.status)) ? (
+      {p.status === "failed" || p.status === "drift" || (p.status_reason && !["applying", "ending", "ended", "paused"].includes(p.status)) ? (
         <p
           role={p.status === "failed" ? "alert" : undefined}
           className={cn(
@@ -221,7 +208,7 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
           <Fact label="Window">
             {windowText(p)}
             {length ? <Meta>{length}</Meta> : null}
-            {progress != null && p.status !== "ended" ? (
+            {progress != null && !isOver(p.status) ? (
               <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-(--color-surface-subtle)" aria-label={`${Math.round(progress * 100)}% of the window has passed`}>
                 <div className="h-full rounded-full bg-(--color-primary)" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
@@ -233,7 +220,7 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
           </Fact>
           {/* Version lives on the History tab */}
           {p.version_no > 1 ? <Fact label="Last changed">{relTime(p.updated_at)}</Fact> : null}
-          {p.status === "ended" ? <Fact label="Ended">{[relTime(p.ended_at), END_REASON[p.end_reason] ?? ""].filter(Boolean).join(" · ") || "Ended"}</Fact> : null}
+          {isOver(p.status) ? <Fact label="Ended">{[relTime(p.ended_at), END_REASON[p.end_reason] ?? ""].filter(Boolean).join(" · ") || "Ended"}</Fact> : null}
         </Facts>
       </Panel>
 

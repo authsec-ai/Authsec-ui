@@ -50,6 +50,7 @@ import {
   bucketOf,
   draftOf,
   draftProblem,
+  isOver,
   emptyDraft,
   formFieldOf,
   policySentence,
@@ -201,7 +202,7 @@ export default function PolicyFormPage() {
           arn,
           account_id: subscription,
           tenant: n.scope?.id,
-          kind: n.type ? armTypeLabel(n.type) : undefined,
+          kind: armTypeLabel(String(n.kind)),
           subscription: n.sub_scope ?? undefined,
           resource_group: resourceGroup || undefined,
         },
@@ -349,7 +350,7 @@ export default function PolicyFormPage() {
       </PolicyShell>
     );
   }
-  if (editing && existing.data?.data.status === "ended") {
+  if (editing && existing.data && isOver(existing.data.data.status)) {
     return (
       <PolicyShell title="Edit policy" requires="access_policies">
         <p className="text-sm text-(--color-text-muted)">

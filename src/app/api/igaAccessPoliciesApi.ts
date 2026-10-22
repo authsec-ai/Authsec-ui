@@ -33,13 +33,14 @@ export type AccessEffect = "block" | "allow";
 /** `all` is offered for block only. */
 export type AccessLevel = "read" | "write" | "delete" | "all";
 export type AccessProvider = "aws" | "azure";
-export type AccessPolicyStatus = "scheduled" | "applying" | "active" | "paused" | "ended" | "failed" | "drift";
+/** `ending`: ended (End, or its end time passed) while AuthSec is still undoing it in the cloud. */
+export type AccessPolicyStatus = "scheduled" | "applying" | "active" | "paused" | "ending" | "ended" | "failed" | "drift";
 /** How a policy left AWS (or `""` while it has not). */
 export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused";
 
 export interface AccessPolicyResource {
   resource_id: string;
-  /** The bucket's ARN on AWS. On Azure the server sends the resource's name here today (the ARM id once it sends `provider`). */
+  /** The bucket's ARN on AWS; the ARM id on Azure. */
   arn: string;
   /** AWS only; "" on Azure. */
   bucket: string;
@@ -47,12 +48,11 @@ export interface AccessPolicyResource {
   prefix: string;
   /** The AWS account, or the Azure subscription id. */
   account_id: string;
-  /** Not sent yet (SPEC-access-policies.md §4.2): read it with `providerOf`. */
-  provider?: AccessProvider;
+  provider: AccessProvider;
   /** The bucket or the Azure resource's name. */
-  name?: string;
-  /** The Azure resource type (`microsoft.storage/storageaccounts`); "s3_bucket" on AWS. */
-  kind?: string;
+  name: string;
+  /** The Azure resource type (`microsoft.storage/storageaccounts`); empty on AWS. */
+  kind: string;
 }
 
 export interface AccessPolicyWorkload {

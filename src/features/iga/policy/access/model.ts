@@ -35,15 +35,9 @@ export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlur
   azure: { label: "Azure", who: "identity", whoPlural: "identities" },
 };
 
-/**
- * A policy's cloud: the server's word when it sends one, else read off the
- * resource. An AWS policy is always on an S3 bucket, so it has a bucket and an
- * `arn:aws…` ARN; an Azure policy has neither (the server sends the resource's
- * name as its `arn` until it sends `provider`).
- */
-export function providerOf(r: { provider?: AccessProvider; arn?: string; bucket?: string }): AccessProvider {
-  if (r.provider) return r.provider;
-  return r.bucket || r.arn?.startsWith("arn:aws") ? "aws" : "azure";
+/** A policy's cloud; a draft's resource without one is AWS (the form's default). */
+export function providerOf(r: { provider?: AccessProvider }): AccessProvider {
+  return r.provider ?? "aws";
 }
 
 /** "role" / "roles", "identity" / "identities". */
@@ -69,10 +63,14 @@ export const STATUS: Record<AccessPolicyStatus, { label: string; tone: ConsoleTo
   drift: { label: "Changed outside AuthSec", tone: "warning", hint: "Someone changed it in the cloud. AuthSec is putting it back." },
   failed: { label: "Failed", tone: "danger", hint: "AuthSec could not apply it to every identity. Open it to see why." },
   paused: { label: "Paused", tone: "warning", hint: "Lifted by hand. Resume puts it back." },
+  ending: { label: "Ending", tone: "info", hint: "Ended; AuthSec is still undoing it in the cloud." },
   ended: { label: "Ended", tone: "info", hint: "No longer in force. The record is kept." },
 };
 
-export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ended"];
+export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ending", "ended"];
+
+/** Whether a policy is over: ended, or ending while AuthSec undoes it. Nothing more can be done to it. */
+export const isOver = (status: AccessPolicyStatus) => status === "ended" || status === "ending";
 
 /**
  * One identity's part of a policy, by the backend's deployment state. An Azure
@@ -204,7 +202,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
-  if (providerOf(r) === "azure") return r.name || (r.arn?.startsWith("/") ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : r.arn ?? "");
+  if (providerOf(r) === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -254,6 +252,8 @@ export function whenText(p: Pick<AccessPolicy, "status" | "starts_at" | "ends_at
   switch (p.status) {
     case "scheduled":
       return p.starts_at ? `Starts in ${rel(p.starts_at, false)}` : "";
+    case "ending":
+      return "Ending";
     case "ended":
       return p.ended_at ? `Ended ${rel(p.ended_at, true)}` : p.ends_at ? `Ended ${rel(p.ends_at, true)}` : "Ended";
     case "paused":

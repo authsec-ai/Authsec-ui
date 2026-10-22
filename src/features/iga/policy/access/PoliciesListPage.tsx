@@ -207,7 +207,8 @@ export default function PoliciesListPage() {
         cell: ({ row }) => {
           const p = row.original;
           if (!enforce.offered) return null;
-          // An ended policy has only one thing left to do.
+          // An ending policy has nothing left to do until AuthSec is done; an ended one only Delete.
+          if (p.status === "ending") return null;
           const items = p.status === "ended" ? [
             { label: "Delete", icon: <Trash2 className="size-4" />, destructive: true, onSelect: () => setDeleting(p) },
           ] : [

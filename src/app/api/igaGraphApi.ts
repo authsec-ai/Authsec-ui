@@ -805,7 +805,8 @@ export interface AzureRoleAssignment {
   grant_kind: string;
   actions: string[];
   not_actions: string[];
-  condition: string | null;
+  /** The ABAC condition as Azure states it; null when unconditional. */
+  condition: unknown;
 }
 
 export interface GraphEdge {
