@@ -8,12 +8,15 @@
  */
 
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import type { AzureFoundry, AzureFoundryTrust, CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { EntityCell } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
+import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 import { Fact, Facts, Panel } from "@/features/iga/shared/components/Panel";
+import type { PreviewModel } from "@/features/iga/shared/components/ObjectPreview";
+import { useClientPaging } from "./azurePaging";
 
 import { CloudPill } from "../CloudPill";
 import { ListFrame, RelativeDate } from "./AzureDiscoveryShared";
@@ -207,26 +210,52 @@ function flatten(nodes: FoundryNode[]): FoundryRow[] {
   return nodes.flatMap((n) => [{ node: n }, ...n.children.map((p) => ({ node: p, parent: n }))]);
 }
 
-function nameOf(n: FoundryNode): string {
-  return (str(n.workload.attrs?.["display_name"]) || n.workload.name || n.workload.native_id) ?? "";
+export function foundryName(n: FoundryNode): string {
+  return str(n.workload.attrs?.["display_name"]) || n.workload.name || n.workload.native_id;
 }
 
-/** A Foundry object opens its own page, keyed by its ARM id, like every other Azure row. */
-export function foundryHref(n: Pick<FoundryNode, "workload">): string {
+const nameOf = foundryName;
+
+export function foundryHref(n: FoundryNode): string {
   return `/iga/azure/workload/${encodeURIComponent(n.workload.native_id)}`;
+}
+
+/** The side panel for a Foundry object: its facts, with the full detail one click away. */
+export function foundryPreview(n: FoundryNode, connectors: CloudConnector[]): PreviewModel {
+  const a = n.workload.attrs ?? {};
+  const conn = connectors.find((c) => c.id === n.workload.connector_id);
+  return {
+    key: n.workload.native_id,
+    name: foundryName(n),
+    kindLabel: foundryKindLabel(n.foundryKind, n.workload.runtime_kind),
+    provider: "azure",
+    context: [n.workload.region].filter(Boolean) as string[],
+    facts: [
+      { label: "Subscription", value: connectorLabel(conn) },
+      { label: "Models", value: String(n.deployments.length) },
+      ...(str(a["endpoint"]) ? [{ label: "Endpoint", value: <span className="break-all font-mono text-xs">{str(a["endpoint"])!}</span> }] : []),
+    ],
+    detailsHref: foundryHref(n),
+  };
 }
 
 export function AzureFoundryView({
   query,
   nodes,
   connectors,
+  onSelect,
+  pageSize,
+  onPageSize,
 }: {
   query: { isLoading: boolean; isError: boolean; error?: Parameters<typeof ListFrame>[0]["error"]; refetch: () => unknown; data?: AzureFoundry };
   nodes: FoundryNode[];
   connectors: CloudConnector[];
+  onSelect: (id: string | null) => void;
+  pageSize: number;
+  onPageSize: (n: number) => void;
 }) {
-  const navigate = useNavigate();
   const rows = useMemo(() => flatten(nodes), [nodes]);
+  const paged = useClientPaging(rows, pageSize, `foundry|${pageSize}`);
   const subscription = (id: string) => connectorLabel(connectors.find((c) => c.id === id));
 
   const columns = useMemo<AdaptiveColumn<FoundryRow>[]>(
@@ -236,15 +265,15 @@ export function AzureFoundryView({
         header: "Name",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 260,
+        approxWidth: 300,
         cell: ({ row }) => (
           <EntityCell
             label={
               <Link to={foundryHref(row.original.node)} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                {nameOf(row.original.node)}
+                {foundryName(row.original.node)}
               </Link>
             }
-            detail={<span className={MUTED}>{row.original.parent ? `Project of ${nameOf(row.original.parent)}` : foundryKindLabel(row.original.node.foundryKind, row.original.node.workload.runtime_kind)}</span>}
+            detail={row.original.parent ? `Project of ${foundryName(row.original.parent)}` : undefined}
           />
         ),
       },
@@ -252,29 +281,22 @@ export function AzureFoundryView({
         id: "type",
         header: "Type",
         priority: 2,
-        approxWidth: 170,
-        cell: ({ row }) => <span className="text-xs">{foundryKindLabel(row.original.node.foundryKind, row.original.node.workload.runtime_kind)}</span>,
+        approxWidth: 180,
+        cell: ({ row }) => <span className="text-sm">{foundryKindLabel(row.original.node.foundryKind, row.original.node.workload.runtime_kind)}</span>,
       },
       {
         id: "subscription",
         header: "Subscription",
         priority: 3,
         approxWidth: 180,
-        cell: ({ row }) => <span className="text-xs">{subscription(row.original.node.workload.connector_id)}</span>,
+        cell: ({ row }) => <span className="text-sm">{subscription(row.original.node.workload.connector_id)}</span>,
       },
       {
         id: "region",
         header: "Region",
         priority: 4,
         approxWidth: 120,
-        cell: ({ row }) => <span className="text-xs">{row.original.node.workload.region || "—"}</span>,
-      },
-      {
-        id: "deployments",
-        header: "Models",
-        priority: 5,
-        approxWidth: 90,
-        cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.node.deployments.length}</span>,
+        cell: ({ row }) => <span className="text-sm">{row.original.node.workload.region || "—"}</span>,
       },
       {
         id: "last_seen",
@@ -296,19 +318,31 @@ export function AzureFoundryView({
       onRetry={() => void query.refetch()}
       empty={!nodes.length}
       noMatch={false}
+      subject="Microsoft Foundry objects"
       emptyText="No Microsoft Foundry resource, hub or Machine Learning workspace was recorded. They are read from each connected subscription with Reader; the connection's Coverage tab says whether that read ran."
     >
       <AdaptiveTable
-        tableId="azure-agents-foundry"
         sizing="fit"
+        cardsBelow={640}
+        tableId="azure-agents-foundry"
         columns={columns}
-        data={rows}
+        data={paged.pageRows}
         getRowId={(r) => r.node.workload.id}
         enableSelection={false}
         enableExpansion={false}
+        enableSorting={false}
+        enablePagination={false}
         rowDetails={false}
-        onRowClick={(r) => navigate(foundryHref(r.node))}
-        pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+        onRowClick={(r) => onSelect(r.node.workload.native_id)}
+      />
+      <CursorPager
+        meta={paged.meta}
+        pageIndex={paged.pageIndex}
+        rowsOnPage={paged.pageRows.length}
+        onPrev={paged.onPrev}
+        onNext={paged.onNext}
+        pageSize={pageSize}
+        onPageSize={(n) => onPageSize(n)}
       />
     </ListFrame>
   );

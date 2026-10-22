@@ -12,15 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
 import { TableCard } from "@/theme/components/cards";
 
+import { EmptyList } from "@/features/iga/discovery/ListStates";
+
 import { TruncationLine } from "../aws/AWSInventoryNotices";
 import { attrLabel, connectorLabel, type DirectoryRef } from "./azureDiscoveryLabels";
 
 export const ALL = "all";
 
-/** Relative time, the exact instant on hover; "Unknown" rather than an invented time. */
+/** Relative time, the exact instant on hover; "—" rather than an invented time. */
 export function RelativeDate({ iso }: { iso: string | null | undefined }) {
   const at = iso ? new Date(iso) : null;
-  if (!at || Number.isNaN(at.getTime())) return <span className="text-xs text-muted-foreground">Unknown</span>;
+  if (!at || Number.isNaN(at.getTime())) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <span className="text-xs text-muted-foreground" title={at.toLocaleString()}>
       {formatDistanceToNow(at, { addSuffix: true })}
@@ -107,6 +109,7 @@ export function ListFrame({
   empty,
   noMatch,
   emptyText,
+  subject,
   children,
 }: {
   loading: boolean;
@@ -116,13 +119,15 @@ export function ListFrame({
   empty: boolean;
   noMatch: boolean;
   emptyText: string;
+  /** Plural, lower-case: "agent identities". Titles the empty panel. */
+  subject: string;
   children: ReactNode;
 }) {
   let body: ReactNode = children;
   if (loading) {
     body = (
       <div className="p-4">
-        <DataTableSkeleton columns={5} rows={6} showSelection={false} showActions={false} />
+        <DataTableSkeleton columns={6} rows={6} showSelection={false} showActions={false} />
       </div>
     );
   } else if (failed) {
@@ -132,7 +137,11 @@ export function ListFrame({
       </div>
     );
   } else if (empty) {
-    body = <p className="px-6 py-14 text-center text-xs text-muted-foreground">{emptyText}</p>;
+    body = (
+      <div className="p-4">
+        <EmptyList subject={subject} detail={emptyText} />
+      </div>
+    );
   } else if (noMatch) {
     body = <p className="px-6 py-14 text-center text-xs text-muted-foreground">Nothing in the loaded rows matches that search or filter.</p>;
   }

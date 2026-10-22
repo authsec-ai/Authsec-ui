@@ -27,7 +27,6 @@ import {
 } from "@/app/api/cloudDiscoveryApi";
 import type { InventoryClass } from "@/app/api/igaInventoryApi";
 import { ConsoleRowActions } from "@/components/console/iam-console";
-import { StatusBadge } from "@/components/console/status";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { RowName } from "@/features/iga/discovery/DiscoveryTable";
 import type { FacetSpec } from "@/features/iga/discovery/FacetBar";
@@ -35,6 +34,7 @@ import { sourceFacet } from "@/features/iga/discovery/facets";
 import { ScreenFrame } from "@/features/iga/discovery/ScreenFrame";
 import type { ScreenProps } from "@/features/iga/discovery/screenTypes";
 import { CursorPager } from "@/features/iga/shared/components/CursorPager";
+import { PreviewLayout, type PreviewModel } from "@/features/iga/shared/components/ObjectPreview";
 import type { CountValue } from "@/features/iga/shared/components/countValue";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -60,7 +60,6 @@ function rowKind(cls: InventoryClass, r: Row): string {
 
 export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryClass }) {
   const { cls } = p;
-  const navigate = useNavigate();
   const kind = p.url.get("kind");
   const pageSize = parsePageSize(p.url.get("size"));
   const setPageSize = (n: number) => p.url.patch({ size: pageSizeParam(n) });
@@ -93,7 +92,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
   const total = q.data?.total ?? 0;
   const truncated = !!q.data && q.data.totalKnown && total > loaded.length;
   const manyTenants = tenants.size > 1;
-  const paged = useClientPaging(rows, pageSize, `${cls}|${p.url.q}|${kind ?? ""}|${tenantId ?? ""}|${pageSize}`);
+  const paged = useClientPaging(rows, pageSize, `${cls}|${p.url.q}|${kind ?? ""}|${tenantId ?? ""}|${pageSize}`, truncated);
+  const navigate = useNavigate();
 
   const kindOptions = useMemo(() => {
     if (cls === "identities") return IDENTITY_FILTERS.map((f) => ({ value: f.key, label: f.label }));
@@ -111,11 +111,33 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
   const selectedTenantName = p.scope.kind === "one" ? p.scope.source.label : undefined;
 
   const tenantOf = (c: CloudConnector | undefined): string => {
-    if (!c) return "Unknown";
+    if (!c) return "—";
     if (c.scope_kind === "tenant") return tenantName(c, c.scope_id);
     const t = connectors.find((x) => x.scope_kind === "tenant" && x.scope_id.toLowerCase() === c.parent_scope_id?.toLowerCase());
-    return t ? tenantName(t, t.scope_id) : c.parent_scope_id ?? "Unknown";
+    return t ? tenantName(t, t.scope_id) : c.parent_scope_id ?? "—";
   };
+
+  const selectedRow = p.url.sel ? rows.find((r) => r.native_id === p.url.sel) : undefined;
+  const selectedModel: PreviewModel | null = selectedRow
+    ? (() => {
+        const conn = connectors.find((c) => c.id === selectedRow.connector_id);
+        const workloadRegion = cls === "workloads" ? (selectedRow as AzureWorkload).region : undefined;
+        return {
+          key: selectedRow.native_id,
+          name: selectedRow.name || selectedRow.native_id,
+          kindLabel: cls === "identities" ? identityKindLabel((selectedRow as AzureIdentity).kind) : inventoryKindLabel(cls, String((selectedRow as { kind?: string }).kind ?? "")),
+          provider: "azure",
+          context: [],
+          facts: [
+            { label: "Tenant", value: tenantOf(conn) },
+            ...(cls !== "identities" ? [{ label: "Subscription", value: connectorLabel(conn) }] : []),
+            ...(workloadRegion ? [{ label: "Region", value: workloadRegion }] : []),
+          ],
+          exception: cls === "identities" && (selectedRow as AzureIdentity).enabled === false ? "This account is disabled in Microsoft Entra ID." : undefined,
+          detailsHref: scanTablesHref(cls, selectedRow),
+        };
+      })()
+    : null;
 
   const columns = useMemo<AdaptiveColumn<Row>[]>(() => {
     const name: AdaptiveColumn<Row> = {
@@ -140,21 +162,6 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
         );
       },
     };
-    const state: AdaptiveColumn<Row> = {
-      id: "state",
-      header: "State",
-      priority: 2,
-      approxWidth: 100,
-      cell: ({ row }) =>
-        cls === "identities" && (row.original as AzureIdentity).enabled === false ? <StatusBadge tone="neutral">Disabled</StatusBadge> : <span className={MUTED}>Current</span>,
-    };
-    const signIn: AdaptiveColumn<Row> = {
-      id: "last_sign_in",
-      header: "Last sign-in",
-      priority: 3,
-      approxWidth: 130,
-      cell: ({ row }) => <RelativeDate iso={(row.original as AzureIdentity).last_used_at} />,
-    };
     const subscription: AdaptiveColumn<Row> = {
       id: "subscription",
       header: "Subscription",
@@ -170,23 +177,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       header: "Region",
       priority: 4,
       approxWidth: 110,
-      cell: ({ row }) => <span className={MUTED}>{(row.original as AzureWorkload).region || "Not stated"}</span>,
-    };
-    const runsAs: AdaptiveColumn<Row> = {
-      id: "runs_as",
-      header: "Runs as",
-      priority: 4,
-      approxWidth: 180,
-      cell: ({ row }) => {
-        const w = row.original as AzureWorkload;
-        return w.identity_name ? (
-          <span className="text-xs">
-            {w.identity_name} <span className="text-muted-foreground">({identityKindLabel(w.identity_kind)})</span>
-          </span>
-        ) : (
-          <span className={MUTED}>No identity recorded</span>
-        );
-      },
+      cell: ({ row }) => <span className={MUTED}>{(row.original as AzureWorkload).region || "—"}</span>,
     };
     const tenant: AdaptiveColumn<Row> = {
       id: "account",
@@ -219,8 +210,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       ),
     };
     const tenantCols = manyTenants ? [tenant] : [];
-    if (cls === "identities") return [name, state, signIn, ...tenantCols, seen, actions];
-    if (cls === "workloads") return [name, subscription, region, runsAs, ...tenantCols, seen, actions];
+    if (cls === "identities") return [name, ...tenantCols, seen, actions];
+    if (cls === "workloads") return [name, subscription, region, ...tenantCols, seen, actions];
     return [name, subscription, ...tenantCols, seen, actions];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cls, byId, connectors, manyTenants]);
@@ -265,7 +256,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
         </div>
       }
     >
-      {() => (
+      {(width) => (
+        <PreviewLayout width={width} model={selectedModel} onClose={() => p.url.select(null)} list={
         <ListFrame
           loading={q.isLoading || connectorsQ.isLoading}
           failed={q.isError && !loaded.length}
@@ -273,6 +265,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
           onRetry={() => void q.refetch()}
           empty={!rows.length}
           noMatch={false}
+          subject={NOUN[cls]}
           emptyText={
             !rows.length && loaded.length && !scope.exact
               ? `None of the first ${loaded.length.toLocaleString()} ${NOUN[cls]} read belong to ${selectedTenantName ?? "this tenant"}. Choose Every tenant, or search, to look further.`
@@ -294,7 +287,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
             enableSorting={false}
             enablePagination={false}
             rowDetails={false}
-            onRowClick={(r) => navigate(scanTablesHref(cls, r))}
+            onRowClick={(r) => p.url.select(r.native_id)}
           />
           <CursorPager
             meta={paged.meta}
@@ -306,6 +299,8 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
             onPageSize={setPageSize}
           />
         </ListFrame>
+        }
+        />
       )}
     </ScreenFrame>
   );

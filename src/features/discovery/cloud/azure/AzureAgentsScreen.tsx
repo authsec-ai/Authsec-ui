@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   AWS_DISCOVERY_MAX_LIMIT,
@@ -19,16 +19,17 @@ import {
 import { EntityCell } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { CursorPager } from "@/features/iga/shared/components/CursorPager";
+import { PreviewLayout, type PreviewModel } from "@/features/iga/shared/components/ObjectPreview";
+import { useElementWidth } from "@/features/iga/shared/components/useElementWidth";
 
-import { CloudPill } from "../CloudPill";
+import { StatusBadge } from "@/components/console/status";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "../aws/AWSFilterChips";
-import { CopyableId } from "../aws/AWSInventoryCells";
 import { TruncationNotice } from "../aws/AWSInventoryNotices";
-import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { AzureFoundryView } from "./AzureFoundryView";
+import { ALL, AzureSourceSelect, ListFrame, RelativeDate } from "./AzureDiscoveryShared";
+import { AzureFoundryView, foundryPreview } from "./AzureFoundryView";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
-import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
+import { azureSourceFor, azureSourcesFor, connectorLabel, identityKindLabel, refsOf } from "./azureDiscoveryLabels";
 import { pageSizeParam, parsePageSize, useClientPaging } from "./azurePaging";
 
 type View = "identities" | "blueprints" | "foundry";
@@ -49,6 +50,28 @@ function NameLink({ r, children }: { r: AzureIdentity; children: string }) {
   );
 }
 
+/** The side panel for an agent identity or blueprint: its facts, with the full page one click away. */
+function identityPreview(r: AzureIdentity): PreviewModel {
+  const people = (key: string) => refsOf(r.attrs, key).map((x) => x.name).filter(Boolean).join(", ");
+  const blueprint = typeof r.attrs?.["agent_blueprint_name"] === "string" ? (r.attrs["agent_blueprint_name"] as string) : "";
+  return {
+    key: r.native_id,
+    name: r.name || r.native_id,
+    kindLabel: identityKindLabel(r.kind),
+    provider: "azure",
+    context: [],
+    facts: [
+      { label: "Blueprint", value: blueprint || "—" },
+      { label: "Sponsors", value: people("sponsors") || "None recorded" },
+      { label: "Owners", value: people("owners") || "None recorded" },
+      { label: "Created", value: <RelativeDate iso={r.created_at} /> },
+      { label: "Last sign-in", value: <RelativeDate iso={r.last_used_at} /> },
+    ],
+    exception: r.enabled === false ? "This agent is disabled in Microsoft Entra ID." : undefined,
+    detailsHref: detailHref(r),
+  };
+}
+
 function createdBy(r: AzureIdentity): string | undefined {
   const c = r.attrs?.["created_by"] as { by?: string } | undefined;
   return c?.by || undefined;
@@ -60,7 +83,6 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
   const view: View = agentsParam === "blueprints" ? "blueprints" : agentsParam === "foundry" ? "foundry" : "identities";
   const source = params.get("source");
   const [search, setSearch] = useState(params.get("q") ?? "");
-  const navigate = useNavigate();
   const pageSize = parsePageSize(params.get("size"));
 
   const setParam = (key: string, value: string | null) => {
@@ -99,6 +121,10 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
 
   const q = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS[view === "foundry" ? "identities" : view], limit: AWS_DISCOVERY_MAX_LIMIT }, { skip: view === "foundry" });
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
+  const [rootRef, rootWidth] = useElementWidth<HTMLDivElement>();
+  const selectedKey = params.get("sel");
+  const selectedRow = selectedKey ? rows.find((r) => r.native_id === selectedKey) : undefined;
+  const selectedFoundry = selectedKey ? foundry.flatMap((n) => [n, ...n.children]).find((n) => n.workload.native_id === selectedKey) : undefined;
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     if (!s) return rows;
@@ -109,8 +135,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     });
   }, [rows, search]);
 
-  const paged = useClientPaging(filtered, pageSize, `${view}|${connectorId ?? ""}|${search.trim()}|${pageSize}`);
   const truncation = { truncated: !!q.data && q.data.totalKnown && q.data.total > rows.length, shown: rows.length, total: q.data?.total ?? rows.length, totalKnown: !!q.data?.totalKnown };
+  const paged = useClientPaging(filtered, pageSize, `${view}|${connectorId ?? ""}|${search.trim()}|${pageSize}`, truncation.truncated);
 
   const identityColumns = useMemo<AdaptiveColumn<AzureIdentity>[]>(
     () => [
@@ -121,44 +147,16 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         alwaysVisible: true,
         priority: 1,
         approxWidth: 280,
-        cell: ({ row }) => <EntityCell label={<NameLink r={row.original}>{row.original.name || row.original.native_id}</NameLink>} detail={<CopyableId value={row.original.native_id} label="Object ID" />} />,
+        cell: ({ row }) => <EntityCell label={<NameLink r={row.original}>{row.original.name || row.original.native_id}</NameLink>} />,
       },
-      {
-        id: "blueprint",
-        header: "Agent identity blueprint",
-        priority: 2,
-        approxWidth: 200,
-        cell: ({ row }) => {
-          const name = row.original.attrs?.["agent_blueprint_name"];
-          return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">Not recorded</span>;
-        },
-      },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
       {
         id: "status",
         header: "Status",
         priority: 5,
         approxWidth: 100,
-        cell: ({ row }) => (
-          <CloudPill tone="muted" dot={false}>
-            {row.original.enabled ? "Enabled" : "Disabled"}
-          </CloudPill>
-        ),
+        cell: ({ row }) => (row.original.enabled === false ? <StatusBadge tone="neutral">Disabled</StatusBadge> : <span className="text-xs text-muted-foreground">Enabled</span>),
       },
-      {
-        id: "created",
-        header: "Created",
-        priority: 6,
-        approxWidth: 160,
-        cell: ({ row }) => (
-          <span className="text-xs">
-            <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">by {createdBy(row.original)}</span> : null}
-          </span>
-        ),
-      },
-      { id: "last_sign_in", header: "Last sign-in", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
+      { id: "last_sign_in", header: "Last seen", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
     ],
     [],
   );
@@ -174,7 +172,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         approxWidth: 280,
         cell: ({ row }) => {
           const appId = typeof row.original.attrs?.["app_id"] === "string" ? (row.original.attrs["app_id"] as string) : row.original.native_id;
-          return <EntityCell label={<NameLink r={row.original}>{row.original.name || appId}</NameLink>} detail={<CopyableId value={appId} label="Application (client) ID" />} />;
+          return <EntityCell label={<NameLink r={row.original}>{row.original.name || appId}</NameLink>} />;
         },
       },
       {
@@ -184,17 +182,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         approxWidth: 120,
         cell: ({ row }) => {
           const n = row.original.attrs?.["agent_count"];
-          return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
+          return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "—"}</span>;
         },
-      },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
-      {
-        id: "publisher",
-        header: "Publisher domain",
-        priority: 5,
-        approxWidth: 150,
-        cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "—"}</span>,
       },
       {
         id: "created",
@@ -233,7 +222,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     />
   );
   return (
-    <div className="space-y-4">
+    <div ref={rootRef} className="space-y-4">
       {view === "foundry" ? (
         <>
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
@@ -245,7 +234,21 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             </p>
             <span className="ml-auto">{sourceSelect}</span>
           </div>
-          <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
+          <PreviewLayout
+            width={rootWidth}
+            model={selectedFoundry ? foundryPreview(selectedFoundry, connectors) : null}
+            onClose={() => setParam("sel", null)}
+            list={
+              <AzureFoundryView
+                query={foundryQ}
+                nodes={foundry}
+                connectors={connectors}
+                onSelect={(id) => setParam("sel", id)}
+                pageSize={pageSize}
+                onPageSize={(n) => setParam("size", pageSizeParam(n))}
+              />
+            }
+          />
         </>
       ) : (
         <>
@@ -269,6 +272,11 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
 
           <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
 
+          <PreviewLayout
+            width={rootWidth}
+            model={selectedRow ? identityPreview(selectedRow) : null}
+            onClose={() => setParam("sel", null)}
+            list={
           <ListFrame
             loading={q.isLoading}
             failed={q.isError && !rows.length}
@@ -276,6 +284,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             onRetry={() => void q.refetch()}
             empty={!rows.length}
             noMatch={!filtered.length}
+            subject={view === "identities" ? "agent identities" : "agent identity blueprints"}
             emptyText={
               view === "identities"
                 ? "No agent identity was recorded. Agent identities are read with AgentIdentity.Read.All; the connection's Coverage tab says whether that read ran."
@@ -295,7 +304,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
               enableSorting={false}
               enablePagination={false}
               rowDetails={false}
-              onRowClick={(r) => navigate(detailHref(r))}
+              onRowClick={(r) => setParam("sel", r.native_id)}
             />
             <CursorPager
               meta={paged.meta}
@@ -307,6 +316,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
               onPageSize={(n) => setParam("size", pageSizeParam(n))}
             />
           </ListFrame>
+            }
+          />
         </>
       )}
     </div>

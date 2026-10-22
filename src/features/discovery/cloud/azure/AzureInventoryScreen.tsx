@@ -20,10 +20,8 @@ import { refId } from "@/app/api/igaGraphApi";
 import { useListInventoryQuery, type InventoryClass, type InventoryMeta, type InventoryRow } from "@/app/api/igaInventoryApi";
 import { ConsoleRowActions } from "@/components/console/iam-console";
 import { StatusBadge } from "@/components/console/status";
-import type { AdaptiveColumn, AdaptiveColumnsLayout } from "@/components/ui/adaptive-table";
+import type { AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { CardContent } from "@/components/ui/card";
-import { ColumnsMenu } from "@/components/ui/table-columns";
-import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { copyToClipboard } from "@/lib/clipboard";
 import { LifecycleCell } from "@/features/iga/discovery/PublishedBody";
 import { DiscoveryTable, RowName } from "@/features/iga/discovery/DiscoveryTable";
@@ -77,7 +75,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     () => new Map((connectorsQ.data ?? []).filter((c) => c.scope_kind === "tenant").map((c) => [tenantScopeId(c), c] as const)),
     [connectorsQ.data],
   );
-  const tenantLabel = (id: string | undefined | null) => (id ? tenantName(tenants.get(id), id) : "Not stated");
+  const tenantLabel = (id: string | undefined | null) => (id ? tenantName(tenants.get(id), id) : "—");
   // One tenant is not worth a column or a line under every name.
   const manyTenants = tenants.size > 1;
   const sources = useMemo(() => p.sources.map((s) => ({ ...s, label: tenantName(tenants.get(s.scopeId), s.label) })), [p.sources, tenants]);
@@ -116,7 +114,8 @@ export default function AzureInventoryScreen(p: ScreenProps) {
           name={row.original.name}
           rowKey={refId(row.original.ref)}
           selected={selectedId === refId(row.original.ref)}
-          context={[kindLabel(row.original.kind), type === "identities" && str(row.original.attrs.agent_type) ? agentTypeLabel({ attrs: row.original.attrs }) : null]}
+          badge={<span className="flex-none rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{kindLabel(row.original.kind)}</span>}
+          context={[type === "identities" && str(row.original.attrs.agent_type) ? agentTypeLabel({ attrs: row.original.attrs }) : null]}
           account={manyTenants ? tenantLabel(row.original.scope?.id) : null}
           lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
         />
@@ -124,7 +123,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
     const lifecycle: AdaptiveColumn<InventoryRow> = {
       id: "lifecycle",
-      header: "State",
+      header: "Status",
       alwaysVisible: lifecycleFilter !== undefined,
       priority: 1,
       approxWidth: 100,
@@ -150,23 +149,12 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       approxWidth: 160,
       cell: ({ row }) => <span className={`text-sm ${row.original.sub_scope ? "" : MUTED}`}>{subscriptionLabel(row.original.sub_scope)}</span>,
     };
-    const signIn: AdaptiveColumn<InventoryRow> = {
-      id: "last_sign_in",
-      header: "Last sign-in",
-      priority: 2,
-      approxWidth: 130,
-      cell: ({ row }) => (
-        <span className={`text-sm ${MUTED}`}>
-          <Timestamp iso={str(row.original.attrs.last_sign_in_at)} missing="never seen" />
-        </span>
-      ),
-    };
     const region: AdaptiveColumn<InventoryRow> = {
       id: "region",
       header: "Region",
       priority: 3,
       approxWidth: 120,
-      cell: ({ row }) => <span className={`text-sm ${MUTED}`}>{str(row.original.attrs.region) ?? "Not stated"}</span>,
+      cell: ({ row }) => <span className={`text-sm ${MUTED}`}>{str(row.original.attrs.region) ?? "—"}</span>,
     };
     const seen: AdaptiveColumn<InventoryRow> = {
       id: "seen",
@@ -197,14 +185,12 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       ),
     };
     const tenantCols = manyTenants ? [tenant] : [];
-    if (type === "identities") return [name, lifecycle, signIn, ...tenantCols, seen, actions];
+    if (type === "identities") return [name, lifecycle, ...tenantCols, seen, actions];
     if (type === "workloads") return [name, lifecycle, subscription, region, ...tenantCols, seen, actions];
     return [name, lifecycle, subscription, ...tenantCols, seen, actions];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, selectedId, navigate, tenants, lifecycleFilter, manyTenants]);
 
-  const prefs = useColumnPreferences(`discovery-azure-${type}`, columns);
-  const [layout, setLayout] = useState<AdaptiveColumnsLayout | undefined>();
 
   const kindOptions = reportedFacet(facets, "kind", (v) => kindLabel(v));
   const specs: FacetSpec[] = [
@@ -242,9 +228,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     const facts: PreviewModel["facts"] = [
       { label: "Tenant", value: tenantLabel(r.scope?.id) },
       ...(type !== "identities" ? [{ label: "Subscription", value: r.sub_scope ? subscriptionLabel(r.sub_scope) : <span className={MUTED}>Tenant-wide</span> }] : []),
-      ...(type === "identities" ? [{ label: "Last sign-in", value: <ConfirmedValue iso={str(r.attrs.last_sign_in_at)} /> }] : []),
       ...(type === "workloads" && str(r.attrs.region) ? [{ label: "Region", value: str(r.attrs.region) }] : []),
-      { label: type === "identities" ? "Object ID" : "Resource ID", value: <span className="break-all font-mono text-xs">{r.native_id}</span> },
       { label: "Last confirmed", value: <ConfirmedValue iso={r.as_of ?? r.last_seen_at} /> },
     ];
     const href = detailHref(r);
@@ -282,7 +266,6 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       searchPlaceholder={SEARCH_PLACEHOLDER[type]}
       searchHint={p.url.qTooShort ? "Type at least 2 characters to search." : undefined}
       facets={specs}
-      trailing={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={layout} />}
       onClearAll={() => p.url.patch({ kind: null, source: null, lifecycle: null, q: null })}
       notices={
         restarted ? (
@@ -315,8 +298,6 @@ export default function AzureInventoryScreen(p: ScreenProps) {
                   onRetry={() => void list.refetch()}
                   subject={SUBJECT[type]}
                   permission="iga:read"
-                  chosenColumns={prefs.chosen}
-                  onColumnsLayout={setLayout}
                   empty={
                     narrowing.length ? (
                       <FilteredEmpty subject={SUBJECT[type]} narrowing={narrowing} onClear={() => p.url.patch({ q: null, kind: null, source: null, lifecycle: null })} />

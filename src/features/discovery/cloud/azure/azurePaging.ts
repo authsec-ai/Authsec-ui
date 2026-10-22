@@ -29,11 +29,18 @@ export function pageSlice<T>(rows: T[], pageSize: number, page: number): { rows:
   return { rows: rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), pageIndex, pages };
 }
 
-export function useClientPaging<T>(rows: T[], pageSize: number, resetKey: string) {
+/**
+ * `truncated` says the rows are the first part of a larger set: the footer then
+ * gives the range without a total, rather than presenting the loaded rows as all.
+ */
+export function useClientPaging<T>(rows: T[], pageSize: number, resetKey: string, truncated = false) {
   const [state, setState] = useState({ key: resetKey, page: 0 });
   const page = state.key === resetKey ? state.page : 0;
   const slice = pageSlice(rows, pageSize, page);
-  const meta: PagerMeta = { next_cursor: slice.pageIndex < slice.pages - 1 ? "next" : null, limit: pageSize, total_known: true, total: rows.length };
+  const hasMore = slice.pageIndex < slice.pages - 1;
+  const meta: PagerMeta = truncated
+    ? { next_cursor: hasMore ? "next" : null, limit: pageSize, total_known: false }
+    : { next_cursor: hasMore ? "next" : null, limit: pageSize, total_known: true, total: rows.length };
   return {
     pageRows: slice.rows,
     pageIndex: slice.pageIndex,
