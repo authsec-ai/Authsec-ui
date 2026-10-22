@@ -1,35 +1,48 @@
-/** Whether AuthSec can change IAM in the workspace's AWS accounts, in words. */
+/** Whether AuthSec can change the cloud a policy is in, in words. */
 
-import { useGetAccessReadinessQuery } from "@/app/api/igaAccessPoliciesApi";
+import { useGetAccessReadinessQuery, type AccessProvider } from "@/app/api/igaAccessPoliciesApi";
 
 import { classifyPolicyError } from "../shared";
 
-/** Why an account is not ready, in words (readiness `reason` codes). */
+/** Why an account or subscription is not ready, in words (readiness `reason` codes). */
 const READINESS_WORDS: Record<string, string> = {
   binding_missing: "AWS access is not set up",
   binding_not_verified: "AWS access setup has not finished: the CloudFormation stack has not reported back or its self-test has not passed",
   binding_template_v1: "the AWS access stack is an older version and must be updated",
   binding_capability_missing: "the AWS access self-test is missing a check access policies need",
+  azure_write_access_missing: "AuthSec's Azure app cannot manage role assignments: give it the Role Based Access Control Administrator role on the subscription",
 };
 
 export function readinessWords(reason: string): string {
   return READINESS_WORDS[reason] ?? (reason ? reason.replace(/_/g, " ") : "AWS access is not ready");
 }
 
-/** The readiness of the workspace's AWS accounts, for one account when `accountId` is given. */
-export function useAccessReadiness(ws: string, accountId?: string) {
+/**
+ * The readiness of the workspace's AWS accounts or Azure subscriptions, for one
+ * when `scopeId` (an account or subscription id) is given. `known` is false for
+ * Azure on a backend that does not report subscriptions: the preview's blocker
+ * then says whether AuthSec can change it.
+ */
+export function useAccessReadiness(ws: string, scopeId?: string, provider: AccessProvider = "aws") {
   const q = useGetAccessReadinessQuery({ ws });
   const r = q.data?.data;
-  const accounts = r ? (accountId ? r.accounts.filter((a) => a.account_id === accountId) : r.accounts) : [];
-  const notReady = accounts.filter((a) => !a.ready);
+  const all = r
+    ? provider === "aws"
+      ? r.accounts.map((a) => ({ id: a.account_id, name: a.account_id, ready: a.ready, reason: a.reason }))
+      : (r.azure_subscriptions ?? []).map((s) => ({ id: s.subscription_id, name: s.name || s.subscription_id, ready: s.ready, reason: s.reason }))
+    : [];
+  const scopes = scopeId ? all.filter((a) => a.id.toLowerCase() === scopeId.toLowerCase()) : all;
+  const notReady = scopes.filter((a) => !a.ready);
+  const known = provider === "aws" || !!r?.azure_subscriptions;
   return {
     loading: q.isLoading,
     failed: q.isError && classifyPolicyError(q.error)?.kind !== "unavailable",
     available: r?.available ?? false,
     reason: r?.reason ?? "",
-    accounts,
+    known,
+    scopes,
     notReady,
-    ready: !!r && r.available && accounts.length > 0 && notReady.length === 0,
+    ready: !!r && r.available && known && scopes.length > 0 && notReady.length === 0,
     refetch: () => void q.refetch(),
   };
 }

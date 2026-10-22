@@ -1,7 +1,10 @@
 /**
- * Access policies: an admin blocks or allows IAM roles on an AWS resource for a
- * time window, and AuthSec applies it as an AuthSec-owned IAM policy attached to
- * each role (AWS enforces it, the window included).
+ * Access policies: an admin blocks or allows identities on one cloud resource
+ * for a time window (SPEC-access-policies.md). On AWS, IAM roles on an S3 bucket
+ * or folder: AuthSec attaches its own IAM policy to each role and AWS enforces
+ * it, the window included. On Azure, service principals, managed identities and
+ * agent identities on one resource: AuthSec removes (block) or creates (allow)
+ * role assignments and undoes it at the end.
  *
  * Every route is under `/api/iga/v1/policy/access-policies`; the workspace is
  * the token's. Reads need `governance:read`, changes `governance:enforce`. The
@@ -16,7 +19,7 @@
  *   POST /:id/resume       put the current version back
  *   POST /:id/end          take it out of AWS for good; the record is kept
  *   GET  /:id/events       history, newest first
- *   GET  /readiness        whether AuthSec can change IAM in each AWS account
+ *   GET  /readiness        whether AuthSec can change each AWS account and Azure subscription
  *
  * Envelope `{ data, meta }`; errors `{ error: { code, message, field?, detail? } }`.
  */
@@ -29,17 +32,27 @@ const BASE = `${POLICY_BASE}/access-policies`;
 export type AccessEffect = "block" | "allow";
 /** `all` is offered for block only. */
 export type AccessLevel = "read" | "write" | "delete" | "all";
+export type AccessProvider = "aws" | "azure";
 export type AccessPolicyStatus = "scheduled" | "applying" | "active" | "paused" | "ended" | "failed" | "drift";
 /** How a policy left AWS (or `""` while it has not). */
 export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused";
 
 export interface AccessPolicyResource {
   resource_id: string;
+  /** The bucket's ARN on AWS; the ARM id on Azure. */
   arn: string;
+  /** AWS only; "" on Azure. */
   bucket: string;
-  /** "" means the whole bucket. */
+  /** "" means the whole bucket (always "" on Azure). */
   prefix: string;
+  /** The AWS account, or the Azure subscription id. */
   account_id: string;
+  /** Absent from a backend that predates Azure: read it with `providerOf`. */
+  provider?: AccessProvider;
+  /** The bucket or the Azure resource's name. */
+  name?: string;
+  /** The Azure resource type (`microsoft.storage/storageaccounts`); "s3_bucket" on AWS. */
+  kind?: string;
 }
 
 export interface AccessPolicyWorkload {
@@ -53,6 +66,8 @@ export interface AccessPolicyRole {
   name: string;
   arn: string;
   account_id: string;
+  /** `iam_role`, or `entra_service_principal` · `entra_managed_identity` · `entra_agent_identity`. */
+  kind?: string;
   /** Workloads that run as the role: who the policy really affects. */
   used_by: AccessPolicyWorkload[];
 }
@@ -71,6 +86,8 @@ export interface AccessPolicyDeployment {
   version_no: number;
   state: string;
   aws_policy_arn: string;
+  /** Azure: the ARM scope AuthSec changes role assignments on. */
+  target_ref?: string;
   document_hash: string;
   deployed_at: string | null;
   verified_at: string | null;
@@ -183,10 +200,22 @@ export interface AccessReadinessAccount {
   reason: string;
 }
 
+/** One Azure subscription: whether AuthSec's app can manage role assignments there. */
+export interface AccessReadinessSubscription {
+  subscription_id: string;
+  name: string;
+  connector_id: string;
+  ready: boolean;
+  /** `azure_write_access_missing`, or why the check could not run. */
+  reason: string;
+}
+
 export interface AccessReadiness {
   available: boolean;
   reason: string;
   accounts: AccessReadinessAccount[];
+  /** Absent from a backend that predates Azure readiness. */
+  azure_subscriptions?: AccessReadinessSubscription[];
 }
 
 export interface ListAccessPoliciesArgs extends WsArg, PageArgs {

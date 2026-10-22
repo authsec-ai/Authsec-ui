@@ -1,6 +1,7 @@
 /**
- * The form's two pickers. Both read Discovery, so what you pick is what the
- * last scan found: an S3 bucket, and the IAM roles to block or allow on it.
+ * The form's two AWS pickers (the Azure ones are in AzurePickers.tsx). Both
+ * read Discovery, so what you pick is what the last scan found: an S3 bucket,
+ * and the IAM roles to block or allow on it.
  *
  * Discovery records what policies name: a bucket, a file, or a folder pattern
  * (`bucket/folder/*`). Most buckets appear only through such paths, so the
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
 
 import { bucketOf, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { useDebounced } from "./useDebounced";
 
 /** Every bucket the S3 records name, with its records (bucket record first) and the folders seen in it. */
 function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: boolean })[] {
@@ -47,7 +49,7 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
     if (!b) continue;
     let e = by.get(b.bucket);
     if (!e) {
-      e = { resource_id: "", bucket: b.bucket, arn: `arn:aws:s3:::${b.bucket}`, account_id: r.account?.id ?? "", records: [], folders: [], hasBucketRecord: false };
+      e = { provider: "aws", resource_id: "", name: b.bucket, bucket: b.bucket, arn: `arn:aws:s3:::${b.bucket}`, account_id: r.account?.id ?? "", records: [], folders: [], hasBucketRecord: false };
       by.set(b.bucket, e);
     }
     const rec = { id: refId(r.ref), text: r.text };
@@ -69,17 +71,7 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
   return [...by.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
-/** `useDebounced(value)`: the value once it has stopped changing for `ms`. */
-function useDebounced<T>(value: T, ms = 300): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
-
-const rowButton =
+export const rowButton =
   "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-(--color-surface-subtle) focus-visible:bg-(--color-surface-subtle) focus-visible:outline-none";
 
 /* --------------------------------- bucket --------------------------------- */
@@ -170,7 +162,7 @@ export function ResourcePicker({
                       key={b.bucket}
                       value={b.bucket}
                       onSelect={() => {
-                        onChange({ resource_id: b.resource_id, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders });
+                        onChange({ provider: "aws", resource_id: b.resource_id, name: b.bucket, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders });
                         setOpen(false);
                       }}
                       className="gap-3 px-2.5 py-2"
@@ -239,14 +231,15 @@ function useBucketAccess(ws: string, resource: DraftResource | null) {
 
 /* ---------------------------------- roles --------------------------------- */
 
-interface Candidate {
+export interface Candidate {
   identity_account_id: string;
   name: string;
+  /** The line under the name when no paths are given: the account, or an Azure identity's kind and roles. */
   account: string;
   hasAccess: boolean;
   /** Where in the bucket it has access: "" for the whole bucket, else paths like `attachments/*`. */
   paths?: string[];
-  /** Why it cannot be chosen (an Allow of access it already has), else unset. */
+  /** Why it cannot be chosen (an Allow of access it already has, a kind no policy can name), else unset. */
   blocked?: string;
 }
 
@@ -433,7 +426,7 @@ export function RolePicker({
   );
 }
 
-function CandidateRow({ c, on, onToggle }: { c: Candidate; on: boolean; onToggle: () => void }) {
+export function CandidateRow({ c, on, onToggle }: { c: Candidate; on: boolean; onToggle: () => void }) {
   // A role that cannot be added stays visible so the reason is too; one already chosen can still be removed.
   const off = !!c.blocked && !on;
   return (

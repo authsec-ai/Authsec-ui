@@ -1,7 +1,7 @@
 /**
  * Delete an ended policy. It leaves the list for good; what it did stays in
- * the Logs. Only a policy that has ended offers this, so nothing is left in
- * AWS when it goes.
+ * the Logs. Only a policy that has ended offers this, so nothing of it is left
+ * in its cloud when it goes.
  */
 
 import { useEffect } from "react";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { PolicyActionError, usePolicyAction } from "../shared";
+import { CLOUD, providerOf } from "./model";
 
 export function DeletePolicyDialog({
   policy,
@@ -51,7 +52,7 @@ export function DeletePolicyDialog({
         <DialogHeader>
           <DialogTitle>Delete this policy?</DialogTitle>
           <DialogDescription>
-            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in AWS. What it did stays in the Logs.
+            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in {CLOUD[providerOf(policy.resource)].label}. What it did stays in the Logs.
           </DialogDescription>
         </DialogHeader>
         <PolicyActionError failure={act.failure} />

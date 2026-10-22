@@ -1,10 +1,11 @@
 /**
- * Policy › Policies: every access policy in the workspace. A policy blocks or
- * allows IAM roles on an S3 bucket for a time window; AuthSec applies it in IAM
- * and AWS enforces it.
+ * Policy › Policies: every access policy in the workspace, AWS and Azure. A
+ * policy blocks or allows identities on one resource for a time window
+ * (SPEC-access-policies.md §2.2).
  *
  * `?resource_id=` and `?identity_account_id=` (from Discovery) narrow the list
- * to one bucket or one role. A row opens the policy's page.
+ * to one resource or one identity; `?cloud=` to one cloud. A row opens the
+ * policy's page.
  */
 
 import { Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react";
@@ -16,6 +17,7 @@ import {
   type AccessEffect,
   type AccessPolicy,
   type AccessPolicyStatus,
+  type AccessProvider,
 } from "@/app/api/igaAccessPoliciesApi";
 import { AppliedFilters, ConsoleFilterBar, ConsoleRowActions } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
@@ -28,7 +30,7 @@ import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { PolicyLoadFailure, PolicyShell, classifyPolicyError, usePolicyPermission } from "../shared";
 import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
-import { STATUS, STATUS_ORDER, accessText, resourceText, whenText, windowText } from "./model";
+import { CLOUD, STATUS, STATUS_ORDER, accessText, providerOf, resourceText, whenText, windowText } from "./model";
 import { EffectChip, PolicyStatusChip, ReadinessBanner } from "./parts";
 
 const PAGE = 200;
@@ -39,6 +41,7 @@ export default function PoliciesListPage() {
   const [params, setParams] = useSearchParams();
   const status = (params.get("status") ?? "") as "" | AccessPolicyStatus;
   const effect = (params.get("effect") ?? "") as "" | AccessEffect;
+  const cloud = (params.get("cloud") ?? "") as "" | AccessProvider;
   const resourceId = params.get("resource_id") ?? "";
   const resourceName = params.get("resource_name") ?? "";
   const identityId = params.get("identity_account_id") ?? "";
@@ -76,7 +79,12 @@ export default function PoliciesListPage() {
     for (const p of all) c[p.status] = (c[p.status] ?? 0) + 1;
     return c;
   }, [all]);
-  const rows = useMemo(() => (status ? all.filter((p) => p.status === status) : all), [all, status]);
+  const rows = useMemo(
+    () => all.filter((p) => (!status || p.status === status) && (!cloud || providerOf(p.resource) === cloud)),
+    [all, status, cloud],
+  );
+  // The cloud filter is offered once policies of both clouds exist.
+  const clouds = useMemo(() => new Set(all.map((p) => providerOf(p.resource))), [all]);
 
   const [lifecycle, setLifecycle] = useState<{ policy: AccessPolicy; action: LifecycleAction } | null>(null);
   const [deleting, setDeleting] = useState<AccessPolicy | null>(null);
@@ -94,8 +102,8 @@ export default function PoliciesListPage() {
         cellClassName: "py-3.5",
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-3">
-            {/* Policies of every provider share this list; the mark says which one this is. Today: AWS. */}
-            <ProviderGlyph provider="aws" className="shrink-0" />
+            {/* Policies of every cloud share this list; the mark says which one this is. */}
+            <ProviderGlyph provider={providerOf(row.original.resource)} className="shrink-0" />
             <div className="min-w-0">
               <Link
                 to={`/iga/policy/${row.original.id}`}
@@ -121,8 +129,8 @@ export default function PoliciesListPage() {
       },
       {
         id: "roles",
-        header: "Roles",
-        label: "Roles",
+        header: "Who",
+        label: "Who",
         priority: 2,
         approxWidth: 230,
         cell: ({ row }) => {
@@ -219,12 +227,12 @@ export default function PoliciesListPage() {
     [enforce.offered, navigate],
   );
 
-  const filtered = !!(q || effect || status || resourceId || identityId);
+  const filtered = !!(q || effect || status || cloud || resourceId || identityId);
   const emptyState = !filtered ? (
     <div className="mx-auto max-w-md space-y-3 py-6 text-center">
       <p className="text-sm font-semibold text-(--color-text)">No policies yet</p>
       <p className="text-[13px] text-(--color-text-muted)">
-        A policy blocks or allows an agent&rsquo;s role on a storage bucket for as long as you say. Create one here, or open a bucket or role in Discovery and add one from there.
+        A policy blocks or allows an agent&rsquo;s access to a resource, such as an S3 bucket or an Azure storage account, for as long as you say. Create one here, or open a resource or identity in Discovery and add one from there.
       </p>
       {enforce.offered ? (
         <Button asChild className="text-white">
@@ -250,8 +258,9 @@ export default function PoliciesListPage() {
   const loadFailed = !!failure && !list.data;
 
   const applied = [
-    resourceId ? { key: "resource", label: `Bucket ${resourceName || resourceId}`, onRemove: () => setParams(dropKeys(params, ["resource_id", "resource_name"]), { replace: true }) } : null,
-    identityId ? { key: "identity", label: `Role ${identityName || identityId}`, onRemove: () => setParams(dropKeys(params, ["identity_account_id", "identity_name"]), { replace: true }) } : null,
+    resourceId ? { key: "resource", label: `Resource ${resourceName || resourceId}`, onRemove: () => setParams(dropKeys(params, ["resource_id", "resource_name"]), { replace: true }) } : null,
+    identityId ? { key: "identity", label: `Identity ${identityName || identityId}`, onRemove: () => setParams(dropKeys(params, ["identity_account_id", "identity_name"]), { replace: true }) } : null,
+    cloud ? { key: "cloud", label: `${CLOUD[cloud].label} only`, onRemove: () => setParam("cloud", null) } : null,
     effect ? { key: "effect", label: effect === "block" ? "Block only" : "Allow only", onRemove: () => setParam("effect", null) } : null,
   ].filter((f): f is NonNullable<typeof f> => f !== null);
 
@@ -284,6 +293,28 @@ export default function PoliciesListPage() {
         activeFilter={status}
         onFilterChange={(k) => setParam("status", k || null)}
         trailing={
+          <div className="flex flex-wrap items-center gap-3">
+          {clouds.size > 1 || cloud ? (
+            <div role="radiogroup" aria-label="Cloud" className="flex items-center gap-1.5">
+              {(["", "aws", "azure"] as const).map((c) => (
+                <button
+                  key={c || "any"}
+                  type="button"
+                  role="radio"
+                  aria-checked={cloud === c}
+                  onClick={() => setParam("cloud", c || null)}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
+                    cloud === c
+                      ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"
+                      : "border-(--color-border-strong) bg-(--color-surface-raised) text-(--color-text-secondary) hover:bg-(--color-surface-subtle) hover:text-(--color-text)"
+                  }`}
+                >
+                  {c ? <span aria-hidden="true"><ProviderGlyph provider={c} /></span> : null}
+                  {c === "" ? "Any cloud" : CLOUD[c].label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div role="radiogroup" aria-label="Effect" className="flex items-center gap-1.5">
             {(["", "block", "allow"] as const).map((e) => (
               <button
@@ -301,6 +332,7 @@ export default function PoliciesListPage() {
                 {e === "" ? "Any effect" : e === "block" ? "Block" : "Allow"}
               </button>
             ))}
+          </div>
           </div>
         }
         below={applied.length ? <AppliedFilters filters={applied} onClearAll={() => setParams({}, { replace: true })} /> : undefined}

@@ -1,4 +1,4 @@
-/** Small pieces every access-policy screen shares: chips, the AWS document, and the readiness banner. */
+/** Small pieces every access-policy screen shares: chips, the change each cloud gets, and the readiness banner. */
 
 import { Copy, Info } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -49,6 +49,67 @@ export function AwsDocument({ title, document, className }: { title?: string; do
   );
 }
 
+/** A string list from a document field, [] when absent. */
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/**
+ * What AuthSec changes in Azure for one identity, in words, with the JSON
+ * behind it one click away. The server's document is either
+ * `remove_role_assignments_granting {scope, actions, data_actions}` (a block)
+ * or `create_role_assignment {scope, role, role_definition_id}` (an allow).
+ */
+export function AzureChange({ title, document, className }: { title?: string; document: Record<string, unknown>; className?: string }) {
+  const remove = document.remove_role_assignments_granting as Record<string, unknown> | undefined;
+  const create = document.create_role_assignment as Record<string, unknown> | undefined;
+  const scope = String((remove ?? create)?.scope ?? "");
+  const where = scope ? scope.slice(scope.lastIndexOf("/") + 1) : "the resource";
+  const grants = remove ? [...strings(remove.data_actions), ...strings(remove.actions)] : [];
+  return (
+    <figure className={cn("min-w-0 overflow-hidden rounded-md border border-(--color-border-subtle)", className)}>
+      <figcaption className="flex items-center justify-between gap-2 border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-3 py-1.5">
+        <span className="truncate text-xs text-(--color-text-muted)">{title ?? "Azure role assignments"}</span>
+        <button
+          type="button"
+          aria-label="Copy the change as JSON"
+          className="inline-flex items-center gap-1 text-xs text-(--color-text-muted) hover:text-(--color-text)"
+          onClick={() => void copyToClipboard(JSON.stringify(document, null, 2), "Change")}
+        >
+          <Copy aria-hidden="true" className="size-3.5" />
+          Copy
+        </button>
+      </figcaption>
+      <div className="space-y-2 bg-(--color-surface-raised) px-3 py-2 text-[13px] text-(--color-text)">
+        {remove ? (
+          <>
+            <p>
+              Removes this identity&rsquo;s role assignments on <span className="font-medium">{where}</span> (or inside it) whose role grants any of these, and puts them back when the policy ends:
+            </p>
+            <ul className="space-y-0.5 font-mono text-xs text-(--color-text-secondary)">
+              {grants.map((a) => (
+                <li key={a} className="break-all">
+                  {a}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : create ? (
+          <p>
+            Assigns <span className="font-medium">{String(create.role ?? "a built-in role")}</span> on <span className="font-medium">{where}</span>. Azure assignments do not expire on their own: AuthSec removes it when the policy ends.
+          </p>
+        ) : (
+          <pre className="max-h-80 overflow-auto font-mono text-xs">{JSON.stringify(document, null, 2)}</pre>
+        )}
+        {scope ? <p className="break-all font-mono text-xs text-(--color-text-muted)">{scope}</p> : null}
+      </div>
+    </figure>
+  );
+}
+
+/** The change one identity gets, in its cloud's form: an IAM policy document, or Azure role assignments. */
+export function PolicyChange({ title, document, className }: { title?: string; document: Record<string, unknown>; className?: string }) {
+  return document.provider === "azure" ? <AzureChange title={title} document={document} className={className} /> : <AwsDocument title={title} document={document} className={className} />;
+}
+
 /** A quiet note above a list: one line of what, one of why, and the way forward on the right. */
 function SetupNotice({ title, body, actionLabel, actionHref }: { title: string; body: string; actionLabel?: string; actionHref?: string }) {
   return (
@@ -71,9 +132,9 @@ function SetupNotice({ title, body, actionLabel, actionHref }: { title: string; 
 }
 
 /**
- * Whether AuthSec can change IAM yet. Says so once, with the way to fix it,
- * and nothing when every connected account is ready. A failed check is said
- * as a failed check, never as "not ready".
+ * Whether AuthSec can change the clouds it is connected to. Says so once, with
+ * the way to fix it, and nothing when every AWS account and Azure subscription
+ * is ready. A failed check is said as a failed check, never as "not ready".
  */
 export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: string }) {
   const q = useGetAccessReadinessQuery({ ws });
@@ -84,8 +145,8 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
     return (
       <DecisionBanner
         tone="warning"
-        title="Could not check whether AuthSec can change AWS"
-        body="Applying may still be refused. Retry, or check AWS access."
+        title="Could not check whether AuthSec can make changes in your clouds"
+        body="Applying may still be refused. Retry, or check Connections."
         actionLabel="Retry"
         onAction={() => void q.refetch()}
         secondaryLabel="Open Connections"
@@ -97,11 +158,30 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
   if (!r) return null;
   const accounts = accountId ? r.accounts.filter((a) => a.account_id === accountId) : r.accounts;
   const notReady = accounts.filter((a) => !a.ready);
-  if (r.available && notReady.length === 0 && accounts.length > 0) return null;
+  const subs = accountId ? [] : r.azure_subscriptions ?? [];
+  const subsNotReady = subs.filter((s) => !s.ready);
+  if (r.available && accounts.length === 0 && subs.length > 0) {
+    // An Azure-only workspace: say only what Azure needs.
+    return subsNotReady.length ? (
+      <SetupNotice
+        title="AuthSec cannot change role assignments in every subscription yet"
+        body={`${subsNotReady.map((s) => s.name || s.subscription_id).join(", ")}: give AuthSec's Azure app the Role Based Access Control Administrator role on ${subsNotReady.length === 1 ? "that subscription" : "those subscriptions"} so it can block and allow access there.`}
+      />
+    ) : null;
+  }
+  if (r.available && notReady.length === 0 && accounts.length > 0 && subsNotReady.length === 0) return null;
+  if (r.available && notReady.length === 0 && accounts.length > 0) {
+    return (
+      <SetupNotice
+        title="AuthSec cannot change role assignments in every Azure subscription yet"
+        body={`${subsNotReady.map((s) => s.name || s.subscription_id).join(", ")}: give AuthSec's Azure app the Role Based Access Control Administrator role on ${subsNotReady.length === 1 ? "that subscription" : "those subscriptions"} so it can block and allow access there.`}
+      />
+    );
+  }
   const body = !r.available
     ? r.reason || "Applying policies is turned off on this server."
     : accounts.length === 0
-      ? "No AWS account is connected yet. Connect one in Connections first."
+      ? "No AWS account or Azure subscription is connected yet. Connect one in Connections first."
       : `${notReady.length === 1 ? `Account ${notReady[0].account_id} needs` : `Accounts ${notReady.map((a) => a.account_id).join(", ")} need`} AWS access set up before AuthSec can apply policies there. Until then AuthSec can read ${notReady.length === 1 ? "it" : "them"} but not change ${notReady.length === 1 ? "it" : "them"}. ${[...new Set(notReady.map((a) => readinessWords(a.reason)))].map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(". ")}.`;
   return (
     <SetupNotice

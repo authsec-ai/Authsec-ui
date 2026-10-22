@@ -2,15 +2,21 @@
  * What the access-policy screens say about a policy, and the create/edit form's
  * draft. Pure.
  *
- * A policy blocks or allows IAM roles on one S3 bucket (or a folder of it) for
- * a time window. AuthSec attaches its own IAM policy to each role and AWS
- * enforces it; the window is written into the IAM policy, so AWS honours it
- * even when AuthSec is down.
+ * A policy blocks or allows identities on one resource for a time window
+ * (SPEC-access-policies.md). AWS: IAM roles on an S3 bucket or a folder of it;
+ * AuthSec attaches its own IAM policy to each role and the window is written
+ * into it, so AWS honours it even when AuthSec is down. Azure: service
+ * principals, managed identities and agent identities on one resource; AuthSec
+ * removes (block) or creates (allow) role assignments and undoes it at the end.
  */
 
 import { differenceInMinutes, format, formatDistanceToNowStrict, isValid, parseISO } from "date-fns";
 
 import type { ConsoleTone } from "@/components/console/status";
+import { refId, type GraphNeighbourhood } from "@/app/api/igaGraphApi";
+import type { InventoryRow } from "@/app/api/igaInventoryApi";
+import { armTypeLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+
 import { humanize } from "../shared";
 import type {
   AccessEffect,
@@ -19,37 +25,70 @@ import type {
   AccessPolicyBody,
   AccessPolicyDetail,
   AccessPolicyStatus,
+  AccessProvider,
 } from "@/app/api/igaAccessPoliciesApi";
+
+/* -------------------------------- providers -------------------------------- */
+
+export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlural: string }> = {
+  aws: { label: "AWS", who: "role", whoPlural: "roles" },
+  azure: { label: "Azure", who: "identity", whoPlural: "identities" },
+};
+
+/** A policy's cloud: the server's word when it sends one, else read off the resource (AWS before Azure existed). */
+export function providerOf(r: { provider?: AccessProvider; arn?: string; bucket?: string }): AccessProvider {
+  if (r.provider) return r.provider;
+  return !r.bucket && r.arn?.toLowerCase().startsWith("/subscriptions/") ? "azure" : "aws";
+}
+
+/** "role" / "roles", "identity" / "identities". */
+export function whoWord(provider: AccessProvider, n = 1): string {
+  return n === 1 ? CLOUD[provider].who : CLOUD[provider].whoPlural;
+}
+
+/** The Azure identity kinds a policy can name (the backend's azureEligibleKinds). */
+export const AZURE_TARGET_KINDS = new Set(["entra_service_principal", "entra_managed_identity", "entra_agent_identity"]);
+
+/** Whether an ARM id names a storage account (or something in one): its access levels are blob data. */
+export function isAzureStorage(arn: string | undefined): boolean {
+  return !!arn && arn.toLowerCase().includes("/providers/microsoft.storage/storageaccounts/");
+}
 
 /* --------------------------------- states --------------------------------- */
 
+/** Statuses in words that hold for either cloud; the detail page names the cloud. */
 export const STATUS: Record<AccessPolicyStatus, { label: string; tone: ConsoleTone; hint: string }> = {
-  applying: { label: "Applying", tone: "info", hint: "AuthSec is putting it into AWS and reading it back." },
-  scheduled: { label: "Scheduled", tone: "info", hint: "In AWS already; it takes effect when its window starts." },
-  active: { label: "Active", tone: "success", hint: "In AWS and inside its window." },
-  drift: { label: "Changed in AWS", tone: "warning", hint: "Someone changed or removed it in AWS. AuthSec is putting it back." },
-  failed: { label: "Failed", tone: "danger", hint: "AuthSec could not apply it to every role. Open it to see why." },
-  paused: { label: "Paused", tone: "warning", hint: "Taken out of AWS by hand. Resume puts it back." },
-  ended: { label: "Ended", tone: "info", hint: "No longer in AWS. The record is kept." },
+  applying: { label: "Applying", tone: "info", hint: "AuthSec is applying it in the cloud and reading it back." },
+  scheduled: { label: "Scheduled", tone: "info", hint: "It takes effect when its window starts." },
+  active: { label: "Active", tone: "success", hint: "In place and inside its window." },
+  drift: { label: "Changed outside AuthSec", tone: "warning", hint: "Someone changed it in the cloud. AuthSec is putting it back." },
+  failed: { label: "Failed", tone: "danger", hint: "AuthSec could not apply it to every identity. Open it to see why." },
+  paused: { label: "Paused", tone: "warning", hint: "Lifted by hand. Resume puts it back." },
+  ended: { label: "Ended", tone: "info", hint: "No longer in force. The record is kept." },
 };
 
 export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ended"];
 
-/** A role's copy in AWS, by the backend's deployment state. */
-export function deploymentView(state: string): { label: string; tone: ConsoleTone } {
+/**
+ * One identity's part of a policy, by the backend's deployment state. An Azure
+ * block takes the identity's role assignments away while it is in force and
+ * gives them back at the end, so its words run the other way round.
+ */
+export function deploymentView(state: string, provider: AccessProvider = "aws", effect: AccessEffect = "block"): { label: string; tone: ConsoleTone } {
+  const azureBlock = provider === "azure" && effect === "block";
   switch (state) {
     case "approved":
     case "deploying":
       return { label: "Applying", tone: "info" };
     case "outcome_unknown":
-      return { label: "Checking AWS", tone: "warning" };
+      return { label: `Checking ${CLOUD[provider].label}`, tone: "warning" };
     case "active":
-      return { label: "In AWS", tone: "success" };
+      return { label: azureBlock ? "Access removed" : provider === "azure" ? "Assigned" : "In AWS", tone: "success" };
     case "expiring":
-      return { label: "Removing", tone: "info" };
+      return { label: azureBlock ? "Restoring" : "Removing", tone: "info" };
     case "expired":
     case "revoked":
-      return { label: "Removed", tone: "neutral" };
+      return { label: azureBlock ? "Restored" : "Removed", tone: "neutral" };
     case "failed":
       return { label: "Failed", tone: "danger" };
     default:
@@ -76,17 +115,16 @@ export const END_REASON: Record<string, string> = {
 const EVENT_LABEL: Record<string, string> = {
   "access_policy.created": "Created",
   "access_policy.applied": "Applied",
-  "access_policy.confirmed": "In place on role (verified)",
+  "access_policy.confirmed": "In place (verified)",
   "access_policy.edited": "Edited",
   "access_policy.paused": "Paused",
   "access_policy.resumed": "Resumed",
   "access_policy.ended": "Ended",
-  "access_policy.expired": "Reached its end time; removed from role",
-  "access_policy.removed": "Removed from role",
+  "access_policy.expired": "Reached its end time",
+  "access_policy.removed": "Taken off",
   "access_policy.drifted": "Changed outside AuthSec",
   "access_policy.reapplied": "Put back by AuthSec",
-  "access_policy.failed": "Failed on role",
-  "access_policy.outcome_unknown": "Waiting for AWS to confirm",
+  "access_policy.failed": "Failed",
 };
 
 /**
@@ -94,8 +132,17 @@ const EVENT_LABEL: Record<string, string> = {
  * carries one, is appended so "Applied" reads "Applied · v2". Unknown names are
  * humanised (`access_policy.something_new` → "Something new").
  */
-export function eventLabel(e: { event: string; payload?: Record<string, unknown> }): string {
-  const base = EVENT_LABEL[e.event] ?? humanize(e.event.replace(/^access_policy\./, "").replace(/_/g, " "));
+export function eventLabel(
+  e: { event: string; payload?: Record<string, unknown> },
+  ctx: { provider: AccessProvider; effect: AccessEffect } = { provider: "aws", effect: "block" },
+): string {
+  // An Azure block ends by giving the identity its role assignments back.
+  const base =
+    e.event === "access_policy.removed" && ctx.provider === "azure" && ctx.effect === "block"
+      ? "Access restored"
+      : e.event === "access_policy.outcome_unknown"
+        ? `Waiting for ${CLOUD[ctx.provider].label} to confirm`
+        : EVENT_LABEL[e.event] ?? humanize(e.event.replace(/^access_policy\./, "").replace(/_/g, " "));
   const no = e.payload?.version_no;
   const reason = e.payload?.reason;
   const parts = [base];
@@ -120,6 +167,13 @@ export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; blurb: s
   { key: "delete", label: "Delete", blurb: "Remove objects and their versions.", verb: "deleting", base: "delete" },
 ];
 
+/** What each level covers on this resource: S3 objects, Azure blobs, or another Azure resource's management. */
+export function accessBlurbs(provider: AccessProvider, arn?: string): Record<Exclude<AccessLevel, "all">, string> {
+  if (provider === "aws") return { read: ACCESS[0].blurb, write: ACCESS[1].blurb, delete: ACCESS[2].blurb };
+  if (isAzureStorage(arn)) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
+  return { read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." };
+}
+
 /** "Read, Write" or "All access". */
 export function accessText(levels: readonly AccessLevel[]): string {
   if (levels.includes("all")) return "All access";
@@ -136,9 +190,14 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
   return v.length <= 1 ? v.join("") : `${v.slice(0, -1).join(", ")} and ${v[v.length - 1]}`;
 }
 
-/** `invoices/` in `finance-reports` → `finance-reports/invoices/`; the whole bucket → `finance-reports`. */
-export function resourceText(r: { bucket: string; prefix: string }): string {
-  return r.prefix ? `${r.bucket}/${r.prefix}` : r.bucket;
+/**
+ * What a policy is on, in words: `finance-reports/invoices/` (a folder),
+ * `finance-reports` (a whole bucket), or an Azure resource's name.
+ */
+export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
+  if (providerOf(r) === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
+  const bucket = r.bucket || r.name || "";
+  return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
 
 /**
@@ -219,11 +278,11 @@ export function policySentence(p: {
   effect: AccessEffect;
   access: readonly AccessLevel[];
   roles: readonly { name: string }[];
-  resource: { bucket: string; prefix: string };
+  resource: Parameters<typeof resourceText>[0];
   starts_at: string | null;
   ends_at: string | null;
 }): string {
-  const who = p.roles.map((r) => r.name).join(" and ") || "No role";
+  const who = p.roles.map((r) => r.name).join(" and ") || "No one";
   const tail = p.ends_at ? ` until ${stamp(p.ends_at)}` : " until the policy is ended";
   const from = p.starts_at ? `, from ${stamp(p.starts_at)}` : "";
   return `${who} ${p.roles.length === 1 ? "is" : "are"} ${EFFECT[p.effect].verb} ${accessVerb(p.access, p.effect === "allow")} on ${resourceText(p.resource)}${from}${tail}.`;
@@ -272,10 +331,22 @@ export interface DraftRole {
 }
 
 export interface DraftResource {
+  provider: AccessProvider;
   resource_id: string;
+  /** The bucket, or the Azure resource's name. */
+  name: string;
+  /** AWS only: the bucket ("" on Azure). */
   bucket: string;
+  /** The bucket's ARN, or the Azure resource's ARM id. */
   arn: string;
+  /** The AWS account, or the Azure subscription id. */
   account_id: string;
+  /** Azure: its Entra tenant (identities must be in the same one). */
+  tenant?: string;
+  /** Azure: the resource type in words, its subscription's name and its resource group, for the chosen row. */
+  kind?: string;
+  subscription?: string;
+  resource_group?: string;
   /**
    * Every Discovery record naming this bucket or a path in it, the bucket's own
    * record first when it has one. Most buckets are known only through paths
@@ -298,6 +369,7 @@ export function pathInBucket(text: string): string {
 
 /** The form's state: what the person chose, before it becomes a request. */
 export interface PolicyDraft {
+  provider: AccessProvider;
   effect: AccessEffect;
   resource: DraftResource | null;
   prefix: string;
@@ -315,8 +387,9 @@ export const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
 
 const minute = (d: Date) => new Date(Math.floor(d.getTime() / 60_000) * 60_000);
 
-export function emptyDraft(initial?: { effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
+export function emptyDraft(initial?: { provider?: AccessProvider; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
   return {
+    provider: initial?.provider ?? initial?.resource?.provider ?? "aws",
     effect: initial?.effect ?? "block",
     resource: initial?.resource ?? null,
     prefix: initial?.prefix ?? "",
@@ -333,9 +406,18 @@ export function emptyDraft(initial?: { effect?: AccessEffect; resource?: DraftRe
 /** An edit starts from the policy as it is now. */
 export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   const fallbackEnd = toLocalInput(new Date(minute(new Date()).getTime() + 24 * 3_600_000));
+  const provider = providerOf(p.resource);
   return {
+    provider,
     effect: p.effect,
-    resource: { resource_id: p.resource.resource_id, bucket: p.resource.bucket, arn: p.resource.arn, account_id: p.resource.account_id },
+    resource: {
+      provider,
+      resource_id: p.resource.resource_id,
+      name: resourceText({ ...p.resource, prefix: "" }),
+      bucket: p.resource.bucket,
+      arn: p.resource.arn,
+      account_id: p.resource.account_id,
+    },
     prefix: p.resource.prefix,
     roles: p.roles.map((r) => ({ identity_account_id: r.identity_account_id, name: r.name })),
     access: p.access,
@@ -371,7 +453,8 @@ export function windowOf(d: PolicyDraft, now = new Date()): { starts_at: string 
 export function bodyOf(d: PolicyDraft): AccessPolicyBody {
   return {
     effect: d.effect,
-    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.prefix.trim() },
+    // A folder is S3's alone; an Azure policy is on the whole resource.
+    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.provider === "aws" ? d.prefix.trim() : "" },
     roles: d.roles.map((r) => ({ identity_account_id: r.identity_account_id })),
     access: d.access,
     ...windowOf(d),
@@ -383,16 +466,16 @@ export function bodyOf(d: PolicyDraft): AccessPolicyBody {
 /** A name to start from, until the person types their own. */
 export function suggestedName(d: PolicyDraft): string {
   const who = d.roles.length === 0 ? "" : d.roles.length === 1 ? d.roles[0].name : `${d.roles[0].name} and ${d.roles.length - 1} more`;
-  const where = d.resource ? resourceText({ bucket: d.resource.bucket, prefix: d.prefix.trim() }) : "";
+  const where = d.resource ? resourceText({ ...d.resource, prefix: d.provider === "aws" ? d.prefix.trim() : "" }) : "";
   if (!who || !where) return "";
   return `${EFFECT[d.effect].label} ${who} on ${where}`;
 }
 
 /** What is still missing before Apply, in the order the form asks for it; "" when nothing is. */
 export function draftProblem(d: PolicyDraft, now = new Date()): { field: string; message: string } | null {
-  if (!d.resource) return { field: "resource", message: "Choose a bucket." };
-  if (d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
-  if (d.roles.length === 0) return { field: "roles", message: "Choose at least one role." };
+  if (!d.resource) return { field: "resource", message: d.provider === "aws" ? "Choose a bucket." : "Choose a resource." };
+  if (d.provider === "aws" && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
+  if (d.roles.length === 0) return { field: "roles", message: `Choose at least one ${whoWord(d.provider)}.` };
   if (d.access.length === 0) return { field: "access", message: `Choose what to ${d.effect === "block" ? "block." : "allow."}` };
   const w = windowOf(d, now);
   if (d.preset === "custom") {
@@ -409,4 +492,56 @@ export function draftProblem(d: PolicyDraft, now = new Date()): { field: string;
   }
   if (!d.reason.trim()) return { field: "reason", message: "Say why. It is kept in the history." };
   return null;
+}
+
+/* ---------------------------------- azure ---------------------------------- */
+
+/** The subscription id and resource group an ARM id names. */
+export function armParts(arn: string): { subscription: string; resourceGroup: string } {
+  const m = /^\/subscriptions\/([^/]+)(?:\/resourcegroups\/([^/]+))?/i.exec(arn);
+  return { subscription: m?.[1]?.toLowerCase() ?? "", resourceGroup: m?.[2] ?? "" };
+}
+
+/** The draft resource for one Azure inventory row. */
+export function azureResourceOf(row: InventoryRow): DraftResource {
+  const { subscription, resourceGroup } = armParts(row.native_id);
+  return {
+    provider: "azure",
+    resource_id: refId(row.ref),
+    name: row.name,
+    bucket: "",
+    arn: row.native_id,
+    account_id: subscription,
+    tenant: row.scope?.id,
+    kind: armTypeLabel(row.kind),
+    subscription: row.sub_scope ?? undefined,
+    resource_group: resourceGroup || undefined,
+  };
+}
+
+/** One identity holding a role assignment on a resource, with the roles. */
+interface Holder {
+  id: string;
+  name: string;
+  kind: string;
+  roles: string[];
+}
+
+/** Who holds a role assignment on the root resource: grant edges into the assignments whose target is the root. */
+export function holdersOf(g: GraphNeighbourhood | undefined): Holder[] {
+  if (!g) return [];
+  const node = new Map(g.nodes.map((n) => [n.ref, n]));
+  const onRoot = new Set(g.edges.filter((e) => e.kind === "target" && e.to === g.root).map((e) => e.from));
+  const by = new Map<string, Holder>();
+  for (const e of g.edges) {
+    if (e.kind !== "grant" || !onRoot.has(e.to)) continue;
+    const who = node.get(e.from);
+    if (!who) continue;
+    const id = refId(who.ref);
+    const h = by.get(id) ?? { id, name: who.label, kind: String(who.kind), roles: [] };
+    const role = node.get(e.to)?.label;
+    if (role && !h.roles.includes(role)) h.roles.push(role);
+    by.set(id, h);
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

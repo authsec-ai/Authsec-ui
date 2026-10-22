@@ -1,9 +1,12 @@
 /**
- * One access policy (`/iga/policy/:id`): what it does, where it stands in AWS
- * for each role, the IAM documents AWS holds, and its history.
+ * One access policy (`/iga/policy/:id`): what it does, where it stands in its
+ * cloud for each identity, the change the cloud holds (an IAM policy document
+ * on AWS, role assignments on Azure), and its history (SPEC-access-policies.md
+ * §2.3).
  *
- * Overview · In AWS · History. The page is read again while AuthSec is still
- * applying or repairing it, so the state moves without a reload.
+ * Overview · In AWS / In Azure · History. The page is read again while AuthSec
+ * is still applying, repairing or undoing it, so the state moves without a
+ * reload.
  */
 
 import { useState } from "react";
@@ -15,6 +18,7 @@ import {
   type AccessPolicyDetail,
 } from "@/app/api/igaAccessPoliciesApi";
 import { IgaBadge } from "../../shared/components/IgaBadge";
+import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { Button } from "@/components/ui/button";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
@@ -25,28 +29,28 @@ import { PolicyLoadFailure, PolicyShell, classifyPolicyError, relTime, shortHash
 import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
 import {
+  CLOUD,
   END_REASON,
   STATUS,
   accessText,
   deploymentView,
   eventLabel,
   policySentence,
+  providerOf,
   resourceText,
+  whoWord,
   whenText,
   windowLength,
   windowProgress,
   windowText,
 } from "./model";
-import { AwsDocument, EffectChip, PolicyStatusChip } from "./parts";
+import { EffectChip, PolicyChange, PolicyStatusChip } from "./parts";
 
-type Tab = "overview" | "aws" | "history";
-const TABS: { key: Tab; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "aws", label: "In AWS" },
-  { key: "history", label: "History" },
-];
+type Tab = "overview" | "cloud" | "history";
 
 const MOVING = new Set(["applying", "drift"]);
+/** Deployment states in which the cloud still holds the policy's change, or AuthSec is putting it in or taking it out. */
+const HELD = ["approved", "deploying", "active", "outcome_unknown", "expiring"];
 
 export default function PolicyDetailPage() {
   const ws = getWorkspaceId() ?? "";
@@ -60,7 +64,9 @@ export default function PolicyDetailPage() {
   const [poll, setPoll] = useState(60_000);
   const q = useGetAccessPolicyQuery({ ws, id }, { pollingInterval: poll, skipPollingIfUnfocused: true });
   const p = q.data?.data;
-  const nextPoll = p && MOVING.has(p.status) ? 10_000 : 60_000;
+  // Ended, but AuthSec is still undoing it (an Azure block restoring access): it reads "Ending" until done.
+  const ending = !!p && p.status === "ended" && p.deployments.some((d) => d.state === "expiring");
+  const nextPoll = p && (MOVING.has(p.status) || ending) ? 10_000 : 60_000;
   if (nextPoll !== poll) setPoll(nextPoll);
   const failure = classifyPolicyError(q.error);
 
@@ -78,9 +84,16 @@ export default function PolicyDetailPage() {
     );
   }
 
+  const provider = providerOf(p.resource);
+  const cloud = CLOUD[provider].label;
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "cloud", label: `In ${cloud}` },
+    { key: "history", label: "History" },
+  ];
   const live = p.status !== "ended";
-  // AWS still holds the policy while any deployment is on its way in, in, or on its way out.
-  const stillInAws = p.deployments.some((d) => ["approved", "deploying", "active", "outcome_unknown", "expiring"].includes(d.state));
+  // The cloud still holds the policy's change while any deployment is on its way in, in, or on its way out.
+  const stillHeld = p.deployments.some((d) => HELD.includes(d.state));
   // Ended and paused policies say where AuthSec is, in one quiet line by the status chip.
   const quietNote = (p.status === "ended" || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
   const actions =
@@ -101,8 +114,8 @@ export default function PolicyDetailPage() {
         variant="outline"
         className="text-(--color-danger-text)"
         onClick={() => setDeleteOpen(true)}
-        disabled={stillInAws}
-        title={stillInAws ? "Available once AuthSec has removed the policy from AWS" : undefined}
+        disabled={stillHeld}
+        title={stillHeld ? `Available once AuthSec has finished undoing the policy in ${cloud}` : undefined}
       >
         Delete
       </Button>
@@ -112,9 +125,17 @@ export default function PolicyDetailPage() {
     <PolicyShell title={p.name} description={policySentence(p)} actions={actions} requires="access_policies">
       <div className="flex flex-wrap items-center gap-2">
         <EffectChip effect={p.effect} />
-        <PolicyStatusChip status={p.status} />
-        <span className="text-xs text-(--color-text-muted)">{whenText(p)}</span>
-        {quietNote ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
+        {ending ? (
+          <IgaBadge tone="info" title={`AuthSec is undoing it in ${cloud}.`}>
+            Ending
+          </IgaBadge>
+        ) : (
+          <PolicyStatusChip status={p.status} />
+        )}
+        <span className="text-xs text-(--color-text-muted)">
+          {ending ? (provider === "azure" && p.effect === "block" ? "Restoring access in Azure…" : `Removing it from ${cloud}…`) : whenText(p)}
+        </span>
+        {quietNote && !ending ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
         <Link to="/iga/policy" className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>
@@ -133,7 +154,7 @@ export default function PolicyDetailPage() {
       ) : null}
 
       <div role="tablist" aria-label="Policy" className="flex gap-1 border-b border-(--color-border-subtle)">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -150,7 +171,7 @@ export default function PolicyDetailPage() {
         ))}
       </div>
 
-      {tab === "overview" ? <Overview p={p} /> : tab === "aws" ? <InAws p={p} /> : <History ws={ws} p={p} />}
+      {tab === "overview" ? <Overview p={p} /> : tab === "cloud" ? <InCloud p={p} /> : <History ws={ws} p={p} />}
 
       <DeletePolicyDialog policy={deleteOpen ? p : null} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate("/iga/policy")} />
       <LifecycleDialog policy={lifecycle ? p : null} action={lifecycle} onClose={() => setLifecycle(null)} />
@@ -163,15 +184,32 @@ export default function PolicyDetailPage() {
 function Overview({ p }: { p: AccessPolicyDetail }) {
   const progress = windowProgress(p);
   const length = windowLength(p);
+  const provider = providerOf(p.resource);
+  const azure = provider === "azure";
+  const Who = whoWord(provider, 2);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel title="Rule">
         <Facts>
-          <Fact label="Effect">{p.effect === "block" ? "Block: deny these roles, whatever else allows them" : "Allow for a time: grant access the roles do not have"}</Fact>
+          <Fact label="Effect">
+            {p.effect === "block"
+              ? azure
+                ? "Block: take away these identities' role assignments on the resource that give the access, until the policy ends"
+                : "Block: deny these roles, whatever else allows them"
+              : `Allow for a time: grant access the ${Who} do not have`}
+          </Fact>
           <Fact label="Resource">
-            <span className="font-mono text-xs">{resourceText(p.resource)}</span>
+            {azure ? (
+              <Link to={`/iga/azure/resource/${encodeURIComponent(p.resource.resource_id)}`} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
+                {resourceText(p.resource)}
+              </Link>
+            ) : (
+              <span className="font-mono text-xs">{resourceText(p.resource)}</span>
+            )}
             <Meta>{p.resource.arn}</Meta>
-            <Meta>Account {p.resource.account_id}</Meta>
+            <Meta>
+              {azure ? "Subscription" : "Account"} {p.resource.account_id}
+            </Meta>
           </Fact>
           <Fact label="Access">{accessText(p.access)}</Fact>
           <Fact label="Window">
@@ -193,13 +231,25 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
         </Facts>
       </Panel>
 
-      <Panel title="Roles" count={p.roles.length} description="The agents and jobs below reach AWS through these roles, so the policy applies to them.">
+      <Panel
+        title={azure ? "Identities" : "Roles"}
+        count={p.roles.length}
+        description={`The agents and jobs below reach ${CLOUD[provider].label} through these ${Who}, so the policy applies to them.`}
+      >
         <ul className="divide-y divide-(--color-border-subtle)">
           {p.roles.map((r) => (
             <li key={r.identity_account_id} className="py-2 first:pt-0 last:pb-0">
-              <Link to={`/iga/identities/${r.identity_account_id}`} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
-                {r.name}
-              </Link>
+              {azure ? (
+                // The Azure identity page is keyed by the Entra object id, which the policy does not carry.
+                <span className="text-[13px] font-medium text-(--color-text)">
+                  {r.name}
+                  {r.kind ? <span className="ml-1.5 text-xs font-normal text-(--color-text-muted)">{identityKindLabel(r.kind)}</span> : null}
+                </span>
+              ) : (
+                <Link to={`/iga/identities/${r.identity_account_id}`} className="text-[13px] font-medium text-(--color-primary-text) hover:underline">
+                  {r.name}
+                </Link>
+              )}
               <Meta>{r.used_by.length ? `Used by ${r.used_by.map((w) => w.name).join(", ")}` : "No workload found running as it"}</Meta>
             </li>
           ))}
@@ -209,9 +259,11 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
   );
 }
 
-/* ---------------------------------- in AWS --------------------------------- */
+/* ------------------------------- in the cloud ------------------------------ */
 
-function InAws({ p }: { p: AccessPolicyDetail }) {
+function InCloud({ p }: { p: AccessPolicyDetail }) {
+  const provider = providerOf(p.resource);
+  const cloud = CLOUD[provider].label;
   const [showEarlier, setShowEarlier] = useState(false);
   // deployments[] carries rows from older versions and past runs, newest first.
   // The main view is this version's rows; earlier ones go behind a toggle.
@@ -222,17 +274,25 @@ function InAws({ p }: { p: AccessPolicyDetail }) {
   return (
     <div className="space-y-4">
       <Meta>
-        One AuthSec-owned IAM policy per role, under the <span className="font-mono">/authsec/</span> path, attached to the role. AuthSec reads it back after
-        applying and every few minutes after that; if someone changes or removes it in AWS, AuthSec puts it back and records it in History.
+        {provider === "aws" ? (
+          <>
+            One AuthSec-owned IAM policy per role, under the <span className="font-mono">/authsec/</span> path, attached to the role. AuthSec reads it back after
+            applying and every few minutes after that; if someone changes or removes it in AWS, AuthSec puts it back and records it in History.
+          </>
+        ) : p.effect === "block" ? (
+          "For each identity, AuthSec records and then removes its role assignments on the resource that give the access, and puts exactly those back when the policy ends, is paused or is ended by hand. Azure assignments have no expiry of their own, so the end depends on AuthSec."
+        ) : (
+          "For each identity, AuthSec creates one built-in role assignment on the resource and deletes it when the policy ends. Azure assignments have no expiry of their own, so the end depends on AuthSec."
+        )}
       </Meta>
       {p.deployments.length === 0 ? (
-        <p className="text-sm text-(--color-text-muted)">Nothing has been sent to AWS for this policy yet.</p>
+        <p className="text-sm text-(--color-text-muted)">Nothing has been sent to {cloud} for this policy yet.</p>
       ) : (
         <>
           {current.length === 0 ? (
-            <p className="text-sm text-(--color-text-muted)">Nothing is in AWS for the current version yet.</p>
+            <p className="text-sm text-(--color-text-muted)">Nothing is in {cloud} for the current version yet.</p>
           ) : (
-            current.map((d) => <DeploymentCard key={d.id} d={d} doc={docOf(d.identity_account_id)} />)
+            current.map((d) => <DeploymentCard key={d.id} p={p} d={d} doc={docOf(d.identity_account_id)} />)
           )}
 
           {earlier.length > 0 ? (
@@ -245,7 +305,7 @@ function InAws({ p }: { p: AccessPolicyDetail }) {
               >
                 {showEarlier ? "Hide earlier versions" : `Show earlier versions (${earlier.length})`}
               </button>
-              {showEarlier ? earlier.map((d) => <DeploymentCard key={d.id} d={d} doc={docOf(d.identity_account_id)} earlier />) : null}
+              {showEarlier ? earlier.map((d) => <DeploymentCard key={d.id} p={p} d={d} doc={docOf(d.identity_account_id)} earlier />) : null}
             </div>
           ) : null}
         </>
@@ -254,8 +314,21 @@ function InAws({ p }: { p: AccessPolicyDetail }) {
   );
 }
 
-function DeploymentCard({ d, doc, earlier }: { d: AccessPolicyDetail["deployments"][number]; doc: AccessPolicyDetail["documents"][number] | undefined; earlier?: boolean }) {
-  const v = deploymentView(d.state);
+function DeploymentCard({
+  p,
+  d,
+  doc,
+  earlier,
+}: {
+  p: AccessPolicyDetail;
+  d: AccessPolicyDetail["deployments"][number];
+  doc: AccessPolicyDetail["documents"][number] | undefined;
+  earlier?: boolean;
+}) {
+  const provider = providerOf(p.resource);
+  const azure = provider === "azure";
+  const cloud = CLOUD[provider].label;
+  const v = deploymentView(d.state, provider, p.effect);
   return (
     <Panel
       title={earlier ? `${d.role_name} · v${d.version_no}` : d.role_name}
@@ -263,17 +336,23 @@ function DeploymentCard({ d, doc, earlier }: { d: AccessPolicyDetail["deployment
     >
       <div className="space-y-3">
         <Facts>
-          <Fact label="AWS policy" mono>
-            {doc?.policy_name || d.aws_policy_arn || "Not created yet"}
-          </Fact>
+          {azure ? (
+            <Fact label="Scope" mono>
+              {d.target_ref || d.aws_policy_arn || p.resource.arn}
+            </Fact>
+          ) : (
+            <Fact label="AWS policy" mono>
+              {doc?.policy_name || d.aws_policy_arn || "Not created yet"}
+            </Fact>
+          )}
           {d.deployed_at ? <Fact label="Applied"><Timestamp iso={d.deployed_at} /></Fact> : null}
-          {d.verified_at ? <Fact label="Confirmed by AWS"><Timestamp iso={d.verified_at} /></Fact> : null}
+          {d.verified_at ? <Fact label={`Confirmed by ${cloud}`}><Timestamp iso={d.verified_at} /></Fact> : null}
           {d.last_readback_at ? <Fact label="Last checked">{relTime(d.last_readback_at)}</Fact> : null}
           {d.drift || d.last_readback_at ? (
             <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : "Yes"}</Fact>
           ) : null}
-          {!d.deployed_at && !d.error ? <Fact label="Status">Waiting for AWS to accept the policy.</Fact> : null}
-          {d.end_reason ? <Fact label="Removed because">{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
+          {!d.deployed_at && !d.error ? <Fact label="Status">{azure ? "Waiting for Azure to accept the change." : "Waiting for AWS to accept the policy."}</Fact> : null}
+          {d.end_reason ? <Fact label={azure && p.effect === "block" ? "Restored because" : "Removed because"}>{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
           {d.document_hash ? (
             <Fact label="Fingerprint" mono>
               {shortHash(d.document_hash)}
@@ -285,7 +364,7 @@ function DeploymentCard({ d, doc, earlier }: { d: AccessPolicyDetail["deployment
             </Fact>
           ) : null}
         </Facts>
-        {doc ? <AwsDocument title={doc.policy_name || d.aws_policy_arn || d.role_name} document={doc.document} /> : null}
+        {doc ? <PolicyChange title={doc.policy_name || d.aws_policy_arn || d.role_name} document={doc.document} /> : null}
       </div>
     </Panel>
   );
@@ -317,7 +396,7 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
                   {relTime(e.occurred_at)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[13px] text-(--color-text)">{eventLabel(e)}</span>
+                  <span className="block text-[13px] text-(--color-text)">{eventLabel(e, { provider: providerOf(p.resource), effect: p.effect })}</span>
                   <span className="block text-xs text-(--color-text-muted)">{e.actor_kind === "system" ? "AuthSec" : "A member"}</span>
                 </span>
               </li>
@@ -326,7 +405,7 @@ function History({ ws, p }: { ws: string; p: AccessPolicyDetail }) {
         )}
       </Panel>
 
-      <Panel title="Versions" count={p.versions.length} description="A version never changes once applied. Applying a new one replaces it in AWS.">
+      <Panel title="Versions" count={p.versions.length} description={`A version never changes once applied. Applying a new one replaces it in ${CLOUD[providerOf(p.resource)].label}.`}>
         <ul className="divide-y divide-(--color-border-subtle)">
           {p.versions.map((v) => (
             <li key={v.version_no} className="flex items-baseline gap-3 py-2 first:pt-0 last:pb-0">

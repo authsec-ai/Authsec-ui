@@ -1,7 +1,8 @@
 /**
  * Pause, Resume or End now, with the reason the history keeps. Each one changes
- * AWS: pausing and ending take AuthSec's IAM policy off every role, resuming
- * puts the current version back.
+ * the cloud: pausing and ending undo the policy (AWS: AuthSec's IAM policy comes
+ * off every role; Azure: the role assignments a block removed are put back, the
+ * one an allow created is deleted), resuming applies the current version again.
  */
 
 import { useEffect, useState } from "react";
@@ -19,17 +20,29 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 
 import { PolicyActionError, usePolicyAction } from "../shared";
+import { CLOUD, providerOf, whoWord } from "./model";
 
 export type LifecycleAction = "pause" | "resume" | "end";
 
-const COPY: Record<LifecycleAction, { title: string; button: string; done: string; reasonRequired: boolean }> = {
-  pause: { title: "Pause this policy?", button: "Pause", done: "Paused. AuthSec is taking it out of AWS.", reasonRequired: true },
-  resume: { title: "Resume this policy?", button: "Resume", done: "Resumed. AuthSec is putting it back into AWS.", reasonRequired: false },
-  end: { title: "End this policy now?", button: "End now", done: "Ended. AuthSec is taking it out of AWS.", reasonRequired: true },
+const COPY: Record<LifecycleAction, { title: string; button: string; reasonRequired: boolean }> = {
+  pause: { title: "Pause this policy?", button: "Pause", reasonRequired: true },
+  resume: { title: "Resume this policy?", button: "Resume", reasonRequired: false },
+  end: { title: "End this policy now?", button: "End now", reasonRequired: true },
 };
 
+/** The toast once the server has accepted the action. */
+function doneText(action: LifecycleAction, p: AccessPolicy): string {
+  const provider = providerOf(p.resource);
+  const cloud = CLOUD[provider].label;
+  const restores = provider === "azure" && p.effect === "block";
+  if (action === "resume") return `Resumed. AuthSec is applying it in ${cloud} again.`;
+  const verb = action === "pause" ? "Paused" : "Ended";
+  return restores ? `${verb}. AuthSec is restoring access in Azure.` : `${verb}. AuthSec is taking it out of ${cloud}.`;
+}
+
 function body(action: LifecycleAction, p: AccessPolicy): string {
-  const roles = p.roles.length === 1 ? p.roles[0].name : `${p.roles.length} roles`;
+  const provider = providerOf(p.resource);
+  const roles = p.roles.length === 1 ? p.roles[0].name : `${p.roles.length} ${whoWord(provider, 2)}`;
   const effect = p.effect === "block" ? "The block is lifted" : "The extra access is removed";
   switch (action) {
     case "pause":
@@ -82,7 +95,7 @@ export function LifecycleDialog({
     const run = action === "pause" ? () => pause(args) : action === "resume" ? () => resume(args) : () => end(args);
     const ok = await act.run(run);
     if (ok) {
-      toast.success(c.done);
+      toast.success(doneText(action, policy));
       onClose();
     }
   }

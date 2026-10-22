@@ -1,14 +1,17 @@
 /**
- * Create policy (`/iga/policy/new`) and Edit policy (`/iga/policy/:id/edit`).
+ * Create policy (`/iga/policy/new`) and Edit policy (`/iga/policy/:id/edit`),
+ * one form for AWS and Azure (SPEC-access-policies.md §2.1).
  *
- * The admin chooses a bucket and roles from Discovery, Block or Allow, what
+ * The admin chooses the cloud, a resource and the identities from Discovery
+ * (AWS: an S3 bucket or folder and IAM roles; Azure: one resource and service
+ * principals, managed identities or agent identities), Block or Allow, what
  * access, and for how long, then presses Apply: there is no approval step.
  * The right column is one summary: the rule in a sentence, whether AuthSec can
- * change AWS for this account, who it affects, and the IAM documents AWS will
- * hold (from the server's preview).
+ * change this account or subscription, who it affects, and the change the
+ * cloud gets (from the server's preview).
  *
- * `?resource_id=`, `?identity_account_id=` and `?effect=` fill the form when it
- * is opened from Discovery or the graph.
+ * `?resource_id=`, `?identity_account_id=`, `?effect=` and `?provider=azure`
+ * fill the form when it is opened from Discovery or the graph.
  */
 
 import { ArrowRight, CheckCircle2, Info } from "lucide-react";
@@ -25,7 +28,8 @@ import {
   type AccessLevel,
   type AccessPolicyPreview,
 } from "@/app/api/igaAccessPoliciesApi";
-import { useGetGraphIdentityQuery, useGetGraphResourceQuery } from "@/app/api/igaGraphApi";
+import { useGetGraphIdentityQuery, useGetGraphNeighbourhoodQuery, useGetGraphResourceQuery, type GraphRef } from "@/app/api/igaGraphApi";
+import { armTypeLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -33,9 +37,15 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyActionError, PolicyLoadFailure, PolicyShell, classifyPolicyError, describeFailure, usePolicyAction } from "../shared";
 import { PageFooter } from "@/components/layout/PageFooter";
+import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
+import { AzureIdentityPicker, AzureResourcePicker } from "./AzurePickers";
 import {
   ACCESS,
+  AZURE_TARGET_KINDS,
+  CLOUD,
   PRESETS,
+  accessBlurbs,
+  armParts,
   bodyOf,
   bucketOf,
   draftOf,
@@ -46,10 +56,11 @@ import {
   suggestedName,
   windowOf,
   windowText,
+  whoWord,
   withEffect,
   type PolicyDraft,
 } from "./model";
-import { AwsDocument, EffectChip } from "./parts";
+import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
 
@@ -114,9 +125,9 @@ function Pill({
 }
 
 /** One line under the access toggles saying what the choice covers. */
-function accessHint(access: AccessLevel[], isBlock: boolean): string {
-  if (access.includes("all")) return "Everything on this bucket or folder: reading, writing, deleting and listing.";
-  const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => a.blurb.replace(/\.$/, "").toLowerCase());
+function accessHint(access: AccessLevel[], isBlock: boolean, blurbs: ReturnType<typeof accessBlurbs>, aws: boolean): string {
+  if (access.includes("all")) return aws ? "Everything on this bucket or folder: reading, writing, deleting and listing." : "Everything on this resource: reading, changing and deleting.";
+  const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => blurbs[a.key].replace(/\.$/, "").toLowerCase());
   if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
   return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
 }
@@ -139,13 +150,19 @@ export default function PolicyFormPage() {
   const existing = useGetAccessPolicyQuery({ ws, id: id ?? "" }, { skip: !editing });
   const loadFailure = classifyPolicyError(existing.error);
 
-  // Opened from Discovery: fill in the bucket and the role it named.
+  // Opened from Discovery or the graph: fill in the resource and the identity it named.
   const fromResource = !editing ? params.get("resource_id") ?? "" : "";
   const fromRole = !editing ? params.get("identity_account_id") ?? "" : "";
-  const resourceQ = useGetGraphResourceQuery({ ws, id: fromResource }, { skip: !fromResource });
-  const roleQ = useGetGraphIdentityQuery({ ws, id: fromRole }, { skip: !fromRole });
+  const fromAzure = params.get("provider") === "azure";
+  const resourceQ = useGetGraphResourceQuery({ ws, id: fromResource }, { skip: !fromResource || fromAzure });
+  const roleQ = useGetGraphIdentityQuery({ ws, id: fromRole }, { skip: !fromRole || fromAzure });
+  // An Azure object is read off the shared graph: its root node names it (D-114).
+  const azureResourceQ = useGetGraphNeighbourhoodQuery({ ws, root: `resource:${fromResource}` as GraphRef, direction: "reverse" }, { skip: !fromResource || !fromAzure });
+  const azureRoleQ = useGetGraphNeighbourhoodQuery({ ws, root: `identity:${fromRole}` as GraphRef, direction: "forward" }, { skip: !fromRole || !fromAzure });
 
-  const [draft, setDraft] = useState<PolicyDraft>(() => emptyDraft({ effect: params.get("effect") === "allow" ? "allow" : "block" }));
+  const [draft, setDraft] = useState<PolicyDraft>(() =>
+    emptyDraft({ provider: fromAzure ? "azure" : "aws", effect: params.get("effect") === "allow" ? "allow" : "block" }),
+  );
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });
 
@@ -161,10 +178,43 @@ export default function PolicyFormPage() {
       filled.current.resource = true;
       const b = bucketOf(r.text);
       if (r.type === "s3_bucket" || b) {
-        setDraft((d) => ({ ...d, resource: { resource_id: fromResource, bucket: b?.bucket ?? r.text, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
+        const bucket = b?.bucket ?? r.text;
+        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
       }
     }
   }, [resourceQ.data, fromResource]);
+  useEffect(() => {
+    const g = azureResourceQ.data?.data;
+    const n = g?.nodes.find((x) => x.ref === g.root);
+    if (n && !filled.current.resource) {
+      filled.current.resource = true;
+      const arn = n.native_id ?? "";
+      const { subscription, resourceGroup } = armParts(arn);
+      setDraft((d) => ({
+        ...d,
+        resource: {
+          provider: "azure",
+          resource_id: fromResource,
+          name: n.label,
+          bucket: "",
+          arn,
+          account_id: subscription,
+          tenant: n.scope?.id,
+          kind: n.type ? armTypeLabel(n.type) : undefined,
+          subscription: n.sub_scope ?? undefined,
+          resource_group: resourceGroup || undefined,
+        },
+      }));
+    }
+  }, [azureResourceQ.data, fromResource]);
+  useEffect(() => {
+    const g = azureRoleQ.data?.data;
+    const n = g?.nodes.find((x) => x.ref === g.root);
+    if (n && !filled.current.role && AZURE_TARGET_KINDS.has(String(n.kind))) {
+      filled.current.role = true;
+      setDraft((d) => (d.roles.some((x) => x.identity_account_id === fromRole) ? d : { ...d, roles: [...d.roles, { identity_account_id: fromRole, name: n.label }] }));
+    }
+  }, [azureRoleQ.data, fromRole]);
   useEffect(() => {
     const r = roleQ.data?.data;
     if (r && !filled.current.role && r.kind === "iam_role") {
@@ -175,6 +225,11 @@ export default function PolicyFormPage() {
 
   const set = <K extends keyof PolicyDraft>(k: K, v: PolicyDraft[K]) => {
     setDraft((d) => ({ ...d, [k]: v }));
+    setFieldError(null);
+  };
+  // Another cloud is another resource and other identities: start those over.
+  const setProvider = (provider: PolicyDraft["provider"]) => {
+    setDraft((d) => (d.provider === provider ? d : { ...d, provider, resource: null, prefix: "", roles: [] }));
     setFieldError(null);
   };
   const setEffect = (e: AccessEffect) => {
@@ -240,7 +295,8 @@ export default function PolicyFormPage() {
       editing && existing.data ? edit({ id: id!, body: { ...body, base_version_no: existing.data.data.version_no } }) : create(body),
     );
     if (res) {
-      toast.success(editing ? "Saved. AuthSec is applying the new version in AWS." : "Applied. AuthSec is putting it into AWS.");
+      const cloud = CLOUD[draft.provider].label;
+      toast.success(editing ? `Saved. AuthSec is applying the new version in ${cloud}.` : `Applied. AuthSec is putting it into ${cloud}.`);
       navigate(`/iga/policy/${res.data.id}`);
     }
   }
@@ -261,16 +317,22 @@ export default function PolicyFormPage() {
   const err = (f: string) => (fieldError?.field === f ? fieldError.message : undefined);
   const localSentence = useMemo(() => {
     if (!draft.resource || draft.roles.length === 0 || draft.access.length === 0) return "";
-    return policySentence({ ...draft, resource: { bucket: draft.resource.bucket, prefix: draft.prefix.trim() }, ...windowOf(draft) });
+    return policySentence({ ...draft, resource: { ...draft.resource, prefix: draft.provider === "aws" ? draft.prefix.trim() : "" }, ...windowOf(draft) });
   }, [draft]);
   const isBlock = draft.effect === "block";
-  const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined);
-  const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
+  const aws = draft.provider === "aws";
+  const who = whoWord(draft.provider, draft.roles.length);
+  const blurbs = accessBlurbs(draft.provider, draft.resource?.arn);
+  const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
+  // Azure readiness is known only when the server reports it; otherwise the preview's blocker says.
+  const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && readiness.known && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
   const notes = (shown?.warnings ?? []).filter((w) => w.code !== "other_paths");
   const workloads = [...new Set((shown?.also_affected ?? []).flatMap((a) => a.workloads.map((w) => w.name)))];
   const disabledWhy = bindingBlocked
-    ? "Set up AWS access for this account to apply."
+    ? aws
+      ? "Set up AWS access for this account to apply."
+      : "Give AuthSec's Azure app the Role Based Access Control Administrator role on this subscription to apply."
     : otherBlockers.length
       ? otherBlockers[0].message
       : "";
@@ -301,8 +363,10 @@ export default function PolicyFormPage() {
       title={editing ? `Edit ${existing.data?.data.name ?? "policy"}` : "Create policy"}
       description={
         editing
-          ? "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
-          : "Block or allow roles on a bucket for as long as you say. AuthSec writes it into IAM and AWS enforces it."
+          ? aws
+            ? "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
+            : "Applying replaces the version in Azure: AuthSec applies the new one and undoes what the old one changed."
+          : "Block or allow an agent's access to a resource for as long as you say. AuthSec makes the change in AWS or Azure and undoes it at the end."
       }
       requires="access_policies"
     >
@@ -320,6 +384,20 @@ export default function PolicyFormPage() {
                 void apply();
               }}
             >
+              {editing ? null : (
+                <Block title="Cloud">
+                  <div role="radiogroup" aria-label="Cloud" className="flex flex-wrap gap-1.5">
+                    {(["aws", "azure"] as const).map((c) => (
+                      <Pill key={c} radio on={draft.provider === c} onClick={() => setProvider(c)}>
+                        <span aria-hidden="true" className="mr-1.5 inline-flex"><ProviderGlyph provider={c} /></span>
+                        {CLOUD[c].label}
+                      </Pill>
+                    ))}
+                  </div>
+                </Block>
+              )}
+
+              {aws ? (
               <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
                   <div id="ap-resource">
@@ -368,23 +446,51 @@ export default function PolicyFormPage() {
                   </div>
                 </div>
               </Block>
+              ) : (
+                <Block title="Resource" hint="Choose the Azure resource this rule is about, such as a storage account or a key vault. Only resources a subscription scan found are listed.">
+                  <div id="ap-resource">
+                    <AzureResourcePicker
+                      ws={ws}
+                      value={draft.resource}
+                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.tenant === d.resource?.tenant ? d.roles : [] }))}
+                      invalid={!!err("resource")}
+                    />
+                    <FieldError message={err("resource")} />
+                  </div>
+                </Block>
+              )}
 
-              <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
-                <div id="ap-roles">
-                  <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
-                  <FieldError message={err("roles")} />
-                </div>
-              </Block>
+              {aws ? (
+                <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
+                  <div id="ap-roles">
+                    <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                    <FieldError message={err("roles")} />
+                  </div>
+                </Block>
+              ) : (
+                <Block title="Identities" hint="Choose the service principals, managed identities or agent identities this rule is for. Every agent or workload that runs as one of them is covered.">
+                  <div id="ap-roles">
+                    <AzureIdentityPicker ws={ws} resource={draft.resource} effect={draft.effect} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                    <FieldError message={err("roles")} />
+                  </div>
+                </Block>
+              )}
 
               <Block title="Rule">
                 <div className="space-y-4">
                   <div>
                     <p className="mb-1.5 text-[13px] font-medium text-(--color-text)">Effect</p>
                     <div role="radiogroup" aria-label="Block or allow" className="flex flex-wrap items-center gap-1.5">
-                      <Pill radio danger on={isBlock} onClick={() => setEffect("block")} title="Deny these roles, whatever else allows them">
+                      <Pill
+                        radio
+                        danger
+                        on={isBlock}
+                        onClick={() => setEffect("block")}
+                        title={aws ? "Deny these roles, whatever else allows them" : "Take away the role assignments on this resource that give these identities the access, until the policy ends"}
+                      >
                         Block
                       </Pill>
-                      <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title="Grant access these roles do not have; must end within 30 days">
+                      <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title={`Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}>
                         Allow for a time
                       </Pill>
                     </div>
@@ -399,12 +505,12 @@ export default function PolicyFormPage() {
                         </Pill>
                       ) : null}
                       {ACCESS.map((a) => (
-                        <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={a.blurb}>
+                        <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={blurbs[a.key]}>
                           {a.label}
                         </Pill>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock)}</p>
+                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, blurbs, aws)}</p>
                     <FieldError message={err("access")} />
                   </fieldset>
 
@@ -439,7 +545,9 @@ export default function PolicyFormPage() {
                         ? "No end: it stays until you end or pause it."
                         : draft.preset === "custom"
                           ? `${windowText(windowOf(draft))}, your local time.`
-                          : `From when you apply, for ${PRESETS.find((p) => p.key === draft.preset)?.label}. AWS stops honouring it at the end, even if AuthSec is down.`}
+                          : `From when you apply, for ${PRESETS.find((p) => p.key === draft.preset)?.label}. ${
+                              aws ? "AWS stops honouring it at the end, even if AuthSec is down." : "AuthSec undoes it in Azure at the end."
+                            }`}
                     </p>
                     <FieldError message={err("end")} />
                   </div>
@@ -488,20 +596,37 @@ export default function PolicyFormPage() {
                     <span className="text-xs text-(--color-text-muted)">Summary</span>
                   </div>
                   <p className="text-[15px] font-semibold leading-snug text-(--color-text)">
-                    {localSentence || "Choose a bucket, roles and access to see what this does."}
+                    {localSentence || (aws ? "Choose a bucket, roles and access to see what this does." : "Choose a resource, identities and access to see what this does.")}
                   </p>
                   {previewable ? (
                     <p className="text-xs text-(--color-text-muted)">
-                      Only these roles change. Other roles, users, groups and bucket policies keep their access.
+                      {aws
+                        ? "Only these roles change. Other roles, users, groups and bucket policies keep their access."
+                        : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
                     </p>
                   ) : null}
                 </div>
 
                 <ul className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle) text-[13px]">
-                  {readiness.loading ? null : readiness.ready ? (
+                  {readiness.loading || (!aws && (!readiness.known || !draft.resource)) ? null : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
-                      AuthSec can change IAM in this account.
+                      {aws ? "AuthSec can change IAM in this account." : `AuthSec can change role assignments in subscription ${readiness.scopes[0]?.name ?? draft.resource?.subscription ?? ""}.`}
+                    </li>
+                  ) : !aws ? (
+                    <li className="space-y-1.5 bg-(--color-surface-subtle) px-4 py-2.5">
+                      <p className="flex items-start gap-2 text-(--color-text)">
+                        <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
+                        <span>
+                          {readiness.failed
+                            ? "Could not check whether AuthSec can change Azure."
+                            : !readiness.available
+                              ? readiness.reason || "Applying policies is turned off on this server."
+                              : readiness.scopes.length === 0
+                                ? "This resource's subscription is not connected to AuthSec."
+                                : `AuthSec's Azure app cannot manage role assignments in subscription ${readiness.scopes[0].name}. Give it the Role Based Access Control Administrator role there.`}
+                        </span>
+                      </p>
                     </li>
                   ) : (
                     <li className="space-y-1.5 bg-(--color-surface-subtle) px-4 py-2.5">
@@ -513,7 +638,7 @@ export default function PolicyFormPage() {
                             : !readiness.available
                               ? readiness.reason || "Applying policies is turned off on this server."
                               : readiness.notReady.length
-                                ? `AWS access is not set up for ${readiness.notReady.length === 1 ? "account" : "accounts"} ${readiness.notReady.map((a) => a.account_id).join(", ")}. AuthSec can read ${readiness.notReady.length === 1 ? "it" : "them"} but cannot change ${readiness.notReady.length === 1 ? "it" : "them"} yet.`
+                                ? `AWS access is not set up for ${readiness.notReady.length === 1 ? "account" : "accounts"} ${readiness.notReady.map((a) => a.id).join(", ")}. AuthSec can read ${readiness.notReady.length === 1 ? "it" : "them"} but cannot change ${readiness.notReady.length === 1 ? "it" : "them"} yet.`
                                 : "No AWS account is connected yet."}
                         </span>
                       </p>
@@ -530,10 +655,12 @@ export default function PolicyFormPage() {
                     <li className="px-4 py-2.5 text-(--color-text)">
                       {workloads.length ? (
                         <>
-                          Affects <span className="font-medium">{workloads.join(", ")}</span>, which run as {draft.roles.length === 1 ? "this role" : "these roles"}.
+                          Affects <span className="font-medium">{workloads.join(", ")}</span>, which run as {draft.roles.length === 1 ? "this" : "these"} {who}.
                         </>
                       ) : (
-                        <span className="text-(--color-text-muted)">No workload Discovery found runs as {draft.roles.length === 1 ? "this role" : "these roles"}.</span>
+                        <span className="text-(--color-text-muted)">
+                          No workload Discovery found runs as {draft.roles.length === 1 ? "this" : "these"} {who}.
+                        </span>
                       )}
                     </li>
                   ) : null}
@@ -551,7 +678,7 @@ export default function PolicyFormPage() {
                   {previewNote ? <li className="px-4 py-2.5 text-xs text-(--color-text-muted)">Preview unavailable: {previewNote}</li> : null}
                   {previewState.isLoading && !shown && previewable ? (
                     <li role="status" className="px-4 py-2.5 text-xs text-(--color-text-muted)">
-                      Working out what AWS will get…
+                      Working out what {CLOUD[draft.provider].label} will get…
                     </li>
                   ) : null}
                 </ul>
@@ -559,11 +686,13 @@ export default function PolicyFormPage() {
                 {shown?.documents.length ? (
                   <details className="border-t border-(--color-border-subtle)">
                     <summary className="cursor-pointer px-4 py-2.5 text-[13px] font-medium text-(--color-primary-text)">
-                      View the IAM {shown.documents.length === 1 ? "policy" : `policies (${shown.documents.length})`} AuthSec will attach
+                      {aws
+                        ? `View the IAM ${shown.documents.length === 1 ? "policy" : `policies (${shown.documents.length})`} AuthSec will attach`
+                        : "View the role assignment changes AuthSec will make"}
                     </summary>
                     <div className="space-y-2 px-4 pb-3">
                       {shown.documents.map((d) => (
-                        <AwsDocument key={d.identity_account_id} title={[d.role_name, d.policy_name].filter(Boolean).join(" · ") || "IAM policy"} document={d.document} />
+                        <PolicyChange key={d.identity_account_id} title={[d.role_name, d.policy_name].filter(Boolean).join(" · ") || (aws ? "IAM policy" : "Role assignments")} document={d.document} />
                       ))}
                     </div>
                   </details>

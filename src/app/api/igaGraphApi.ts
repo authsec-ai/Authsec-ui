@@ -757,13 +757,29 @@ export interface GraphNode {
    * AWS node. A Kubernetes node has no `account` and no `arn`. `sub_scope` is
    * the namespace, null for a cluster-scoped object; `native_id` is
    * `namespace/name`; `k8s_rule` is a rule node's PolicyRule.
+   *
+   * Azure nodes (D-114) take the same fields: `scope` is the tenant, `sub_scope`
+   * the subscription's name. A role assignment is a `statement` node
+   * (`role_assignment:<id>`) carrying `azure_role`; a subscription, resource
+   * group or the directory an assignment names is a leaf `scope` node.
    */
-  provider?: "k8s";
+  provider?: "k8s" | "azure";
   scope?: K8sScope;
   sub_scope?: string | null;
   native_id?: string;
   k8s_rule?: K8sRule;
+  azure_role?: AzureRoleAssignment;
   limitations: EvidenceLimitation[];
+}
+
+/** What an Azure role assignment node grants (D-114), from the role it assigns. */
+export interface AzureRoleAssignment {
+  role_name: string;
+  /** `azure_rbac` · `entra_directory_role` · `entra_app_permission` · `entra_delegated_permission` · `key_vault_access_policy`. */
+  grant_kind: string;
+  actions: string[];
+  not_actions: string[];
+  condition: string | null;
 }
 
 export interface GraphEdge {
@@ -786,9 +802,10 @@ export interface GraphEdge {
    * reaches the identity through, and the role it belongs to (`policy_ref`,
    * `policy_kind` k8s_role | k8s_cluster_role).
    */
-  provider?: "k8s";
+  provider?: "k8s" | "azure";
   policy_ref?: GraphRef;
-  policy_kind?: "k8s_role" | "k8s_cluster_role";
+  /** Kubernetes: the role's kind. Azure: the grant kind (`azure_rbac`, `entra_app_permission` …). */
+  policy_kind?: string;
   assignment?: K8sAssignment;
   limitations: EvidenceLimitation[];
 }
