@@ -31,8 +31,8 @@ import { objectPath, refType, type Basis, type GraphFrontier, type GraphNode, ty
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { azureObjectPath } from "@/features/discovery/cloud/azure/azureGraphAdapter";
-import { agentTypeLabel, armTypeLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { azureObjectPath } from "@/features/discovery/cloud/azure/azureGraphLinks";
+import { agentTypeLabel, armTypeLabel, graphKindLabel, identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
 import { accountWithId, limitationText } from "../shared/labels";
 import { bindingKindWord, groupWords, parseAnchor, roleKindWord, ruleFlags, scopeBadge, scopeOfBinding, workloadKindWord } from "../k8s/rules";
@@ -168,7 +168,7 @@ function azureNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edg
 
   switch (first.kind) {
     case "workload": {
-      const runs = edges.find((e) => e.members.some((m) => m.from === first.ref && (m.kind === "executes_as" || m.label === "runs as")))?.members[0];
+      const runs = edges.find((e) => e.members.some((m) => m.from === first.ref && m.kind === "executes_as"))?.members[0];
       sentence = runs
         ? `${d.type.replace("Workload · ", "An Azure ")} that runs as ${name(runs.to)}.`
         : "An Azure workload. The identity it runs as is not loaded.";
@@ -188,11 +188,20 @@ function azureNodeSummary(v: VisualNode, d: ReturnType<typeof describeNode>, edg
       sentence = "The scope a role or permission is assigned at. It applies to everything inside it.";
       if (first.sublabel) facts.push(["Covers", first.sublabel]);
       break;
+    case "statement": {
+      // A role assignment (D-114): what the role allows, on the scope it is assigned at.
+      const role = first.azure_role;
+      sentence = `A role assignment: ${role?.role_name || first.label}${first.sub_scope ? ` in subscription ${first.sub_scope}` : ""}. It is how the identity holds this access.`;
+      if (role?.grant_kind) facts.push(["Kind", graphKindLabel("access_edge", role.grant_kind)]);
+      if (role?.actions.length) facts.push(["Allows", <WrapId className="font-mono text-xs">{`${role.actions.slice(0, 4).join(", ")}${role.actions.length > 4 ? ` +${role.actions.length - 4}` : ""}`}</WrapId>]);
+      if (role?.condition) facts.push(["Condition", "Yes: AuthSec does not evaluate it"]);
+      break;
+    }
     default: {
       const agent = agentTypeLabel({ attrs });
       const kind = identityKindLabel(first.kind);
       sentence = `A Microsoft Entra ${agent ? `${agent.toLowerCase()} (${kind.toLowerCase()})` : kind.toLowerCase()}.`;
-      const objectId = str(attrs["object_id"]);
+      const objectId = str(attrs["object_id"]) ?? str(first.native_id);
       const upn = str(attrs["user_principal_name"]);
       const appId = str(attrs["app_id"]);
       if (objectId) facts.push(["Object ID", <WrapId className="font-mono text-xs">{objectId}</WrapId>]);
@@ -213,9 +222,7 @@ function azureEdgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   const facts: [string, ReactNode][] = [];
   if (e.kind === "grant" && e.members.length > 1) facts.push(["Grants", `${e.members.length} independent roles or permissions`]);
   if (e.members.length === 1) {
-    if (m.path_kind) facts.push(["Kind", m.path_kind.replace(/^(entra|azure)_/, "").replace(/_/g, " ")]);
-    if (m.sensitivity) facts.push(["Sensitivity", m.sensitivity]);
-    if (m.conclusion) facts.push(["Assessment", m.conclusion.replace(/_/g, " ")]);
+    if (e.kind === "grant" && m.policy_kind) facts.push(["Kind", graphKindLabel("access_edge", m.policy_kind)]);
   }
   return { sentence: edgeMeaning(e), facts: facts.slice(0, 3), title: `${nameOf(m.from)} → ${nameOf(m.to)}`, type: edgeVerb(e), why: null };
 }

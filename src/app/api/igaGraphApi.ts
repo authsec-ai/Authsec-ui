@@ -49,6 +49,26 @@ export function refType(ref: GraphRef): GraphObjectType | GraphClaimType {
   return ref.slice(0, ref.indexOf(":")) as GraphObjectType | GraphClaimType;
 }
 
+/**
+ * Azure nodes of the shared read (D-114) in the kinds the graph draws them as.
+ * The server states a resource's kind as its ARM type and a scope's as
+ * `scope`; the canvas draws them as `azure_resource` (its type as the sublabel,
+ * its ARM id in attrs.native_id) and `azure_scope` (its path as the sublabel).
+ * A role assignment is already a `statement`.
+ */
+function azureKinds(n: GraphNode): GraphNode {
+  if (n.provider !== "azure") return n;
+  const type: string = refType(n.ref);
+  if (type === "resource") return { ...n, kind: "azure_resource", sublabel: String(n.kind), attrs: { ...n.attrs, native_id: n.native_id } };
+  if (type === "scope") return { ...n, kind: "azure_scope", sublabel: n.native_id };
+  if (type === "workload") return { ...n, sublabel: n.runtime_kind };
+  return n;
+}
+
+function withAzureKinds<T extends { nodes: GraphNode[] }>(d: T): T {
+  return d.nodes.some((n) => n.provider === "azure") ? { ...d, nodes: d.nodes.map(azureKinds) } : d;
+}
+
 /** The uuid part of a typed reference, for building a type-specific route. */
 export function refId(ref: GraphRef): string {
   const i = ref.indexOf(":");
@@ -687,9 +707,9 @@ export type GraphNodeKind =
   | ResourceKind;
 
 /**
- * An Azure graph node, from the Azure neighbourhood read (`azure/azureGraphAdapter.ts`): an Entra
- * identity by its account kind, or an ARM resource or a grant's scope. Workloads and external
- * principals reuse their shared kinds.
+ * An Azure graph node's kind as the graph draws it (`azureKinds`): an Entra identity by its
+ * account kind, an ARM resource, or the scope a role is assigned at. Workloads, external
+ * principals and role assignments (statements) reuse their shared kinds.
  */
 export type AzureNodeKind =
   | "entra_user"
@@ -788,9 +808,9 @@ export interface GraphNode {
   k8s_rule?: K8sRule;
   azure_role?: AzureRoleAssignment;
   /**
-   * Azure nodes only (`azure/azureGraphAdapter.ts`): the neighbourhood read's own sublabel (a
-   * UPN, an app id, an ARM type), sensitivity and attrs. `attrs.object_id` is an identity's Entra
-   * object id, which its page is keyed by.
+   * Azure nodes only, set as the read arrives (`azureKinds`): a resource's ARM type or a
+   * scope's path as the sublabel, and a resource's ARM id as attrs.native_id. An identity's
+   * Entra object id, which its page is keyed by, is its native_id.
    */
   sublabel?: string;
   sensitivity?: string;
@@ -834,11 +854,6 @@ export interface GraphEdge {
   /** Kubernetes: the role's kind. Azure: the grant kind (`azure_rbac`, `entra_app_permission` …). */
   policy_kind?: string;
   assignment?: K8sAssignment;
-  /** Azure edges only: the neighbourhood read's own words for the line, and what it says of it. */
-  label?: string;
-  sensitivity?: string;
-  path_kind?: string;
-  conclusion?: string;
   limitations: EvidenceLimitation[];
 }
 
@@ -1515,11 +1530,13 @@ export const igaGraphApi = baseApi.injectEndpoints({
 
     getGraphNeighbourhood: builder.query<{ data: GraphNeighbourhood; meta: GraphMeta }, GraphRootArgs>({
       query: (args) => ({ url: `${BASE}/graph${query(asParams(args))}` }),
+      transformResponse: (res: { data: GraphNeighbourhood; meta: GraphMeta }) => ({ ...res, data: withAzureKinds(res.data) }),
       providesTags: [{ type: "IgaGraph", id: "GRAPH" }],
     }),
 
     getGraphExpansion: builder.query<{ data: GraphExpansion; meta: GraphMeta }, GraphExpandArgs>({
       query: (args) => ({ url: `${BASE}/graph/expand${query(asParams(args))}` }),
+      transformResponse: (res: { data: GraphExpansion; meta: GraphMeta }) => ({ ...res, data: withAzureKinds(res.data) }),
       providesTags: [{ type: "IgaGraph", id: "GRAPH" }],
     }),
 

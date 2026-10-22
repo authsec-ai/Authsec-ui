@@ -422,6 +422,11 @@ function describeAzure(v: VisualNode): NodeDescription {
     case "azure_scope":
       type = "Scope";
       break;
+    case "statement":
+      // A role assignment (D-114): the role it assigns, in the subscription it is in.
+      type = v.members.length > 1 ? `${v.members.length} role assignments` : `Role assignment · ${graphKindLabel("access_edge", first.azure_role?.grant_kind ?? "azure_rbac")}`;
+      context = first.sub_scope ? `Subscription ${first.sub_scope}` : null;
+      break;
     default: {
       const agent = agentTypeLabel({ attrs: first.attrs ?? {} });
       type = `Identity · ${agent ?? identityKindLabel(first.kind)}`;

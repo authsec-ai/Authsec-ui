@@ -19,7 +19,7 @@
  *                   main button: a policy for this identity; policies in force
  *   ARM resource    main button: a policy on this resource; the identities drawn
  *                   holding a role on it are shortcuts that fill them in too
- *   grant line      main button: a policy for that identity on that resource
+ *   summary line    main button: a policy for that identity on that resource
  *   workload        points at the identity it runs as
  *   user, group     one line: policies change service principals, managed
  *                   identities and agent identities, not users or groups
@@ -112,9 +112,9 @@ export function usePolicyCard({
 
   if (subject.kind === "edge") {
     const e = subject.edge;
-    if (e.kind === "grant" && e.members[0]?.provider === "azure") return azureLine(e, nodes);
     if (e.kind !== "declares") return none;
     const holder = nodes.get(e.from as GraphRef);
+    if (holder?.provider === "azure") return azureLine(e, nodes);
     if (holder?.kind !== "iam_role") return none;
     const target = nodes.get(e.to as GraphRef);
     const s3 = target ? bucketOf(target.text ?? target.arn ?? target.label) : null;
@@ -221,9 +221,11 @@ function RoleSection({ identityId }: { identityId: string }) {
 const HOPS = 3;
 
 /**
- * The roles this canvas draws as reaching `id`, found by walking the drawn lines
- * backwards. Not the roles that can reach it: only the ones loaded. A role behind
- * a "more" node that is not expanded is not drawn, so it is not here.
+ * The roles (or Azure identities a policy can name) this canvas draws as
+ * reaching `id`, found by walking the drawn lines backwards: identity →
+ * statement (or role assignment) → resource. Not the ones that can reach it:
+ * only the ones loaded. One behind a "more" node that is not expanded is not
+ * drawn, so it is not here.
  */
 function holdersOf(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>): GraphNode[] {
   const roles: GraphNode[] = [];
@@ -236,7 +238,7 @@ function holdersOf(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNo
       for (const e of edges) {
         if (e.to !== cur) continue;
         const n = nodes.get(e.from as GraphRef);
-        if (n && n.kind === "iam_role") {
+        if (n && isPolicyHolder(n)) {
           if (!seenRole.has(n.ref)) {
             seenRole.add(n.ref);
             roles.push(n);
@@ -308,7 +310,7 @@ function azureArmId(n: GraphNode): string | null {
   return n.kind === "azure_resource" && typeof id === "string" && /^\/subscriptions\/.+\/providers\//i.test(id) ? id : null;
 }
 
-/** A grant line from an identity to a resource: a policy for that identity on that resource. */
+/** A summary line from an identity to a resource: a policy for that identity on that resource. */
 function azureLine(e: VisualEdge, nodes: Map<GraphRef, GraphNode>): { section: ReactNode; action: PolicyAction | null } {
   const holder = nodes.get(e.from as GraphRef);
   const target = nodes.get(e.to as GraphRef);
@@ -414,17 +416,6 @@ function AzureIdentitySection({ identityId }: { identityId: string }) {
   );
 }
 
-/** The identities this canvas draws holding a role on the resource: grant lines into it, from identities a policy can name. */
-function azureHolders(id: string, edges: VisualEdge[], nodes: Map<GraphRef, GraphNode>): GraphNode[] {
-  const out = new Map<string, GraphNode>();
-  for (const e of edges) {
-    if (e.kind !== "grant" || e.to !== id) continue;
-    const n = nodes.get(e.from as GraphRef);
-    if (n && isPolicyHolder(n)) out.set(n.ref, n);
-  }
-  return [...out.values()].sort((a, b) => a.label.localeCompare(b.label));
-}
-
 function AzureResourceSection({
   id,
   node,
@@ -439,7 +430,7 @@ function AzureResourceSection({
   nodes: Map<GraphRef, GraphNode>;
 }) {
   const blocks = useGraphBlocks();
-  const holders = azureHolders(id, edges, nodes);
+  const holders = holdersOf(id, edges, nodes);
   const shown = holders.slice(0, ROLES_SHOWN);
   return (
     <Section>

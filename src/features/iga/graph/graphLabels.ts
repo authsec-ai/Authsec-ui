@@ -36,24 +36,27 @@ export function isAzureEdge(e: VisualEdge): boolean {
  * ...); this says what kind of fact it is, and what it is not.
  */
 const AZURE_EDGE_MEANING: Partial<Record<VisualEdgeKind, string>> = {
-  grant: "A role or permission held on this scope or resource. Assigned access, not evaluated: Azure deny assignments and conditions are not applied.",
+  grant: "The identity holds this role assignment. Assigned access, not evaluated: Azure deny assignments and conditions are not applied.",
+  target: "The scope the role is assigned at: this resource, or everything inside this subscription or resource group.",
   member_of: "The identity is a member of the group, so the group's roles and permissions reach it too.",
   can_assume:
     "It can act as, or be acted on by, the other identity: an owner who can add a credential, an agent identity blueprint, a federated credential, or the service principal of an app registration.",
   executes_as: "The workload runs as this identity, so it holds its roles and permissions.",
 };
 
+/** An Azure line in words: identity → role assignment (grant) → resource or scope (target), D-114. */
 const AZURE_EDGE_DEFAULT: Partial<Record<VisualEdgeKind, string>> = {
-  grant: "has access",
+  grant: "is assigned",
+  target: "on",
   member_of: "member of",
   can_assume: "can act as",
   executes_as: "runs as",
 };
 
-/** The word on an Azure line: its own label, or how many grants a grouped line stands for. */
+/** The word on an Azure line, or how many assignments a grouped line stands for. */
 function azureEdgeVerb(e: VisualEdge): string {
-  if (e.kind === "grant" && e.members.length > 1) return `${e.members.length} roles and permissions`;
-  return e.members[0]?.label || AZURE_EDGE_DEFAULT[e.kind] || EDGE_LABEL[e.kind];
+  if (e.kind === "grant" && e.members.length > 1) return `${e.members.length} role assignments`;
+  return AZURE_EDGE_DEFAULT[e.kind] || EDGE_LABEL[e.kind];
 }
 
 /** What each relationship means, in one sentence's worth, for the legend and the selection card. */
@@ -120,8 +123,6 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
  * forward `can_assume` as the roles it may assume.
  */
 export function frontierLabel(f: GraphFrontier, k8s = false): string {
-  // An Azure card has one control: the object's own neighbourhood (`azure/azureGraphAdapter`).
-  if (f.expand === "azure") return "Load its connections";
   const n = f.more.exact && f.more.count != null ? f.more.count : null;
   if (k8s && f.edge === "grant") return n != null ? `Load ${n} more ${n === 1 ? "rule" : "rules"}` : "Load more rules";
   if (k8s && f.edge === "executes_as" && f.direction === "forward") return "Load the ServiceAccount it runs as";

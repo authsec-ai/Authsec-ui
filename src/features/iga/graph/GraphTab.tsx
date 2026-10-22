@@ -41,7 +41,7 @@ import { useAppDispatch } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { azureObjectPath, useAzureGraphExpansion, useAzureGraphRoot } from "@/features/discovery/cloud/azure/azureGraphAdapter";
+import { azureObjectPath } from "@/features/discovery/cloud/azure/azureGraphLinks";
 
 import { k8sNodePath } from "../k8s/links";
 import { viaLink } from "../shared/links";
@@ -105,8 +105,8 @@ type GraphTabProps = {
    * publication"; `meta.rev` on its answers (the AWS publication current in the
    * snapshot) is ignored. Paths to a resource are not offered. Default `aws`.
    *
-   * `azure`: unrevisioned like Kubernetes, and read from the Azure neighbourhood endpoint through
-   * `azure/azureGraphAdapter`. It has no statements, so one view, one direction and no Paths.
+   * `azure`: unrevisioned like Kubernetes, from the same read (D-114). A role assignment is its
+   * statement: identity → role assignment → resource or scope, summarised into one line as AWS is.
    */
   provider?: "aws" | "k8s" | "azure";
 };
@@ -145,9 +145,7 @@ const DENSE_EDGES = 40;
 export default function GraphTab(props: GraphTabProps) {
   const [params] = useSearchParams();
   const direction =
-    props.provider === "azure"
-      ? "forward"
-      : refType(props.root) === "resource"
+    refType(props.root) === "resource"
         ? "reverse"
         : params.get("direction") === "reverse" && refType(props.root) === "identity"
           ? "reverse"
@@ -205,10 +203,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   /* ------------------------------ initial load ----------------------------- */
 
   const rootArgs = { ws, rev, key: String(epoch), root, direction, assume_hops: 2 };
-  // Azure reads its own neighbourhood endpoint; the shared read is skipped for it, as the Azure one is for the rest.
-  const sharedRoot = useGetGraphNeighbourhoodQuery(rootArgs, { skip: azure });
-  const azureRoot = useAzureGraphRoot(root, !azure);
-  const rootQuery = azure ? azureRoot : sharedRoot;
+  const rootQuery = useGetGraphNeighbourhoodQuery(rootArgs);
   const rootFailure = classifyGraphError(rootQuery.error);
   // A Kubernetes answer carries the AWS publication current in its snapshot as meta.rev: it must not pin or move the workspace's.
   useTrackRevision(ws, live ? undefined : rootQuery.currentData, live ? null : rootFailure, (r, d) =>
@@ -276,10 +271,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootQuery.currentData, root, direction, epoch, ws, dispatchModel]);
 
-  const [triggerSharedExpand] = useLazyGetGraphExpansionQuery();
-  const triggerAzureExpand = useAzureGraphExpansion(root);
-  // The same call either way: the shared lazy read, or an Azure node's own neighbourhood.
-  const triggerExpand = azure ? triggerAzureExpand : triggerSharedExpand;
+  const [triggerExpand] = useLazyGetGraphExpansionQuery();
 
   // Replays the previous investigation's expansions once the new root has
   // settled, in the order they originally happened (an ancestor before its
@@ -515,9 +507,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
   // default), Detailed (every statement drawn) or Paths. `as=canvas` from an
   // older link means Overview.
   const asParam = params.get("as");
-  const view: "overview" | "detailed" | "paths" = azure
-    ? "overview"
-    : k8s
+  const view: "overview" | "detailed" | "paths" = k8s
     ? asParam === "detailed"
       ? "detailed"
       : "overview"
@@ -1091,9 +1081,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     notices.push({
       key: "truncated",
       tone: "warning",
-      text: azure
-        ? `Azure shows up to 40 of each kind of relationship, most sensitive first.${model.truncated.detail ? ` This object has ${model.truncated.detail}.` : ""} Open a connected object and use its Load control to see more of the graph around it.`
-        : `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls to fetch them.`,
+      text: `The server stopped at its ${model.truncated.bound_by.replace(/_/g, " ")} limit, so more relationships exist than are loaded. Use the Load controls to fetch them.`,
     });
 
   const noRelationships = rootReady && model.laidOut && visual.edges.length === 0 && visual.nodes.length <= 1;
@@ -1243,7 +1231,6 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
       aria-label={expanded ? `Access Graph of ${rootName}` : undefined}
     >
       <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
-        {azure ? null : (
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
           <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
             Summary
@@ -1257,8 +1244,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             </button>
           )}
         </div>
-        )}
-        {isIdentity && !azure ? (
+        {isIdentity ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
             <span className="text-(--color-text-muted)">Direction</span>
             <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">

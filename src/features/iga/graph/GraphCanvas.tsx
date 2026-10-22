@@ -273,9 +273,8 @@ function GraphCanvasInner({
           const spread = (siblings.indexOf(e.id) - (siblings.length - 1) / 2) * (showEdgeLabels ? 24 : 14);
           const selected = selection?.kind === "edge" && selection.id === e.id;
           const highlighted = highlightedEdgeIds?.has(e.id) ?? false;
-          // AWS draws access as a declares line; Azure as a grant line straight to the resource.
           const block =
-            e.kind === "declares" || (e.kind === "grant" && e.members[0]?.provider === "azure")
+            e.kind === "declares"
               ? (byId.get(e.to)?.members ?? []).map((t) => blocks.lineBlock(byId.get(e.from)?.members[0], t)).find(Boolean) ?? null
               : null;
           const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels, block };
