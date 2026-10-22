@@ -1447,6 +1447,7 @@ export interface AzureGraphNode {
   kind: string;
   label: string;
   sublabel?: string;
+  sensitivity?: string;
   attrs?: Record<string, unknown>;
 }
 
@@ -1458,8 +1459,10 @@ export interface AzureGraphEdge {
   from: string;
   to: string;
   label?: string;
+  sensitivity?: string;
   state: string;
   path_kind?: string;
+  effective_conclusion?: string;
 }
 
 export interface AzureGraphNeighbourhood {

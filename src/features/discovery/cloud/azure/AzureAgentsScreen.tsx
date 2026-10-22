@@ -6,7 +6,7 @@
  * rated.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -16,26 +16,26 @@ import {
   type AzureIdentity,
   type CloudConnector,
 } from "@/app/api/cloudDiscoveryApi";
-import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { EntityCell } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
-import { cn } from "@/lib/utils";
+import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 
 import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
+import { AWSFilterChips } from "../aws/AWSFilterChips";
 import { CopyableId } from "../aws/AWSInventoryCells";
+import { TruncationNotice } from "../aws/AWSInventoryNotices";
 import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
 import { AzureFoundryView } from "./AzureFoundryView";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
 import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
+import { pageSizeParam, parsePageSize, useClientPaging } from "./azurePaging";
 
 type View = "identities" | "blueprints" | "foundry";
 
 const KIND_ARGS = {
   identities: { kind: "entra_agent_identity" },
   blueprints: { kind: "entra_application", agent_type: "agent_identity_blueprint" },
-  principals: { kind: "entra_service_principal", agent_type: "agent_identity_blueprint_principal" },
-  users: { kind: "entra_agent_user" },
 } as const;
 
 /** An agent or blueprint opens its own page, keyed by its Entra object id. */
@@ -54,35 +54,14 @@ function createdBy(r: AzureIdentity): string | undefined {
   return c?.by || undefined;
 }
 
-function Tile({ label, value, active, onClick, title }: { label: string; value: number | undefined; active?: boolean; onClick?: () => void; title: string }) {
-  const body = (
-    <>
-      <span className="block text-2xl font-semibold tabular-nums text-(--color-text)">{value ?? "–"}</span>
-      <span className="block text-xs text-(--color-text-muted)">{label}</span>
-    </>
-  );
-  const cls = cn(
-    "rounded-lg border px-4 py-3 text-left",
-    active ? "border-(--color-primary) bg-(--color-primary-soft)" : "border-(--color-border-subtle) bg-(--color-surface-raised)",
-  );
-  return onClick ? (
-    <button type="button" className={cn(cls, "hover:border-(--color-primary)")} onClick={onClick} title={title} aria-pressed={active}>
-      {body}
-    </button>
-  ) : (
-    <div className={cls} title={title}>
-      {body}
-    </div>
-  );
-}
-
 export default function AzureAgentsScreen({ connectors }: { connectors: CloudConnector[] }) {
   const [params, setParams] = useSearchParams();
   const agentsParam = params.get("agents");
   const view: View = agentsParam === "blueprints" ? "blueprints" : agentsParam === "foundry" ? "foundry" : "identities";
   const source = params.get("source");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(params.get("q") ?? "");
   const navigate = useNavigate();
+  const pageSize = parsePageSize(params.get("size"));
 
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -91,15 +70,22 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     setParams(next, { replace: true });
   };
 
+  // The search lives in the URL (a reload or a shared link keeps it), written a moment after typing.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const wanted = search.trim();
+      if ((params.get("q") ?? "") === wanted) return;
+      const next = new URLSearchParams(params);
+      if (wanted) next.set("q", wanted);
+      else next.delete("q");
+      setParams(next, { replace: true });
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [search, params, setParams]);
+
   const options = azureSourcesFor(connectors, "agents");
   const connectorId = azureSourceFor(connectors, "agents", source);
   const scope = { connector_id: connectorId };
-
-  // The four counts, each the server's own total.
-  const cIdentities = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.identities, limit: 1 });
-  const cBlueprints = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.blueprints, limit: 1 });
-  const cPrincipals = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.principals, limit: 1 });
-  const cUsers = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS.users, limit: 1 });
 
   // Foundry is read once for every tenant: its rows belong to subscriptions, so
   // the tenant chosen above narrows them by the subscriptions under it.
@@ -123,13 +109,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     });
   }, [rows, search]);
 
-  const toIdentities = (kind: string) => {
-    const next = new URLSearchParams(params);
-    next.set("type", "identities");
-    next.set("kind", kind);
-    next.delete("agents");
-    setParams(next);
-  };
+  const paged = useClientPaging(filtered, pageSize, `${view}|${connectorId ?? ""}|${search.trim()}|${pageSize}`);
+  const truncation = { truncated: !!q.data && q.data.totalKnown && q.data.total > rows.length, shown: rows.length, total: q.data?.total ?? rows.length, totalKnown: !!q.data?.totalKnown };
 
   const identityColumns = useMemo<AdaptiveColumn<AzureIdentity>[]>(
     () => [
@@ -233,55 +214,43 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
 
   const noun = view === "identities" ? "agent identities" : "agent identity blueprints";
   const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />;
+  const viewChips = (
+    <AWSFilterChips
+      label="Agent view"
+      active={view}
+      onSelect={(key) => {
+        const next = new URLSearchParams(params);
+        if (key === "identities") next.delete("agents");
+        else next.set("agents", key);
+        next.delete("size");
+        setParams(next, { replace: true });
+      }}
+      options={[
+        { key: "identities", label: "Agent identities" },
+        { key: "blueprints", label: "Agent identity blueprints" },
+        { key: "foundry", label: "Microsoft Foundry" },
+      ]}
+    />
+  );
   return (
     <div className="space-y-4 p-4">
-      <AllAgentsNote onOpen={() => setParam("type", "sightings")} />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Tile
-          label="Agent identities"
-          value={cIdentities.data?.total}
-          active={view === "identities"}
-          onClick={() => setParam("agents", null)}
-          title="Show agent identities"
-        />
-        <Tile
-          label="Agent identity blueprints"
-          value={cBlueprints.data?.total}
-          active={view === "blueprints"}
-          onClick={() => setParam("agents", "blueprints")}
-          title="Show agent identity blueprints"
-        />
-        <Tile
-          label="Agent identity blueprint principals"
-          value={cPrincipals.data?.total}
-          onClick={() => toIdentities("agent_identity_blueprint_principal")}
-          title="Open them in Identities"
-        />
-        <Tile label="Agents' user accounts" value={cUsers.data?.total} onClick={() => toIdentities("entra_agent_user")} title="Open them in Identities" />
-        <Tile
-          label="Microsoft Foundry"
-          value={foundryQ.data ? foundryTotals.objects : undefined}
-          active={view === "foundry"}
-          onClick={() => setParam("agents", "foundry")}
-          title="Show Foundry resources, projects, model deployments and agent applications"
-        />
-      </div>
-
       {view === "foundry" ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {viewChips}
             <p className="text-xs text-(--color-text-muted)">
               {foundryQ.data
                 ? `${foundryTotals.objects} Foundry ${foundryTotals.objects === 1 ? "object" : "objects"} · ${foundryTotals.projects} ${foundryTotals.projects === 1 ? "project" : "projects"} · ${foundryTotals.deployments} model ${foundryTotals.deployments === 1 ? "deployment" : "deployments"} · ${foundryTotals.agentApplications} agent ${foundryTotals.agentApplications === 1 ? "application" : "applications"} (${foundryTotals.agents} ${foundryTotals.agents === 1 ? "agent" : "agents"})`
                 : "Reading Microsoft Foundry…"}
             </p>
-            {sourceSelect}
+            <span className="ml-auto">{sourceSelect}</span>
           </div>
           <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
         </>
       ) : (
         <>
           <InventoryToolbar
+            chips={viewChips}
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
@@ -295,6 +264,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             total={rows.length}
             noun={noun}
           />
+
+          <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
 
           <ListFrame
             loading={q.isLoading}
@@ -315,37 +286,27 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
               cardsBelow={640}
               tableId={`azure-agents-${view}`}
               columns={view === "identities" ? identityColumns : blueprintColumns}
-              data={filtered}
+              data={paged.pageRows}
               getRowId={(r) => r.id}
               enableSelection={false}
               enableExpansion={false}
+              enableSorting={false}
+              enablePagination={false}
               rowDetails={false}
               onRowClick={(r) => navigate(detailHref(r))}
-              pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+            />
+            <CursorPager
+              meta={paged.meta}
+              pageIndex={paged.pageIndex}
+              rowsOnPage={paged.pageRows.length}
+              onPrev={paged.onPrev}
+              onNext={paged.onNext}
+              pageSize={pageSize}
+              onPageSize={(n) => setParam("size", pageSizeParam(n))}
             />
           </ListFrame>
         </>
       )}
     </div>
-  );
-}
-
-/**
- * This tab lists Microsoft Entra Agent ID objects only. Every Azure agent —
- * these, Microsoft 365 agent registry agents and the ones AuthSec inferred —
- * is in the shared agent inventory, which Sightings lists.
- */
-function AllAgentsNote({ onOpen }: { onOpen: () => void }) {
-  const all = useListDiscoveredAgentsQuery({ source: "azure", limit: 1 });
-  const total = all.data?.total;
-  if (total === undefined) return null;
-  return (
-    <p className="text-xs text-(--color-text-muted)">
-      These are the agents Microsoft Entra Agent ID lists.{" "}
-      <button type="button" onClick={onOpen} className="font-medium text-(--color-primary-text) hover:underline">
-        See all {total} Azure {total === 1 ? "agent" : "agents"} in Sightings
-      </button>
-      , including Microsoft 365 agent registry agents and agents inferred from sign-ins and permissions.
-    </p>
   );
 }

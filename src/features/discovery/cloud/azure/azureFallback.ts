@@ -48,7 +48,7 @@ export function identityFilterArgs(kind: string | null | undefined): { kind?: st
 }
 
 /** An identity's page is keyed by its Entra object id; a resource's and a
- * workload's by its ARM id here, since no graph id exists while the graph is off. */
+ * workload's by its ARM id here, since no graph id exists while the graph is not ready. */
 export function scanTablesHref(cls: InventoryClass, r: { native_id: string }): string {
   const seg = cls === "identities" ? "identity" : cls === "resources" ? "resource" : "workload";
   return `/iga/azure/${seg}/${encodeURIComponent(r.native_id)}`;

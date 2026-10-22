@@ -104,7 +104,11 @@ export default function SightingsScreen(p: ScreenProps) {
 
   const needle = p.url.searchText.trim().toLowerCase();
   const loaded = q.currentData?.agents;
-  const matches = (a: DiscoveredAgent) => !needle || [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]].join(" ").toLowerCase().includes(needle);
+  // An Azure sighting has no discovery source to filter by on the server, so a chosen tenant narrows the loaded rows by the tenant each one names.
+  const tenantOnly = provider === "azure" && p.scope.kind === "one" ? p.scope.source.scopeId.toLowerCase() : undefined;
+  const matches = (a: DiscoveredAgent) =>
+    (!tenantOnly || String(a.metadata?.tenant_id ?? "").toLowerCase() === tenantOnly) &&
+    (!needle || [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]].join(" ").toLowerCase().includes(needle));
   const rows = useMemo(() => {
     if (!loaded) return undefined;
     // One order: running first, then the most recently seen.
@@ -319,8 +323,12 @@ export default function SightingsScreen(p: ScreenProps) {
                   permission="discovery:read"
                   chosenColumns={prefs.chosen}
                   onColumnsLayout={setLayout}
-                  rowFilter={needle ? matches : undefined}
-                  filterNote={(shown, loadedCount) => `Search matches ${shown} of the ${loadedCount} loaded rows. The server has no search for sightings, so it cannot look further.`}
+                  rowFilter={needle || tenantOnly ? matches : undefined}
+                  filterNote={(shown, loadedCount) =>
+                    needle
+                      ? `Search matches ${shown} of the ${loadedCount} loaded rows. The server has no search for sightings, so it cannot look further.`
+                      : `${shown} of the ${loadedCount} loaded sightings belong to this tenant.`
+                  }
                   empty={
                     narrowing.length ? (
                       <FilteredEmpty

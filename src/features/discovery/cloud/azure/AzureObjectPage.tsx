@@ -15,7 +15,7 @@
  *   - workload: `:id` is the IGA uuid. The graph root `workload:<id>` carries only
  *     its name and region, so the record is the workloads list matched on both.
  *   - resource or workload by ARM id: `:id` is the ARM id itself ("/subscriptions/…"),
- *     linked from the scan-table lists while the graph is off. No graph read is
+ *     linked from the scan-table lists while the graph is not ready. No graph read is
  *     needed: the record is the list searched for that id.
  */
 
@@ -40,7 +40,9 @@ import { getWorkspaceId } from "@/utils/workspace";
 import { AzurePolicySection } from "@/features/iga/policy/DiscoveryPolicySection";
 import { AZURE_TARGET_KINDS } from "@/features/iga/policy/access/model";
 
-import { AzureAccessGraph } from "./AzureAccessGraph";
+import { Info } from "lucide-react";
+import { InventoryNotice } from "../aws/AWSInventoryNotices";
+import { AzureGraphPanel } from "./AzureGraphPanel";
 import {
   IdentityAccessTab,
   IdentityActivityTab,
@@ -65,16 +67,16 @@ const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "activity", label: "Activity", path: "/activity" },
   { key: "workloads", label: "Workloads", path: "/workloads" },
   { key: "evidence", label: "Evidence", path: "/evidence" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
   { key: "access", label: "Who can access", path: "/access" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access Graph", path: "/graph" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
@@ -204,7 +206,13 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         <WorkloadOverview workload={workload} subscription={connector} identityHref={runsAsObjectId ? `/iga/azure/identity/${encodeURIComponent(runsAsObjectId)}` : undefined} />
       ) : null;
     } else if (active === "graph") {
-      body = <AzureAccessGraph name={name} objectId={kind === "identity" ? id : undefined} startRef={kind === "identity" ? undefined : `${kind}:${id}`} />;
+      body = byArmId ? (
+        <InventoryNotice icon={<Info />}>
+          The access graph is not available for this object yet. It was opened from the scan tables, which carry no graph reference. Open it from Discovery once the access graph is ready on this server.
+        </InventoryNotice>
+      ) : (
+        <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />
+      );
     } else if (identity) {
       body =
         active === "access" ? (
