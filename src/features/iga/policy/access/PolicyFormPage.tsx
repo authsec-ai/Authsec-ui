@@ -9,6 +9,13 @@
  *
  * `?resource_id=`, `?identity_account_id=` and `?effect=` fill the form when it
  * is opened from Discovery or the graph.
+ *
+ * Azure (`?provider=azure`, or the Cloud switch): the admin chooses an Azure
+ * resource and service principals, managed identities or agent identities.
+ * AuthSec applies it as role assignments -- Allow creates one, Block removes
+ * the identity's own assignments that grant the access and restores them at
+ * the end -- with AuthSec's Azure app, which needs Role Based Access Control
+ * Administrator on the subscription (the preview says when it does not).
  */
 
 import { ArrowRight, CheckCircle2, Info } from "lucide-react";
@@ -25,6 +32,7 @@ import {
   type AccessLevel,
   type AccessPolicyPreview,
 } from "@/app/api/igaAccessPoliciesApi";
+import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
 import { useGetGraphIdentityQuery, useGetGraphResourceQuery } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +56,9 @@ import {
   windowText,
   withEffect,
   type PolicyDraft,
+  type PolicyProvider,
 } from "./model";
+import { AzureIdentityPicker, AzureResourcePicker } from "./AzurePickers";
 import { AwsDocument, EffectChip } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
@@ -114,7 +124,14 @@ function Pill({
 }
 
 /** One line under the access toggles saying what the choice covers. */
-function accessHint(access: AccessLevel[], isBlock: boolean): string {
+function accessHint(access: AccessLevel[], isBlock: boolean, provider: PolicyProvider = "aws", storage = false): string {
+  if (provider === "azure") {
+    if (access.includes("all")) return "Everything on this resource: reading, changing and deleting it, and for a storage account its blobs and keys.";
+    const words = { read: storage ? "reading blobs" : "reading the resource", write: storage ? "writing blobs" : "changing the resource", delete: storage ? "deleting blobs" : "deleting the resource" };
+    const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => words[a.key]);
+    if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
+    return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
+  }
   if (access.includes("all")) return "Everything on this bucket or folder: reading, writing, deleting and listing.";
   const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => a.blurb.replace(/\.$/, "").toLowerCase());
   if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
@@ -140,12 +157,15 @@ export default function PolicyFormPage() {
   const loadFailure = classifyPolicyError(existing.error);
 
   // Opened from Discovery: fill in the bucket and the role it named.
-  const fromResource = !editing ? params.get("resource_id") ?? "" : "";
-  const fromRole = !editing ? params.get("identity_account_id") ?? "" : "";
+  const fromAzure = params.get("provider") === "azure";
+  const fromResource = !editing && !fromAzure ? params.get("resource_id") ?? "" : "";
+  const fromRole = !editing && !fromAzure ? params.get("identity_account_id") ?? "" : "";
+  const azureQ = useListAzureConnectorsQuery();
+  const azureConnected = (azureQ.data ?? []).some((c) => c.scope_kind === "subscription" && c.status === "active");
   const resourceQ = useGetGraphResourceQuery({ ws, id: fromResource }, { skip: !fromResource });
   const roleQ = useGetGraphIdentityQuery({ ws, id: fromRole }, { skip: !fromRole });
 
-  const [draft, setDraft] = useState<PolicyDraft>(() => emptyDraft({ effect: params.get("effect") === "allow" ? "allow" : "block" }));
+  const [draft, setDraft] = useState<PolicyDraft>(() => emptyDraft({ provider: fromAzure ? "azure" : "aws", effect: params.get("effect") === "allow" ? "allow" : "block" }));
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });
 
@@ -175,6 +195,11 @@ export default function PolicyFormPage() {
 
   const set = <K extends keyof PolicyDraft>(k: K, v: PolicyDraft[K]) => {
     setDraft((d) => ({ ...d, [k]: v }));
+    setFieldError(null);
+  };
+  // A resource and identities belong to one cloud: switching clears them.
+  const setProvider = (provider: PolicyProvider) => {
+    setDraft((d) => (d.provider === provider ? d : { ...d, provider, resource: null, roles: [], prefix: "" }));
     setFieldError(null);
   };
   const setEffect = (e: AccessEffect) => {
@@ -240,7 +265,8 @@ export default function PolicyFormPage() {
       editing && existing.data ? edit({ id: id!, body: { ...body, base_version_no: existing.data.data.version_no } }) : create(body),
     );
     if (res) {
-      toast.success(editing ? "Saved. AuthSec is applying the new version in AWS." : "Applied. AuthSec is putting it into AWS.");
+      const where = draft.provider === "azure" ? "Azure" : "AWS";
+      toast.success(editing ? `Saved. AuthSec is applying the new version in ${where}.` : `Applied. AuthSec is putting it into ${where}.`);
       navigate(`/iga/policy/${res.data.id}`);
     }
   }
@@ -264,13 +290,19 @@ export default function PolicyFormPage() {
     return policySentence({ ...draft, resource: { bucket: draft.resource.bucket, prefix: draft.prefix.trim() }, ...windowOf(draft) });
   }, [draft]);
   const isBlock = draft.effect === "block";
+  const isAzure = draft.provider === "azure";
+  const storage = !!draft.resource?.kind?.toLowerCase().startsWith("microsoft.storage/storageaccounts");
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined);
-  const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
+  // AWS readiness is the account's IAM binding; Azure's is AuthSec's write access, which the preview checks.
+  const bindingBlocked = !isAzure && (blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready));
+  const azureWriteMissing = isAzure && blockers.some((b) => b.code === "azure_write_access_missing");
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
   const notes = (shown?.warnings ?? []).filter((w) => w.code !== "other_paths");
   const workloads = [...new Set((shown?.also_affected ?? []).flatMap((a) => a.workloads.map((w) => w.name)))];
   const disabledWhy = bindingBlocked
     ? "Set up AWS access for this account to apply."
+    : azureWriteMissing
+      ? "Give AuthSec's Azure app Role Based Access Control Administrator on the subscription to apply."
     : otherBlockers.length
       ? otherBlockers[0].message
       : "";
@@ -301,8 +333,12 @@ export default function PolicyFormPage() {
       title={editing ? `Edit ${existing.data?.data.name ?? "policy"}` : "Create policy"}
       description={
         editing
-          ? "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
-          : "Block or allow roles on a bucket for as long as you say. AuthSec writes it into IAM and AWS enforces it."
+          ? isAzure
+            ? "Applying replaces the version in Azure: AuthSec changes the role assignments to match the new version."
+            : "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
+          : isAzure
+            ? "Block or allow identities on an Azure resource for as long as you say. AuthSec changes the role assignments in Azure."
+            : "Block or allow roles on a bucket for as long as you say. AuthSec writes it into IAM and AWS enforces it."
       }
       requires="access_policies"
     >
@@ -320,61 +356,100 @@ export default function PolicyFormPage() {
                 void apply();
               }}
             >
-              <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
-                  <div id="ap-resource">
-                    <ResourcePicker
-                      ws={ws}
-                      value={draft.resource}
-                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.account_id === d.resource?.account_id ? d.roles : [] }))}
-                      invalid={!!err("resource")}
-                    />
-                    <FieldError message={err("resource")} />
+              {/* An edit keeps its cloud; a new policy can be AWS or Azure. */}
+              {!editing && azureConnected ? (
+                <Block title="Cloud" hint="Where the resource is. A policy changes one cloud.">
+                  <div role="radiogroup" aria-label="Cloud" className="flex flex-wrap gap-1.5">
+                    <Pill radio on={!isAzure} onClick={() => setProvider("aws")}>
+                      AWS
+                    </Pill>
+                    <Pill radio on={isAzure} onClick={() => setProvider("azure")}>
+                      Microsoft Azure
+                    </Pill>
                   </div>
-                  <div>
-                    <label htmlFor="ap-prefix" className="sr-only">
-                      Folder (optional)
-                    </label>
-                    <Input
-                      id="ap-prefix"
-                      value={draft.prefix}
-                      onChange={(e) => set("prefix", e.target.value)}
-                      placeholder="Whole bucket, or a folder/"
-                      className="font-mono placeholder:font-sans"
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-invalid={!!err("prefix")}
-                    />
-                    {draft.resource?.folders?.length ? (
-                      <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Folders Discovery found">
-                        {["", ...draft.resource.folders].map((f) => (
-                          <button
-                            key={f || "whole"}
-                            type="button"
-                            onClick={() => set("prefix", f)}
-                            className={cn(
-                              "rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
-                              draft.prefix.trim() === f
-                                ? "border-(--color-primary) bg-(--color-primary-soft) text-(--color-primary-text)"
-                                : "border-(--color-border-subtle) text-(--color-text-muted) hover:text-(--color-text)",
-                            )}
-                          >
-                            {f || "whole bucket"}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <FieldError message={err("prefix")} />
-                  </div>
-                </div>
-              </Block>
+                </Block>
+              ) : null}
 
-              <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
-                <div id="ap-roles">
-                  <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
-                  <FieldError message={err("roles")} />
-                </div>
-              </Block>
+              {isAzure ? (
+                <>
+                  <Block title="Resource" hint="Choose the Azure resource this rule is about, e.g. a storage account. Only resources AuthSec found in your connected subscriptions are listed; a resource group or subscription cannot be chosen.">
+                    <div id="ap-resource">
+                      <AzureResourcePicker
+                        ws={ws}
+                        value={draft.resource}
+                        onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.account_id === d.resource?.account_id ? d.roles : [] }))}
+                        invalid={!!err("resource")}
+                      />
+                      <FieldError message={err("resource")} />
+                    </div>
+                  </Block>
+
+                  <Block title="Identities" hint="Choose the service principals, managed identities or agent identities this rule is for. An agent that runs as one of them is covered.">
+                    <div id="ap-roles">
+                      <AzureIdentityPicker ws={ws} resource={draft.resource} effect={draft.effect} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                      <FieldError message={err("roles")} />
+                    </div>
+                  </Block>
+                </>
+              ) : (
+                <>
+                <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
+                    <div id="ap-resource">
+                      <ResourcePicker
+                        ws={ws}
+                        value={draft.resource}
+                        onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.account_id === d.resource?.account_id ? d.roles : [] }))}
+                        invalid={!!err("resource")}
+                      />
+                      <FieldError message={err("resource")} />
+                    </div>
+                    <div>
+                      <label htmlFor="ap-prefix" className="sr-only">
+                        Folder (optional)
+                      </label>
+                      <Input
+                        id="ap-prefix"
+                        value={draft.prefix}
+                        onChange={(e) => set("prefix", e.target.value)}
+                        placeholder="Whole bucket, or a folder/"
+                        className="font-mono placeholder:font-sans"
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-invalid={!!err("prefix")}
+                      />
+                      {draft.resource?.folders?.length ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1" aria-label="Folders Discovery found">
+                          {["", ...draft.resource.folders].map((f) => (
+                            <button
+                              key={f || "whole"}
+                              type="button"
+                              onClick={() => set("prefix", f)}
+                              className={cn(
+                                "rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
+                                draft.prefix.trim() === f
+                                  ? "border-(--color-primary) bg-(--color-primary-soft) text-(--color-primary-text)"
+                                  : "border-(--color-border-subtle) text-(--color-text-muted) hover:text-(--color-text)",
+                              )}
+                            >
+                              {f || "whole bucket"}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      <FieldError message={err("prefix")} />
+                    </div>
+                  </div>
+                </Block>
+
+                <Block title="Roles" hint="Choose the AWS roles this rule is for. Every agent or job that runs as one of these roles is covered.">
+                  <div id="ap-roles">
+                    <RolePicker ws={ws} resource={draft.resource} effect={draft.effect} folder={draft.prefix} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
+                    <FieldError message={err("roles")} />
+                  </div>
+                </Block>
+                </>
+              )}
 
               <Block title="Rule">
                 <div className="space-y-4">
@@ -404,7 +479,7 @@ export default function PolicyFormPage() {
                         </Pill>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock)}</p>
+                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, draft.provider, storage)}</p>
                     <FieldError message={err("access")} />
                   </fieldset>
 
@@ -439,7 +514,9 @@ export default function PolicyFormPage() {
                         ? "No end: it stays until you end or pause it."
                         : draft.preset === "custom"
                           ? `${windowText(windowOf(draft))}, your local time.`
-                          : `From when you apply, for ${PRESETS.find((p) => p.key === draft.preset)?.label}. AWS stops honouring it at the end, even if AuthSec is down.`}
+                          : isAzure
+                            ? `From when you apply, for ${PRESETS.find((p) => p.key === draft.preset)?.label}. Azure role assignments have no expiry of their own: AuthSec changes them back at the end.`
+                            : `From when you apply, for ${PRESETS.find((p) => p.key === draft.preset)?.label}. AWS stops honouring it at the end, even if AuthSec is down.`}
                     </p>
                     <FieldError message={err("end")} />
                   </div>
@@ -488,17 +565,36 @@ export default function PolicyFormPage() {
                     <span className="text-xs text-(--color-text-muted)">Summary</span>
                   </div>
                   <p className="text-[15px] font-semibold leading-snug text-(--color-text)">
-                    {localSentence || "Choose a bucket, roles and access to see what this does."}
+                    {localSentence || (isAzure ? "Choose a resource, identities and access to see what this does." : "Choose a bucket, roles and access to see what this does.")}
                   </p>
                   {previewable ? (
                     <p className="text-xs text-(--color-text-muted)">
-                      Only these roles change. Other roles, users, groups and bucket policies keep their access.
+                      {isAzure
+                        ? "Only these identities' role assignments on this resource change. Others keep their access; access from a broader scope or through groups is not removed."
+                        : "Only these roles change. Other roles, users, groups and bucket policies keep their access."}
                     </p>
                   ) : null}
                 </div>
 
                 <ul className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle) text-[13px]">
-                  {readiness.loading ? null : readiness.ready ? (
+                  {isAzure ? (
+                    previewable && shown && !azureWriteMissing ? (
+                      <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
+                        <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
+                        AuthSec can change role assignments in this subscription.
+                      </li>
+                    ) : azureWriteMissing ? (
+                      <li className="space-y-1 bg-(--color-surface-subtle) px-4 py-2.5 text-(--color-text)">
+                        <p className="flex items-start gap-2">
+                          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
+                          <span>
+                            AuthSec can read this subscription but cannot change role assignments yet. In the Azure portal, give AuthSec&rsquo;s enterprise app the{" "}
+                            <span className="font-medium">Role Based Access Control Administrator</span> role on subscription {draft.resource?.account_id}.
+                          </span>
+                        </p>
+                      </li>
+                    ) : null
+                  ) : readiness.loading ? null : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
                       AuthSec can change IAM in this account.
@@ -526,7 +622,7 @@ export default function PolicyFormPage() {
                     </li>
                   )}
 
-                  {previewable && shown ? (
+                  {previewable && shown && !isAzure ? (
                     <li className="px-4 py-2.5 text-(--color-text)">
                       {workloads.length ? (
                         <>
@@ -551,7 +647,7 @@ export default function PolicyFormPage() {
                   {previewNote ? <li className="px-4 py-2.5 text-xs text-(--color-text-muted)">Preview unavailable: {previewNote}</li> : null}
                   {previewState.isLoading && !shown && previewable ? (
                     <li role="status" className="px-4 py-2.5 text-xs text-(--color-text-muted)">
-                      Working out what AWS will get…
+                      {isAzure ? "Working out what changes in Azure…" : "Working out what AWS will get…"}
                     </li>
                   ) : null}
                 </ul>
@@ -559,11 +655,13 @@ export default function PolicyFormPage() {
                 {shown?.documents.length ? (
                   <details className="border-t border-(--color-border-subtle)">
                     <summary className="cursor-pointer px-4 py-2.5 text-[13px] font-medium text-(--color-primary-text)">
-                      View the IAM {shown.documents.length === 1 ? "policy" : `policies (${shown.documents.length})`} AuthSec will attach
+                      {isAzure
+                        ? "View the role-assignment change AuthSec will make"
+                        : `View the IAM ${shown.documents.length === 1 ? "policy" : `policies (${shown.documents.length})`} AuthSec will attach`}
                     </summary>
                     <div className="space-y-2 px-4 pb-3">
                       {shown.documents.map((d) => (
-                        <AwsDocument key={d.identity_account_id} title={[d.role_name, d.policy_name].filter(Boolean).join(" · ") || "IAM policy"} document={d.document} />
+                        <AwsDocument key={d.identity_account_id} title={[d.role_name, d.policy_name].filter(Boolean).join(" · ") || (isAzure ? "Azure role assignments" : "IAM policy")} document={d.document} />
                       ))}
                     </div>
                   </details>

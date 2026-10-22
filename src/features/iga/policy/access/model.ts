@@ -36,15 +36,16 @@ export const STATUS: Record<AccessPolicyStatus, { label: string; tone: ConsoleTo
 export const STATUS_ORDER: AccessPolicyStatus[] = ["active", "applying", "scheduled", "drift", "failed", "paused", "ended"];
 
 /** A role's copy in AWS, by the backend's deployment state. */
-export function deploymentView(state: string): { label: string; tone: ConsoleTone } {
+export function deploymentView(state: string, provider: PolicyProvider = "aws"): { label: string; tone: ConsoleTone } {
+  const cloud = provider === "azure" ? "Azure" : "AWS";
   switch (state) {
     case "approved":
     case "deploying":
       return { label: "Applying", tone: "info" };
     case "outcome_unknown":
-      return { label: "Checking AWS", tone: "warning" };
+      return { label: `Checking ${cloud}`, tone: "warning" };
     case "active":
-      return { label: "In AWS", tone: "success" };
+      return { label: `In ${cloud}`, tone: "success" };
     case "expiring":
       return { label: "Removing", tone: "info" };
     case "expired":
@@ -136,8 +137,12 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
   return v.length <= 1 ? v.join("") : `${v.slice(0, -1).join(", ")} and ${v[v.length - 1]}`;
 }
 
-/** `invoices/` in `finance-reports` → `finance-reports/invoices/`; the whole bucket → `finance-reports`. */
-export function resourceText(r: { bucket: string; prefix: string }): string {
+/**
+ * `invoices/` in `finance-reports` → `finance-reports/invoices/`; the whole bucket → `finance-reports`.
+ * An Azure resource has no bucket: its name, the last segment of `arn` (a name or an ARM id).
+ */
+export function resourceText(r: { bucket: string; prefix: string; arn?: string }): string {
+  if (!r.bucket && r.arn) return r.arn.split("/").filter(Boolean).pop() ?? r.arn;
   return r.prefix ? `${r.bucket}/${r.prefix}` : r.bucket;
 }
 
@@ -219,7 +224,7 @@ export function policySentence(p: {
   effect: AccessEffect;
   access: readonly AccessLevel[];
   roles: readonly { name: string }[];
-  resource: { bucket: string; prefix: string };
+  resource: { bucket: string; prefix: string; arn?: string };
   starts_at: string | null;
   ends_at: string | null;
 }): string {
@@ -271,8 +276,48 @@ export interface DraftRole {
   name: string;
 }
 
+/** Which cloud a policy changes: IAM in AWS, role assignments in Azure. */
+export type PolicyProvider = "aws" | "azure";
+
+/**
+ * The cloud of a stored policy. An AWS policy always names an S3 bucket; an
+ * Azure one names a resource (no bucket), and its roles' ARNs read `azure:<name>`.
+ */
+export function policyProvider(p: { resource: { bucket: string; arn: string }; roles?: readonly { arn?: string }[] }): PolicyProvider {
+  if (p.roles?.some((r) => r.arn?.startsWith("azure:"))) return "azure";
+  if (p.resource.arn.startsWith("/subscriptions/")) return "azure";
+  return !p.resource.bucket && !p.resource.arn.startsWith("arn:aws") ? "azure" : "aws";
+}
+
+/**
+ * Text written for AWS (by this console or the backend), said in the policy's
+ * own cloud: "AWS" becomes "Azure" for an Azure policy. AWS text is unchanged.
+ */
+export function inCloud(text: string, provider: PolicyProvider): string {
+  return provider === "azure" ? text.replace(/\bAWS\b/g, "Azure") : text;
+}
+
+/** `/subscriptions/<id>/...` → its subscription id, or "". */
+export function subscriptionOf(armId: string): string {
+  const m = /^\/subscriptions\/([^/]+)/i.exec(armId);
+  return m ? m[1].toLowerCase() : "";
+}
+
+/** The identity kinds an Azure access policy can target (the backend's azureEligibleKinds). */
+export const AZURE_TARGET_KINDS = ["entra_service_principal", "entra_managed_identity", "entra_agent_identity"] as const;
+
+export function azureTargetable(kind: string): boolean {
+  return (AZURE_TARGET_KINDS as readonly string[]).includes(kind);
+}
+
+/** An ARM resource a policy can name: `/subscriptions/…/resourceGroups/…/providers/…`, not a resource group or subscription. */
+export function isArmResource(nativeId: string): boolean {
+  return /^\/subscriptions\/[^/]+\/resourcegroups\/[^/]+\/providers\/.+/i.test(nativeId);
+}
+
 export interface DraftResource {
   resource_id: string;
+  /** AWS: the bucket. Azure: the resource's name. */
   bucket: string;
   arn: string;
   account_id: string;
@@ -285,6 +330,8 @@ export interface DraftResource {
   records?: { id: string; text: string }[];
   /** Folders Discovery saw named in this bucket, e.g. `attachments/`. */
   folders?: string[];
+  /** Azure: the ARM type, e.g. `microsoft.storage/storageaccounts`. */
+  kind?: string;
 }
 
 /** The path a record names inside its bucket: "" for the bucket or all of it, else `folder/*` or a key. */
@@ -298,6 +345,7 @@ export function pathInBucket(text: string): string {
 
 /** The form's state: what the person chose, before it becomes a request. */
 export interface PolicyDraft {
+  provider: PolicyProvider;
   effect: AccessEffect;
   resource: DraftResource | null;
   prefix: string;
@@ -315,8 +363,9 @@ export const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
 
 const minute = (d: Date) => new Date(Math.floor(d.getTime() / 60_000) * 60_000);
 
-export function emptyDraft(initial?: { effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
+export function emptyDraft(initial?: { provider?: PolicyProvider; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
   return {
+    provider: initial?.provider ?? "aws",
     effect: initial?.effect ?? "block",
     resource: initial?.resource ?? null,
     prefix: initial?.prefix ?? "",
@@ -333,9 +382,17 @@ export function emptyDraft(initial?: { effect?: AccessEffect; resource?: DraftRe
 /** An edit starts from the policy as it is now. */
 export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   const fallbackEnd = toLocalInput(new Date(minute(new Date()).getTime() + 24 * 3_600_000));
+  const provider = policyProvider(p);
   return {
+    provider,
     effect: p.effect,
-    resource: { resource_id: p.resource.resource_id, bucket: p.resource.bucket, arn: p.resource.arn, account_id: p.resource.account_id },
+    resource: {
+      resource_id: p.resource.resource_id,
+      // An Azure policy's resource has no bucket: its name is what the list and detail call `arn`.
+      bucket: provider === "azure" ? p.resource.bucket || p.resource.arn : p.resource.bucket,
+      arn: p.resource.arn,
+      account_id: p.resource.account_id,
+    },
     prefix: p.resource.prefix,
     roles: p.roles.map((r) => ({ identity_account_id: r.identity_account_id, name: r.name })),
     access: p.access,
@@ -371,7 +428,8 @@ export function windowOf(d: PolicyDraft, now = new Date()): { starts_at: string 
 export function bodyOf(d: PolicyDraft): AccessPolicyBody {
   return {
     effect: d.effect,
-    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.prefix.trim() },
+    // A prefix is for S3 buckets only; the server refuses one on an Azure resource.
+    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.provider === "azure" ? "" : d.prefix.trim() },
     roles: d.roles.map((r) => ({ identity_account_id: r.identity_account_id })),
     access: d.access,
     ...windowOf(d),
@@ -390,9 +448,10 @@ export function suggestedName(d: PolicyDraft): string {
 
 /** What is still missing before Apply, in the order the form asks for it; "" when nothing is. */
 export function draftProblem(d: PolicyDraft, now = new Date()): { field: string; message: string } | null {
-  if (!d.resource) return { field: "resource", message: "Choose a bucket." };
-  if (d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
-  if (d.roles.length === 0) return { field: "roles", message: "Choose at least one role." };
+  const azure = d.provider === "azure";
+  if (!d.resource) return { field: "resource", message: azure ? "Choose an Azure resource." : "Choose a bucket." };
+  if (!azure && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
+  if (d.roles.length === 0) return { field: "roles", message: azure ? "Choose at least one identity." : "Choose at least one role." };
   if (d.access.length === 0) return { field: "access", message: `Choose what to ${d.effect === "block" ? "block." : "allow."}` };
   const w = windowOf(d, now);
   if (d.preset === "custom") {

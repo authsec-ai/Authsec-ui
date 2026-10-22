@@ -28,7 +28,8 @@ import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { PolicyLoadFailure, PolicyShell, classifyPolicyError, usePolicyPermission } from "../shared";
 import { DeletePolicyDialog } from "./DeletePolicyDialog";
 import { LifecycleDialog, type LifecycleAction } from "./LifecycleDialog";
-import { STATUS, STATUS_ORDER, accessText, resourceText, whenText, windowText } from "./model";
+import { STATUS, STATUS_ORDER, accessText, policyProvider,
+  resourceText, whenText, windowText } from "./model";
 import { EffectChip, PolicyStatusChip, ReadinessBanner } from "./parts";
 
 const PAGE = 200;
@@ -94,8 +95,8 @@ export default function PoliciesListPage() {
         cellClassName: "py-3.5",
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-3">
-            {/* Policies of every provider share this list; the mark says which one this is. Today: AWS. */}
-            <ProviderGlyph provider="aws" className="shrink-0" />
+            {/* Policies of every provider share this list; the mark says which one this is. */}
+            <ProviderGlyph provider={policyProvider(row.original)} className="shrink-0" />
             <div className="min-w-0">
               <Link
                 to={`/iga/policy/${row.original.id}`}
@@ -184,7 +185,7 @@ export default function PoliciesListPage() {
         label: "Status",
         priority: 1,
         approxWidth: 150,
-        cell: ({ row }) => <PolicyStatusChip status={row.original.status} />,
+        cell: ({ row }) => <PolicyStatusChip status={row.original.status} provider={policyProvider(row.original)} />,
         detail: (p) => STATUS[p.status]?.label ?? p.status,
       },
       {

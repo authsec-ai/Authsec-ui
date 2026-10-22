@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 import { PolicyActionError, usePolicyAction } from "../shared";
 
+import { policyProvider } from "./model";
+
 export function DeletePolicyDialog({
   policy,
   onClose,
@@ -51,7 +53,7 @@ export function DeletePolicyDialog({
         <DialogHeader>
           <DialogTitle>Delete this policy?</DialogTitle>
           <DialogDescription>
-            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in AWS. What it did stays in the Logs.
+            {policy.name} leaves the Policies list for good. It has already ended and nothing of it is left in {policyProvider(policy) === "azure" ? "Azure" : "AWS"}. What it did stays in the Logs.
           </DialogDescription>
         </DialogHeader>
         <PolicyActionError failure={act.failure} />

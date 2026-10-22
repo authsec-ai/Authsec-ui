@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { PolicyActionError, usePolicyAction } from "../shared";
 
+import { inCloud, policyProvider } from "./model";
+
 export type LifecycleAction = "pause" | "resume" | "end";
 
 const COPY: Record<LifecycleAction, { title: string; button: string; done: string; reasonRequired: boolean }> = {
@@ -82,7 +84,7 @@ export function LifecycleDialog({
     const run = action === "pause" ? () => pause(args) : action === "resume" ? () => resume(args) : () => end(args);
     const ok = await act.run(run);
     if (ok) {
-      toast.success(c.done);
+      toast.success(inCloud(c.done, policyProvider(policy)));
       onClose();
     }
   }

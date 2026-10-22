@@ -10,14 +10,14 @@ import { cn } from "@/lib/utils";
 
 import { IgaBadge } from "../../shared/components/IgaBadge";
 import { classifyPolicyError } from "../shared";
-import { EFFECT, STATUS } from "./model";
+import { EFFECT, STATUS, inCloud, type PolicyProvider } from "./model";
 import { readinessWords } from "./readiness";
 
-export function PolicyStatusChip({ status, className }: { status: AccessPolicyStatus; className?: string }) {
+export function PolicyStatusChip({ status, provider = "aws", className }: { status: AccessPolicyStatus; provider?: PolicyProvider; className?: string }) {
   const s = STATUS[status] ?? { label: status, tone: "neutral" as const, hint: "" };
   return (
-    <IgaBadge tone={s.tone} title={s.hint} className={className}>
-      {s.label}
+    <IgaBadge tone={s.tone} title={inCloud(s.hint, provider)} className={className}>
+      {inCloud(s.label, provider)}
     </IgaBadge>
   );
 }
