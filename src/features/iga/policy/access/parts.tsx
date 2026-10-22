@@ -52,16 +52,32 @@ export function AwsDocument({ title, document, className }: { title?: string; do
 /** A string list from a document field, [] when absent. */
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
+/** Azure's built-in roles an allow assigns, by role definition GUID. */
+const BUILT_IN_ROLE: Record<string, string> = {
+  "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1": "Storage Blob Data Reader",
+  "ba92f5b4-2d11-453d-a403-e96b0029c9fe": "Storage Blob Data Contributor",
+  "acdd72a7-3385-48ef-bd42-f606fba81ae7": "Reader",
+  "b24988ac-6180-42a0-ab88-20f7382dd24c": "Contributor",
+};
+
+function roleName(roleDefinitionId: unknown): string {
+  const id = typeof roleDefinitionId === "string" ? roleDefinitionId.slice(roleDefinitionId.lastIndexOf("/") + 1).toLowerCase() : "";
+  return BUILT_IN_ROLE[id] ?? (id ? `role ${id}` : "a built-in role");
+}
+
 /**
  * What AuthSec changes in Azure for one identity, in words, with the JSON
- * behind it one click away. The server's document is either
- * `remove_role_assignments_granting {scope, actions, data_actions}` (a block)
- * or `create_role_assignment {scope, role, role_definition_id}` (an allow).
+ * behind it one click away. Two shapes reach here:
+ *   the preview's  `remove_role_assignments_granting {scope, actions, data_actions}`
+ *                  or `create_role_assignment {scope, role, role_definition_id}`;
+ *   the detail's   `{scope, principal_id, removed_role_assignments: [...]}`
+ *                  or `{scope, principal_id, create_role_assignment {name, role_definition_id}}`.
  */
 export function AzureChange({ title, document, className }: { title?: string; document: Record<string, unknown>; className?: string }) {
   const remove = document.remove_role_assignments_granting as Record<string, unknown> | undefined;
   const create = document.create_role_assignment as Record<string, unknown> | undefined;
-  const scope = String((remove ?? create)?.scope ?? "");
+  const removed = Array.isArray(document.removed_role_assignments) ? (document.removed_role_assignments as Record<string, unknown>[]) : null;
+  const scope = String(document.scope ?? (remove ?? create)?.scope ?? "");
   const where = scope ? scope.slice(scope.lastIndexOf("/") + 1) : "the resource";
   const grants = remove ? [...strings(remove.data_actions), ...strings(remove.actions)] : [];
   return (
@@ -79,7 +95,28 @@ export function AzureChange({ title, document, className }: { title?: string; do
         </button>
       </figcaption>
       <div className="space-y-2 bg-(--color-surface-raised) px-3 py-2 text-[13px] text-(--color-text)">
-        {remove ? (
+        {removed ? (
+          removed.length ? (
+            <>
+              <p>
+                Removed {removed.length === 1 ? "this role assignment" : `these ${removed.length} role assignments`} on <span className="font-medium">{where}</span>; AuthSec puts {removed.length === 1 ? "it" : "them"} back when the policy ends:
+              </p>
+              <ul className="space-y-0.5 text-xs text-(--color-text-secondary)">
+                {removed.map((a, i) => {
+                  const props = (a.properties ?? {}) as Record<string, unknown>;
+                  return (
+                    <li key={String(a.id ?? i)} className="break-all">
+                      {roleName(props.roleDefinitionId)}
+                      {props.scope ? <span className="font-mono text-(--color-text-muted)"> · {String(props.scope)}</span> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p>No role assignment on <span className="font-medium">{where}</span> gave this identity the access, so nothing was removed. AuthSec removes any that appear while the block is on.</p>
+          )
+        ) : remove ? (
           <>
             <p>
               Removes this identity&rsquo;s role assignments on <span className="font-medium">{where}</span> (or inside it) whose role grants any of these, and puts them back when the policy ends:
@@ -94,7 +131,7 @@ export function AzureChange({ title, document, className }: { title?: string; do
           </>
         ) : create ? (
           <p>
-            Assigns <span className="font-medium">{String(create.role ?? "a built-in role")}</span> on <span className="font-medium">{where}</span>. Azure assignments do not expire on their own: AuthSec removes it when the policy ends.
+            Assigns <span className="font-medium">{typeof create.role === "string" ? create.role : roleName(create.role_definition_id)}</span> on <span className="font-medium">{where}</span>. Azure assignments do not expire on their own: AuthSec removes it when the policy ends.
           </p>
         ) : (
           <pre className="max-h-80 overflow-auto font-mono text-xs">{JSON.stringify(document, null, 2)}</pre>
@@ -160,6 +197,8 @@ export function ReadinessBanner({ ws, accountId }: { ws: string; accountId?: str
   const notReady = accounts.filter((a) => !a.ready);
   const subs = accountId ? [] : r.azure_subscriptions ?? [];
   const subsNotReady = subs.filter((s) => !s.ready);
+  // No AWS account, and a server that does not report Azure subscriptions: nothing true to say about Azure.
+  if (r.available && accounts.length === 0 && !r.azure_subscriptions) return null;
   if (r.available && accounts.length === 0 && subs.length > 0) {
     // An Azure-only workspace: say only what Azure needs.
     return subsNotReady.length ? (

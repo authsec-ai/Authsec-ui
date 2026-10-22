@@ -39,7 +39,7 @@ export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused"
 
 export interface AccessPolicyResource {
   resource_id: string;
-  /** The bucket's ARN on AWS; the ARM id on Azure. */
+  /** The bucket's ARN on AWS. On Azure the server sends the resource's name here today (the ARM id once it sends `provider`). */
   arn: string;
   /** AWS only; "" on Azure. */
   bucket: string;
@@ -47,7 +47,7 @@ export interface AccessPolicyResource {
   prefix: string;
   /** The AWS account, or the Azure subscription id. */
   account_id: string;
-  /** Absent from a backend that predates Azure: read it with `providerOf`. */
+  /** Not sent yet (SPEC-access-policies.md §4.2): read it with `providerOf`. */
   provider?: AccessProvider;
   /** The bucket or the Azure resource's name. */
   name?: string;

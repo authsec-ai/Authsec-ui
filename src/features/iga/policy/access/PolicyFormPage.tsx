@@ -186,7 +186,8 @@ export default function PolicyFormPage() {
   useEffect(() => {
     const g = azureResourceQ.data?.data;
     const n = g?.nodes.find((x) => x.ref === g.root);
-    if (n && !filled.current.resource) {
+    // Only an Azure root with its ARM id fills the form; anything else leaves the picker to the admin.
+    if (n && n.provider === "azure" && n.native_id && !filled.current.resource) {
       filled.current.resource = true;
       const arn = n.native_id ?? "";
       const { subscription, resourceGroup } = armParts(arn);
@@ -332,7 +333,11 @@ export default function PolicyFormPage() {
   const disabledWhy = bindingBlocked
     ? aws
       ? "Set up AWS access for this account to apply."
-      : "Give AuthSec's Azure app the Role Based Access Control Administrator role on this subscription to apply."
+      : !readiness.available
+        ? readiness.reason || "Applying policies is not available on this server."
+        : readiness.scopes.length === 0
+          ? "This resource's subscription is not connected to AuthSec."
+          : "Give AuthSec's Azure app the Role Based Access Control Administrator role on this subscription to apply."
     : otherBlockers.length
       ? otherBlockers[0].message
       : "";
@@ -397,6 +402,12 @@ export default function PolicyFormPage() {
                 </Block>
               )}
 
+              {fromAzure && (azureResourceQ.isError || azureRoleQ.isError) ? (
+                <p role="status" className="rounded-md border border-(--color-border-strong) bg-(--color-surface-subtle) px-3 py-2 text-xs text-(--color-text-muted)">
+                  The {fromResource ? "resource" : "identity"} this link names could not be read. Choose it below.
+                </p>
+              ) : null}
+
               {aws ? (
               <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
@@ -404,7 +415,7 @@ export default function PolicyFormPage() {
                     <ResourcePicker
                       ws={ws}
                       value={draft.resource}
-                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.account_id === d.resource?.account_id ? d.roles : [] }))}
+                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: !r || !d.resource || r.account_id === d.resource.account_id ? d.roles : [] }))}
                       invalid={!!err("resource")}
                     />
                     <FieldError message={err("resource")} />
@@ -452,7 +463,8 @@ export default function PolicyFormPage() {
                     <AzureResourcePicker
                       ws={ws}
                       value={draft.resource}
-                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: r?.tenant === d.resource?.tenant ? d.roles : [] }))}
+                      // Identities stay while the tenant does: one filled in from a link survives the first pick, and Change keeps them.
+                      onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: !r || !d.resource || r.tenant === d.resource.tenant ? d.roles : [] }))}
                       invalid={!!err("resource")}
                     />
                     <FieldError message={err("resource")} />
@@ -728,7 +740,12 @@ export default function PolicyFormPage() {
             )}
             <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
               <span className={cn("mr-auto text-xs", disabledWhy ? "text-(--color-warning-text)" : "text-(--color-text-muted)")}>
-                {disabledWhy || (isBlock ? "Takes effect when you apply. You can lift it any time." : "Takes effect when you apply and ends on its own.")}
+                {disabledWhy ||
+                  (isBlock
+                    ? "Takes effect when you apply. You can lift it any time."
+                    : aws
+                      ? "Takes effect when you apply and ends on its own."
+                      : "Takes effect when you apply. AuthSec removes it at the end.")}
               </span>
               <Button variant="outline" asChild>
                 <Link to={editing ? `/iga/policy/${id}` : "/iga/policy"}>Cancel</Link>

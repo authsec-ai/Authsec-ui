@@ -764,7 +764,8 @@ export interface GraphNode {
    * group or the directory an assignment names is a leaf `scope` node.
    */
   provider?: "k8s" | "azure";
-  scope?: K8sScope;
+  /** A Kubernetes node's cluster, or an Azure node's tenant (`azure_tenant`). */
+  scope?: K8sScope | { kind: "azure_tenant"; id: string; label: string };
   sub_scope?: string | null;
   native_id?: string;
   k8s_rule?: K8sRule;

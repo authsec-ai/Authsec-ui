@@ -241,6 +241,8 @@ export interface Candidate {
   paths?: string[];
   /** Why it cannot be chosen (an Allow of access it already has, a kind no policy can name), else unset. */
   blocked?: string;
+  /** The badge's words when they are not "Has access" / "No access now". */
+  badge?: string;
 }
 
 export function RolePicker({
@@ -455,7 +457,7 @@ export function CandidateRow({ c, on, onToggle }: { c: Candidate; on: boolean; o
             <span className="block truncate text-xs text-(--color-text-muted)">{c.account}</span>
           ) : null}
         </span>
-        <StatusBadge tone={c.hasAccess ? "success" : "neutral"}>{c.blocked ?? (c.hasAccess ? "Has access" : "No access now")}</StatusBadge>
+        <StatusBadge tone={c.hasAccess ? "success" : "neutral"}>{c.blocked ?? c.badge ?? (c.hasAccess ? "Has access" : "No access now")}</StatusBadge>
       </button>
     </li>
   );

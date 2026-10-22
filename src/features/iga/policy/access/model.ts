@@ -35,10 +35,15 @@ export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlur
   azure: { label: "Azure", who: "identity", whoPlural: "identities" },
 };
 
-/** A policy's cloud: the server's word when it sends one, else read off the resource (AWS before Azure existed). */
+/**
+ * A policy's cloud: the server's word when it sends one, else read off the
+ * resource. An AWS policy is always on an S3 bucket, so it has a bucket and an
+ * `arn:aws…` ARN; an Azure policy has neither (the server sends the resource's
+ * name as its `arn` until it sends `provider`).
+ */
 export function providerOf(r: { provider?: AccessProvider; arn?: string; bucket?: string }): AccessProvider {
   if (r.provider) return r.provider;
-  return !r.bucket && r.arn?.toLowerCase().startsWith("/subscriptions/") ? "azure" : "aws";
+  return r.bucket || r.arn?.startsWith("arn:aws") ? "aws" : "azure";
 }
 
 /** "role" / "roles", "identity" / "identities". */
@@ -112,19 +117,20 @@ export const END_REASON: Record<string, string> = {
 /* --------------------------------- events --------------------------------- */
 
 /** The history event names (GovEvent `event`) as words, from the contract. */
+/** `{who}` is "role" on AWS, "identity" on Azure. */
 const EVENT_LABEL: Record<string, string> = {
   "access_policy.created": "Created",
   "access_policy.applied": "Applied",
-  "access_policy.confirmed": "In place (verified)",
+  "access_policy.confirmed": "In place on {who} (verified)",
   "access_policy.edited": "Edited",
   "access_policy.paused": "Paused",
   "access_policy.resumed": "Resumed",
   "access_policy.ended": "Ended",
-  "access_policy.expired": "Reached its end time",
-  "access_policy.removed": "Taken off",
+  "access_policy.expired": "Reached its end time; removed from {who}",
+  "access_policy.removed": "Removed from {who}",
   "access_policy.drifted": "Changed outside AuthSec",
   "access_policy.reapplied": "Put back by AuthSec",
-  "access_policy.failed": "Failed",
+  "access_policy.failed": "Failed on {who}",
 };
 
 /**
@@ -137,12 +143,15 @@ export function eventLabel(
   ctx: { provider: AccessProvider; effect: AccessEffect } = { provider: "aws", effect: "block" },
 ): string {
   // An Azure block ends by giving the identity its role assignments back.
+  const restores = ctx.provider === "azure" && ctx.effect === "block";
   const base =
-    e.event === "access_policy.removed" && ctx.provider === "azure" && ctx.effect === "block"
-      ? "Access restored"
+    restores && (e.event === "access_policy.removed" || e.event === "access_policy.expired")
+      ? e.event === "access_policy.expired"
+        ? "Reached its end time; access restored"
+        : "Access restored"
       : e.event === "access_policy.outcome_unknown"
         ? `Waiting for ${CLOUD[ctx.provider].label} to confirm`
-        : EVENT_LABEL[e.event] ?? humanize(e.event.replace(/^access_policy\./, "").replace(/_/g, " "));
+        : (EVENT_LABEL[e.event] ?? humanize(e.event.replace(/^access_policy\./, "").replace(/_/g, " "))).replace("{who}", whoWord(ctx.provider));
   const no = e.payload?.version_no;
   const reason = e.payload?.reason;
   const parts = [base];
@@ -195,7 +204,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
-  if (providerOf(r) === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
+  if (providerOf(r) === "azure") return r.name || (r.arn?.startsWith("/") ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : r.arn ?? "");
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -525,6 +534,8 @@ interface Holder {
   name: string;
   kind: string;
   roles: string[];
+  /** Whether any of its grants here is an Azure role assignment: the only kind a policy changes. */
+  hasRoleAssignment: boolean;
 }
 
 /** Who holds a role assignment on the root resource: grant edges into the assignments whose target is the root. */
@@ -538,9 +549,11 @@ export function holdersOf(g: GraphNeighbourhood | undefined): Holder[] {
     const who = node.get(e.from);
     if (!who) continue;
     const id = refId(who.ref);
-    const h = by.get(id) ?? { id, name: who.label, kind: String(who.kind), roles: [] };
-    const role = node.get(e.to)?.label;
+    const h = by.get(id) ?? { id, name: who.label, kind: String(who.kind), roles: [], hasRoleAssignment: false };
+    const assignment = node.get(e.to);
+    const role = assignment?.label;
     if (role && !h.roles.includes(role)) h.roles.push(role);
+    if ((assignment?.azure_role?.grant_kind ?? "azure_rbac") === "azure_rbac") h.hasRoleAssignment = true;
     by.set(id, h);
   }
   return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));

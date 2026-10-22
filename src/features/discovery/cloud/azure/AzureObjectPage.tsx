@@ -198,7 +198,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         <>
           <ResourceOverview resource={resource} subscription={connector} />
           {/* A policy is on an ARM resource; an application permission or delegated scope cannot be named. */}
-          {resource.native_id.toLowerCase().startsWith("/subscriptions/") ? <AzurePolicySection ws={ws} what="resource" igaId={policyIgaId} /> : null}
+          {resource.native_id.toLowerCase().startsWith("/subscriptions/") && resource.native_id.toLowerCase().includes("/providers/") ? <AzurePolicySection ws={ws} what="resource" igaId={policyIgaId} /> : null}
         </>
       ) : workload ? (
         <WorkloadOverview workload={workload} subscription={connector} identityHref={runsAsObjectId ? `/iga/azure/identity/${encodeURIComponent(runsAsObjectId)}` : undefined} />

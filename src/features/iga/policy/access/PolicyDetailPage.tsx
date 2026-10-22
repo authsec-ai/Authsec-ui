@@ -94,6 +94,8 @@ export default function PolicyDetailPage() {
   const live = p.status !== "ended";
   // The cloud still holds the policy's change while any deployment is on its way in, in, or on its way out.
   const stillHeld = p.deployments.some((d) => HELD.includes(d.state));
+  // The server's status_reason names AWS for every policy today; an Azure one says it in its own words.
+  const azureNote = p.status === "paused" ? (p.effect === "block" ? "Access restored in Azure while paused" : "Removed from Azure while paused") : "";
   // Ended and paused policies say where AuthSec is, in one quiet line by the status chip.
   const quietNote = (p.status === "ended" || p.status === "paused") && p.status_reason ? p.status_reason.charAt(0).toUpperCase() + p.status_reason.slice(1) : "";
   const actions =
@@ -135,7 +137,9 @@ export default function PolicyDetailPage() {
         <span className="text-xs text-(--color-text-muted)">
           {ending ? (provider === "azure" && p.effect === "block" ? "Restoring access in Azure…" : `Removing it from ${cloud}…`) : whenText(p)}
         </span>
-        {quietNote && !ending ? <span className="text-xs text-(--color-text-secondary)">· {quietNote}</span> : null}
+        {(provider === "azure" ? azureNote : quietNote) && !ending ? (
+          <span className="text-xs text-(--color-text-secondary)">· {provider === "azure" ? azureNote : quietNote}</span>
+        ) : null}
         <Link to="/iga/policy" className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
           All policies
         </Link>
@@ -206,10 +210,12 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
             ) : (
               <span className="font-mono text-xs">{resourceText(p.resource)}</span>
             )}
-            <Meta>{p.resource.arn}</Meta>
-            <Meta>
-              {azure ? "Subscription" : "Account"} {p.resource.account_id}
-            </Meta>
+            {!azure || p.resource.arn.startsWith("/") ? <Meta>{p.resource.arn}</Meta> : null}
+            {p.resource.account_id ? (
+              <Meta>
+                {azure ? "Subscription" : "Account"} {p.resource.account_id}
+              </Meta>
+            ) : null}
           </Fact>
           <Fact label="Access">{accessText(p.access)}</Fact>
           <Fact label="Window">

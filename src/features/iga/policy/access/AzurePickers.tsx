@@ -77,7 +77,6 @@ export function AzureResourcePicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          id="ap-resource"
           type="button"
           role="combobox"
           aria-expanded={open}
@@ -149,7 +148,9 @@ export function AzureResourcePicker({
 
 /* ------------------------------- identities -------------------------------- */
 
-const NOT_TARGETABLE = "Only service principals, managed identities and agent identities can be named";
+/** Badge words (short: the list's footer says why). */
+const NOT_TARGETABLE = "Can't be named";
+const NOT_A_ROLE = "Not a role assignment";
 
 export function AzureIdentityPicker({
   ws,
@@ -171,6 +172,9 @@ export function AzureIdentityPicker({
     { skip: !resource },
   );
   const holders = useMemo(() => holdersOf(access.data?.data), [access.data]);
+  // The walk is readable only when its root is the Azure resource (D-114); anything else is not an answer.
+  const rootRead = access.data?.data.nodes.find((n) => n.ref === access.data?.data.root);
+  const unreadable = access.isError || (!!access.data && rootRead?.provider !== "azure");
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim());
   const search = useListInventoryQuery(
@@ -183,16 +187,19 @@ export function AzureIdentityPicker({
   const toggle = (c: { identity_account_id: string; name: string }) =>
     onChange(chosen.has(c.identity_account_id) ? value.filter((r) => r.identity_account_id !== c.identity_account_id) : [...value, { identity_account_id: c.identity_account_id, name: c.name }]);
 
+  // Holding a role here is not proof of the access chosen, so the badge says what is known: a role is held.
   const listed: Candidate[] = holders.map((h) => ({
     identity_account_id: h.id,
     name: h.name,
     account: `${identityKindLabel(h.kind)} · ${h.roles.join(", ")}`,
     hasAccess: true,
-    blocked: AZURE_TARGET_KINDS.has(h.kind) ? undefined : NOT_TARGETABLE,
+    badge: "Holds a role here",
+    blocked: !AZURE_TARGET_KINDS.has(h.kind) ? NOT_TARGETABLE : !h.hasRoleAssignment ? NOT_A_ROLE : undefined,
   }));
+  // Access from a resource group, subscription or group is not listed, so "not listed" is all that is known.
   const found: Candidate[] = (search.data?.data ?? [])
     .filter((r) => AZURE_TARGET_KINDS.has(r.kind) && !holders.some((h) => h.id === refId(r.ref)))
-    .map((r) => ({ identity_account_id: refId(r.ref), name: r.name, account: identityKindLabel(r.kind), hasAccess: false }));
+    .map((r) => ({ identity_account_id: refId(r.ref), name: r.name, account: identityKindLabel(r.kind), hasAccess: false, badge: "No role here" }));
   // Identities ticked in the list need no chip; only ones added by search do.
   const extra = value.filter((r) => !listed.some((c) => c.identity_account_id === r.identity_account_id));
 
@@ -203,7 +210,7 @@ export function AzureIdentityPicker({
   return (
     <div className="space-y-2">
       {extra.length ? (
-        <div className="flex flex-wrap gap-1.5" aria-label="Other chosen identities">
+        <div role="group" className="flex flex-wrap gap-1.5" aria-label="Other chosen identities">
           {extra.map((r) => (
             <span key={r.identity_account_id} className="inline-flex h-7 items-center gap-1 rounded-md border border-(--color-primary) bg-(--color-primary-soft) pl-2 pr-1 text-xs font-medium text-(--color-primary-text)">
               {r.name}
@@ -225,7 +232,7 @@ export function AzureIdentityPicker({
             <p role="status" className="px-3 py-3 text-xs text-(--color-text-muted)">
               Reading who holds a role on this resource…
             </p>
-          ) : access.isError ? (
+          ) : unreadable ? (
             <p className="px-3 py-3 text-xs text-(--color-danger-text)">
               Who holds a role on this resource could not be read. Search for an identity below.{" "}
               <button type="button" className="underline" onClick={() => void access.refetch()}>
@@ -248,7 +255,7 @@ export function AzureIdentityPicker({
           {isAllow
             ? "Holding a role here is not the same as having the access you allow; the summary says what AuthSec will assign. "
             : "Roles given on the resource group or subscription also reach this resource; the summary says if any do. "}
-          Users and groups cannot be named in a policy.
+          Users and groups cannot be named in a policy, and AuthSec changes Azure role assignments only (not Key Vault access policies or app permissions).
         </p>
       </div>
 

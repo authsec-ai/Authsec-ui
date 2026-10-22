@@ -41,7 +41,8 @@ export default function PoliciesListPage() {
   const [params, setParams] = useSearchParams();
   const status = (params.get("status") ?? "") as "" | AccessPolicyStatus;
   const effect = (params.get("effect") ?? "") as "" | AccessEffect;
-  const cloud = (params.get("cloud") ?? "") as "" | AccessProvider;
+  const cloudParam = params.get("cloud");
+  const cloud: "" | AccessProvider = cloudParam === "aws" || cloudParam === "azure" ? cloudParam : "";
   const resourceId = params.get("resource_id") ?? "";
   const resourceName = params.get("resource_name") ?? "";
   const identityId = params.get("identity_account_id") ?? "";
