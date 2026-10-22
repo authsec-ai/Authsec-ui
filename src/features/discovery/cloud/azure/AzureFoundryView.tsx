@@ -7,9 +7,12 @@
  * is rated.
  */
 
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { AzureFoundry, AzureFoundryTrust, CloudConnector } from "@/app/api/cloudDiscoveryApi";
+import { EntityCell } from "@/components/console/iam-console";
+import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { Fact, Facts, Panel } from "@/features/iga/shared/components/Panel";
 
 import { CloudPill } from "../CloudPill";
@@ -169,6 +172,20 @@ function NodeBody({ n }: { n: FoundryNode }) {
   );
 }
 
+interface FoundryRow {
+  node: FoundryNode;
+  /** The resource a project belongs to, when it is one of its children. */
+  parent?: FoundryNode;
+}
+
+function flatten(nodes: FoundryNode[]): FoundryRow[] {
+  return nodes.flatMap((n) => [{ node: n }, ...n.children.map((p) => ({ node: p, parent: n }))]);
+}
+
+function nameOf(n: FoundryNode): string {
+  return (str(n.workload.attrs?.["display_name"]) || n.workload.name || n.workload.native_id) ?? "";
+}
+
 export function AzureFoundryView({
   query,
   nodes,
@@ -178,7 +195,66 @@ export function AzureFoundryView({
   nodes: FoundryNode[];
   connectors: CloudConnector[];
 }) {
-  const subscription = (id: string) => connectors.find((c) => c.id === id);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const rows = useMemo(() => flatten(nodes), [nodes]);
+  const selected = rows.find((r) => r.node.workload.id === selectedId);
+  const subscription = (id: string) => connectorLabel(connectors.find((c) => c.id === id));
+
+  const columns = useMemo<AdaptiveColumn<FoundryRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Name",
+        alwaysVisible: true,
+        priority: 1,
+        approxWidth: 260,
+        cell: ({ row }) => (
+          <EntityCell
+            label={<span className="font-medium">{nameOf(row.original.node)}</span>}
+            detail={<span className={MUTED}>{row.original.parent ? `Project of ${nameOf(row.original.parent)}` : row.original.node.workload.native_id}</span>}
+          />
+        ),
+      },
+      {
+        id: "type",
+        header: "Type",
+        priority: 2,
+        approxWidth: 170,
+        cell: ({ row }) => <span className="text-xs">{foundryKindLabel(row.original.node.foundryKind, row.original.node.workload.runtime_kind)}</span>,
+      },
+      {
+        id: "subscription",
+        header: "Subscription",
+        priority: 3,
+        approxWidth: 180,
+        cell: ({ row }) => <span className="text-xs">{subscription(row.original.node.workload.connector_id)}</span>,
+      },
+      {
+        id: "region",
+        header: "Region",
+        priority: 4,
+        approxWidth: 120,
+        cell: ({ row }) => <span className="text-xs">{row.original.node.workload.region || "—"}</span>,
+      },
+      {
+        id: "deployments",
+        header: "Models",
+        priority: 5,
+        approxWidth: 90,
+        cell: ({ row }) => <span className="text-xs tabular-nums">{row.original.node.deployments.length}</span>,
+      },
+      {
+        id: "last_seen",
+        header: "Last seen",
+        priority: 6,
+        approxWidth: 140,
+        cell: ({ row }) => <RelativeDate iso={row.original.node.workload.last_seen_at} />,
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [connectors],
+  );
+
   return (
     <ListFrame
       loading={query.isLoading}
@@ -189,35 +265,32 @@ export function AzureFoundryView({
       noMatch={false}
       emptyText="No Microsoft Foundry resource, hub or Machine Learning workspace was recorded. They are read from each connected subscription with Reader; the connection's Coverage tab says whether that read ran."
     >
-      <div className="space-y-4 p-4">
-        {nodes.map((n) => (
+      <div className="space-y-4">
+        <AdaptiveTable
+          tableId="azure-agents-foundry"
+          columns={columns}
+          data={rows}
+          getRowId={(r) => r.node.workload.id}
+          enableSelection={false}
+          enableExpansion={false}
+          rowDetails={false}
+          onRowClick={(r) => setSelectedId(r.node.workload.id)}
+          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+        />
+        {selected ? (
           <Panel
-            key={n.workload.id}
-            title={n.workload.name || n.workload.native_id}
-            count={[foundryKindLabel(n.foundryKind, n.workload.runtime_kind), n.workload.region].filter(Boolean).join(" · ")}
-            description={<span className="break-all">{`Subscription ${connectorLabel(subscription(n.workload.connector_id))} · ${n.workload.native_id}`}</span>}
+            title={nameOf(selected.node)}
+            count={[foundryKindLabel(selected.node.foundryKind, selected.node.workload.runtime_kind), selected.node.workload.region].filter(Boolean).join(" · ")}
+            description={<span className="break-all">{`Subscription ${subscription(selected.node.workload.connector_id)} · ${selected.node.workload.native_id}`}</span>}
+            actions={
+              <button type="button" onClick={() => setSelectedId(null)} className="font-medium text-(--color-primary-text) hover:underline">
+                Close
+              </button>
+            }
           >
-            <div className="space-y-4">
-              <NodeBody n={n} />
-              {n.children.length ? (
-                <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-(--color-text)">
-                    Projects <span className="font-normal tabular-nums text-(--color-text-muted)">{n.children.length}</span>
-                  </h4>
-                  {n.children.map((p) => (
-                    <div key={p.workload.id} className="space-y-3 rounded-md border border-(--color-border-subtle) p-3">
-                      <p className="text-[13px]">
-                        <span className="font-semibold">{str(p.workload.attrs?.["display_name"]) || p.workload.name}</span>
-                        <span className={`ml-2 ${MUTED}`}>{foundryKindLabel(p.foundryKind, p.workload.runtime_kind)}</span>
-                      </p>
-                      <NodeBody n={p} />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <NodeBody n={selected.node} />
           </Panel>
-        ))}
+        ) : null}
       </div>
     </ListFrame>
   );
