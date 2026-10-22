@@ -24,6 +24,7 @@ import { useParams } from "react-router-dom";
 import {
   useGetAzureNeighbourhoodQuery,
   useListAzureConnectorsQuery,
+  useListAzureFoundryQuery,
   useListAzureIdentitiesQuery,
   useListAzureResourcesQuery,
   useListAzureWorkloadsQuery,
@@ -41,6 +42,8 @@ import { getWorkspaceId } from "@/utils/workspace";
 import { Info } from "lucide-react";
 import { InventoryNotice } from "../aws/AWSInventoryNotices";
 import { AzureGraphPanel } from "./AzureGraphPanel";
+import { FoundryOverview } from "./AzureFoundryView";
+import { foundryNodeOf, type FoundryNode } from "./azureFoundry";
 import {
   IdentityAccessTab,
   IdentityActivityTab,
@@ -82,6 +85,9 @@ const LIST_TYPE = { identity: "identities", resource: "resources", workload: "wo
 const KIND_WORD: Record<Kind, string> = { identity: "Identity", resource: "Resource", workload: "Workload" };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+
+/** An ARM id without Microsoft's `#system` identity suffix, lowercased: how a Foundry project names its parent. */
+const armBase = (id: string | undefined) => id?.toLowerCase().replace(/#system$/, "");
 
 export default function AzureObjectPage() {
   const { kind, id = "", tab } = useParams<{ kind: string; id: string; tab?: string }>();
@@ -130,6 +136,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   const resQ = useListAzureResourcesQuery({ q: native, limit: 10 }, { skip: kind !== "resource" || !native });
   const wlQ = useListAzureWorkloadsQuery({ q: workloadQ, limit: 100 }, { skip: kind !== "workload" || !workloadQ });
   const connectorsQ = useListAzureConnectorsQuery();
+  const foundryQ = useListAzureFoundryQuery(undefined, { skip: kind !== "workload" });
 
   const identity: AzureIdentity | undefined = idQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
   const resource: AzureResource | undefined = resQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
@@ -173,6 +180,19 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         }
       : undefined;
 
+  // A Foundry object shows its own facts (deployments, connections, trust, projects) instead of the raw attributes.
+  const foundryTrusts = foundryQ.data?.trusts ?? [];
+  const foundryNode: FoundryNode | undefined =
+    workload && str(workload.attrs?.["foundry_kind"]) ? foundryNodeOf(workload, foundryTrusts) : undefined;
+  const foundryProjects: FoundryNode[] = foundryNode
+    ? (foundryQ.data?.rows ?? [])
+        .filter((w) => {
+          const self = armBase(workload?.native_id);
+          return armBase(str(w.attrs?.["account_id"])) === self || armBase(str(w.attrs?.["hub_id"])) === self;
+        })
+        .map((w) => foundryNodeOf(w, foundryTrusts))
+    : [];
+
   const tabs = TABS[kind];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -188,6 +208,8 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         <IdentityOverview identity={identity} tenant={connector} />
       ) : resource ? (
         <ResourceOverview resource={resource} subscription={connector} />
+      ) : workload && foundryNode ? (
+        <FoundryOverview node={foundryNode} projects={foundryProjects} />
       ) : workload ? (
         <WorkloadOverview workload={workload} subscription={connector} identityHref={runsAsObjectId ? `/iga/azure/identity/${encodeURIComponent(runsAsObjectId)}` : undefined} />
       ) : null;

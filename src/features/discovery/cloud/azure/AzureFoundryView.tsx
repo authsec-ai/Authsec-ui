@@ -7,8 +7,8 @@
  * is rated.
  */
 
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { AzureFoundry, AzureFoundryTrust, CloudConnector } from "@/app/api/cloudDiscoveryApi";
 import { EntityCell } from "@/components/console/iam-console";
@@ -119,7 +119,7 @@ function Rows<T>({ title, rows, empty, render }: { title: string; rows: T[]; emp
   );
 }
 
-function NodeBody({ n }: { n: FoundryNode }) {
+export function FoundryNodeBody({ n }: { n: FoundryNode }) {
   const a = n.workload.attrs ?? {};
   const isProject = n.foundryKind === "project" || n.foundryKind === "hub_project";
   return (
@@ -172,6 +172,31 @@ function NodeBody({ n }: { n: FoundryNode }) {
   );
 }
 
+/** A Foundry object's page: its facts, then its projects when it is a resource or hub. */
+export function FoundryOverview({ node, projects }: { node: FoundryNode; projects: FoundryNode[] }) {
+  return (
+    <div className="space-y-4">
+      <Panel title={nameOf(node)} count={foundryKindLabel(node.foundryKind, node.workload.runtime_kind)}>
+        <FoundryNodeBody n={node} />
+      </Panel>
+      {projects.length ? (
+        <Panel title="Projects" count={projects.length}>
+          <ul className="divide-y divide-(--color-border-subtle)">
+            {projects.map((p) => (
+              <li key={p.workload.id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+                <Link to={foundryHref(p)} className="font-medium text-(--color-primary-text) hover:underline">
+                  {nameOf(p)}
+                </Link>
+                <span className={MUTED}>{foundryKindLabel(p.foundryKind, p.workload.runtime_kind)}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
+
 interface FoundryRow {
   node: FoundryNode;
   /** The resource a project belongs to, when it is one of its children. */
@@ -186,6 +211,11 @@ function nameOf(n: FoundryNode): string {
   return (str(n.workload.attrs?.["display_name"]) || n.workload.name || n.workload.native_id) ?? "";
 }
 
+/** A Foundry object opens its own page, keyed by its ARM id, like every other Azure row. */
+export function foundryHref(n: Pick<FoundryNode, "workload">): string {
+  return `/iga/azure/workload/${encodeURIComponent(n.workload.native_id)}`;
+}
+
 export function AzureFoundryView({
   query,
   nodes,
@@ -195,9 +225,8 @@ export function AzureFoundryView({
   nodes: FoundryNode[];
   connectors: CloudConnector[];
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const rows = useMemo(() => flatten(nodes), [nodes]);
-  const selected = rows.find((r) => r.node.workload.id === selectedId);
   const subscription = (id: string) => connectorLabel(connectors.find((c) => c.id === id));
 
   const columns = useMemo<AdaptiveColumn<FoundryRow>[]>(
@@ -210,8 +239,12 @@ export function AzureFoundryView({
         approxWidth: 260,
         cell: ({ row }) => (
           <EntityCell
-            label={<span className="font-medium">{nameOf(row.original.node)}</span>}
-            detail={<span className={MUTED}>{row.original.parent ? `Project of ${nameOf(row.original.parent)}` : row.original.node.workload.native_id}</span>}
+            label={
+              <Link to={foundryHref(row.original.node)} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                {nameOf(row.original.node)}
+              </Link>
+            }
+            detail={<span className={MUTED}>{row.original.parent ? `Project of ${nameOf(row.original.parent)}` : foundryKindLabel(row.original.node.foundryKind, row.original.node.workload.runtime_kind)}</span>}
           />
         ),
       },
@@ -265,33 +298,18 @@ export function AzureFoundryView({
       noMatch={false}
       emptyText="No Microsoft Foundry resource, hub or Machine Learning workspace was recorded. They are read from each connected subscription with Reader; the connection's Coverage tab says whether that read ran."
     >
-      <div className="space-y-4">
-        <AdaptiveTable
-          tableId="azure-agents-foundry"
-          columns={columns}
-          data={rows}
-          getRowId={(r) => r.node.workload.id}
-          enableSelection={false}
-          enableExpansion={false}
-          rowDetails={false}
-          onRowClick={(r) => setSelectedId(r.node.workload.id)}
-          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
-        />
-        {selected ? (
-          <Panel
-            title={nameOf(selected.node)}
-            count={[foundryKindLabel(selected.node.foundryKind, selected.node.workload.runtime_kind), selected.node.workload.region].filter(Boolean).join(" · ")}
-            description={<span className="break-all">{`Subscription ${subscription(selected.node.workload.connector_id)} · ${selected.node.workload.native_id}`}</span>}
-            actions={
-              <button type="button" onClick={() => setSelectedId(null)} className="font-medium text-(--color-primary-text) hover:underline">
-                Close
-              </button>
-            }
-          >
-            <NodeBody n={selected.node} />
-          </Panel>
-        ) : null}
-      </div>
+      <AdaptiveTable
+        tableId="azure-agents-foundry"
+        sizing="fit"
+        columns={columns}
+        data={rows}
+        getRowId={(r) => r.node.workload.id}
+        enableSelection={false}
+        enableExpansion={false}
+        rowDetails={false}
+        onRowClick={(r) => navigate(foundryHref(r.node))}
+        pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
+      />
     </ListFrame>
   );
 }
