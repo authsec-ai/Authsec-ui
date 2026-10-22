@@ -25,6 +25,7 @@ import { CardContent } from "@/components/ui/card";
 import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { copyToClipboard } from "@/lib/clipboard";
+import { LifecycleCell } from "@/features/iga/discovery/PublishedBody";
 import { DiscoveryTable, RowName } from "@/features/iga/discovery/DiscoveryTable";
 import type { FacetSpec } from "@/features/iga/discovery/FacetBar";
 import { reportedFacet, sourceFacet } from "@/features/iga/discovery/facets";
@@ -49,7 +50,7 @@ const MUTED = "text-(--color-text-muted)";
 
 const SUBJECT: Record<InventoryClass, string> = { identities: "identities", resources: "resources", workloads: "workloads" };
 const OBJECT_SEGMENT: Record<InventoryClass, string> = { identities: "identity", resources: "resource", workloads: "workload" };
-const KIND_FACET_LABEL: Record<InventoryClass, string> = { identities: "Kind", resources: "Type", workloads: "Runtime" };
+const KIND_FACET_LABEL: Record<InventoryClass, string> = { identities: "Kind", resources: "Kind", workloads: "Runtime" };
 const SEARCH_PLACEHOLDER: Record<InventoryClass, string> = {
   identities: "Search identities by name or object ID",
   resources: "Search resources by name or resource ID",
@@ -129,14 +130,10 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       approxWidth: 100,
       cardSummary: true,
       cell: ({ row }) =>
-        row.original.lifecycle === "retired" ? (
-          <StatusBadge tone="neutral">Retired</StatusBadge>
-        ) : row.original.state === "stale" ? (
-          <StatusBadge tone="warning">Stale</StatusBadge>
-        ) : row.original.attrs.enabled === false ? (
+        row.original.lifecycle !== "retired" && row.original.state !== "stale" && row.original.attrs.enabled === false ? (
           <StatusBadge tone="neutral">Disabled</StatusBadge>
         ) : (
-          <span className={`text-sm ${MUTED}`}>Current</span>
+          <LifecycleCell lifecycle={row.original.lifecycle} state={row.original.state} />
         ),
     };
     const tenant: AdaptiveColumn<InventoryRow> = {
@@ -216,7 +213,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       label: "Source",
       kind: "choice",
       value: p.scope.kind === "one" ? p.scope.source.id : p.url.source,
-      anyLabel: "Every tenant",
+      anyLabel: "Every Azure tenant",
       ...sourceFacet(sources, facets?.scope),
       onChange: (v) => p.url.patch({ source: v }),
     },
@@ -225,7 +222,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       label: KIND_FACET_LABEL[type],
       kind: "choice",
       value: kind,
-      anyLabel: type === "identities" ? "Any kind" : type === "resources" ? "Any type" : "Any runtime",
+      anyLabel: type === "workloads" ? "Any runtime" : "Any kind",
       ...kindOptions,
       onChange: (v) => p.url.patch({ kind: v }),
     },
