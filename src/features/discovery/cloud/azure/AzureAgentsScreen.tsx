@@ -233,10 +233,10 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     />
   );
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4">
       {view === "foundry" ? (
         <>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             {viewChips}
             <p className="text-xs text-(--color-text-muted)">
               {foundryQ.data
@@ -249,6 +249,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         </>
       ) : (
         <>
+          <div className="px-4 pt-3">
           <InventoryToolbar
             chips={viewChips}
             search={search}
@@ -264,6 +265,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             total={rows.length}
             noun={noun}
           />
+          </div>
 
           <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
 
