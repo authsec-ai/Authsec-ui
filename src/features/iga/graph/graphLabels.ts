@@ -90,6 +90,8 @@ export function isK8sEdge(e: VisualEdge): boolean {
 /** What a line means: the AWS definition, or the Kubernetes one for a Kubernetes line. */
 export function edgeMeaning(e: VisualEdge): string {
   if (isAzureEdge(e)) return AZURE_EDGE_MEANING[e.kind] ?? EDGE_MEANING[e.kind];
+  if (e.kind === "declares" && (e.summary?.statements ?? []).some((st) => st.members[0]?.provider === "azure"))
+    return "The identity holds a role assignment on this resource or a scope above it. Assigned access, not evaluated: Azure deny assignments and conditions are not applied.";
   return (isK8sEdge(e) ? K8S_EDGE_MEANING[e.kind] : undefined) ?? EDGE_MEANING[e.kind];
 }
 
@@ -233,6 +235,13 @@ export function edgeVerb(e: VisualEdge): string {
     }
   }
   if (e.kind === "declares") {
+    // Azure: the line folds role assignments, so it says the roles, never "declares".
+    const assignments = (e.summary?.statements ?? []).flatMap((st) => st.members).filter((m) => m.provider === "azure");
+    if (assignments.length) {
+      const roles = [...new Set(assignments.map((m) => m.azure_role?.role_name || m.label).filter(Boolean))];
+      if (!roles.length) return "has a role";
+      return `${roles[0]}${roles.length > 1 ? ` +${roles.length - 1}` : ""}`;
+    }
     // The actions the statements behind the line list, never "can access".
     const actions = [...new Set((e.summary?.statements ?? []).flatMap((st) => st.members.map((m) => m.label)).filter(Boolean))];
     const verb = e.summary?.effect === "deny" ? "denies" : e.summary?.effect === "mixed" ? "allows and denies" : "declares";
