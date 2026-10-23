@@ -66,11 +66,11 @@ type Kind = "identity" | "resource" | "workload";
 
 const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Access", path: "/access" },
+  { key: "access", label: "Permissions", path: "/access" },
   { key: "credentials", label: "Credentials", path: "/credentials" },
   { key: "token-access", label: "Who can access", path: "/token-access" },
   { key: "activity", label: "Activity", path: "/activity" },
-  { key: "workloads", label: "Running on", path: "/workloads" },
+  { key: "workloads", label: "Workloads", path: "/workloads" },
   { key: "evidence", label: "Evidence", path: "/evidence" },
   { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
