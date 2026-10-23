@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Connection } from "@/app/api/connectionsApi";
+import { SESSION_KEY } from "@/utils/sessionManager";
 
 import { connectionNotices, type Notice } from "./connectionNotices";
 import { SourceNotices } from "./SourceNotices";
@@ -19,8 +20,24 @@ function renderNotices(notices: Notice[]) {
   );
 }
 
+function b64url(obj: unknown): string {
+  return btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Signs this tab in as `user` of `workspace`; the identity is the token's claims. */
+function signIn(workspace: string, user: string) {
+  const claims = { exp: Math.floor(Date.now() / 1000) + 3600, workspace_id: workspace, user_id: user };
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ token: `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url(claims)}.sig` }));
+}
+
+const WS_A = "11111111-1111-4111-8111-111111111111";
+const WS_B = "22222222-2222-4222-8222-222222222222";
+
 describe("SourceNotices", () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+  });
 
   it("renders nothing when there are no notices", () => {
     const { container } = renderNotices([]);
@@ -72,5 +89,42 @@ describe("SourceNotices", () => {
     expect(screen.getAllByRole("button", { name: "Dismiss this notice" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Dismiss this notice" }));
     expect(screen.queryByText("Collection partial")).toBeNull();
+  });
+
+  it("does not carry a dismissal into another workspace or another user's session in the same tab", () => {
+    // A Kubernetes sweep notice is keyed by the cluster's name, which two workspaces can share.
+    const sweep = notice({ key: "sweep:prod", label: "Namespaces only" });
+    signIn(WS_A, "u1");
+    const { unmount } = renderNotices([sweep]);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss this notice" }));
+    unmount();
+
+    signIn(WS_B, "u1");
+    const other = renderNotices([sweep]);
+    expect(screen.getByText("Namespaces only")).toBeTruthy();
+    other.unmount();
+
+    signIn(WS_A, "u2");
+    const otherUser = renderNotices([sweep]);
+    expect(screen.getByText("Namespaces only")).toBeTruthy();
+    otherUser.unmount();
+
+    signIn(WS_A, "u1");
+    renderNotices([sweep]);
+    expect(screen.queryByText("Namespaces only")).toBeNull();
+  });
+
+  it("re-reads the dismissals when the session changes under a mounted list", () => {
+    const sweep = notice({ key: "sweep:prod", label: "Namespaces only" });
+    signIn(WS_A, "u1");
+    const { rerender } = renderNotices([sweep]);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss this notice" }));
+    signIn(WS_B, "u1");
+    rerender(
+      <MemoryRouter>
+        <SourceNotices notices={[sweep]} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Namespaces only")).toBeTruthy();
   });
 });
