@@ -59,7 +59,7 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v 
 const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v.filter((x) => x && typeof x === "object") as T[]) : []);
 const lower = (v: string | undefined) => v?.toLowerCase();
 
-function nodeOf(w: AzureWorkload, trusts: AzureFoundryTrust[]): FoundryNode {
+export function foundryNodeOf(w: AzureWorkload, trusts: AzureFoundryTrust[]): FoundryNode {
   const a = w.attrs ?? {};
   const principalId = lower(str(a["principal_id"]));
   return {
@@ -87,7 +87,7 @@ export function foundryRowsOf(rows: AzureWorkload[], connectors: CloudConnector[
 /** Top-level Foundry objects, each with its projects; a project whose parent
  * was not read is listed on its own rather than dropped. */
 export function groupFoundry(rows: AzureWorkload[], trusts: AzureFoundryTrust[]): FoundryNode[] {
-  const nodes = rows.map((w) => nodeOf(w, trusts));
+  const nodes = rows.map((w) => foundryNodeOf(w, trusts));
   const byResourceId = new Map<string, FoundryNode>();
   for (const n of nodes) {
     const id = lower(str(n.workload.attrs?.["resource_id"])) ?? lower(n.workload.native_id);
