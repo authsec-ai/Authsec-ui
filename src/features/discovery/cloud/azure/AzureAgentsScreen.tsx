@@ -131,14 +131,20 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         id: "blueprint",
         header: "Built from template",
         priority: 2,
-        approxWidth: 200,
+        approxWidth: 220,
         cell: ({ row }) => {
           const name = row.original.attrs?.["agent_blueprint_name"];
-          return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">No template recorded</span>;
+          return typeof name === "string" && name ? (
+            <span className="block truncate text-xs" title={name}>
+              {name}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">No template recorded</span>
+          );
         },
       },
-      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
-      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
+      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "status",
         header: "Switched on",
@@ -193,14 +199,21 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
         },
       },
-      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
-      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
+      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "publisher",
         header: "Publisher website",
         priority: 5,
         approxWidth: 150,
-        cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "Not stated"}</span>,
+        cell: ({ row }) => {
+          const domain = (row.original.attrs?.["publisher_domain"] as string) || "Not stated";
+          return (
+            <span className="block truncate text-xs" title={domain}>
+              {domain}
+            </span>
+          );
+        },
       },
       {
         id: "created",

@@ -1374,6 +1374,11 @@ export interface AzureResource {
   kind: string;
   native_id: string;
   name: string;
+  // Same shape as AzureIdentity/AzureWorkload's attrs on this same read: tags,
+  // sku, public_network_access and the rest of what Azure returned for this
+  // resource. Was missing here only because this type was never updated —
+  // the field was already on the wire.
+  attrs: Record<string, unknown>;
   first_seen_at: string;
   last_seen_at: string;
 }
