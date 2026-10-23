@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, pathInBucket } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 const IN_FORCE = new Set(["applying", "active", "scheduled", "drift"]);
@@ -65,13 +65,18 @@ export function isPolicyHolder(n: GraphNode | undefined): boolean {
   return n.provider === "azure" ? AZURE_TARGET_KINDS.has(String(n.kind)) : n.kind === "iam_role";
 }
 
-/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 ARN; Azure by the resource itself. */
+/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 or DynamoDB ARN (a table's index or stream is the table); Azure by the resource itself. */
 export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
   if (p.resource.provider === "azure") {
     if (n?.provider !== "azure" || n.kind !== "azure_resource" || refId(n.ref) !== p.resource.resource_id) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }
   const text = textOf(n);
+  if (p.resource.resource_type === "dynamodb_table") {
+    const t = tableOf(text);
+    if (!t || t.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
   const b = bucketOf(text ?? "");
   if (!b || b.bucket !== p.resource.bucket) return "none";
   const path = pathInBucket(text ?? "");

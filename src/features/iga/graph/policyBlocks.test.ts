@@ -74,3 +74,25 @@ describe("coverage on Azure", () => {
     expect(coverage(p(["all"]), undefined)).toBe("none");
   });
 });
+
+describe("coverage on DynamoDB", () => {
+  const T = "arn:aws:dynamodb:us-east-1:111122223333:table/orders";
+  const tbl = (access: AccessLevel[]) => policy({ resource_type: "dynamodb_table", name: "orders", arn: T }, access);
+
+  it("a table policy covers the table, its indexes and streams: fully for all, partly otherwise", () => {
+    expect(coverage(tbl(["all"]), node(T))).toBe("full");
+    expect(coverage(tbl(["all"]), node(`${T}/index/by-date`))).toBe("full");
+    expect(coverage(tbl(["read"]), node(`${T}/stream/2026`))).toBe("partial");
+  });
+
+  it("covers no other table, region, pattern or bucket", () => {
+    expect(coverage(tbl(["all"]), node("arn:aws:dynamodb:us-east-1:111122223333:table/orders-archive"))).toBe("none");
+    expect(coverage(tbl(["all"]), node("arn:aws:dynamodb:eu-west-1:111122223333:table/orders"))).toBe("none");
+    expect(coverage(tbl(["all"]), node("arn:aws:dynamodb:us-east-1:111122223333:table/*"))).toBe("none");
+    expect(coverage(tbl(["all"]), node("arn:aws:s3:::orders"))).toBe("none");
+  });
+
+  it("an S3 policy does not cover a table named like its bucket", () => {
+    expect(coverage(policy({ bucket: "orders", name: "orders", arn: "arn:aws:s3:::orders" }, ["all"]), node(T))).toBe("none");
+  });
+});
