@@ -63,6 +63,8 @@ export interface ObjectHeaderData {
   classification?: { label: string; tone: ConsoleTone; by?: string };
   /** The publication this page is read at. */
   publishedAt?: string | null;
+  /** A plain sentence for the header in place of the "Declared access" badge (Azure: what Azure recorded, not tested). */
+  plainNote?: { short: string; long: string };
   /** The page's own actions (Classify), before the shared ones. */
   actions?: ReactNode;
   /** The identifier Copy puts on the clipboard: an ARN, a pattern, a principal. */
@@ -231,7 +233,13 @@ export function ObjectShell({
             <CategoryChip category={object.kind.category} icon={object.kind.icon}>
               {object.kind.label}
             </CategoryChip>
-            <span className="min-w-0">{object.name}</span>
+            {/* Azure's own object names run long (a resource's name is often its ARM
+                resource name, sometimes 60-80+ characters). Truncate with an ellipsis
+                rather than let it blow out the header or wrap into the actions row;
+                the full name is always on hover and in the breadcrumb/copy button. */}
+            <span className="min-w-0 max-w-[36rem] truncate" title={object.name}>
+              {object.name}
+            </span>
           </span>
         ) : (
           kindLabel
@@ -257,7 +265,7 @@ export function ObjectShell({
               ) : (
                 <Button asChild variant="outline" size="sm">
                   <Link to={`${base}${graphTab.path}`}>
-                    <Network className="size-3.5" aria-hidden="true" /> Open Access Graph
+                    <Network className="size-3.5" aria-hidden="true" /> Open access map
                   </Link>
                 </Button>
               )
@@ -320,7 +328,15 @@ function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHe
       {/* Said once per screen, here, never per row. The graph's status bar and an
           open inspector each say it for themselves, so the header yields to them
           while evidence is open; otherwise it is always on screen. */}
-      {!evidenceOpen ? (
+      {object.plainNote && !evidenceOpen ? (
+        <span className="basis-full text-(--color-text-muted)">
+          <span className="inline-flex items-center gap-1 font-medium" title={object.plainNote.long}>
+            <Info className="size-3.5" aria-hidden="true" /> {object.plainNote.short}
+          </span>{" "}
+          {object.plainNote.long}
+        </span>
+      ) : null}
+      {!object.plainNote && !evidenceOpen ? (
         <span className="inline-flex items-center gap-1 text-(--color-text-muted)" title="What a policy declares is shown; whether a request would succeed is not evaluated.">
           <Info className="size-3.5" aria-hidden="true" /> Declared access — not evaluated
         </span>

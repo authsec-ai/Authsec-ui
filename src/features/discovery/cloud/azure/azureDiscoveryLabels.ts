@@ -12,37 +12,40 @@ export const AZURE_IDENTITY_KINDS = [
 ] as const;
 
 const IDENTITY_KIND_LABEL: Record<string, string> = {
-  entra_user: "User",
-  entra_group: "Group",
-  entra_application: "App registration",
-  entra_service_principal: "Service principal",
-  entra_managed_identity: "Managed identity",
-  entra_agent_identity: "Agent identity",
-  entra_agent_user: "Agent user",
+  entra_user: "Person (user)",
+  entra_group: "Team (group)",
+  entra_application: "App definition (app registration)",
+  entra_service_principal: "App login (service principal)",
+  entra_managed_identity: "Azure-run login (managed identity)",
+  entra_agent_identity: "AI agent",
+  entra_agent_user: "User account of an AI agent",
 };
 
 /** The Identities filter: agents first, since they are what Agent ID adds, then
  * the directory's other kinds. A blueprint and its principal are an
  * application and a service principal marked by attrs.agent_type. */
 export const IDENTITY_FILTERS: { key: string; label: string; kind: string; agentType?: string }[] = [
-  { key: "entra_agent_identity", label: "Agent identities", kind: "entra_agent_identity" },
-  { key: "agent_identity_blueprint", label: "Agent blueprints", kind: "entra_application", agentType: "agent_identity_blueprint" },
+  { key: "entra_agent_identity", label: "AI agents", kind: "entra_agent_identity" },
+  { key: "agent_identity_blueprint", label: "Agent templates", kind: "entra_application", agentType: "agent_identity_blueprint" },
   {
     key: "agent_identity_blueprint_principal",
-    label: "Agent blueprint principals",
+    label: "Template logins",
     kind: "entra_service_principal",
     agentType: "agent_identity_blueprint_principal",
   },
-  { key: "entra_agent_user", label: "Agent users", kind: "entra_agent_user" },
-  { key: "entra_user", label: "Users", kind: "entra_user" },
-  { key: "entra_group", label: "Groups", kind: "entra_group" },
-  { key: "entra_application", label: "App registrations", kind: "entra_application" },
-  { key: "entra_service_principal", label: "Service principals", kind: "entra_service_principal" },
-  { key: "entra_managed_identity", label: "Managed identities", kind: "entra_managed_identity" },
+  { key: "entra_agent_user", label: "AI agent user accounts", kind: "entra_agent_user" },
+  { key: "entra_user", label: "People (users)", kind: "entra_user" },
+  { key: "entra_group", label: "Teams (groups)", kind: "entra_group" },
+  { key: "entra_application", label: "App definitions", kind: "entra_application" },
+  { key: "entra_service_principal", label: "App logins", kind: "entra_service_principal" },
+  { key: "entra_managed_identity", label: "Azure-run logins", kind: "entra_managed_identity" },
 ];
 
+/** What a raw code shows as when it has no plain label: never the code itself. */
+export const OTHER_LABEL = "Other (not yet described)";
+
 export function identityKindLabel(kind: string): string {
-  return IDENTITY_KIND_LABEL[kind] ?? kind;
+  return IDENTITY_KIND_LABEL[kind] ?? OTHER_LABEL;
 }
 
 /** A blueprint is an app registration and its principal a service principal;
@@ -50,8 +53,8 @@ export function identityKindLabel(kind: string): string {
 // Microsoft's full names; "agent blueprint" is the short form its own
 // Conditional Access picker uses, so the filters above use that.
 const AGENT_TYPE_LABEL: Record<string, string> = {
-  agent_identity_blueprint: "Agent identity blueprint",
-  agent_identity_blueprint_principal: "Agent identity blueprint principal",
+  agent_identity_blueprint: "Agent template",
+  agent_identity_blueprint_principal: "Template login",
 };
 
 export function agentTypeLabel(identity: Pick<AzureIdentity, "attrs">): string | undefined {
@@ -60,27 +63,27 @@ export function agentTypeLabel(identity: Pick<AzureIdentity, "attrs">): string |
 }
 
 const GRANT_SOURCE_LABEL: Record<string, string> = {
-  directory_role: "Microsoft Entra role",
-  application_permission: "Application permission",
-  delegated_permission: "Delegated permission",
-  rbac_role_assignment: "Azure role assignment",
-  key_vault_access_policy: "Key Vault access policy",
+  directory_role: "Directory role",
+  application_permission: "Granted to the app itself",
+  delegated_permission: "Granted by a person",
+  rbac_role_assignment: "Azure permission",
+  key_vault_access_policy: "Key Vault access list",
 };
 
 export function grantSourceLabel(source: string): string {
-  return GRANT_SOURCE_LABEL[source] ?? source;
+  return GRANT_SOURCE_LABEL[source] ?? OTHER_LABEL;
 }
 
 const MECHANISM_LABEL: Record<string, string> = {
-  oidc_federation: "Federated credential",
+  oidc_federation: "Trusted outside sign-in",
   entra_app_owner: "Owner",
-  entra_app_registration: "Its application's credentials",
-  agent_identity_blueprint: "Agent identity blueprint",
-  agent_user: "Agent's user account",
+  entra_app_registration: "The app's own password or certificate",
+  agent_identity_blueprint: "Agent template",
+  agent_user: "The agent's user account",
 };
 
 export function mechanismLabel(m: string): string {
-  return MECHANISM_LABEL[m] ?? m;
+  return MECHANISM_LABEL[m] ?? OTHER_LABEL;
 }
 
 /** The ARM resource types Azure discovery reads, in Microsoft's own product
@@ -104,15 +107,15 @@ const ARM_TYPE_NAME: Record<string, string> = {
   "microsoft.search/searchservices": "Azure AI Search service",
   "microsoft.containerregistry/registries": "Container registry",
   "microsoft.containerinstance/containergroups": "Container instance",
-  "microsoft.containerservice/managedclusters": "AKS cluster",
+  "microsoft.containerservice/managedclusters": "Kubernetes cluster (AKS)",
   "microsoft.compute/virtualmachines": "Virtual machine",
   "microsoft.compute/virtualmachinescalesets": "Virtual machine scale set",
-  "microsoft.web/sites": "App Service or Function app",
+  "microsoft.web/sites": "Web app or function app",
   "microsoft.app/containerapps": "Container app",
   "microsoft.app/jobs": "Container Apps job",
   "microsoft.logic/workflows": "Logic app",
   "microsoft.botservice/botservices": "Azure Bot",
-  "microsoft.cognitiveservices/accounts": "Foundry or Azure AI services account",
+  "microsoft.cognitiveservices/accounts": "AI service account (Microsoft Foundry)",
   "microsoft.cognitiveservices/accounts/projects": "Foundry project",
   "microsoft.machinelearningservices/workspaces": "Machine Learning workspace",
   "microsoft.managedidentity/userassignedidentities": "User-assigned managed identity",
@@ -144,55 +147,51 @@ const ARM_TYPE_NAME: Record<string, string> = {
  * segment with the provider namespace beside it ("vaults (keyvault)"). The raw
  * type is always in the row's detail. */
 export function armTypeLabel(type: string): string {
-  const known = ARM_TYPE_NAME[type.toLowerCase()];
-  if (known) return known;
-  const [ns, ...rest] = type.split("/");
-  if (!rest.length) return type;
-  return `${rest.join("/")} (${ns.replace(/^microsoft\./i, "")})`;
+  return ARM_TYPE_NAME[type.toLowerCase()] ?? "Other Azure resource";
 }
 
 /** What each coverage surface of an Azure scan reads, in Microsoft's terms.
  * Keys are the backend's `Surface*` names; an unknown key shows as written. */
 const SURFACE_LABEL: Record<string, string> = {
-  users: "Users",
-  groups: "Groups",
-  group_members: "Group memberships",
-  applications: "Applications (app registrations)",
-  service_principals: "Service principals (enterprise applications)",
-  directory_roles: "Microsoft Entra role assignments",
-  app_role_assignments: "Application permissions",
-  delegated_permission_grants: "Delegated permissions",
-  federated_credentials: "Federated identity credentials",
+  users: "People (user accounts)",
+  groups: "Teams (groups)",
+  group_members: "Team memberships",
+  applications: "Apps (app definitions)",
+  service_principals: "App logins (enterprise apps)",
+  directory_roles: "Directory admin roles",
+  app_role_assignments: "Permissions granted to apps",
+  delegated_permission_grants: "Permissions granted by users",
+  federated_credentials: "Outside sign-ins trusted to act as a login",
   sign_in_activity: "Sign-in activity",
-  credential_activity: "Credential sign-in activity",
-  sign_ins: "Service principal sign-ins",
+  credential_activity: "Sign-ins using passwords or certificates",
+  sign_ins: "Sign-ins by app logins",
   licenses: "Licences",
-  app_management_policies: "App management policies",
-  conditional_access: "Conditional Access policies",
-  agent_identities: "Agent identities",
-  agent_blueprints: "Agent identity blueprints",
-  agent_blueprint_principals: "Agent identity blueprint principals",
-  agent_users: "Agents' user accounts",
+  app_management_policies: "App security rules",
+  conditional_access: "Sign-in rules (Conditional Access)",
+  agent_identities: "AI agent logins",
+  agent_blueprints: "Agent templates",
+  agent_blueprint_principals: "Template logins",
+  agent_users: "User accounts of AI agents",
   owners: "Owners",
-  agent_sponsors: "Agent sponsors",
-  agent_inheritable_permissions: "Agent inheritable permissions",
-  agent_registry: "Microsoft 365 agent registry (Copilot packages)",
-  agent_audit: "Agent audit log",
-  teams_apps: "Teams apps with a bot (Copilot Studio agents and custom bots)",
+  agent_sponsors: "Sponsors of AI agents",
+  agent_inheritable_permissions: "Permissions agents inherit from their template",
+  agent_registry: "Microsoft 365 agent list (Copilot)",
+  agent_audit: "Changes made to AI agents",
+  teams_apps: "Teams bots (includes Copilot Studio agents)",
   resources: "Resources",
-  resource_containers: "Subscription and resource group tags",
-  role_assignments: "Azure role assignments",
-  key_vault_access_policies: "Key Vault access policies",
-  workloads: "Resources running as a managed identity",
-  managed_identity_federated_credentials: "Managed identity federated identity credentials",
-  foundry: "Microsoft Foundry",
-  foundry_agents: "Microsoft Foundry project agents (data plane)",
+  resource_containers: "Labels on subscriptions and resource groups",
+  role_assignments: "Azure permissions",
+  key_vault_access_policies: "Key Vault access rules",
+  workloads: "Resources running as an Azure-run login",
+  managed_identity_federated_credentials: "Outside sign-ins trusted by Azure-run logins",
+  foundry: "Microsoft Foundry (AI projects)",
+  foundry_agents: "AI agents in Microsoft Foundry projects",
   public_ips: "Public IP addresses",
-  activity_log: "Azure Activity Log",
+  activity_log: "Azure activity log",
 };
 
 export function surfaceLabel(key: string): string {
-  return SURFACE_LABEL[key] ?? key.replace(/_/g, " ");
+  return SURFACE_LABEL[key] ?? "Other area (not yet described)";
 }
 
 /** `iga_entitlements.native_grant_kind` of an Azure entitlement. */
@@ -246,11 +245,11 @@ export function graphKindLabel(table: string, kind: string): string {
 
 /** `attrs.foundry_kind` of a Foundry workload. */
 const FOUNDRY_KIND_LABEL: Record<string, string> = {
-  account: "Foundry resource",
-  project: "Foundry project",
-  hub: "Foundry hub",
-  hub_project: "Hub-based project",
-  ml_workspace: "Machine Learning workspace",
+  account: "AI service account",
+  project: "AI project",
+  hub: "AI hub",
+  hub_project: "AI project in a hub",
+  ml_workspace: "Machine learning workspace",
 };
 
 export function foundryKindLabel(kind: string | undefined, runtimeKind: string): string {
@@ -271,14 +270,72 @@ export function connectorLabel(c: CloudConnector | undefined): string {
   const name = typeof attrs["display_name"] === "string" ? (attrs["display_name"] as string) : "";
   if (c.scope_kind === "tenant") {
     const tenant = typeof attrs["tenant_display_name"] === "string" ? (attrs["tenant_display_name"] as string) : "";
-    return tenant || `Tenant ${shortId(c.scope_id)}`;
+    return tenant || `Directory ${shortId(c.scope_id)} (name not read)`;
   }
   return name || shortId(c.scope_id);
 }
 
-/** Turns an attrs key into words: "user_principal_name" → "User principal name". */
+/** Plain labels for the attribute keys Microsoft returns (the copy dictionary, section 4). */
+const ATTR_LABEL: Record<string, string> = {
+  object_id: "Technical ID",
+  agent_blueprint_app_id: "Template app ID (technical)",
+  agent_blueprint_id: "Template ID (technical)",
+  owners: "Owners",
+  sponsors: "Sponsors",
+  created_by: "Created by",
+  audit_changes: "Recent directory changes",
+  agent_listed: "Listed as an agent",
+  agent_type: "Agent type",
+  agent_blueprint_name: "Template name",
+  agent_count: "AI agents created",
+  app_id: "App ID",
+  publisher_domain: "Publisher website",
+  enabled: "Switched on",
+  last_sign_in_at: "Last sign-in",
+  region: "Region",
+  tenant_display_name: "Directory name",
+  display_name: "Name",
+  user_principal_name: "Sign-in name",
+  principal_id: "Technical ID",
+  account_id: "AI service account",
+  hub_id: "Hub",
+  resource_id: "Resource ID",
+  foundry_kind: "AI type",
+  deployments: "AI models deployed",
+  connections: "Connections",
+  agent_applications: "Agent apps",
+  agent_applications_unavailable: "Agent apps not readable",
+  detail_incomplete: "Some detail not read",
+  public_network_access: "Reachable from the internet",
+  local_auth_enabled: "Shared-key sign-in allowed",
+  sku: "Pricing tier",
+  sku_name: "Pricing tier",
+  is_default: "Default project",
+  endpoint: "Endpoint",
+  trusted_agent_type: "Agent type of the trusted login",
+  trusted_kind: "Kind of the trusted login",
+  trusted_identity_id: "Trusted login ID",
+  subject: "Subject",
+  issuer: "Issuer",
+  mechanism: "How it is trusted",
+  expires_at: "Expires",
+  created_at: "Created",
+  source_api: "Source (Microsoft service)",
+  scope: "Scope",
+  role_definition_id: "Azure role",
+  principal_type: "Kind of login",
+  custom_security_attributes: "Custom attributes",
+  sign_in_audience: "Who can sign in",
+  identifier_uris: "Identifier addresses",
+  redirect_uris: "Return addresses",
+  tags: "Tags",
+  kind: "Kind",
+};
+
+/** An attribute key in plain words; a key with no label is spelled out, never shown as code. */
 export function attrLabel(key: string): string {
-  const s = key.replace(/_/g, " ");
+  if (ATTR_LABEL[key]) return ATTR_LABEL[key];
+  const s = key.replace(/_/g, " ").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 

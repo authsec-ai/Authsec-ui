@@ -46,10 +46,10 @@ const AZURE_EDGE_MEANING: Partial<Record<VisualEdgeKind, string>> = {
 
 /** An Azure line in words: identity → role assignment (grant) → resource or scope (target), D-114. */
 const AZURE_EDGE_DEFAULT: Partial<Record<VisualEdgeKind, string>> = {
-  grant: "is assigned",
+  grant: "has permission",
   target: "on",
   member_of: "member of",
-  can_assume: "can act as",
+  can_assume: "can act as (sign in as)",
   executes_as: "runs as",
 };
 
@@ -124,8 +124,9 @@ function noun(edge: GraphEdgeKind, count: number | null): string {
  * reverse through `executes_as` reads as the workloads that run as it; a
  * forward `can_assume` as the roles it may assume.
  */
-export function frontierLabel(f: GraphFrontier, k8s = false): string {
+export function frontierLabel(f: GraphFrontier, k8s = false, azure = false): string {
   const n = f.more.exact && f.more.count != null ? f.more.count : null;
+  if (azure) return n != null ? `Show ${n} more connections` : "Show more connections";
   if (k8s && f.edge === "grant") return n != null ? `Load ${n} more ${n === 1 ? "rule" : "rules"}` : "Load more rules";
   if (k8s && f.edge === "executes_as" && f.direction === "forward") return "Load the ServiceAccount it runs as";
   if (f.direction === "reverse" && f.edge === "executes_as") return n != null ? `Load ${n} ${noun(f.edge, n)} that run as it` : "Load workloads that run as it";
@@ -136,8 +137,8 @@ export function frontierLabel(f: GraphFrontier, k8s = false): string {
   return n != null ? `Load ${n} more ${noun(f.edge, n)}` : `Load more ${noun(f.edge, null)}`;
 }
 
-export function frontierAriaLabel(f: GraphFrontier, k8s = false): string {
-  return `${frontierLabel(f, k8s)} (not loaded yet)`;
+export function frontierAriaLabel(f: GraphFrontier, k8s = false, azure = false): string {
+  return `${frontierLabel(f, k8s, azure)} (not loaded yet)`;
 }
 
 /**

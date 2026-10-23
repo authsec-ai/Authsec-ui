@@ -33,7 +33,7 @@ export function AzureReachPanel({ objectId }: { objectId: string }) {
   if (q.isError) {
     return <LoadFailurePanel failure={loadFailureOf(q.error) ?? "failed"} subject="what this object can reach" permission="discovery:read" onRetry={() => void q.refetch()} />;
   }
-  if (!q.currentData) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!q.currentData) return <p className="text-xs text-muted-foreground">Loading…</p>;
   const { reach, grants } = q.currentData;
   return (
     <div className="space-y-3">
@@ -43,7 +43,7 @@ export function AzureReachPanel({ objectId }: { objectId: string }) {
       </p>
       {reach.length ? (
         <div className="space-y-1">
-          <p className="text-xs font-medium">Identities it reaches ({reach.length})</p>
+          <p className="text-[13px] font-semibold leading-5">Identities it reaches ({reach.length})</p>
           <ul className="divide-y rounded-md border text-[13px]">
             {reach.map((r) => (
               <li key={r.identity_id} className="flex flex-wrap justify-between gap-2 px-3 py-2">
@@ -58,7 +58,7 @@ export function AzureReachPanel({ objectId }: { objectId: string }) {
         </div>
       ) : null}
       <div className="space-y-1">
-        <p className="text-xs font-medium">Roles and permissions ({grants.length})</p>
+        <p className="text-[13px] font-semibold leading-5">Roles and permissions ({grants.length})</p>
         {grants.length ? (
           <ul className="divide-y rounded-md border text-[13px]">
             {grants.map((g) => (

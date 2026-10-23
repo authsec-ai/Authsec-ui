@@ -28,7 +28,33 @@ import { Fact, Facts, Panel, CopyValue } from "@/features/iga/shared/components/
 
 import { CloudPill } from "../CloudPill";
 import { AttrFacts, DrawerList, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { armTypeLabel, connectorLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf, surfaceLabel } from "./azureDiscoveryLabels";
+import { armTypeLabel, connectorLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf, surfaceLabel, OTHER_LABEL } from "./azureDiscoveryLabels";
+
+/** Where a grant applies, in words. The raw scope kind is never shown. */
+const SCOPE_WORDS: Record<string, string> = {
+  resource: "this resource",
+  resource_group: "its resource group",
+  subscription: "its subscription",
+  tenant: "the whole directory",
+};
+
+/** The service a Microsoft evidence line was read from, by its request path. */
+function sourceServiceOf(api: string | null | undefined): string {
+  if (!api) return "Microsoft";
+  return /graph|\/v1\.0\/|\/beta\//i.test(api) ? "Microsoft Graph" : /authorization|management/i.test(api) ? "Azure Resource Manager" : "Microsoft";
+}
+
+const SURFACE_STATE_WORDS: Record<string, string> = {
+  reached: "Read",
+  partial: "Partly read",
+  denied: "Access refused",
+  throttled: "Slowed by Microsoft's limits",
+  stale: "Not confirmed by the latest scan",
+  unknown: "Not checked",
+  revoked: "Connection switched off",
+  not_selected: "Outside the scan",
+  unsupported: "Not offered here",
+};
 
 /** Attributes shown in their own sections rather than as raw facts. */
 const SHOWN_ELSEWHERE = ["owners", "sponsors", "created_by", "audit_changes", "agent_listed"];
@@ -44,7 +70,7 @@ const LIST_LIMIT = 200;
 
 export function GrantLine({ g, showHolder = false }: { g: AzureGrant; showHolder?: boolean }) {
   const what = g.role_name || (g.actions ?? []).join(", ") || g.native_id;
-  const where = g.resource_name || (g.scope_kind ? g.scope_kind.replace(/_/g, " ") : "");
+  const where = g.resource_name || (g.scope_kind ? SCOPE_WORDS[g.scope_kind] ?? OTHER_LABEL.toLowerCase() : "");
   return (
     <div className="space-y-0.5">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -53,8 +79,8 @@ export function GrantLine({ g, showHolder = false }: { g: AzureGrant; showHolder
           {grantSourceLabel(g.source)}
         </CloudPill>
         {g.inherited ? (
-          <CloudPill tone="info" dot={false} title="Granted to its agent identity blueprint principal and inherited by this agent identity; not granted to the agent identity itself.">
-            Inherited
+          <CloudPill tone="info" dot={false} title="Granted to the agent template's login and inherited by this agent. Not granted to the agent itself.">
+            Inherited from its template
           </CloudPill>
         ) : null}
         {g.condition ? (
@@ -146,8 +172,8 @@ export function IdentityAccessTab({ id }: { id: string }) {
 export function IdentityCredentialsTab({ id }: { id: string }) {
   const q = useListAzureSecretsQuery({ identity_id: id, limit: LIST_LIMIT });
   return (
-    <Panel title="Credentials" count={q.data ? `${q.data.rows.length}` : undefined} description="Metadata only: names, dates and status. AuthSec never holds a secret value.">
-      <DrawerList query={q} empty="No client secrets or certificates were recorded for this identity." render={(s: AzureSecret) => <SecretLine s={s} />} />
+    <Panel title="Passwords and certificates" count={q.data ? `${q.data.rows.length}` : undefined} description="AuthSec only sees the name and dates of each password or certificate. It never sees the secret itself.">
+      <DrawerList query={q} empty="No passwords or certificates are recorded for this identity." render={(s: AzureSecret) => <SecretLine s={s} />} />
     </Panel>
   );
 }
@@ -155,11 +181,11 @@ export function IdentityTokensTab({ id }: { id: string }) {
   const q = useListAzureFederationQuery({ identity_id: id, limit: LIST_LIMIT });
   return (
     <Panel
-      title="Who can obtain its tokens"
+      title="Who can sign in as it"
       count={q.data ? `${q.data.rows.length}` : undefined}
-      description="Who can obtain this identity's tokens without holding its own secret: federated identity credentials, owners (who can add a credential) and agent identity blueprints."
+      description="People, apps and setups that can sign in as this identity without its password: trusted outside sign-in settings, owners who can add a credential, and the template it was made from."
     >
-      <DrawerList query={q} empty="Nothing was recorded that can obtain this identity's tokens." render={(e: AzureFederationEdge) => <EdgeLine e={e} />} />
+      <DrawerList query={q} empty="Nothing was recorded that can sign in as this identity." render={(e: AzureFederationEdge) => <EdgeLine e={e} />} />
     </Panel>
   );
 }
@@ -169,7 +195,7 @@ export function IdentityActivityTab({ id }: { id: string }) {
     <Panel
       title="Activity"
       count={q.data ? `${q.data.rows.length}` : undefined}
-      description="From Microsoft Entra sign-in logs and the Azure Activity Log. Reading sign-in activity through Microsoft Graph needs Microsoft Entra ID P1 or P2."
+      description="Sign-ins and Azure actions recorded by Microsoft. Reading the full sign-in history needs a paid Microsoft Entra licence (P1 or P2). Without one, this list can be empty."
     >
       <DrawerList query={q} empty="No activity was recorded for this identity." render={(u: AzureUsage) => <UsageLine u={u} />} />
     </Panel>
@@ -178,8 +204,8 @@ export function IdentityActivityTab({ id }: { id: string }) {
 export function IdentityWorkloadsTab({ id }: { id: string }) {
   const q = useListAzureWorkloadsQuery({ identity_id: id, limit: LIST_LIMIT });
   return (
-    <Panel title="Workloads running as this identity" count={q.data ? `${q.data.rows.length}` : undefined}>
-      <DrawerList query={q} empty="No workload was recorded running as this identity." render={(w: AzureWorkload) => <WorkloadLine w={w} />} />
+    <Panel title="Things that run as this identity (for example an app or a server)" count={q.data ? `${q.data.rows.length}` : undefined}>
+      <DrawerList query={q} empty="Nothing is recorded as running as this identity." render={(w: AzureWorkload) => <WorkloadLine w={w} />} />
     </Panel>
   );
 }
@@ -194,26 +220,24 @@ function EvidenceLine({ e }: { e: AzureEvidence }) {
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="font-medium">{surfaceLabel(e.surface)}</span>
           <CloudPill tone="muted" dot={false}>
-            {e.subject === "grant" ? "A grant it holds" : "The object itself"}
+            {e.subject === "grant" ? "A permission it has" : "The agent itself"}
           </CloudPill>
           {e.surface_state ? (
             <CloudPill tone={SURFACE_STATE_TONE[e.surface_state] ?? "muted"} dot={false}>
-              {e.surface_state.replace(/_/g, " ")}
+              {SURFACE_STATE_WORDS[e.surface_state] ?? OTHER_LABEL}
             </CloudPill>
           ) : null}
         </span>
         <span className="text-xs text-muted-foreground">
-          Confirmed {e.confirmation_count} {e.confirmation_count === 1 ? "time" : "times"} · last <RelativeDate iso={e.last_confirmed_at ?? e.observed_at} />
+          Seen in {e.confirmation_count} {e.confirmation_count === 1 ? "check" : "checks"} · last <RelativeDate iso={e.last_confirmed_at ?? e.observed_at} />
         </span>
       </div>
-      <p className="break-all font-mono text-xs text-muted-foreground">{e.source_api}</p>
       <p className="text-xs text-muted-foreground">
-        First observed <RelativeDate iso={e.observed_at} />
-        {e.subject_native_id ? <span className="break-all"> · {e.subject_native_id}</span> : null}
+        Read from {sourceServiceOf(e.source_api)} · first seen <RelativeDate iso={e.observed_at} />
       </p>
       {Object.keys(facts).length ? (
         <details className="text-xs">
-          <summary className="cursor-pointer text-(--color-primary-text)">Facts as recorded</summary>
+          <summary className="cursor-pointer text-(--color-primary-text)">Details as Microsoft returned them</summary>
           <div className="mt-2">
             <AttrFacts attrs={facts} />
           </div>
@@ -228,11 +252,11 @@ export function IdentityEvidenceTab({ objectId }: { objectId: string }) {
   const q = useListAzureEvidenceQuery({ object_id: objectId, limit: LIST_LIMIT });
   return (
     <Panel
-      title="Evidence"
+      title="Where this came from"
       count={q.data ? `${q.data.rows.length}` : undefined}
-      description="Every observation behind this object and its grants: which Microsoft API returned it, how many scans confirmed it, and the facts recorded (sanitized: never a secret value)."
+      description="What Microsoft returned for this object and its roles: which Microsoft service gave each answer, how many checks confirmed it, and the details it held. No secret value is ever stored."
     >
-      <DrawerList query={q} empty="No observation was recorded for this object yet. Evidence is written when a scan pass finishes." render={(e: AzureEvidence) => <EvidenceLine e={e} />} />
+      <DrawerList query={q} empty="No observations recorded yet. They appear when a scan finishes." render={(e: AzureEvidence) => <EvidenceLine e={e} />} />
     </Panel>
   );
 }
@@ -248,8 +272,8 @@ function PeoplePanel({ identity }: { identity: AzureIdentity }) {
   return (
     <Panel title="People">
       <DetailGrid>
-        {isAgent || sponsors.length ? <DetailRow label="Sponsors" value={<RefNames refs={sponsors} max={10} />} /> : null}
-        <DetailRow label="Owners" value={<RefNames refs={owners} max={10} />} />
+        {isAgent || sponsors.length ? <DetailRow label="Sponsor (accountable person)" value={<RefNames refs={sponsors} max={10} empty="No sponsor listed" />} /> : null}
+        <DetailRow label="Owners (can change it)" value={<RefNames refs={owners} max={10} empty="No owner listed" />} />
         {created?.by ? (
           <DetailRow
             label="Created by"
@@ -271,7 +295,7 @@ function AuditPanel({ identity }: { identity: AzureIdentity }) {
   const changes = Array.isArray(raw) ? (raw as AuditChange[]) : [];
   if (!changes.length) return null;
   return (
-    <Panel title="Recent directory changes" count={`${changes.length}`}>
+    <Panel title="Recent directory changes" count={`${changes.length}`} description="Edits to this object in the directory's change log.">
       <ul className="divide-y rounded-md border text-[13px]">
         {changes.map((c, i) => (
           <li key={c.id ?? i} className="flex flex-wrap justify-between gap-2 px-3 py-2">
@@ -292,28 +316,28 @@ export function IdentityOverview({ identity, tenant }: { identity: AzureIdentity
     <div className="space-y-4">
       <Panel title="Identity">
         <Facts>
-          <Fact label="Object ID">
-            <CopyValue value={identity.native_id} what="Object ID" />
+          <Fact label="Technical ID">
+            <CopyValue value={identity.native_id} what="Technical ID" />
           </Fact>
-          <Fact label="Kind">{identityKindLabel(identity.kind)}</Fact>
-          <Fact label="Tenant">{connectorLabel(tenant)}</Fact>
-          <Fact label="Enabled">{identity.enabled ? "Yes" : "No"}</Fact>
-          <Fact label="Created in Microsoft Entra ID">
+          <Fact label="Type">{identityKindLabel(identity.kind)}</Fact>
+          <Fact label="Directory">{connectorLabel(tenant)}</Fact>
+          <Fact label="Switched on">{identity.enabled ? "Yes" : "No"}</Fact>
+          <Fact label="Created">
             <RelativeDate iso={identity.created_at} />
           </Fact>
           <Fact label="Last sign-in">
             <RelativeDate iso={identity.last_used_at} />
           </Fact>
-          <Fact label="First seen by AuthSec">
+          <Fact label="First found by AuthSec">
             <RelativeDate iso={identity.first_seen_at} />
           </Fact>
-          <Fact label="Last seen by AuthSec">
+          <Fact label="Last checked by AuthSec">
             <RelativeDate iso={identity.last_seen_at} />
           </Fact>
         </Facts>
       </Panel>
       <PeoplePanel identity={identity} />
-      <Panel title="Attributes from Microsoft">
+      <Panel title="Details from Microsoft" description="The other details Microsoft returned, as read. Nothing here is rated.">
         <AttrFacts attrs={identity.attrs} skip={SHOWN_ELSEWHERE} />
       </Panel>
       <AuditPanel identity={identity} />
@@ -328,14 +352,12 @@ export function ResourceOverview({ resource, subscription }: { resource: AzureRe
         <Fact label="Resource ID">
           <CopyValue value={resource.native_id} what="Resource ID" />
         </Fact>
-        <Fact label="Type" mono>
-          {resource.kind}
-        </Fact>
-        <Fact label="Subscription">{connectorLabel(subscription)}</Fact>
-        <Fact label="First seen by AuthSec">
+        <Fact label="Type">{armTypeLabel(resource.kind)}</Fact>
+        <Fact label="Azure subscription">{connectorLabel(subscription)}</Fact>
+        <Fact label="First found by AuthSec">
           <RelativeDate iso={resource.first_seen_at} />
         </Fact>
-        <Fact label="Last seen by AuthSec">
+        <Fact label="Last checked by AuthSec">
           <RelativeDate iso={resource.last_seen_at} />
         </Fact>
       </Facts>
@@ -347,10 +369,10 @@ export function ResourceOverview({ resource, subscription }: { resource: AzureRe
 export function ResourceAccessTab({ resourceId }: { resourceId: string }) {
   const q = useListAzureGrantsQuery({ resource_id: resourceId, limit: LIST_LIMIT });
   return (
-    <Panel title="Who can access" count={q.data ? `${q.data.rows.length}` : undefined}>
+    <Panel title="Who has a role here" count={q.data ? `${q.data.rows.length}` : undefined}>
       <DrawerList
         query={q}
-        empty="No Azure role assignment is scoped to this resource directly. Role assignments at the subscription or a resource group still apply to it and are listed on each identity."
+        empty="No role was set on this resource itself. Roles given on its subscription or resource group still reach it, and they appear under each identity."
         render={(g: AzureGrant) => <GrantLine g={g} showHolder />}
       />
     </Panel>
@@ -365,12 +387,10 @@ export function WorkloadOverview({ workload, subscription, identityHref }: { wor
           <Fact label="Resource ID">
             <CopyValue value={workload.native_id} what="Resource ID" />
           </Fact>
-          <Fact label="Type" mono>
-            {workload.runtime_kind}
-          </Fact>
-          <Fact label="Region">{workload.region || "—"}</Fact>
-          <Fact label="Subscription">{connectorLabel(subscription)}</Fact>
-          <Fact label="Runs as">
+          <Fact label="Type">{armTypeLabel(workload.runtime_kind)}</Fact>
+          <Fact label="Region">{workload.region === "global" ? "Worldwide" : workload.region || "Region not read"}</Fact>
+          <Fact label="Azure subscription">{connectorLabel(subscription)}</Fact>
+          <Fact label="Signs in as">
             {workload.identity_name ? (
               identityHref ? (
                 <Link to={identityHref} className="text-(--color-primary-text) hover:underline">
@@ -380,19 +400,19 @@ export function WorkloadOverview({ workload, subscription, identityHref }: { wor
                 `${workload.identity_name} (${identityKindLabel(workload.identity_kind)})`
               )
             ) : (
-              "No identity recorded"
+              "No login recorded"
             )}
           </Fact>
-          <Fact label="First seen by AuthSec">
+          <Fact label="First found by AuthSec">
             <RelativeDate iso={workload.first_seen_at} />
           </Fact>
-          <Fact label="Last seen by AuthSec">
+          <Fact label="Last checked by AuthSec">
             <RelativeDate iso={workload.last_seen_at} />
           </Fact>
         </Facts>
       </Panel>
-      <Panel title="Attributes from Microsoft">
-        <AttrFacts attrs={workload.attrs} />
+      <Panel title="Details from Microsoft" description="The other details Microsoft returned, as read. Nothing here is rated.">
+        <AttrFacts attrs={workload.attrs} skip={["resource_id"]} />
       </Panel>
     </div>
   );

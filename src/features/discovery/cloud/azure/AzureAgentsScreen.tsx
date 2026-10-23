@@ -23,9 +23,8 @@ import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "../aws/AWSFilterChips";
-import { CopyableId } from "../aws/AWSInventoryCells";
 import { TruncationNotice } from "../aws/AWSInventoryNotices";
-import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
+import { ALL, AzureSourceSelect, CopyableId, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
 import { AzureFoundryView } from "./AzureFoundryView";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
 import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
@@ -43,7 +42,7 @@ const detailHref = (r: Pick<AzureIdentity, "native_id">) => `/iga/azure/identity
 
 function NameLink({ r, children }: { r: AzureIdentity; children: string }) {
   return (
-    <Link to={detailHref(r)} onClick={(e) => e.stopPropagation()} className="hover:underline">
+    <Link to={detailHref(r)} onClick={(e) => e.stopPropagation()} className="hover:underline" title={children}>
       {children}
     </Link>
   );
@@ -117,32 +116,37 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "Agent identity",
+        header: "AI agent",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 280,
-        cell: ({ row }) => <EntityCell label={<NameLink r={row.original}>{row.original.name || row.original.native_id}</NameLink>} detail={<CopyableId value={row.original.native_id} label="Object ID" />} />,
+        approxWidth: 340,
+        cell: ({ row }) => (
+          <EntityCell
+            label={<NameLink r={row.original}>{row.original.name || "Unnamed AI agent"}</NameLink>}
+            detail={<CopyableId value={row.original.native_id} what="Object ID" />}
+          />
+        ),
       },
       {
         id: "blueprint",
-        header: "Agent identity blueprint",
+        header: "Built from template",
         priority: 2,
         approxWidth: 200,
         cell: ({ row }) => {
           const name = row.original.attrs?.["agent_blueprint_name"];
-          return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">Not recorded</span>;
+          return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">No template recorded</span>;
         },
       },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
+      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "status",
-        header: "Status",
+        header: "Switched on",
         priority: 5,
         approxWidth: 100,
         cell: ({ row }) => (
-          <CloudPill tone="muted" dot={false}>
-            {row.original.enabled ? "Enabled" : "Disabled"}
+          <CloudPill tone="muted" dot={false} title={row.original.enabled ? "Can sign in and use its permissions" : "Off: this agent cannot sign in"}>
+            {row.original.enabled ? "On" : "Off"}
           </CloudPill>
         ),
       },
@@ -154,11 +158,11 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         cell: ({ row }) => (
           <span className="text-xs">
             <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">by {createdBy(row.original)}</span> : null}
+            {createdBy(row.original) ? <span className="block text-muted-foreground">Created by {createdBy(row.original)}</span> : null}
           </span>
         ),
       },
-      { id: "last_sign_in", header: "Last sign-in", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
+      { id: "last_sign_in", header: "Last used", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
     ],
     [],
   );
@@ -168,18 +172,20 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "Agent identity blueprint",
+        header: "Agent template",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 280,
-        cell: ({ row }) => {
-          const appId = typeof row.original.attrs?.["app_id"] === "string" ? (row.original.attrs["app_id"] as string) : row.original.native_id;
-          return <EntityCell label={<NameLink r={row.original}>{row.original.name || appId}</NameLink>} detail={<CopyableId value={appId} label="Application (client) ID" />} />;
-        },
+        approxWidth: 340,
+        cell: ({ row }) => (
+          <EntityCell
+            label={<NameLink r={row.original}>{row.original.name || "Unnamed template"}</NameLink>}
+            detail={<CopyableId value={row.original.native_id} what="Object ID" />}
+          />
+        ),
       },
       {
         id: "agents",
-        header: "Agent identities",
+        header: "Agents made from it",
         priority: 2,
         approxWidth: 120,
         cell: ({ row }) => {
@@ -187,14 +193,14 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
         },
       },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
+      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "publisher",
-        header: "Publisher domain",
+        header: "Publisher website",
         priority: 5,
         approxWidth: 150,
-        cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "—"}</span>,
+        cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "Not stated"}</span>,
       },
       {
         id: "created",
@@ -212,8 +218,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     [],
   );
 
-  const noun = view === "identities" ? "agent identities" : "agent identity blueprints";
-  const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />;
+  const noun = view === "identities" ? "AI agents" : "agent templates";
+  const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="All Microsoft accounts" />;
   const viewChips = (
     <AWSFilterChips
       label="Agent view"
@@ -226,35 +232,37 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         setParams(next, { replace: true });
       }}
       options={[
-        { key: "identities", label: "Agent identities" },
-        { key: "blueprints", label: "Agent identity blueprints" },
-        { key: "foundry", label: "Microsoft Foundry" },
+        { key: "identities", label: "AI agents" },
+        { key: "blueprints", label: "Agent templates" },
+        { key: "foundry", label: "Microsoft Foundry (AI projects)" },
       ]}
     />
   );
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4">
+      {/* The view chips and the source selector stay in this one row across every
+          tab, in this same order, so switching to Microsoft Foundry — which has no
+          search box — never shifts them: only what sits between the two changes. */}
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+        {viewChips}
+        {view === "foundry" ? (
+          <p className="text-xs text-(--color-text-muted)">
+            {foundryQ.data
+              ? `${foundryTotals.objects} ${foundryTotals.objects === 1 ? "item" : "items"}: ${foundryTotals.projects} ${foundryTotals.projects === 1 ? "project" : "projects"}. ${foundryTotals.deployments} AI ${foundryTotals.deployments === 1 ? "model" : "models"} deployed. ${foundryTotals.agents} ${foundryTotals.agents === 1 ? "agent" : "agents"} found.`
+              : "Reading Microsoft Foundry…"}
+          </p>
+        ) : null}
+        <span className="ml-auto">{sourceSelect}</span>
+      </div>
       {view === "foundry" ? (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            {viewChips}
-            <p className="text-xs text-(--color-text-muted)">
-              {foundryQ.data
-                ? `${foundryTotals.objects} Foundry ${foundryTotals.objects === 1 ? "object" : "objects"} · ${foundryTotals.projects} ${foundryTotals.projects === 1 ? "project" : "projects"} · ${foundryTotals.deployments} model ${foundryTotals.deployments === 1 ? "deployment" : "deployments"} · ${foundryTotals.agentApplications} agent ${foundryTotals.agentApplications === 1 ? "application" : "applications"} (${foundryTotals.agents} ${foundryTotals.agents === 1 ? "agent" : "agents"})`
-                : "Reading Microsoft Foundry…"}
-            </p>
-            <span className="ml-auto">{sourceSelect}</span>
-          </div>
-          <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
-        </>
+        <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
       ) : (
         <>
+          <div className="px-4">
           <InventoryToolbar
-            chips={viewChips}
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
-            controls={sourceSelect}
+            searchPlaceholder="Search by name, ID, template or person"
             applied={connectorId ? [{ key: "source", label: `Source: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
             onClearAll={() => {
               setParam("source", null);
@@ -264,6 +272,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             total={rows.length}
             noun={noun}
           />
+          </div>
 
           <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
 
@@ -276,8 +285,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             noMatch={!filtered.length}
             emptyText={
               view === "identities"
-                ? "No agent identity was recorded. Agent identities are read with AgentIdentity.Read.All; the connection's Coverage tab says whether that read ran."
-                : "No agent identity blueprint was recorded. Blueprints are read with AgentIdentityBlueprint.Read.All; the connection's Coverage tab says whether that read ran."
+                ? "No AI agent was found in this directory. AuthSec reads them with the permission Read all agent identities (AgentIdentity.Read.All). The connection's Coverage tab shows whether that read ran. This is not proof there are none."
+                : "No agent template was found. AuthSec reads them with the permission Read all agent identity blueprints (AgentIdentityBlueprint.Read.All). The connection's Coverage tab shows whether that read ran."
             }
           >
             <AdaptiveTable

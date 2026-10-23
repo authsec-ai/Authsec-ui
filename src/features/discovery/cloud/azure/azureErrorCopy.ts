@@ -46,6 +46,43 @@ function joined(apiErr: CloudOnboardingApiError): string {
     .join(" ");
 }
 
+/**
+ * A coverage surface's or a scan run's raw failure text, made safe for a
+ * non-technical reader. The backend writes these straight from the Microsoft
+ * Graph / ARM response (an HTTP status line, a raw permission name), so the
+ * same few shapes repeat across every tenant: a missing licence, a missing
+ * admin consent, and Microsoft's own 5xx. Anything else falls back to one
+ * generic "Microsoft could not answer" sentence rather than the raw string,
+ * because a raw `http 403 Forbidden: …` reads as a crash to someone who is
+ * not debugging the integration. The raw text is never discarded — callers
+ * that want it (e.g. a "technical details" disclosure) still have the
+ * original string beside this one.
+ */
+export function azureSurfaceErrorProse(raw: string | undefined | null): string | undefined {
+  const text = (raw ?? "").trim();
+  if (!text) return undefined;
+  if (/licen[cs]e/i.test(text)) {
+    return "This tenant does not have the Microsoft licence this needs, so AuthSec cannot read it.";
+  }
+  if (/\b403\b|forbidden|\.read\.all\b|is not granted|admin consent|consent is required/i.test(text)) {
+    return "AuthSec does not have permission for this yet. An administrator needs to grant consent in Azure.";
+  }
+  if (/\b5\d\d\b|internal server error|service unavailable|bad gateway|gateway timeout/i.test(text)) {
+    return "Microsoft had a temporary problem answering this request. AuthSec will retry automatically on the next scan.";
+  }
+  if (/\b401\b|unauthori[sz]ed/i.test(text)) {
+    return "AuthSec's sign-in to this account was refused. Verify the connection again.";
+  }
+  if (/\b429\b|throttl|too many requests/i.test(text)) {
+    return "Microsoft slowed down these requests. AuthSec will retry automatically.";
+  }
+  // Strip a leading "http 403 Forbidden:" / "azure foundry: http 500:" style
+  // prefix even when none of the specific cases above matched, so a raw
+  // status line is never the first thing shown.
+  const stripped = text.replace(/^[\w .-]*?\bhttp\s+\d{3}\b[^:]*:\s*/i, "").trim();
+  return stripped || "Microsoft could not answer this request.";
+}
+
 /** The wizard and the action handlers hold the raw RTK error; this reads its body. */
 export function azureErrorOf(err: unknown): CloudOnboardingApiError | undefined {
   const e = err as { status?: number | string; data?: unknown } | undefined;

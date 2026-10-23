@@ -323,7 +323,7 @@ export const PRESETS: { key: WindowPreset; label: string; hours?: number }[] = [
   { key: "24h", label: "24 hours", hours: 24 },
   { key: "7d", label: "7 days", hours: 168 },
   { key: "custom", label: "Pick dates" },
-  { key: "none", label: "No end" },
+  { key: "none", label: "Until I remove it" },
 ];
 
 /** Allow is privilege expansion: it must end, within 30 days. */

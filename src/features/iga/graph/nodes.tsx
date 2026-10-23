@@ -59,6 +59,7 @@ const TONE_CLASS = {
 function FrontierRow({
   frontier,
   k8s,
+  azure = false,
   control,
   canLoadMore,
   onExpand,
@@ -68,6 +69,7 @@ function FrontierRow({
 }: {
   frontier: GraphFrontier;
   k8s: boolean;
+  azure?: boolean;
   control: FrontierControl;
   canLoadMore: boolean;
   onExpand: () => void;
@@ -103,8 +105,8 @@ function FrontierRow({
         </button>
       );
     return (
-      <button type="button" onClick={stop(onExpand)} aria-label={frontierAriaLabel(frontier, k8s)} className={cn(row, link, "text-(--color-primary-text)")}>
-        {frontierLabel(frontier, k8s)}
+      <button type="button" onClick={stop(onExpand)} aria-label={frontierAriaLabel(frontier, k8s, azure)} className={cn(row, link, "text-(--color-primary-text)")}>
+        {frontierLabel(frontier, k8s, azure)}
       </button>
     );
   }
@@ -250,7 +252,7 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
       <Handle type="source" position={Position.Right} isConnectable={false} className="!pointer-events-none !opacity-0" />
 
       {compact ? (
-        <CompactBody icon={<Icon aria-hidden="true" className={cn("size-5 shrink-0", cat.icon)} />} type={data.isRoot ? `${d.type} · start` : d.type} title={d.title} height={height ?? 60} headerClass={cat.header} />
+        <CompactBody icon={<Icon aria-hidden="true" className={cn("size-5 shrink-0", cat.icon)} />} type={data.isRoot ? `${d.type} · You are here` : d.type} title={d.title} height={height ?? 60} headerClass={cat.header} />
       ) : (
         <>
         <p className={cn("flex h-6 shrink-0 items-center gap-1.5 px-3 text-[11px] font-semibold", cat.header)}>
@@ -258,11 +260,14 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
           <span className="min-w-0 truncate" title={d.type}>
             {d.type}
           </span>
-          {data.isRoot ? <span className="ml-auto shrink-0 font-medium opacity-80">start</span> : null}
+          {data.isRoot ? <span className="ml-auto shrink-0 font-medium opacity-80">You are here</span> : null}
         </p>
       <div className="flex min-h-0 flex-1 flex-col px-3 pt-1.5 pb-2">
         <p
-          className={cn("text-[13px] font-semibold leading-5 text-(--color-text) [overflow-wrap:anywhere]", titleLines(d.title) === 2 ? "line-clamp-2 h-10" : "h-5 truncate")}
+          // text-sm (14px), a step closer to the Selection panel's 15px heading for
+          // the same object — as close as the card's fixed row height can take it
+          // without a larger layout change (the leading-5/h-5/h-10 boxes stay put).
+          className={cn("text-sm font-semibold leading-5 text-(--color-text) [overflow-wrap:anywhere]", titleLines(d.title) === 2 ? "line-clamp-2 h-10" : "h-5 truncate")}
           title={`Name: ${d.title}`}
         >
           {d.title}
@@ -290,6 +295,7 @@ function GraphNodeViewImpl({ data, id, width, height, dragging }: NodeProps<RFGr
           <FrontierRow
             frontier={d.frontier[0]}
             k8s={!!d.k8s}
+            azure={!!d.azure}
             control={data.stateOf(d.frontier[0])}
             canLoadMore={data.canLoadMore(d.frontier[0])}
             onExpand={() => data.onExpand(d.frontier[0])}

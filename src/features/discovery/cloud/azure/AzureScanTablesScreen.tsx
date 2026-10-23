@@ -38,7 +38,7 @@ import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 import type { CountValue } from "@/features/iga/shared/components/countValue";
 import { copyToClipboard } from "@/lib/clipboard";
 
-import { ListFrame, RelativeDate } from "./AzureDiscoveryShared";
+import { CopyableId, ListFrame, RelativeDate } from "./AzureDiscoveryShared";
 import { agentTypeLabel, connectorLabel, IDENTITY_FILTERS, identityKindLabel } from "./azureDiscoveryLabels";
 import { azureFallbackScope, identityFilterArgs, scanTablesHref } from "./azureFallback";
 import { inventoryKindLabel, tenantName, tenantScopeId } from "./azureInventoryLabels";
@@ -46,7 +46,9 @@ import { pageSizeParam, parsePageSize, useClientPaging } from "./azurePaging";
 
 type Row = AzureIdentity | AzureResource | AzureWorkload;
 
-const MUTED = "text-xs text-muted-foreground";
+// Same size as the primary AzureInventoryScreen's equivalent columns (text-sm),
+// so a field reads the same when the server falls back to this table.
+const MUTED = "text-sm text-muted-foreground";
 const NOUN: Record<InventoryClass, string> = { identities: "identities", resources: "resources", workloads: "workloads" };
 const SEARCH_PLACEHOLDER: Record<InventoryClass, string> = {
   identities: "Search identities by name, object ID or user principal name",
@@ -124,7 +126,9 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       header: "Name",
       alwaysVisible: true,
       priority: 1,
-      approxWidth: 300,
+      // Wider than the generic default: Azure's own names (agent blueprints, app
+      // registrations) run 40-60+ characters and clip hard at a narrower column.
+      approxWidth: 360,
       cell: ({ row }) => {
         const r = row.original;
         const agent = cls === "identities" ? agentTypeLabel(r as AzureIdentity) : undefined;
@@ -136,6 +140,9 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
             selected={false}
             context={[inventoryKindLabel(cls, rowKind(cls, r)), agent]}
             account={manyTenants ? tenantOf(byId.get(r.connector_id)) : null}
+            // An agent identity's name can be a long technical slug; its short,
+            // click-to-copy ID gives the eye a stable anchor the way the Agents tab's list does.
+            badge={agent ? <CopyableId value={r.native_id} what="Object ID" /> : undefined}
           />
         );
       },
@@ -146,7 +153,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       priority: 2,
       approxWidth: 100,
       cell: ({ row }) =>
-        cls === "identities" && (row.original as AzureIdentity).enabled === false ? <StatusBadge tone="neutral">Disabled</StatusBadge> : <span className={MUTED}>Current</span>,
+        cls === "identities" && (row.original as AzureIdentity).enabled === false ? <StatusBadge tone="neutral">Disabled</StatusBadge> : <span className={MUTED}>Active</span>,
     };
     const signIn: AdaptiveColumn<Row> = {
       id: "last_sign_in",
@@ -162,7 +169,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       approxWidth: 160,
       cell: ({ row }) => {
         const c = byId.get(row.original.connector_id);
-        return <span className="text-xs">{c?.scope_kind === "subscription" ? connectorLabel(c) : "Tenant-wide"}</span>;
+        return <span className="text-sm">{c?.scope_kind === "subscription" ? connectorLabel(c) : "Tenant-wide"}</span>;
       },
     };
     const region: AdaptiveColumn<Row> = {
@@ -180,7 +187,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       cell: ({ row }) => {
         const w = row.original as AzureWorkload;
         return w.identity_name ? (
-          <span className="text-xs">
+          <span className="text-sm">
             {w.identity_name} <span className="text-muted-foreground">({identityKindLabel(w.identity_kind)})</span>
           </span>
         ) : (
@@ -193,7 +200,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       header: "Tenant",
       priority: 5,
       approxWidth: 150,
-      cell: ({ row }) => <span className="text-xs">{tenantOf(byId.get(row.original.connector_id))}</span>,
+      cell: ({ row }) => <span className="text-sm">{tenantOf(byId.get(row.original.connector_id))}</span>,
     };
     const seen: AdaptiveColumn<Row> = {
       id: "seen",

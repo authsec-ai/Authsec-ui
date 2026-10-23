@@ -24,6 +24,7 @@ import { useParams } from "react-router-dom";
 import {
   useGetAzureNeighbourhoodQuery,
   useListAzureConnectorsQuery,
+  useListAzureFoundryQuery,
   useListAzureIdentitiesQuery,
   useListAzureResourcesQuery,
   useListAzureWorkloadsQuery,
@@ -44,6 +45,8 @@ import { AZURE_TARGET_KINDS } from "@/features/iga/policy/access/model";
 import { Info } from "lucide-react";
 import { InventoryNotice } from "../aws/AWSInventoryNotices";
 import { AzureGraphPanel } from "./AzureGraphPanel";
+import { FoundryOverview } from "./AzureFoundryView";
+import { foundryNodeOf, type FoundryNode } from "./azureFoundry";
 import { useAzureIdentityRef } from "./azureGraphLinks";
 import {
   IdentityAccessTab,
@@ -65,20 +68,20 @@ const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
   { key: "access", label: "Access", path: "/access" },
   { key: "credentials", label: "Credentials", path: "/credentials" },
-  { key: "token-access", label: "Token access", path: "/token-access" },
+  { key: "token-access", label: "Who can sign in as it", path: "/token-access" },
   { key: "activity", label: "Activity", path: "/activity" },
-  { key: "workloads", label: "Workloads", path: "/workloads" },
-  { key: "evidence", label: "Evidence", path: "/evidence" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+  { key: "workloads", label: "Running on", path: "/workloads" },
+  { key: "evidence", label: "Where this came from", path: "/evidence" },
+  { key: "graph", label: "Access map", path: "/graph", workspace: true },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Who can access", path: "/access" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+  { key: "access", label: "Who has a role here", path: "/access" },
+  { key: "graph", label: "Access map", path: "/graph", workspace: true },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+  { key: "graph", label: "Access map", path: "/graph", workspace: true },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
@@ -86,6 +89,9 @@ const LIST_TYPE = { identity: "identities", resource: "resources", workload: "wo
 const KIND_WORD: Record<Kind, string> = { identity: "Identity", resource: "Resource", workload: "Workload" };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+
+/** An ARM id without Microsoft's `#system` identity suffix, lowercased: how a Foundry project names its parent. */
+const armBase = (id: string | undefined) => id?.toLowerCase().replace(/#system$/, "");
 
 export default function AzureObjectPage() {
   const { kind, id = "", tab } = useParams<{ kind: string; id: string; tab?: string }>();
@@ -134,6 +140,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   const resQ = useListAzureResourcesQuery({ q: native, limit: 10 }, { skip: kind !== "resource" || !native });
   const wlQ = useListAzureWorkloadsQuery({ q: workloadQ, limit: 100 }, { skip: kind !== "workload" || !workloadQ });
   const connectorsQ = useListAzureConnectorsQuery();
+  const foundryQ = useListAzureFoundryQuery(undefined, { skip: kind !== "workload" });
 
   const identity: AzureIdentity | undefined = idQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
   const resource: AzureResource | undefined = resQ.data?.rows.find((r) => r.native_id.toLowerCase() === native);
@@ -162,7 +169,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   if (identity) {
     const agent = agentTypeLabel(identity);
     header = {
-      label: agent ? `${identityKindLabel(identity.kind)} · ${agent}` : identityKindLabel(identity.kind),
+      label: agent ?? identityKindLabel(identity.kind),
       category: "identity",
       icon: identity.kind === "entra_user" || identity.kind === "entra_agent_user" ? "user" : identity.kind === "entra_group" ? "group" : "service_account",
     };
@@ -175,10 +182,27 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
           name,
           kind: header,
           context: [],
-          sweep: { context: [connectorLabel(connector)], line: `Last confirmed ${dayText(lastSeen)}` },
-          copy: { value: nativeId, label: isIdentity ? "Copy object ID" : "Copy resource ID", what: isIdentity ? "Object ID" : "Resource ID" },
+          sweep: { context: [connectorLabel(connector)], line: `Last checked ${dayText(lastSeen)}` },
+          copy: { value: nativeId, label: "Copy ID", what: isIdentity ? "Object ID" : "Resource ID" },
+          plainNote: {
+            short: "Recorded, not tested",
+            long: "These are the permissions Azure has recorded. They have not been tested, so they do not prove a request would succeed.",
+          },
         }
       : undefined;
+
+  // A Foundry object shows its own facts (deployments, connections, trust, projects) instead of the raw attributes.
+  const foundryTrusts = foundryQ.data?.trusts ?? [];
+  const foundryNode: FoundryNode | undefined =
+    workload && str(workload.attrs?.["foundry_kind"]) ? foundryNodeOf(workload, foundryTrusts) : undefined;
+  const foundryProjects: FoundryNode[] = foundryNode
+    ? (foundryQ.data?.rows ?? [])
+        .filter((w) => {
+          const self = armBase(workload?.native_id);
+          return armBase(str(w.attrs?.["account_id"])) === self || armBase(str(w.attrs?.["hub_id"])) === self;
+        })
+        .map((w) => foundryNodeOf(w, foundryTrusts))
+    : [];
 
   const tabs = TABS[kind];
   const activeTab = activeTabOf(tabs, tab);
@@ -202,13 +226,15 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
           {/* A policy is on an ARM resource; an application permission or delegated scope cannot be named. */}
           {resource.native_id.toLowerCase().startsWith("/subscriptions/") && resource.native_id.toLowerCase().includes("/providers/") ? <AzurePolicySection ws={ws} what="resource" igaId={policyIgaId} /> : null}
         </>
+      ) : workload && foundryNode ? (
+        <FoundryOverview node={foundryNode} projects={foundryProjects} />
       ) : workload ? (
         <WorkloadOverview workload={workload} subscription={connector} identityHref={runsAsObjectId ? `/iga/azure/identity/${encodeURIComponent(runsAsObjectId)}` : undefined} />
       ) : null;
     } else if (active === "graph") {
       body = byArmId ? (
         <InventoryNotice icon={<Info />}>
-          The access graph is not available for this object yet. It was opened from the scan tables, which carry no graph reference. Open it from Discovery once the access graph is ready on this server.
+          The access map is not ready for this object yet. Open it from Discovery once the access map is ready on this server.
         </InventoryNotice>
       ) : (
         <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />

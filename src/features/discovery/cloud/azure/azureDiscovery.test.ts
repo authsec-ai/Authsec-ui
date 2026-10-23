@@ -11,17 +11,17 @@ describe("Azure resource types", () => {
   it("names the types discovery reads in Microsoft's words, case-insensitively", () => {
     expect(armTypeLabel("microsoft.keyvault/vaults")).toBe("Key Vault");
     expect(armTypeLabel("Microsoft.Storage/storageAccounts")).toBe("Storage account");
-    expect(armTypeLabel("microsoft.containerservice/managedclusters")).toBe("AKS cluster");
+    expect(armTypeLabel("microsoft.containerservice/managedclusters")).toBe("Kubernetes cluster (AKS)");
     expect(armTypeLabel("microsoft.cognitiveservices/accounts/projects")).toBe("Foundry project");
   });
 
   it("falls back to the last segment and namespace for a type it does not know", () => {
-    expect(armTypeLabel("microsoft.example/widgets")).toBe("widgets (example)");
-    expect(armTypeLabel("plain")).toBe("plain");
+    expect(armTypeLabel("microsoft.example/widgets")).toBe("Other Azure resource");
+    expect(armTypeLabel("plain")).toBe("Other Azure resource");
   });
 
   it("labels each table of the graph summary by its own vocabulary", () => {
-    expect(graphKindLabel("identity", "entra_agent_identity")).toBe("Agent identity");
+    expect(graphKindLabel("identity", "entra_agent_identity")).toBe("AI agent");
     expect(graphKindLabel("resource", "entra_app_role")).toBe("Application permission");
     expect(graphKindLabel("resource", "microsoft.sql/servers")).toBe("SQL server");
     expect(graphKindLabel("entitlement", "azure_role_definition")).toBe("Azure role");
@@ -32,13 +32,13 @@ describe("Azure resource types", () => {
   });
 
   it("names the Teams and Foundry agent coverage surfaces", () => {
-    expect(surfaceLabel("teams_apps")).toMatch(/Teams apps/);
-    expect(surfaceLabel("foundry_agents")).toMatch(/Foundry project agents/);
-    expect(surfaceLabel("brand_new_surface")).toBe("brand new surface");
+    expect(surfaceLabel("teams_apps")).toMatch(/Teams bots/);
+    expect(surfaceLabel("foundry_agents")).toMatch(/Microsoft Foundry projects/);
+    expect(surfaceLabel("brand_new_surface")).toBe("Other area (not yet described)");
   });
 
   it("names a Foundry kind, else its runtime type", () => {
-    expect(foundryKindLabel("hub_project", "microsoft.machinelearningservices/workspaces")).toBe("Hub-based project");
+    expect(foundryKindLabel("hub_project", "microsoft.machinelearningservices/workspaces")).toBe("AI project in a hub");
     expect(foundryKindLabel(undefined, "microsoft.machinelearningservices/workspaces")).toBe("Machine Learning workspace");
   });
 });
