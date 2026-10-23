@@ -410,6 +410,8 @@ export interface AgentFilters {
   runtime_status?: RuntimeStatus;
   /** The connection's discovery source: "agents in this cluster / organisation". */
   discovery_source_id?: string;
+  /** An Entra tenant: Azure agents have no discovery source, their metadata names the tenant. */
+  tenant_id?: string;
   limit?: number;
   offset?: number;
 }
@@ -607,6 +609,7 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.live ? { live: "true" } : {}),
           ...(f?.runtime_status ? { runtime_status: f.runtime_status } : {}),
           ...(f?.discovery_source_id ? { discovery_source_id: f.discovery_source_id } : {}),
+          ...(f?.tenant_id ? { tenant_id: f.tenant_id } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },
