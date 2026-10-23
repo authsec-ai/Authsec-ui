@@ -181,7 +181,7 @@ export function IdentityTokensTab({ id }: { id: string }) {
   const q = useListAzureFederationQuery({ identity_id: id, limit: LIST_LIMIT });
   return (
     <Panel
-      title="Who can sign in as it"
+      title="Who can access"
       count={q.data ? `${q.data.rows.length}` : undefined}
       description="People, apps and setups that can sign in as this identity without its password: trusted outside sign-in settings, owners who can add a credential, and the template it was made from."
     >
@@ -252,7 +252,7 @@ export function IdentityEvidenceTab({ objectId }: { objectId: string }) {
   const q = useListAzureEvidenceQuery({ object_id: objectId, limit: LIST_LIMIT });
   return (
     <Panel
-      title="Where this came from"
+      title="Evidence"
       count={q.data ? `${q.data.rows.length}` : undefined}
       description="What Microsoft returned for this object and its roles: which Microsoft service gave each answer, how many checks confirmed it, and the details it held. No secret value is ever stored."
     >
@@ -369,7 +369,7 @@ export function ResourceOverview({ resource, subscription }: { resource: AzureRe
 export function ResourceAccessTab({ resourceId }: { resourceId: string }) {
   const q = useListAzureGrantsQuery({ resource_id: resourceId, limit: LIST_LIMIT });
   return (
-    <Panel title="Who has a role here" count={q.data ? `${q.data.rows.length}` : undefined}>
+    <Panel title="Who can access" count={q.data ? `${q.data.rows.length}` : undefined}>
       <DrawerList
         query={q}
         empty="No role was set on this resource itself. Roles given on its subscription or resource group still reach it, and they appear under each identity."
