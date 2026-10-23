@@ -1,5 +1,5 @@
 /**
- * Azure Identities, Resources and Workloads while the access graph is
+ * Azure Identities, Resources and Workloads while the Access Graph is
  * unavailable: read from the Azure discovery routes,
  * which serve the scan tables directly, as AWS's "Latest collected" does. The
  * inventory screen hands over to this one only when the graph answers
@@ -264,7 +264,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
       notices={
         <div className="space-y-1 text-xs text-(--color-text-muted)" role="status">
           <p>
-            Read straight from the latest Azure scan. The access graph is not ready on this server yet, so these {NOUN[cls]} are listed without graph counts and have no
+            Read straight from the latest Azure scan. The Access Graph is not ready on this server yet, so these {NOUN[cls]} are listed without graph counts and have no
             Access Graph.
           </p>
           {truncated ? <p>Showing the first {loaded.length.toLocaleString()} of {total.toLocaleString()}. Search or filter to narrow them.</p> : null}

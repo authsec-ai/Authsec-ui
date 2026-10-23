@@ -66,22 +66,22 @@ type Kind = "identity" | "resource" | "workload";
 
 const IDENTITY_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Access", path: "/access" },
+  { key: "access", label: "Permissions", path: "/access" },
   { key: "credentials", label: "Credentials", path: "/credentials" },
-  { key: "token-access", label: "Who can sign in as it", path: "/token-access" },
+  { key: "token-access", label: "Who can access", path: "/token-access" },
   { key: "activity", label: "Activity", path: "/activity" },
-  { key: "workloads", label: "Running on", path: "/workloads" },
-  { key: "evidence", label: "Where this came from", path: "/evidence" },
-  { key: "graph", label: "Access map", path: "/graph", workspace: true },
+  { key: "workloads", label: "Workloads", path: "/workloads" },
+  { key: "evidence", label: "Evidence", path: "/evidence" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Who has a role here", path: "/access" },
-  { key: "graph", label: "Access map", path: "/graph", workspace: true },
+  { key: "access", label: "Who can access", path: "/access" },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access map", path: "/graph", workspace: true },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
@@ -234,7 +234,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
     } else if (active === "graph") {
       body = byArmId ? (
         <InventoryNotice icon={<Info />}>
-          The access map is not ready for this object yet. Open it from Discovery once the access map is ready on this server.
+          The Access Graph is not ready for this object yet. Open it from Discovery once the Access Graph is ready on this server.
         </InventoryNotice>
       ) : (
         <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />

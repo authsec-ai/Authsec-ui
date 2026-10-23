@@ -265,7 +265,7 @@ export function ObjectShell({
               ) : (
                 <Button asChild variant="outline" size="sm">
                   <Link to={`${base}${graphTab.path}`}>
-                    <Network className="size-3.5" aria-hidden="true" /> Open access map
+                    <Network className="size-3.5" aria-hidden="true" /> Open Access Graph
                   </Link>
                 </Button>
               )
