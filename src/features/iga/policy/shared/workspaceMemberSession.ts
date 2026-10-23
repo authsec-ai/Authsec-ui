@@ -13,7 +13,6 @@
  * `skip` until the swap settles.
  */
 
-import { useEffect, useState } from "react";
 
 import config from "@/config";
 import { decodeJWT } from "@/utils/jwt";
@@ -112,30 +111,4 @@ export function ensureWorkspaceMemberSession(): Promise<WorkspaceSessionResult> 
     inflight = null;
   });
   return inflight;
-}
-
-/** Whether the upgrade attempt has completed at least once this session. */
-let settled = false;
-
-/**
- * Fire the member-session upgrade on mount; report `ready` once it settles
- * (success or failure). A later-mounting page starts ready and does not retry.
- */
-export function useWorkspaceMemberSession(): { ready: boolean } {
-  const [ready, setReady] = useState(settled);
-  useEffect(() => {
-    if (settled) {
-      setReady(true);
-      return;
-    }
-    let live = true;
-    void ensureWorkspaceMemberSession().finally(() => {
-      settled = true;
-      if (live) setReady(true);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-  return { ready };
 }

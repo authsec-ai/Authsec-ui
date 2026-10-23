@@ -205,7 +205,7 @@ export function describeFailure(f: PolicyFailure): { title: string; fix?: string
   if (f.kind === "member_session") {
     return {
       title: "Your workspace session needs a refresh",
-      fix: "Sign out and sign in again, then re-open this page. Your membership is active, but this login is missing its workspace membership, so AuthSec cannot tell the request is yours.",
+      fix: "Sign out and sign in again, then re-open this page. If it keeps happening, ask a workspace admin to check that your membership in this workspace is active: this login carries no workspace membership, so AuthSec cannot tell the request is yours.",
     };
   }
   const known = POLICY_ERROR_COPY[f.code];
