@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyActionError, PolicyLoadFailure, PolicyShell, classifyPolicyError, describeFailure, usePolicyAction } from "../shared";
+import { usePolicyCapabilities } from "../shared/usePolicyCapabilities";
 import { PageFooter } from "@/components/layout/PageFooter";
 import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { AzureIdentityPicker, AzureResourcePicker } from "./AzurePickers";
@@ -47,7 +48,9 @@ import {
   accessBlurbs,
   armParts,
   bodyOf,
+  awsTypeOf,
   bucketOf,
+  tableOf,
   draftCopy,
   draftOf,
   draftProblem,
@@ -67,7 +70,7 @@ import {
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
-import { RESOURCE_TYPES, type ResourceTypeCopy } from "./resourceTypes";
+import { RESOURCE_TYPES, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -166,7 +169,7 @@ export default function PolicyFormPage() {
   const azureRoleQ = useGetGraphNeighbourhoodQuery({ ws, root: `identity:${fromRole}` as GraphRef, direction: "forward" }, { skip: !fromRole || !fromAzure });
 
   const [draft, setDraft] = useState<PolicyDraft>(() =>
-    emptyDraft({ provider: fromAzure ? "azure" : "aws", effect: params.get("effect") === "allow" ? "allow" : "block" }),
+    emptyDraft({ provider: fromAzure ? "azure" : "aws", awsType: awsTypeOf(params.get("type") ?? undefined), effect: params.get("effect") === "allow" ? "allow" : "block" }),
   );
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });
@@ -181,8 +184,16 @@ export default function PolicyFormPage() {
     const r = resourceQ.data?.data;
     if (r && !filled.current.resource) {
       filled.current.resource = true;
+      const tbl = tableOf(r.text);
       const b = bucketOf(r.text);
-      if (r.type === "s3_bucket" || b) {
+      if (tbl) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "dynamodb_table",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "dynamodb_table", name: tbl.table, bucket: "", arn: tbl.arn, account_id: tbl.account, region: tbl.region },
+          prefix: "",
+        }));
+      } else if (r.type === "s3_bucket" || b) {
         const bucket = b?.bucket ?? r.text;
         setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, resource_type: "s3_bucket", name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
       }
@@ -239,6 +250,13 @@ export default function PolicyFormPage() {
     setDraft((d) => (d.provider === provider ? d : { ...d, provider, resource: null, prefix: "", roles: [] }));
     setFieldError(null);
   };
+  // So is another kind of AWS resource.
+  const setAwsType = (awsType: AwsResourceType) => {
+    setDraft((d) => (d.awsType === awsType && (!d.resource || d.resource.resource_type === awsType) ? d : { ...d, awsType, resource: null, prefix: "", roles: [] }));
+    setFieldError(null);
+  };
+  const caps = usePolicyCapabilities(ws);
+  const awsTypes = (Object.keys(RESOURCE_TYPES) as AwsResourceType[]).filter((t) => caps.accessResourceTypes.includes(t));
   const setEffect = (e: AccessEffect) => {
     setDraft((d) => withEffect(d, e));
     setFieldError(null);
@@ -417,18 +435,32 @@ export default function PolicyFormPage() {
                 </p>
               ) : null}
 
+              {aws && awsTypes.length > 1 ? (
+                <Block title="Resource type">
+                  <div role="radiogroup" aria-label="Resource type" className="flex flex-wrap gap-1.5">
+                    {awsTypes.map((t) => (
+                      <Pill key={t} radio on={draftType(draft) === t} onClick={() => setAwsType(t)}>
+                        {t === "s3_bucket" ? "S3 bucket" : "DynamoDB table"}
+                      </Pill>
+                    ))}
+                  </div>
+                </Block>
+              ) : null}
+
               {aws ? (
               <Block title={awsCopy.title} hint={awsCopy.hint}>
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
+                <div className={cn("grid gap-2 sm:items-start", awsCopy.subScope === "folder" && "sm:grid-cols-[minmax(0,1fr)_14rem]")}>
                   <div id="ap-resource">
                     <ResourcePicker
                       ws={ws}
+                      type={awsTypeOf(draftType(draft))}
                       value={draft.resource}
                       onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: !r || !d.resource || r.account_id === d.resource.account_id ? d.roles : [] }))}
                       invalid={!!err("resource")}
                     />
                     <FieldError message={err("resource")} />
                   </div>
+                  {awsCopy.subScope === "folder" ? (
                   <div>
                     <label htmlFor="ap-prefix" className="sr-only">
                       Folder (optional)
@@ -464,6 +496,7 @@ export default function PolicyFormPage() {
                     ) : null}
                     <FieldError message={err("prefix")} />
                   </div>
+                  ) : null}
                 </div>
               </Block>
               ) : (

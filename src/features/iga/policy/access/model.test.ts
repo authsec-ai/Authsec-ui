@@ -10,17 +10,20 @@ import {
   draftSubScope,
   draftType,
   emptyDraft,
+  groupTables,
   pathInBucket,
   pathReachesFolder,
   policySentence,
   reachesFolder,
   resourceText,
   suggestedName,
+  tableOf,
   type DraftResource,
   type PolicyDraft,
 } from "./model";
 import { RESOURCE_TYPES, resourceTypeCopy } from "./resourceTypes";
 import type { AccessPolicyDetail, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
+import type { ResourceRow } from "@/app/api/igaGraphApi";
 
 describe("pathReachesFolder", () => {
   it("whole-bucket holders and whole-bucket rules reach everything", () => {
@@ -249,5 +252,59 @@ describe("draftOf", () => {
     expect(draftOf(detail({ resource_type: undefined })).resource?.resource_type).toBe("s3_bucket");
     expect(draftOf(detail({ resource_type: "" })).resource?.resource_type).toBe("s3_bucket");
     expect(draftOf(detail({ resource_type: undefined, provider: "azure", bucket: "", prefix: "" })).resource?.resource_type).toBe("azure_resource");
+  });
+});
+
+describe("DynamoDB tables", () => {
+  const T = "arn:aws:dynamodb:us-east-1:111122223333:table/orders";
+
+  it("tableOf reads the table any record names, as the backend does", () => {
+    for (const text of [T, `${T}/index/by-date`, `${T}/index/*`, `${T}/stream/2026-10-01T00:00`, `${T}/*`, `${T}/backup/01234`]) {
+      expect(tableOf(text)).toEqual({ partition: "aws", region: "us-east-1", account: "111122223333", table: "orders", arn: T });
+    }
+    expect(tableOf("arn:aws-cn:dynamodb:cn-north-1:111122223333:table/orders")?.partition).toBe("aws-cn");
+    expect(tableOf("arn:aws-us-gov:dynamodb:us-gov-west-1:111122223333:table/orders")?.region).toBe("us-gov-west-1");
+    for (const text of [
+      "arn:aws:dynamodb:us-east-1:111122223333:table/*",
+      "arn:aws:dynamodb:us-east-1:111122223333:table/ord*",
+      "arn:aws:dynamodb:*:111122223333:table/orders",
+      "arn:aws:dynamodb:us-east-1:11112222333:table/orders",
+      "arn:aws:dynamodb::111122223333:global-table/orders",
+      "arn:aws:s3:::orders",
+    ]) {
+      expect(tableOf(text)).toBeNull();
+    }
+  });
+
+  it("groupTables makes one entry per table, its own record first, and skips patterns", () => {
+    const row = (id: string, text: string) => ({ ref: `resource:${id}`, text, type: "selector" }) as unknown as ResourceRow;
+    const tables = groupTables([
+      row("idx", `${T}/index/*`),
+      row("own", T),
+      row("pat", "arn:aws:dynamodb:us-east-1:111122223333:table/ord*"),
+      row("other", "arn:aws:dynamodb:eu-west-1:111122223333:table/audit"),
+    ]);
+    expect(tables.map((t) => t.name)).toEqual(["audit", "orders"]);
+    const orders = tables[1];
+    expect(orders).toMatchObject({ resource_id: "own", resource_type: "dynamodb_table", arn: T, account_id: "111122223333", region: "us-east-1", bucket: "" });
+    expect(orders.records?.map((r) => r.id)).toEqual(["own", "idx"]);
+  });
+
+  const table: DraftResource = { provider: "aws", resource_id: "r-1", resource_type: "dynamodb_table", name: "orders", bucket: "", arn: T, account_id: "111122223333", region: "us-east-1" };
+
+  it("a table policy sends no folder and asks for a table", () => {
+    const d: PolicyDraft = { ...emptyDraft({ awsType: "dynamodb_table" }), prefix: "stale/" };
+    expect(draftProblem(d)?.message).toBe("Choose a table.");
+    expect(bodyOf({ ...d, resource: table }).resource).toEqual({ resource_id: "r-1", prefix: "" });
+    expect(resourceText({ ...table, prefix: "" })).toBe("orders (us-east-1)");
+  });
+
+  it("every resource type has every word the form uses", () => {
+    for (const copy of Object.values(RESOURCE_TYPES)) {
+      for (const k of ["noun", "title", "hint", "label", "search", "loading", "empty", "error", "allHint", "untouched"] as const) {
+        expect(copy[k]).toBeTruthy();
+      }
+      expect(Object.keys(copy.blurbs).sort()).toEqual(["delete", "read", "write"]);
+    }
   });
 });

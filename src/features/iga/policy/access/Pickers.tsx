@@ -38,8 +38,8 @@ import { cn } from "@/lib/utils";
 
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
-import { RESOURCE_TYPES } from "./resourceTypes";
+import { bucketOf, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { RESOURCE_TYPES, type AwsResourceType } from "./resourceTypes";
 import { useDebounced } from "./useDebounced";
 
 /** Every bucket the S3 records name, with its records (bucket record first) and the folders seen in it. */
@@ -72,6 +72,8 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
   return [...by.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
+const SERVICE: Record<AwsResourceType, string> = { s3_bucket: "s3", dynamodb_table: "dynamodb" };
+
 export const rowButton =
   "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-(--color-surface-subtle) focus-visible:bg-(--color-surface-subtle) focus-visible:outline-none";
 
@@ -79,11 +81,14 @@ export const rowButton =
 
 export function ResourcePicker({
   ws,
+  type = "s3_bucket",
   value,
   onChange,
   invalid,
 }: {
   ws: string;
+  /** What is picked: an S3 bucket or a DynamoDB table. */
+  type?: AwsResourceType;
   value: DraftResource | null;
   onChange: (r: DraftResource | null) => void;
   invalid?: boolean;
@@ -91,18 +96,19 @@ export function ResourcePicker({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim());
-  const list = useListGraphResourcesQuery({ ws, q: dq || undefined, service: "s3", limit: 200 }, { skip: !!value });
-  const buckets = useMemo(() => groupBuckets(list.data?.data ?? []), [list.data]);
-  const copy = RESOURCE_TYPES.s3_bucket;
+  const list = useListGraphResourcesQuery({ ws, q: dq || undefined, service: SERVICE[type], limit: 200 }, { skip: !!value });
+  const buckets = useMemo(() => (type === "s3_bucket" ? groupBuckets(list.data?.data ?? []) : []), [list.data, type]);
+  const tables = useMemo(() => (type === "dynamodb_table" ? groupTables(list.data?.data ?? []) : []), [list.data, type]);
+  const copy = RESOURCE_TYPES[type];
 
   if (value) {
     return (
       <div className="flex items-center gap-3 rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) px-3 py-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-(--color-text)">{value.bucket}</div>
+          <div className="truncate text-[13px] font-medium text-(--color-text)">{value.bucket || value.name}</div>
           <div className="truncate font-mono text-xs text-(--color-text-muted)">
             {value.arn}
-            {value.account_id ? ` · ${value.account_id}` : ""}
+            {value.account_id && !value.arn.includes(value.account_id) ? ` · ${value.account_id}` : ""}
           </div>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange(null)}>
@@ -147,7 +153,7 @@ export function ResourcePicker({
                   Retry
                 </button>
               </p>
-            ) : buckets.length === 0 ? (
+            ) : buckets.length + tables.length === 0 ? (
               <CommandEmpty>
                 {dq ? `No ${copy.noun} matches “${dq}”.` : copy.empty}
               </CommandEmpty>
@@ -159,6 +165,24 @@ export function ResourcePicker({
                   </p>
                 ) : null}
                 <div className="p-1">
+                  {tables.map((t) => (
+                    <CommandItem
+                      key={t.arn}
+                      value={t.arn}
+                      onSelect={() => {
+                        onChange(t);
+                        setOpen(false);
+                      }}
+                      className="gap-3 px-2.5 py-2"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-(--color-text)">{t.name}</span>
+                        <span className="block truncate text-xs text-(--color-text-muted)">
+                          {t.region} · {t.account_id}
+                        </span>
+                      </span>
+                    </CommandItem>
+                  ))}
                   {buckets.map((b) => (
                     <CommandItem
                       key={b.bucket}

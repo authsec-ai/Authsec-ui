@@ -13,7 +13,7 @@
 import { differenceInMinutes, format, formatDistanceToNowStrict, isValid, parseISO } from "date-fns";
 
 import type { ConsoleTone } from "@/components/console/status";
-import { refId, type GraphNeighbourhood } from "@/app/api/igaGraphApi";
+import { refId, type GraphNeighbourhood, type ResourceRow } from "@/app/api/igaGraphApi";
 import type { InventoryRow } from "@/app/api/igaInventoryApi";
 import { armTypeLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
@@ -29,7 +29,7 @@ import type {
   AccessResourceType,
 } from "@/app/api/igaAccessPoliciesApi";
 
-import { RESOURCE_TYPES, resourceTypeCopy, type ResourceTypeCopy } from "./resourceTypes";
+import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 /* -------------------------------- providers -------------------------------- */
 
@@ -203,8 +203,9 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * What a policy is on, in words: `finance-reports/invoices/` (a folder),
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
-export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
+export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
+  if (r.resource_type === "dynamodb_table") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -225,6 +226,45 @@ export function pathReachesFolder(path: string, folder: string): boolean {
 /** Whether any of the paths a role holds reaches the folder. */
 export function reachesFolder(paths: readonly string[], folder: string): boolean {
   return paths.some((p) => pathReachesFolder(p, folder));
+}
+
+/**
+ * The DynamoDB table an ARN names or lies under (an index, stream or backup),
+ * as the backend reads it (internal/igagov/access_dynamodb.go): the name must
+ * be literal; a pattern or a global-table ARN is not a table.
+ */
+export function tableOf(text: string | null | undefined): { partition: string; region: string; account: string; table: string; arn: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):dynamodb:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):table\/([A-Za-z0-9_.-]{3,255})(?:\/.*)?$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], table: m[4], arn: `arn:${m[1]}:dynamodb:${m[2]}:${m[3]}:table/${m[4]}` };
+}
+
+/**
+ * Every table the DynamoDB records name (the table, an index, a stream...),
+ * with its records, the table's own record first. A pattern or global-table
+ * record is not a table and is skipped.
+ */
+export function groupTables(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource & { own: boolean }>();
+  for (const r of rows) {
+    const t = tableOf(r.text);
+    if (!t) continue;
+    let e = by.get(t.arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "dynamodb_table", name: t.table, bucket: "", arn: t.arn, account_id: t.account, region: t.region, records: [], own: false };
+      by.set(t.arn, e);
+    }
+    const rec = { id: refId(r.ref), text: r.text };
+    if (r.text.trim() === t.arn) {
+      e.records!.unshift(rec);
+      e.own = true;
+    } else {
+      e.records!.push(rec);
+    }
+  }
+  return [...by.values()]
+    .map(({ own: _own, ...e }) => ({ ...e, resource_id: e.records![0].id }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.arn.localeCompare(b.arn));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */
@@ -385,6 +425,8 @@ export function pathInBucket(text: string): string {
 /** The form's state: what the person chose, before it becomes a request. */
 export interface PolicyDraft {
   provider: AccessProvider;
+  /** On AWS, what kind of resource is being picked (before one is). */
+  awsType: AwsResourceType;
   effect: AccessEffect;
   resource: DraftResource | null;
   prefix: string;
@@ -402,9 +444,10 @@ export const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
 
 const minute = (d: Date) => new Date(Math.floor(d.getTime() / 60_000) * 60_000);
 
-export function emptyDraft(initial?: { provider?: AccessProvider; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
+export function emptyDraft(initial?: { provider?: AccessProvider; awsType?: AwsResourceType; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
   return {
     provider: initial?.provider ?? initial?.resource?.provider ?? "aws",
+    awsType: initial?.awsType ?? awsTypeOf(initial?.resource?.resource_type),
     effect: initial?.effect ?? "block",
     resource: initial?.resource ?? null,
     prefix: initial?.prefix ?? "",
@@ -424,6 +467,7 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   const provider = p.resource.provider;
   return {
     provider,
+    awsType: awsTypeOf(p.resource.resource_type),
     effect: p.effect,
     resource: {
       provider,
@@ -451,18 +495,23 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
  * What the draft is on: Azure's one resource, else the chosen AWS resource's
  * type, else S3 (the AWS type before anything is chosen).
  */
-export function draftType(d: Pick<PolicyDraft, "provider" | "resource">): AccessResourceType {
+export function draftType(d: Pick<PolicyDraft, "provider" | "resource"> & { awsType?: AwsResourceType }): AccessResourceType {
   if (d.provider === "azure") return "azure_resource";
-  return d.resource?.resource_type || "s3_bucket";
+  return d.resource?.resource_type || d.awsType || "s3_bucket";
+}
+
+/** The AWS type a resource type is, S3 for anything else (Azure, unknown, ""). */
+export function awsTypeOf(type: string | undefined): AwsResourceType {
+  return resourceTypeCopy(type) ? (type as AwsResourceType) : "s3_bucket";
 }
 
 /** The words for the draft's AWS resource type; undefined on Azure. */
-export function draftCopy(d: Pick<PolicyDraft, "provider" | "resource">): ResourceTypeCopy | undefined {
+export function draftCopy(d: Pick<PolicyDraft, "provider" | "resource"> & { awsType?: AwsResourceType }): ResourceTypeCopy | undefined {
   return resourceTypeCopy(draftType(d));
 }
 
 /** The draft's narrowing inside its resource (S3's folder), trimmed; "" when its type has none. */
-export function draftSubScope(d: Pick<PolicyDraft, "provider" | "resource" | "prefix">): string {
+export function draftSubScope(d: Pick<PolicyDraft, "provider" | "resource" | "prefix"> & { awsType?: AwsResourceType }): string {
   return draftCopy(d)?.subScope ? d.prefix.trim() : "";
 }
 

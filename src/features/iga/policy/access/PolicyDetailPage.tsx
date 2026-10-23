@@ -199,6 +199,7 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
               <span className="font-mono text-xs">{resourceText(p.resource)}</span>
             )}
             {!azure ? <Meta>{p.resource.arn}</Meta> : null}
+            {p.resource.region ? <Meta>Region {p.resource.region}</Meta> : null}
             {p.resource.account_id ? (
               <Meta>
                 {azure ? "Azure subscription" : "Account"} {azure ? shortId(p.resource.account_id) : p.resource.account_id}

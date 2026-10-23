@@ -234,7 +234,7 @@ export default function PoliciesListPage() {
     <div className="mx-auto max-w-md space-y-3 py-6 text-center">
       <p className="text-sm font-semibold text-(--color-text)">No policies yet</p>
       <p className="text-[13px] text-(--color-text-muted)">
-        A policy blocks or allows an agent&rsquo;s access to a resource, such as an Azure storage account or a key vault, for as long as you say. Create one here, or open an agent or resource in Discovery and start one from its page.
+        A policy blocks or allows an agent&rsquo;s access to a resource, such as an S3 bucket, a DynamoDB table or an Azure storage account, for as long as you say. Create one here, or open an agent or resource in Discovery and start one from its page.
       </p>
       {enforce.offered ? (
         <Button asChild className="text-white">

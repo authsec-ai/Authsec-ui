@@ -55,6 +55,24 @@ export const RESOURCE_TYPES = {
     untouched: "Only these roles change. Other roles, users, groups and bucket policies keep their access.",
     subScope: "folder",
   },
+  dynamodb_table: {
+    noun: "table",
+    title: "Table",
+    hint: "Choose the DynamoDB table this rule is about. Only tables that AuthSec has found in your AWS policies are listed. The rule covers the whole table and its indexes.",
+    label: "Choose a DynamoDB table",
+    search: "Search for a DynamoDB table",
+    loading: "Looking for tables…",
+    empty: "No DynamoDB table found yet. A table shows up here once one of your AWS policies mentions it.",
+    error: "Tables could not be read.",
+    blurbs: {
+      read: "Get, query and scan items. Blocking it also stops streams, exports, restores and backups of the table.",
+      write: "Put and update items.",
+      delete: "Delete items. Blocking it also stops deleting the table.",
+    },
+    allHint: "Everything on this table: items, settings, streams, backups and replicas.",
+    untouched: "Only these roles change. Other roles, users, groups and the table's resource policy keep their access.",
+    subScope: null,
+  },
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 
 export type AwsResourceType = keyof typeof RESOURCE_TYPES;

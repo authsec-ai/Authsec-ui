@@ -17,6 +17,8 @@ export interface PolicyCaps {
   caps: PolicyCapabilities | null;
   /** A flag is true only when the gate is on AND the feature is served. */
   feature: (name: "findings" | "proposals" | "export" | "iac" | "enforcement" | "slack" | "access_policies") => boolean;
+  /** The AWS resource types access policies take (`s3_bucket` from a backend that does not list them). */
+  accessResourceTypes: string[];
   /** Why a feature is false, when the server said. */
   featureReason: (name: string) => string | null;
   /** Provider support: AWS supported, Kubernetes not in this release. */
@@ -30,11 +32,11 @@ export interface PolicyCaps {
  * shipped backend sends `{available, reason}`; a boolean is also accepted so an
  * older build reads correctly. `on` is false when the field is absent.
  */
-function accessPolicies(caps: PolicyCapabilities | null): { on: boolean; reason: string | null } {
+function accessPolicies(caps: PolicyCapabilities | null): { on: boolean; reason: string | null; types: string[] } {
   const v = caps?.access_policies;
-  if (v === undefined || v === null) return { on: false, reason: null };
-  if (typeof v === "boolean") return { on: v, reason: null };
-  return { on: v.available === true, reason: v.reason ?? null };
+  if (v === undefined || v === null) return { on: false, reason: null, types: ["s3_bucket"] };
+  if (typeof v === "boolean") return { on: v, reason: null, types: ["s3_bucket"] };
+  return { on: v.available === true, reason: v.reason ?? null, types: v.resource_types?.length ? v.resource_types : ["s3_bucket"] };
 }
 
 export function usePolicyCapabilities(ws: string): PolicyCaps {
@@ -51,6 +53,7 @@ export function usePolicyCapabilities(ws: string): PolicyCaps {
     reason: caps?.reason ?? (failure?.kind === "unavailable" ? failure.reason ?? null : null),
     caps,
     feature: (name) => state === "on" && (name === "access_policies" ? accessPolicies(caps).on : caps?.[name] === true),
+    accessResourceTypes: accessPolicies(caps).types,
     featureReason: (name) =>
       name === "access_policies"
         ? accessPolicies(caps).reason ?? (caps?.access_policies !== undefined ? null : "Access policies are not available on this server yet.")
