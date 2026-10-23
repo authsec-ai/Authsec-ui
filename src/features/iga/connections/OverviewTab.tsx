@@ -57,7 +57,7 @@ function connectionPill(c: Connection) {
     case "connected":
       return <ConnPill tone="success">Connected</ConnPill>;
     case "authentication_failed":
-      return <ConnPill tone="danger">Authentication failed</ConnPill>;
+      return <ConnPill tone="danger">Could not sign in</ConnPill>;
     case "revoked":
       return <ConnPill tone="muted">{primaryOf(c).label}</ConnPill>;
     case "not_verified":

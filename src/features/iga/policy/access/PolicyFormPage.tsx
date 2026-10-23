@@ -371,7 +371,9 @@ export default function PolicyFormPage() {
           ? aws
             ? "Applying replaces the version in AWS. The new version goes on before the old one comes off, so there is no gap."
             : "Applying replaces the version in Azure: AuthSec applies the new one and undoes what the old one changed."
-          : "Block or allow an agent's access to a resource for as long as you say. AuthSec makes the change in AWS or Azure and undoes it at the end."
+          : aws
+            ? "Block or allow an agent's access to a resource for as long as you say. AuthSec makes the change in AWS and undoes it at the end."
+            : "Block or allow an agent's access to an Azure resource for a set time. AuthSec makes the change in Azure and reverses it when the time is up."
       }
       requires="access_policies"
     >
@@ -389,7 +391,7 @@ export default function PolicyFormPage() {
                 void apply();
               }}
             >
-              {editing ? null : (
+              {editing || fromAzure ? null : (
                 <Block title="Cloud">
                   <div role="radiogroup" aria-label="Cloud" className="flex flex-wrap gap-1.5">
                     {(["aws", "azure"] as const).map((c) => (
@@ -458,7 +460,7 @@ export default function PolicyFormPage() {
                 </div>
               </Block>
               ) : (
-                <Block title="Resource" hint="Choose the Azure resource this rule is about, such as a storage account or a key vault. Only resources a subscription scan found are listed.">
+                <Block title="Resource to control" hint="Pick the Azure resource to control, such as a storage account or a key vault. Only resources found by a scan are listed.">
                   <div id="ap-resource">
                     <AzureResourcePicker
                       ws={ws}
@@ -480,7 +482,7 @@ export default function PolicyFormPage() {
                   </div>
                 </Block>
               ) : (
-                <Block title="Identities" hint="Choose the service principals, managed identities or agent identities this rule is for. Every agent or workload that runs as one of them is covered.">
+                <Block title="Logins" hint="Pick the logins this rule applies to: app logins, Azure-run logins or AI agents. Anything that runs under one of them is covered too.">
                   <div id="ap-roles">
                     <AzureIdentityPicker ws={ws} resource={draft.resource} effect={draft.effect} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
                     <FieldError message={err("roles")} />
@@ -488,10 +490,10 @@ export default function PolicyFormPage() {
                 </Block>
               )}
 
-              <Block title="Rule">
+              <Block title={aws ? "Rule" : "What to do"}>
                 <div className="space-y-4">
                   <div>
-                    <p className="mb-1.5 text-[13px] font-medium text-(--color-text)">Effect</p>
+                    <p className="mb-1.5 text-[13px] font-medium text-(--color-text)">{aws ? "Effect" : "Action"}</p>
                     <div role="radiogroup" aria-label="Block or allow" className="flex flex-wrap items-center gap-1.5">
                       <Pill
                         radio
@@ -503,7 +505,7 @@ export default function PolicyFormPage() {
                         Block
                       </Pill>
                       <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title={`Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}>
-                        Allow for a time
+                        {aws ? "Allow for a time" : "Allow for a set time"}
                       </Pill>
                     </div>
                   </div>
@@ -584,14 +586,14 @@ export default function PolicyFormPage() {
                   </div>
                   <div id="ap-reason">
                     <label htmlFor="ap-reason-input" className="sr-only">
-                      Why
+                      Reason
                     </label>
                     <Input
                       id="ap-reason-input"
                       value={draft.reason}
                       onChange={(e) => set("reason", e.target.value)}
                       maxLength={500}
-                      placeholder="Why (kept in the history)"
+                      placeholder="Reason (kept in the history)"
                       aria-invalid={!!err("reason")}
                     />
                     <FieldError message={err("reason")} />
@@ -608,7 +610,7 @@ export default function PolicyFormPage() {
                     <span className="text-xs text-(--color-text-muted)">Summary</span>
                   </div>
                   <p className="text-[15px] font-semibold leading-snug text-(--color-text)">
-                    {localSentence || (aws ? "Choose a bucket, roles and access to see what this does." : "Choose a resource, identities and access to see what this does.")}
+                    {localSentence || (aws ? "Choose a bucket, roles and access to see what this does." : "Pick a resource, logins and action to see a plain summary here.")}
                   </p>
                   {previewable ? (
                     <p className="text-xs text-(--color-text-muted)">
@@ -742,7 +744,7 @@ export default function PolicyFormPage() {
               <span className={cn("mr-auto text-xs", disabledWhy ? "text-(--color-warning-text)" : "text-(--color-text-muted)")}>
                 {disabledWhy ||
                   (isBlock
-                    ? "Takes effect when you apply. You can lift it any time."
+                    ? "Takes effect when you apply. You can remove it at any time."
                     : aws
                       ? "Takes effect when you apply and ends on its own."
                       : "Takes effect when you apply. AuthSec removes it at the end.")}

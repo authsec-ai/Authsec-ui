@@ -83,7 +83,7 @@ describe("connectorLabel", () => {
     const named = { scope_kind: "tenant", scope_id: "3f1c6a52-8d1e-4b7a-9c20-5e6a41b0d7c3", attrs: { tenant_display_name: "Contoso Ltd" } } as Parameters<typeof connectorLabel>[0];
     const unnamed = { scope_kind: "tenant", scope_id: "3f1c6a52-8d1e-4b7a-9c20-5e6a41b0d7c3", attrs: {} } as Parameters<typeof connectorLabel>[0];
     expect(connectorLabel(named)).toBe("Contoso Ltd");
-    expect(connectorLabel(unnamed)).toBe("Tenant 3f1c6a52…b0d7c3");
+    expect(connectorLabel(unnamed)).toBe("Directory 3f1c6a52…b0d7c3 (name not read)");
   });
   it("names a subscription by its display name, else a short id", () => {
     const named = { scope_kind: "subscription", scope_id: "c0a1b2d3-1111-4aaa-8bbb-000000000001", attrs: { display_name: "Contoso Production" } } as Parameters<typeof connectorLabel>[0];

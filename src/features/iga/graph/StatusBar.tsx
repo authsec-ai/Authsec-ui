@@ -170,7 +170,7 @@ export function StatusBar({
           }
         >
           <Info aria-hidden="true" className="size-3" />
-          {azure ? "Assigned access · not evaluated" : k8s ? "Declared by RBAC · admission policies and token mounting not evaluated" : "Declared access · not evaluated"}
+          {azure ? "Permissions as recorded (not tested)" : k8s ? "Declared by RBAC · admission policies and token mounting not evaluated" : "Declared access · not evaluated"}
         </span>
         {canvas ? (
           <span className="inline-flex items-center rounded border border-(--color-border-subtle)" role="group" aria-label="Zoom">

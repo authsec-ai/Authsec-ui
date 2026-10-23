@@ -62,7 +62,7 @@ const BUILT_IN_ROLE: Record<string, string> = {
 
 function roleName(roleDefinitionId: unknown): string {
   const id = typeof roleDefinitionId === "string" ? roleDefinitionId.slice(roleDefinitionId.lastIndexOf("/") + 1).toLowerCase() : "";
-  return BUILT_IN_ROLE[id] ?? (id ? `role ${id}` : "a built-in role");
+  return BUILT_IN_ROLE[id] ?? "Azure role (name not available)";
 }
 
 /**

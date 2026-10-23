@@ -30,7 +30,7 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
       continue;
     }
     if (c.connection.state === "authentication_failed") {
-      out.push({ key: `${c.id}:auth`, tone: "warning", label: "Authentication failed", text: `${name}: results from earlier scans remain.`, href });
+      out.push({ key: `${c.id}:auth`, tone: "warning", label: "Could not sign in", text: `${name}: AuthSec could not sign in, so these results are from an earlier check.`, href });
     } else if (c.connection.state === "not_verified") {
       // The cause is the connection's own (a lost heartbeat, a throttled call, a pending installation): never "not verified" alone.
       const never = neverProven(c);

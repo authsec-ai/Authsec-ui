@@ -211,13 +211,13 @@ export default function SightingDetailPage() {
         </Panel>
       ) : null}
 
-      <Panel title="Lifecycle trail" description="How it was noticed, and who removed it when it went.">
+      <Panel title="History" description="When it was found and when it was removed.">
         <AgentLifecycleTrail agentId={a.id} />
       </Panel>
 
-      <Panel title="Source metadata">
+      <Panel title="Technical details (for support)">
         <details>
-          <summary className="cursor-pointer text-xs font-medium text-(--color-primary-text) hover:underline">Show the raw record</summary>
+          <summary className="cursor-pointer text-xs font-medium text-(--color-primary-text) hover:underline">Show technical details</summary>
           <pre className="mt-2 overflow-x-auto rounded-md bg-(--color-surface-subtle) p-3 text-[11px] leading-relaxed">{JSON.stringify(a.metadata, null, 2)}</pre>
         </details>
       </Panel>

@@ -204,7 +204,7 @@ export function AzureIdentityPicker({
   const extra = value.filter((r) => !listed.some((c) => c.identity_account_id === r.identity_account_id));
 
   if (!resource) {
-    return <p className="rounded-md border border-dashed border-(--color-border-strong) px-3 py-3 text-xs text-(--color-text-muted)">Choose a resource first. The identities holding a role on it will be listed here.</p>;
+    return <p className="rounded-md border border-dashed border-(--color-border-strong) px-3 py-3 text-xs text-(--color-text-muted)">Pick a resource first. The logins that already have access to it will appear here.</p>;
   }
 
   return (
@@ -224,7 +224,7 @@ export function AzureIdentityPicker({
 
       <div className={cn("overflow-hidden rounded-md border", invalid ? "border-(--color-danger)" : "border-(--color-border-strong)")}>
         <div className="border-b border-(--color-border-subtle) bg-(--color-surface-subtle) px-3 py-1.5 text-xs font-medium text-(--color-text-muted)">
-          Identities with a role on {resource.name} now
+          Logins with access to {resource.name} now
           {value.length ? ` · ${value.length} selected` : ""}
         </div>
         <div className="max-h-56 overflow-y-auto">
@@ -277,7 +277,7 @@ export function AzureIdentityPicker({
               Searching…
             </p>
           ) : search.isError ? (
-            <p className="px-3 py-2 text-xs text-(--color-danger-text)">Identities could not be searched.</p>
+            <p className="px-3 py-2 text-xs text-(--color-danger-text)">Logins could not be searched.</p>
           ) : found.length === 0 ? (
             <p className="px-3 py-2 text-xs text-(--color-text-muted)">No other identity matches “{dq}”.</p>
           ) : (

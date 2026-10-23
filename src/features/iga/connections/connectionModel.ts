@@ -107,12 +107,12 @@ export interface Primary {
 
 const PRIMARY: Record<PrimaryKey, Primary> = {
   revoked: { key: "revoked", label: "Revoked", tone: "muted" },
-  auth_failed: { key: "auth_failed", label: "Authentication failed", tone: "danger" },
+  auth_failed: { key: "auth_failed", label: "Could not sign in", tone: "danger" },
   not_verified: { key: "not_verified", label: "Not yet verified", tone: "warning" },
   scan_failed: { key: "scan_failed", label: "Latest scan failed", tone: "danger" },
   publication_failed: { key: "publication_failed", label: "Publication failed", tone: "danger" },
   coverage_denied: { key: "coverage_denied", label: "Coverage denied", tone: "warning" },
-  coverage_partial: { key: "coverage_partial", label: "Coverage partial", tone: "warning" },
+  coverage_partial: { key: "coverage_partial", label: "Some information missing", tone: "warning" },
   scan_running: { key: "scan_running", label: "Scan running", tone: "info" },
   scan_queued: { key: "scan_queued", label: "Scan queued", tone: "info" },
   connected: { key: "connected", label: "Connected", tone: "success" },
@@ -203,7 +203,8 @@ export function coverageText(c: Connection): string {
       if (c.provider === "k8s" && n === 1 && c.coverage.gaps[0].surface === K8S_SWEEP_SURFACE) {
         return `Partial — ${k8sSweepWord(c.coverage.gaps[0].state)}`;
       }
-      return n > 0 ? `Partial — ${n} ${n === 1 ? "surface" : "surfaces"}` : "Partial";
+      const unit = c.provider === "azure" ? "area" : "surface";
+      return n > 0 ? `Partial — ${n} ${n === 1 ? unit : `${unit}s`}` : "Partial";
     }
     case "denied": {
       const denied = c.coverage.gaps.filter((g) => g.state === "denied");
@@ -301,7 +302,7 @@ function reasonAction(c: Connection, code: string | null): string {
         : provider === "aws"
           ? checkThenVerify(c, "Check the role ARN, the ExternalId in its trust policy and that it trusts AuthSec")
           : provider === "azure"
-            ? checkThenVerify(c, "Check that an administrator granted consent to the AuthSec application in the tenant, or that your own app's client secret is still valid")
+            ? checkThenVerify(c, "Ask an administrator of this account to approve AuthSec again. If you use your own app, check its password (client secret) is still valid")
             : "Check the installation's permissions, then try again.";
     case "throttled":
       return "This is usually temporary. Try again in a moment.";
@@ -467,7 +468,7 @@ export const STATUS_FILTERS: { key: StatusFilterKey; label: string }[] = [
   { key: "all", label: "All" },
   { key: "connected", label: "Connected" },
   { key: "attention", label: "Needs attention" },
-  { key: "partial", label: "Partial coverage" },
+  { key: "partial", label: "Some information missing" },
   { key: "running", label: "Scanning" },
   { key: "revoked", label: "Revoked" },
 ];

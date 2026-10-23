@@ -44,6 +44,8 @@ import {
   windowProgress,
   windowText,
 } from "./model";
+import { shortId } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+
 import { EffectChip, PolicyChange, PolicyStatusChip } from "./parts";
 
 type Tab = "overview" | "cloud" | "history";
@@ -196,10 +198,10 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
             ) : (
               <span className="font-mono text-xs">{resourceText(p.resource)}</span>
             )}
-            {!azure || p.resource.arn.startsWith("/") ? <Meta>{p.resource.arn}</Meta> : null}
+            {!azure ? <Meta>{p.resource.arn}</Meta> : null}
             {p.resource.account_id ? (
               <Meta>
-                {azure ? "Subscription" : "Account"} {p.resource.account_id}
+                {azure ? "Azure subscription" : "Account"} {azure ? shortId(p.resource.account_id) : p.resource.account_id}
               </Meta>
             ) : null}
           </Fact>
@@ -329,8 +331,13 @@ function DeploymentCard({
       <div className="space-y-3">
         <Facts>
           {azure ? (
-            <Fact label="Scope" mono>
-              {d.target_ref || d.aws_policy_arn || p.resource.arn}
+            <Fact label="Scope">
+              {(() => {
+                // The path itself is never shown: say which level of Azure the role is set at.
+                const ref = (d.target_ref ?? "").toLowerCase();
+                const onThis = !ref || ref === p.resource.arn.toLowerCase() || ref.endsWith((p.resource.name ?? "").toLowerCase());
+                return onThis ? "On this resource" : "On its resource group or subscription";
+              })()}
             </Fact>
           ) : (
             <Fact label="AWS policy" mono>

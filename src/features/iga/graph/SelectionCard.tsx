@@ -362,7 +362,7 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
   };
 }
 
-function LoadControls({ frontier, a, k8s }: { frontier: GraphFrontier[]; a: SelectionActions; k8s: boolean }) {
+function LoadControls({ frontier, a, k8s, azure = false }: { frontier: GraphFrontier[]; a: SelectionActions; k8s: boolean; azure?: boolean }) {
   if (!frontier.length) return null;
   return (
     <ul className="space-y-1 border-t border-(--color-border-subtle) pt-2 text-xs">
@@ -370,7 +370,7 @@ function LoadControls({ frontier, a, k8s }: { frontier: GraphFrontier[]; a: Sele
         const c = a.stateOf(f);
         return (
           <li key={frontierKey(f)} className="flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-(--color-text-muted)">{frontierLabel(f, k8s)}</span>
+            <span className="min-w-0 truncate text-(--color-text-muted)">{frontierLabel(f, k8s, azure)}</span>
             {c.pending === "paused" ? (
               <button type="button" onClick={a.onRefresh} className="shrink-0 font-medium text-(--color-primary-text) hover:underline">Refresh first</button>
             ) : c.pending === "loading" ? (
@@ -496,7 +496,7 @@ export function SelectionCard({
     body = (
       <>
         {body}
-        <LoadControls frontier={v.frontier} a={actions} k8s={k8s} />
+        <LoadControls frontier={v.frontier} a={actions} k8s={k8s} azure={azure} />
       </>
     );
   } else {
