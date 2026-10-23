@@ -92,6 +92,8 @@ export interface NodeDescription {
   wildcard?: boolean;
   /** A Kubernetes card: its Load controls say rules and ServiceAccounts, not statements. */
   k8s?: boolean;
+  /** An Azure card: its Load controls say "Show more connections". */
+  azure?: boolean;
 }
 
 const SERVICE_NAME: Record<string, string> = {
@@ -410,9 +412,13 @@ function describeAzure(v: VisualNode): NodeDescription {
       type = "External · Federated credential";
       context = first.issuer ? `Issuer ${first.issuer}` : null;
       break;
-    case "azure_resource":
-      type = `Resource · ${first.type ? graphKindLabel("resource", first.type) : "Azure resource"}`;
+    case "azure_resource": {
+      // `type` is the card's own kind, set by azureKinds(): a Graph permission, or an ARM resource type.
+      const sub = first.type ?? "";
+      type = sub === "entra_app_role" || sub === "entra_delegated_scope" ? "Permission" : sub.includes("/") ? `Resource · ${armTypeLabel(sub)}` : "Resource";
+      context = null;
       break;
+    }
     case "azure_scope":
       type = "Scope";
       context = first.native_id ?? null;
@@ -425,6 +431,8 @@ function describeAzure(v: VisualNode): NodeDescription {
     default:
       type = `Identity · ${identityKindLabel(first.kind)}`;
   }
+  // A bare GUID (an app or object id) is never the line under a name: the name says what it is.
+  if (context && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(context)) context = null;
   return {
     icon: ICON_OF[first.kind],
     category: CATEGORY_OF[first.kind],
@@ -435,6 +443,7 @@ function describeAzure(v: VisualNode): NodeDescription {
     notes: indicators,
     frontier: v.frontier.slice(0, MAX_FRONTIER_ROWS),
     frontierHidden: Math.max(0, v.frontier.length - MAX_FRONTIER_ROWS),
+    azure: true,
   };
 }
 
@@ -573,7 +582,7 @@ export function nodeAriaLabel(d: NodeDescription): string {
     d.type,
     d.context,
     ...d.notes.map((i) => i.long),
-    ...d.frontier.map((f) => frontierLabel(f, d.k8s)),
+    ...d.frontier.map((f) => frontierLabel(f, d.k8s, d.azure)),
     d.frontierHidden ? `${d.frontierHidden} more expansion${d.frontierHidden === 1 ? "" : "s"} in the inspector` : null,
   ]
     .filter(Boolean)
