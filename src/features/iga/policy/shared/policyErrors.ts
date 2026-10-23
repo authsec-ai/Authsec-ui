@@ -166,8 +166,10 @@ export const POLICY_ERROR_COPY: Record<string, { title: string; fix?: string }> 
   // Access policies (the one Policy feature). Codes from the backend contract.
   name_taken: { title: "A policy with that name already exists", fix: "Choose another name." },
   access_policy_invalid: { title: "That change cannot be applied", fix: "A field breaks a rule; the message says which." },
-  resource_not_found: { title: "That bucket is not in this workspace", fix: "Pick the bucket again." },
-  resource_not_supported: { title: "Only S3 buckets are supported", fix: "This version can block or allow access to S3 buckets only." },
+  resource_not_found: { title: "That resource is not in this workspace", fix: "Pick the resource again." },
+  resource_not_supported: { title: "This resource type is not supported", fix: "AWS: S3 buckets and DynamoDB tables; Azure resources." },
+  resource_other_account: { title: "The table is in another AWS account than the role", fix: "An allow needs roles in the table's own account. A block can name roles in any account." },
+  resource_not_current: { title: "AuthSec no longer sees this table", fix: "The last scan did not find it. Rescan the account on Connections, then pick the table again." },
   role_ineligible: { title: "This role cannot be changed by policy", fix: "See the reason listed for the role." },
   role_not_in_account: { title: "AuthSec has not seen this bucket in the role's account", fix: "The role must be in an account where AuthSec has discovered the bucket." },
   role_policy_quota: { title: "This role already has the most IAM policies AWS allows", fix: "Detach a managed policy from this role in AWS, then try again." },
