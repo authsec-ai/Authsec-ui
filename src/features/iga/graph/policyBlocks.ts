@@ -31,7 +31,14 @@ import { getWorkspaceId } from "@/utils/workspace";
 import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
-const IN_FORCE = new Set(["applying", "active", "scheduled", "drift"]);
+// Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
+// (its window has not started; Azure has not removed anything): it is no mark.
+export const IN_FORCE = ["applying", "active", "drift"] as const;
+
+/** Whether a block in this status is enforced now. */
+export function inForce(status: string): boolean {
+  return (IN_FORCE as readonly string[]).includes(status);
+}
 
 export interface BlockMark {
   /** Every action on the path is blocked; false when only some actions or part of the path are. */
@@ -101,10 +108,14 @@ export function useGraphBlocks(): GraphBlocks {
   const ws = getWorkspaceId() ?? "";
   const caps = usePolicyCapabilities(ws);
   const on = caps.feature("access_policies");
-  const q = useListAccessPoliciesQuery({ ws, effect: "block", limit: 200 }, { skip: !on, pollingInterval: 60_000, skipPollingIfUnfocused: true });
+  // One read per status in force, so ended policies never take up the page.
+  const opts = { skip: !on, pollingInterval: 60_000, skipPollingIfUnfocused: true };
+  const applying = useListAccessPoliciesQuery({ ws, effect: "block", status: "applying", limit: 200 }, opts);
+  const active = useListAccessPoliciesQuery({ ws, effect: "block", status: "active", limit: 200 }, opts);
+  const drift = useListAccessPoliciesQuery({ ws, effect: "block", status: "drift", limit: 200 }, opts);
 
   return useMemo(() => {
-    const live = (q.data?.data ?? []).filter((p) => p.effect === "block" && IN_FORCE.has(p.status));
+    const live = [applying.data, active.data, drift.data].flatMap((d) => d?.data ?? []).filter((p) => p.effect === "block" && inForce(p.status));
     if (!on || !live.length) return NONE;
     const naming = (id: string) => live.filter((p) => p.roles.some((r) => r.identity_account_id === id));
     const covering = (n: GraphNode) =>
@@ -125,5 +136,5 @@ export function useGraphBlocks(): GraphBlocks {
       forRole: naming,
       forResource: (n) => covering(n).map((x) => x.p),
     };
-  }, [q.data, on]);
+  }, [applying.data, active.data, drift.data, on]);
 }

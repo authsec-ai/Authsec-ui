@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AccessLevel, AccessPolicy, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
 import type { GraphNode, GraphRef } from "@/app/api/igaGraphApi";
 
-import { coverage } from "./policyBlocks";
+import { coverage, inForce } from "./policyBlocks";
 
 function policy(resource: Partial<AccessPolicyResource>, access: AccessLevel[]): AccessPolicy {
   return {
@@ -94,5 +94,16 @@ describe("coverage on DynamoDB", () => {
 
   it("an S3 policy does not cover a table named like its bucket", () => {
     expect(coverage(policy({ bucket: "orders", name: "orders", arn: "arn:aws:s3:::orders" }, ["all"]), node(T))).toBe("none");
+  });
+});
+
+describe("inForce", () => {
+  it("a scheduled block is not drawn as blocking: its window has not started", () => {
+    expect(inForce("scheduled")).toBe(false);
+    expect(inForce("active")).toBe(true);
+    expect(inForce("applying")).toBe(true);
+    expect(inForce("drift")).toBe(true);
+    expect(inForce("ended")).toBe(false);
+    expect(inForce("paused")).toBe(false);
   });
 });

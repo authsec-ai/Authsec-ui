@@ -233,6 +233,7 @@ export interface AccessReadiness {
 
 export interface ListAccessPoliciesArgs extends WsArg, PageArgs {
   status?: AccessPolicyStatus;
+  provider?: AccessProvider;
   effect?: AccessEffect;
   q?: string;
   resource_id?: string;

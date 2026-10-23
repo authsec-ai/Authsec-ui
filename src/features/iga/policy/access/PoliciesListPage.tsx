@@ -66,24 +66,26 @@ export default function PoliciesListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  // The status filter is local, so its counts stay honest for what was loaded.
-  const list = useListAccessPoliciesQuery(
-    { ws, q: q || undefined, effect: effect || undefined, resource_id: resourceId || undefined, identity_account_id: identityId || undefined, limit: PAGE },
-    // Windows start and end with the clock, so the list is read again now and then.
-    { pollingInterval: 30_000, skipPollingIfUnfocused: true },
-  );
-  const failure = classifyPolicyError(list.error);
+  // The status chips count the unfiltered list; status and cloud then filter
+  // on the server, so a filter finds policies past the first page too.
+  const base = { ws, q: q || undefined, effect: effect || undefined, resource_id: resourceId || undefined, identity_account_id: identityId || undefined, limit: PAGE };
+  // Windows start and end with the clock, so the list is read again now and then.
+  const poll = { pollingInterval: 30_000, skipPollingIfUnfocused: true };
+  const list = useListAccessPoliciesQuery(base, poll);
+  const narrowed = !!status || !!cloud;
+  const filteredList = useListAccessPoliciesQuery({ ...base, status: status || undefined, provider: cloud || undefined }, { ...poll, skip: !narrowed });
+  const shown = narrowed ? filteredList : list;
+  const failure = classifyPolicyError(list.error ?? (narrowed ? filteredList.error : undefined));
   const all = useMemo(() => list.data?.data ?? [], [list.data]);
-  const more = !!list.data?.meta.next_cursor;
+  const more = !!shown.data?.meta.next_cursor;
+  // The server read only the newest policies (meta.truncated): searching narrows it.
+  const truncated = shown.data?.meta.truncated === true;
   const counts = useMemo(() => {
     const c = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<AccessPolicyStatus, number>;
     for (const p of all) c[p.status] = (c[p.status] ?? 0) + 1;
     return c;
   }, [all]);
-  const rows = useMemo(
-    () => all.filter((p) => (!status || p.status === status) && (!cloud || p.resource.provider === cloud)),
-    [all, status, cloud],
-  );
+  const rows = useMemo(() => (narrowed ? filteredList.data?.data ?? [] : all), [narrowed, filteredList.data, all]);
   // The cloud filter is offered once policies of both clouds exist.
   const clouds = useMemo(() => new Set(all.map((p) => p.resource.provider)), [all]);
 
@@ -355,7 +357,7 @@ export default function PoliciesListPage() {
               sizing="fit"
               rowDetails={false}
               cardsBelow={640}
-              loading={list.isLoading}
+              loading={list.isLoading || (narrowed && filteredList.isLoading)}
               emptyState={emptyState}
               columns={columns}
               data={rows}
@@ -369,7 +371,11 @@ export default function PoliciesListPage() {
           </CardContent>
         </TableCard>
       )}
-      {more ? <p className="text-xs text-(--color-text-muted)">Showing the first {PAGE}. Search or filter to find the rest.</p> : null}
+      {more || truncated ? (
+        <p className="text-xs text-(--color-text-muted)">
+          {truncated ? "This workspace has more policies than the list reads at once." : `Showing the first ${PAGE}.`} Search or filter to find the rest.
+        </p>
+      ) : null}
 
       <DeletePolicyDialog policy={deleting} onClose={() => setDeleting(null)} />
       <LifecycleDialog policy={lifecycle?.policy ?? null} action={lifecycle?.action ?? null} onClose={() => setLifecycle(null)} />
