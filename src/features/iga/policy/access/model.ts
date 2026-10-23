@@ -51,6 +51,18 @@ export function isAzureStorage(arn: string | undefined): boolean {
   return !!arn && arn.toLowerCase().includes("/providers/microsoft.storage/storageaccounts/");
 }
 
+/** The Azure data planes the backend maps beyond storage (services/iga_gov_access_azure_planes.go), by ARM type. */
+const AZURE_DATA_BLURBS: { type: string; blurbs: Record<Exclude<AccessLevel, "all">, string> }[] = [
+  {
+    type: "/providers/microsoft.keyvault/vaults/",
+    blurbs: { read: "Read secret values.", write: "Set and update secrets.", delete: "Delete and purge secrets." },
+  },
+  {
+    type: "/providers/microsoft.search/searchservices/",
+    blurbs: { read: "Query index documents.", write: "Upload and update documents.", delete: "Delete documents." },
+  },
+];
+
 /* --------------------------------- states --------------------------------- */
 
 /** Statuses in words that hold for either cloud; the detail page names the cloud. */
@@ -180,6 +192,8 @@ export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; verb: st
 export function accessBlurbs(provider: AccessProvider, arn?: string, type?: AccessResourceType): Record<Exclude<AccessLevel, "all">, string> {
   if (provider === "aws") return (resourceTypeCopy(type) ?? RESOURCE_TYPES.s3_bucket).blurbs;
   if (isAzureStorage(arn)) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
+  const plane = arn ? AZURE_DATA_BLURBS.find((p) => arn.toLowerCase().includes(p.type)) : undefined;
+  if (plane) return plane.blurbs;
   return { read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." };
 }
 

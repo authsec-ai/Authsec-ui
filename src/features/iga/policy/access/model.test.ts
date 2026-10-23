@@ -138,7 +138,8 @@ describe("accessBlurbs", () => {
       write: "Upload and overwrite blobs.",
       delete: "Delete blobs.",
     });
-    expect(accessBlurbs("azure", vault.arn)).toEqual({ read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." });
+    // Key Vault secrets are mapped (step 2): its own words.
+    expect(accessBlurbs("azure", vault.arn)).toEqual({ read: "Read secret values.", write: "Set and update secrets.", delete: "Delete and purge secrets." });
   });
 });
 
@@ -306,5 +307,13 @@ describe("DynamoDB tables", () => {
       }
       expect(Object.keys(copy.blurbs).sort()).toEqual(["delete", "read", "write"]);
     }
+  });
+});
+
+describe("Azure data planes", () => {
+  it("describes Key Vault and AI Search access in their own words", () => {
+    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv1").read).toBe("Read secret values.");
+    expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.search/searchServices/srch").write).toBe("Upload and update documents.");
+    expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.web/sites/app").read).toBe("Read the resource and its settings.");
   });
 });
