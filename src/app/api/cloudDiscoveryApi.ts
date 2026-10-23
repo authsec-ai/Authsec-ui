@@ -1263,7 +1263,7 @@ export interface AzureSubscriptionResult {
   connector_id?: string;
   status: string;
   reader: {
-    /** created · already_assigned · inherited · permission_denied · skipped · failed */
+    /** created · already_assigned · inherited · permission_denied · skipped · failed · not_checked */
     status: string;
     verified: boolean;
     error?: string;
