@@ -21,6 +21,8 @@ import { useAppDispatch } from "@/app/hooks";
 import { AzureCoverageSummary } from "@/features/discovery/cloud/azure/AzureCoverageSummary";
 import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscoveryScreen";
 import { AzureDiscoverySummary } from "@/features/discovery/cloud/azure/AzureDiscoverySummary";
+import { azureExplain } from "@/features/discovery/cloud/azure/azureGlossary";
+import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
 import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { tenantName, tenantScopeId } from "@/features/discovery/cloud/azure/azureInventoryLabels";
@@ -50,7 +52,7 @@ import type { ScreenProps } from "./screenTypes";
 import { useDiscoveryOverview } from "./useDiscoveryOverview";
 import { useDiscoveryUrl } from "./useDiscoveryUrl";
 import { inScope } from "./k8s";
-import { DISCOVERY_PROVIDERS, PROVIDER_LABEL, TYPE_LABEL, rememberDiscoverySearch, type DiscoveryProvider, type DiscoveryType, type DiscoveryView } from "./urlState";
+import { typeLabel, DISCOVERY_PROVIDERS, PROVIDER_LABEL, rememberDiscoverySearch, type DiscoveryProvider, type DiscoveryType, type DiscoveryView } from "./urlState";
 import LatestScreen from "./LatestScreen";
 import InventoryScreen from "./InventoryScreen";
 import PublishedScreen from "./PublishedScreen";
@@ -104,7 +106,7 @@ export default function DiscoveryPage() {
   // The announcer keeps its last words until something replaces them. Screens that
   // announce their own counts do so when their data arrives; one that does not
   // (Latest collected) must not leave the previous list's sentence in its place.
-  useAnnounce(provider ? `Discovery: ${PROVIDER_LABEL[provider]}, ${TYPE_LABEL[type]}${hasViews(provider, type) ? (view === "latest" ? ", latest collected" : ", published") : ""}` : null);
+  useAnnounce(provider ? `Discovery: ${PROVIDER_LABEL[provider]}, ${typeLabel(provider, type)}${hasViews(provider, type) ? (view === "latest" ? ", latest collected" : ", published") : ""}` : null);
   const connectionsFailed = connQ.isError && !connQ.data;
   const ready = !connQ.isLoading && !azureQ.isLoading && !connectionsFailed;
 
@@ -190,35 +192,36 @@ export default function DiscoveryPage() {
       {tabTypes.map((t, i) => {
         const on = supportsType(provider, type) && type === t;
         return (
-          <button
-            key={t}
-            ref={(el) => {
-              tabRefs.current[i] = el;
-            }}
-            id={`discovery-tab-${t}`}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            aria-controls="discovery-tabpanel"
-            tabIndex={on || (!supportsType(provider, type) && i === 0) ? 0 : -1}
-            onKeyDown={(e) => onTabKey(e, i)}
-            title={`${TYPE_LABEL[t]}, ${countBasis(viewFor(provider, t), t)}`}
-            onClick={() => switchType(t)}
-            className={cn(
-              "inline-flex h-12 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm",
-              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--color-focus-ring)",
-              on ? "border-(--color-primary) font-semibold text-(--color-text)" : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
-            )}
-          >
-            {TYPE_LABEL[t]}
-            <CountText
-              count={overview.counts[t] ?? COUNT_UNAVAILABLE}
+          <HoverExplain key={t} title={typeLabel(provider, t)} text={provider === "azure" ? azureExplain(typeLabel(provider, t)) : undefined}>
+            <button
+              ref={(el) => {
+                tabRefs.current[i] = el;
+              }}
+              id={`discovery-tab-${t}`}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              aria-controls="discovery-tabpanel"
+              tabIndex={on || (!supportsType(provider, type) && i === 0) ? 0 : -1}
+              onKeyDown={(e) => onTabKey(e, i)}
+              title={provider === "azure" ? undefined : `${typeLabel(provider, t)}, ${countBasis(viewFor(provider, t), t)}`}
+              onClick={() => switchType(t)}
               className={cn(
-                "rounded-full px-2 py-px text-xs font-medium",
-                on ? "bg-(--color-primary-soft) text-(--color-primary-text)" : "bg-(--color-surface-subtle) text-(--color-text-muted)",
+                "inline-flex h-12 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm",
+                "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--color-focus-ring)",
+                on ? "border-(--color-primary) font-semibold text-(--color-text)" : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
               )}
-            />
-          </button>
+            >
+              {typeLabel(provider, t)}
+              <CountText
+                count={overview.counts[t] ?? COUNT_UNAVAILABLE}
+                className={cn(
+                  "rounded-full px-2 py-px text-xs font-medium",
+                  on ? "bg-(--color-primary-soft) text-(--color-primary-text)" : "bg-(--color-surface-subtle) text-(--color-text-muted)",
+                )}
+              />
+            </button>
+          </HoverExplain>
         );
       })}
     </div>

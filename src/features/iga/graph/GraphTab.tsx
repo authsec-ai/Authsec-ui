@@ -77,6 +77,16 @@ import { SelectionCard, type SelectionActions, type SelectionSubject } from "./S
 import { StatusBar } from "./StatusBar";
 import { useWorkspaceSize } from "./useWorkspaceSize";
 import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
+import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
+
+/** The Azure graph's view and direction buttons, explained on hover. */
+const AZURE_GRAPH_TIPS = {
+  summary: "The short answer: who it can act as, and the Azure roles and permissions it holds, grouped.",
+  detailed: "Every role assignment, permission and group membership drawn one by one.",
+  paths: "How it reaches each resource, step by step, as a list instead of a picture.",
+  forward: "What this identity can access: its roles and permissions, and those of the groups and identities it can act as.",
+  reverse: "Who can reach this: the groups, owners and identities that can act as it or hold access to it.",
+} as const;
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -1209,7 +1219,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             {rootFrontier.length
               ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
               : azure
-                ? `No relationships are recorded for ${rootName}. That is what the latest Azure scan read: where a scan was partial, some may be missing, and that is not the same as having none.`
+                ? `${rootName} has no Azure roles or Microsoft Entra permissions of its own in the latest scan. It may still reach resources through another identity, such as its Foundry project's managed identity. Choose "What reaches it" to see who can act as it.`
                 : k8s
                 ? `The latest sweep recorded no relationships for ${rootName}. That is what the sweep read — where it was partial, some may be missing, and that is not the same as having none.`
                 : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
@@ -1232,28 +1242,38 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     >
       <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
-            Summary
-          </button>
-          <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title={k8s ? "Every rule drawn" : "Every policy statement drawn"}>
-            Detailed
-          </button>
-          {k8s ? null : (
-            <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="How it reaches each thing, as a list of paths">
-              Paths
+          <HoverExplain title="Summary" text={azure ? AZURE_GRAPH_TIPS.summary : undefined}>
+            <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={azure ? undefined : k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
+              Summary
             </button>
+          </HoverExplain>
+          <HoverExplain title="Detailed" text={azure ? AZURE_GRAPH_TIPS.detailed : undefined}>
+            <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title={azure ? undefined : k8s ? "Every rule drawn" : "Every policy statement drawn"}>
+              Detailed
+            </button>
+          </HoverExplain>
+          {k8s ? null : (
+            <HoverExplain title="Paths" text={azure ? AZURE_GRAPH_TIPS.paths : undefined}>
+              <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title={azure ? undefined : "How it reaches each thing, as a list of paths"}>
+                Paths
+              </button>
+            </HoverExplain>
           )}
         </div>
         {isIdentity ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
             <span className="text-(--color-text-muted)">Direction</span>
             <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
-              <button type="button" aria-pressed={direction === "forward"} onClick={() => setManualDirection("forward")} className={toggleClass(direction === "forward")}>
-                What it reaches
-              </button>
-              <button type="button" aria-pressed={direction === "reverse"} onClick={() => setManualDirection("reverse")} className={toggleClass(direction === "reverse")}>
-                What reaches it
-              </button>
+              <HoverExplain title="What it reaches" text={azure ? AZURE_GRAPH_TIPS.forward : undefined}>
+                <button type="button" aria-pressed={direction === "forward"} onClick={() => setManualDirection("forward")} className={toggleClass(direction === "forward")}>
+                  What it reaches
+                </button>
+              </HoverExplain>
+              <HoverExplain title="What reaches it" text={azure ? AZURE_GRAPH_TIPS.reverse : undefined}>
+                <button type="button" aria-pressed={direction === "reverse"} onClick={() => setManualDirection("reverse")} className={toggleClass(direction === "reverse")}>
+                  What reaches it
+                </button>
+              </HoverExplain>
             </div>
           </div>
         ) : null}

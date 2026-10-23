@@ -25,6 +25,8 @@ import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "../aws/AWSFilterChips";
 import { CopyableId } from "../aws/AWSInventoryCells";
 import { TruncationNotice } from "../aws/AWSInventoryNotices";
+import { AzureTerm } from "./AzureTerm";
+import { azureExplain } from "./azureGlossary";
 import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
 import { AzureFoundryView } from "./AzureFoundryView";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
@@ -117,7 +119,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "Agent identity",
+        header: () => <AzureTerm term="Agent identity" />, label: "Agent identity",
         alwaysVisible: true,
         priority: 1,
         approxWidth: 280,
@@ -125,7 +127,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       },
       {
         id: "blueprint",
-        header: "Agent identity blueprint",
+        header: () => <AzureTerm term="Agent identity blueprint" />, label: "Agent identity blueprint",
         priority: 2,
         approxWidth: 200,
         cell: ({ row }) => {
@@ -133,32 +135,43 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">Not recorded</span>;
         },
       },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
       {
         id: "status",
-        header: "Status",
+        header: () => <AzureTerm term="Status" />, label: "Status",
         priority: 5,
         approxWidth: 100,
         cell: ({ row }) => (
           <CloudPill tone="muted" dot={false}>
-            {row.original.enabled ? "Enabled" : "Disabled"}
+            {row.original.enabled ? "Active" : "Disabled"}
           </CloudPill>
         ),
       },
       {
         id: "created",
-        header: "Created",
+        header: () => <AzureTerm term="Created" />, label: "Created",
         priority: 6,
         approxWidth: 160,
         cell: ({ row }) => (
           <span className="text-xs">
             <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">by {createdBy(row.original)}</span> : null}
+            {createdBy(row.original) ? (
+              <span className="block text-muted-foreground">
+                by <AzureTerm term={createdBy(row.original)!} />
+              </span>
+            ) : null}
           </span>
         ),
       },
-      { id: "last_sign_in", header: "Last sign-in", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
+      {
+        id: "last_sign_in",
+        header: () => <AzureTerm term="Last sign-in" />,
+        label: "Last sign-in",
+        priority: 7,
+        approxWidth: 120,
+        cell: ({ row }) => (row.original.last_used_at ? <RelativeDate iso={row.original.last_used_at} /> : <span className="text-xs text-muted-foreground">No sign-in recorded</span>),
+      },
     ],
     [],
   );
@@ -168,7 +181,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "Agent identity blueprint",
+        header: () => <AzureTerm term="Agent identity blueprint" />, label: "Agent identity blueprint",
         alwaysVisible: true,
         priority: 1,
         approxWidth: 280,
@@ -179,7 +192,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       },
       {
         id: "agents",
-        header: "Agent identities",
+        header: () => <AzureTerm term="Agent identities" />,
+        label: "Agent identities",
         priority: 2,
         approxWidth: 120,
         cell: ({ row }) => {
@@ -187,24 +201,28 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
         },
       },
-      { id: "sponsors", header: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
       {
         id: "publisher",
-        header: "Publisher domain",
+        header: () => <AzureTerm term="Publisher domain" />, label: "Publisher domain",
         priority: 5,
         approxWidth: 150,
         cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "—"}</span>,
       },
       {
         id: "created",
-        header: "Created",
+        header: () => <AzureTerm term="Created" />, label: "Created",
         priority: 6,
         approxWidth: 160,
         cell: ({ row }) => (
           <span className="text-xs">
             <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">by {createdBy(row.original)}</span> : null}
+            {createdBy(row.original) ? (
+              <span className="block text-muted-foreground">
+                by <AzureTerm term={createdBy(row.original)!} />
+              </span>
+            ) : null}
           </span>
         ),
       },
@@ -226,9 +244,9 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         setParams(next, { replace: true });
       }}
       options={[
-        { key: "identities", label: "Agent identities" },
-        { key: "blueprints", label: "Agent identity blueprints" },
-        { key: "foundry", label: "Microsoft Foundry" },
+        { key: "identities", label: "Agent identities", hint: azureExplain("Agent identities") },
+        { key: "blueprints", label: "Agent identity blueprints", hint: azureExplain("Agent identity blueprints") },
+        { key: "foundry", label: "Microsoft Foundry", hint: azureExplain("Microsoft Foundry") },
       ]}
     />
   );
@@ -255,7 +273,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             onSearchChange={setSearch}
             searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
             controls={sourceSelect}
-            applied={connectorId ? [{ key: "source", label: `Source: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
+            applied={connectorId ? [{ key: "source", label: `Tenant: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
             onClearAll={() => {
               setParam("source", null);
               setSearch("");

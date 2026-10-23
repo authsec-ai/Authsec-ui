@@ -36,7 +36,7 @@ export function AzureGraphPanel({ kind, id, name, objectId }: { kind: "identity"
         <LoadFailurePanel failure={failure} subject="the access graph" permission="discovery:read" onRetry={() => void q.refetch()} />
       ) : q.isSuccess ? (
         <InventoryNotice icon={<Info />}>
-          This object is not in the access graph yet. It appears once a scan has finished and been projected into the graph.
+          This object is not in the access graph yet. It appears after the next scan of Azure finishes.
         </InventoryNotice>
       ) : (
         <div className="h-96 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading the graph" />

@@ -13,6 +13,7 @@ import type { AzureFoundry, AzureFoundryTrust, CloudConnector } from "@/app/api/
 import { Fact, Facts, Panel } from "@/features/iga/shared/components/Panel";
 
 import { CloudPill } from "../CloudPill";
+import { AzureTerm } from "./AzureTerm";
 import { ListFrame, RelativeDate } from "./AzureDiscoveryShared";
 import { agentTypeLabel, connectorLabel, foundryKindLabel, identityKindLabel } from "./azureDiscoveryLabels";
 import type { FoundryConnection, FoundryDeployment, FoundryNode } from "./azureFoundry";
@@ -25,6 +26,34 @@ const identityHref = (objectId: string) => `/iga/azure/identity/${encodeURICompo
 function yesNo(v: unknown): string {
   return v === true ? "Yes" : v === false ? "No" : "Not recorded";
 }
+
+/** A Foundry connection's target service and how it signs in, in words; unknown values as Microsoft wrote them. */
+const CONNECTION_CATEGORY: Record<string, string> = {
+  AppInsights: "Application Insights",
+  CognitiveSearch: "Azure AI Search",
+  AzureBlob: "Azure Blob Storage",
+  AzureStorageAccount: "Azure Storage",
+  AzureOpenAI: "Azure OpenAI",
+  AIServices: "Foundry Tools (Azure AI services)",
+  CognitiveService: "Azure AI service",
+  ApiKey: "API key service",
+  CustomKeys: "Custom service",
+  RemoteTool: "Remote tool",
+  KeyVault: "Key Vault",
+  CosmosDB: "Azure Cosmos DB",
+};
+const CONNECTION_AUTH: Record<string, string> = {
+  AAD: "Microsoft Entra ID",
+  ApiKey: "API key",
+  ManagedIdentity: "Managed identity",
+  AccountKey: "Account key",
+  AccessKey: "Access key",
+  CustomKeys: "Custom keys",
+  ServicePrincipal: "Service principal",
+  ProjectManagedIdentity: "Project managed identity",
+  AgenticIdentity: "Agent identity",
+  None: "No authentication",
+};
 
 function DeploymentLine({ d }: { d: FoundryDeployment }) {
   const model = [d.model, d.model_version].filter(Boolean).join(" ");
@@ -48,12 +77,12 @@ function ConnectionLine({ c }: { c: FoundryConnection }) {
         <span className="font-medium">{c.name}</span>
         {c.category ? (
           <CloudPill tone="muted" dot={false}>
-            {c.category}
+            {CONNECTION_CATEGORY[c.category] ?? c.category}
           </CloudPill>
         ) : null}
         {c.auth_type ? (
           <CloudPill tone="muted" dot={false}>
-            {c.auth_type}
+            Signs in with {CONNECTION_AUTH[c.auth_type] ?? c.auth_type}
           </CloudPill>
         ) : null}
       </div>
@@ -75,11 +104,11 @@ function TrustLine({ t }: { t: AzureFoundryTrust }) {
         <span className={`ml-2 ${MUTED}`}>{agentType ?? identityKindLabel(t.trusted_kind)}</span>
       </p>
       <p className={MUTED}>
-        Has a federated credential naming this managed identity
+        Its federated credential trusts this managed identity
         {t.agent_name ? (
           <>
             {" "}
-            · obtains the tokens of agent identity{" "}
+            · so this resource can get the tokens of agent identity{" "}
             {t.agent_object_id ? (
               <Link to={identityHref(t.agent_object_id)} className="text-(--color-primary-text) hover:underline">
                 {t.agent_name}
@@ -99,7 +128,7 @@ function Rows<T>({ title, rows, empty, render }: { title: string; rows: T[]; emp
   return (
     <div className="space-y-1.5">
       <h4 className="text-xs font-semibold text-(--color-text)">
-        {title} <span className="font-normal tabular-nums text-(--color-text-muted)">{rows.length}</span>
+        <AzureTerm term={title} /> <span className="font-normal tabular-nums text-(--color-text-muted)">{rows.length}</span>
       </h4>
       {rows.length ? (
         <ul className="divide-y rounded-md border">
@@ -122,7 +151,7 @@ function NodeBody({ n }: { n: FoundryNode }) {
   return (
     <div className="space-y-3">
       <Facts>
-        <Fact label="Runs as">
+        <Fact label={<AzureTerm term="Managed identity" />}>
           {n.principalId ? (
             <Link to={identityHref(n.principalId)} className="text-(--color-primary-text) hover:underline">
               {n.workload.identity_name || n.principalId}
@@ -132,15 +161,17 @@ function NodeBody({ n }: { n: FoundryNode }) {
           )}
         </Fact>
         {str(a["endpoint"]) ? (
-          <Fact label="Endpoint" mono>
+          <Fact label={<AzureTerm term="Endpoint" />} mono>
             {str(a["endpoint"])!}
           </Fact>
         ) : null}
-        {a["public_network_access"] !== undefined ? <Fact label="Public network access">{str(a["public_network_access"]) ?? "Not recorded"}</Fact> : null}
-        {a["local_auth_enabled"] !== undefined ? <Fact label="API key sign-in allowed">{yesNo(a["local_auth_enabled"])}</Fact> : null}
-        {str(a["sku"]) ? <Fact label="SKU">{str(a["sku"])!}</Fact> : null}
-        {isProject && a["is_default"] !== undefined ? <Fact label="Default project">{yesNo(a["is_default"])}</Fact> : null}
-        <Fact label="Last seen by AuthSec">
+        {a["public_network_access"] !== undefined ? <Fact label={<AzureTerm term="Public network access" />}>{str(a["public_network_access"]) ?? "Not recorded"}</Fact> : null}
+        {a["local_auth_enabled"] !== undefined ? (
+          <Fact label={<AzureTerm term="API key access" />}>{a["local_auth_enabled"] === true ? "Allowed" : a["local_auth_enabled"] === false ? "Off: Microsoft Entra ID only" : "Not recorded"}</Fact>
+        ) : null}
+        {str(a["sku"]) ? <Fact label={<AzureTerm term="Pricing tier" />}>{str(a["sku"])!}</Fact> : null}
+        {isProject && a["is_default"] !== undefined ? <Fact label={<AzureTerm term="Default project" />}>{yesNo(a["is_default"])}</Fact> : null}
+        <Fact label={<AzureTerm term="Last seen" />}>
           <RelativeDate iso={n.workload.last_seen_at} />
         </Fact>
       </Facts>
@@ -164,7 +195,7 @@ function NodeBody({ n }: { n: FoundryNode }) {
           )}
         />
       ) : null}
-      <Rows title="Trusted by" rows={n.trusts} render={(t) => <TrustLine t={t} />} />
+      <Rows title="Agent blueprints that trust it" rows={n.trusts} render={(t) => <TrustLine t={t} />} />
     </div>
   );
 }

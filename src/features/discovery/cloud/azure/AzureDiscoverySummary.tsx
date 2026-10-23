@@ -23,9 +23,9 @@ function SectionTable({ s }: { s: SummarySection }) {
     <table className="w-full text-[13px]">
       <thead>
         <tr className={`text-left text-xs ${MUTED}`}>
-          <th className="pb-1.5 font-medium">Kind</th>
+          <th className="pb-1.5 font-medium">Type</th>
           <th className="pb-1.5 text-right font-medium">In Azure</th>
-          <th className="pb-1.5 pl-3 font-medium">By state</th>
+          <th className="pb-1.5 pl-3 font-medium">By status</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-(--color-border-subtle)">
@@ -67,11 +67,11 @@ export function AzureDiscoverySummary() {
           </span>
         ))}
         <button type="button" onClick={() => setOpen(true)} className="ml-auto text-xs font-medium text-(--color-primary-text) hover:underline">
-          See every kind
+          See every type
         </button>
       </div>
-      <RightDrawer open={open} onClose={() => setOpen(false)} width={640} ariaTitle="Discovered in Azure" ariaDescription="Every kind Azure discovery recorded, counted by state.">
-        <DrawerHeader title="Discovered in Azure" subtitle="Every Azure tenant of this workspace, as written to AuthSec's graph. Struck-through states are no longer in Azure." />
+      <RightDrawer open={open} onClose={() => setOpen(false)} width={640} ariaTitle="Discovered in Azure" ariaDescription="Every type Azure discovery recorded, counted by status.">
+        <DrawerHeader title="Discovered in Azure" subtitle="Everything AuthSec found across your connected Azure tenants. Struck-through counts are no longer in Azure." />
         <DrawerBody>
           {sections.map((s) => (
             <DrawerSection key={s.table} label={`${s.label} · ${fmt(s.present)}`}>
