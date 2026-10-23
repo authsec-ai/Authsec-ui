@@ -6,7 +6,6 @@
 import type { Connection } from "@/app/api/connectionsApi";
 import type { ConsoleTone } from "@/components/console/status";
 
-import { surfaceLabel as azureSurfaceLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { readableSurface } from "../coverage/surfaceNames";
 import { K8S_SWEEP_SURFACE, gapName, neverProven, primaryOf, reasonCopy } from "../connections/connectionModel";
 import { surfaceStateText } from "../shared/labels";
@@ -57,17 +56,13 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
       out.push({ key: `${c.id}:graph`, tone: "info", label: "Publishing", text: `${name}: the graph is being built from the latest scan.`, href });
     }
     // On the published AWS lists the graph's own coverage summary says this, with
-    // its sheet. Azure has the same: AzureCoverageSummary, mounted once above the
-    // Discovery body, replaces this sentence with a one-line headline and a sheet.
+    // its sheet. Azure says it on the connection's Overview and Coverage tabs
+    // only: its strip above the lists was removed (1d1d9d9, abaa356).
     if (!opts.publishedView && !opts.skipCoverage && c.provider !== "azure" && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
       const gaps = c.coverage.gaps
         .slice(0, 3)
         .map((g) =>
-          g.surface === K8S_SWEEP_SURFACE
-            ? gapName(g)
-            : c.provider === "azure"
-              ? `${azureSurfaceLabel(g.surface)} ${surfaceStateText(g.state)}`
-              : `${readableSurface(g.surface).service} ${surfaceStateText(g.state)}`,
+          g.surface === K8S_SWEEP_SURFACE ? gapName(g) : `${readableSurface(g.surface).service} ${surfaceStateText(g.state)}`,
         );
       out.push({
         key: `${c.id}:coverage`,
