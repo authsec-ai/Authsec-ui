@@ -4,10 +4,10 @@
  * shared/components/Panel.tsx), not a colour-coded warning banner: one line
  * saying what is missing, and a "Review collection gaps" header action that
  * opens a sheet with the surfaces and why each one is short. Same idea as the
- * Discovery page's coverage summaries (iga/coverage/CoverageSummary.tsx for
- * AWS, discovery/cloud/azure/AzureCoverageSummary.tsx for Azure) — this is
- * the single-connection version, so every provider gets it from one
- * component instead of each connection page inventing its own.
+ * Discovery page's coverage summary for AWS (iga/coverage/CoverageSummary.tsx;
+ * Azure's gaps show there as a closeable notice) — this is the
+ * single-connection version, so every provider gets it from one component
+ * instead of each connection page inventing its own.
  *
  * The Tracker's Coverage row (coverageText/coveragePill in connectionModel.ts)
  * keeps its short pill and its link to the Coverage tab; this panel is the

@@ -1547,20 +1547,6 @@ export interface AzureEvidence {
   facts: Record<string, unknown> | null;
 }
 
-/** One count of the Azure rows of the shared IGA graph: a table, a kind, a state. */
-export interface AzureGraphCount {
-  table: string;
-  kind: string;
-  state: string;
-  count: number;
-}
-
-export interface AzureGraphSummary {
-  rows: AzureGraphCount[];
-  /** False while the graph is not ready: nothing is projected yet, so every count is 0. */
-  projectionEnabled: boolean;
-}
-
 function azureListParams(a: AzureListArgs): Record<string, string | number> {
   const p: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(a)) if (v !== undefined && v !== "") p[k] = v;
@@ -2326,13 +2312,6 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       transformResponse: (r: CloudListEnvelope<AzureEvidence>, _m, arg) => toCloudPage(r, arg),
     }),
 
-    getAzureGraphSummary: builder.query<AzureGraphSummary, void>({
-      query: () => ({ url: "/authsec/discovery/azure/graph/summary", method: "GET" }),
-      transformResponse: (r: { data: AzureGraphCount[] | null; meta?: { projection_enabled?: boolean } }) => ({
-        rows: r.data ?? [],
-        projectionEnabled: r.meta?.projection_enabled !== false,
-      }),
-    }),
   }),
 });
 
@@ -2393,5 +2372,4 @@ export const {
   useGetAzureReachQuery,
   useListAzureFoundryQuery,
   useListAzureEvidenceQuery,
-  useGetAzureGraphSummaryQuery,
 } = cloudDiscoveryApi;
