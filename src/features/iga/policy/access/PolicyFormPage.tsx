@@ -48,8 +48,11 @@ import {
   armParts,
   bodyOf,
   bucketOf,
+  draftCopy,
   draftOf,
   draftProblem,
+  draftSubScope,
+  draftType,
   isOver,
   emptyDraft,
   formFieldOf,
@@ -64,6 +67,7 @@ import {
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
+import { RESOURCE_TYPES, type ResourceTypeCopy } from "./resourceTypes";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -125,9 +129,9 @@ function Pill({
   );
 }
 
-/** One line under the access toggles saying what the choice covers. */
-function accessHint(access: AccessLevel[], isBlock: boolean, blurbs: ReturnType<typeof accessBlurbs>, aws: boolean): string {
-  if (access.includes("all")) return aws ? "Everything on this bucket or folder: reading, writing, deleting and listing." : "Everything on this resource: reading, changing and deleting.";
+/** One line under the access toggles saying what the choice covers. `copy` is the AWS type's words, absent on Azure. */
+function accessHint(access: AccessLevel[], isBlock: boolean, blurbs: ReturnType<typeof accessBlurbs>, copy: ResourceTypeCopy | undefined): string {
+  if (access.includes("all")) return copy ? copy.allHint : "Everything on this resource: reading, changing and deleting.";
   const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => blurbs[a.key].replace(/\.$/, "").toLowerCase());
   if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
   return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
@@ -180,7 +184,7 @@ export default function PolicyFormPage() {
       const b = bucketOf(r.text);
       if (r.type === "s3_bucket" || b) {
         const bucket = b?.bucket ?? r.text;
-        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
+        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, resource_type: "s3_bucket", name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
       }
     }
   }, [resourceQ.data, fromResource]);
@@ -197,6 +201,7 @@ export default function PolicyFormPage() {
         resource: {
           provider: "azure",
           resource_id: fromResource,
+          resource_type: "azure_resource",
           name: n.label,
           bucket: "",
           arn,
@@ -319,12 +324,14 @@ export default function PolicyFormPage() {
   const err = (f: string) => (fieldError?.field === f ? fieldError.message : undefined);
   const localSentence = useMemo(() => {
     if (!draft.resource || draft.roles.length === 0 || draft.access.length === 0) return "";
-    return policySentence({ ...draft, resource: { ...draft.resource, prefix: draft.provider === "aws" ? draft.prefix.trim() : "" }, ...windowOf(draft) });
+    return policySentence({ ...draft, resource: { ...draft.resource, prefix: draftSubScope(draft) }, ...windowOf(draft) });
   }, [draft]);
   const isBlock = draft.effect === "block";
   const aws = draft.provider === "aws";
   const who = whoWord(draft.provider, draft.roles.length);
-  const blurbs = accessBlurbs(draft.provider, draft.resource?.arn);
+  const blurbs = accessBlurbs(draft.provider, draft.resource?.arn, draftType(draft));
+  // The AWS resource type's words: S3's until another type is chosen. Read on AWS only.
+  const awsCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
   const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
@@ -411,7 +418,7 @@ export default function PolicyFormPage() {
               ) : null}
 
               {aws ? (
-              <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
+              <Block title={awsCopy.title} hint={awsCopy.hint}>
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
                   <div id="ap-resource">
                     <ResourcePicker
@@ -524,7 +531,7 @@ export default function PolicyFormPage() {
                         </Pill>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, blurbs, aws)}</p>
+                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, blurbs, aws ? awsCopy : undefined)}</p>
                     <FieldError message={err("access")} />
                   </fieldset>
 
@@ -610,12 +617,12 @@ export default function PolicyFormPage() {
                     <span className="text-xs text-(--color-text-muted)">Summary</span>
                   </div>
                   <p className="text-[15px] font-semibold leading-snug text-(--color-text)">
-                    {localSentence || (aws ? "Choose a bucket, roles and access to see what this does." : "Pick a resource, logins and action to see a plain summary here.")}
+                    {localSentence || (aws ? `Choose a ${awsCopy.noun}, roles and access to see what this does.` : "Pick a resource, logins and action to see a plain summary here.")}
                   </p>
                   {previewable ? (
                     <p className="text-xs text-(--color-text-muted)">
                       {aws
-                        ? "Only these roles change. Other roles, users, groups and bucket policies keep their access."
+                        ? awsCopy.untouched
                         : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
                     </p>
                   ) : null}

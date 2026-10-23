@@ -26,7 +26,10 @@ import type {
   AccessPolicyDetail,
   AccessPolicyStatus,
   AccessProvider,
+  AccessResourceType,
 } from "@/app/api/igaAccessPoliciesApi";
+
+import { RESOURCE_TYPES, resourceTypeCopy, type ResourceTypeCopy } from "./resourceTypes";
 
 /* -------------------------------- providers -------------------------------- */
 
@@ -163,15 +166,19 @@ export function eventLabel(
 
 /* --------------------------------- access --------------------------------- */
 
-export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; blurb: string; verb: string; base: string }[] = [
-  { key: "read", label: "Read", blurb: "List the folder and read objects.", verb: "reading", base: "read" },
-  { key: "write", label: "Write", blurb: "Upload and overwrite objects.", verb: "writing", base: "write" },
-  { key: "delete", label: "Delete", blurb: "Remove objects and their versions.", verb: "deleting", base: "delete" },
+export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; verb: string; base: string }[] = [
+  { key: "read", label: "Read", verb: "reading", base: "read" },
+  { key: "write", label: "Write", verb: "writing", base: "write" },
+  { key: "delete", label: "Delete", verb: "deleting", base: "delete" },
 ];
 
-/** What each level covers on this resource: S3 objects, Azure blobs, or another Azure resource's management. */
-export function accessBlurbs(provider: AccessProvider, arn?: string): Record<Exclude<AccessLevel, "all">, string> {
-  if (provider === "aws") return { read: ACCESS[0].blurb, write: ACCESS[1].blurb, delete: ACCESS[2].blurb };
+/**
+ * What each level covers on this resource: the AWS type's own words (S3
+ * objects when no type is given), Azure blobs, or another Azure resource's
+ * management.
+ */
+export function accessBlurbs(provider: AccessProvider, arn?: string, type?: AccessResourceType): Record<Exclude<AccessLevel, "all">, string> {
+  if (provider === "aws") return (resourceTypeCopy(type) ?? RESOURCE_TYPES.s3_bucket).blurbs;
   if (isAzureStorage(arn)) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
   return { read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." };
 }
@@ -337,6 +344,8 @@ export interface DraftRole {
 export interface DraftResource {
   provider: AccessProvider;
   resource_id: string;
+  /** What it is: `s3_bucket` on AWS today, `azure_resource` on Azure. */
+  resource_type: AccessResourceType;
   /** The bucket, or the Azure resource's name. */
   name: string;
   /** AWS only: the bucket ("" on Azure). */
@@ -345,6 +354,8 @@ export interface DraftResource {
   arn: string;
   /** The AWS account, or the Azure subscription id. */
   account_id: string;
+  /** AWS: the region, for a type whose ARN names one. */
+  region?: string;
   /** Azure: its Entra tenant (identities must be in the same one). */
   tenant?: string;
   /** Azure: the resource type in words, its subscription's name and its resource group, for the chosen row. */
@@ -417,10 +428,13 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
     resource: {
       provider,
       resource_id: p.resource.resource_id,
+      // A backend that predates the field, or an ARN it cannot read, says nothing: that was S3.
+      resource_type: p.resource.resource_type || (provider === "azure" ? "azure_resource" : "s3_bucket"),
       name: resourceText({ ...p.resource, prefix: "" }),
       bucket: p.resource.bucket,
       arn: p.resource.arn,
       account_id: p.resource.account_id,
+      region: p.resource.region,
     },
     prefix: p.resource.prefix,
     roles: p.roles.map((r) => ({ identity_account_id: r.identity_account_id, name: r.name })),
@@ -431,6 +445,25 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
     name: p.name,
     reason: p.reason,
   };
+}
+
+/**
+ * What the draft is on: Azure's one resource, else the chosen AWS resource's
+ * type, else S3 (the AWS type before anything is chosen).
+ */
+export function draftType(d: Pick<PolicyDraft, "provider" | "resource">): AccessResourceType {
+  if (d.provider === "azure") return "azure_resource";
+  return d.resource?.resource_type || "s3_bucket";
+}
+
+/** The words for the draft's AWS resource type; undefined on Azure. */
+export function draftCopy(d: Pick<PolicyDraft, "provider" | "resource">): ResourceTypeCopy | undefined {
+  return resourceTypeCopy(draftType(d));
+}
+
+/** The draft's narrowing inside its resource (S3's folder), trimmed; "" when its type has none. */
+export function draftSubScope(d: Pick<PolicyDraft, "provider" | "resource" | "prefix">): string {
+  return draftCopy(d)?.subScope ? d.prefix.trim() : "";
 }
 
 /** Switching effect keeps the choice valid: Allow has no "All access" and must end. */
@@ -457,8 +490,8 @@ export function windowOf(d: PolicyDraft, now = new Date()): { starts_at: string 
 export function bodyOf(d: PolicyDraft): AccessPolicyBody {
   return {
     effect: d.effect,
-    // A folder is S3's alone; an Azure policy is on the whole resource.
-    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.provider === "aws" ? d.prefix.trim() : "" },
+    // A folder is S3's alone; any other type, and an Azure policy, is on the whole resource.
+    resource: { resource_id: d.resource?.resource_id ?? "", prefix: draftSubScope(d) },
     roles: d.roles.map((r) => ({ identity_account_id: r.identity_account_id })),
     access: d.access,
     ...windowOf(d),
@@ -470,15 +503,16 @@ export function bodyOf(d: PolicyDraft): AccessPolicyBody {
 /** A name to start from, until the person types their own. */
 export function suggestedName(d: PolicyDraft): string {
   const who = d.roles.length === 0 ? "" : d.roles.length === 1 ? d.roles[0].name : `${d.roles[0].name} and ${d.roles.length - 1} more`;
-  const where = d.resource ? resourceText({ ...d.resource, prefix: d.provider === "aws" ? d.prefix.trim() : "" }) : "";
+  const where = d.resource ? resourceText({ ...d.resource, prefix: draftSubScope(d) }) : "";
   if (!who || !where) return "";
   return `${EFFECT[d.effect].label} ${who} on ${where}`;
 }
 
 /** What is still missing before Apply, in the order the form asks for it; "" when nothing is. */
 export function draftProblem(d: PolicyDraft, now = new Date()): { field: string; message: string } | null {
-  if (!d.resource) return { field: "resource", message: d.provider === "aws" ? "Choose a bucket." : "Choose a resource." };
-  if (d.provider === "aws" && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
+  const copy = draftCopy(d);
+  if (!d.resource) return { field: "resource", message: `Choose a ${copy?.noun ?? "resource"}.` };
+  if (copy?.subScope === "folder" && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
   if (d.roles.length === 0) return { field: "roles", message: `Choose at least one ${whoWord(d.provider)}.` };
   if (d.access.length === 0) return { field: "access", message: `Choose what to ${d.effect === "block" ? "block." : "allow."}` };
   const w = windowOf(d, now);
@@ -512,6 +546,7 @@ export function azureResourceOf(row: InventoryRow): DraftResource {
   return {
     provider: "azure",
     resource_id: refId(row.ref),
+    resource_type: "azure_resource",
     name: row.name,
     bucket: "",
     arn: row.native_id,

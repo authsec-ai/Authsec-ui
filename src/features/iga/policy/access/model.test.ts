@@ -4,7 +4,11 @@ import {
   accessBlurbs,
   bodyOf,
   bucketOf,
+  draftCopy,
+  draftOf,
   draftProblem,
+  draftSubScope,
+  draftType,
   emptyDraft,
   pathInBucket,
   pathReachesFolder,
@@ -15,6 +19,8 @@ import {
   type DraftResource,
   type PolicyDraft,
 } from "./model";
+import { RESOURCE_TYPES, resourceTypeCopy } from "./resourceTypes";
+import type { AccessPolicyDetail, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
 
 describe("pathReachesFolder", () => {
   it("whole-bucket holders and whole-bucket rules reach everything", () => {
@@ -54,8 +60,8 @@ describe("policySentence", () => {
 
 /* The S3 helpers, pinned as they are before other AWS resource types join them. */
 
-const bucket: DraftResource = { provider: "aws", resource_id: "r-1", name: "fin", bucket: "fin", arn: "arn:aws:s3:::fin", account_id: "111122223333" };
-const vault: DraftResource = { provider: "azure", resource_id: "r-2", name: "kv", bucket: "", arn: "/subscriptions/s/resourceGroups/g/providers/Microsoft.KeyVault/vaults/kv", account_id: "s" };
+const bucket: DraftResource = { provider: "aws", resource_id: "r-1", resource_type: "s3_bucket", name: "fin", bucket: "fin", arn: "arn:aws:s3:::fin", account_id: "111122223333" };
+const vault: DraftResource = { provider: "azure", resource_id: "r-2", resource_type: "azure_resource", name: "kv", bucket: "", arn: "/subscriptions/s/resourceGroups/g/providers/Microsoft.KeyVault/vaults/kv", account_id: "s" };
 const now = new Date("2026-10-23T10:00:00Z");
 
 function draft(over: Partial<PolicyDraft>): PolicyDraft {
@@ -190,5 +196,58 @@ describe("draftProblem", () => {
   });
   it("an allow must end within 30 days", () => {
     expect(draftProblem(draft({ effect: "allow", resource: bucket, roles: [role] }), now)).toEqual({ field: "end", message: "Allowed access must end. Pick an end time." });
+  });
+});
+
+describe("resource types", () => {
+  const keys = ["noun", "title", "hint", "label", "search", "loading", "empty", "error", "blurbs", "allHint", "untouched", "subScope"];
+  it("every entry has every word, and a blurb for each level", () => {
+    for (const [type, copy] of Object.entries(RESOURCE_TYPES)) {
+      expect(Object.keys(copy).sort(), type).toEqual([...keys].sort());
+      for (const k of keys.filter((k) => k !== "blurbs" && k !== "subScope")) expect((copy as unknown as Record<string, string>)[k], `${type}.${k}`).toBeTruthy();
+      expect(Object.keys(copy.blurbs).sort(), type).toEqual(["delete", "read", "write"]);
+    }
+  });
+  it("S3 keeps a folder; Azure, unknown and inherited names have no entry", () => {
+    expect(resourceTypeCopy("s3_bucket")?.subScope).toBe("folder");
+    expect(resourceTypeCopy("azure_resource")).toBeUndefined();
+    expect(resourceTypeCopy("")).toBeUndefined();
+    expect(resourceTypeCopy(undefined)).toBeUndefined();
+    expect(resourceTypeCopy("toString")).toBeUndefined();
+  });
+  it("a draft is S3 on AWS until another type is chosen, and Azure's resource on Azure", () => {
+    expect(draftType(draft({}))).toBe("s3_bucket");
+    expect(draftType(draft({ resource: bucket }))).toBe("s3_bucket");
+    expect(draftType(draft({ resource: { ...bucket, resource_type: "" } }))).toBe("s3_bucket");
+    expect(draftType(draft({ provider: "azure" }))).toBe("azure_resource");
+    expect(draftCopy(draft({}))).toBe(RESOURCE_TYPES.s3_bucket);
+    expect(draftCopy(draft({ provider: "azure", resource: vault }))).toBeUndefined();
+  });
+  it("only a type with a folder keeps the prefix", () => {
+    expect(draftSubScope(draft({ resource: bucket, prefix: " a/ " }))).toBe("a/");
+    expect(draftSubScope(draft({ provider: "azure", resource: vault, prefix: "a/" }))).toBe("");
+  });
+});
+
+describe("draftOf", () => {
+  const detail = (resource: Partial<AccessPolicyResource>) =>
+    ({
+      name: "p",
+      reason: "r",
+      effect: "block",
+      access: ["read"],
+      starts_at: null,
+      ends_at: null,
+      roles: [],
+      resource: { resource_id: "r-1", resource_type: "s3_bucket", arn: "arn:aws:s3:::fin", bucket: "fin", prefix: "a/", account_id: "1", provider: "aws", name: "fin", kind: "s3_bucket", ...resource },
+    }) as unknown as AccessPolicyDetail;
+  it("keeps the resource's type and region", () => {
+    expect(draftOf(detail({})).resource).toMatchObject({ resource_type: "s3_bucket", bucket: "fin", name: "fin" });
+    expect(draftOf(detail({ region: "us-east-1" })).resource?.region).toBe("us-east-1");
+  });
+  it("reads a resource without a type as S3 on AWS and Azure's on Azure", () => {
+    expect(draftOf(detail({ resource_type: undefined })).resource?.resource_type).toBe("s3_bucket");
+    expect(draftOf(detail({ resource_type: "" })).resource?.resource_type).toBe("s3_bucket");
+    expect(draftOf(detail({ resource_type: undefined, provider: "azure", bucket: "", prefix: "" })).resource?.resource_type).toBe("azure_resource");
   });
 });
