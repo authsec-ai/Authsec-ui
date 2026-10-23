@@ -14,7 +14,8 @@ import {
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { CloudPill } from "@/features/discovery/cloud/CloudPill";
-import { surfaceLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { shortId, surfaceLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { azureSurfaceErrorProse } from "@/features/discovery/cloud/azure/azureErrorCopy";
 import { Fact, Facts, Meta, Panel } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
@@ -25,12 +26,36 @@ function Loading({ label }: { label: string }) {
 const RUN_STATUS: Record<string, { label: string; tone: "success" | "info" | "warning" | "danger" | "muted" }> = {
   queued: { label: "Queued", tone: "muted" },
   running: { label: "Running", tone: "info" },
-  published: { label: "Finished", tone: "success" },
+  published: { label: "Complete", tone: "success" },
   failed: { label: "Failed", tone: "danger" },
   abandoned: { label: "Abandoned", tone: "muted" },
 };
 
 const TRIGGER: Record<string, string> = { connect: "Connect", verify: "Verify", schedule: "Scheduled" };
+
+/** How long a run took, from its own timestamps — never invented when one is missing. */
+function runDuration(r: { started_at?: string | null; requested_at: string; published_at?: string | null; updated_at: string }): string | null {
+  const start = r.started_at ?? r.requested_at;
+  const end = r.published_at ?? (r.updated_at !== start ? r.updated_at : null);
+  if (!start || !end) return null;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const totalSeconds = Math.round(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** The total "reached" count across a run's surfaces — a plain-language stand-in
+ * for "what did this scan actually find", shown next to the run instead of
+ * leaving the user to open Coverage to learn whether anything came back. */
+function runFoundCount(r: { coverage: { surfaces?: Record<string, { state: string; count: number }> } }): number | null {
+  const surfaces = r.coverage?.surfaces;
+  if (!surfaces) return null;
+  const reached = Object.values(surfaces).filter((s) => s.state === "reached");
+  if (!reached.length) return null;
+  return reached.reduce((sum, s) => sum + (s.count || 0), 0);
+}
 
 export function AzureScans({ c }: { c: Connection }) {
   const q = useListAzureScanRunsQuery(c.id);
@@ -52,12 +77,19 @@ export function AzureScans({ c }: { c: Connection }) {
           <ul className="divide-y divide-(--color-border-subtle)">
             {runs.map((r) => {
               const s = RUN_STATUS[r.status] ?? { label: r.status, tone: "muted" as const };
+              const duration = runDuration(r);
+              const found = runFoundCount(r);
               return (
                 <li key={r.id} className="space-y-1 py-2.5 text-[13px]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex items-center gap-2">
                       <CloudPill tone={s.tone}>{s.label}</CloudPill>
-                      <span className="text-(--color-text-muted)">{TRIGGER[r.trigger] ?? r.trigger}</span>
+                      <span className="text-(--color-text-muted)">
+                        {TRIGGER[r.trigger] ?? r.trigger}
+                        {r.trigger === "connect" || r.trigger === "verify" ? " (started by a person)" : ""}
+                      </span>
+                      {duration ? <span className="text-xs text-(--color-text-muted)">· {duration}</span> : null}
+                      {found != null ? <span className="text-xs text-(--color-text-muted)">· {found.toLocaleString()} objects found</span> : null}
                     </span>
                     <span className="text-xs text-(--color-text-muted)">
                       Started <Timestamp iso={r.started_at ?? r.requested_at} />
@@ -69,7 +101,7 @@ export function AzureScans({ c }: { c: Connection }) {
                       ) : null}
                     </span>
                   </div>
-                  {r.last_error ? <p className="break-words text-xs text-(--color-danger-text)">{r.last_error}</p> : null}
+                  {r.last_error ? <p className="break-words text-xs text-(--color-danger-text)">{azureSurfaceErrorProse(r.last_error)}</p> : null}
                 </li>
               );
             })}
@@ -91,31 +123,65 @@ const SURFACE_TONE: Record<string, "success" | "info" | "warning" | "danger" | "
   unknown: "muted",
 };
 
+/** A plain word for each coverage state — never the raw backend token. */
+const SURFACE_STATE_LABEL: Record<string, string> = {
+  reached: "Read",
+  partial: "Partly read",
+  denied: "Access refused",
+  throttled: "Slowed down by Microsoft",
+  unsupported: "Not supported for this tenant",
+  not_selected: "Not turned on",
+  not_configured: "Not set up",
+  unknown: "Unknown",
+};
+
+/**
+ * Items needing attention sort first, so a user scanning the list top-down
+ * meets "Access refused" before fifteen rows of "Read" — the audit's
+ * "Issues to Resolve at the top" ask, without a second, duplicate section.
+ */
+const SURFACE_SEVERITY: Record<string, number> = {
+  denied: 0,
+  throttled: 1,
+  partial: 2,
+  not_configured: 3,
+  not_selected: 4,
+  unknown: 5,
+  unsupported: 6,
+  reached: 7,
+};
+
 function SurfaceList({ connector }: { connector: CloudConnector }) {
   const label = surfaceLabel;
-  const surfaces = Object.entries(connector.coverage?.surfaces ?? {}).sort(([a], [b]) => label(a).localeCompare(label(b)));
+  const surfaces = Object.entries(connector.coverage?.surfaces ?? {}).sort(([a, sa], [b, sb]) => {
+    const sev = (SURFACE_SEVERITY[sa.state] ?? 9) - (SURFACE_SEVERITY[sb.state] ?? 9);
+    return sev !== 0 ? sev : label(a).localeCompare(label(b));
+  });
   if (connector.coverage?.status === "running" && surfaces.every(([, s]) => s.state === "unknown")) {
     return <p className="text-[13px] text-(--color-text-muted)">A scan is running. Coverage is written when it finishes.</p>;
   }
   if (!surfaces.length) return <p className="text-[13px] text-(--color-text-muted)">No coverage report yet. It is written when a scan pass finishes.</p>;
   return (
     <ul className="divide-y divide-(--color-border-subtle)">
-      {surfaces.map(([name, s]) => (
-        <li key={name} className="flex flex-wrap items-start justify-between gap-2 py-2 text-[13px]">
-          <span className="min-w-0">
-            <span className="font-medium">{label(name)}</span>
-            {s.error ? <span className="block break-words text-xs text-(--color-text-muted)">{s.error}</span> : null}
-          </span>
-          <span className="flex items-center gap-2">
-            {s.state === "reached" ? (
-              <span className="text-xs text-(--color-text-muted)">{s.count}</span>
-            ) : s.count > 0 ? (
-              <span className="text-xs text-(--color-text-muted)">at least {s.count}</span>
-            ) : null}
-            <CloudPill tone={SURFACE_TONE[s.state] ?? "muted"}>{s.state.replace(/_/g, " ")}</CloudPill>
-          </span>
-        </li>
-      ))}
+      {surfaces.map(([name, s]) => {
+        // "0" against "Read" means nothing of that kind exists in the tenant —
+        // never ambiguous with "0" because the read failed (that is "denied"
+        // or "throttled", a different state and a different pill).
+        const countLabel = s.state === "reached" ? (s.count > 0 ? s.count.toLocaleString() : "None found") : s.count > 0 ? `at least ${s.count.toLocaleString()}` : null;
+        const plainError = azureSurfaceErrorProse(s.error);
+        return (
+          <li key={name} className="flex flex-wrap items-start justify-between gap-2 py-2 text-[13px]">
+            <span className="min-w-0">
+              <span className="font-medium">{label(name)}</span>
+              {plainError ? <span className="block break-words text-xs text-(--color-text-muted)">{plainError}</span> : null}
+            </span>
+            <span className="flex items-center gap-2">
+              {countLabel ? <span className="text-xs text-(--color-text-muted)">{countLabel}</span> : null}
+              <CloudPill tone={SURFACE_TONE[s.state] ?? "muted"}>{SURFACE_STATE_LABEL[s.state] ?? s.state.replace(/_/g, " ")}</CloudPill>
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -130,7 +196,10 @@ export function AzureCoverage({ c }: { c: Connection }) {
   const subs = (all.data ?? []).filter((s) => s.scope_kind === "subscription" && s.parent_scope_id === c.native_id && s.status === "active");
   return (
     <div className="space-y-4">
-      <Meta>What each part of the scan could read. A count beside anything other than reached is a floor, not a total.</Meta>
+      <Meta>
+        What the last scan could read, for Microsoft Entra ID and each subscription. Items needing attention are listed first; a count next to
+        anything other than "Read" is a minimum, because AuthSec stopped counting once it hit a limit.
+      </Meta>
       <Panel title="Microsoft Entra ID (read through Microsoft Graph)">
         <SurfaceList connector={tenant.data} />
       </Panel>
@@ -145,7 +214,9 @@ export function AzureCoverage({ c }: { c: Connection }) {
 
 function subscriptionName(s: CloudConnector): string {
   const n = (s.attrs as Record<string, unknown> | undefined)?.["display_name"];
-  return typeof n === "string" && n ? n : s.scope_id;
+  // Microsoft did not return a subscription name: a short id reads better than
+  // the full GUID, same as every other unnamed technical reference on this page.
+  return typeof n === "string" && n ? n : shortId(s.scope_id);
 }
 
 const READER_LABEL: Record<string, string> = {
@@ -198,18 +269,21 @@ export function AzureScope({ c }: { c: Connection }) {
                     {s.verified_at ? (
                       <>
                         {" "}
-                        · last proven <Timestamp iso={s.verified_at} />
+                        · permissions verified <Timestamp iso={s.verified_at} />
                       </>
                     ) : null}
                   </p>
-                  {s.last_error ? <p className="break-words text-xs text-(--color-text-muted)">{s.last_error}</p> : null}
+                  {s.last_error ? <p className="break-words text-xs text-(--color-text-muted)">{azureSurfaceErrorProse(s.last_error)}</p> : null}
                 </li>
               );
             })}
           </ul>
         )}
       </Panel>
-      <Meta>To add or remove subscriptions, connect the tenant again and choose them. Removing AuthSec's access is done in Azure by deleting its enterprise application.</Meta>
+      <Meta>
+        To add or remove subscriptions, run "Connect" on this tenant again and pick the subscriptions you want — this re-checks permissions, it does
+        not remove anything already discovered. To stop AuthSec from reading this tenant entirely, delete its enterprise application in Azure.
+      </Meta>
     </div>
   );
 }

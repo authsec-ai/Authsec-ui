@@ -36,29 +36,31 @@ export function ConnectionCoverageStrip({ c }: { c: Connection }) {
   const [open, setOpen] = useState(false);
   if ((c.coverage.state !== "partial" && c.coverage.state !== "denied") || !c.coverage.gaps.length) return null;
 
+  const unit = c.provider === "azure" ? (c.coverage.gaps.length === 1 ? "area" : "areas") : c.coverage.gaps.length === 1 ? "surface" : "surfaces";
+  const names = c.coverage.gaps.slice(0, 2).map((g) => surfaceName(c, g.surface));
+  const preview = names.length ? `${names.join(", ")}${c.coverage.gaps.length > names.length ? ", and more" : ""}` : "";
+
   const headline =
-    c.coverage.state === "denied"
-      ? "Collection was denied here. Some results may be missing."
-      : "Discovery is incomplete here. Some results may be missing.";
+    (c.coverage.state === "denied" ? "Access was refused for: " : "Not fully read: ") + (preview || "some parts of this account");
 
   return (
     <>
       <Panel
-        title="Collection gaps"
-        count={`${c.coverage.gaps.length} ${c.coverage.gaps.length === 1 ? "surface" : "surfaces"}`}
+        title="Items needing attention"
+        count={`${c.coverage.gaps.length} ${unit}`}
         actions={
           <button type="button" onClick={() => setOpen(true)} className="font-medium text-(--color-primary-text) hover:underline">
-            Review collection gaps
+            See what to do
           </button>
         }
       >
-        <p className="text-xs leading-relaxed text-(--color-text-muted)">{headline}</p>
+        <p className="text-xs leading-relaxed text-(--color-text-muted)">{headline}.</p>
       </Panel>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full gap-0 overflow-hidden p-0 sm:max-w-[440px]">
           <SheetHeader className="shrink-0 border-b px-5 py-4">
-            <SheetTitle>Collection gaps</SheetTitle>
+            <SheetTitle>Items needing attention</SheetTitle>
             <SheetDescription>What the latest read could not collect, and what that leaves unknown.</SheetDescription>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-0 overflow-y-auto">

@@ -79,7 +79,7 @@ function InForce({ policies }: { policies: AccessPolicy[] }) {
     <ul className="divide-y divide-(--color-border-subtle) rounded-md border border-(--color-border-subtle)">
       {policies.map((p) => (
         <li key={p.id}>
-          <Link to={`/iga/policy/${p.id}`} className="flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-(--color-surface-subtle)">
+          <Link to={`/iga/policy/${p.id}`} className="flex items-center gap-2 px-2.5 py-2 text-[13px] hover:bg-(--color-surface-subtle)">
             <StatusBadge tone={p.effect === "block" ? "danger" : "success"}>{p.effect === "block" ? "Blocked" : "Allowed"}</StatusBadge>
             <span className="min-w-0 flex-1 truncate font-medium text-(--color-text)" title={p.name}>{p.name}</span>
             <span className="shrink-0 text-(--color-text-muted)">{whenText(p)}</span>

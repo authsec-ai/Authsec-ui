@@ -37,12 +37,12 @@ function renderStrip(c: Connection) {
 describe("ConnectionCoverageStrip", () => {
   it("renders nothing when coverage is complete", () => {
     renderStrip(conn({ coverage: { state: "complete", gaps: [] } }));
-    expect(screen.queryByText("Review collection gaps")).toBeNull();
+    expect(screen.queryByText("See what to do")).toBeNull();
   });
 
   it("renders nothing when coverage is unknown with no gaps", () => {
     renderStrip(conn({ coverage: { state: "unknown", gaps: [] } }));
-    expect(screen.queryByText("Review collection gaps")).toBeNull();
+    expect(screen.queryByText("See what to do")).toBeNull();
   });
 
   it("shows the headline and AWS surface names for a partial AWS connection", () => {
@@ -52,8 +52,8 @@ describe("ConnectionCoverageStrip", () => {
         coverage: { state: "partial", gaps: [{ surface: "iam_users", state: "throttled" }] },
       }),
     );
-    expect(screen.getByText("Discovery is incomplete here. Some results may be missing.")).toBeTruthy();
-    fireEvent.click(screen.getByText("Review collection gaps"));
+    expect(screen.getByText(/^Not fully read: /)).toBeTruthy();
+    fireEvent.click(screen.getByText("See what to do"));
     expect(screen.getByText("What the latest read could not collect, and what that leaves unknown.")).toBeTruthy();
   });
 
@@ -64,6 +64,6 @@ describe("ConnectionCoverageStrip", () => {
         coverage: { state: "denied", gaps: [{ surface: "entra_agent_identity", state: "denied" }] },
       }),
     );
-    expect(screen.getByText("Collection was denied here. Some results may be missing.")).toBeTruthy();
+    expect(screen.getByText(/^Access was refused for: /)).toBeTruthy();
   });
 });

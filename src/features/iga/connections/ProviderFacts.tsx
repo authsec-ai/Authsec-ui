@@ -194,13 +194,16 @@ export function AzureFacts({ c }: { c: Connection }) {
   return (
     <Panel title="Tenant">
       <Facts>
-        <Fact label="Tenant ID" mono>
-          {c.native_id}
-        </Fact>
         {attrs?.tenant_display_name ? (
           <Fact label="Directory name">{String(attrs.tenant_display_name)}</Fact>
         ) : null}
-        <Fact label="Subscriptions">{attrs?.subscription_count != null ? String(attrs.subscription_count) : "—"}</Fact>
+        <Fact label="Tenant ID" mono>
+          {c.native_id}
+        </Fact>
+        {/* Always the live count of connected subscriptions (c.scope_summary), never a
+            separate stored field — a stale `attrs.subscription_count` must never say
+            something this count, computed from the same list the Scope tab reads, denies. */}
+        <Fact label="Subscriptions">{c.scope_summary || "0 subscriptions"}</Fact>
         <Fact label="Last verified">
           <Timestamp iso={q.data.verified_at} missing="Never proven" />
         </Fact>

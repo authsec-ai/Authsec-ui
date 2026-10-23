@@ -1209,7 +1209,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             {rootFrontier.length
               ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
               : azure
-                ? `No relationships are recorded for ${rootName}. That is what the latest Azure scan read: where a scan was partial, some may be missing, and that is not the same as having none.`
+                ? `Azure recorded no relationships for ${rootName}. If the connection's read was partial, some may be missing — this does not mean the agent truly has none.`
                 : k8s
                 ? `The latest sweep recorded no relationships for ${rootName}. That is what the sweep read — where it was partial, some may be missing, and that is not the same as having none.`
                 : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
