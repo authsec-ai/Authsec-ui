@@ -278,8 +278,9 @@ interface ConnectorEnvelope {
 /** `GET|PUT /aws/connectors/:id/schedule` — automatic rescans.
  * A connector never scheduled reads as `enabled: false` with the default
  * interval. `paused_reason` is "" unless the scheduler paused the schedule
- * after repeated failures. `scheduler_active: false` means this deployment has
- * the scheduler switched off: the settings are kept but nothing runs on them. */
+ * after repeated failures. `scheduler_active: false` means no scheduler is
+ * serving the schedule (the answering server does not run one and the schedule
+ * is overdue): the settings are kept but nothing runs on them. */
 export interface AWSScanSchedule {
   enabled: boolean;
   interval_minutes: number;
