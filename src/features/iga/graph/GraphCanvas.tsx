@@ -44,12 +44,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { refId, type GraphFrontier, type GraphRef } from "@/app/api/igaGraphApi";
+import { refId, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { GraphEdgeView, type GraphEdgeData, type RFGraphEdge } from "./edges";
-import { isPolicyHolder, useGraphBlocks, type GraphBlocks } from "./policyBlocks";
+import { isPolicyHolder, useGraphBlocks, type BlockMark, type GraphBlocks } from "./policyBlocks";
 import { GraphNodeView, type FrontierControl, type GraphNodeData, type RFGraphNode } from "./nodes";
 import type { Position, Size } from "./layout";
 import type { NodeCategory, NodeDescription } from "./nodeView";
@@ -204,6 +204,28 @@ function GraphCanvasInner({
   const blocks = useGraphBlocks();
   const byId = useMemo(() => new Map(visualNodes.map((v) => [v.id, v])), [visualNodes]);
 
+  // Detailed draws each role assignment (a statement) as its own card between
+  // the identity and the resource. As in AWS, the block is decided on the
+  // identity-to-resource pair that card stands for, and shown on the card and
+  // on the lines to it.
+  const chain = useMemo(() => {
+    const holderOf = new Map<string, GraphNode>();
+    const resourceOf = new Map<string, GraphNode>();
+    for (const e of visualEdges) {
+      const from = byId.get(e.from)?.members[0];
+      const to = byId.get(e.to)?.members[0];
+      if (to?.kind === "statement" && isPolicyHolder(from)) holderOf.set(e.to, from!);
+      if (from?.kind === "statement" && to && to.kind !== "statement") resourceOf.set(e.from, to);
+    }
+    const statementBlock = new Map<string, BlockMark>();
+    for (const [sid, holder] of holderOf) {
+      const resource = resourceOf.get(sid);
+      const m = resource ? blocks.lineBlock(holder, resource) : null;
+      if (m) statementBlock.set(sid, m);
+    }
+    return { holderOf, resourceOf, statementBlock };
+  }, [visualEdges, byId, blocks]);
+
   const rfNodes = useMemo<RFGraphNode[]>(
     () =>
       visualNodes
@@ -225,7 +247,7 @@ function GraphCanvasInner({
             onRefresh,
             stateOf,
             canLoadMore,
-            block: blockNote(v, blocks),
+            block: v.members[0]?.kind === "statement" ? statementChip(chain.statementBlock.get(v.id)) : blockNote(v, blocks),
           };
           return {
             id: v.id,
@@ -254,7 +276,7 @@ function GraphCanvasInner({
             ) || undefined,
           } satisfies RFGraphNode;
         }),
-    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds, focusCategory, blocks],
+    [visualNodes, positions, dragging, descriptions, sizes, selection, rootId, reducedMotion, onSelectNode, onOpenNode, onExpand, onLoadMore, onCollapse, onRefresh, stateOf, canLoadMore, highlightedNodeIds, focusCategory, blocks, chain],
   );
   const drawnIds = useMemo(() => new Set(rfNodes.map((n) => n.id)), [rfNodes]);
 
@@ -276,7 +298,7 @@ function GraphCanvasInner({
           const block =
             e.kind === "declares"
               ? (byId.get(e.to)?.members ?? []).map((t) => blocks.lineBlock(byId.get(e.from)?.members[0], t)).find(Boolean) ?? null
-              : null;
+              : statementLineBlock(e, byId, chain, blocks);
           const data: GraphEdgeData = { visual: e, isSelected: selected, highlighted, hovered: hoveredEdge === e.id, reducedMotion, onSelect: onSelectEdge, spread, showLabel: showEdgeLabels, block };
           return {
             id: e.id,
@@ -295,7 +317,7 @@ function GraphCanvasInner({
             },
           } satisfies RFGraphEdge;
         });
-  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge, showEdgeLabels, blocks, byId]);
+  }, [visualEdges, drawnIds, selection, highlightedEdgeIds, hoveredEdge, reducedMotion, onSelectEdge, showEdgeLabels, blocks, byId, chain]);
 
   /* ------------------------------- viewport ------------------------------- */
 
@@ -578,6 +600,29 @@ function GraphCanvasInner({
       ) : null}
     </div>
   );
+}
+
+/** A Detailed line that touches a role-assignment card: blocked when the identity-to-resource pair the card stands for is. */
+function statementLineBlock(
+  e: { from: string; to: string },
+  byId: Map<string, { members: GraphNode[] }>,
+  chain: { holderOf: Map<string, GraphNode>; resourceOf: Map<string, GraphNode> },
+  blocks: GraphBlocks,
+): BlockMark | null {
+  const to = byId.get(e.to)?.members[0];
+  if (to?.kind === "statement") {
+    const holder = byId.get(e.from)?.members[0];
+    const resource = chain.resourceOf.get(e.to);
+    return isPolicyHolder(holder) && resource ? blocks.lineBlock(holder, resource) : null;
+  }
+  const holder = chain.holderOf.get(e.from);
+  const resource = byId.get(e.to)?.members[0];
+  return holder && resource && resource.kind !== "statement" ? blocks.lineBlock(holder, resource) : null;
+}
+
+/** A role-assignment card's chip, from the block on its identity-to-resource pair. */
+function statementChip(m: BlockMark | undefined): GraphNodeData["block"] {
+  return m ? { text: m.full ? "Blocked" : "Partly blocked", long: `Blocked by ${m.policies.map((p) => p.name).join(", ")}` } : undefined;
 }
 
 /** The card's block chip: a role or Azure identity a Block policy names, or a resource one covers. */
