@@ -41,6 +41,30 @@ export function CopyableId({ value, what = "ID" }: { value: string; what?: strin
   );
 }
 
+/** A tenant's or subscription's name, exactly where `connectorLabel` would
+ * fall back to a raw id — this is that same fallback, but with the id made
+ * copyable instead of sitting there as plain, unpasteable text. For a Fact
+ * row whose own label already says "Directory"/"Azure subscription": never
+ * repeats that word, so the row doesn't read "Directory: Directory …". */
+export function ConnectorNameOrId({ c, what }: { c: CloudConnector | undefined; what: string }) {
+  if (!c) return <>Unknown</>;
+  const attrs = (c.attrs ?? {}) as Record<string, unknown>;
+  const name =
+    c.scope_kind === "tenant"
+      ? typeof attrs["tenant_display_name"] === "string" && attrs["tenant_display_name"]
+        ? (attrs["tenant_display_name"] as string)
+        : ""
+      : typeof attrs["display_name"] === "string" && attrs["display_name"]
+        ? (attrs["display_name"] as string)
+        : "";
+  if (name) return <>{name}</>;
+  return (
+    <span className="inline-flex items-center gap-1 text-(--color-text-muted)">
+      <CopyableId value={c.scope_id} what={what} /> <span>(name not read)</span>
+    </span>
+  );
+}
+
 /** Relative time, the exact instant on hover; "Unknown" rather than an invented time. */
 export function RelativeDate({ iso }: { iso: string | null | undefined }) {
   const at = iso ? new Date(iso) : null;
@@ -95,7 +119,10 @@ export function RefNames({ refs, max = 2, empty = "None listed" }: { refs: Direc
   const names = [...new Set(refs.map(refName))];
   const shown = names.slice(0, max).join(", ");
   return (
-    <span className="text-xs" title={names.join(", ")}>
+    // block + truncate: a long name (or several joined by commas) clips with "…"
+    // at the column's own width instead of running on past it; the full list
+    // is still one hover away.
+    <span className="block truncate text-xs" title={names.join(", ")}>
       {shown}
       {names.length > max ? <span className="text-muted-foreground"> +{names.length - max}</span> : null}
     </span>

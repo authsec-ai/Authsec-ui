@@ -97,7 +97,11 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "px-[var(--component-table-cell-padding-inline)] py-[var(--component-table-cell-padding-block)] align-middle whitespace-nowrap text-[length:var(--font-size-body-sm)] text-[color:var(--color-text-primary)] leading-[var(--line-height-body)] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // overflow-hidden + text-ellipsis: a cell whose content has no truncation of
+        // its own (a plain name, a list of names) clips at the column boundary with
+        // "…" instead of bleeding into the next column — the safety net every table
+        // gets for free, on top of whatever truncation a cell's own content applies.
+        "overflow-hidden px-[var(--component-table-cell-padding-inline)] py-[var(--component-table-cell-padding-block)] align-middle whitespace-nowrap text-ellipsis text-[length:var(--font-size-body-sm)] text-[color:var(--color-text-primary)] leading-[var(--line-height-body)] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

@@ -27,8 +27,8 @@ import { DetailGrid, DetailRow } from "@/components/console/detail";
 import { Fact, Facts, Panel, CopyValue } from "@/features/iga/shared/components/Panel";
 
 import { CloudPill } from "../CloudPill";
-import { AttrFacts, DrawerList, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { armTypeLabel, connectorLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf, surfaceLabel, OTHER_LABEL } from "./azureDiscoveryLabels";
+import { AttrFacts, ConnectorNameOrId, DrawerList, RefNames, RelativeDate } from "./AzureDiscoveryShared";
+import { armTypeLabel, grantSourceLabel, identityKindLabel, mechanismLabel, refsOf, surfaceLabel, OTHER_LABEL } from "./azureDiscoveryLabels";
 
 /** Where a grant applies, in words. The raw scope kind is never shown. */
 const SCOPE_WORDS: Record<string, string> = {
@@ -56,8 +56,10 @@ const SURFACE_STATE_WORDS: Record<string, string> = {
   unsupported: "Not offered here",
 };
 
-/** Attributes shown in their own sections rather than as raw facts. */
-const SHOWN_ELSEWHERE = ["owners", "sponsors", "created_by", "audit_changes", "agent_listed"];
+/** Attributes shown in their own sections rather than as raw facts. `agent_listed`
+ * used to be skipped here on the premise that it was shown elsewhere — it never
+ * was, so it now falls through to the generic Details panel like anything else. */
+const SHOWN_ELSEWHERE = ["owners", "sponsors", "created_by", "audit_changes"];
 
 interface AuditChange {
   id?: string;
@@ -320,7 +322,7 @@ export function IdentityOverview({ identity, tenant }: { identity: AzureIdentity
             <CopyValue value={identity.native_id} what="Technical ID" />
           </Fact>
           <Fact label="Type">{identityKindLabel(identity.kind)}</Fact>
-          <Fact label="Directory">{connectorLabel(tenant)}</Fact>
+          <Fact label="Directory"><ConnectorNameOrId c={tenant} what="Directory ID" /></Fact>
           <Fact label="Switched on">{identity.enabled ? "Yes" : "No"}</Fact>
           <Fact label="Created">
             <RelativeDate iso={identity.created_at} />
@@ -347,21 +349,27 @@ export function IdentityOverview({ identity, tenant }: { identity: AzureIdentity
 
 export function ResourceOverview({ resource, subscription }: { resource: AzureResource; subscription?: CloudConnector }) {
   return (
-    <Panel title="Resource">
-      <Facts>
-        <Fact label="Resource ID">
-          <CopyValue value={resource.native_id} what="Resource ID" />
-        </Fact>
-        <Fact label="Type">{armTypeLabel(resource.kind)}</Fact>
-        <Fact label="Azure subscription">{connectorLabel(subscription)}</Fact>
-        <Fact label="First found by AuthSec">
-          <RelativeDate iso={resource.first_seen_at} />
-        </Fact>
-        <Fact label="Last checked by AuthSec">
-          <RelativeDate iso={resource.last_seen_at} />
-        </Fact>
-      </Facts>
-    </Panel>
+    <div className="space-y-4">
+      <Panel title="Resource">
+        <Facts>
+          <Fact label="Resource ID">
+            <CopyValue value={resource.native_id} what="Resource ID" />
+          </Fact>
+          <Fact label="Type">{armTypeLabel(resource.kind)}</Fact>
+          <Fact label="Azure subscription"><ConnectorNameOrId c={subscription} what="Subscription ID" /></Fact>
+          <Fact label="First found by AuthSec">
+            <RelativeDate iso={resource.first_seen_at} />
+          </Fact>
+          <Fact label="Last checked by AuthSec">
+            <RelativeDate iso={resource.last_seen_at} />
+          </Fact>
+        </Facts>
+      </Panel>
+      <Panel title="Details from Microsoft" description="The other details Microsoft returned, as read. Nothing here is rated.">
+        {/* resource_id duplicates the Resource ID fact above, same as the Workload overview. */}
+        <AttrFacts attrs={resource.attrs} skip={["resource_id"]} />
+      </Panel>
+    </div>
   );
 }
 
@@ -389,7 +397,7 @@ export function WorkloadOverview({ workload, subscription, identityHref }: { wor
           </Fact>
           <Fact label="Type">{armTypeLabel(workload.runtime_kind)}</Fact>
           <Fact label="Region">{workload.region === "global" ? "Worldwide" : workload.region || "Region not read"}</Fact>
-          <Fact label="Azure subscription">{connectorLabel(subscription)}</Fact>
+          <Fact label="Azure subscription"><ConnectorNameOrId c={subscription} what="Subscription ID" /></Fact>
           <Fact label="Signs in as">
             {workload.identity_name ? (
               identityHref ? (
