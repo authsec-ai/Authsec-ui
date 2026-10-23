@@ -7,10 +7,21 @@ React/TypeScript console conventions for any assistant or engineer.
 
 The design entrypoint is
 [`SPEC-iga-phase2-graph.md`](../authsec/.claude/specs/SPEC-iga-phase2-graph.md).
-The goal is an end-to-end AWS scanning and graph experience; a fixture-backed
+The goal is an end-to-end scanning and graph experience; a fixture-backed
 screen is not evidence that its backend contract exists. Keep screen contracts,
 capability handling, authorization, workspace-scoped caching and publication
 consistency aligned with the backend.
+
+- One graph for every provider: `src/features/iga/graph` reads the shared
+  `/api/iga/v1/graph` for AWS, Kubernetes and Azure. Azure nodes arrive in the
+  kinds the canvas draws (`azureKinds` in `igaGraphApi.ts`); an Azure role
+  assignment is a `statement` node. Do not add a provider-specific graph
+  adapter or endpoint again.
+- Access policies (AWS and Azure) follow
+  [`SPEC-access-policies.md`](../authsec/.claude/specs/SPEC-access-policies.md):
+  `src/features/iga/policy/access` (form, list, detail, dialogs) and the graph
+  selection card (`graph/PolicyCardSection.tsx`, block marks in
+  `graph/policyBlocks.ts`). The provider comes from `resource.provider`.
 
 Preserve existing GitHub, Kubernetes and other product screens and behaviors.
 Do not remove unrelated navigation or substitute legacy endpoints just to make
