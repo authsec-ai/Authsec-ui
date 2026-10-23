@@ -17,7 +17,11 @@ import { useEffect, useState } from "react";
 
 import config from "@/config";
 import { decodeJWT } from "@/utils/jwt";
+import { revokeToken } from "@/auth/endServerSession";
 import { SessionManager } from "@/utils/sessionManager";
+
+/** How long after the swap the replaced login token is revoked. */
+export const OLD_TOKEN_REVOKE_DELAY_MS = 30_000;
 
 /** The claim a workspace-scoped token carries; the login token does not. */
 const MEMBERSHIP_CLAIM = "workspace_membership_id";
@@ -70,6 +74,10 @@ async function postSwitch(token: string, workspaceId: string): Promise<Workspace
       jwtPayload: decoded,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     });
+    // The login token is no longer stored or used: revoke it so it does not
+    // stay valid on the server until it expires (sign-out revokes only the
+    // current token). Later, so a request already in flight with it ends first.
+    setTimeout(() => void revokeToken(token), OLD_TOKEN_REVOKE_DELAY_MS);
     // Keep the admin flow's token mirror in sync when it exists.
     try {
       if (window.localStorage.getItem("jwt_token")) {
