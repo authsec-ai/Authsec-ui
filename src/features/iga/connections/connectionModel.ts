@@ -577,12 +577,26 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
       { key: "settings", label: "Settings" },
     );
   }
+  // Notifications are workspace-wide; an Azure-only workspace reaches them here.
+  if (c.provider === "azure") tabs.push({ key: "notifications", label: "Notifications" });
   return tabs;
 }
 
 export function detailHref(id: string, tab: DetailTab = "overview"): string {
   const base = `/iga/connections/${encodeURIComponent(id)}`;
   return tab === "overview" ? base : `${base}/${tab}`;
+}
+
+const SETUP_SECTIONS: DetailTab[] = ["enforcement", "iac", "notifications", "settings"];
+
+/**
+ * Where an `/iga/policy/setup[/section]` link (Slack messages, older links)
+ * now lands: that tab of the first connection that has it, or the list.
+ */
+export function setupTarget(connections: Connection[] | undefined, section: string | undefined): string {
+  const tab = SETUP_SECTIONS.find((s) => s === section) ?? "enforcement";
+  const c = (connections ?? []).find((x) => tabsOf(x).some((t) => t.key === tab));
+  return c ? detailHref(c.id, tab) : "/iga/connections";
 }
 
 export function scanHref(id: string, runId: string): string {
