@@ -2235,8 +2235,10 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     verifyAzureConnector: builder.mutation<CloudConnector, string>({
       query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/verify`, method: "POST" }),
       transformResponse: (r: ConnectorEnvelope) => r.data,
+      // A verify starts a discovery pass (Rescan is a verify): the Scans tab reads again.
       invalidatesTags: (_r, _e, id) => [
         { type: "CloudConnector", id },
+        { type: "CloudConnector", id: `${id}:scans` },
         { type: "CloudConnector", id: "AZURE_LIST" },
         "Connections",
       ],
@@ -2254,6 +2256,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     listAzureScanRuns: builder.query<AzureScanRun[], string>({
       query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/scan-runs`, method: "GET" }),
       transformResponse: (r: { data: AzureScanRun[] }) => r.data ?? [],
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector", id: `${id}:scans` }],
     }),
 
     listAzureIdentities: builder.query<CloudPage<AzureIdentity>, AzureListArgs>({
