@@ -262,7 +262,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
   if (r.resource_type === "bedrock_model") return r.name ?? "";
-  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret" || r.resource_type === "ssm_parameter" || r.resource_type === "bedrock_agent" || r.resource_type === "agentcore_runtime") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
+  if (r.resource_type && r.resource_type !== "s3_bucket" && r.resource_type !== "azure_resource") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -420,6 +420,45 @@ export function groupModels(rows: readonly ResourceRow[]): DraftResource[] {
       by.set(arn, e);
     }
     if (r.text.includes(":foundation-model/")) e.records!.unshift(rec);
+    else e.records!.push(rec);
+  }
+  return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Readers of the single-ARN AWS types, as the backend reads them (internal/igagov/access_lambda.go, access_kms.go, access_sqs_sns.go). */
+const SIMPLE_ARNS: Partial<Record<AccessResourceType, { re: RegExp; arn: (m: RegExpExecArray) => string }>> = {
+  lambda_function: {
+    re: /^arn:(aws[a-z-]*):lambda:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):function:([A-Za-z0-9_-]{1,64})(?::(?:\$LATEST|[A-Za-z0-9_-]{1,128}|\*))?$/,
+    arn: (m) => `arn:${m[1]}:lambda:${m[2]}:${m[3]}:function:${m[4]}`,
+  },
+  kms_key: {
+    re: /^arn:(aws[a-z-]*):kms:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):key\/(mrk-[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/,
+    arn: (m) => m[0],
+  },
+  sqs_queue: { re: /^arn:(aws[a-z-]*):sqs:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):([A-Za-z0-9_-]{1,75}(?:\.fifo)?)$/, arn: (m) => m[0] },
+  sns_topic: { re: /^arn:(aws[a-z-]*):sns:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):([A-Za-z0-9_-]{1,251}(?:\.fifo)?)$/, arn: (m) => m[0] },
+};
+
+/** The function, key, queue or topic an ARN names, or null. */
+export function simpleTargetOf(type: AccessResourceType, text: string | null | undefined): { arn: string; name: string; account: string; region: string } | null {
+  const r = SIMPLE_ARNS[type];
+  const m = r && text ? r.re.exec(text.trim()) : null;
+  return m ? { arn: r!.arn(m), name: m[4], account: m[3], region: m[2] } : null;
+}
+
+/** One entry per function, key, queue or topic the records name, its own ARN first. */
+export function groupSimple(type: AccessResourceType, rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const s = simpleTargetOf(type, r.text);
+    if (!s) continue;
+    const rec = { id: refId(r.ref), text: r.text };
+    let e = by.get(s.arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: type, name: s.name, bucket: "", arn: s.arn, account_id: s.account, region: s.region, records: [] };
+      by.set(s.arn, e);
+    }
+    if (r.text.trim() === s.arn) e.records!.unshift(rec);
     else e.records!.push(rec);
   }
   return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));

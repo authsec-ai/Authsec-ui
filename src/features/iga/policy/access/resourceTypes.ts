@@ -43,6 +43,8 @@ export interface ResourceTypeCopy {
   noDelete?: boolean;
   /** Picked from Discovery's workloads of this kind, not from resource records. */
   workloads?: RuntimeKind;
+  /** The levels an allow may name, when not all three. */
+  allowLevels?: Exclude<AccessLevel, "all">[];
 }
 
 export const RESOURCE_TYPES = {
@@ -186,6 +188,85 @@ export const RESOURCE_TYPES = {
     subScope: null,
     blockOnly: true,
     workloads: "bedrock_agentcore_runtime",
+  },
+  lambda_function: {
+    noun: "function",
+    pill: "Lambda function",
+    title: "Function",
+    hint: "Choose the Lambda function this rule is about. Only functions that AuthSec has found in your AWS policies are listed. The rule covers every version and alias.",
+    label: "Choose a Lambda function",
+    search: "Search for a Lambda function",
+    loading: "Looking for functions…",
+    empty: "No Lambda function found yet. A function shows up here once one of your AWS policies mentions it.",
+    error: "Functions could not be read.",
+    blurbs: {
+      read: "Invoke the function and read its code and settings. Blocking it also stops handing invoking to others.",
+      write: "Change its code, settings, aliases, URL and resource policy.",
+      delete: "Delete the function, its aliases or its URL.",
+    },
+    allHint: "Everything on this function.",
+    untouched: "Only these roles change. Other roles, users, groups and callers through the function's resource policy keep their access.",
+    subScope: null,
+    allowLevels: ["read"],
+  },
+  kms_key: {
+    noun: "key",
+    pill: "KMS key",
+    title: "Key",
+    hint: "Choose the KMS key this rule is about. Only keys that AuthSec has found in your AWS policies are listed (by key, not alias).",
+    label: "Choose a KMS key",
+    search: "Search for a KMS key",
+    loading: "Looking for keys…",
+    empty: "No KMS key found yet. A key shows up here once one of your AWS policies names it.",
+    error: "Keys could not be read.",
+    blurbs: {
+      read: "Decrypt with the key, also through services, and grant others its use.",
+      write: "Encrypt, make data keys, sign, and change the key and its policy.",
+      delete: "Schedule its deletion, disable it, delete imported material.",
+    },
+    allHint: "Everything on this key.",
+    untouched: "Only these roles change. Other roles, users, groups, the key policy and grants made to others keep their access.",
+    subScope: null,
+    blockOnly: true,
+  },
+  sqs_queue: {
+    noun: "queue",
+    pill: "SQS queue",
+    title: "Queue",
+    hint: "Choose the SQS queue this rule is about. Only queues that AuthSec has found in your AWS policies are listed.",
+    label: "Choose an SQS queue",
+    search: "Search for an SQS queue",
+    loading: "Looking for queues…",
+    empty: "No SQS queue found yet. A queue shows up here once one of your AWS policies mentions it.",
+    error: "Queues could not be read.",
+    blurbs: {
+      read: "Receive messages. Blocking it also stops changing the queue's policy.",
+      write: "Send messages.",
+      delete: "Delete messages, purge or delete the queue.",
+    },
+    allHint: "Everything on this queue.",
+    untouched: "Only these roles change. Other roles, users, groups and the queue's policy keep their access.",
+    subScope: null,
+  },
+  sns_topic: {
+    noun: "topic",
+    pill: "SNS topic",
+    title: "Topic",
+    hint: "Choose the SNS topic this rule is about. Only topics that AuthSec has found in your AWS policies are listed.",
+    label: "Choose an SNS topic",
+    search: "Search for an SNS topic",
+    loading: "Looking for topics…",
+    empty: "No SNS topic found yet. A topic shows up here once one of your AWS policies mentions it.",
+    error: "Topics could not be read.",
+    blurbs: {
+      read: "Subscribe to the topic. Existing subscriptions keep receiving.",
+      write: "Publish messages.",
+      delete: "Delete the topic or unsubscribe.",
+    },
+    allHint: "Everything on this topic.",
+    untouched: "Only these roles change. Other roles, users, groups and the topic's policy keep their access.",
+    subScope: null,
+    allowLevels: ["write"],
   },
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 

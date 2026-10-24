@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, modelOf, parameterOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, modelOf, parameterOf, pathInBucket, secretOf, simpleTargetOf, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 // Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
@@ -83,6 +83,11 @@ export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "f
     // A discovered agent: its workload node, or a record naming its ARN.
     const own = (n && refId(n.ref) === p.resource.resource_id) || (!!text && text.trim() === p.resource.arn);
     if (!own) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (["lambda_function", "kms_key", "sqs_queue", "sns_topic"].includes(p.resource.resource_type)) {
+    const s = simpleTargetOf(p.resource.resource_type, text);
+    if (!s || s.arn !== p.resource.arn) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }
   if (p.resource.resource_type === "bedrock_model") {

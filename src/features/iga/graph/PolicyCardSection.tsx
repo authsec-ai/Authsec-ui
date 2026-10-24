@@ -41,7 +41,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, modelOf, parameterOf, secretOf, tableOf, whenText } from "../policy/access/model";
+import { bucketOf, modelOf, parameterOf, secretOf, simpleTargetOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
@@ -212,8 +212,8 @@ function RoleSection({ identityId }: { identityId: string }) {
       <InForce policies={inForce} />
       <p className={note}>
         {inForce.length
-          ? "Add another to block or allow this role on a bucket, table, secret or parameter for a set window."
-          : "Block or allow this role on an S3 bucket or a DynamoDB table, or block it on a secret or an SSM parameter, for a set window."}
+          ? "Add another to block or allow this role on an AWS resource for a set window."
+          : "Block or allow this role on an AWS resource (a bucket, table, queue, function, secret, model and more) for a set window."}
       </p>
     </Section>
   );
@@ -233,7 +233,12 @@ function policyTarget(n: GraphNode, types: readonly string[]): string | null {
   const p = types.includes("ssm_parameter") ? parameterOf(text) : null;
   if (p) return p.name;
   const m = types.includes("bedrock_model") ? modelOf(text) : null;
-  return m ? m.model : null;
+  if (m) return m.model;
+  for (const t of ["lambda_function", "kms_key", "sqs_queue", "sns_topic"] as const) {
+    const s = types.includes(t) ? simpleTargetOf(t, text) : null;
+    if (s) return s.name;
+  }
+  return null;
 }
 
 /** The AWS types access policies take, in words: "S3 buckets, DynamoDB tables and Secrets Manager secrets". */
@@ -244,6 +249,10 @@ function coveredTypes(types: readonly string[]): string {
     ...(types.includes("secretsmanager_secret") ? ["Secrets Manager secrets"] : []),
     ...(types.includes("ssm_parameter") ? ["SSM parameters"] : []),
     ...(types.includes("bedrock_model") ? ["Bedrock models"] : []),
+    ...(types.includes("lambda_function") ? ["Lambda functions"] : []),
+    ...(types.includes("kms_key") ? ["KMS keys"] : []),
+    ...(types.includes("sqs_queue") ? ["SQS queues"] : []),
+    ...(types.includes("sns_topic") ? ["SNS topics"] : []),
   ];
   return words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }

@@ -14,6 +14,7 @@ import {
   groupModels,
   groupParameters,
   groupSecrets,
+  groupSimple,
   groupTables,
   pathInBucket,
   pathReachesFolder,
@@ -24,6 +25,7 @@ import {
   modelOf,
   parameterOf,
   secretOf,
+  simpleTargetOf,
   tableOf,
   withEffect,
   type DraftResource,
@@ -222,7 +224,7 @@ describe("resource types", () => {
   const keys = ["noun", "pill", "title", "hint", "label", "search", "loading", "empty", "error", "blurbs", "allHint", "untouched", "subScope"];
   it("every entry has every word, and a blurb for each level", () => {
     for (const [type, copy] of Object.entries(RESOURCE_TYPES)) {
-      expect(Object.keys(copy).filter((k) => !["blockOnly", "noDelete", "workloads"].includes(k)).sort(), type).toEqual([...keys].sort());
+      expect(Object.keys(copy).filter((k) => !["blockOnly", "noDelete", "workloads", "allowLevels"].includes(k)).sort(), type).toEqual([...keys].sort());
       for (const k of keys.filter((k) => k !== "blurbs" && k !== "subScope")) expect((copy as unknown as Record<string, string>)[k], `${type}.${k}`).toBeTruthy();
       expect(Object.keys(copy.blurbs).sort(), type).toEqual(["delete", "read", "write"]);
     }
@@ -431,5 +433,29 @@ describe("Bedrock", () => {
     expect(RESOURCE_TYPES.bedrock_agent.workloads).toBe("bedrock_agent");
     expect(RESOURCE_TYPES.agentcore_runtime.workloads).toBe("bedrock_agentcore_runtime");
     expect(RESOURCE_TYPES.bedrock_model.noDelete).toBe(true);
+  });
+});
+
+describe("Lambda, KMS, SQS and SNS", () => {
+  const FN = "arn:aws:lambda:us-east-1:111122223333:function:book-flight";
+  it("reads each type's ARN as the backend does", () => {
+    expect(simpleTargetOf("lambda_function", `${FN}:prod`)).toEqual({ arn: FN, name: "book-flight", account: "111122223333", region: "us-east-1" });
+    expect(simpleTargetOf("lambda_function", "arn:aws:lambda:us-east-1:111122223333:function:book-*")).toBeNull();
+    expect(simpleTargetOf("kms_key", "arn:aws:kms:us-east-1:111122223333:alias/app")).toBeNull();
+    expect(simpleTargetOf("kms_key", "arn:aws:kms:us-east-1:111122223333:key/mrk-1234abcd12ab34cd56ef1234567890ab")?.name).toBe("mrk-1234abcd12ab34cd56ef1234567890ab");
+    expect(simpleTargetOf("sqs_queue", "arn:aws:sqs:us-east-1:111122223333:orders.fifo")?.name).toBe("orders.fifo");
+    expect(simpleTargetOf("sns_topic", "arn:aws:sns:us-east-1:111122223333:alerts:0b1c2d3e-aaaa-bbbb-cccc-123456789012")).toBeNull();
+  });
+  it("groups a function's versions and aliases under it", () => {
+    const row = (id: string, text: string) => ({ ref: `resource:${id}`, text, type: "lambda_function" }) as unknown as ResourceRow;
+    const fns = groupSimple("lambda_function", [row("alias", `${FN}:prod`), row("own", FN), row("other", "arn:aws:lambda:us-east-1:111122223333:function:cancel")]);
+    expect(fns.map((f) => f.name)).toEqual(["book-flight", "cancel"]);
+    expect(fns[0].records?.map((r) => r.id)).toEqual(["own", "alias"]);
+    expect(resourceText({ ...fns[0], prefix: "" })).toBe("book-flight (us-east-1)");
+  });
+  it("limits what an allow may name", () => {
+    expect(RESOURCE_TYPES.lambda_function.allowLevels).toEqual(["read"]);
+    expect(RESOURCE_TYPES.sns_topic.allowLevels).toEqual(["write"]);
+    expect(RESOURCE_TYPES.kms_key.blockOnly).toBe(true);
   });
 });

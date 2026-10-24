@@ -601,7 +601,11 @@ export default function PolicyFormPage() {
                           All access
                         </Pill>
                       ) : null}
-                      {ACCESS.filter((a) => !(a.key === "delete" && (aws ? awsCopy.noDelete : azureNoDelete(draft.resource?.arn)))).map((a) => (
+                      {ACCESS.filter(
+                        (a) =>
+                          !(a.key === "delete" && (aws ? awsCopy.noDelete : azureNoDelete(draft.resource?.arn))) &&
+                          !(aws && !isBlock && awsCopy.allowLevels && !awsCopy.allowLevels.includes(a.key)),
+                      ).map((a) => (
                         <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={blurbs[a.key]}>
                           {a.label}
                         </Pill>

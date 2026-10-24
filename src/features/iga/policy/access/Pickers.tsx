@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
 
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, groupModels, groupParameters, groupSecrets, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { bucketOf, groupModels, groupParameters, groupSimple, groupSecrets, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
 import { RESOURCE_TYPES, type AwsResourceType } from "./resourceTypes";
 import { useDebounced } from "./useDebounced";
 
@@ -78,6 +78,10 @@ const SERVICE: Record<AwsResourceType, string> = { s3_bucket: "s3", dynamodb_tab
   bedrock_model: "bedrock",
   bedrock_agent: "bedrock",
   agentcore_runtime: "bedrock-agentcore",
+  lambda_function: "lambda",
+  kms_key: "kms",
+  sqs_queue: "sqs",
+  sns_topic: "sns",
 };
 
 export const rowButton =
@@ -128,7 +132,7 @@ export function ResourcePicker({
     if (type === "secretsmanager_secret") return groupSecrets(rows);
     if (type === "ssm_parameter") return groupParameters(rows);
     if (type === "bedrock_model") return groupModels(rows);
-    return [];
+    return groupSimple(type, rows);
   }, [records.data, workloads.data, workloadKind, type]);
 
   if (value) {
