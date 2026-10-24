@@ -50,6 +50,7 @@ import {
   bodyOf,
   awsTypeOf,
   bucketOf,
+  secretOf,
   tableOf,
   draftCopy,
   draftOf,
@@ -70,7 +71,7 @@ import {
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
-import { RESOURCE_TYPES, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
+import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -169,7 +170,11 @@ export default function PolicyFormPage() {
   const azureRoleQ = useGetGraphNeighbourhoodQuery({ ws, root: `identity:${fromRole}` as GraphRef, direction: "forward" }, { skip: !fromRole || !fromAzure });
 
   const [draft, setDraft] = useState<PolicyDraft>(() =>
-    emptyDraft({ provider: fromAzure ? "azure" : "aws", awsType: awsTypeOf(params.get("type") ?? undefined), effect: params.get("effect") === "allow" ? "allow" : "block" }),
+    emptyDraft({
+      provider: fromAzure ? "azure" : "aws",
+      awsType: awsTypeOf(params.get("type") ?? undefined),
+      effect: params.get("effect") === "allow" && !resourceTypeCopy(params.get("type") ?? undefined)?.blockOnly ? "allow" : "block",
+    }),
   );
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });
@@ -185,8 +190,17 @@ export default function PolicyFormPage() {
     if (r && !filled.current.resource) {
       filled.current.resource = true;
       const tbl = tableOf(r.text);
+      const sec = secretOf(r.text);
       const b = bucketOf(r.text);
-      if (tbl) {
+      if (sec) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "secretsmanager_secret",
+          effect: "block",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "secretsmanager_secret", name: sec.name, bucket: "", arn: r.text.trim(), account_id: sec.account, region: sec.region },
+          prefix: "",
+        }));
+      } else if (tbl) {
         setDraft((d) => ({
           ...d,
           awsType: "dynamodb_table",
@@ -252,7 +266,11 @@ export default function PolicyFormPage() {
   };
   // So is another kind of AWS resource.
   const setAwsType = (awsType: AwsResourceType) => {
-    setDraft((d) => (d.awsType === awsType && (!d.resource || d.resource.resource_type === awsType) ? d : { ...d, awsType, resource: null, prefix: "", roles: [] }));
+    setDraft((d) =>
+      d.awsType === awsType && (!d.resource || d.resource.resource_type === awsType)
+        ? d
+        : { ...(resourceTypeCopy(awsType)?.blockOnly ? withEffect(d, "block") : d), awsType, resource: null, prefix: "", roles: [] },
+    );
     setFieldError(null);
   };
   const caps = usePolicyCapabilities(ws);
@@ -349,7 +367,8 @@ export default function PolicyFormPage() {
   const who = whoWord(draft.provider, draft.roles.length);
   const blurbs = accessBlurbs(draft.provider, draft.resource?.arn, draftType(draft));
   // The AWS resource type's words: S3's until another type is chosen. Read on AWS only.
-  const awsCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
+  const awsCopy: ResourceTypeCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
+  const blockOnly = aws && (!!awsCopy.blockOnly || caps.accessBlockOnly.includes(draftType(draft)));
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
   const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
@@ -440,7 +459,7 @@ export default function PolicyFormPage() {
                   <div role="radiogroup" aria-label="Resource type" className="flex flex-wrap gap-1.5">
                     {awsTypes.map((t) => (
                       <Pill key={t} radio on={draftType(draft) === t} onClick={() => setAwsType(t)}>
-                        {t === "s3_bucket" ? "S3 bucket" : "DynamoDB table"}
+                        {RESOURCE_TYPES[t].pill}
                       </Pill>
                     ))}
                   </div>
@@ -544,7 +563,13 @@ export default function PolicyFormPage() {
                       >
                         Block
                       </Pill>
-                      <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title={`Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}>
+                      <Pill
+                        radio
+                        on={!isBlock}
+                        onClick={() => setEffect("allow")}
+                        disabled={blockOnly}
+                        title={blockOnly ? `A ${awsCopy.noun} can only be blocked for now.` : `Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}
+                      >
                         {aws ? "Allow for a time" : "Allow for a set time"}
                       </Pill>
                     </div>

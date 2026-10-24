@@ -1236,9 +1236,10 @@ export interface PolicyCapabilities {
    * Block or allow roles on a resource for a time. Absent on a backend without
    * them. The backend sends `{available, reason, resource_types}`; a boolean is
    * accepted too. `resource_types` lists the AWS resource types a policy can
-   * name (`s3_bucket`, `dynamodb_table`); a backend without it supports S3 only.
+   * name (`s3_bucket`, `dynamodb_table`, `secretsmanager_secret`); a backend
+   * without it supports S3 only. `block_only` lists the types that take no allow.
    */
-  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[] } | boolean;
+  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[] } | boolean;
   reasons: Record<string, string>;
 }
 

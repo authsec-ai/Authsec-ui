@@ -16,6 +16,8 @@ import type { AccessLevel, AccessResourceType } from "@/app/api/igaAccessPolicie
 export interface ResourceTypeCopy {
   /** "Choose a bucket.", "No bucket matches …". */
   noun: string;
+  /** The type's choice in the form ("S3 bucket"). */
+  pill: string;
   /** The form's section for the resource. */
   title: string;
   hint: string;
@@ -34,11 +36,14 @@ export interface ResourceTypeCopy {
   /** Who and what the change leaves alone, under the summary. */
   untouched: string;
   subScope: "folder" | null;
+  /** The type takes a block only: Allow is off in the form. */
+  blockOnly?: boolean;
 }
 
 export const RESOURCE_TYPES = {
   s3_bucket: {
     noun: "bucket",
+    pill: "S3 bucket",
     title: "Bucket",
     hint: "Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.",
     label: "Choose an S3 bucket",
@@ -57,6 +62,7 @@ export const RESOURCE_TYPES = {
   },
   dynamodb_table: {
     noun: "table",
+    pill: "DynamoDB table",
     title: "Table",
     hint: "Choose the DynamoDB table this rule is about. Only tables that AuthSec has found in your AWS policies are listed. The rule covers the whole table and its indexes.",
     label: "Choose a DynamoDB table",
@@ -72,6 +78,26 @@ export const RESOURCE_TYPES = {
     allHint: "Everything on this table: items, settings, streams, backups and replicas.",
     untouched: "Only these roles change. Other roles, users, groups and the table's resource policy keep their access.",
     subScope: null,
+  },
+  secretsmanager_secret: {
+    noun: "secret",
+    pill: "Secret",
+    title: "Secret",
+    hint: "Choose the Secrets Manager secret this rule is about. Only secrets that AuthSec has found in your AWS policies are listed. The rule covers the secret in every region, including replicas.",
+    label: "Choose a Secrets Manager secret",
+    search: "Search for a Secrets Manager secret",
+    loading: "Looking for secrets…",
+    empty: "No Secrets Manager secret found yet. A secret shows up here once one of your AWS policies mentions it.",
+    error: "Secrets could not be read.",
+    blurbs: {
+      read: "Read the secret's value. Blocking it also stops replicating, rotating, tagging and resource-policy changes.",
+      write: "Change the value, versions, rotation and tags.",
+      delete: "Delete the secret or its replicas.",
+    },
+    allHint: "Everything on this secret, in every region.",
+    untouched: "Only these roles change. Other roles, users, groups and the secret's resource policy keep their access.",
+    subScope: null,
+    blockOnly: true,
   },
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 

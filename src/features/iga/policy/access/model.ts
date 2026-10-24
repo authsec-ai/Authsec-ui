@@ -219,7 +219,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
-  if (r.resource_type === "dynamodb_table") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
+  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -279,6 +279,48 @@ export function groupTables(rows: readonly ResourceRow[]): DraftResource[] {
   return [...by.values()]
     .map(({ own: _own, ...e }) => ({ ...e, resource_id: e.records![0].id }))
     .sort((a, b) => a.name.localeCompare(b.name) || a.arn.localeCompare(b.arn));
+}
+
+/**
+ * The Secrets Manager secret an ARN or a `<name>-??????` selector names, as
+ * the backend reads it (internal/igagov/access_secretsmanager.go): the name is
+ * literal and the suffix is the random six characters (`suffix`) or six "?"
+ * (`suffix` null). `key` is the secret by name in its region.
+ */
+export function secretOf(
+  text: string | null | undefined,
+): { partition: string; region: string; account: string; name: string; suffix: string | null; key: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):secretsmanager:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):secret:([A-Za-z0-9/_+=.@-]{1,512})-([A-Za-z0-9]{6}|\?{6})$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], name: m[4], suffix: m[5] === "??????" ? null : m[5], key: `arn:${m[1]}:secretsmanager:${m[2]}:${m[3]}:secret:${m[4]}` };
+}
+
+/**
+ * Every secret the Secrets Manager records name, by name and region, with its
+ * records: the secret's own ARN first, else the `<name>-??????` selector. A
+ * pattern is not a secret and is skipped.
+ */
+export function groupSecrets(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const s = secretOf(r.text);
+    if (!s) continue;
+    let e = by.get(s.key);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "secretsmanager_secret", name: s.name, bucket: "", arn: r.text.trim(), account_id: s.account, region: s.region, records: [] };
+      by.set(s.key, e);
+    }
+    const rec = { id: refId(r.ref), text: r.text };
+    if (s.suffix && !secretOf(e.records![0]?.text)?.suffix) {
+      e.records!.unshift(rec);
+      e.arn = r.text.trim();
+    } else {
+      e.records!.push(rec);
+    }
+  }
+  return [...by.values()]
+    .map((e) => ({ ...e, resource_id: e.records![0].id }))
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */

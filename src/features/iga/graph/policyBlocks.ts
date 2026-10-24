@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, tableOf } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 // Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
@@ -72,7 +72,7 @@ export function isPolicyHolder(n: GraphNode | undefined): boolean {
   return n.provider === "azure" ? AZURE_TARGET_KINDS.has(String(n.kind)) : n.kind === "iam_role";
 }
 
-/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 or DynamoDB ARN (a table's index or stream is the table); Azure by the resource itself. */
+/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3, DynamoDB or Secrets Manager ARN (a table's index or stream is the table; a secret is every secret of its name in the account, in any region); Azure by the resource itself. */
 export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
   if (p.resource.provider === "azure") {
     if (n?.provider !== "azure" || n.kind !== "azure_resource" || refId(n.ref) !== p.resource.resource_id) return "none";
@@ -82,6 +82,12 @@ export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "f
   if (p.resource.resource_type === "dynamodb_table") {
     const t = tableOf(text);
     if (!t || t.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "secretsmanager_secret") {
+    const s = secretOf(text);
+    const own = secretOf(p.resource.arn);
+    if (!s || !own || s.partition !== own.partition || s.account !== own.account || s.name !== own.name) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }
   const b = bucketOf(text ?? "");

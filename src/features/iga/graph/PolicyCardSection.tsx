@@ -1,7 +1,7 @@
 /**
  * What the graph's selection card offers about policy. With the one access-policy
- * feature, a policy blocks or allows an IAM role's access to an S3 bucket or a DynamoDB table for a
- * set window. The card is the way in: its main button carries the thing selected
+ * feature, a policy blocks or allows an IAM role's access to an S3 bucket or a DynamoDB table, or
+ * blocks it on a Secrets Manager secret, for a set window. The card is the way in: its main button carries the thing selected
  * into the create form (`/iga/policy/new`), which resolves it server-side.
  *
  *   IAM role        main button: a policy for this role; policies in force listed
@@ -41,7 +41,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, tableOf, whenText } from "../policy/access/model";
+import { bucketOf, secretOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
@@ -184,7 +184,7 @@ export function usePolicyCard({
           section: (
             <Section>
               <p className={note}>
-                Access policies cover S3 buckets{caps.accessResourceTypes.includes("dynamodb_table") ? " and DynamoDB tables" : ""} for now, so none can be set on this resource.
+                Access policies cover {coveredTypes(caps.accessResourceTypes)} for now, so none can be set on this resource.
               </p>
             </Section>
           ),
@@ -211,7 +211,9 @@ function RoleSection({ identityId }: { identityId: string }) {
     <Section>
       <InForce policies={inForce} />
       <p className={note}>
-        {inForce.length ? "Add another to block or allow this role on a bucket or table for a set window." : "Block or allow this role on an S3 bucket or a DynamoDB table for a set window."}
+        {inForce.length
+          ? "Add another to block or allow this role on a bucket, table or secret for a set window."
+          : "Block or allow this role on an S3 bucket, a DynamoDB table or a Secrets Manager secret (block only) for a set window."}
       </p>
     </Section>
   );
@@ -225,7 +227,19 @@ function policyTarget(n: GraphNode, types: readonly string[]): string | null {
   const s3 = bucketOf(text);
   if (s3) return s3.prefix ? `${s3.bucket}/${s3.prefix}` : s3.bucket;
   const t = types.includes("dynamodb_table") ? tableOf(text) : null;
-  return t ? t.table : null;
+  if (t) return t.table;
+  const s = types.includes("secretsmanager_secret") ? secretOf(text) : null;
+  return s ? s.name : null;
+}
+
+/** The AWS types access policies take, in words: "S3 buckets, DynamoDB tables and Secrets Manager secrets". */
+function coveredTypes(types: readonly string[]): string {
+  const words = [
+    "S3 buckets",
+    ...(types.includes("dynamodb_table") ? ["DynamoDB tables"] : []),
+    ...(types.includes("secretsmanager_secret") ? ["Secrets Manager secrets"] : []),
+  ];
+  return words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
 
 /** How far back from a resource to look for a role: role → statement → resource is two hops; one spare for a summary line in between. */
@@ -283,10 +297,14 @@ function BucketSection({
   const blocks = useGraphBlocks();
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, ROLES_SHOWN);
+  // A secret takes a block only.
+  const secret = !!secretOf(node.text ?? node.arn ?? node.label);
   return (
     <Section>
       <InForce policies={blocks.forResource(node)} />
-      <p className={note}>Block or allow a role&rsquo;s access to {bucket} for a set window.</p>
+      <p className={note}>
+        {secret ? "Block" : "Block or allow"} a role&rsquo;s access to {bucket} for a set window.
+      </p>
       {shown.length ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-(--color-text)">Start from a role that reaches it</p>

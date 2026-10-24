@@ -10,6 +10,7 @@ import {
   draftSubScope,
   draftType,
   emptyDraft,
+  groupSecrets,
   groupTables,
   pathInBucket,
   pathReachesFolder,
@@ -17,7 +18,9 @@ import {
   reachesFolder,
   resourceText,
   suggestedName,
+  secretOf,
   tableOf,
+  withEffect,
   type DraftResource,
   type PolicyDraft,
 } from "./model";
@@ -204,10 +207,10 @@ describe("draftProblem", () => {
 });
 
 describe("resource types", () => {
-  const keys = ["noun", "title", "hint", "label", "search", "loading", "empty", "error", "blurbs", "allHint", "untouched", "subScope"];
+  const keys = ["noun", "pill", "title", "hint", "label", "search", "loading", "empty", "error", "blurbs", "allHint", "untouched", "subScope"];
   it("every entry has every word, and a blurb for each level", () => {
     for (const [type, copy] of Object.entries(RESOURCE_TYPES)) {
-      expect(Object.keys(copy).sort(), type).toEqual([...keys].sort());
+      expect(Object.keys(copy).filter((k) => k !== "blockOnly").sort(), type).toEqual([...keys].sort());
       for (const k of keys.filter((k) => k !== "blurbs" && k !== "subScope")) expect((copy as unknown as Record<string, string>)[k], `${type}.${k}`).toBeTruthy();
       expect(Object.keys(copy.blurbs).sort(), type).toEqual(["delete", "read", "write"]);
     }
@@ -315,5 +318,54 @@ describe("Azure data planes", () => {
     expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv1").read).toBe("Read secret values.");
     expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.search/searchServices/srch").write).toBe("Upload and update documents.");
     expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.web/sites/app").read).toBe("Read the resource and its settings.");
+  });
+});
+
+describe("Secrets Manager secrets", () => {
+  const S = "arn:aws:secretsmanager:us-east-1:111122223333:secret:prod/db";
+
+  it("secretOf reads the secret an ARN or a name selector names, as the backend does", () => {
+    expect(secretOf(`${S}-AbCdEf`)).toEqual({ partition: "aws", region: "us-east-1", account: "111122223333", name: "prod/db", suffix: "AbCdEf", key: S });
+    expect(secretOf(`${S}-??????`)).toMatchObject({ name: "prod/db", suffix: null, key: S });
+    expect(secretOf(`${S}-abcdef-AbCdEf`)?.name).toBe("prod/db-abcdef");
+    expect(secretOf("arn:aws-us-gov:secretsmanager:us-gov-west-1:111122223333:secret:a/_+=.@-b-AbCdEf")?.name).toBe("a/_+=.@-b");
+    for (const text of [
+      `${S}-*`,
+      "arn:aws:secretsmanager:us-east-1:111122223333:secret:*",
+      "arn:aws:secretsmanager:us-east-1:111122223333:secret:pr?d/db-??????",
+      `${S}-?????`,
+      S,
+      `${S}-AbCdE`,
+      "arn:aws:secretsmanager:*:111122223333:secret:prod/db-AbCdEf",
+      "arn:aws:secretsmanager:us-east-1:11112222333:secret:prod/db-AbCdEf",
+      "arn:aws:s3:::prod-db",
+    ]) {
+      expect(secretOf(text)).toBeNull();
+    }
+  });
+
+  it("groupSecrets makes one entry per name and region, the secret's own ARN first", () => {
+    const row = (id: string, text: string) => ({ ref: `resource:${id}`, text, type: "selector" }) as unknown as ResourceRow;
+    const secrets = groupSecrets([
+      row("sel", `${S}-??????`),
+      row("own", `${S}-AbCdEf`),
+      row("pat", `${S}-*`),
+      row("west", "arn:aws:secretsmanager:us-west-2:111122223333:secret:prod/db-??????"),
+      row("api", "arn:aws:secretsmanager:us-east-1:111122223333:secret:api-key-XyZ123"),
+    ]);
+    expect(secrets.map((s) => `${s.name} ${s.region}`)).toEqual(["api-key us-east-1", "prod/db us-east-1", "prod/db us-west-2"]);
+    expect(secrets[1]).toMatchObject({ resource_id: "own", resource_type: "secretsmanager_secret", arn: `${S}-AbCdEf`, account_id: "111122223333" });
+    expect(secrets[1].records?.map((r) => r.id)).toEqual(["own", "sel"]);
+    expect(secrets[2]).toMatchObject({ resource_id: "west", arn: "arn:aws:secretsmanager:us-west-2:111122223333:secret:prod/db-??????" });
+  });
+
+  it("a secret takes a block only and reads as its name and region", () => {
+    expect(RESOURCE_TYPES.secretsmanager_secret.blockOnly).toBe(true);
+    expect(resourceTypeCopy("dynamodb_table")?.blockOnly).toBeUndefined();
+    const secret: DraftResource = { provider: "aws", resource_id: "r-1", resource_type: "secretsmanager_secret", name: "prod/db", bucket: "", arn: `${S}-AbCdEf`, account_id: "111122223333", region: "us-east-1" };
+    expect(resourceText({ ...secret, prefix: "" })).toBe("prod/db (us-east-1)");
+    const d: PolicyDraft = { ...emptyDraft({ awsType: "secretsmanager_secret", effect: "allow" }), resource: secret };
+    expect(withEffect(d, "block").effect).toBe("block");
+    expect(draftProblem({ ...emptyDraft({ awsType: "secretsmanager_secret" }) })?.message).toBe("Choose a secret.");
   });
 });

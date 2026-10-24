@@ -42,7 +42,7 @@ export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused"
  * What a policy is on. `""` when the backend cannot tell (an ARN it no longer
  * parses); a backend that predates the field omits it.
  */
-export type AccessResourceType = "s3_bucket" | "dynamodb_table" | "azure_resource" | "";
+export type AccessResourceType = "s3_bucket" | "dynamodb_table" | "secretsmanager_secret" | "azure_resource" | "";
 
 export interface AccessPolicyResource {
   resource_id: string;

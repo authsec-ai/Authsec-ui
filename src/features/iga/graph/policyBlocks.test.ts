@@ -107,3 +107,21 @@ describe("inForce", () => {
     expect(inForce("paused")).toBe(false);
   });
 });
+
+describe("coverage on Secrets Manager", () => {
+  const S = "arn:aws:secretsmanager:us-east-1:111122223333:secret:prod/db";
+  const sec = (access: AccessLevel[], arn = `${S}-AbCdEf`) => policy({ resource_type: "secretsmanager_secret", name: "prod/db", arn }, access);
+
+  it("a secret policy covers every secret of its name in the account, in any region", () => {
+    expect(coverage(sec(["all"]), node(`${S}-AbCdEf`))).toBe("full");
+    expect(coverage(sec(["read"]), node(`${S}-??????`))).toBe("partial");
+    expect(coverage(sec(["all"], `${S}-??????`), node("arn:aws:secretsmanager:eu-west-1:111122223333:secret:prod/db-AbCdEf"))).toBe("full");
+  });
+
+  it("covers no other name, account, pattern or bucket", () => {
+    expect(coverage(sec(["all"]), node("arn:aws:secretsmanager:us-east-1:111122223333:secret:prod/dbx-AbCdEf"))).toBe("none");
+    expect(coverage(sec(["all"]), node("arn:aws:secretsmanager:us-east-1:999999999999:secret:prod/db-AbCdEf"))).toBe("none");
+    expect(coverage(sec(["all"]), node(`${S}-*`))).toBe("none");
+    expect(coverage(sec(["all"]), node("arn:aws:s3:::prod"))).toBe("none");
+  });
+});
