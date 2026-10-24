@@ -31,7 +31,7 @@ import {
   type DraftResource,
   type PolicyDraft,
 } from "./model";
-import { RESOURCE_TYPES, resourceTypeCopy } from "./resourceTypes";
+import { RESOURCE_TYPES, resourceTypeCopy, typeRules } from "./resourceTypes";
 import type { AccessPolicyDetail, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
 import type { ResourceRow } from "@/app/api/igaGraphApi";
 
@@ -457,5 +457,14 @@ describe("Lambda, KMS, SQS and SNS", () => {
     expect(RESOURCE_TYPES.lambda_function.allowLevels).toEqual(["read"]);
     expect(RESOURCE_TYPES.sns_topic.allowLevels).toEqual(["write"]);
     expect(RESOURCE_TYPES.kms_key.blockOnly).toBe(true);
+  });
+});
+
+describe("typeRules", () => {
+  it("prefers the server's description and falls back to the registry", () => {
+    expect(typeRules(RESOURCE_TYPES.sns_topic)).toEqual({ blockOnly: false, noDelete: false, allowLevels: ["write"] });
+    const view = { type: "sns_topic", service: "sns", noun: "topic", prefix: false, block_only: true, allow_levels: [], levels: ["read", "write"] } as const;
+    expect(typeRules(RESOURCE_TYPES.sns_topic, { ...view, allow_levels: [], levels: ["read", "write"] })).toEqual({ blockOnly: true, noDelete: true, allowLevels: [] });
+    expect(typeRules(RESOURCE_TYPES.s3_bucket, { ...view, block_only: false, allow_levels: ["read", "write", "delete"], levels: ["read", "write", "delete"] }).allowLevels).toBeUndefined();
   });
 });

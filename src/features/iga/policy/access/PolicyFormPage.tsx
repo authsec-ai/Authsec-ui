@@ -73,7 +73,7 @@ import {
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
 import { ResourcePicker, RolePicker } from "./Pickers";
-import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
+import { RESOURCE_TYPES, resourceTypeCopy, typeRules, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -386,7 +386,8 @@ export default function PolicyFormPage() {
   const blurbs = accessBlurbs(draft.provider, draft.resource?.arn, draftType(draft));
   // The AWS resource type's words: S3's until another type is chosen. Read on AWS only.
   const awsCopy: ResourceTypeCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
-  const blockOnly = aws && (!!awsCopy.blockOnly || caps.accessBlockOnly.includes(draftType(draft)));
+  const rules = typeRules(awsCopy, caps.accessTypeViews[draftType(draft)]);
+  const blockOnly = aws && (rules.blockOnly || caps.accessBlockOnly.includes(draftType(draft)));
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
   const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
@@ -603,8 +604,8 @@ export default function PolicyFormPage() {
                       ) : null}
                       {ACCESS.filter(
                         (a) =>
-                          !(a.key === "delete" && (aws ? awsCopy.noDelete : azureNoDelete(draft.resource?.arn))) &&
-                          !(aws && !isBlock && awsCopy.allowLevels && !awsCopy.allowLevels.includes(a.key)),
+                          !(a.key === "delete" && (aws ? rules.noDelete : azureNoDelete(draft.resource?.arn))) &&
+                          !(aws && !isBlock && rules.allowLevels && !rules.allowLevels.includes(a.key)),
                       ).map((a) => (
                         <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={blurbs[a.key]}>
                           {a.label}

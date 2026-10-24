@@ -12,7 +12,7 @@
  */
 
 import type { AccessLevel, AccessResourceType } from "@/app/api/igaAccessPoliciesApi";
-import type { RuntimeKind } from "@/app/api/igaGraphApi";
+import type { AccessTypeView, RuntimeKind } from "@/app/api/igaGraphApi";
 
 export interface ResourceTypeCopy {
   /** "Choose a bucket.", "No bucket matches …". */
@@ -271,6 +271,17 @@ export const RESOURCE_TYPES = {
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 
 export type AwsResourceType = keyof typeof RESOURCE_TYPES;
+
+/**
+ * What the form may offer on a type: the server's description when it sends
+ * one, else this registry's (an older server).
+ */
+export function typeRules(copy: ResourceTypeCopy, view?: AccessTypeView): { blockOnly: boolean; noDelete: boolean; allowLevels?: Exclude<AccessLevel, "all">[] } {
+  if (view) {
+    return { blockOnly: view.block_only, noDelete: !view.levels.includes("delete"), allowLevels: view.allow_levels.length === 3 ? undefined : view.allow_levels };
+  }
+  return { blockOnly: !!copy.blockOnly, noDelete: !!copy.noDelete, allowLevels: copy.allowLevels };
+}
 
 /** The words for an AWS resource type, or undefined for any other type (Azure, unknown, ""). */
 export function resourceTypeCopy(type: string | undefined): ResourceTypeCopy | undefined {

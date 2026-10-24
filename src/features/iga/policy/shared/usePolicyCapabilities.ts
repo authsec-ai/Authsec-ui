@@ -5,7 +5,7 @@
  * policy route renders "not available", never an error or an empty list.
  */
 
-import { useGetGraphCapabilitiesQuery, type PolicyCapabilities } from "@/app/api/igaGraphApi";
+import { useGetGraphCapabilitiesQuery, type AccessTypeView, type PolicyCapabilities } from "@/app/api/igaGraphApi";
 import { classifyGraphError } from "../../shared/graphErrors";
 
 export type PolicyGateState = "loading" | "on" | "off" | "error";
@@ -21,6 +21,8 @@ export interface PolicyCaps {
   accessResourceTypes: string[];
   /** The types that take a block only. */
   accessBlockOnly: string[];
+  /** Each type as the server describes it (absent from an older server). */
+  accessTypeViews: Record<string, AccessTypeView>;
   /** Why a feature is false, when the server said. */
   featureReason: (name: string) => string | null;
   /** Provider support: AWS supported, Kubernetes not in this release. */
@@ -57,6 +59,9 @@ export function usePolicyCapabilities(ws: string): PolicyCaps {
     feature: (name) => state === "on" && (name === "access_policies" ? accessPolicies(caps).on : caps?.[name] === true),
     accessResourceTypes: accessPolicies(caps).types,
     accessBlockOnly: accessPolicies(caps).blockOnly,
+    accessTypeViews: Object.fromEntries(
+      (caps?.access_policies && typeof caps.access_policies === "object" ? caps.access_policies.types ?? [] : []).map((v) => [v.type, v]),
+    ),
     featureReason: (name) =>
       name === "access_policies"
         ? accessPolicies(caps).reason ?? (caps?.access_policies !== undefined ? null : "Access policies are not available on this server yet.")

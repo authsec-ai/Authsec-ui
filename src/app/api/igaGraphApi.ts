@@ -323,6 +323,19 @@ export type ExecutionRole =
   | { state: "not_in_scan" | "not_in_inventory"; execution_role_arn: string }
   | { state: "none" };
 
+/** One AWS access-policy resource type as capabilities describe it. */
+export interface AccessTypeView {
+  type: string;
+  service: string;
+  noun: string;
+  prefix: boolean;
+  block_only: boolean;
+  /** The levels an allow may name (none for a block-only type). */
+  allow_levels: ("read" | "write" | "delete")[];
+  /** The levels a block may name besides "all". */
+  levels: ("read" | "write" | "delete")[];
+}
+
 export interface WorkloadRow {
   ref: GraphRef;
   name: string;
@@ -1239,7 +1252,7 @@ export interface PolicyCapabilities {
    * name (`s3_bucket`, `dynamodb_table`, `secretsmanager_secret`); a backend
    * without it supports S3 only. `block_only` lists the types that take no allow.
    */
-  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[] } | boolean;
+  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[]; types?: AccessTypeView[] } | boolean;
   reasons: Record<string, string>;
 }
 
