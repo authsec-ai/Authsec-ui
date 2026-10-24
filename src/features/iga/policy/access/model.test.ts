@@ -317,6 +317,7 @@ describe("Azure data planes", () => {
   it("describes Key Vault and AI Search access in their own words", () => {
     expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/kv1").read).toBe("Read secret values.");
     expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.search/searchServices/srch").write).toBe("Upload and update documents.");
+    expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/Microsoft.CognitiveServices/accounts/ai").read).toMatch(/^Call the models/);
     expect(accessBlurbs("azure", "/subscriptions/s/resourcegroups/rg/providers/microsoft.web/sites/app").read).toBe("Read the resource and its settings.");
   });
 });

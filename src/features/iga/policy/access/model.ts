@@ -61,6 +61,14 @@ const AZURE_DATA_BLURBS: { type: string; blurbs: Record<Exclude<AccessLevel, "al
     type: "/providers/microsoft.search/searchservices/",
     blurbs: { read: "Query index documents.", write: "Upload and update documents.", delete: "Delete documents." },
   },
+  {
+    type: "/providers/microsoft.cognitiveservices/accounts/",
+    blurbs: {
+      read: "Call the models (chat, completions, embeddings, images, audio) and read stored files and completions.",
+      write: "Upload files, fine-tune, change deployments and create assistants, responses and batches.",
+      delete: "Delete files, fine-tunes, deployments, assistants and stored data.",
+    },
+  },
 ];
 
 /* --------------------------------- states --------------------------------- */
