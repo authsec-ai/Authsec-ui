@@ -41,7 +41,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, secretOf, tableOf, whenText } from "../policy/access/model";
+import { bucketOf, parameterOf, secretOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
@@ -212,8 +212,8 @@ function RoleSection({ identityId }: { identityId: string }) {
       <InForce policies={inForce} />
       <p className={note}>
         {inForce.length
-          ? "Add another to block or allow this role on a bucket, table or secret for a set window."
-          : "Block or allow this role on an S3 bucket, a DynamoDB table or a Secrets Manager secret (block only) for a set window."}
+          ? "Add another to block or allow this role on a bucket, table, secret or parameter for a set window."
+          : "Block or allow this role on an S3 bucket or a DynamoDB table, or block it on a secret or an SSM parameter, for a set window."}
       </p>
     </Section>
   );
@@ -229,7 +229,9 @@ function policyTarget(n: GraphNode, types: readonly string[]): string | null {
   const t = types.includes("dynamodb_table") ? tableOf(text) : null;
   if (t) return t.table;
   const s = types.includes("secretsmanager_secret") ? secretOf(text) : null;
-  return s ? s.name : null;
+  if (s) return s.name;
+  const p = types.includes("ssm_parameter") ? parameterOf(text) : null;
+  return p ? p.name : null;
 }
 
 /** The AWS types access policies take, in words: "S3 buckets, DynamoDB tables and Secrets Manager secrets". */
@@ -238,6 +240,7 @@ function coveredTypes(types: readonly string[]): string {
     "S3 buckets",
     ...(types.includes("dynamodb_table") ? ["DynamoDB tables"] : []),
     ...(types.includes("secretsmanager_secret") ? ["Secrets Manager secrets"] : []),
+    ...(types.includes("ssm_parameter") ? ["SSM parameters"] : []),
   ];
   return words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
@@ -297,13 +300,13 @@ function BucketSection({
   const blocks = useGraphBlocks();
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, ROLES_SHOWN);
-  // A secret takes a block only.
-  const secret = !!secretOf(node.text ?? node.arn ?? node.label);
+  // A secret or a parameter takes a block only.
+  const blockOnly = !!secretOf(node.text ?? node.arn ?? node.label) || !!parameterOf(node.text ?? node.arn ?? node.label);
   return (
     <Section>
       <InForce policies={blocks.forResource(node)} />
       <p className={note}>
-        {secret ? "Block" : "Block or allow"} a role&rsquo;s access to {bucket} for a set window.
+        {blockOnly ? "Block" : "Block or allow"} a role&rsquo;s access to {bucket} for a set window.
       </p>
       {shown.length ? (
         <div className="space-y-1.5">

@@ -125,3 +125,14 @@ describe("coverage on Secrets Manager", () => {
     expect(coverage(sec(["all"]), node("arn:aws:s3:::prod"))).toBe("none");
   });
 });
+
+describe("coverage on SSM", () => {
+  const P = "arn:aws:ssm:us-east-1:111122223333:parameter/prod/db";
+  const prm = (access: AccessLevel[]) => policy({ resource_type: "ssm_parameter", name: "/prod/db", arn: P }, access);
+  it("covers the parameter only", () => {
+    expect(coverage(prm(["all"]), node(P))).toBe("full");
+    expect(coverage(prm(["read"]), node(P))).toBe("partial");
+    expect(coverage(prm(["all"]), node(`${P}/x`))).toBe("none");
+    expect(coverage(prm(["all"]), node("arn:aws:ssm:us-east-1:111122223333:parameter/prod/*"))).toBe("none");
+  });
+});

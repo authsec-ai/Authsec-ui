@@ -10,6 +10,7 @@ import {
   draftSubScope,
   draftType,
   emptyDraft,
+  groupParameters,
   groupSecrets,
   groupTables,
   pathInBucket,
@@ -18,6 +19,7 @@ import {
   reachesFolder,
   resourceText,
   suggestedName,
+  parameterOf,
   secretOf,
   tableOf,
   withEffect,
@@ -368,5 +370,26 @@ describe("Secrets Manager secrets", () => {
     const d: PolicyDraft = { ...emptyDraft({ awsType: "secretsmanager_secret", effect: "allow" }), resource: secret };
     expect(withEffect(d, "block").effect).toBe("block");
     expect(draftProblem({ ...emptyDraft({ awsType: "secretsmanager_secret" }) })?.message).toBe("Choose a secret.");
+  });
+});
+
+describe("SSM parameters", () => {
+  const P = "arn:aws:ssm:us-east-1:111122223333:parameter/prod/db/password";
+
+  it("parameterOf reads a parameter ARN as the backend does", () => {
+    expect(parameterOf(P)).toEqual({ partition: "aws", region: "us-east-1", account: "111122223333", name: "/prod/db/password", arn: P });
+    expect(parameterOf("arn:aws:ssm:us-east-1:111122223333:parameter/db")?.name).toBe("db");
+    for (const text of [`${P}/*`, "arn:aws:ssm:us-east-1:111122223333:parameter/prod/db?", "arn:aws:ssm:us-east-1:111122223333:parameter/", "arn:aws:ssm:*:111122223333:parameter/prod", "arn:aws:ssm:us-east-1:111122223333:document/prod"]) {
+      expect(parameterOf(text)).toBeNull();
+    }
+  });
+
+  it("groupParameters makes one entry per parameter and skips patterns", () => {
+    const row = (id: string, text: string) => ({ ref: `resource:${id}`, text, type: "ssm_parameter" }) as unknown as ResourceRow;
+    const params = groupParameters([row("a", P), row("b", P), row("pat", "arn:aws:ssm:us-east-1:111122223333:parameter/prod/*"), row("c", "arn:aws:ssm:us-east-1:111122223333:parameter/api")]);
+    expect(params.map((p) => p.name)).toEqual(["/prod/db/password", "api"]);
+    expect(params[0]).toMatchObject({ resource_id: "a", resource_type: "ssm_parameter", arn: P });
+    expect(params[0].records?.map((r) => r.id)).toEqual(["a", "b"]);
+    expect(RESOURCE_TYPES.ssm_parameter.blockOnly).toBe(true);
   });
 });

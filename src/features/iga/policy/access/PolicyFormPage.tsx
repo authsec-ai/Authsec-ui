@@ -50,6 +50,7 @@ import {
   bodyOf,
   awsTypeOf,
   bucketOf,
+  parameterOf,
   secretOf,
   tableOf,
   draftCopy,
@@ -191,8 +192,17 @@ export default function PolicyFormPage() {
       filled.current.resource = true;
       const tbl = tableOf(r.text);
       const sec = secretOf(r.text);
+      const param = parameterOf(r.text);
       const b = bucketOf(r.text);
-      if (sec) {
+      if (param) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "ssm_parameter",
+          effect: "block",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "ssm_parameter", name: param.name, bucket: "", arn: param.arn, account_id: param.account, region: param.region },
+          prefix: "",
+        }));
+      } else if (sec) {
         setDraft((d) => ({
           ...d,
           awsType: "secretsmanager_secret",

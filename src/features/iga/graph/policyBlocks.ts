@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, parameterOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 // Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
@@ -82,6 +82,11 @@ export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "f
   if (p.resource.resource_type === "dynamodb_table") {
     const t = tableOf(text);
     if (!t || t.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "ssm_parameter") {
+    const s = parameterOf(text);
+    if (!s || s.arn !== p.resource.arn) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }
   if (p.resource.resource_type === "secretsmanager_secret") {

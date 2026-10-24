@@ -99,6 +99,26 @@ export const RESOURCE_TYPES = {
     subScope: null,
     blockOnly: true,
   },
+  ssm_parameter: {
+    noun: "parameter",
+    pill: "SSM parameter",
+    title: "Parameter",
+    hint: "Choose the SSM Parameter Store parameter this rule is about. Only parameters that AuthSec has found in your AWS policies are listed.",
+    label: "Choose an SSM parameter",
+    search: "Search for an SSM parameter",
+    loading: "Looking for parameters…",
+    empty: "No SSM parameter found yet. A parameter shows up here once one of your AWS policies mentions it.",
+    error: "Parameters could not be read.",
+    blurbs: {
+      read: "Read the value and its history. Blocking it also stops listing the paths above it.",
+      write: "Put new values, labels and tags.",
+      delete: "Delete the parameter.",
+    },
+    allHint: "Everything on this parameter, and listing the paths above it.",
+    untouched: "Only these roles change. Other roles, users, groups and accounts it is shared with keep their access.",
+    subScope: null,
+    blockOnly: true,
+  },
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 
 export type AwsResourceType = keyof typeof RESOURCE_TYPES;

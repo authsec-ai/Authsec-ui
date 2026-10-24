@@ -227,7 +227,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
-  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
+  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret" || r.resource_type === "ssm_parameter") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -329,6 +329,31 @@ export function groupSecrets(rows: readonly ResourceRow[]): DraftResource[] {
   return [...by.values()]
     .map((e) => ({ ...e, resource_id: e.records![0].id }))
     .sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
+}
+
+/**
+ * The SSM parameter an ARN names, as the backend reads it
+ * (internal/igagov/access_ssm.go): a literal name of at most 15 levels; a
+ * hierarchical name gets its leading "/" back.
+ */
+export function parameterOf(text: string | null | undefined): { partition: string; region: string; account: string; name: string; arn: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):ssm:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):parameter\/([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+){0,14})$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], name: m[4].includes("/") ? `/${m[4]}` : m[4], arn: text!.trim() };
+}
+
+/** One entry per parameter the SSM records name; a pattern is not a parameter and is skipped. */
+export function groupParameters(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const p = parameterOf(r.text);
+    if (!p) continue;
+    const rec = { id: refId(r.ref), text: r.text };
+    const e = by.get(p.arn);
+    if (e) e.records!.push(rec);
+    else by.set(p.arn, { provider: "aws", resource_id: rec.id, resource_type: "ssm_parameter", name: p.name, bucket: "", arn: p.arn, account_id: p.account, region: p.region, records: [rec] });
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */
