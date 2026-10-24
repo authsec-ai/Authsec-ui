@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   accessBlurbs,
+  azureNoDelete,
   bodyOf,
   bucketOf,
   draftCopy,
@@ -140,11 +141,18 @@ describe("accessBlurbs", () => {
     expect(accessBlurbs("aws", "arn:aws:s3:::fin")).toEqual(accessBlurbs("aws"));
   });
   it("speaks of blobs on Azure storage and of the resource elsewhere", () => {
-    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/g/providers/Microsoft.Storage/storageAccounts/st")).toEqual({
+    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/g/providers/Microsoft.Storage/storageAccounts/st").read).toBe("Read blobs, queue messages, table entities and files.");
+    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/g/providers/Microsoft.Storage/storageAccounts/st/blobServices/default/containers/c")).toEqual({
       read: "Read blobs.",
       write: "Upload and overwrite blobs.",
       delete: "Delete blobs.",
     });
+    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/g/providers/Microsoft.Storage/storageAccounts/st/queueServices/default/queues/q").read).toBe(
+      "Peek at and receive queue messages.",
+    );
+    expect(accessBlurbs("azure", "/subscriptions/s/resourceGroups/g/providers/Microsoft.ServiceBus/namespaces/ns/queues/q").write).toBe("Send messages.");
+    expect(azureNoDelete("/subscriptions/s/resourceGroups/g/providers/Microsoft.EventHub/namespaces/ns")).toBe(true);
+    expect(azureNoDelete("/subscriptions/s/resourceGroups/g/providers/Microsoft.Storage/storageAccounts/st")).toBe(false);
     // Key Vault secrets are mapped (step 2): its own words.
     expect(accessBlurbs("azure", vault.arn)).toEqual({ read: "Read secret values.", write: "Set and update secrets.", delete: "Delete and purge secrets." });
   });

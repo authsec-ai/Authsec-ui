@@ -69,7 +69,33 @@ const AZURE_DATA_BLURBS: { type: string; blurbs: Record<Exclude<AccessLevel, "al
       delete: "Delete files, fine-tunes, deployments, assistants and stored data.",
     },
   },
+  {
+    type: "/queueservices/",
+    blurbs: { read: "Peek at and receive queue messages.", write: "Add and update messages.", delete: "Delete and receive messages." },
+  },
+  {
+    type: "/tableservices/",
+    blurbs: { read: "Read table entities.", write: "Insert and update entities.", delete: "Delete entities." },
+  },
+  {
+    type: "/fileservices/",
+    blurbs: { read: "Read files in the share.", write: "Write files and change their permissions.", delete: "Delete files." },
+  },
+  {
+    type: "/providers/microsoft.servicebus/namespaces/",
+    blurbs: { read: "Receive messages.", write: "Send messages.", delete: "Receiving removes messages; there is nothing else to delete." },
+  },
+  {
+    type: "/providers/microsoft.eventhub/namespaces/",
+    blurbs: { read: "Receive events.", write: "Send events.", delete: "Events expire on their own; there is nothing to delete." },
+  },
 ];
+
+/** Whether an Azure resource has nothing to delete (Service Bus, Event Hubs): Delete is off in the form. */
+export function azureNoDelete(arn: string | undefined): boolean {
+  const a = arn?.toLowerCase() ?? "";
+  return a.includes("/providers/microsoft.servicebus/namespaces/") || a.includes("/providers/microsoft.eventhub/namespaces/");
+}
 
 /* --------------------------------- states --------------------------------- */
 
@@ -199,9 +225,17 @@ export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; verb: st
  */
 export function accessBlurbs(provider: AccessProvider, arn?: string, type?: AccessResourceType): Record<Exclude<AccessLevel, "all">, string> {
   if (provider === "aws") return (resourceTypeCopy(type) ?? RESOURCE_TYPES.s3_bucket).blurbs;
-  if (isAzureStorage(arn)) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
   const plane = arn ? AZURE_DATA_BLURBS.find((p) => arn.toLowerCase().includes(p.type)) : undefined;
   if (plane) return plane.blurbs;
+  if (isAzureStorage(arn)) {
+    // The whole account covers every data service; a container its blobs.
+    if (arn!.toLowerCase().includes("/blobservices/")) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
+    return {
+      read: "Read blobs, queue messages, table entities and files.",
+      write: "Write blobs, messages, entities and files.",
+      delete: "Delete blobs, messages, entities and files.",
+    };
+  }
   return { read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." };
 }
 
