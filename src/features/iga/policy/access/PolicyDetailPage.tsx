@@ -178,6 +178,7 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
   const length = windowLength(p);
   const provider = p.resource.provider;
   const azure = provider === "azure";
+  const k8s = provider === "k8s";
   const Who = whoWord(provider, 2);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -187,7 +188,9 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
             {p.effect === "block"
               ? azure
                 ? "Block: take away these identities' role assignments on the resource that give the access, until the policy ends"
-                : "Block: deny these roles, whatever else allows them"
+                : k8s
+                  ? "Block: take these ServiceAccounts out of every binding of the role, and put them back when the policy ends"
+                  : "Block: deny these roles, whatever else allows them"
               : `Allow for a time: grant access the ${Who} do not have`}
           </Fact>
           <Fact label="Resource">
@@ -198,11 +201,11 @@ function Overview({ p }: { p: AccessPolicyDetail }) {
             ) : (
               <span className="font-mono text-xs">{resourceText(p.resource)}</span>
             )}
-            {!azure ? <Meta>{p.resource.arn}</Meta> : null}
+            {!azure && !k8s ? <Meta>{p.resource.arn}</Meta> : null}
             {p.resource.region ? <Meta>Region {p.resource.region}</Meta> : null}
             {p.resource.account_id ? (
               <Meta>
-                {azure ? "Azure subscription" : "Account"} {azure ? shortId(p.resource.account_id) : p.resource.account_id}
+                {azure ? "Azure subscription" : k8s ? "Cluster" : "Account"} {azure ? shortId(p.resource.account_id) : p.resource.account_id}
               </Meta>
             ) : null}
           </Fact>
@@ -322,6 +325,7 @@ function DeploymentCard({
 }) {
   const provider = p.resource.provider;
   const azure = provider === "azure";
+  const k8s = provider === "k8s";
   const cloud = CLOUD[provider].label;
   const v = deploymentView(d.state, provider, p.effect);
   return (
@@ -331,7 +335,11 @@ function DeploymentCard({
     >
       <div className="space-y-3">
         <Facts>
-          {azure ? (
+          {k8s ? (
+            <Fact label="Binding" mono>
+              {(d.target_ref ?? "").replace(/^k8s:[^/]+\//, "") || "—"}
+            </Fact>
+          ) : azure ? (
             <Fact label="Scope">
               {(() => {
                 // The path itself is never shown: say which level of Azure the role is set at.
@@ -351,8 +359,12 @@ function DeploymentCard({
           {d.drift || d.last_readback_at ? (
             <Fact label="Matches AuthSec's copy">{d.drift ? <span className="text-(--color-warning-text)">No: {d.drift}</span> : "Yes"}</Fact>
           ) : null}
-          {!d.deployed_at && !d.error ? <Fact label="Status">{azure ? "Waiting for Azure to accept the change." : "Waiting for AWS to accept the policy."}</Fact> : null}
-          {d.end_reason ? <Fact label={azure && p.effect === "block" ? "Restored because" : "Removed because"}>{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
+          {!d.deployed_at && !d.error ? (
+            <Fact label="Status">
+              {k8s ? "Waiting for the cluster's agent to make the change." : azure ? "Waiting for Azure to accept the change." : "Waiting for AWS to accept the policy."}
+            </Fact>
+          ) : null}
+          {d.end_reason ? <Fact label={(azure || k8s) && p.effect === "block" ? "Restored because" : "Removed because"}>{END_REASON[d.end_reason] ?? d.end_reason}</Fact> : null}
           {d.document_hash ? (
             <Fact label="Fingerprint" mono>
               {shortHash(d.document_hash)}

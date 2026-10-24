@@ -29,6 +29,8 @@ import type {
   AccessResourceType,
 } from "@/app/api/igaAccessPoliciesApi";
 
+import type { K8sGrant } from "@/app/api/k8sGraphApi";
+
 import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 /* -------------------------------- providers -------------------------------- */
@@ -36,6 +38,7 @@ import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTy
 export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlural: string }> = {
   aws: { label: "AWS", who: "role", whoPlural: "roles" },
   azure: { label: "Azure", who: "identity", whoPlural: "identities" },
+  k8s: { label: "Kubernetes", who: "ServiceAccount", whoPlural: "ServiceAccounts" },
 };
 
 /** "role" / "roles", "identity" / "identities". */
@@ -122,7 +125,8 @@ export const isOver = (status: AccessPolicyStatus) => status === "ended" || stat
  * gives them back at the end, so its words run the other way round.
  */
 export function deploymentView(state: string, provider: AccessProvider = "aws", effect: AccessEffect = "block"): { label: string; tone: ConsoleTone } {
-  const azureBlock = provider === "azure" && effect === "block";
+  // An Azure block and a Kubernetes block take something away and put it back.
+  const azureBlock = (provider === "azure" || provider === "k8s") && effect === "block";
   switch (state) {
     case "approved":
     case "deploying":
@@ -260,6 +264,7 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
+  if (r.provider === "k8s") return r.name ?? "";
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
   if (r.resource_type === "bedrock_model") return r.name ?? "";
   if (r.resource_type && r.resource_type !== "s3_bucket" && r.resource_type !== "azure_resource") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
@@ -670,7 +675,7 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
       provider,
       resource_id: p.resource.resource_id,
       // A backend that predates the field, or an ARN it cannot read, says nothing: that was S3.
-      resource_type: p.resource.resource_type || (provider === "azure" ? "azure_resource" : "s3_bucket"),
+      resource_type: p.resource.resource_type || (provider === "azure" ? "azure_resource" : provider === "k8s" ? "k8s_role" : "s3_bucket"),
       name: resourceText({ ...p.resource, prefix: "" }),
       bucket: p.resource.bucket,
       arn: p.resource.arn,
@@ -694,6 +699,7 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
  */
 export function draftType(d: Pick<PolicyDraft, "provider" | "resource"> & { awsType?: AwsResourceType }): AccessResourceType {
   if (d.provider === "azure") return "azure_resource";
+  if (d.provider === "k8s") return "k8s_role";
   return d.resource?.resource_type || d.awsType || "s3_bucket";
 }
 
@@ -712,8 +718,9 @@ export function draftSubScope(d: Pick<PolicyDraft, "provider" | "resource" | "pr
   return draftCopy(d)?.subScope ? d.prefix.trim() : "";
 }
 
-/** Switching effect keeps the choice valid: Allow has no "All access" and must end. */
+/** Switching effect keeps the choice valid: Allow has no "All access" and must end; Kubernetes blocks all access only. */
 export function withEffect(d: PolicyDraft, effect: AccessEffect): PolicyDraft {
+  if (d.provider === "k8s") return { ...d, effect: "block", access: ["all"] };
   if (effect === "block") return { ...d, effect };
   const access = d.access.filter((a) => a !== "all");
   return { ...d, effect, access: access.length ? access : ["read"], preset: d.preset === "none" ? "24h" : d.preset };
@@ -776,6 +783,25 @@ export function draftProblem(d: PolicyDraft, now = new Date()): { field: string;
   }
   if (!d.reason.trim()) return { field: "reason", message: "Say why. It is kept in the history." };
   return null;
+}
+
+/* -------------------------------- kubernetes -------------------------------- */
+
+/** The roles a ServiceAccount's grants come through, one per role, with the bindings that carry it. */
+export function k8sRolesOf(grants: readonly K8sGrant[]): { role_id: string; label: string; kind: string; bindings: string[] }[] {
+  const by = new Map<string, { role_id: string; label: string; kind: string; bindings: string[] }>();
+  for (const g of grants) {
+    if (!g.role_id) continue;
+    let e = by.get(g.role_id);
+    if (!e) {
+      const cluster = g.role_kind === "k8s_cluster_role";
+      e = { role_id: g.role_id, label: !cluster && g.namespace ? `${g.namespace}/${g.role_name}` : g.role_name, kind: cluster ? "ClusterRole" : "Role", bindings: [] };
+      by.set(g.role_id, e);
+    }
+    const b = g.binding_name || g.binding;
+    if (b && !e.bindings.includes(b)) e.bindings.push(b);
+  }
+  return [...by.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /* ---------------------------------- azure ---------------------------------- */

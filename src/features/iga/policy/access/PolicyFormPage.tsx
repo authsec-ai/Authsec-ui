@@ -72,6 +72,7 @@ import {
 } from "./model";
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
+import { K8sPicker } from "./K8sPickers";
 import { ResourcePicker, RolePicker } from "./Pickers";
 import { RESOURCE_TYPES, resourceTypeCopy, typeRules, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
@@ -272,7 +273,12 @@ export default function PolicyFormPage() {
   };
   // Another cloud is another resource and other identities: start those over.
   const setProvider = (provider: PolicyDraft["provider"]) => {
-    setDraft((d) => (d.provider === provider ? d : { ...d, provider, resource: null, prefix: "", roles: [] }));
+    setDraft((d) =>
+      d.provider === provider
+        ? d
+        : // Kubernetes blocks a ServiceAccount from a whole role.
+          { ...d, provider, resource: null, prefix: "", roles: [], ...(provider === "k8s" ? { effect: "block" as const, access: ["all" as const] } : {}) },
+    );
     setFieldError(null);
   };
   // So is another kind of AWS resource.
@@ -298,6 +304,7 @@ export default function PolicyFormPage() {
     setFieldError(null);
   };
   const toggleAccess = (a: AccessLevel) => {
+    if (draft.provider === "k8s") return;
     if (a === "all") return set("access", draft.access.includes("all") ? ["read"] : ["all"]);
     const base = draft.access.filter((x) => x !== "all");
     set("access", base.includes(a) ? base.filter((x) => x !== a) : [...base, a]);
@@ -382,19 +389,22 @@ export default function PolicyFormPage() {
   }, [draft]);
   const isBlock = draft.effect === "block";
   const aws = draft.provider === "aws";
+  const k8s = draft.provider === "k8s";
   const who = whoWord(draft.provider, draft.roles.length);
   const blurbs = accessBlurbs(draft.provider, draft.resource?.arn, draftType(draft));
   // The AWS resource type's words: S3's until another type is chosen. Read on AWS only.
   const awsCopy: ResourceTypeCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
   const rules = typeRules(awsCopy, caps.accessTypeViews[draftType(draft)]);
-  const blockOnly = aws && (rules.blockOnly || caps.accessBlockOnly.includes(draftType(draft)));
+  const blockOnly = k8s || (aws && (rules.blockOnly || caps.accessBlockOnly.includes(draftType(draft))));
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
   const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
   const notes = (shown?.warnings ?? []).filter((w) => w.code !== "other_paths");
   const workloads = [...new Set((shown?.also_affected ?? []).flatMap((a) => a.workloads.map((w) => w.name)))];
   const disabledWhy = bindingBlocked
-    ? aws
+    ? k8s
+      ? readiness.reason || "Kubernetes access policies are not available on this server."
+      : aws
       ? "Set up AWS access for this account to apply."
       : !readiness.available
         ? readiness.reason || "Applying policies is not available on this server."
@@ -457,7 +467,7 @@ export default function PolicyFormPage() {
               {editing || fromAzure ? null : (
                 <Block title="Cloud">
                   <div role="radiogroup" aria-label="Cloud" className="flex flex-wrap gap-1.5">
-                    {(["aws", "azure"] as const).map((c) => (
+                    {(caps.accessK8s ? (["aws", "azure", "k8s"] as const) : (["aws", "azure"] as const)).map((c) => (
                       <Pill key={c} radio on={draft.provider === c} onClick={() => setProvider(c)}>
                         <span aria-hidden="true" className="mr-1.5 inline-flex"><ProviderGlyph provider={c} /></span>
                         {CLOUD[c].label}
@@ -537,6 +547,21 @@ export default function PolicyFormPage() {
                   ) : null}
                 </div>
               </Block>
+              ) : k8s ? (
+                <Block
+                  title="ServiceAccount and role"
+                  hint="Choose the ServiceAccount, then the role to take it out of. AuthSec asks the cluster's agent to remove it from every binding of that role, and to put it back at the end."
+                >
+                  <div id="ap-resource">
+                    <K8sPicker
+                      resource={draft.resource}
+                      roles={draft.roles}
+                      onChange={(resource, roles) => setDraft((d) => ({ ...d, resource, roles }))}
+                      invalid={!!err("resource") || !!err("roles")}
+                    />
+                    <FieldError message={err("resource") || err("roles")} />
+                  </div>
+                </Block>
               ) : (
                 <Block title="Resource to control" hint="Pick the Azure resource to control, such as a storage account or a key vault. Only resources found by a scan are listed.">
                   <div id="ap-resource">
@@ -559,7 +584,7 @@ export default function PolicyFormPage() {
                     <FieldError message={err("roles")} />
                   </div>
                 </Block>
-              ) : (
+              ) : k8s ? null : (
                 <Block title="Logins" hint="Pick the logins this rule applies to: app logins, Azure-run logins or AI agents. Anything that runs under one of them is covered too.">
                   <div id="ap-roles">
                     <AzureIdentityPicker ws={ws} resource={draft.resource} effect={draft.effect} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
@@ -587,7 +612,13 @@ export default function PolicyFormPage() {
                         on={!isBlock}
                         onClick={() => setEffect("allow")}
                         disabled={blockOnly}
-                        title={blockOnly ? `A ${awsCopy.noun} can only be blocked for now.` : `Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}
+                        title={
+                          k8s
+                            ? "Kubernetes roles can only be blocked for now."
+                            : blockOnly
+                              ? `A ${awsCopy.noun} can only be blocked for now.`
+                              : `Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`
+                        }
                       >
                         {aws ? "Allow for a time" : "Allow for a set time"}
                       </Pill>
@@ -604,6 +635,7 @@ export default function PolicyFormPage() {
                       ) : null}
                       {ACCESS.filter(
                         (a) =>
+                          !k8s &&
                           !(a.key === "delete" && (aws ? rules.noDelete : azureNoDelete(draft.resource?.arn))) &&
                           !(aws && !isBlock && rules.allowLevels && !rules.allowLevels.includes(a.key)),
                       ).map((a) => (
@@ -612,7 +644,11 @@ export default function PolicyFormPage() {
                         </Pill>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, blurbs, aws ? awsCopy : undefined)}</p>
+                    <p className="mt-1.5 text-xs text-(--color-text-muted)">
+                      {k8s
+                        ? "Kubernetes cannot take away part of a binding: the ServiceAccount loses everything the role gives it."
+                        : accessHint(draft.access, isBlock, blurbs, aws ? awsCopy : undefined)}
+                    </p>
                     <FieldError message={err("access")} />
                   </fieldset>
 
@@ -704,13 +740,20 @@ export default function PolicyFormPage() {
                     <p className="text-xs text-(--color-text-muted)">
                       {aws
                         ? awsCopy.untouched
-                        : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
+                        : k8s
+                          ? "Only this ServiceAccount changes, and only in the bindings of this role. Its other roles, and access through groups, are untouched."
+                          : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
                     </p>
                   ) : null}
                 </div>
 
                 <ul className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle) text-[13px]">
-                  {readiness.loading || (!aws && !draft.resource) ? null : readiness.ready ? (
+                  {readiness.loading || (!aws && !draft.resource) ? null : k8s ? (
+                    <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
+                      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
+                      The cluster&rsquo;s agent makes the change. It must have enforcement.bindings on and list this role; the preview says if it does not.
+                    </li>
+                  ) : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
                       {aws ? "AuthSec can change IAM in this account." : `AuthSec can change role assignments in subscription ${readiness.scopes[0]?.name ?? draft.resource?.subscription ?? ""}.`}

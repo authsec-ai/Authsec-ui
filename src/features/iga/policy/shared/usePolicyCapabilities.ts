@@ -21,6 +21,8 @@ export interface PolicyCaps {
   accessResourceTypes: string[];
   /** The types that take a block only. */
   accessBlockOnly: string[];
+  /** Kubernetes access policies are served (migration 146). */
+  accessK8s: boolean;
   /** Each type as the server describes it (absent from an older server). */
   accessTypeViews: Record<string, AccessTypeView>;
   /** Why a feature is false, when the server said. */
@@ -59,6 +61,7 @@ export function usePolicyCapabilities(ws: string): PolicyCaps {
     feature: (name) => state === "on" && (name === "access_policies" ? accessPolicies(caps).on : caps?.[name] === true),
     accessResourceTypes: accessPolicies(caps).types,
     accessBlockOnly: accessPolicies(caps).blockOnly,
+    accessK8s: !!(caps?.access_policies && typeof caps.access_policies === "object" && caps.access_policies.k8s?.available),
     accessTypeViews: Object.fromEntries(
       (caps?.access_policies && typeof caps.access_policies === "object" ? caps.access_policies.types ?? [] : []).map((v) => [v.type, v]),
     ),

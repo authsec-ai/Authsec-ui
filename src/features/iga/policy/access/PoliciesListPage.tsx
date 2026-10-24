@@ -42,7 +42,7 @@ export default function PoliciesListPage() {
   const status = (params.get("status") ?? "") as "" | AccessPolicyStatus;
   const effect = (params.get("effect") ?? "") as "" | AccessEffect;
   const cloudParam = params.get("cloud");
-  const cloud: "" | AccessProvider = cloudParam === "aws" || cloudParam === "azure" ? cloudParam : "";
+  const cloud: "" | AccessProvider = cloudParam === "aws" || cloudParam === "azure" || cloudParam === "k8s" ? cloudParam : "";
   const resourceId = params.get("resource_id") ?? "";
   const resourceName = params.get("resource_name") ?? "";
   const identityId = params.get("identity_account_id") ?? "";
@@ -300,7 +300,7 @@ export default function PoliciesListPage() {
           <div className="flex flex-wrap items-center gap-3">
           {clouds.size > 1 || cloud ? (
             <div role="radiogroup" aria-label="Cloud" className="flex items-center gap-1.5">
-              {(["", "aws", "azure"] as const).map((c) => (
+              {(clouds.has("k8s") || cloud === "k8s" ? (["", "aws", "azure", "k8s"] as const) : (["", "aws", "azure"] as const)).map((c) => (
                 <button
                   key={c || "any"}
                   type="button"

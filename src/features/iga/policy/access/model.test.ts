@@ -12,6 +12,7 @@ import {
   draftType,
   emptyDraft,
   groupModels,
+  k8sRolesOf,
   groupParameters,
   groupSecrets,
   groupSimple,
@@ -34,6 +35,7 @@ import {
 import { RESOURCE_TYPES, resourceTypeCopy, typeRules } from "./resourceTypes";
 import type { AccessPolicyDetail, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
 import type { ResourceRow } from "@/app/api/igaGraphApi";
+import type { K8sGrant } from "@/app/api/k8sGraphApi";
 
 describe("pathReachesFolder", () => {
   it("whole-bucket holders and whole-bucket rules reach everything", () => {
@@ -466,5 +468,29 @@ describe("typeRules", () => {
     const view = { type: "sns_topic", service: "sns", noun: "topic", prefix: false, block_only: true, allow_levels: [], levels: ["read", "write"] } as const;
     expect(typeRules(RESOURCE_TYPES.sns_topic, { ...view, allow_levels: [], levels: ["read", "write"] })).toEqual({ blockOnly: true, noDelete: true, allowLevels: [] });
     expect(typeRules(RESOURCE_TYPES.s3_bucket, { ...view, block_only: false, allow_levels: ["read", "write", "delete"], levels: ["read", "write", "delete"] }).allowLevels).toBeUndefined();
+  });
+});
+
+describe("Kubernetes", () => {
+  it("k8sRolesOf lists each role once, with the bindings that carry it", () => {
+    const g = (role_id: string | undefined, role_name: string, role_kind: string, namespace: string, binding_name: string) =>
+      ({ role_id, role_name, role_kind, namespace, binding: "", binding_name }) as unknown as K8sGrant;
+    const roles = k8sRolesOf([
+      g("r1", "secret-reader", "k8s_role", "agents", "booker-secrets"),
+      g("r1", "secret-reader", "k8s_role", "agents", "booker-secrets"),
+      g("r2", "view", "k8s_cluster_role", "", "booker-view"),
+      g(undefined, "missing", "", "", "dangling"),
+    ]);
+    expect(roles).toEqual([
+      { role_id: "r1", label: "agents/secret-reader", kind: "Role", bindings: ["booker-secrets"] },
+      { role_id: "r2", label: "view", kind: "ClusterRole", bindings: ["booker-view"] },
+    ]);
+  });
+  it("a Kubernetes draft blocks all access only", () => {
+    const d = withEffect(emptyDraft({ provider: "k8s" }), "allow");
+    expect(d.effect).toBe("block");
+    expect(d.access).toEqual(["all"]);
+    expect(draftType(d)).toBe("k8s_role");
+    expect(resourceText({ provider: "k8s", name: "agents/secret-reader", prefix: "" })).toBe("agents/secret-reader");
   });
 });

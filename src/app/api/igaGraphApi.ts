@@ -1252,7 +1252,7 @@ export interface PolicyCapabilities {
    * name (`s3_bucket`, `dynamodb_table`, `secretsmanager_secret`); a backend
    * without it supports S3 only. `block_only` lists the types that take no allow.
    */
-  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[]; types?: AccessTypeView[] } | boolean;
+  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[]; types?: AccessTypeView[]; k8s?: { available: boolean; reason?: string | null } } | boolean;
   reasons: Record<string, string>;
 }
 

@@ -32,7 +32,7 @@ const BASE = `${POLICY_BASE}/access-policies`;
 export type AccessEffect = "block" | "allow";
 /** `all` is offered for block only. */
 export type AccessLevel = "read" | "write" | "delete" | "all";
-export type AccessProvider = "aws" | "azure";
+export type AccessProvider = "aws" | "azure" | "k8s";
 /** `ending`: ended (End, or its end time passed) while AuthSec is still undoing it in the cloud. */
 export type AccessPolicyStatus = "scheduled" | "applying" | "active" | "paused" | "ending" | "ended" | "failed" | "drift";
 /** How a policy left AWS (or `""` while it has not). */
@@ -42,7 +42,7 @@ export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused"
  * What a policy is on. `""` when the backend cannot tell (an ARN it no longer
  * parses); a backend that predates the field omits it.
  */
-export type AccessResourceType = "s3_bucket" | "dynamodb_table" | "secretsmanager_secret" | "ssm_parameter" | "bedrock_model" | "bedrock_agent" | "agentcore_runtime" | "lambda_function" | "kms_key" | "sqs_queue" | "sns_topic" | "azure_resource" | "";
+export type AccessResourceType = "s3_bucket" | "dynamodb_table" | "secretsmanager_secret" | "ssm_parameter" | "bedrock_model" | "bedrock_agent" | "agentcore_runtime" | "lambda_function" | "kms_key" | "sqs_queue" | "sns_topic" | "azure_resource" | "k8s_role" | "";
 
 export interface AccessPolicyResource {
   resource_id: string;
