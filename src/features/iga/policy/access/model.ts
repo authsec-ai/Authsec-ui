@@ -13,7 +13,7 @@
 import { differenceInMinutes, format, formatDistanceToNowStrict, isValid, parseISO } from "date-fns";
 
 import type { ConsoleTone } from "@/components/console/status";
-import { refId, type GraphNeighbourhood } from "@/app/api/igaGraphApi";
+import { refId, type GraphNeighbourhood, type ResourceRow } from "@/app/api/igaGraphApi";
 import type { InventoryRow } from "@/app/api/igaInventoryApi";
 import { armTypeLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 
@@ -26,13 +26,19 @@ import type {
   AccessPolicyDetail,
   AccessPolicyStatus,
   AccessProvider,
+  AccessResourceType,
 } from "@/app/api/igaAccessPoliciesApi";
+
+import type { K8sGrant } from "@/app/api/k8sGraphApi";
+
+import { RESOURCE_TYPES, resourceTypeCopy, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 /* -------------------------------- providers -------------------------------- */
 
 export const CLOUD: Record<AccessProvider, { label: string; who: string; whoPlural: string }> = {
   aws: { label: "AWS", who: "role", whoPlural: "roles" },
   azure: { label: "Azure", who: "identity", whoPlural: "identities" },
+  k8s: { label: "Kubernetes", who: "ServiceAccount", whoPlural: "ServiceAccounts" },
 };
 
 /** "role" / "roles", "identity" / "identities". */
@@ -46,6 +52,52 @@ export const AZURE_TARGET_KINDS = new Set(["entra_service_principal", "entra_man
 /** Whether an ARM id names a storage account (or something in one): its access levels are blob data. */
 export function isAzureStorage(arn: string | undefined): boolean {
   return !!arn && arn.toLowerCase().includes("/providers/microsoft.storage/storageaccounts/");
+}
+
+/** The Azure data planes the backend maps beyond storage (services/iga_gov_access_azure_planes.go), by ARM type. */
+const AZURE_DATA_BLURBS: { type: string; blurbs: Record<Exclude<AccessLevel, "all">, string> }[] = [
+  {
+    type: "/providers/microsoft.keyvault/vaults/",
+    blurbs: { read: "Read secret values.", write: "Set and update secrets.", delete: "Delete and purge secrets." },
+  },
+  {
+    type: "/providers/microsoft.search/searchservices/",
+    blurbs: { read: "Query index documents.", write: "Upload and update documents.", delete: "Delete documents." },
+  },
+  {
+    type: "/providers/microsoft.cognitiveservices/accounts/",
+    blurbs: {
+      read: "Call the models (chat, completions, embeddings, images, audio) and read stored files and completions.",
+      write: "Upload files, fine-tune, change deployments and create assistants, responses and batches.",
+      delete: "Delete files, fine-tunes, deployments, assistants and stored data.",
+    },
+  },
+  {
+    type: "/queueservices/",
+    blurbs: { read: "Peek at and receive queue messages.", write: "Add and update messages.", delete: "Delete and receive messages." },
+  },
+  {
+    type: "/tableservices/",
+    blurbs: { read: "Read table entities.", write: "Insert and update entities.", delete: "Delete entities." },
+  },
+  {
+    type: "/fileservices/",
+    blurbs: { read: "Read files in the share.", write: "Write files and change their permissions.", delete: "Delete files." },
+  },
+  {
+    type: "/providers/microsoft.servicebus/namespaces/",
+    blurbs: { read: "Receive messages.", write: "Send messages.", delete: "Receiving removes messages; there is nothing else to delete." },
+  },
+  {
+    type: "/providers/microsoft.eventhub/namespaces/",
+    blurbs: { read: "Receive events.", write: "Send events.", delete: "Events expire on their own; there is nothing to delete." },
+  },
+];
+
+/** Whether an Azure resource has nothing to delete (Service Bus, Event Hubs): Delete is off in the form. */
+export function azureNoDelete(arn: string | undefined): boolean {
+  const a = arn?.toLowerCase() ?? "";
+  return a.includes("/providers/microsoft.servicebus/namespaces/") || a.includes("/providers/microsoft.eventhub/namespaces/");
 }
 
 /* --------------------------------- states --------------------------------- */
@@ -73,7 +125,8 @@ export const isOver = (status: AccessPolicyStatus) => status === "ended" || stat
  * gives them back at the end, so its words run the other way round.
  */
 export function deploymentView(state: string, provider: AccessProvider = "aws", effect: AccessEffect = "block"): { label: string; tone: ConsoleTone } {
-  const azureBlock = provider === "azure" && effect === "block";
+  // An Azure block and a Kubernetes block take something away and put it back.
+  const azureBlock = (provider === "azure" || provider === "k8s") && effect === "block";
   switch (state) {
     case "approved":
     case "deploying":
@@ -163,16 +216,30 @@ export function eventLabel(
 
 /* --------------------------------- access --------------------------------- */
 
-export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; blurb: string; verb: string; base: string }[] = [
-  { key: "read", label: "Read", blurb: "List the folder and read objects.", verb: "reading", base: "read" },
-  { key: "write", label: "Write", blurb: "Upload and overwrite objects.", verb: "writing", base: "write" },
-  { key: "delete", label: "Delete", blurb: "Remove objects and their versions.", verb: "deleting", base: "delete" },
+export const ACCESS: { key: Exclude<AccessLevel, "all">; label: string; verb: string; base: string }[] = [
+  { key: "read", label: "Read", verb: "reading", base: "read" },
+  { key: "write", label: "Write", verb: "writing", base: "write" },
+  { key: "delete", label: "Delete", verb: "deleting", base: "delete" },
 ];
 
-/** What each level covers on this resource: S3 objects, Azure blobs, or another Azure resource's management. */
-export function accessBlurbs(provider: AccessProvider, arn?: string): Record<Exclude<AccessLevel, "all">, string> {
-  if (provider === "aws") return { read: ACCESS[0].blurb, write: ACCESS[1].blurb, delete: ACCESS[2].blurb };
-  if (isAzureStorage(arn)) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
+/**
+ * What each level covers on this resource: the AWS type's own words (S3
+ * objects when no type is given), Azure blobs, or another Azure resource's
+ * management.
+ */
+export function accessBlurbs(provider: AccessProvider, arn?: string, type?: AccessResourceType): Record<Exclude<AccessLevel, "all">, string> {
+  if (provider === "aws") return (resourceTypeCopy(type) ?? RESOURCE_TYPES.s3_bucket).blurbs;
+  const plane = arn ? AZURE_DATA_BLURBS.find((p) => arn.toLowerCase().includes(p.type)) : undefined;
+  if (plane) return plane.blurbs;
+  if (isAzureStorage(arn)) {
+    // The whole account covers every data service; a container its blobs.
+    if (arn!.toLowerCase().includes("/blobservices/")) return { read: "Read blobs.", write: "Upload and overwrite blobs.", delete: "Delete blobs." };
+    return {
+      read: "Read blobs, queue messages, table entities and files.",
+      write: "Write blobs, messages, entities and files.",
+      delete: "Delete blobs, messages, entities and files.",
+    };
+  }
   return { read: "Read the resource and its settings.", write: "Change the resource.", delete: "Delete the resource." };
 }
 
@@ -196,8 +263,11 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  * What a policy is on, in words: `finance-reports/invoices/` (a folder),
  * `finance-reports` (a whole bucket), or an Azure resource's name.
  */
-export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider }): string {
+export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
+  if (r.provider === "k8s") return r.name ?? "";
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
+  if (r.resource_type === "bedrock_model") return r.name ?? "";
+  if (r.resource_type && r.resource_type !== "s3_bucket" && r.resource_type !== "azure_resource") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -218,6 +288,185 @@ export function pathReachesFolder(path: string, folder: string): boolean {
 /** Whether any of the paths a role holds reaches the folder. */
 export function reachesFolder(paths: readonly string[], folder: string): boolean {
   return paths.some((p) => pathReachesFolder(p, folder));
+}
+
+/**
+ * The DynamoDB table an ARN names or lies under (an index, stream or backup),
+ * as the backend reads it (internal/igagov/access_dynamodb.go): the name must
+ * be literal; a pattern or a global-table ARN is not a table.
+ */
+export function tableOf(text: string | null | undefined): { partition: string; region: string; account: string; table: string; arn: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):dynamodb:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):table\/([A-Za-z0-9_.-]{3,255})(?:\/.*)?$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], table: m[4], arn: `arn:${m[1]}:dynamodb:${m[2]}:${m[3]}:table/${m[4]}` };
+}
+
+/**
+ * Every table the DynamoDB records name (the table, an index, a stream...),
+ * with its records, the table's own record first. A pattern or global-table
+ * record is not a table and is skipped.
+ */
+export function groupTables(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource & { own: boolean }>();
+  for (const r of rows) {
+    const t = tableOf(r.text);
+    if (!t) continue;
+    let e = by.get(t.arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "dynamodb_table", name: t.table, bucket: "", arn: t.arn, account_id: t.account, region: t.region, records: [], own: false };
+      by.set(t.arn, e);
+    }
+    const rec = { id: refId(r.ref), text: r.text };
+    if (r.text.trim() === t.arn) {
+      e.records!.unshift(rec);
+      e.own = true;
+    } else {
+      e.records!.push(rec);
+    }
+  }
+  return [...by.values()]
+    .map(({ own: _own, ...e }) => ({ ...e, resource_id: e.records![0].id }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.arn.localeCompare(b.arn));
+}
+
+/**
+ * The Secrets Manager secret an ARN or a `<name>-??????` selector names, as
+ * the backend reads it (internal/igagov/access_secretsmanager.go): the name is
+ * literal and the suffix is the random six characters (`suffix`) or six "?"
+ * (`suffix` null). `key` is the secret by name in its region.
+ */
+export function secretOf(
+  text: string | null | undefined,
+): { partition: string; region: string; account: string; name: string; suffix: string | null; key: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):secretsmanager:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):secret:([A-Za-z0-9/_+=.@-]{1,512})-([A-Za-z0-9]{6}|\?{6})$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], name: m[4], suffix: m[5] === "??????" ? null : m[5], key: `arn:${m[1]}:secretsmanager:${m[2]}:${m[3]}:secret:${m[4]}` };
+}
+
+/**
+ * Every secret the Secrets Manager records name, by name and region, with its
+ * records: the secret's own ARN first, else the `<name>-??????` selector. A
+ * pattern is not a secret and is skipped.
+ */
+export function groupSecrets(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const s = secretOf(r.text);
+    if (!s) continue;
+    let e = by.get(s.key);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "secretsmanager_secret", name: s.name, bucket: "", arn: r.text.trim(), account_id: s.account, region: s.region, records: [] };
+      by.set(s.key, e);
+    }
+    const rec = { id: refId(r.ref), text: r.text };
+    if (s.suffix && !secretOf(e.records![0]?.text)?.suffix) {
+      e.records!.unshift(rec);
+      e.arn = r.text.trim();
+    } else {
+      e.records!.push(rec);
+    }
+  }
+  return [...by.values()]
+    .map((e) => ({ ...e, resource_id: e.records![0].id }))
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
+}
+
+/**
+ * The SSM parameter an ARN names, as the backend reads it
+ * (internal/igagov/access_ssm.go): a literal name of at most 15 levels; a
+ * hierarchical name gets its leading "/" back.
+ */
+export function parameterOf(text: string | null | undefined): { partition: string; region: string; account: string; name: string; arn: string } | null {
+  const m = text ? /^arn:(aws[a-z-]*):ssm:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):parameter\/([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+){0,14})$/.exec(text.trim()) : null;
+  if (!m) return null;
+  return { partition: m[1], region: m[2], account: m[3], name: m[4].includes("/") ? `/${m[4]}` : m[4], arn: text!.trim() };
+}
+
+/** One entry per parameter the SSM records name; a pattern is not a parameter and is skipped. */
+export function groupParameters(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const p = parameterOf(r.text);
+    if (!p) continue;
+    const rec = { id: refId(r.ref), text: r.text };
+    const e = by.get(p.arn);
+    if (e) e.records!.push(rec);
+    else by.set(p.arn, { provider: "aws", resource_id: rec.id, resource_type: "ssm_parameter", name: p.name, bucket: "", arn: p.arn, account_id: p.account, region: p.region, records: [rec] });
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
+}
+
+/** The geography prefixes of Bedrock's system inference profiles ("us.anthropic…"). */
+const BEDROCK_GEOS = new Set(["us", "eu", "apac", "us-gov", "jp", "au", "ca", "global"]);
+
+/**
+ * The Bedrock foundation model an ARN names, directly or through a system
+ * inference profile, as the backend reads it (internal/igagov/access_bedrock.go).
+ */
+export function modelOf(text: string | null | undefined): { partition: string; model: string } | null {
+  const t = text?.trim() ?? "";
+  const fm = /^arn:(aws[a-z-]*):bedrock:(?:[a-z]{2}(?:-[a-z]+)+-\d+|\*)?::foundation-model\/([a-z0-9-]+\.[A-Za-z0-9._:-]{1,200})$/.exec(t);
+  if (fm) return { partition: fm[1], model: fm[2] };
+  const ip = /^arn:(aws[a-z-]*):bedrock:[a-z]{2}(?:-[a-z]+)+-\d+:\d{12}:inference-profile\/([a-z-]+)\.([a-z0-9-]+\.[A-Za-z0-9._:-]{1,200})$/.exec(t);
+  return ip && BEDROCK_GEOS.has(ip[2]) ? { partition: ip[1], model: ip[3] } : null;
+}
+
+/** One entry per model the Bedrock records name, its foundation-model record first. */
+export function groupModels(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const m = modelOf(r.text);
+    if (!m) continue;
+    const arn = `arn:${m.partition}:bedrock:*::foundation-model/${m.model}`;
+    const rec = { id: refId(r.ref), text: r.text };
+    let e = by.get(arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "bedrock_model", name: m.model, bucket: "", arn, account_id: r.account?.id ?? "", records: [] };
+      by.set(arn, e);
+    }
+    if (r.text.includes(":foundation-model/")) e.records!.unshift(rec);
+    else e.records!.push(rec);
+  }
+  return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Readers of the single-ARN AWS types, as the backend reads them (internal/igagov/access_lambda.go, access_kms.go, access_sqs_sns.go). */
+const SIMPLE_ARNS: Partial<Record<AccessResourceType, { re: RegExp; arn: (m: RegExpExecArray) => string }>> = {
+  lambda_function: {
+    re: /^arn:(aws[a-z-]*):lambda:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):function:([A-Za-z0-9_-]{1,64})(?::(?:\$LATEST|[A-Za-z0-9_-]{1,128}|\*))?$/,
+    arn: (m) => `arn:${m[1]}:lambda:${m[2]}:${m[3]}:function:${m[4]}`,
+  },
+  kms_key: {
+    re: /^arn:(aws[a-z-]*):kms:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):key\/(mrk-[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/,
+    arn: (m) => m[0],
+  },
+  sqs_queue: { re: /^arn:(aws[a-z-]*):sqs:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):([A-Za-z0-9_-]{1,75}(?:\.fifo)?)$/, arn: (m) => m[0] },
+  sns_topic: { re: /^arn:(aws[a-z-]*):sns:([a-z]{2}(?:-[a-z]+)+-\d+):(\d{12}):([A-Za-z0-9_-]{1,251}(?:\.fifo)?)$/, arn: (m) => m[0] },
+};
+
+/** The function, key, queue or topic an ARN names, or null. */
+export function simpleTargetOf(type: AccessResourceType, text: string | null | undefined): { arn: string; name: string; account: string; region: string } | null {
+  const r = SIMPLE_ARNS[type];
+  const m = r && text ? r.re.exec(text.trim()) : null;
+  return m ? { arn: r!.arn(m), name: m[4], account: m[3], region: m[2] } : null;
+}
+
+/** One entry per function, key, queue or topic the records name, its own ARN first. */
+export function groupSimple(type: AccessResourceType, rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const s = simpleTargetOf(type, r.text);
+    if (!s) continue;
+    const rec = { id: refId(r.ref), text: r.text };
+    let e = by.get(s.arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: type, name: s.name, bucket: "", arn: s.arn, account_id: s.account, region: s.region, records: [] };
+      by.set(s.arn, e);
+    }
+    if (r.text.trim() === s.arn) e.records!.unshift(rec);
+    else e.records!.push(rec);
+  }
+  return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */
@@ -337,6 +586,8 @@ export interface DraftRole {
 export interface DraftResource {
   provider: AccessProvider;
   resource_id: string;
+  /** What it is: `s3_bucket` on AWS today, `azure_resource` on Azure. */
+  resource_type: AccessResourceType;
   /** The bucket, or the Azure resource's name. */
   name: string;
   /** AWS only: the bucket ("" on Azure). */
@@ -345,6 +596,8 @@ export interface DraftResource {
   arn: string;
   /** The AWS account, or the Azure subscription id. */
   account_id: string;
+  /** AWS: the region, for a type whose ARN names one. */
+  region?: string;
   /** Azure: its Entra tenant (identities must be in the same one). */
   tenant?: string;
   /** Azure: the resource type in words, its subscription's name and its resource group, for the chosen row. */
@@ -374,6 +627,8 @@ export function pathInBucket(text: string): string {
 /** The form's state: what the person chose, before it becomes a request. */
 export interface PolicyDraft {
   provider: AccessProvider;
+  /** On AWS, what kind of resource is being picked (before one is). */
+  awsType: AwsResourceType;
   effect: AccessEffect;
   resource: DraftResource | null;
   prefix: string;
@@ -391,9 +646,10 @@ export const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
 
 const minute = (d: Date) => new Date(Math.floor(d.getTime() / 60_000) * 60_000);
 
-export function emptyDraft(initial?: { provider?: AccessProvider; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
+export function emptyDraft(initial?: { provider?: AccessProvider; awsType?: AwsResourceType; effect?: AccessEffect; resource?: DraftResource | null; prefix?: string; roles?: DraftRole[] }): PolicyDraft {
   return {
     provider: initial?.provider ?? initial?.resource?.provider ?? "aws",
+    awsType: initial?.awsType ?? awsTypeOf(initial?.resource?.resource_type),
     effect: initial?.effect ?? "block",
     resource: initial?.resource ?? null,
     prefix: initial?.prefix ?? "",
@@ -413,14 +669,18 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   const provider = p.resource.provider;
   return {
     provider,
+    awsType: awsTypeOf(p.resource.resource_type),
     effect: p.effect,
     resource: {
       provider,
       resource_id: p.resource.resource_id,
+      // A backend that predates the field, or an ARN it cannot read, says nothing: that was S3.
+      resource_type: p.resource.resource_type || (provider === "azure" ? "azure_resource" : provider === "k8s" ? "k8s_role" : "s3_bucket"),
       name: resourceText({ ...p.resource, prefix: "" }),
       bucket: p.resource.bucket,
       arn: p.resource.arn,
       account_id: p.resource.account_id,
+      region: p.resource.region,
     },
     prefix: p.resource.prefix,
     roles: p.roles.map((r) => ({ identity_account_id: r.identity_account_id, name: r.name })),
@@ -433,8 +693,34 @@ export function draftOf(p: AccessPolicyDetail): PolicyDraft {
   };
 }
 
-/** Switching effect keeps the choice valid: Allow has no "All access" and must end. */
+/**
+ * What the draft is on: Azure's one resource, else the chosen AWS resource's
+ * type, else S3 (the AWS type before anything is chosen).
+ */
+export function draftType(d: Pick<PolicyDraft, "provider" | "resource"> & { awsType?: AwsResourceType }): AccessResourceType {
+  if (d.provider === "azure") return "azure_resource";
+  if (d.provider === "k8s") return "k8s_role";
+  return d.resource?.resource_type || d.awsType || "s3_bucket";
+}
+
+/** The AWS type a resource type is, S3 for anything else (Azure, unknown, ""). */
+export function awsTypeOf(type: string | undefined): AwsResourceType {
+  return resourceTypeCopy(type) ? (type as AwsResourceType) : "s3_bucket";
+}
+
+/** The words for the draft's AWS resource type; undefined on Azure. */
+export function draftCopy(d: Pick<PolicyDraft, "provider" | "resource"> & { awsType?: AwsResourceType }): ResourceTypeCopy | undefined {
+  return resourceTypeCopy(draftType(d));
+}
+
+/** The draft's narrowing inside its resource (S3's folder), trimmed; "" when its type has none. */
+export function draftSubScope(d: Pick<PolicyDraft, "provider" | "resource" | "prefix"> & { awsType?: AwsResourceType }): string {
+  return draftCopy(d)?.subScope ? d.prefix.trim() : "";
+}
+
+/** Switching effect keeps the choice valid: Allow has no "All access" and must end; Kubernetes blocks all access only. */
 export function withEffect(d: PolicyDraft, effect: AccessEffect): PolicyDraft {
+  if (d.provider === "k8s") return { ...d, effect: "block", access: ["all"] };
   if (effect === "block") return { ...d, effect };
   const access = d.access.filter((a) => a !== "all");
   return { ...d, effect, access: access.length ? access : ["read"], preset: d.preset === "none" ? "24h" : d.preset };
@@ -457,8 +743,8 @@ export function windowOf(d: PolicyDraft, now = new Date()): { starts_at: string 
 export function bodyOf(d: PolicyDraft): AccessPolicyBody {
   return {
     effect: d.effect,
-    // A folder is S3's alone; an Azure policy is on the whole resource.
-    resource: { resource_id: d.resource?.resource_id ?? "", prefix: d.provider === "aws" ? d.prefix.trim() : "" },
+    // A folder is S3's alone; any other type, and an Azure policy, is on the whole resource.
+    resource: { resource_id: d.resource?.resource_id ?? "", prefix: draftSubScope(d) },
     roles: d.roles.map((r) => ({ identity_account_id: r.identity_account_id })),
     access: d.access,
     ...windowOf(d),
@@ -470,15 +756,16 @@ export function bodyOf(d: PolicyDraft): AccessPolicyBody {
 /** A name to start from, until the person types their own. */
 export function suggestedName(d: PolicyDraft): string {
   const who = d.roles.length === 0 ? "" : d.roles.length === 1 ? d.roles[0].name : `${d.roles[0].name} and ${d.roles.length - 1} more`;
-  const where = d.resource ? resourceText({ ...d.resource, prefix: d.provider === "aws" ? d.prefix.trim() : "" }) : "";
+  const where = d.resource ? resourceText({ ...d.resource, prefix: draftSubScope(d) }) : "";
   if (!who || !where) return "";
   return `${EFFECT[d.effect].label} ${who} on ${where}`;
 }
 
 /** What is still missing before Apply, in the order the form asks for it; "" when nothing is. */
 export function draftProblem(d: PolicyDraft, now = new Date()): { field: string; message: string } | null {
-  if (!d.resource) return { field: "resource", message: d.provider === "aws" ? "Choose a bucket." : "Choose a resource." };
-  if (d.provider === "aws" && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
+  const copy = draftCopy(d);
+  if (!d.resource) return { field: "resource", message: `Choose a ${copy?.noun ?? "resource"}.` };
+  if (copy?.subScope === "folder" && d.prefix.trim() && !d.prefix.trim().endsWith("/")) return { field: "prefix", message: "A folder ends with /, for example invoices/." };
   if (d.roles.length === 0) return { field: "roles", message: `Choose at least one ${whoWord(d.provider)}.` };
   if (d.access.length === 0) return { field: "access", message: `Choose what to ${d.effect === "block" ? "block." : "allow."}` };
   const w = windowOf(d, now);
@@ -498,6 +785,25 @@ export function draftProblem(d: PolicyDraft, now = new Date()): { field: string;
   return null;
 }
 
+/* -------------------------------- kubernetes -------------------------------- */
+
+/** The roles a ServiceAccount's grants come through, one per role, with the bindings that carry it. */
+export function k8sRolesOf(grants: readonly K8sGrant[]): { role_id: string; label: string; kind: string; bindings: string[] }[] {
+  const by = new Map<string, { role_id: string; label: string; kind: string; bindings: string[] }>();
+  for (const g of grants) {
+    if (!g.role_id) continue;
+    let e = by.get(g.role_id);
+    if (!e) {
+      const cluster = g.role_kind === "k8s_cluster_role";
+      e = { role_id: g.role_id, label: !cluster && g.namespace ? `${g.namespace}/${g.role_name}` : g.role_name, kind: cluster ? "ClusterRole" : "Role", bindings: [] };
+      by.set(g.role_id, e);
+    }
+    const b = g.binding_name || g.binding;
+    if (b && !e.bindings.includes(b)) e.bindings.push(b);
+  }
+  return [...by.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /* ---------------------------------- azure ---------------------------------- */
 
 /** The subscription id and resource group an ARM id names. */
@@ -512,6 +818,7 @@ export function azureResourceOf(row: InventoryRow): DraftResource {
   return {
     provider: "azure",
     resource_id: refId(row.ref),
+    resource_type: "azure_resource",
     name: row.name,
     bucket: "",
     arn: row.native_id,

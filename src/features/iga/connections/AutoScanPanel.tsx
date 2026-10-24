@@ -444,7 +444,7 @@ function AutoScanBody({ c }: { c: Connection }) {
                   ? s.next_due_at
                     ? `Next scan ${formatInZone(s.next_due_at, zone)} (${formatDistanceToNowStrict(new Date(s.next_due_at), { addSuffix: true })})`
                     : null
-                  : "The scan scheduler is not running on the server, so nothing will run yet"}
+                  : "No scan scheduler has picked this up: the scan worker is not running on the server, so nothing will run yet"}
               </span>
               {stale ? <span className="text-(--color-warning-text)">Inventory may be out of date</span> : null}
               {canAdminister ? (

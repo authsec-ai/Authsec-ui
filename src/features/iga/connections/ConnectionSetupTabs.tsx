@@ -77,7 +77,7 @@ export function NotificationsTab() {
     <Gate>
       <div className="space-y-4">
         <WorkspaceScopeNote>
-          Notifications are set once for the whole workspace — the same Slack channel and delivery targets apply to every AWS account.
+          Notifications are set once for the whole workspace — the same Slack channel and delivery targets apply to every connection.
         </WorkspaceScopeNote>
         <NotificationsSection slackReturn={slack.value} onHandled={slack.consume} />
       </div>

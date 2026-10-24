@@ -365,10 +365,13 @@ export function ResourceOverview({ resource, subscription }: { resource: AzureRe
           </Fact>
         </Facts>
       </Panel>
-      <Panel title="Details from Microsoft" description="The other details Microsoft returned, as read. Nothing here is rated.">
-        {/* resource_id duplicates the Resource ID fact above, same as the Workload overview. */}
-        <AttrFacts attrs={resource.attrs} skip={["resource_id"]} />
-      </Panel>
+      {/* Shown only when the backend sent attributes: it keeps none for resources today. */}
+      {resource.attrs && Object.keys(resource.attrs).length ? (
+        <Panel title="Details from Microsoft" description="The other details Microsoft returned, as read. Nothing here is rated.">
+          {/* resource_id duplicates the Resource ID fact above, same as the Workload overview. */}
+          <AttrFacts attrs={resource.attrs} skip={["resource_id"]} />
+        </Panel>
+      ) : null}
     </div>
   );
 }

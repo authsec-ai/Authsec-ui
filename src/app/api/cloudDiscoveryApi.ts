@@ -278,8 +278,9 @@ interface ConnectorEnvelope {
 /** `GET|PUT /aws/connectors/:id/schedule` — automatic rescans.
  * A connector never scheduled reads as `enabled: false` with the default
  * interval. `paused_reason` is "" unless the scheduler paused the schedule
- * after repeated failures. `scheduler_active: false` means this deployment has
- * the scheduler switched off: the settings are kept but nothing runs on them. */
+ * after repeated failures. `scheduler_active: false` means no scheduler is
+ * serving the schedule (the answering server does not run one and the schedule
+ * is overdue): the settings are kept but nothing runs on them. */
 export interface AWSScanSchedule {
   enabled: boolean;
   interval_minutes: number;
@@ -1263,7 +1264,7 @@ export interface AzureSubscriptionResult {
   connector_id?: string;
   status: string;
   reader: {
-    /** created · already_assigned · inherited · permission_denied · skipped · failed */
+    /** created · already_assigned · inherited · permission_denied · skipped · failed · not_checked */
     status: string;
     verified: boolean;
     error?: string;
@@ -1374,11 +1375,9 @@ export interface AzureResource {
   kind: string;
   native_id: string;
   name: string;
-  // Same shape as AzureIdentity/AzureWorkload's attrs on this same read: tags,
-  // sku, public_network_access and the rest of what Azure returned for this
-  // resource. Was missing here only because this type was never updated —
-  // the field was already on the wire.
-  attrs: Record<string, unknown>;
+  // The backend's resource rows (models.CloudResource) keep no attributes from
+  // Azure, so this is absent today; typed for when they are stored.
+  attrs?: Record<string, unknown>;
   first_seen_at: string;
   last_seen_at: string;
 }
@@ -1546,20 +1545,6 @@ export interface AzureEvidence {
   last_confirmed_at?: string | null;
   confirmation_count: number;
   facts: Record<string, unknown> | null;
-}
-
-/** One count of the Azure rows of the shared IGA graph: a table, a kind, a state. */
-export interface AzureGraphCount {
-  table: string;
-  kind: string;
-  state: string;
-  count: number;
-}
-
-export interface AzureGraphSummary {
-  rows: AzureGraphCount[];
-  /** False while the graph is not ready: nothing is projected yet, so every count is 0. */
-  projectionEnabled: boolean;
 }
 
 function azureListParams(a: AzureListArgs): Record<string, string | number> {
@@ -2234,8 +2219,10 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     verifyAzureConnector: builder.mutation<CloudConnector, string>({
       query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/verify`, method: "POST" }),
       transformResponse: (r: ConnectorEnvelope) => r.data,
+      // A verify starts a discovery pass (Rescan is a verify): the Scans tab reads again.
       invalidatesTags: (_r, _e, id) => [
         { type: "CloudConnector", id },
+        { type: "CloudConnector", id: `${id}:scans` },
         { type: "CloudConnector", id: "AZURE_LIST" },
         "Connections",
       ],
@@ -2253,6 +2240,7 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     listAzureScanRuns: builder.query<AzureScanRun[], string>({
       query: (id) => ({ url: `/authsec/discovery/azure/connectors/${id}/scan-runs`, method: "GET" }),
       transformResponse: (r: { data: AzureScanRun[] }) => r.data ?? [],
+      providesTags: (_r, _e, id) => [{ type: "CloudConnector", id: `${id}:scans` }],
     }),
 
     listAzureIdentities: builder.query<CloudPage<AzureIdentity>, AzureListArgs>({
@@ -2324,13 +2312,6 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
       transformResponse: (r: CloudListEnvelope<AzureEvidence>, _m, arg) => toCloudPage(r, arg),
     }),
 
-    getAzureGraphSummary: builder.query<AzureGraphSummary, void>({
-      query: () => ({ url: "/authsec/discovery/azure/graph/summary", method: "GET" }),
-      transformResponse: (r: { data: AzureGraphCount[] | null; meta?: { projection_enabled?: boolean } }) => ({
-        rows: r.data ?? [],
-        projectionEnabled: r.meta?.projection_enabled !== false,
-      }),
-    }),
   }),
 });
 
@@ -2391,5 +2372,4 @@ export const {
   useGetAzureReachQuery,
   useListAzureFoundryQuery,
   useListAzureEvidenceQuery,
-  useGetAzureGraphSummaryQuery,
 } = cloudDiscoveryApi;

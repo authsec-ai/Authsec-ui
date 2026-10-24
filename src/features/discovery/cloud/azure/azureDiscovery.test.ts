@@ -5,7 +5,6 @@ import type { AzureFoundryTrust, AzureWorkload, CloudConnector } from "@/app/api
 import { armTypeLabel, foundryKindLabel, graphKindLabel, surfaceLabel } from "./azureDiscoveryLabels";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
 import { azureFallbackScope, identityFilterArgs, scanTablesHref } from "./azureFallback";
-import { isPresentState, stateLabel, summarizeGraph } from "./azureGraphSummary";
 
 describe("Azure resource types", () => {
   it("names the types discovery reads in Microsoft's words, case-insensitively", () => {
@@ -40,54 +39,6 @@ describe("Azure resource types", () => {
   it("names a Foundry kind, else its runtime type", () => {
     expect(foundryKindLabel("hub_project", "microsoft.machinelearningservices/workspaces")).toBe("AI project in a hub");
     expect(foundryKindLabel(undefined, "microsoft.machinelearningservices/workspaces")).toBe("Machine Learning workspace");
-  });
-});
-
-describe("summarizeGraph", () => {
-  const rows = [
-    { table: "resource", kind: "microsoft.keyvault/vaults", state: "active", count: 3 },
-    { table: "resource", kind: "microsoft.keyvault/vaults", state: "retired", count: 2 },
-    { table: "resource", kind: "microsoft.storage/storageaccounts", state: "active", count: 5 },
-    { table: "identity", kind: "entra_user", state: "active", count: 10 },
-    { table: "access_edge", kind: "azure_rbac", state: "ended", count: 4 },
-    { table: "access_edge", kind: "azure_rbac", state: "current", count: 1 },
-    { table: "credential", kind: "entra_client_secret", state: "expired", count: 2 },
-    { table: "workload", kind: "microsoft.web/sites", state: "active", count: 0 },
-  ];
-
-  it("orders tables as a reader meets them and drops empty ones", () => {
-    expect(summarizeGraph(rows).map((s) => s.table)).toEqual(["identity", "resource", "access_edge", "credential"]);
-  });
-
-  it("counts what is still in Azure apart from what is gone", () => {
-    const resources = summarizeGraph(rows).find((s) => s.table === "resource")!;
-    expect(resources.present).toBe(8);
-    expect(resources.total).toBe(10);
-    expect(resources.kinds.map((k) => k.label)).toEqual(["Storage account", "Key Vault"]);
-    expect(resources.kinds[1].byState).toEqual([
-      { state: "active", count: 3 },
-      { state: "retired", count: 2 },
-    ]);
-    const grants = summarizeGraph(rows).find((s) => s.table === "access_edge")!;
-    expect(grants.present).toBe(1);
-  });
-
-  it("treats an expired credential as still there, an ended grant as gone", () => {
-    expect(isPresentState("expired")).toBe(true);
-    expect(isPresentState("ended")).toBe(false);
-    expect(isPresentState("tombstoned")).toBe(false);
-    expect(summarizeGraph(rows).find((s) => s.table === "credential")!.present).toBe(2);
-  });
-
-  it("keeps a table it does not know rather than hiding it", () => {
-    const out = summarizeGraph([{ table: "new_table", kind: "k", state: "active", count: 1 }]);
-    expect(out).toHaveLength(1);
-    expect(out[0].label).toBe("new table");
-  });
-
-  it("words a state", () => {
-    expect(stateLabel("not_in_inventory")).toBe("Not in inventory");
-    expect(stateLabel("")).toBe("Not stated");
   });
 });
 

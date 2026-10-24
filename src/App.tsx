@@ -69,6 +69,7 @@ import GatedRedirect from "./features/iga/policy/GatedRedirect";
 // Access policies (the one Policy feature): list, create/edit, detail. Each page
 // renders through PolicyShell, which gates on the access_policies capability.
 const PoliciesListPage = React.lazy(() => import("./features/iga/policy/access/PoliciesListPage"));
+const PolicySetupRedirect = React.lazy(() => import("./features/iga/connections/PolicySetupRedirect"));
 const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
 const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
@@ -838,6 +839,16 @@ function AppContent() {
                         <IgaLayout>
                           <PoliciesListPage />
                         </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Policy setup moved onto the connection pages; Slack messages
+                      and older links still name it. */}
+                  <Route
+                    path="/iga/policy/setup/:section?"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <PolicySetupRedirect />
                       </ProtectedRoute>
                     }
                   />

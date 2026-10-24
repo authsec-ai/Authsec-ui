@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { getWorkspaceId } from "@/utils/workspace";
 
 import { PolicyActionError, PolicyLoadFailure, PolicyShell, classifyPolicyError, describeFailure, usePolicyAction } from "../shared";
+import { usePolicyCapabilities } from "../shared/usePolicyCapabilities";
 import { PageFooter } from "@/components/layout/PageFooter";
 import { ProviderGlyph } from "../../shared/components/ProviderGlyph";
 import { AzureIdentityPicker, AzureResourcePicker } from "./AzurePickers";
@@ -47,9 +48,17 @@ import {
   accessBlurbs,
   armParts,
   bodyOf,
+  awsTypeOf,
+  azureNoDelete,
   bucketOf,
+  parameterOf,
+  secretOf,
+  tableOf,
+  draftCopy,
   draftOf,
   draftProblem,
+  draftSubScope,
+  draftType,
   isOver,
   emptyDraft,
   formFieldOf,
@@ -63,7 +72,9 @@ import {
 } from "./model";
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
+import { K8sPicker } from "./K8sPickers";
 import { ResourcePicker, RolePicker } from "./Pickers";
+import { RESOURCE_TYPES, resourceTypeCopy, typeRules, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
 
 function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -125,9 +136,9 @@ function Pill({
   );
 }
 
-/** One line under the access toggles saying what the choice covers. */
-function accessHint(access: AccessLevel[], isBlock: boolean, blurbs: ReturnType<typeof accessBlurbs>, aws: boolean): string {
-  if (access.includes("all")) return aws ? "Everything on this bucket or folder: reading, writing, deleting and listing." : "Everything on this resource: reading, changing and deleting.";
+/** One line under the access toggles saying what the choice covers. `copy` is the AWS type's words, absent on Azure. */
+function accessHint(access: AccessLevel[], isBlock: boolean, blurbs: ReturnType<typeof accessBlurbs>, copy: ResourceTypeCopy | undefined): string {
+  if (access.includes("all")) return copy ? copy.allHint : "Everything on this resource: reading, changing and deleting.";
   const parts = ACCESS.filter((a) => access.includes(a.key)).map((a) => blurbs[a.key].replace(/\.$/, "").toLowerCase());
   if (!parts.length) return isBlock ? "Choose what to block." : "Choose what to allow.";
   return `${isBlock ? "Blocks" : "Allows"}: ${parts.join("; ")}.`;
@@ -162,7 +173,11 @@ export default function PolicyFormPage() {
   const azureRoleQ = useGetGraphNeighbourhoodQuery({ ws, root: `identity:${fromRole}` as GraphRef, direction: "forward" }, { skip: !fromRole || !fromAzure });
 
   const [draft, setDraft] = useState<PolicyDraft>(() =>
-    emptyDraft({ provider: fromAzure ? "azure" : "aws", effect: params.get("effect") === "allow" ? "allow" : "block" }),
+    emptyDraft({
+      provider: fromAzure ? "azure" : "aws",
+      awsType: awsTypeOf(params.get("type") ?? undefined),
+      effect: params.get("effect") === "allow" && !resourceTypeCopy(params.get("type") ?? undefined)?.blockOnly ? "allow" : "block",
+    }),
   );
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });
@@ -177,10 +192,36 @@ export default function PolicyFormPage() {
     const r = resourceQ.data?.data;
     if (r && !filled.current.resource) {
       filled.current.resource = true;
+      const tbl = tableOf(r.text);
+      const sec = secretOf(r.text);
+      const param = parameterOf(r.text);
       const b = bucketOf(r.text);
-      if (r.type === "s3_bucket" || b) {
+      if (param) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "ssm_parameter",
+          effect: "block",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "ssm_parameter", name: param.name, bucket: "", arn: param.arn, account_id: param.account, region: param.region },
+          prefix: "",
+        }));
+      } else if (sec) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "secretsmanager_secret",
+          effect: "block",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "secretsmanager_secret", name: sec.name, bucket: "", arn: r.text.trim(), account_id: sec.account, region: sec.region },
+          prefix: "",
+        }));
+      } else if (tbl) {
+        setDraft((d) => ({
+          ...d,
+          awsType: "dynamodb_table",
+          resource: { provider: "aws", resource_id: fromResource, resource_type: "dynamodb_table", name: tbl.table, bucket: "", arn: tbl.arn, account_id: tbl.account, region: tbl.region },
+          prefix: "",
+        }));
+      } else if (r.type === "s3_bucket" || b) {
         const bucket = b?.bucket ?? r.text;
-        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
+        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, resource_type: "s3_bucket", name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
       }
     }
   }, [resourceQ.data, fromResource]);
@@ -197,6 +238,7 @@ export default function PolicyFormPage() {
         resource: {
           provider: "azure",
           resource_id: fromResource,
+          resource_type: "azure_resource",
           name: n.label,
           bucket: "",
           arn,
@@ -231,14 +273,38 @@ export default function PolicyFormPage() {
   };
   // Another cloud is another resource and other identities: start those over.
   const setProvider = (provider: PolicyDraft["provider"]) => {
-    setDraft((d) => (d.provider === provider ? d : { ...d, provider, resource: null, prefix: "", roles: [] }));
+    setDraft((d) =>
+      d.provider === provider
+        ? d
+        : // Kubernetes blocks a ServiceAccount from a whole role.
+          { ...d, provider, resource: null, prefix: "", roles: [], ...(provider === "k8s" ? { effect: "block" as const, access: ["all" as const] } : {}) },
+    );
     setFieldError(null);
   };
+  // So is another kind of AWS resource.
+  const setAwsType = (awsType: AwsResourceType) => {
+    setDraft((d) =>
+      d.awsType === awsType && (!d.resource || d.resource.resource_type === awsType)
+        ? d
+        : {
+            ...(resourceTypeCopy(awsType)?.blockOnly ? withEffect(d, "block") : d),
+            awsType,
+            resource: null,
+            prefix: "",
+            roles: [],
+            ...(resourceTypeCopy(awsType)?.noDelete ? { access: d.access.filter((a) => a !== "delete").length ? d.access.filter((a) => a !== "delete") : ["read" as const] } : {}),
+          },
+    );
+    setFieldError(null);
+  };
+  const caps = usePolicyCapabilities(ws);
+  const awsTypes = (Object.keys(RESOURCE_TYPES) as AwsResourceType[]).filter((t) => caps.accessResourceTypes.includes(t));
   const setEffect = (e: AccessEffect) => {
     setDraft((d) => withEffect(d, e));
     setFieldError(null);
   };
   const toggleAccess = (a: AccessLevel) => {
+    if (draft.provider === "k8s") return;
     if (a === "all") return set("access", draft.access.includes("all") ? ["read"] : ["all"]);
     const base = draft.access.filter((x) => x !== "all");
     set("access", base.includes(a) ? base.filter((x) => x !== a) : [...base, a]);
@@ -319,19 +385,26 @@ export default function PolicyFormPage() {
   const err = (f: string) => (fieldError?.field === f ? fieldError.message : undefined);
   const localSentence = useMemo(() => {
     if (!draft.resource || draft.roles.length === 0 || draft.access.length === 0) return "";
-    return policySentence({ ...draft, resource: { ...draft.resource, prefix: draft.provider === "aws" ? draft.prefix.trim() : "" }, ...windowOf(draft) });
+    return policySentence({ ...draft, resource: { ...draft.resource, prefix: draftSubScope(draft) }, ...windowOf(draft) });
   }, [draft]);
   const isBlock = draft.effect === "block";
   const aws = draft.provider === "aws";
+  const k8s = draft.provider === "k8s";
   const who = whoWord(draft.provider, draft.roles.length);
-  const blurbs = accessBlurbs(draft.provider, draft.resource?.arn);
+  const blurbs = accessBlurbs(draft.provider, draft.resource?.arn, draftType(draft));
+  // The AWS resource type's words: S3's until another type is chosen. Read on AWS only.
+  const awsCopy: ResourceTypeCopy = draftCopy(draft) ?? RESOURCE_TYPES.s3_bucket;
+  const rules = typeRules(awsCopy, caps.accessTypeViews[draftType(draft)]);
+  const blockOnly = k8s || (aws && (rules.blockOnly || caps.accessBlockOnly.includes(draftType(draft))));
   const readiness = useAccessReadiness(ws, draft.resource?.account_id || undefined, draft.provider);
   const bindingBlocked = blockers.some((b) => b.code.startsWith("binding_")) || (!readiness.loading && !readiness.ready);
   const otherBlockers = blockers.filter((b) => !b.code.startsWith("binding_"));
   const notes = (shown?.warnings ?? []).filter((w) => w.code !== "other_paths");
   const workloads = [...new Set((shown?.also_affected ?? []).flatMap((a) => a.workloads.map((w) => w.name)))];
   const disabledWhy = bindingBlocked
-    ? aws
+    ? k8s
+      ? readiness.reason || "Kubernetes access policies are not available on this server."
+      : aws
       ? "Set up AWS access for this account to apply."
       : !readiness.available
         ? readiness.reason || "Applying policies is not available on this server."
@@ -394,7 +467,7 @@ export default function PolicyFormPage() {
               {editing || fromAzure ? null : (
                 <Block title="Cloud">
                   <div role="radiogroup" aria-label="Cloud" className="flex flex-wrap gap-1.5">
-                    {(["aws", "azure"] as const).map((c) => (
+                    {(caps.accessK8s ? (["aws", "azure", "k8s"] as const) : (["aws", "azure"] as const)).map((c) => (
                       <Pill key={c} radio on={draft.provider === c} onClick={() => setProvider(c)}>
                         <span aria-hidden="true" className="mr-1.5 inline-flex"><ProviderGlyph provider={c} /></span>
                         {CLOUD[c].label}
@@ -410,18 +483,32 @@ export default function PolicyFormPage() {
                 </p>
               ) : null}
 
+              {aws && awsTypes.length > 1 ? (
+                <Block title="Resource type">
+                  <div role="radiogroup" aria-label="Resource type" className="flex flex-wrap gap-1.5">
+                    {awsTypes.map((t) => (
+                      <Pill key={t} radio on={draftType(draft) === t} onClick={() => setAwsType(t)}>
+                        {RESOURCE_TYPES[t].pill}
+                      </Pill>
+                    ))}
+                  </div>
+                </Block>
+              ) : null}
+
               {aws ? (
-              <Block title="Bucket" hint="Choose the S3 bucket (file storage) this rule is about. Only buckets that AuthSec has found in your AWS policies are listed. To cover just one folder, add it next to the bucket.">
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-start">
+              <Block title={awsCopy.title} hint={awsCopy.hint}>
+                <div className={cn("grid gap-2 sm:items-start", awsCopy.subScope === "folder" && "sm:grid-cols-[minmax(0,1fr)_14rem]")}>
                   <div id="ap-resource">
                     <ResourcePicker
                       ws={ws}
+                      type={awsTypeOf(draftType(draft))}
                       value={draft.resource}
                       onChange={(r) => setDraft((d) => ({ ...d, resource: r, roles: !r || !d.resource || r.account_id === d.resource.account_id ? d.roles : [] }))}
                       invalid={!!err("resource")}
                     />
                     <FieldError message={err("resource")} />
                   </div>
+                  {awsCopy.subScope === "folder" ? (
                   <div>
                     <label htmlFor="ap-prefix" className="sr-only">
                       Folder (optional)
@@ -457,8 +544,24 @@ export default function PolicyFormPage() {
                     ) : null}
                     <FieldError message={err("prefix")} />
                   </div>
+                  ) : null}
                 </div>
               </Block>
+              ) : k8s ? (
+                <Block
+                  title="ServiceAccount and role"
+                  hint="Choose the ServiceAccount, then the role to take it out of. AuthSec asks the cluster's agent to remove it from every binding of that role, and to put it back at the end."
+                >
+                  <div id="ap-resource">
+                    <K8sPicker
+                      resource={draft.resource}
+                      roles={draft.roles}
+                      onChange={(resource, roles) => setDraft((d) => ({ ...d, resource, roles }))}
+                      invalid={!!err("resource") || !!err("roles")}
+                    />
+                    <FieldError message={err("resource") || err("roles")} />
+                  </div>
+                </Block>
               ) : (
                 <Block title="Resource to control" hint="Pick the Azure resource to control, such as a storage account or a key vault. Only resources found by a scan are listed.">
                   <div id="ap-resource">
@@ -481,7 +584,7 @@ export default function PolicyFormPage() {
                     <FieldError message={err("roles")} />
                   </div>
                 </Block>
-              ) : (
+              ) : k8s ? null : (
                 <Block title="Logins" hint="Pick the logins this rule applies to: app logins, Azure-run logins or AI agents. Anything that runs under one of them is covered too.">
                   <div id="ap-roles">
                     <AzureIdentityPicker ws={ws} resource={draft.resource} effect={draft.effect} value={draft.roles} onChange={(r) => set("roles", r)} invalid={!!err("roles")} />
@@ -504,7 +607,19 @@ export default function PolicyFormPage() {
                       >
                         Block
                       </Pill>
-                      <Pill radio on={!isBlock} onClick={() => setEffect("allow")} title={`Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`}>
+                      <Pill
+                        radio
+                        on={!isBlock}
+                        onClick={() => setEffect("allow")}
+                        disabled={blockOnly}
+                        title={
+                          k8s
+                            ? "Kubernetes roles can only be blocked for now."
+                            : blockOnly
+                              ? `A ${awsCopy.noun} can only be blocked for now.`
+                              : `Grant access these ${whoWord(draft.provider, 2)} do not have; must end within 30 days`
+                        }
+                      >
                         {aws ? "Allow for a time" : "Allow for a set time"}
                       </Pill>
                     </div>
@@ -518,13 +633,22 @@ export default function PolicyFormPage() {
                           All access
                         </Pill>
                       ) : null}
-                      {ACCESS.map((a) => (
+                      {ACCESS.filter(
+                        (a) =>
+                          !k8s &&
+                          !(a.key === "delete" && (aws ? rules.noDelete : azureNoDelete(draft.resource?.arn))) &&
+                          !(aws && !isBlock && rules.allowLevels && !rules.allowLevels.includes(a.key)),
+                      ).map((a) => (
                         <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={blurbs[a.key]}>
                           {a.label}
                         </Pill>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-xs text-(--color-text-muted)">{accessHint(draft.access, isBlock, blurbs, aws)}</p>
+                    <p className="mt-1.5 text-xs text-(--color-text-muted)">
+                      {k8s
+                        ? "Kubernetes cannot take away part of a binding: the ServiceAccount loses everything the role gives it."
+                        : accessHint(draft.access, isBlock, blurbs, aws ? awsCopy : undefined)}
+                    </p>
                     <FieldError message={err("access")} />
                   </fieldset>
 
@@ -610,19 +734,26 @@ export default function PolicyFormPage() {
                     <span className="text-xs text-(--color-text-muted)">Summary</span>
                   </div>
                   <p className="text-[15px] font-semibold leading-snug text-(--color-text)">
-                    {localSentence || (aws ? "Choose a bucket, roles and access to see what this does." : "Pick a resource, logins and action to see a plain summary here.")}
+                    {localSentence || (aws ? `Choose a ${awsCopy.noun}, roles and access to see what this does.` : "Pick a resource, logins and action to see a plain summary here.")}
                   </p>
                   {previewable ? (
                     <p className="text-xs text-(--color-text-muted)">
                       {aws
-                        ? "Only these roles change. Other roles, users, groups and bucket policies keep their access."
-                        : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
+                        ? awsCopy.untouched
+                        : k8s
+                          ? "Only this ServiceAccount changes, and only in the bindings of this role. Its other roles, and access through groups, are untouched."
+                          : "Only these identities change, and only on this resource. Other identities, and roles given on the resource group or subscription, are untouched."}
                     </p>
                   ) : null}
                 </div>
 
                 <ul className="divide-y divide-(--color-border-subtle) border-t border-(--color-border-subtle) text-[13px]">
-                  {readiness.loading || (!aws && !draft.resource) ? null : readiness.ready ? (
+                  {readiness.loading || (!aws && !draft.resource) ? null : k8s ? (
+                    <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
+                      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
+                      The cluster&rsquo;s agent makes the change. It must have enforcement.bindings on and list this role; the preview says if it does not.
+                    </li>
+                  ) : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <CheckCircle2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-success-text)" />
                       {aws ? "AuthSec can change IAM in this account." : `AuthSec can change role assignments in subscription ${readiness.scopes[0]?.name ?? draft.resource?.subscription ?? ""}.`}

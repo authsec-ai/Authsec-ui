@@ -101,7 +101,11 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
         // its own (a plain name, a list of names) clips at the column boundary with
         // "…" instead of bleeding into the next column — the safety net every table
         // gets for free, on top of whatever truncation a cell's own content applies.
-        "overflow-hidden px-[var(--component-table-cell-padding-inline)] py-[var(--component-table-cell-padding-block)] align-middle whitespace-nowrap text-ellipsis text-[length:var(--font-size-body-sm)] text-[color:var(--color-text-primary)] leading-[var(--line-height-body)] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        // Popovers, menus and tooltips are portalled and focus rings fit inside the
+        // padding, so nothing else is clipped -- except in a checkbox cell, which drops
+        // its right padding and holds no text: it stays overflow-visible so the
+        // checkbox's focus ring is not cut (UI-049).
+        "overflow-hidden [&:has([role=checkbox])]:overflow-visible px-[var(--component-table-cell-padding-inline)] py-[var(--component-table-cell-padding-block)] align-middle whitespace-nowrap text-ellipsis text-[length:var(--font-size-body-sm)] text-[color:var(--color-text-primary)] leading-[var(--line-height-body)] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

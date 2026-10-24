@@ -22,12 +22,26 @@ export function useAccessReadiness(ws: string, scopeId?: string, provider: Acces
   const q = useGetAccessReadinessQuery({ ws });
   const r = q.data?.data;
   const all = r
-    ? provider === "aws"
+    ? provider !== "azure"
       ? r.accounts.map((a) => ({ id: a.account_id, name: a.account_id, ready: a.ready, reason: a.reason }))
       : r.azure_subscriptions.map((s) => ({ id: s.subscription_id, name: s.name || s.subscription_id, ready: s.ready, reason: s.reason }))
     : [];
   const scopes = scopeId ? all.filter((a) => a.id.toLowerCase() === scopeId.toLowerCase()) : all;
   const notReady = scopes.filter((a) => !a.ready);
+  if (provider === "k8s") {
+    // Kubernetes has no cloud credentials to check: the cluster's agent says
+    // whether it may change bindings, and the preview reports it.
+    return {
+      loading: q.isLoading,
+      failed: q.isError && classifyPolicyError(q.error)?.kind !== "unavailable",
+      available: r?.available ?? false,
+      reason: r?.reason ?? "",
+      scopes: [],
+      notReady: [],
+      ready: !!r && r.available,
+      refetch: () => void q.refetch(),
+    };
+  }
   return {
     loading: q.isLoading,
     failed: q.isError && classifyPolicyError(q.error)?.kind !== "unavailable",

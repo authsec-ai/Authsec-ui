@@ -1,8 +1,8 @@
 /**
  * Access policies: an admin blocks or allows identities on one cloud resource
  * for a time window (SPEC-access-policies.md). On AWS, IAM roles on an S3 bucket
- * or folder: AuthSec attaches its own IAM policy to each role and AWS enforces
- * it, the window included. On Azure, service principals, managed identities and
+ * or folder, or a DynamoDB table: AuthSec attaches its own IAM policy to each
+ * role and AWS enforces it, the window included. On Azure, service principals, managed identities and
  * agent identities on one resource: AuthSec removes (block) or creates (allow)
  * role assignments and undoes it at the end.
  *
@@ -32,26 +32,40 @@ const BASE = `${POLICY_BASE}/access-policies`;
 export type AccessEffect = "block" | "allow";
 /** `all` is offered for block only. */
 export type AccessLevel = "read" | "write" | "delete" | "all";
-export type AccessProvider = "aws" | "azure";
+export type AccessProvider = "aws" | "azure" | "k8s";
 /** `ending`: ended (End, or its end time passed) while AuthSec is still undoing it in the cloud. */
 export type AccessPolicyStatus = "scheduled" | "applying" | "active" | "paused" | "ending" | "ended" | "failed" | "drift";
 /** How a policy left AWS (or `""` while it has not). */
 export type AccessEndReason = "" | "expired" | "ended" | "superseded" | "paused";
 
+/**
+ * What a policy is on. `""` when the backend cannot tell (an ARN it no longer
+ * parses); a backend that predates the field omits it.
+ */
+export type AccessResourceType = "s3_bucket" | "dynamodb_table" | "secretsmanager_secret" | "ssm_parameter" | "bedrock_model" | "bedrock_agent" | "agentcore_runtime" | "lambda_function" | "kms_key" | "sqs_queue" | "sns_topic" | "azure_resource" | "k8s_role" | "";
+
 export interface AccessPolicyResource {
   resource_id: string;
-  /** The bucket's ARN on AWS; the ARM id on Azure. */
+  resource_type: AccessResourceType;
+  /** The bucket's or table's ARN on AWS; the ARM id on Azure. */
   arn: string;
-  /** AWS only; "" on Azure. */
+  /** S3 only; "" for a table and on Azure. */
   bucket: string;
-  /** "" means the whole bucket (always "" on Azure). */
+  /** An S3 folder; "" means the whole bucket (always "" for a table and on Azure). */
   prefix: string;
-  /** The AWS account, or the Azure subscription id. */
+  /** The AWS account (a table's own, from its ARN), or the Azure subscription id. */
   account_id: string;
   provider: AccessProvider;
-  /** The bucket or the Azure resource's name. */
+  /** The bucket, the table, or the Azure resource's name. */
   name: string;
-  /** The Azure resource type (`microsoft.storage/storageaccounts`); empty on AWS. */
+  /** A table's AWS region; absent for S3 and Azure. */
+  region?: string;
+  /**
+   * The kind of the Discovery record the policy names: on Azure the resource
+   * type (`microsoft.storage/storageaccounts`); on AWS the record's kind, which
+   * is `selector` for a path such as `bucket/*` or `table/orders/index/*`. Not
+   * the resource's type: read `resource_type` for that.
+   */
   kind: string;
 }
 
@@ -219,6 +233,7 @@ export interface AccessReadiness {
 
 export interface ListAccessPoliciesArgs extends WsArg, PageArgs {
   status?: AccessPolicyStatus;
+  provider?: AccessProvider;
   effect?: AccessEffect;
   q?: string;
   resource_id?: string;

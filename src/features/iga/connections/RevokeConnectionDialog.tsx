@@ -76,9 +76,10 @@ function Copy({ c, lastGitHubOrg }: { c: Connection; lastGitHubOrg: boolean }): 
             this connection again.
           </p>
           <p className="text-muted-foreground">
-            <strong>AuthSec deletes nothing in your Azure tenant.</strong> The Reader role assignments and the AuthSec
-            enterprise application stay until you delete the application in Microsoft Entra ID, which also removes its role
-            assignments.
+            <strong>AuthSec deletes nothing in your Azure tenant.</strong> Connected with AuthSec&apos;s app: its Reader role
+            assignments and the AuthSec enterprise application stay until you delete the application in Microsoft Entra ID,
+            which also removes its role assignments. Connected with your own app: AuthSec deletes the client secret it stored,
+            and your app and its role assignments stay.
           </p>
           <p className="text-muted-foreground">
             Everything already discovered is kept, unchanged, and is no longer reconfirmed. Connecting the same tenant again

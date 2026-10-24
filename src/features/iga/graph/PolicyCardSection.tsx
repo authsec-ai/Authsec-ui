@@ -1,14 +1,14 @@
 /**
  * What the graph's selection card offers about policy. With the one access-policy
- * feature, a policy blocks or allows an IAM role's access to an S3 bucket for a
- * set window. The card is the way in: its main button carries the thing selected
+ * feature, a policy blocks or allows an IAM role's access to an S3 bucket or a DynamoDB table, or
+ * blocks it on a Secrets Manager secret, for a set window. The card is the way in: its main button carries the thing selected
  * into the create form (`/iga/policy/new`), which resolves it server-side.
  *
  *   IAM role        main button: a policy for this role; policies in force listed
- *   S3 resource     main button: a policy on this bucket; the roles drawn as
+ *   S3 / DynamoDB   main button: a policy on this bucket or table; the roles drawn as
  *                   reaching it are shortcuts that fill in the role as well
  *   workload        no policy of its own: points at the role it runs as
- *   other resource  one line: only S3 buckets are supported
+ *   other resource  one line: only S3 buckets and DynamoDB tables are supported
  *   grant line      main button: a policy for the role that holds the grant
  *   IAM user/group  one line: policies change roles, not users or groups
  *   Kubernetes      the shared "not yet supported" note
@@ -41,7 +41,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, whenText } from "../policy/access/model";
+import { bucketOf, modelOf, parameterOf, secretOf, simpleTargetOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
@@ -117,12 +117,12 @@ export function usePolicyCard({
     if (holder?.provider === "azure") return azureLine(e, nodes);
     if (holder?.kind !== "iam_role") return none;
     const target = nodes.get(e.to as GraphRef);
-    const s3 = target ? bucketOf(target.text ?? target.arn ?? target.label) : null;
+    const where = target ? policyTarget(target, caps.accessResourceTypes) : null;
     return {
       section: null,
       action: {
         label: "New access policy",
-        to: newPolicyHref({ identity_account_id: refId(holder.ref), resource_id: s3 && target ? refId(target.ref) : undefined }),
+        to: newPolicyHref({ identity_account_id: refId(holder.ref), resource_id: where && target ? refId(target.ref) : undefined }),
       },
     };
   }
@@ -178,12 +178,14 @@ export function usePolicyCard({
     case "exact":
     case "selector":
     case "external": {
-      const s3 = bucketOf(first.text ?? first.arn ?? first.label);
-      if (!s3) {
+      const where = policyTarget(first, caps.accessResourceTypes);
+      if (!where) {
         return {
           section: (
             <Section>
-              <p className={note}>Access policies cover S3 buckets for now, so none can be set on this resource.</p>
+              <p className={note}>
+                Access policies cover {coveredTypes(caps.accessResourceTypes)} for now, so none can be set on this resource.
+              </p>
             </Section>
           ),
           action: null,
@@ -191,7 +193,7 @@ export function usePolicyCard({
       }
       const resourceId = refId(first.ref);
       return {
-        section: <BucketSection id={v.id} node={first} bucket={s3.prefix ? `${s3.bucket}/${s3.prefix}` : s3.bucket} resourceId={resourceId} edges={edges} nodes={nodes} />,
+        section: <BucketSection id={v.id} node={first} bucket={where} resourceId={resourceId} edges={edges} nodes={nodes} />,
         action: { label: "New access policy", to: newPolicyHref({ resource_id: resourceId }) },
       };
     }
@@ -209,13 +211,51 @@ function RoleSection({ identityId }: { identityId: string }) {
     <Section>
       <InForce policies={inForce} />
       <p className={note}>
-        {inForce.length ? "Add another to block or allow this role on an S3 bucket for a set window." : "Block or allow this role on an S3 bucket for a set window."}
+        {inForce.length
+          ? "Add another to block or allow this role on an AWS resource for a set window."
+          : "Block or allow this role on an AWS resource (a bucket, table, queue, function, secret, model and more) for a set window."}
       </p>
     </Section>
   );
 }
 
 /* --------------------------------- bucket --------------------------------- */
+
+/** What a resource node is to a policy, in words (`bucket/folder/`, a table's name), or null when no policy can be on it here. */
+function policyTarget(n: GraphNode, types: readonly string[]): string | null {
+  const text = n.text ?? n.arn ?? n.label;
+  const s3 = bucketOf(text);
+  if (s3) return s3.prefix ? `${s3.bucket}/${s3.prefix}` : s3.bucket;
+  const t = types.includes("dynamodb_table") ? tableOf(text) : null;
+  if (t) return t.table;
+  const s = types.includes("secretsmanager_secret") ? secretOf(text) : null;
+  if (s) return s.name;
+  const p = types.includes("ssm_parameter") ? parameterOf(text) : null;
+  if (p) return p.name;
+  const m = types.includes("bedrock_model") ? modelOf(text) : null;
+  if (m) return m.model;
+  for (const t of ["lambda_function", "kms_key", "sqs_queue", "sns_topic"] as const) {
+    const s = types.includes(t) ? simpleTargetOf(t, text) : null;
+    if (s) return s.name;
+  }
+  return null;
+}
+
+/** The AWS types access policies take, in words: "S3 buckets, DynamoDB tables and Secrets Manager secrets". */
+function coveredTypes(types: readonly string[]): string {
+  const words = [
+    "S3 buckets",
+    ...(types.includes("dynamodb_table") ? ["DynamoDB tables"] : []),
+    ...(types.includes("secretsmanager_secret") ? ["Secrets Manager secrets"] : []),
+    ...(types.includes("ssm_parameter") ? ["SSM parameters"] : []),
+    ...(types.includes("bedrock_model") ? ["Bedrock models"] : []),
+    ...(types.includes("lambda_function") ? ["Lambda functions"] : []),
+    ...(types.includes("kms_key") ? ["KMS keys"] : []),
+    ...(types.includes("sqs_queue") ? ["SQS queues"] : []),
+    ...(types.includes("sns_topic") ? ["SNS topics"] : []),
+  ];
+  return words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
 
 /** How far back from a resource to look for a role: role → statement → resource is two hops; one spare for a summary line in between. */
 const HOPS = 3;
@@ -272,10 +312,15 @@ function BucketSection({
   const blocks = useGraphBlocks();
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, ROLES_SHOWN);
+  // A secret or a parameter takes a block only.
+  const text = node.text ?? node.arn ?? node.label;
+  const blockOnly = !!secretOf(text) || !!parameterOf(text) || !!modelOf(text);
   return (
     <Section>
       <InForce policies={blocks.forResource(node)} />
-      <p className={note}>Block or allow a role&rsquo;s access to {bucket} for a set window.</p>
+      <p className={note}>
+        {blockOnly ? "Block" : "Block or allow"} a role&rsquo;s access to {bucket} for a set window.
+      </p>
       {shown.length ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-(--color-text)">Start from a role that reaches it</p>

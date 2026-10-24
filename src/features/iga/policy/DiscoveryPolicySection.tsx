@@ -21,7 +21,7 @@ export function IdentityPolicySection({ ws, identityId }: { ws: string; identity
   return (
     <Panel
       title="Policy"
-      description="Block or allow access to an S3 bucket for this role for a set window. AuthSec changes IAM and AWS enforces it."
+      description="Block or allow this role's access to an S3 bucket or a DynamoDB table for a set window. AuthSec changes IAM and AWS enforces it."
       actions={
         <Button asChild size="sm">
           <Link to={`/iga/policy/new?identity_account_id=${encodeURIComponent(identityId)}`}>New access policy</Link>
