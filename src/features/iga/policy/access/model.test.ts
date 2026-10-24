@@ -10,6 +10,7 @@ import {
   draftSubScope,
   draftType,
   emptyDraft,
+  groupModels,
   groupParameters,
   groupSecrets,
   groupTables,
@@ -19,6 +20,7 @@ import {
   reachesFolder,
   resourceText,
   suggestedName,
+  modelOf,
   parameterOf,
   secretOf,
   tableOf,
@@ -212,7 +214,7 @@ describe("resource types", () => {
   const keys = ["noun", "pill", "title", "hint", "label", "search", "loading", "empty", "error", "blurbs", "allHint", "untouched", "subScope"];
   it("every entry has every word, and a blurb for each level", () => {
     for (const [type, copy] of Object.entries(RESOURCE_TYPES)) {
-      expect(Object.keys(copy).filter((k) => k !== "blockOnly").sort(), type).toEqual([...keys].sort());
+      expect(Object.keys(copy).filter((k) => !["blockOnly", "noDelete", "workloads"].includes(k)).sort(), type).toEqual([...keys].sort());
       for (const k of keys.filter((k) => k !== "blurbs" && k !== "subScope")) expect((copy as unknown as Record<string, string>)[k], `${type}.${k}`).toBeTruthy();
       expect(Object.keys(copy.blurbs).sort(), type).toEqual(["delete", "read", "write"]);
     }
@@ -391,5 +393,35 @@ describe("SSM parameters", () => {
     expect(params[0]).toMatchObject({ resource_id: "a", resource_type: "ssm_parameter", arn: P });
     expect(params[0].records?.map((r) => r.id)).toEqual(["a", "b"]);
     expect(RESOURCE_TYPES.ssm_parameter.blockOnly).toBe(true);
+  });
+});
+
+describe("Bedrock", () => {
+  const C = "anthropic.claude-3-5-sonnet-20240620-v1:0";
+
+  it("modelOf reads a foundation model or a system inference profile of it", () => {
+    expect(modelOf(`arn:aws:bedrock:us-east-1::foundation-model/${C}`)).toEqual({ partition: "aws", model: C });
+    expect(modelOf(`arn:aws:bedrock:us-east-1:111122223333:inference-profile/us.${C}`)).toEqual({ partition: "aws", model: C });
+    for (const text of [
+      "arn:aws:bedrock:us-east-1::foundation-model/*",
+      `arn:aws:bedrock:us-east-1:111122223333:inference-profile/xx.${C}`,
+      "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc",
+    ]) {
+      expect(modelOf(text)).toBeNull();
+    }
+  });
+
+  it("groupModels makes one entry per model, its foundation-model record first", () => {
+    const row = (id: string, text: string) => ({ ref: `resource:${id}`, text, type: "selector", account: { id: "111122223333" } }) as unknown as ResourceRow;
+    const models = groupModels([row("ip", `arn:aws:bedrock:us-east-1:111122223333:inference-profile/eu.${C}`), row("fm", `arn:aws:bedrock:us-west-2::foundation-model/${C}`)]);
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({ resource_id: "fm", resource_type: "bedrock_model", name: C, arn: `arn:aws:bedrock:*::foundation-model/${C}` });
+    expect(resourceText({ ...models[0], prefix: "" })).toBe(C);
+  });
+
+  it("agents and runtimes come from workloads; a model has nothing to delete", () => {
+    expect(RESOURCE_TYPES.bedrock_agent.workloads).toBe("bedrock_agent");
+    expect(RESOURCE_TYPES.agentcore_runtime.workloads).toBe("bedrock_agentcore_runtime");
+    expect(RESOURCE_TYPES.bedrock_model.noDelete).toBe(true);
   });
 });

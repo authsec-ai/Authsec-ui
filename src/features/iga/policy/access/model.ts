@@ -227,7 +227,8 @@ export function accessVerb(levels: readonly AccessLevel[], base = false): string
  */
 export function resourceText(r: { bucket?: string; prefix: string; name?: string; arn?: string; provider?: AccessProvider; resource_type?: string; region?: string }): string {
   if (r.provider === "azure") return r.name || (r.arn ? r.arn.slice(r.arn.lastIndexOf("/") + 1) : "");
-  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret" || r.resource_type === "ssm_parameter") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
+  if (r.resource_type === "bedrock_model") return r.name ?? "";
+  if (r.resource_type === "dynamodb_table" || r.resource_type === "secretsmanager_secret" || r.resource_type === "ssm_parameter" || r.resource_type === "bedrock_agent" || r.resource_type === "agentcore_runtime") return r.region ? `${r.name ?? ""} (${r.region})` : r.name ?? "";
   const bucket = r.bucket || r.name || "";
   return r.prefix ? `${bucket}/${r.prefix}` : bucket;
 }
@@ -354,6 +355,40 @@ export function groupParameters(rows: readonly ResourceRow[]): DraftResource[] {
     else by.set(p.arn, { provider: "aws", resource_id: rec.id, resource_type: "ssm_parameter", name: p.name, bucket: "", arn: p.arn, account_id: p.account, region: p.region, records: [rec] });
   }
   return [...by.values()].sort((a, b) => a.name.localeCompare(b.name) || (a.region ?? "").localeCompare(b.region ?? ""));
+}
+
+/** The geography prefixes of Bedrock's system inference profiles ("us.anthropic…"). */
+const BEDROCK_GEOS = new Set(["us", "eu", "apac", "us-gov", "jp", "au", "ca", "global"]);
+
+/**
+ * The Bedrock foundation model an ARN names, directly or through a system
+ * inference profile, as the backend reads it (internal/igagov/access_bedrock.go).
+ */
+export function modelOf(text: string | null | undefined): { partition: string; model: string } | null {
+  const t = text?.trim() ?? "";
+  const fm = /^arn:(aws[a-z-]*):bedrock:(?:[a-z]{2}(?:-[a-z]+)+-\d+|\*)?::foundation-model\/([a-z0-9-]+\.[A-Za-z0-9._:-]{1,200})$/.exec(t);
+  if (fm) return { partition: fm[1], model: fm[2] };
+  const ip = /^arn:(aws[a-z-]*):bedrock:[a-z]{2}(?:-[a-z]+)+-\d+:\d{12}:inference-profile\/([a-z-]+)\.([a-z0-9-]+\.[A-Za-z0-9._:-]{1,200})$/.exec(t);
+  return ip && BEDROCK_GEOS.has(ip[2]) ? { partition: ip[1], model: ip[3] } : null;
+}
+
+/** One entry per model the Bedrock records name, its foundation-model record first. */
+export function groupModels(rows: readonly ResourceRow[]): DraftResource[] {
+  const by = new Map<string, DraftResource>();
+  for (const r of rows) {
+    const m = modelOf(r.text);
+    if (!m) continue;
+    const arn = `arn:${m.partition}:bedrock:*::foundation-model/${m.model}`;
+    const rec = { id: refId(r.ref), text: r.text };
+    let e = by.get(arn);
+    if (!e) {
+      e = { provider: "aws", resource_id: "", resource_type: "bedrock_model", name: m.model, bucket: "", arn, account_id: r.account?.id ?? "", records: [] };
+      by.set(arn, e);
+    }
+    if (r.text.includes(":foundation-model/")) e.records!.unshift(rec);
+    else e.records!.push(rec);
+  }
+  return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */

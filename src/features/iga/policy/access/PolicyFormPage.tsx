@@ -279,7 +279,14 @@ export default function PolicyFormPage() {
     setDraft((d) =>
       d.awsType === awsType && (!d.resource || d.resource.resource_type === awsType)
         ? d
-        : { ...(resourceTypeCopy(awsType)?.blockOnly ? withEffect(d, "block") : d), awsType, resource: null, prefix: "", roles: [] },
+        : {
+            ...(resourceTypeCopy(awsType)?.blockOnly ? withEffect(d, "block") : d),
+            awsType,
+            resource: null,
+            prefix: "",
+            roles: [],
+            ...(resourceTypeCopy(awsType)?.noDelete ? { access: d.access.filter((a) => a !== "delete").length ? d.access.filter((a) => a !== "delete") : ["read" as const] } : {}),
+          },
     );
     setFieldError(null);
   };
@@ -593,7 +600,7 @@ export default function PolicyFormPage() {
                           All access
                         </Pill>
                       ) : null}
-                      {ACCESS.map((a) => (
+                      {ACCESS.filter((a) => !(aws && awsCopy.noDelete && a.key === "delete")).map((a) => (
                         <Pill key={a.key} on={draft.access.includes(a.key)} disabled={draft.access.includes("all")} onClick={() => toggleAccess(a.key)} title={blurbs[a.key]}>
                           {a.label}
                         </Pill>

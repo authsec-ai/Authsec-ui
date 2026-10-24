@@ -12,6 +12,7 @@
  */
 
 import type { AccessLevel, AccessResourceType } from "@/app/api/igaAccessPoliciesApi";
+import type { RuntimeKind } from "@/app/api/igaGraphApi";
 
 export interface ResourceTypeCopy {
   /** "Choose a bucket.", "No bucket matches …". */
@@ -38,6 +39,10 @@ export interface ResourceTypeCopy {
   subScope: "folder" | null;
   /** The type takes a block only: Allow is off in the form. */
   blockOnly?: boolean;
+  /** The type has nothing to delete: Delete is off in the form. */
+  noDelete?: boolean;
+  /** Picked from Discovery's workloads of this kind, not from resource records. */
+  workloads?: RuntimeKind;
 }
 
 export const RESOURCE_TYPES = {
@@ -118,6 +123,69 @@ export const RESOURCE_TYPES = {
     untouched: "Only these roles change. Other roles, users, groups and accounts it is shared with keep their access.",
     subScope: null,
     blockOnly: true,
+  },
+  bedrock_model: {
+    noun: "model",
+    pill: "Bedrock model",
+    title: "Model",
+    hint: "Choose the Bedrock foundation model this rule is about. Models that AuthSec has found in your AWS policies are listed, also through cross-region inference profiles. The rule covers the model in every region.",
+    label: "Choose a Bedrock model",
+    search: "Search for a Bedrock model",
+    loading: "Looking for models…",
+    empty: "No Bedrock model found yet. A model shows up here once one of your AWS policies names it.",
+    error: "Models could not be read.",
+    blurbs: {
+      read: "Call the model, directly or through inference profiles, prompt routers and batch jobs.",
+      write: "Fine-tune it, buy provisioned throughput, and build profiles, routers and evaluations on it.",
+      delete: "A model has nothing to delete.",
+    },
+    allHint: "Everything on this model, in every region.",
+    untouched: "Only these roles change. Other roles, users (including those holding Bedrock API keys) and groups keep their access.",
+    subScope: null,
+    blockOnly: true,
+    noDelete: true,
+  },
+  bedrock_agent: {
+    noun: "agent",
+    pill: "Bedrock agent",
+    title: "Agent",
+    hint: "Choose the Bedrock agent this rule is about, from the agents Discovery found. The rule covers every alias and version of it.",
+    label: "Choose a Bedrock agent",
+    search: "Search for a Bedrock agent",
+    loading: "Looking for agents…",
+    empty: "No Bedrock agent found yet. Agents show up here after a scan of an AWS account that has them.",
+    error: "Agents could not be read.",
+    blurbs: {
+      read: "Invoke the agent and read its memory.",
+      write: "Change the agent, its aliases, action groups, collaborators and knowledge bases.",
+      delete: "Delete the agent, its aliases, versions and memory.",
+    },
+    allHint: "Everything on this agent.",
+    untouched: "Only these roles change. Other roles, users and groups keep their access, and the agent's own role is unchanged.",
+    subScope: null,
+    blockOnly: true,
+    workloads: "bedrock_agent",
+  },
+  agentcore_runtime: {
+    noun: "agent runtime",
+    pill: "AgentCore runtime",
+    title: "Agent runtime",
+    hint: "Choose the AgentCore runtime this rule is about, from the runtimes Discovery found. The rule covers every endpoint of it.",
+    label: "Choose an AgentCore runtime",
+    search: "Search for an AgentCore runtime",
+    loading: "Looking for agent runtimes…",
+    empty: "No AgentCore runtime found yet. Runtimes show up here after a scan of an AWS account that has them.",
+    error: "Agent runtimes could not be read.",
+    blurbs: {
+      read: "Invoke the agent and read its agent card.",
+      write: "Change the runtime and its endpoints, stop sessions, change its resource policy.",
+      delete: "Delete the runtime or its endpoints.",
+    },
+    allHint: "Everything on this agent runtime.",
+    untouched: "Only these roles change. Other roles, users, groups, OAuth callers and the runtime's resource policy keep their access.",
+    subScope: null,
+    blockOnly: true,
+    workloads: "bedrock_agentcore_runtime",
   },
 } satisfies Partial<Record<AccessResourceType, ResourceTypeCopy>>;
 

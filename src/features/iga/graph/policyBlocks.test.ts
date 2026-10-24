@@ -136,3 +136,18 @@ describe("coverage on SSM", () => {
     expect(coverage(prm(["all"]), node("arn:aws:ssm:us-east-1:111122223333:parameter/prod/*"))).toBe("none");
   });
 });
+
+describe("coverage on Bedrock", () => {
+  const C = "anthropic.claude-3-5-sonnet-20240620-v1:0";
+  const model = (access: AccessLevel[]) => policy({ resource_type: "bedrock_model", name: C, arn: `arn:aws:bedrock:*::foundation-model/${C}` }, access);
+  it("a model policy covers the model in any region and its inference profiles", () => {
+    expect(coverage(model(["all"]), node(`arn:aws:bedrock:eu-west-1::foundation-model/${C}`))).toBe("full");
+    expect(coverage(model(["read"]), node(`arn:aws:bedrock:us-east-1:111122223333:inference-profile/us.${C}`))).toBe("partial");
+    expect(coverage(model(["all"]), node("arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"))).toBe("none");
+  });
+  it("an agent policy covers its workload node", () => {
+    const p = policy({ resource_type: "agentcore_runtime", resource_id: "w-1", name: "rt", arn: "arn:aws:bedrock-agentcore:us-east-1:111122223333:runtime/rt" }, ["read"]);
+    expect(coverage(p, { ...node("x"), ref: "workload:w-1" } as GraphNode)).toBe("partial");
+    expect(coverage(p, { ...node("x"), ref: "workload:w-2" } as GraphNode)).toBe("none");
+  });
+});

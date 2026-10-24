@@ -28,7 +28,7 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, parameterOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, modelOf, parameterOf, pathInBucket, secretOf, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
 // Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
@@ -79,6 +79,17 @@ export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "f
     return p.access.includes("all") ? "full" : "partial";
   }
   const text = textOf(n);
+  if (p.resource.resource_type === "bedrock_agent" || p.resource.resource_type === "agentcore_runtime") {
+    // A discovered agent: its workload node, or a record naming its ARN.
+    const own = (n && refId(n.ref) === p.resource.resource_id) || (!!text && text.trim() === p.resource.arn);
+    if (!own) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "bedrock_model") {
+    const m = modelOf(text);
+    if (!m || m.model !== p.resource.name) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
   if (p.resource.resource_type === "dynamodb_table") {
     const t = tableOf(text);
     if (!t || t.arn !== p.resource.arn) return "none";

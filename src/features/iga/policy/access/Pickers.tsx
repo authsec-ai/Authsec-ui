@@ -20,6 +20,7 @@ import {
   refId,
   useListGraphIdentitiesQuery,
   useListGraphResourcesQuery,
+  useListGraphWorkloadsQuery,
   type AccessRow,
   type ResourceRow,
 } from "@/app/api/igaGraphApi";
@@ -38,7 +39,7 @@ import { cn } from "@/lib/utils";
 
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, groupParameters, groupSecrets, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { bucketOf, groupModels, groupParameters, groupSecrets, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
 import { RESOURCE_TYPES, type AwsResourceType } from "./resourceTypes";
 import { useDebounced } from "./useDebounced";
 
@@ -72,7 +73,12 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
   return [...by.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
-const SERVICE: Record<AwsResourceType, string> = { s3_bucket: "s3", dynamodb_table: "dynamodb", secretsmanager_secret: "secretsmanager", ssm_parameter: "ssm" };
+const SERVICE: Record<AwsResourceType, string> = { s3_bucket: "s3", dynamodb_table: "dynamodb", secretsmanager_secret: "secretsmanager",
+  ssm_parameter: "ssm",
+  bedrock_model: "bedrock",
+  bedrock_agent: "bedrock",
+  agentcore_runtime: "bedrock-agentcore",
+};
 
 export const rowButton =
   "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-(--color-surface-subtle) focus-visible:bg-(--color-surface-subtle) focus-visible:outline-none";
@@ -96,17 +102,34 @@ export function ResourcePicker({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim());
-  const list = useListGraphResourcesQuery({ ws, q: dq || undefined, service: SERVICE[type], limit: 200 }, { skip: !!value });
-  const buckets = useMemo(() => (type === "s3_bucket" ? groupBuckets(list.data?.data ?? []) : []), [list.data, type]);
-  // A table, secret or parameter: one row per resource, its records grouped under it.
-  const tables = useMemo(() => {
-    const rows = list.data?.data ?? [];
+  const copy = RESOURCE_TYPES[type];
+  const workloadKind = "workloads" in copy ? copy.workloads : undefined;
+  const records = useListGraphResourcesQuery({ ws, q: dq || undefined, service: SERVICE[type], limit: 200 }, { skip: !!value || !!workloadKind });
+  // Agents and agent runtimes come from Discovery's workloads: IAM policies seldom name one.
+  const workloads = useListGraphWorkloadsQuery({ ws, q: dq || undefined, runtime_kind: workloadKind, limit: 200 }, { skip: !!value || !workloadKind });
+  const list = workloadKind ? workloads : records;
+  const buckets = useMemo(() => (type === "s3_bucket" ? groupBuckets(records.data?.data ?? []) : []), [records.data, type]);
+  // Any other type: one row per resource, its records grouped under it.
+  const tables = useMemo((): DraftResource[] => {
+    if (workloadKind) {
+      return (workloads.data?.data ?? []).map((w) => ({
+        provider: "aws",
+        resource_id: refId(w.ref),
+        resource_type: type,
+        name: w.name,
+        bucket: "",
+        arn: w.arn,
+        account_id: w.account?.id ?? "",
+        region: w.region ?? undefined,
+      }));
+    }
+    const rows = records.data?.data ?? [];
     if (type === "dynamodb_table") return groupTables(rows);
     if (type === "secretsmanager_secret") return groupSecrets(rows);
     if (type === "ssm_parameter") return groupParameters(rows);
+    if (type === "bedrock_model") return groupModels(rows);
     return [];
-  }, [list.data, type]);
-  const copy = RESOURCE_TYPES[type];
+  }, [records.data, workloads.data, workloadKind, type]);
 
   if (value) {
     return (
@@ -185,7 +208,7 @@ export function ResourcePicker({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-(--color-text)">{t.name}</span>
                         <span className="block truncate text-xs text-(--color-text-muted)">
-                          {t.region} · {t.account_id}
+                          {[t.region ?? "every region", t.account_id].filter(Boolean).join(" · ")}
                         </span>
                       </span>
                     </CommandItem>

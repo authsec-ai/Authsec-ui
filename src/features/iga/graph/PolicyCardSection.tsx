@@ -41,7 +41,7 @@ import { getWorkspaceId } from "@/utils/workspace";
 
 import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, parameterOf, secretOf, tableOf, whenText } from "../policy/access/model";
+import { bucketOf, modelOf, parameterOf, secretOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
@@ -231,7 +231,9 @@ function policyTarget(n: GraphNode, types: readonly string[]): string | null {
   const s = types.includes("secretsmanager_secret") ? secretOf(text) : null;
   if (s) return s.name;
   const p = types.includes("ssm_parameter") ? parameterOf(text) : null;
-  return p ? p.name : null;
+  if (p) return p.name;
+  const m = types.includes("bedrock_model") ? modelOf(text) : null;
+  return m ? m.model : null;
 }
 
 /** The AWS types access policies take, in words: "S3 buckets, DynamoDB tables and Secrets Manager secrets". */
@@ -241,6 +243,7 @@ function coveredTypes(types: readonly string[]): string {
     ...(types.includes("dynamodb_table") ? ["DynamoDB tables"] : []),
     ...(types.includes("secretsmanager_secret") ? ["Secrets Manager secrets"] : []),
     ...(types.includes("ssm_parameter") ? ["SSM parameters"] : []),
+    ...(types.includes("bedrock_model") ? ["Bedrock models"] : []),
   ];
   return words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }
@@ -301,7 +304,8 @@ function BucketSection({
   const roles = holdersOf(id, edges, nodes);
   const shown = roles.slice(0, ROLES_SHOWN);
   // A secret or a parameter takes a block only.
-  const blockOnly = !!secretOf(node.text ?? node.arn ?? node.label) || !!parameterOf(node.text ?? node.arn ?? node.label);
+  const text = node.text ?? node.arn ?? node.label;
+  const blockOnly = !!secretOf(text) || !!parameterOf(text) || !!modelOf(text);
   return (
     <Section>
       <InForce policies={blocks.forResource(node)} />
