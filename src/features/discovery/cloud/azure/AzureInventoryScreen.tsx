@@ -8,7 +8,7 @@
  * publication number), so what a row is "as of" is the discovery run that last
  * confirmed it.
  *
- * While the access graph is unavailable, the same three lists are read from
+ * While the Access Graph is unavailable, the same three lists are read from
  * the Azure scan tables by AzureScanTablesScreen.
  */
 
