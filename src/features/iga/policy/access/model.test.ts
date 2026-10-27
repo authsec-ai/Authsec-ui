@@ -31,6 +31,8 @@ import {
   withEffect,
   type DraftResource,
   type PolicyDraft,
+  awsResourceOf,
+  resourcePolicyHref,
 } from "./model";
 import { RESOURCE_TYPES, resourceTypeCopy, typeRules } from "./resourceTypes";
 import type { AccessPolicyDetail, AccessPolicyResource } from "@/app/api/igaAccessPoliciesApi";
@@ -492,5 +494,43 @@ describe("Kubernetes", () => {
     expect(d.access).toEqual(["all"]);
     expect(draftType(d)).toBe("k8s_role");
     expect(resourceText({ provider: "k8s", name: "agents/secret-reader", prefix: "" })).toBe("agents/secret-reader");
+  });
+});
+
+describe("awsResourceOf (UI-052)", () => {
+  const cases: [string, string, string][] = [
+    ["arn:aws:s3:::acme/reports/*", "s3_bucket", "acme"],
+    ["arn:aws:dynamodb:us-east-1:220171243705:table/acme-rag-embeddings", "dynamodb_table", "acme-rag-embeddings"],
+    ["arn:aws:secretsmanager:us-east-1:220171243705:secret:legacy-summary-AbT3LD", "secretsmanager_secret", "legacy-summary"],
+    ["arn:aws:ssm:us-east-1:220171243705:parameter/app/db", "ssm_parameter", "/app/db"],
+    ["arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0", "bedrock_model", "anthropic.claude-3-haiku-20240307-v1:0"],
+    ["arn:aws:lambda:us-east-1:220171243705:function:refund-tools", "lambda_function", "refund-tools"],
+    ["arn:aws:kms:us-east-1:220171243705:key/0f3c5a8e-1b2c-4d5e-8f90-123456789abc", "kms_key", "0f3c5a8e-1b2c-4d5e-8f90-123456789abc"],
+    ["arn:aws:sqs:us-east-1:220171243705:orders", "sqs_queue", "orders"],
+    ["arn:aws:sns:us-east-1:220171243705:alerts", "sns_topic", "alerts"],
+  ];
+  it.each(cases)("fills the form from %s", (text, type, name) => {
+    const got = awsResourceOf("rid", text);
+    expect(got?.awsType).toBe(type);
+    expect(got?.resource).toMatchObject({ provider: "aws", resource_id: "rid", resource_type: type, name });
+  });
+
+  it("keeps an S3 folder and names nothing it cannot", () => {
+    expect(awsResourceOf("rid", "arn:aws:s3:::acme/reports/*")?.prefix).toBe("reports/");
+    expect(awsResourceOf("rid", "arn:aws:apigateway:us-east-1::/apis/*")).toBeNull();
+    expect(awsResourceOf("rid", "*")).toBeNull();
+  });
+});
+
+describe("resourcePolicyHref (UI-052)", () => {
+  const all = ["s3_bucket", "dynamodb_table", "lambda_function"];
+  it("opens the form with the resource and its type", () => {
+    expect(resourcePolicyHref("r1", "arn:aws:dynamodb:us-east-1:220171243705:table/acme", "dynamodb_table", all)).toBe(
+      "/iga/policy/new?resource_id=r1&type=dynamodb_table",
+    );
+  });
+  it("offers nothing the server does not take, or that no policy can name", () => {
+    expect(resourcePolicyHref("r1", "arn:aws:sqs:us-east-1:220171243705:orders", "sqs_queue", all)).toBeNull();
+    expect(resourcePolicyHref("r1", "arn:aws:apigateway:us-east-1::/apis/*", "apigateway", all)).toBeNull();
   });
 });

@@ -49,11 +49,8 @@ import {
   armParts,
   bodyOf,
   awsTypeOf,
+  awsResourceOf,
   azureNoDelete,
-  bucketOf,
-  parameterOf,
-  secretOf,
-  tableOf,
   draftCopy,
   draftOf,
   draftProblem,
@@ -192,36 +189,14 @@ export default function PolicyFormPage() {
     const r = resourceQ.data?.data;
     if (r && !filled.current.resource) {
       filled.current.resource = true;
-      const tbl = tableOf(r.text);
-      const sec = secretOf(r.text);
-      const param = parameterOf(r.text);
-      const b = bucketOf(r.text);
-      if (param) {
+      const got = awsResourceOf(fromResource, r.text, r.type, r.account?.id ?? "");
+      if (got) {
         setDraft((d) => ({
-          ...d,
-          awsType: "ssm_parameter",
-          effect: "block",
-          resource: { provider: "aws", resource_id: fromResource, resource_type: "ssm_parameter", name: param.name, bucket: "", arn: param.arn, account_id: param.account, region: param.region },
-          prefix: "",
+          ...(resourceTypeCopy(got.awsType)?.blockOnly ? withEffect(d, "block") : d),
+          awsType: got.awsType,
+          resource: got.resource,
+          prefix: got.awsType === "s3_bucket" ? d.prefix || got.prefix : "",
         }));
-      } else if (sec) {
-        setDraft((d) => ({
-          ...d,
-          awsType: "secretsmanager_secret",
-          effect: "block",
-          resource: { provider: "aws", resource_id: fromResource, resource_type: "secretsmanager_secret", name: sec.name, bucket: "", arn: r.text.trim(), account_id: sec.account, region: sec.region },
-          prefix: "",
-        }));
-      } else if (tbl) {
-        setDraft((d) => ({
-          ...d,
-          awsType: "dynamodb_table",
-          resource: { provider: "aws", resource_id: fromResource, resource_type: "dynamodb_table", name: tbl.table, bucket: "", arn: tbl.arn, account_id: tbl.account, region: tbl.region },
-          prefix: "",
-        }));
-      } else if (r.type === "s3_bucket" || b) {
-        const bucket = b?.bucket ?? r.text;
-        setDraft((d) => ({ ...d, resource: { provider: "aws", resource_id: fromResource, resource_type: "s3_bucket", name: bucket, bucket, arn: r.text, account_id: r.account?.id ?? "" }, prefix: d.prefix || b?.prefix || "" }));
       }
     }
   }, [resourceQ.data, fromResource]);

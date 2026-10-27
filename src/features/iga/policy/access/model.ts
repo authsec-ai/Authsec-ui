@@ -469,6 +469,50 @@ export function groupSimple(type: AccessResourceType, rows: readonly ResourceRow
   return [...by.values()].map((e) => ({ ...e, resource_id: e.records![0].id })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * The form's resource for an AWS record opened from Discovery or the graph
+ * (UI-052): every type the policy form takes, read from the record's text as
+ * the pickers read it. `type` is the record's own type, `account` its account.
+ * Null for a record no access policy can name.
+ */
+export function awsResourceOf(
+  id: string,
+  text: string,
+  type?: string,
+  account = "",
+): { awsType: AwsResourceType; resource: DraftResource; prefix: string } | null {
+  const aws = (resource_type: AwsResourceType, name: string, arn: string, acct: string, region?: string, bucket = "") => ({
+    awsType: resource_type,
+    resource: { provider: "aws" as const, resource_id: id, resource_type, name, bucket, arn, account_id: acct, ...(region ? { region } : {}) },
+    prefix: "",
+  });
+  const param = parameterOf(text);
+  if (param) return aws("ssm_parameter", param.name, param.arn, param.account, param.region);
+  const sec = secretOf(text);
+  if (sec) return aws("secretsmanager_secret", sec.name, text.trim(), sec.account, sec.region);
+  const tbl = tableOf(text);
+  if (tbl) return aws("dynamodb_table", tbl.table, tbl.arn, tbl.account, tbl.region);
+  const m = modelOf(text);
+  if (m) return aws("bedrock_model", m.model, `arn:${m.partition}:bedrock:*::foundation-model/${m.model}`, account);
+  for (const t of ["lambda_function", "kms_key", "sqs_queue", "sns_topic"] as const) {
+    const st = simpleTargetOf(t, text);
+    if (st) return aws(t, st.name, st.arn, st.account, st.region);
+  }
+  const b = bucketOf(text);
+  if (type === "s3_bucket" || b) {
+    const bucket = b?.bucket ?? text;
+    return { ...aws("s3_bucket", bucket, text, account, undefined, bucket), prefix: b?.prefix ?? "" };
+  }
+  return null;
+}
+
+/** "Create policy" from a resource page: the form, with this resource chosen; null when no access policy the server takes can name it. */
+export function resourcePolicyHref(id: string, text: string, type: string | undefined, types: readonly string[]): string | null {
+  const got = awsResourceOf(id, text, type);
+  if (!got || !types.includes(got.awsType)) return null;
+  return `/iga/policy/new?${new URLSearchParams({ resource_id: id, type: got.awsType }).toString()}`;
+}
+
 /** The bucket name out of an S3 ARN or selector text, or "" when it is not one. */
 export function bucketOf(text: string | null | undefined): { bucket: string; prefix: string } | null {
   const m = text ? /^arn:aws[a-z-]*:s3:::([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])(?:\/(.*))?$/.exec(text.trim()) : null;
