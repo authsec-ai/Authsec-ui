@@ -26,6 +26,7 @@ import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { useListGraphIdentitiesQuery, useListGraphResourcesQuery, useListGraphWorkloadsQuery } from "@/app/api/igaGraphApi";
 import { useGetInventorySummaryQuery, useListInventoryQuery } from "@/app/api/igaInventoryApi";
 import { azureSourceFor } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+import { ENTRA_PERMISSION_KINDS } from "@/features/discovery/cloud/azure/entraPermissions";
 import { azureFallbackScope } from "@/features/discovery/cloud/azure/azureFallback";
 import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { useListK8sClustersQuery } from "@/app/api/k8sGraphApi";
@@ -105,7 +106,8 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   /* ---- Azure: the inventory summary; the Agents tab keeps its own list's total ---- */
   const azureOn = provider === "azure";
   const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
-  const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", scope: scopeId, q }, { skip: !azureOn || blocked });
+  // Resources counts Azure resources, not the Entra permissions its list leaves out (UI-056).
+  const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", exclude_kind: [...ENTRA_PERMISSION_KINDS], scope: scopeId, q }, { skip: !azureOn || blocked });
   // The graph not ready: the lists read the scan tables, and so do their counts.
   const azGraphOff = azureOn && classifyGraphError(azSummary.error)?.kind === "unavailable";
   const fbId = azureFallbackScope(azureConnectors, "identities", scopeId);

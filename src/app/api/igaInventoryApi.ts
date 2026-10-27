@@ -96,6 +96,8 @@ export interface InventoryArgs {
   key?: string;
   provider?: InventoryProvider;
   kind?: string;
+  /** Kinds left out (repeatable); the kind facet still counts them. */
+  exclude_kind?: string[];
   /** A connection's `scope_id`. */
   scope?: string;
   q?: string;
@@ -106,14 +108,15 @@ export interface InventoryArgs {
   facets?: string;
 }
 
-export type InventorySummaryArgs = Pick<InventoryArgs, "ws" | "key" | "provider" | "scope" | "q" | "lifecycle">;
+export type InventorySummaryArgs = Pick<InventoryArgs, "ws" | "key" | "provider" | "exclude_kind" | "scope" | "q" | "lifecycle">;
 
 function qs(args: object): string {
   const skip = new Set(["ws", "key"]);
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
     if (skip.has(k) || v === undefined || v === null || v === "") continue;
-    search.set(k, String(v));
+    if (Array.isArray(v)) v.forEach((x) => search.append(k, String(x)));
+    else search.set(k, String(v));
   }
   const s = search.toString();
   return s ? `?${s}` : "";
