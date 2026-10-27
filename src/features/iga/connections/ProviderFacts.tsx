@@ -11,6 +11,8 @@ import { AlertTriangle } from "lucide-react";
 import type { Connection } from "@/app/api/connectionsApi";
 import { useGetAwsConnectorQuery, useGetGcpConnectorQuery, useGetAzureConnectorQuery } from "@/app/api/cloudDiscoveryApi";
 import { connectorStatusFromSource, type DiscoverySource } from "@/app/api/discoveryApi";
+import { useGetInventorySummaryQuery } from "@/app/api/igaInventoryApi";
+import { getWorkspaceId } from "@/utils/workspace";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { ConnPill } from "./ConnPill";
@@ -30,6 +32,7 @@ import { Fact, Facts, Panel, CopyValue } from "@/features/iga/shared/components/
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
 
 import { awsAttrs, gcpAttrs } from "./providerData";
+import { agentCounters, inventoryCountText } from "./k8sFactsModel";
 
 /** A provider's own read that failed is said as failed, not as missing facts. */
 function FactsFailure({ error, subject, onRetry }: { error: unknown; subject: string; onRetry: () => void }) {
@@ -216,6 +219,10 @@ export function AzureFacts({ c }: { c: Connection }) {
 
 export function K8sFacts({ c, source }: { c: Connection; source: DiscoverySource }) {
   const status = connectorStatusFromSource(source);
+  // The counts come from what Discovery holds for this cluster: no agent
+  // release reports namespace or workload counters in its status (AS-167).
+  const ws = getWorkspaceId() ?? "";
+  const summary = useGetInventorySummaryQuery({ ws, provider: "k8s", scope: c.scope_id }, { skip: !ws || !c.scope_id });
   return (
     <Panel title="Cluster and agent" description="The agent reports on its own schedule; AuthSec holds no credential for the cluster.">
       <Facts>
@@ -240,9 +247,13 @@ export function K8sFacts({ c, source }: { c: Connection; source: DiscoverySource
           </Fact>
         ) : null}
         <Fact label="Created">{status.selfRegistered ? "Self-registered by the agent" : "Created by hand, not self-registered by an agent"}</Fact>
-        <Fact label="Namespaces visible">{status.namespacesVisible ?? "Not reported yet"}</Fact>
-        <Fact label="Workloads scanned">{status.workloadsScanned ?? "Not reported yet"}</Fact>
-        <Fact label="Agents matched">{status.workloadsMatched ?? "Not reported yet"}</Fact>
+        <Fact label="Workloads in Discovery">{inventoryCountText(summary, "workloads")}</Fact>
+        <Fact label="ServiceAccounts in Discovery">{inventoryCountText(summary, "identities")}</Fact>
+        {agentCounters(status).map(([label, value]) => (
+          <Fact key={label} label={label}>
+            {value}
+          </Fact>
+        ))}
       </Facts>
     </Panel>
   );
