@@ -91,6 +91,15 @@ export function accountLabel(account: GraphAccount | null): string {
 }
 
 /**
+ * What a row with no account says instead (UI-055): an ARN whose account field
+ * is empty (S3, API Gateway, a global Bedrock model) names none, which is not
+ * the same as an account AuthSec could not tell.
+ */
+export function missingAccountLabel(text: string): string {
+  return /^arn:[^:]*:[^:]*:[^:]*::/.test(text.trim()) ? "No account in the ARN" : "Unknown account";
+}
+
+/**
  * An account with its id: "Payments (429418377036)" when it has a name of its
  * own, the id alone when its name is the id. Null for no account — the
  * caller says whether that means unknown or not applicable.
