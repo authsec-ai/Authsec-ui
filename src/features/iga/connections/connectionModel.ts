@@ -441,6 +441,35 @@ export function lastScanText(c: Connection): string {
 }
 
 /** The graph column: distinct from the scan outcome. */
+/** How each provider's rows reach the graph when they have no numbered publication. */
+const UNREVISIONED_SENTENCE: Partial<Record<ConnectionProvider, string>> = {
+  k8s: "Kubernetes inventory is written as each sweep arrives. It has no numbered publication, and Discovery labels it by its sweep.",
+  azure: "Azure inventory is written as each scan is read. It has no numbered publication, and Discovery and the Access Graph read the latest scan.",
+  github: "GitHub inventory is written as each scan arrives. It has no numbered publication, and Discovery labels it by its scan.",
+};
+
+/** The Graph card's sentence: what the graph state means for this connection's provider. */
+export function graphSentence(c: Connection): string {
+  switch (c.graph.state) {
+    case "published":
+      return `Discovery's Published view shows what AuthSec concluded${c.graph.rev != null ? ` at revision ${c.graph.rev}` : ""}.`;
+    case "publishing":
+      return "The graph is being built from the latest scan. The previous publication stays until it finishes.";
+    case "failed":
+      return c.graph.published_at
+        ? `The graph from ${ago(c.graph.published_at)} is still shown. Scan again to retry.`
+        : "Nothing from this account is in the graph yet. Scan again to retry.";
+    case "not_published":
+      return "Nothing from this account is in a publication yet, so the Published view in Discovery is empty for it.";
+    case "unrevisioned":
+      return UNREVISIONED_SENTENCE[c.provider] ?? "This source is written as it is read. It has no numbered publication.";
+    case "not_applicable":
+      return "This source is not part of the graph. Discovery reads its latest collected results.";
+    default:
+      return "AuthSec reports a graph state this console does not recognise.";
+  }
+}
+
 export function graphText(c: Connection): { text: string; note?: string } {
   switch (c.graph.state) {
     case "published":
