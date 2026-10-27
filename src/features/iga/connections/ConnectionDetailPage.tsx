@@ -32,6 +32,7 @@ import {
   actionsOf,
   ago,
   day,
+  connectionCrumb,
   detailHref,
   statusOf,
   discoveryLink,
@@ -63,7 +64,8 @@ export default function ConnectionDetailPage() {
   const { pending, failures, run, dismiss } = useConnectionActions();
   const [revokeOpen, setRevokeOpen] = useState(false);
 
-  useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Connections", href: "/iga/connections" });
+  // Always name the page, so the breadcrumb never turns the URL's id into a title.
+  useBreadcrumbTail(id ? detailHref(id) : null, connectionCrumb(c, notFound), { label: "Connections", href: "/iga/connections" });
 
   // The Scope tab's region list is a live AWS call that takes seconds; start
   // it as soon as an AWS connection opens so the tab is ready when clicked.

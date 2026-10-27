@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Connection, ConnectionProvider } from "@/app/api/connectionsApi";
 
-import { graphSentence } from "./connectionModel";
+import { connectionCrumb, graphSentence } from "./connectionModel";
 
 function unrevisioned(provider: ConnectionProvider): Connection {
   return { provider, graph: { state: "unrevisioned", rev: null, published_at: null } } as Connection;
@@ -18,5 +18,13 @@ describe("graphSentence", () => {
 
   it("names no provider it does not know", () => {
     expect(graphSentence(unrevisioned("gcp"))).not.toMatch(/Kubernetes|Azure|GitHub/);
+  });
+});
+
+describe("connectionCrumb", () => {
+  it("never falls back to the URL's id", () => {
+    expect(connectionCrumb({ name: "k3s-master" } as Connection, false)).toBe("k3s-master");
+    expect(connectionCrumb(undefined, true)).toBe("Not found");
+    expect(connectionCrumb(undefined, false)).toBe("Connection");
   });
 });

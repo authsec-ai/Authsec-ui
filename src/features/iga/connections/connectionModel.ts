@@ -441,6 +441,12 @@ export function lastScanText(c: Connection): string {
 }
 
 /** The graph column: distinct from the scan outcome. */
+/** The breadcrumb's name for a connection page: its name, or what the page shows instead. */
+export function connectionCrumb(c: Connection | null | undefined, notFound: boolean): string {
+  if (c) return c.name;
+  return notFound ? "Not found" : "Connection";
+}
+
 /** How each provider's rows reach the graph when they have no numbered publication. */
 const UNREVISIONED_SENTENCE: Partial<Record<ConnectionProvider, string>> = {
   k8s: "Kubernetes inventory is written as each sweep arrives. It has no numbered publication, and Discovery labels it by its sweep.",
