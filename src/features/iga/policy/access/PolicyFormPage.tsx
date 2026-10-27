@@ -163,18 +163,23 @@ export default function PolicyFormPage() {
   const fromResource = !editing ? params.get("resource_id") ?? "" : "";
   const fromRole = !editing ? params.get("identity_account_id") ?? "" : "";
   const fromAzure = params.get("provider") === "azure";
-  const resourceQ = useGetGraphResourceQuery({ ws, id: fromResource }, { skip: !fromResource || fromAzure });
-  const roleQ = useGetGraphIdentityQuery({ ws, id: fromRole }, { skip: !fromRole || fromAzure });
+  // Opened from a Kubernetes page: the ServiceAccount is named in the link (UI-054).
+  const fromK8s = !editing && params.get("provider") === "k8s";
+  const fromSA = fromK8s && fromRole ? { identity_account_id: fromRole, name: params.get("sa") || fromRole } : null;
+  const resourceQ = useGetGraphResourceQuery({ ws, id: fromResource }, { skip: !fromResource || fromAzure || fromK8s });
+  const roleQ = useGetGraphIdentityQuery({ ws, id: fromRole }, { skip: !fromRole || fromAzure || fromK8s });
   // An Azure object is read off the shared graph: its root node names it (D-114).
   const azureResourceQ = useGetGraphNeighbourhoodQuery({ ws, root: `resource:${fromResource}` as GraphRef, direction: "reverse" }, { skip: !fromResource || !fromAzure });
   const azureRoleQ = useGetGraphNeighbourhoodQuery({ ws, root: `identity:${fromRole}` as GraphRef, direction: "forward" }, { skip: !fromRole || !fromAzure });
 
   const [draft, setDraft] = useState<PolicyDraft>(() =>
-    emptyDraft({
-      provider: fromAzure ? "azure" : "aws",
-      awsType: awsTypeOf(params.get("type") ?? undefined),
-      effect: params.get("effect") === "allow" && !resourceTypeCopy(params.get("type") ?? undefined)?.blockOnly ? "allow" : "block",
-    }),
+    fromK8s
+      ? withEffect(emptyDraft({ provider: "k8s", roles: fromSA ? [fromSA] : undefined }), "block")
+      : emptyDraft({
+          provider: fromAzure ? "azure" : "aws",
+          awsType: awsTypeOf(params.get("type") ?? undefined),
+          effect: params.get("effect") === "allow" && !resourceTypeCopy(params.get("type") ?? undefined)?.blockOnly ? "allow" : "block",
+        }),
   );
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const filled = useRef({ policy: false, resource: false, role: false });

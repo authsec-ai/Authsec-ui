@@ -43,7 +43,7 @@ import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
 import { bucketOf, modelOf, parameterOf, secretOf, simpleTargetOf, tableOf, whenText } from "../policy/access/model";
 import { identityKindLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
-import { KubernetesPolicyNote, usePolicyCapabilities } from "../policy/shared";
+import { KubernetesPolicyNote, k8sPolicyHref, usePolicyCapabilities } from "../policy/shared";
 import { isPolicyHolder, useGraphBlocks } from "./policyBlocks";
 import type { SelectionSubject } from "./SelectionCard";
 import type { VisualEdge } from "./types";
@@ -130,7 +130,13 @@ export function usePolicyCard({
   const v = subject.visual;
   const first = v.members[0];
   if (!first || v.overflow || v.members.length > 1) return none;
-  if (first.provider === "k8s") return { section: <KubernetesPolicyNote />, action: null };
+  if (first.provider === "k8s") {
+    // A ServiceAccount can be blocked from a role it holds (UI-054); the form picks the role.
+    if (caps.accessK8s && first.kind === "k8s_service_account") {
+      return { section: null, action: { label: "New access policy", to: k8sPolicyHref({ id: refId(first.ref), name: first.label.replace(/^system:serviceaccount:/, "") }) } };
+    }
+    return { section: <KubernetesPolicyNote />, action: null };
+  }
   if (first.provider === "azure") return azureCard(first, v.id, edges, nodes, onSelectNode);
 
   switch (first.kind) {

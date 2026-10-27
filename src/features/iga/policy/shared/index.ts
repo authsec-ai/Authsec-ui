@@ -9,4 +9,4 @@ export { PolicyActionError, PolicyLoadFailure } from "./PolicyErrorPanel";
 export * from "./remedy";
 export { PolicyCheckFailed, PolicyShell, PolicyUnavailable } from "./PolicyShell";
 export { StateChip } from "./StatusChip";
-export { KubernetesPolicyNote } from "./KubernetesPolicyNote";
+export { KubernetesPolicyNote, k8sPolicyHref } from "./KubernetesPolicyNote";

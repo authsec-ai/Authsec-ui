@@ -196,7 +196,9 @@ function K8sObject({ kind, id, tab }: { kind: "workload" | "identity"; id: strin
           )}
           <WhatTheClusterLetsItDo access={access} sweep={sweep} noun={isWorkload ? "workload" : "ServiceAccount"} />
           <NotEvaluated />
-          <KubernetesPolicyNote />
+          <KubernetesPolicyNote
+            serviceAccount={identity ? { id: identity.id, name: identity.anchor.replace(/^system:serviceaccount:/, "") } : undefined}
+          />
         </>
       );
     } else if (gone) {
