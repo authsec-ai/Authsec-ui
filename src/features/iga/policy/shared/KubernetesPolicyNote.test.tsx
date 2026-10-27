@@ -6,7 +6,8 @@ const caps = { state: "on", accessK8s: false, providerSupported: () => false, pr
 vi.mock("./usePolicyCapabilities", () => ({ usePolicyCapabilities: () => caps }));
 vi.mock("@/utils/workspace", () => ({ getWorkspaceId: () => "ws-1" }));
 
-import { KubernetesPolicyNote, k8sPolicyHref } from "./KubernetesPolicyNote";
+import { KubernetesPolicyNote } from "./KubernetesPolicyNote";
+import { k8sPolicyHref } from "./k8sPolicyHref";
 
 describe("KubernetesPolicyNote (UI-054)", () => {
   beforeEach(() => {

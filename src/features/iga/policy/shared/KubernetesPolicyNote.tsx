@@ -12,20 +12,11 @@ import { Link } from "react-router-dom";
 
 import { getWorkspaceId } from "@/utils/workspace";
 
+import { k8sPolicyHref } from "./k8sPolicyHref";
 import { usePolicyCapabilities } from "./usePolicyCapabilities";
 
 /** Kubernetes clusters have no connection page of their own; they are listed under Connections. */
 const CONNECTIONS = "/iga/connections";
-
-/** "Create policy" for Kubernetes (UI-054): the form on Kubernetes, with the ServiceAccount chosen when there is one. */
-export function k8sPolicyHref(sa?: { id: string; name: string }): string {
-  const q = new URLSearchParams({ provider: "k8s" });
-  if (sa?.id) {
-    q.set("identity_account_id", sa.id);
-    q.set("sa", sa.name);
-  }
-  return `/iga/policy/new?${q.toString()}`;
-}
 
 export function KubernetesPolicyNote({
   clusterConnectionHref = CONNECTIONS,
