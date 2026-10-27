@@ -79,13 +79,11 @@ import { useWorkspaceSize } from "./useWorkspaceSize";
 import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
 import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
 
-/** The Azure graph's view and direction buttons, explained on hover. */
+/** The Azure graph's view buttons, explained on hover. No direction toggle: Azure always shows what the identity reaches. */
 const AZURE_GRAPH_TIPS = {
   summary: "The short answer: who it can act as, and the Azure roles and permissions it holds, grouped.",
   detailed: "Every role assignment, permission and group membership drawn one by one.",
   paths: "How it reaches each resource, step by step, as a list instead of a picture.",
-  forward: "What this identity can access: its roles and permissions, and those of the groups and identities it can act as.",
-  reverse: "Who can reach this: the groups, owners and identities that can act as it or hold access to it.",
 } as const;
 
 function useMediaQuery(query: string): boolean {
@@ -1260,20 +1258,17 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             </HoverExplain>
           )}
         </div>
-        {isIdentity ? (
+        {/* Azure: one direction (what it reaches) is enough; dropped rather than hidden, to keep this simple. */}
+        {isIdentity && !azure ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
             <span className="text-(--color-text-muted)">Direction</span>
             <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">
-              <HoverExplain title="What it reaches" text={azure ? AZURE_GRAPH_TIPS.forward : undefined}>
-                <button type="button" aria-pressed={direction === "forward"} onClick={() => setManualDirection("forward")} className={toggleClass(direction === "forward")}>
-                  What it reaches
-                </button>
-              </HoverExplain>
-              <HoverExplain title="What reaches it" text={azure ? AZURE_GRAPH_TIPS.reverse : undefined}>
-                <button type="button" aria-pressed={direction === "reverse"} onClick={() => setManualDirection("reverse")} className={toggleClass(direction === "reverse")}>
-                  What reaches it
-                </button>
-              </HoverExplain>
+              <button type="button" aria-pressed={direction === "forward"} onClick={() => setManualDirection("forward")} className={toggleClass(direction === "forward")}>
+                What it reaches
+              </button>
+              <button type="button" aria-pressed={direction === "reverse"} onClick={() => setManualDirection("reverse")} className={toggleClass(direction === "reverse")}>
+                What reaches it
+              </button>
             </div>
           </div>
         ) : null}
