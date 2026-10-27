@@ -35,7 +35,7 @@ import { usePaging, useRestoreScroll } from "../shared/paging";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
 import { reportedFacet, sourceFacet } from "./facets";
 import type { FacetSpec } from "./FacetBar";
-import { clusterSweeps, inScope, K8S_COVERAGE_LABEL } from "./k8s";
+import { clusterSweeps, inScope, k8sWorkloadName, K8S_COVERAGE_LABEL } from "./k8s";
 import { EmptyList, FilteredEmpty, SourceHasNoRows, UnknownSource } from "./ListStates";
 import { ScreenFrame } from "./ScreenFrame";
 import type { ScreenProps } from "./screenTypes";
@@ -131,16 +131,20 @@ export default function InventoryScreen(p: ScreenProps) {
       header: "Name",
       primary: true,
       minWidth: 240,
-      cell: ({ row }) => (
-        <RowName
-          to={detailHref(row.original)}
-          name={row.original.name}
-          rowKey={refId(row.original.ref)}
-          selected={selectedId === refId(row.original.ref)}
-          context={[kindLabel(row.original.kind), row.original.sub_scope]}
-          account={row.original.scope?.label}
-        />
-      ),
+      cell: ({ row }) => {
+        const split = type === "workloads" ? k8sWorkloadName(row.original.name) : null;
+        return (
+          <RowName
+            to={detailHref(row.original)}
+            name={split?.name ?? row.original.name}
+            fullName={row.original.name}
+            rowKey={refId(row.original.ref)}
+            selected={selectedId === refId(row.original.ref)}
+            context={[kindLabel(row.original.kind), row.original.sub_scope, split ? `container ${split.container}` : null]}
+            account={row.original.scope?.label}
+          />
+        );
+      },
     };
     const lifecycle: AdaptiveColumn<InventoryRow> = {
       id: "lifecycle",

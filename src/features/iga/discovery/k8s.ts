@@ -62,3 +62,14 @@ export function clusterSweeps(
 export function inScope(sweeps: ClusterSweep[], cluster: string | undefined): ClusterSweep[] {
   return cluster ? sweeps.filter((s) => s.cluster === cluster) : sweeps;
 }
+
+/**
+ * A Kubernetes workload's name as the agent writes it -- "container
+ * (Kind/name) in ns/namespace" -- split, so a list leads with the workload's
+ * own name and does not repeat the kind and namespace it shows beside it
+ * (UI-051). Null for a name in any other form.
+ */
+export function k8sWorkloadName(display: string): { name: string; container: string } | null {
+  const m = /^(.+?) \(([A-Za-z]+)\/([^)]+)\)(?: in ns\/.+)?$/.exec(display.trim());
+  return m ? { name: m[3], container: m[1] } : null;
+}
