@@ -142,7 +142,7 @@ export default function PoliciesListPage() {
           return (
             <div className="min-w-0">
               <div className="truncate text-[13px]" title={r.map((x) => x.name).join(", ")}>{r.length === 1 ? r[0].name : `${r[0]?.name ?? ""} and ${r.length - 1} more`}</div>
-              {used.length ? <div className="truncate text-xs text-(--color-text-secondary)">Used by {used.slice(0, 2).join(", ")}{used.length > 2 ? ` +${used.length - 2}` : ""}</div> : null}
+              {used.length ? <div className="truncate text-xs text-(--color-text-secondary)" title={`Used by ${used.join(", ")}`}>Used by {used.slice(0, 2).join(", ")}{used.length > 2 ? ` +${used.length - 2}` : ""}</div> : null}
             </div>
           );
         },
