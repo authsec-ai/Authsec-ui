@@ -100,6 +100,15 @@ export function missingAccountLabel(text: string): string {
 }
 
 /**
+ * The AWS Resources line when patterns are listed with resources (UI-055): a
+ * selector such as "*" or "/apis/*" names no one resource and may reach many,
+ * so it stays listed, and the reader can narrow to exact references.
+ */
+export function patternRowsText(n: number): string {
+  return `${n} ${n === 1 ? "row is a pattern" : "rows are patterns"} from policy statements, not ${n === 1 ? "a single resource" : "single resources"}; a pattern can reach many resources.`;
+}
+
+/**
  * An account with its id: "Payments (429418377036)" when it has a name of its
  * own, the id alone when its name is the id. Null for no account — the
  * caller says whether that means unknown or not applicable.

@@ -20,7 +20,7 @@ import { ConfirmedCell } from "../shared/components/ConfirmedCell";
 import { ConfirmedValue } from "../shared/components/ObjectPreview";
 import { AccountCell } from "../shared/components/InventoryCells";
 import { classifyGraphError } from "../shared/graphErrors";
-import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId, missingAccountLabel, resourceTypeLabel } from "../shared/labels";
+import { RESOURCE_KIND_LABEL, RESOURCE_KIND_NOTE, accountLabel, accountWithId, missingAccountLabel, patternRowsText, resourceTypeLabel } from "../shared/labels";
 import { IgaBadge } from "../shared/components/IgaBadge";
 import { useRestartOnListingChanged } from "../shared/listView";
 import { useTrackRevision } from "../shared/revision";
@@ -178,6 +178,11 @@ export default function PublishedResources(p: ScreenProps) {
     { value: "selector", label: RESOURCE_KIND_LABEL.selector },
   ]);
   const externalFacet = fixedFacet(facets, "kind", [{ value: "external", label: "External or unresolved only" }]);
+  const selectorCount = kindFacet.options.find((o) => o.value === "selector")?.count;
+  const patterns =
+    !representation && !external && typeof selectorCount === "object" && (selectorCount.kind === "exact" || selectorCount.kind === "at_least")
+      ? selectorCount.value
+      : 0;
   const specs: FacetSpec[] = [
     sourceSpec(p, sourceFacet(p.sources, facets?.account)),
     { key: "region", label: "Region", kind: "choice", value: region, anyLabel: "Any region", ...reportedFacet(facets, "region", (v, l) => (v === "not_stated" ? "Region not stated" : l)), onChange: (v) => p.url.patch({ region: v }) },
@@ -240,6 +245,20 @@ export default function PublishedResources(p: ScreenProps) {
         describeEmpty="resources named by declared access"
         restarted={restarted}
         chrome={chrome}
+        notice={
+          patterns > 0 ? (
+            <p className="text-xs text-(--color-text-muted)">
+              {patternRowsText(patterns)}{" "}
+              <button
+                type="button"
+                className="font-medium text-(--color-primary-text) hover:underline"
+                onClick={() => p.url.patch({ representation: "exact", external: null })}
+              >
+                Show exact references only
+              </button>
+            </p>
+          ) : null
+        }
         preview={(r) => ({
           key: refId(r.ref),
           name: referenceName(r.text),
