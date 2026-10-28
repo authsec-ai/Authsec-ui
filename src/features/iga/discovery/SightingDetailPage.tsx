@@ -27,8 +27,9 @@ import { Timestamp } from "../shared/components/Timestamp";
 import { FailurePanel } from "./ListStates";
 import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
 import { useClientsLookup } from "./useClientsLookup";
-import { azureAgentOrigin, azureAgentSignals, sightingProvider } from "./model";
-import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref } from "./urlState";
+import { AzureAgentDetail } from "./AzureAgentDetail";
+import { azureAgentOrigin, sightingProvider } from "./model";
+import { typeLabel, DISCOVERY_PATH, discoveryListHref } from "./urlState";
 
 const MUTED = "text-(--color-text-muted)";
 
@@ -46,7 +47,7 @@ export default function SightingDetailPage() {
   // sighting still returns to its list; the sighting's own name replaces "Sighting" once loaded.
   const back = discoveryListHref("sightings", a ? sightingProvider(a.source) : undefined);
   const name = a?.display_name || "Sighting";
-  useBreadcrumbTail(`/iga/sightings/${id}`, name, { label: TYPE_LABEL.sightings, href: back, parent: { label: "Discovery", href: DISCOVERY_PATH } });
+  useBreadcrumbTail(`/iga/sightings/${id}`, name, { label: typeLabel(a ? sightingProvider(a.source) : undefined, "sightings"), href: back, parent: { label: "Discovery", href: DISCOVERY_PATH } });
 
   const failure = loadFailureOf(q.error);
   const shell = (children: React.ReactNode, description?: React.ReactNode) => (
@@ -83,8 +84,9 @@ export default function SightingDetailPage() {
   const connection = azureTenant
     ? connections.data?.find((c) => c.provider === "azure" && c.scope_id.toLowerCase() === azureTenant)
     : connections.data?.find((c) => c.id === a.discovery_source_id);
-  // "Declared in code" wording is GitHub's; an Azure declaration is Microsoft listing it.
-  const codeDeclared = mode === "declared" && !azureOrigin;
+  // An Azure agent reads in Azure's terms only (AzureAgentDetail).
+  if (azureOrigin) return shell(<AzureAgentDetail agent={a} connection={connection} />, `Azure agent · first found ${ago(a.first_seen_at)}`);
+  const codeDeclared = mode === "declared";
   const client = a.matched_client_id ? clients.client(a.matched_client_id) : undefined;
   const matched = a.matched_client_id ? (
     client ? (
@@ -144,11 +146,7 @@ export default function SightingDetailPage() {
       <Panel
         title="Runtime"
         description={
-          codeDeclared
-            ? "A declaration is not an observation: the agent may never have run."
-            : azureOrigin
-              ? "Running means it signed in to Microsoft Entra ID, or was used in Microsoft 365, in the last week."
-              : "What was last observed."
+          codeDeclared ? "A declaration is not an observation: the agent may never have run." : "What was last observed."
         }
       >
         <Facts>
@@ -171,29 +169,7 @@ export default function SightingDetailPage() {
         </Facts>
       </Panel>
 
-      {azureOrigin ? (
-        <Panel title="Evidence" description="What Microsoft records about it, as discovery read it.">
-          <Facts>
-            <Fact label="Found by">{azureOrigin}</Fact>
-            <Fact label="Tenant">{azureTenant || <span className={MUTED}>Not recorded</span>}</Fact>
-            {typeof a.metadata?.object_id === "string" ? (
-              <Fact label="Microsoft Entra object ID">
-                <CopyValue value={a.metadata.object_id} what="Object ID" />
-              </Fact>
-            ) : null}
-            {typeof a.metadata?.blueprint_name === "string" && a.metadata.blueprint_name ? (
-              <Fact label="Agent identity blueprint">{a.metadata.blueprint_name}</Fact>
-            ) : null}
-          </Facts>
-          {azureAgentSignals(a).length ? (
-            <ul className="mt-4 list-inside list-disc space-y-1 text-xs text-(--color-text-muted)">
-              {azureAgentSignals(a).map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          ) : null}
-        </Panel>
-      ) : codeDeclared ? (
+      {codeDeclared ? (
         <Panel title="Evidence" description="Where it was declared. File contents are never stored — only a hash.">
           <div className="space-y-6">
             <GitHubEvidenceSection agent={a} />

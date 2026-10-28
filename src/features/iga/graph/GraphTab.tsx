@@ -77,6 +77,14 @@ import { SelectionCard, type SelectionActions, type SelectionSubject } from "./S
 import { StatusBar } from "./StatusBar";
 import { useWorkspaceSize } from "./useWorkspaceSize";
 import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
+import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
+
+/** The Azure graph's view buttons, explained on hover. No direction toggle: Azure always shows what the identity reaches. */
+const AZURE_GRAPH_TIPS = {
+  summary: "The short answer: who it can act as, and the Azure roles and permissions it holds, grouped.",
+  detailed: "Every role assignment, permission and group membership drawn one by one.",
+  paths: "How it reaches each resource, step by step, as a list instead of a picture.",
+} as const;
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -1209,7 +1217,7 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
             {rootFrontier.length
               ? `No relationships are loaded for ${rootName} yet. Use its Load controls to fetch them.`
               : azure
-                ? `Azure recorded no relationships for ${rootName}. If the connection's read was partial, some may be missing — this does not mean the agent truly has none.`
+                ? `${rootName} has no Azure roles or Microsoft Entra permissions of its own in the latest scan. It may still reach resources through another identity, such as its Foundry project's managed identity.`
                 : k8s
                 ? `The latest sweep recorded no relationships for ${rootName}. That is what the sweep read — where it was partial, some may be missing, and that is not the same as having none.`
                 : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
@@ -1232,19 +1240,26 @@ function GraphInvestigation({ ws, root, rootName, direction, provider = "aws" }:
     >
       <div role="toolbar" aria-label="Access Graph" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border-subtle) px-3 py-2">
         <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
-            Summary
-          </button>
-          <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title={k8s ? "Every rule drawn" : "Every policy statement drawn"}>
-            Detailed
-          </button>
-          {k8s ? null : (
-            <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title="How it reaches each thing, as a list of paths">
-              Paths
+          <HoverExplain title="Summary" text={azure ? AZURE_GRAPH_TIPS.summary : undefined}>
+            <button type="button" aria-pressed={view === "overview"} onClick={() => setView("overview")} className={toggleClass(view === "overview")} title={azure ? undefined : k8s ? "The short answer: who it runs as and which roles reach it, one card per role" : "The short answer: who it acts as and what it declares access to"}>
+              Summary
             </button>
+          </HoverExplain>
+          <HoverExplain title="Detailed" text={azure ? AZURE_GRAPH_TIPS.detailed : undefined}>
+            <button type="button" aria-pressed={view === "detailed"} onClick={() => setView("detailed")} className={toggleClass(view === "detailed")} title={azure ? undefined : k8s ? "Every rule drawn" : "Every policy statement drawn"}>
+              Detailed
+            </button>
+          </HoverExplain>
+          {k8s ? null : (
+            <HoverExplain title="Paths" text={azure ? AZURE_GRAPH_TIPS.paths : undefined}>
+              <button type="button" aria-pressed={showPaths} onClick={() => setView("paths")} className={toggleClass(showPaths)} title={azure ? undefined : "How it reaches each thing, as a list of paths"}>
+                Paths
+              </button>
+            </HoverExplain>
           )}
         </div>
-        {isIdentity ? (
+        {/* Azure: one direction (what it reaches) is enough; dropped rather than hidden, to keep this simple. */}
+        {isIdentity && !azure ? (
           <div className="inline-flex items-center gap-1.5 text-xs">
             <span className="text-(--color-text-muted)">Direction</span>
             <div className="inline-flex overflow-hidden rounded-md border border-(--color-border-subtle)">

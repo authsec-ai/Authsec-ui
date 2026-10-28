@@ -1,8 +1,8 @@
 /**
  * Azure: the unified inventory — `provider=azure`, one class per type.
  *
- * The same shape as Kubernetes' list: search is the inventory's `q`, Source
- * (tenant) and Kind are its `scope` and `kind` filters with the server's facet
+ * Search is the inventory's `q`, Tenant and Type are its `scope` and `kind`
+ * filters with the server's facet
  * counts, paging is a signed cursor in history state, and a row opens the
  * shared preview beside the list. Azure writes are UNREVISIONED (read live, no
  * publication number), so what a row is "as of" is the discovery run that last
@@ -25,22 +25,22 @@ import { CardContent } from "@/components/ui/card";
 import { ColumnsMenu } from "@/components/ui/table-columns";
 import { useColumnPreferences } from "@/components/ui/use-column-preferences";
 import { copyToClipboard } from "@/lib/clipboard";
-import { LifecycleCell } from "@/features/iga/discovery/PublishedBody";
 import { DiscoveryTable, RowName } from "@/features/iga/discovery/DiscoveryTable";
 import type { FacetSpec } from "@/features/iga/discovery/FacetBar";
 import { reportedFacet, sourceFacet } from "@/features/iga/discovery/facets";
 import { EmptyList, FilteredEmpty, SourceHasNoRows, UnknownSource } from "@/features/iga/discovery/ListStates";
-import { LIFECYCLE_NOTE, LIFECYCLE_OPTIONS, valid } from "@/features/iga/discovery/publishedCommon";
+import { valid } from "@/features/iga/discovery/publishedCommon";
 import { ScreenFrame } from "@/features/iga/discovery/ScreenFrame";
 import type { ScreenProps } from "@/features/iga/discovery/screenTypes";
-import { ConfirmedValue, PreviewLayout, type PreviewModel } from "@/features/iga/shared/components/ObjectPreview";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
+import { ConfirmedValue, PreviewLayout, type PreviewModel } from "@/features/iga/shared/components/ObjectPreview";
 import { resolvePagedView, useRestartOnListingChanged, type PagedView } from "@/features/iga/shared/listView";
 import { usePaging, useRestoreScroll } from "@/features/iga/shared/paging";
 import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { TableCard } from "@/theme/components/cards";
 
 import AzureScanTablesScreen from "./AzureScanTablesScreen";
+import { AzureTerm } from "./AzureTerm";
 
 import { agentTypeLabel } from "./azureDiscoveryLabels";
 import { CopyableId } from "./AzureDiscoveryShared";
@@ -51,7 +51,13 @@ const MUTED = "text-(--color-text-muted)";
 
 const SUBJECT: Record<InventoryClass, string> = { identities: "identities", resources: "resources", workloads: "workloads" };
 const OBJECT_SEGMENT: Record<InventoryClass, string> = { identities: "identity", resources: "resource", workloads: "workload" };
-const KIND_FACET_LABEL: Record<InventoryClass, string> = { identities: "Kind", resources: "Kind", workloads: "Runtime" };
+const KIND_FACET_LABEL: Record<InventoryClass, string> = { identities: "Type", resources: "Type", workloads: "Type" };
+/** The Show filter, in Azure's terms: what is in Azure now, what was deleted from it, or both. */
+const SHOW_OPTIONS = [
+  { value: "retired", label: "Deleted from Azure" },
+  { value: "all", label: "Everything AuthSec has found" },
+] as const;
+const SHOW_NOTE = "In Azure now includes anything the latest scan could not find; it is marked Not in latest scan, never hidden. Deleted from Azure lists what Azure no longer has.";
 const SEARCH_PLACEHOLDER: Record<InventoryClass, string> = {
   identities: "Search identities by name or object ID",
   resources: "Search resources by name or resource ID",
@@ -59,6 +65,8 @@ const SEARCH_PLACEHOLDER: Record<InventoryClass, string> = {
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
+/** Groups and app registrations never sign in themselves (an app signs in through its service principal). */
+const SIGNS_IN = (kind: string) => kind !== "entra_group" && kind !== "entra_application";
 
 export default function AzureInventoryScreen(p: ScreenProps) {
   const navigate = useNavigate();
@@ -123,7 +131,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
             selected={selectedId === refId(row.original.ref)}
             context={[kindLabel(row.original.kind), isAgent ? agentTypeLabel({ attrs: row.original.attrs }) : null]}
             account={manyTenants ? tenantLabel(row.original.scope?.id) : null}
-            lifecycle={row.original.lifecycle === "retired" ? "Retired" : row.original.state === "stale" ? "Stale" : null}
+            lifecycle={row.original.lifecycle === "retired" ? "Deleted from Azure" : row.original.state === "stale" ? "Not in latest scan" : null}
             // An agent identity's display name can be long and technical; its short,
             // click-to-copy ID gives the eye a stable anchor the way the Agents tab's list does.
             badge={isAgent ? <CopyableId value={row.original.native_id} what="Object ID" /> : undefined}
@@ -133,40 +141,59 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
     const lifecycle: AdaptiveColumn<InventoryRow> = {
       id: "lifecycle",
-      header: "State",
+      header: "Status",
       alwaysVisible: lifecycleFilter !== undefined,
       priority: 1,
       approxWidth: 100,
       cardSummary: true,
       cell: ({ row }) =>
-        row.original.lifecycle !== "retired" && row.original.state !== "stale" && row.original.attrs.enabled === false ? (
-          <StatusBadge tone="neutral">Disabled</StatusBadge>
+        row.original.lifecycle === "retired" ? (
+          <AzureTerm term="Deleted from Azure">
+            <StatusBadge tone="neutral">Deleted from Azure</StatusBadge>
+          </AzureTerm>
+        ) : row.original.state === "stale" ? (
+          <AzureTerm term="Not in latest scan">
+            <StatusBadge tone="warning">Not in latest scan</StatusBadge>
+          </AzureTerm>
+        ) : row.original.attrs.enabled === false ? (
+          <AzureTerm term="Disabled">
+            <StatusBadge tone="neutral">Disabled</StatusBadge>
+          </AzureTerm>
+        ) : type === "identities" && SIGNS_IN(row.original.kind) ? (
+          <AzureTerm term="Enabled" className={`text-sm ${MUTED}`} />
         ) : (
-          <LifecycleCell lifecycle={row.original.lifecycle} state={row.original.state} />
+          <span className={`text-sm ${MUTED}`}>In Azure</span>
         ),
     };
     const tenant: AdaptiveColumn<InventoryRow> = {
       id: "account",
-      header: "Tenant",
+      header: () => <AzureTerm term="Tenant" />,
+      label: "Tenant",
       priority: 2,
       approxWidth: 150,
       cell: ({ row }) => <span className="text-sm">{tenantLabel(row.original.scope?.id)}</span>,
     };
     const subscription: AdaptiveColumn<InventoryRow> = {
       id: "subscription",
-      header: "Subscription",
+      header: () => <AzureTerm term="Subscription" />,
+      label: "Subscription",
       priority: 2,
       approxWidth: 160,
       cell: ({ row }) => <span className={`text-sm ${row.original.sub_scope ? "" : MUTED}`}>{subscriptionLabel(row.original.sub_scope)}</span>,
     };
     const signIn: AdaptiveColumn<InventoryRow> = {
       id: "last_sign_in",
-      header: "Last sign-in",
+      header: () => <AzureTerm term="Last sign-in" />,
+      label: "Last sign-in",
       priority: 2,
       approxWidth: 130,
       cell: ({ row }) => (
         <span className={`text-sm ${MUTED}`}>
-          <Timestamp iso={str(row.original.attrs.last_sign_in_at)} missing="never seen" />
+          {!SIGNS_IN(row.original.kind) ? (
+            <AzureTerm term="Doesn't sign in" />
+          ) : (
+            <Timestamp iso={str(row.original.attrs.last_sign_in_at)} missing="No sign-in recorded" />
+          )}
         </span>
       ),
     };
@@ -179,7 +206,8 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
     const seen: AdaptiveColumn<InventoryRow> = {
       id: "seen",
-      header: "Last confirmed",
+      header: () => <AzureTerm term="Last seen" />,
+      label: "Last seen",
       priority: 3,
       approxWidth: 140,
       cell: ({ row }) => (
@@ -219,7 +247,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const specs: FacetSpec[] = [
     {
       key: "source",
-      label: "Source",
+      label: "Tenant",
       kind: "choice",
       value: p.scope.kind === "one" ? p.scope.source.id : p.url.source,
       anyLabel: "Every Azure tenant",
@@ -231,18 +259,18 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       label: KIND_FACET_LABEL[type],
       kind: "choice",
       value: kind,
-      anyLabel: type === "workloads" ? "Any runtime" : "Any kind",
+      anyLabel: "Any type",
       ...kindOptions,
       onChange: (v) => p.url.patch({ kind: v }),
     },
     {
       key: "lifecycle",
-      label: "Lifecycle",
+      label: "Show",
       kind: "choice",
       value: lifecycleFilter,
-      anyLabel: "Active (default)",
-      options: [...LIFECYCLE_OPTIONS],
-      note: LIFECYCLE_NOTE,
+      anyLabel: "In Azure now (default)",
+      options: [...SHOW_OPTIONS],
+      note: SHOW_NOTE,
       onChange: (v) => p.url.patch({ lifecycle: v }),
     },
   ];
@@ -251,10 +279,10 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     const facts: PreviewModel["facts"] = [
       { label: "Tenant", value: tenantLabel(r.scope?.id) },
       ...(type !== "identities" ? [{ label: "Subscription", value: r.sub_scope ? subscriptionLabel(r.sub_scope) : <span className={MUTED}>Tenant-wide</span> }] : []),
-      ...(type === "identities" ? [{ label: "Last sign-in", value: <ConfirmedValue iso={str(r.attrs.last_sign_in_at)} /> }] : []),
+      ...(type === "identities" && SIGNS_IN(r.kind) ? [{ label: "Last sign-in", value: <ConfirmedValue iso={str(r.attrs.last_sign_in_at)} /> }] : []),
       ...(type === "workloads" && str(r.attrs.region) ? [{ label: "Region", value: str(r.attrs.region) }] : []),
       { label: type === "identities" ? "Object ID" : "Resource ID", value: <span className="break-all font-mono text-xs">{r.native_id}</span> },
-      { label: "Last confirmed", value: <ConfirmedValue iso={r.as_of ?? r.last_seen_at} /> },
+      { label: "Last seen", value: <ConfirmedValue iso={r.as_of ?? r.last_seen_at} /> },
     ];
     const href = detailHref(r);
     return {
@@ -266,9 +294,9 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       facts,
       exception:
         r.lifecycle === "retired"
-          ? `Retired${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
+          ? `Deleted from Azure${r.retired_reason ? ` — ${r.retired_reason}` : ""}.`
           : r.state === "stale"
-            ? "Stale: the latest discovery run could not confirm it. It is still believed, not gone."
+            ? "Not in latest scan: the latest scan could not find it. It may have been deleted, or AuthSec could not read that part of Azure."
             : r.attrs.enabled === false
               ? "This account is disabled in Microsoft Entra ID."
               : undefined,
@@ -277,10 +305,10 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
   };
 
-  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `source ${p.scope.source.label}`, kind && `${KIND_FACET_LABEL[type].toLowerCase()} ${kindLabel(kind)}`, lifecycleFilter && `lifecycle ${lifecycleFilter}`].filter(Boolean) as string[];
+  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `tenant ${p.scope.source.label}`, kind && `type ${kindLabel(kind)}`, lifecycleFilter && (lifecycleFilter === "retired" ? "deleted from Azure" : "everything AuthSec has found")].filter(Boolean) as string[];
 
-  if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" onClear={() => p.url.patch({ source: null })} />;
-  if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} onClear={() => p.url.patch({ source: null })} />;
+  if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" noun="tenant" onClear={() => p.url.patch({ source: null })} />;
+  if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} noun="tenant" onClear={() => p.url.patch({ source: null })} />;
   // The graph is not ready or not deployed: read the same objects from the scan tables instead. Only the
   // first page decides it: a failure on a later page is the page's own and keeps the rows above.
   if (classifyGraphError(list.error)?.kind === "unavailable" && paging.pageIndex === 0) return <AzureScanTablesScreen {...p} cls={type} />;

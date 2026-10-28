@@ -15,6 +15,7 @@ import { ChevronDown } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ConsoleFilterOption } from "@/components/console/iam-console";
+import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
 import { cn } from "@/lib/utils";
 
 /** How many chips stay on the row. Six fits a ~1100px container beside the
@@ -56,16 +57,17 @@ export function AWSFilterChips({
   }
 
   const chip = (o: ConsoleFilterOption) => (
-    <button
-      key={o.key}
-      type="button"
-      onClick={() => onSelect(o.key)}
-      aria-pressed={active === o.key}
-      className={cn(CHIP_BASE, active === o.key ? CHIP_ON : CHIP_OFF)}
-    >
-      <span className="truncate">{o.label}</span>
-      {o.count !== undefined ? <span className="tabular-nums opacity-70">{o.count}</span> : null}
-    </button>
+    <HoverExplain key={o.key} title={o.label} text={o.hint}>
+      <button
+        type="button"
+        onClick={() => onSelect(o.key)}
+        aria-pressed={active === o.key}
+        className={cn(CHIP_BASE, active === o.key ? CHIP_ON : CHIP_OFF)}
+      >
+        <span className="truncate">{o.label}</span>
+        {o.count !== undefined ? <span className="tabular-nums opacity-70">{o.count}</span> : null}
+      </button>
+    </HoverExplain>
   );
 
   return (
