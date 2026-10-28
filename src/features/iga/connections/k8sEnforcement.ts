@@ -112,3 +112,34 @@ export function installProblem(o: EnforcementInstall): string | null {
   if (words(o.quarantineNamespaces).includes("authsec-system")) return "The agent's own namespace cannot be quarantined.";
   return null;
 }
+
+/** What the server said is still in force when it refused to turn enforcement off. */
+export interface EnforcementInUse {
+  quarantined: number;
+  access_policies: number;
+  open_instructions: number;
+}
+
+export function inUseText(u: EnforcementInUse | undefined): string {
+  if (!u) return "Enforcement could not be turned off. Try again.";
+  const parts = [
+    u.quarantined ? `${u.quarantined} quarantined ${u.quarantined === 1 ? "agent" : "agents"} (release ${u.quarantined === 1 ? "it" : "them"})` : "",
+    u.access_policies ? `${u.access_policies} live access ${u.access_policies === 1 ? "policy" : "policies"} (end ${u.access_policies === 1 ? "it" : "them"})` : "",
+    u.open_instructions ? `${u.open_instructions} ${u.open_instructions === 1 ? "change" : "changes"} the agent has not applied yet (wait for ${u.open_instructions === 1 ? "it" : "them"})` : "",
+  ].filter(Boolean);
+  return `Still in force on this cluster: ${parts.join(", ")}. Turned off now, the agent could not undo them.`;
+}
+
+/** Back to discovery only, under the cluster's ingest token: the upgrade, then the Secret goes. */
+export function helmDisableCommand(chartRef: string, ingestSecret: string): string {
+  const upgrade = [
+    `helm upgrade authsec-iga-agent ${chartRef.trim() || DEFAULT_CHART_REF} -n authsec-system --reuse-values`,
+    `--set "roles={discovery}"`,
+    `--set controlPlane.existingSecret=${ingestSecret.trim() || "authsec-iga-ingest"}`,
+    "--set controlPlane.existingSecretKey=sourceToken",
+    '--set actuation.existingSecret=""',
+    '--set actuation.namespaces=""',
+    "--set enforcement.bindings.enabled=false",
+  ];
+  return `${upgrade.join(" \\\n  ")}\nkubectl delete secret ${ACTUATION_SECRET} -n authsec-system`;
+}

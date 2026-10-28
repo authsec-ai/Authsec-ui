@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { helmEnforcementCommand, installProblem, k8sEnforcementState, secretCommand } from "./k8sEnforcement";
+import { helmDisableCommand, helmEnforcementCommand, inUseText, installProblem, k8sEnforcementState, secretCommand } from "./k8sEnforcement";
 
 const src = (o: Partial<DiscoverySource>) => o as DiscoverySource;
 
@@ -53,5 +53,22 @@ describe("enforcement install commands", () => {
     expect(installProblem({ ...base, bindingRoles: "r", clusterWide: true })).toBeNull();
     expect(installProblem({ ...base, quarantineNamespaces: "authsec-system" })).toMatch(/own namespace/);
     expect(installProblem(base)).toBeNull();
+  });
+});
+
+describe("turning enforcement off", () => {
+  it("says what is still in force", () => {
+    expect(inUseText({ quarantined: 1, access_policies: 2, open_instructions: 0 })).toBe(
+      "Still in force on this cluster: 1 quarantined agent (release it), 2 live access policies (end them). Turned off now, the agent could not undo them.",
+    );
+    expect(inUseText(undefined)).toMatch(/could not be turned off/);
+  });
+  it("switches the agent back to discovery under its ingest token", () => {
+    const cmd = helmDisableCommand("", "");
+    expect(cmd).toContain('--set "roles={discovery}"');
+    expect(cmd).toContain("--set controlPlane.existingSecret=authsec-iga-ingest");
+    expect(cmd).toContain("--set controlPlane.existingSecretKey=sourceToken");
+    expect(cmd).toContain("--set enforcement.bindings.enabled=false");
+    expect(cmd).toMatch(/\nkubectl delete secret authsec-iga-actuation -n authsec-system$/);
   });
 });

@@ -13,7 +13,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { Connection } from "@/app/api/connectionsApi";
-import { useEnableActuationMutation, useGetDiscoverySourceQuery } from "@/app/api/discoveryApi";
+import { useDisableActuationMutation, useEnableActuationMutation, useGetDiscoverySourceQuery } from "@/app/api/discoveryApi";
 import { loadFailureOf } from "@/components/console/load-failure";
 import { LoadFailurePanel } from "@/components/console/load-state";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,17 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 import { ConnPill } from "./ConnPill";
-import { DEFAULT_CHART_REF, helmEnforcementCommand, installProblem, k8sEnforcementState, secretCommand, type PowerState } from "./k8sEnforcement";
+import {
+  DEFAULT_CHART_REF,
+  helmDisableCommand,
+  helmEnforcementCommand,
+  inUseText,
+  installProblem,
+  k8sEnforcementState,
+  secretCommand,
+  type EnforcementInUse,
+  type PowerState,
+} from "./k8sEnforcement";
 import { useCanAdminister } from "./permissions";
 
 const MUTED = "text-(--color-text-muted)";
@@ -73,6 +83,10 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const canAdminister = useCanAdminister();
   const [mint, minting] = useEnableActuationMutation();
   const [confirm, setConfirm] = useState(false);
+  const [disable, disabling] = useDisableActuationMutation();
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [turnedOff, setTurnedOff] = useState(false);
+  const [ingestSecret, setIngestSecret] = useState("authsec-iga-ingest");
   const [token, setToken] = useState<string | null>(null);
   const [mintError, setMintError] = useState<string | null>(null);
   const [install, setInstall] = useState({ chartRef: DEFAULT_CHART_REF, quarantineNamespaces: "", bindingRoles: "", bindingNamespaces: "", clusterWide: false });
@@ -112,6 +126,25 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
     }
   };
 
+  const doDisable = async () => {
+    setMintError(null);
+    try {
+      await disable(c.id).unwrap();
+      setTurnedOff(true);
+      setToken(null);
+    } catch (e) {
+      const err = e as { status?: number; data?: { in_use?: EnforcementInUse } };
+      setMintError(
+        err.status === 409
+          ? inUseText(err.data?.in_use)
+          : err.status === 403
+            ? "Your role cannot turn enforcement off: it needs governance:admin."
+            : "Enforcement could not be turned off. Try again.",
+      );
+    }
+    setConfirmOff(false);
+  };
+
   return (
     <div className="space-y-4">
       <Panel
@@ -119,9 +152,16 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
         description="AuthSec never calls into the cluster: the agent polls for work with its actuation token and reports what it is allowed to do."
         actions={
           canAdminister && !token ? (
-            <Button size="sm" variant={st.actuation ? "outline" : "default"} onClick={() => setConfirm(true)} disabled={minting.isLoading}>
-              {minting.isLoading ? "Creating…" : st.actuation ? "Rotate token" : "Turn on enforcement"}
-            </Button>
+            <>
+              {st.actuation ? (
+                <Button size="sm" variant="outline" onClick={() => setConfirmOff(true)} disabled={disabling.isLoading}>
+                  {disabling.isLoading ? "Turning off…" : "Turn off enforcement"}
+                </Button>
+              ) : null}
+              <Button size="sm" variant={st.actuation ? "outline" : "default"} onClick={() => setConfirm(true)} disabled={minting.isLoading}>
+                {minting.isLoading ? "Creating…" : st.actuation ? "Rotate token" : "Turn on enforcement"}
+              </Button>
+            </>
           ) : undefined
         }
       >
@@ -208,6 +248,46 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
           </div>
         </Panel>
       ) : null}
+
+      {turnedOff && !st.actuation ? (
+        <Panel
+          title="Switch the agent back to discovery"
+          description="Enforcement is off: the token no longer works, so AuthSec refuses this cluster's reports until the agent sends its discovery ingest token again."
+          actions={
+            <Button size="sm" variant="outline" onClick={() => setTurnedOff(false)}>
+              Done
+            </Button>
+          }
+        >
+          <div className="space-y-3">
+            <Field id="ingest" label="Ingest token Secret" hint="The Secret in authsec-system that holds the agent's discovery ingest token (key sourceToken).">
+              <Input id="ingest" value={ingestSecret} onChange={(e) => setIngestSecret(e.target.value)} />
+            </Field>
+            <Command label="Upgrade the agent, then remove the token" text={helmDisableCommand(install.chartRef, ingestSecret)} />
+          </div>
+        </Panel>
+      ) : null}
+
+      <Dialog open={confirmOff} onOpenChange={setConfirmOff}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Turn off enforcement?</DialogTitle>
+            <DialogDescription>
+              The cluster's token stops working at once: nothing can be quarantined or blocked on this cluster, and AuthSec refuses its
+              discovery reports until the agent is switched back to its ingest token (the command is shown next). AuthSec refuses this
+              while a quarantine or an access policy is still in force here.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOff(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void doDisable()} disabled={disabling.isLoading}>
+              Turn off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent>

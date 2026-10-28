@@ -651,6 +651,13 @@ export const discoveryApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/authsec/governance/connectors/${id}/actuation`, method: "POST", body: {} }),
       invalidatesTags: (_r, _e, id) => [{ type: "DiscoverySource", id }, "Connections"],
     }),
+    // Turns it off (governance:admin). 409 enforcement_in_use names what is still
+    // in force -- quarantines, live access policies, open instructions -- since the
+    // agent could no longer undo them.
+    disableActuation: builder.mutation<{ actuation_enabled: false }, string>({
+      query: (id) => ({ url: `/authsec/governance/connectors/${id}/actuation`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, id) => [{ type: "DiscoverySource", id }, "Connections"],
+    }),
 
     // The lifecycle trail — the only place a user sees WHO deleted an agent and
     // HOW it was noticed. `pod_terminated` is a rollout (routine); `deleted` is
@@ -926,6 +933,7 @@ export const {
   useQuarantineAgentMutation,
   useUnquarantineAgentMutation,
   useEnableActuationMutation,
+  useDisableActuationMutation,
   useGetGitHubAppQuery,
   useDescribeGitHubAppQuery,
   useSetGitHubAppMutation,
