@@ -14,6 +14,7 @@
  */
 
 import {
+  AWS_DISCOVERY_MAX_LIMIT,
   useListAzureIdentitiesQuery,
   useListAzureResourcesQuery,
   useListAzureWorkloadsQuery,
@@ -27,6 +28,7 @@ import { useListGraphIdentitiesQuery, useListGraphResourcesQuery, useListGraphWo
 import { useGetInventorySummaryQuery, useListInventoryQuery } from "@/app/api/igaInventoryApi";
 import { azureSourceFor } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { azureFallbackScope } from "@/features/discovery/cloud/azure/azureFallback";
+import { isFoundryProjectIdentity } from "@/features/discovery/cloud/azure/azureAgentSource";
 import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { useListK8sClustersQuery } from "@/app/api/k8sGraphApi";
 
@@ -104,7 +106,14 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
 
   /* ---- Azure: the inventory summary; the Agents tab keeps its own list's total ---- */
   const azureOn = provider === "azure";
-  const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
+  const agentsConnector = azureSourceFor(azureConnectors, "agents", source);
+  const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: agentsConnector, kind: "entra_agent_identity" }, { skip: !azureOn });
+  // The Entra admin center also counts older Foundry projects whose agents run as the project's
+  // managed identity; the Entra Agent ID tab lists them, so its count does too (same query, so cached).
+  const am = useListAzureIdentitiesQuery({ connector_id: agentsConnector, kind: "entra_managed_identity", limit: AWS_DISCOVERY_MAX_LIMIT }, { skip: !azureOn });
+  const azureAgents: CountValue = am.isError
+    ? pageCount(aa.data, aa.isError)
+    : sum(pageCount(aa.data, aa.isError), am.data ? { kind: "exact", value: am.data.rows.filter(isFoundryProjectIdentity).length } : COUNT_LOADING);
   const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", scope: scopeId, q }, { skip: !azureOn || blocked });
   // The graph not ready: the lists read the scan tables, and so do their counts.
   const azGraphOff = azureOn && classifyGraphError(azSummary.error)?.kind === "unavailable";
@@ -134,7 +143,7 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   if (azureOn) {
     return {
       counts: {
-        agents: pageCount(aa.data, aa.isError),
+        agents: azureAgents,
         identities: azCount("identities"),
         resources: azCount("resources"),
         workloads: azCount("workloads"),

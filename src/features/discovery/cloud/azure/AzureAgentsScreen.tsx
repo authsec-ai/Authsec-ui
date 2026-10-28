@@ -1,9 +1,14 @@
 /**
- * Azure Agents: Microsoft Entra Agent ID objects in one place, laid out the way
- * the Entra admin center lists them (agent identity, its blueprint, owners and
- * sponsors, status, created), and Microsoft Foundry (its resources, projects,
- * model deployments and agent applications). Counts and facts only; nothing is
- * rated.
+ * Discovery's Entra Agent ID tab: Microsoft Entra Agent ID and Microsoft
+ * Foundry in four views.
+ *
+ *   Overview          each blueprint with its agent identities, by who made them
+ *   Agent identities  the accounts agents sign in with
+ *   Blueprints        the templates agent identities are made from
+ *   Foundry           Foundry resources and their projects
+ *
+ * Names follow the shared cells (AzureAgentCells): a readable name over where
+ * the object came from. Facts only; nothing is rated.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -16,50 +21,31 @@ import {
   type AzureIdentity,
   type CloudConnector,
 } from "@/app/api/cloudDiscoveryApi";
-import { EntityCell } from "@/components/console/iam-console";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { CursorPager } from "@/features/iga/shared/components/CursorPager";
 
-import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "../aws/AWSFilterChips";
-import { CopyableId } from "../aws/AWSInventoryCells";
 import { TruncationNotice } from "../aws/AWSInventoryNotices";
-import { AzureTerm } from "./AzureTerm";
-import { azureExplain } from "./azureGlossary";
+import { AgentNameCell, AgentStatus } from "./AzureAgentCells";
+import { AzureAgentOverview } from "./AzureAgentOverview";
 import { ALL, AzureSourceSelect, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
-import { AzureFoundryView } from "./AzureFoundryView";
-import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
+import { AzureFoundryTable } from "./AzureFoundryTable";
+import { AzureTerm } from "./AzureTerm";
+import { agentDisplayName, agentMatches, agentPageHref, isFoundryProjectIdentity, usesAgentIdentity } from "./azureAgentSource";
 import { azureSourceFor, azureSourcesFor, connectorLabel, refsOf } from "./azureDiscoveryLabels";
+import { foundryRowsOf, groupFoundry } from "./azureFoundry";
+import { azureExplain } from "./azureGlossary";
 import { pageSizeParam, parsePageSize, useClientPaging } from "./azurePaging";
 
-type View = "identities" | "blueprints" | "foundry";
+type View = "overview" | "identities" | "blueprints" | "foundry";
 
-const KIND_ARGS = {
-  identities: { kind: "entra_agent_identity" },
-  blueprints: { kind: "entra_application", agent_type: "agent_identity_blueprint" },
-} as const;
-
-/** An agent or blueprint opens its own page, keyed by its Entra object id. */
-const detailHref = (r: Pick<AzureIdentity, "native_id">) => `/iga/azure/identity/${encodeURIComponent(r.native_id)}`;
-
-function NameLink({ r, children }: { r: AzureIdentity; children: string }) {
-  return (
-    <Link to={detailHref(r)} onClick={(e) => e.stopPropagation()} className="hover:underline">
-      {children}
-    </Link>
-  );
-}
-
-function createdBy(r: AzureIdentity): string | undefined {
-  const c = r.attrs?.["created_by"] as { by?: string } | undefined;
-  return c?.by || undefined;
-}
+const MUTED = "text-xs text-(--color-text-muted)";
 
 export default function AzureAgentsScreen({ connectors }: { connectors: CloudConnector[] }) {
   const [params, setParams] = useSearchParams();
   const agentsParam = params.get("agents");
-  const view: View = agentsParam === "blueprints" ? "blueprints" : agentsParam === "foundry" ? "foundry" : "identities";
+  const view: View = agentsParam === "blueprints" || agentsParam === "foundry" || agentsParam === "identities" ? agentsParam : "overview";
   const source = params.get("source");
   const [search, setSearch] = useState(params.get("q") ?? "");
   const navigate = useNavigate();
@@ -87,108 +73,113 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
 
   const options = azureSourcesFor(connectors, "agents");
   const connectorId = azureSourceFor(connectors, "agents", source);
-  const scope = { connector_id: connectorId };
+  const scope = { connector_id: connectorId, limit: AWS_DISCOVERY_MAX_LIMIT };
+
+  // Both lists are small and every view uses them (counts, blueprint names, Foundry's agent counts).
+  const agentsQ = useListAzureIdentitiesQuery({ ...scope, kind: "entra_agent_identity" });
+  const blueprintsQ = useListAzureIdentitiesQuery({ ...scope, kind: "entra_application", agent_type: "agent_identity_blueprint" });
+  const managedQ = useListAzureIdentitiesQuery({ ...scope, kind: "entra_managed_identity" });
+  const agents = useMemo(() => agentsQ.data?.rows ?? [], [agentsQ.data]);
+  // As in the Entra admin center: agent identities, plus the older Foundry projects whose agents
+  // run as the project's own managed identity ("Uses agent identity: No").
+  const allAgents = useMemo(() => [...agents, ...(managedQ.data?.rows ?? []).filter(isFoundryProjectIdentity)], [agents, managedQ.data]);
+  const blueprints = useMemo(() => blueprintsQ.data?.rows ?? [], [blueprintsQ.data]);
+  const blueprintById = useMemo(() => new Map(blueprints.map((b) => [b.native_id, b])), [blueprints]);
 
   // Foundry is read once for every tenant: its rows belong to subscriptions, so
   // the tenant chosen above narrows them by the subscriptions under it.
   const foundryQ = useListAzureFoundryQuery();
   const foundry = useMemo(() => {
     const tenant = connectors.find((c) => c.id === connectorId);
-    const rows = foundryRowsOf(foundryQ.data?.rows ?? [], connectors, tenant);
-    return groupFoundry(rows, foundryQ.data?.trusts ?? []);
+    return groupFoundry(foundryRowsOf(foundryQ.data?.rows ?? [], connectors, tenant), foundryQ.data?.trusts ?? []);
   }, [foundryQ.data, connectors, connectorId]);
-  const foundryTotals = foundryCounts(foundry);
 
-  const q = useListAzureIdentitiesQuery({ ...scope, ...KIND_ARGS[view === "foundry" ? "identities" : view], limit: AWS_DISCOVERY_MAX_LIMIT }, { skip: view === "foundry" });
-  const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
+  const listQ = view === "blueprints" ? blueprintsQ : agentsQ;
+  const listLoading = view === "blueprints" ? blueprintsQ.isLoading : agentsQ.isLoading || managedQ.isLoading;
+  const rows = view === "blueprints" ? blueprints : allAgents;
   const filtered = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => {
-      const bp = typeof r.attrs?.["agent_blueprint_name"] === "string" ? (r.attrs["agent_blueprint_name"] as string) : "";
-      const people = [...refsOf(r.attrs, "sponsors"), ...refsOf(r.attrs, "owners")].map((p) => p.name ?? "");
-      return [r.name, r.native_id, bp, ...people].some((v) => v.toLowerCase().includes(s));
-    });
+    if (!search.trim()) return rows;
+    return rows.filter((r) => agentMatches(r, search));
   }, [rows, search]);
 
   const paged = useClientPaging(filtered, pageSize, `${view}|${connectorId ?? ""}|${search.trim()}|${pageSize}`);
-  const truncation = { truncated: !!q.data && q.data.totalKnown && q.data.total > rows.length, shown: rows.length, total: q.data?.total ?? rows.length, totalKnown: !!q.data?.totalKnown };
+  const truncation = {
+    truncated: !!listQ.data && listQ.data.totalKnown && listQ.data.total > rows.length,
+    shown: rows.length,
+    total: listQ.data?.total ?? rows.length,
+    totalKnown: !!listQ.data?.totalKnown,
+  };
 
   const identityColumns = useMemo<AdaptiveColumn<AzureIdentity>[]>(
     () => [
       {
         id: "name",
-        accessorKey: "name",
-        header: () => <AzureTerm term="Agent identity" />, label: "Agent identity",
+        header: "Name",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 280,
-        cell: ({ row }) => <EntityCell label={<NameLink r={row.original}>{row.original.name || row.original.native_id}</NameLink>} detail={<CopyableId value={row.original.native_id} label="Object ID" />} />,
+        approxWidth: 300,
+        cell: ({ row }) => <AgentNameCell identity={row.original} noun="identity" />,
       },
       {
         id: "blueprint",
-        header: () => <AzureTerm term="Agent identity blueprint" />, label: "Agent identity blueprint",
+        header: () => <AzureTerm term="Agent identity blueprint">Blueprint</AzureTerm>,
+        label: "Blueprint",
         priority: 2,
         approxWidth: 200,
         cell: ({ row }) => {
+          const id = row.original.attrs?.["agent_blueprint_id"];
+          const bp = typeof id === "string" ? blueprintById.get(id) : undefined;
+          if (bp) {
+            return (
+              <Link to={agentPageHref(bp)} onClick={(e) => e.stopPropagation()} title={bp.name} className="block truncate text-xs hover:underline">
+                {agentDisplayName(bp)}
+              </Link>
+            );
+          }
           const name = row.original.attrs?.["agent_blueprint_name"];
-          return typeof name === "string" && name ? <span className="text-xs">{name}</span> : <span className="text-xs text-muted-foreground">Not recorded</span>;
+          if (typeof name === "string" && name) return <span className="block truncate text-xs">{name}</span>;
+          return <span className="text-xs text-(--color-text-muted)">None</span>;
         },
       },
-      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
       {
-        id: "status",
-        header: () => <AzureTerm term="Status" />, label: "Status",
-        priority: 5,
-        approxWidth: 100,
-        cell: ({ row }) => (
-          <CloudPill tone="muted" dot={false}>
-            {row.original.enabled ? "Active" : "Disabled"}
-          </CloudPill>
-        ),
+        id: "uses_agent_identity",
+        header: () => <AzureTerm term="Uses agent identity" />,
+        label: "Uses agent identity",
+        priority: 3,
+        approxWidth: 130,
+        cell: ({ row }) => <span className="text-xs">{usesAgentIdentity(row.original) ? "Yes" : "No"}</span>,
       },
-      {
-        id: "created",
-        header: () => <AzureTerm term="Created" />, label: "Created",
-        priority: 6,
-        approxWidth: 160,
-        cell: ({ row }) => (
-          <span className="text-xs">
-            <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? (
-              <span className="block text-muted-foreground">
-                by <AzureTerm term={createdBy(row.original)!} />
-              </span>
-            ) : null}
-          </span>
-        ),
-      },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 170, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
+      { id: "status", header: () => <AzureTerm term="Status" />, label: "Status", priority: 2, approxWidth: 100, cell: ({ row }) => <AgentStatus enabled={row.original.enabled} /> },
       {
         id: "last_sign_in",
         header: () => <AzureTerm term="Last sign-in" />,
         label: "Last sign-in",
-        priority: 7,
+        priority: 4,
         approxWidth: 120,
-        cell: ({ row }) => (row.original.last_used_at ? <RelativeDate iso={row.original.last_used_at} /> : <span className="text-xs text-muted-foreground">No sign-in recorded</span>),
+        cell: ({ row }) => (row.original.last_used_at ? <RelativeDate iso={row.original.last_used_at} /> : <span className={MUTED}>Never</span>),
       },
+      {
+        id: "created",
+        header: "Created",
+        priority: 5,
+        approxWidth: 110,
+        cell: ({ row }) => (row.original.created_at ? <RelativeDate iso={row.original.created_at} /> : <span className={MUTED}>—</span>),
+      },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 6, approxWidth: 170, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
     ],
-    [],
+    [blueprintById],
   );
 
   const blueprintColumns = useMemo<AdaptiveColumn<AzureIdentity>[]>(
     () => [
       {
         id: "name",
-        accessorKey: "name",
-        header: () => <AzureTerm term="Agent identity blueprint" />, label: "Agent identity blueprint",
+        header: "Name",
         alwaysVisible: true,
         priority: 1,
-        approxWidth: 280,
-        cell: ({ row }) => {
-          const appId = typeof row.original.attrs?.["app_id"] === "string" ? (row.original.attrs["app_id"] as string) : row.original.native_id;
-          return <EntityCell label={<NameLink r={row.original}>{row.original.name || appId}</NameLink>} detail={<CopyableId value={appId} label="Application (client) ID" />} />;
-        },
+        approxWidth: 300,
+        cell: ({ row }) => <AgentNameCell identity={row.original} noun="blueprint" />,
       },
       {
         id: "agents",
@@ -196,135 +187,116 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         label: "Agent identities",
         priority: 2,
         approxWidth: 120,
-        cell: ({ row }) => {
-          const n = row.original.attrs?.["agent_count"];
-          return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
-        },
+        cell: ({ row }) => <span className="text-xs tabular-nums">{agents.filter((a) => a.attrs?.["agent_blueprint_id"] === row.original.native_id).length}</span>,
       },
-      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
-      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 180, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 170, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} /> },
+      { id: "status", header: () => <AzureTerm term="Status" />, label: "Status", priority: 2, approxWidth: 100, cell: ({ row }) => <AgentStatus enabled={row.original.enabled} /> },
+      { id: "created", header: "Created", priority: 4, approxWidth: 110, cell: ({ row }) => <RelativeDate iso={row.original.created_at} /> },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 5, approxWidth: 170, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} /> },
       {
         id: "publisher",
-        header: () => <AzureTerm term="Publisher domain" />, label: "Publisher domain",
-        priority: 5,
-        approxWidth: 150,
+        header: () => <AzureTerm term="Publisher domain">Publisher</AzureTerm>,
+        label: "Publisher",
+        priority: 6,
+        approxWidth: 140,
         cell: ({ row }) => <span className="text-xs">{(row.original.attrs?.["publisher_domain"] as string) || "—"}</span>,
       },
-      {
-        id: "created",
-        header: () => <AzureTerm term="Created" />, label: "Created",
-        priority: 6,
-        approxWidth: 160,
-        cell: ({ row }) => (
-          <span className="text-xs">
-            <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? (
-              <span className="block text-muted-foreground">
-                by <AzureTerm term={createdBy(row.original)!} />
-              </span>
-            ) : null}
-          </span>
-        ),
-      },
     ],
-    [],
+    [agents],
   );
 
-  const noun = view === "identities" ? "agent identities" : "agent identity blueprints";
+  // The Foundry view lists projects (and any resource with none), so its chip counts those rows.
+  const foundryObjects = foundry.reduce((n, f) => n + (f.children.length || 1), 0);
   const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="Every tenant" />;
   const viewChips = (
     <AWSFilterChips
-      label="Agent view"
+      label="Entra Agent ID view"
       active={view}
       onSelect={(key) => {
         const next = new URLSearchParams(params);
-        if (key === "identities") next.delete("agents");
+        if (key === "overview") next.delete("agents");
         else next.set("agents", key);
         next.delete("size");
         setParams(next, { replace: true });
       }}
       options={[
-        { key: "identities", label: "Agent identities", hint: azureExplain("Agent identities") },
-        { key: "blueprints", label: "Agent identity blueprints", hint: azureExplain("Agent identity blueprints") },
-        { key: "foundry", label: "Microsoft Foundry", hint: azureExplain("Microsoft Foundry") },
+        { key: "overview", label: "Overview", hint: azureExplain("Overview") },
+        { key: "identities", label: "Agent identities", count: agentsQ.data && managedQ.data ? allAgents.length : undefined, hint: azureExplain("Agent identities") },
+        { key: "blueprints", label: "Blueprints", count: blueprintsQ.data ? blueprints.length : undefined, hint: azureExplain("Agent identity blueprints") },
+        { key: "foundry", label: "Foundry", count: foundryQ.data ? foundryObjects : undefined, hint: azureExplain("Microsoft Foundry") },
       ]}
     />
   );
+
+  const noun = view === "identities" ? "agent identities" : view === "blueprints" ? "blueprints" : view === "foundry" ? "projects" : "agents";
+  const listView = view === "identities" || view === "blueprints";
   return (
     <div className="space-y-4 p-4">
-      {view === "foundry" ? (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            {viewChips}
-            <p className="text-xs text-(--color-text-muted)">
-              {foundryQ.data
-                ? `${foundryTotals.objects} Foundry ${foundryTotals.objects === 1 ? "object" : "objects"} · ${foundryTotals.projects} ${foundryTotals.projects === 1 ? "project" : "projects"} · ${foundryTotals.deployments} model ${foundryTotals.deployments === 1 ? "deployment" : "deployments"} · ${foundryTotals.agentApplications} agent ${foundryTotals.agentApplications === 1 ? "application" : "applications"} (${foundryTotals.agents} ${foundryTotals.agents === 1 ? "agent" : "agents"})`
-                : "Reading Microsoft Foundry…"}
-            </p>
-            <span className="ml-auto">{sourceSelect}</span>
-          </div>
-          <AzureFoundryView query={foundryQ} nodes={foundry} connectors={connectors} />
-        </>
-      ) : (
-        <>
-          <InventoryToolbar
-            chips={viewChips}
-            search={search}
-            onSearchChange={setSearch}
-            searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
-            controls={sourceSelect}
-            applied={connectorId ? [{ key: "source", label: `Tenant: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
-            onClearAll={() => {
-              setParam("source", null);
-              setSearch("");
-            }}
-            shown={filtered.length}
-            total={rows.length}
-            noun={noun}
-          />
+      <InventoryToolbar
+        chips={viewChips}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder={view === "foundry" ? "Search projects or agents" : "Search by name, sponsor or owner"}
+        searchAt="end"
+        controls={sourceSelect}
+        applied={connectorId ? [{ key: "source", label: `Tenant: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
+        onClearAll={() => {
+          setParam("source", null);
+          setSearch("");
+        }}
+        shown={listView ? filtered.length : 0}
+        total={listView ? rows.length : 0}
+        noun={noun}
+        showCount={listView}
+      />
 
-          <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
+      {/* Keyed by view: the content fades in on each switch rather than snapping. */}
+      <div key={view} className="space-y-4 animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none">
+        {view === "overview" ? (
+          <AzureAgentOverview connectorId={connectorId} search={search} />
+        ) : view === "foundry" ? (
+          <AzureFoundryTable query={foundryQ} nodes={foundry} agents={allAgents} search={search} />
+        ) : (
+          <>
+      <TruncationNotice truncation={truncation} noun={noun} narrowBy="Choose a tenant to read fewer. Search narrows only the rows already loaded." />
 
-          <ListFrame
-            loading={q.isLoading}
-            failed={q.isError && !rows.length}
-            error={q.error}
-            onRetry={() => void q.refetch()}
-            empty={!rows.length}
-            noMatch={!filtered.length}
-            emptyText={
-              view === "identities"
-                ? "No agent identity was recorded. Agent identities are read with AgentIdentity.Read.All; the connection's Coverage tab says whether that read ran."
-                : "No agent identity blueprint was recorded. Blueprints are read with AgentIdentityBlueprint.Read.All; the connection's Coverage tab says whether that read ran."
-            }
-          >
-            <AdaptiveTable
-              key={view}
-              sizing="fit"
-              cardsBelow={640}
-              tableId={`azure-agents-${view}`}
-              columns={view === "identities" ? identityColumns : blueprintColumns}
-              data={paged.pageRows}
-              getRowId={(r) => r.id}
-              enableSelection={false}
-              enableExpansion={false}
-              enableSorting={false}
-              enablePagination={false}
-              rowDetails={false}
-              onRowClick={(r) => navigate(detailHref(r))}
-            />
-            <CursorPager
-              meta={paged.meta}
-              pageIndex={paged.pageIndex}
-              rowsOnPage={paged.pageRows.length}
-              onPrev={paged.onPrev}
-              onNext={paged.onNext}
-              pageSize={pageSize}
-              onPageSize={(n) => setParam("size", pageSizeParam(n))}
-            />
-          </ListFrame>
-        </>
-      )}
+      <ListFrame
+        loading={listLoading}
+        failed={listQ.isError && !rows.length}
+        error={listQ.error}
+        onRetry={() => void listQ.refetch()}
+        empty={!rows.length}
+        noMatch={!filtered.length}
+        emptyText={view === "identities" ? "No agent identities found in this tenant." : "No agent identity blueprints found in this tenant."}
+      >
+        <AdaptiveTable
+          key={view}
+          sizing="fit"
+          cardsBelow={640}
+          tableId={`azure-agents-${view}`}
+          columns={view === "identities" ? identityColumns : blueprintColumns}
+          data={paged.pageRows}
+          getRowId={(r) => r.id}
+          enableSelection={false}
+          enableExpansion={false}
+          enableSorting={false}
+          enablePagination={false}
+          rowDetails={false}
+          onRowClick={(r) => navigate(agentPageHref(r))}
+        />
+        <CursorPager
+          meta={paged.meta}
+          pageIndex={paged.pageIndex}
+          rowsOnPage={paged.pageRows.length}
+          onPrev={paged.onPrev}
+          onNext={paged.onNext}
+          pageSize={pageSize}
+          onPageSize={(n) => setParam("size", pageSizeParam(n))}
+        />
+      </ListFrame>
+          </>
+        )}
+      </div>
     </div>
   );
 }

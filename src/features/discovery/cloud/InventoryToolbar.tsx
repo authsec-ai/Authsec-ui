@@ -3,7 +3,8 @@
  * card of its own.
  *
  * Search takes the room; the chips that narrow by kind sit beside it; the
- * scope controls (a toggle, the account) sit at the right. A second line
+ * scope controls (a toggle, the account) sit at the right. With
+ * `searchAt="end"` the chips lead and the search sits at the right instead. A second line
  * appears only while something is narrowing the list: how many rows remain,
  * each filter removable, and Clear all. Every control is 32 px high, so the
  * row reads as one object rather than four differently sized ones.
@@ -26,6 +27,8 @@ export function InventoryToolbar({
   shown,
   total,
   noun,
+  searchAt = "start",
+  showCount = true,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -41,12 +44,18 @@ export function InventoryToolbar({
   total: number;
   /** Plural, lower-case: "identities". */
   noun: string;
+  /** "end": the chips first and the search at the right, for views where the chips switch what is listed. */
+  searchAt?: "start" | "end";
+  /** false: no "x of y" line, for views whose rows are not one flat list (the search still narrows them). */
+  showCount?: boolean;
 }) {
   const filtered = applied.length > 0 || search.trim().length > 0;
+  const atEnd = searchAt === "end";
   return (
     <div className="space-y-2" role="search" aria-label={`Filter ${noun}`}>
       <div className="flex flex-wrap items-center gap-2">
-        <label className="relative flex min-w-[220px] flex-1 items-center sm:max-w-md">
+        {atEnd && chips ? <div className="min-w-0">{chips}</div> : null}
+        <label className={cn("relative flex min-w-[220px] flex-1 items-center sm:max-w-md", atEnd && "order-last ml-auto sm:max-w-xs")}>
           <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 size-4 text-(--color-text-muted)" />
           <input
             value={search}
@@ -71,14 +80,16 @@ export function InventoryToolbar({
             </button>
           ) : null}
         </label>
-        {chips ? <div className="min-w-0">{chips}</div> : null}
-        {controls ? <div className="ml-auto flex flex-wrap items-center gap-2">{controls}</div> : null}
+        {!atEnd && chips ? <div className="min-w-0">{chips}</div> : null}
+        {controls ? <div className={cn("flex flex-wrap items-center gap-2", atEnd ? "" : "ml-auto")}>{controls}</div> : null}
       </div>
       {filtered ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-          <span className="tabular-nums text-(--color-text-muted)" role="status">
-            {shown === total ? `All ${total} ${noun} match` : `${shown} of ${total} ${noun}`}
-          </span>
+          {showCount ? (
+            <span className="tabular-nums text-(--color-text-muted)" role="status">
+              {shown === total ? `All ${total} ${noun} match` : `${shown} of ${total} ${noun}`}
+            </span>
+          ) : null}
           <AppliedFilters filters={applied} onClearAll={onClearAll} />
           {!applied.length ? (
             <button type="button" onClick={onClearAll} className="font-medium text-(--color-primary-text) hover:underline">
