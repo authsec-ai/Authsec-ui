@@ -119,7 +119,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
         description="AuthSec never calls into the cluster: the agent polls for work with its actuation token and reports what it is allowed to do."
         actions={
           canAdminister && !token ? (
-            <Button size="sm" variant={st.actuation ? "outline" : "default"} onClick={() => (st.actuation ? setConfirm(true) : void doMint())} disabled={minting.isLoading}>
+            <Button size="sm" variant={st.actuation ? "outline" : "default"} onClick={() => setConfirm(true)} disabled={minting.isLoading}>
               {minting.isLoading ? "Creating…" : st.actuation ? "Rotate token" : "Turn on enforcement"}
             </Button>
           ) : undefined
@@ -173,7 +173,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
       {token ? (
         <Panel
           title="Hand the token to the agent"
-          description="The token is shown once. Store it in the cluster as a Secret, then upgrade the agent. Its Helm values decide what it may do; nothing changes until it is upgraded."
+          description="The token is shown once. Store it in the cluster as a Secret, then upgrade the agent: until then AuthSec refuses this cluster's discovery reports. The agent's Helm values decide what it may do."
           actions={
             <Button size="sm" variant="outline" onClick={() => setToken(null)}>
               Done
@@ -184,16 +184,16 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
             <Command label="1. Store the token" text={secretCommand(token)} />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field id="ns" label="Quarantine may act in" hint="Namespaces, space-separated. Only these; never the agent's own.">
-                <Input id="ns" value={install.quarantineNamespaces} placeholder="agent-demo iga-demo" onChange={(e) => setInstall({ ...install, quarantineNamespaces: e.target.value })} />
+                <Input id="ns" value={install.quarantineNamespaces} placeholder="e.g. agent-demo iga-demo" onChange={(e) => setInstall({ ...install, quarantineNamespaces: e.target.value })} />
               </Field>
               <Field id="chart" label="Chart" hint="Where your deployment publishes the iga-agent chart (0.5.0 or later).">
                 <Input id="chart" value={install.chartRef} onChange={(e) => setInstall({ ...install, chartRef: e.target.value })} />
               </Field>
               <Field id="roles" label="Access policies may change bindings of" hint="Role or ClusterRole names. Empty leaves access policies off.">
-                <Input id="roles" value={install.bindingRoles} placeholder="secret-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
+                <Input id="roles" value={install.bindingRoles} placeholder="e.g. rag-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
               </Field>
               <Field id="bns" label="…in RoleBindings of these namespaces" hint="The agent is granted bind on exactly the roles above, never escalate.">
-                <Input id="bns" value={install.bindingNamespaces} placeholder="iga-test" onChange={(e) => setInstall({ ...install, bindingNamespaces: e.target.value })} />
+                <Input id="bns" value={install.bindingNamespaces} placeholder="e.g. agent-demo" onChange={(e) => setInstall({ ...install, bindingNamespaces: e.target.value })} />
               </Field>
             </div>
             <label className="flex items-center gap-2 text-xs">
@@ -212,9 +212,11 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
       <Dialog open={confirm} onOpenChange={setConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rotate the actuation token?</DialogTitle>
+            <DialogTitle>{st.actuation ? "Rotate the actuation token?" : "Turn on enforcement?"}</DialogTitle>
             <DialogDescription>
-              The agent's current token stops working at once: until the new one is stored in the cluster, quarantines and access policies cannot reach it.
+              {st.actuation
+                ? "The agent's current token stops working at once: until the new one is stored in the cluster and the agent upgraded, AuthSec refuses its discovery reports, and quarantines and access policies cannot reach it."
+                : "AuthSec creates this cluster's token and from then on accepts its discovery reports only under it: discovery from the cluster pauses until you store the token and upgrade the agent (two commands, shown next). Have cluster access ready."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -222,7 +224,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
               Cancel
             </Button>
             <Button onClick={() => void doMint()} disabled={minting.isLoading}>
-              Rotate
+              {st.actuation ? "Rotate" : "Create the token"}
             </Button>
           </DialogFooter>
         </DialogContent>

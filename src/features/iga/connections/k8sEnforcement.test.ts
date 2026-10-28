@@ -30,8 +30,11 @@ describe("enforcement install commands", () => {
     expect(helm).toContain("--reuse-values");
     expect(helm).toContain('--set "roles={discovery,actuation}"');
     expect(helm).toContain("--set actuation.existingSecret=authsec-iga-actuation");
+    // Discovery must send the same token once it exists, or the server refuses it.
+    expect(helm).toContain("--set controlPlane.existingSecret=authsec-iga-actuation");
+    expect(helm).toContain("--set controlPlane.existingSecretKey=actuationToken");
     expect(helm).toContain('--set "actuation.namespaces=agent-demo iga-demo"');
-    expect(helm).not.toContain("token");
+    expect(helm).not.toMatch(/authsec_act_|--from-literal/);
     expect(helm).not.toContain("bindings");
     expect(secretCommand("authsec_act_abc")).toContain("--from-literal=actuationToken=authsec_act_abc");
   });

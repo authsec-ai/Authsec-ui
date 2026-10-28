@@ -5,6 +5,10 @@
  * each power on. The console never pushes configuration to a cluster -- the
  * agent's Helm values decide, and the agent reports them back on its poll.
  *
+ * Minting the token changes discovery too: the server then accepts this
+ * cluster's registration, sightings and sweeps only under it (401 otherwise),
+ * so the same upgrade makes it the agent's discovery token as well.
+ *
  * Two powers, each bounded by the namespaces and roles named here:
  *   quarantine       a NetworkPolicy that cuts a quarantined agent's network
  *                    (the actuation role; actuation.namespaces)
@@ -82,6 +86,10 @@ export function helmEnforcementCommand(o: EnforcementInstall): string {
   const lines = [
     `helm upgrade authsec-iga-agent ${o.chartRef.trim() || DEFAULT_CHART_REF} -n authsec-system --reuse-values`,
     `--set "roles={discovery,actuation}"`,
+    // A connector with an actuation token accepts discovery (registration,
+    // sightings, sweeps) only under that token: the agent sends it for both.
+    `--set controlPlane.existingSecret=${ACTUATION_SECRET}`,
+    "--set controlPlane.existingSecretKey=actuationToken",
     `--set actuation.existingSecret=${ACTUATION_SECRET}`,
     `--set "actuation.namespaces=${ns.join(" ")}"`,
   ];
