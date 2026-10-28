@@ -22,6 +22,7 @@ export const AZURE_GLOSSARY = {
   "Agent identity": "The account an AI agent uses to sign in and reach resources: a special service principal, created from a blueprint, with no credentials of its own.",
   "AI agent": "The account an AI agent uses to sign in and reach resources: a special service principal, created from a blueprint, with no credentials of its own.",
   "Agent identity blueprint": "The template this agent was made from. It holds the credentials that get the agent's tokens. Disabling it stops all its agent identities.",
+  "Agent template": "The template this agent was made from. It holds the credentials that get the agent's tokens. Disabling it stops all its agent identities.",
   "Agent identity blueprint principal": "The blueprint's presence in this tenant. It requests tokens and creates agent identities; audit logs show it as the actor.",
   "Agent user": "An optional user account paired with one agent identity, for systems that need a user, such as a mailbox. It has no password.",
   "User account of an AI agent": "An optional user account paired with one agent identity, for systems that need a user, such as a mailbox. It has no password.",
@@ -121,15 +122,16 @@ export const AZURE_GLOSSARY = {
   "Its application's credentials": "The secrets and certificates of its app registration, which can get this service principal's tokens.",
 
   /* Roles, permissions and who can act as an identity */
-  "Microsoft Entra role": "Permissions to manage Microsoft Entra ID itself (users, groups, apps), such as Global Administrator.",
-  "Azure role assignment": "Access to Azure resources, given on a management group, subscription, resource group or resource. Lower levels inherit it.",
-  "Application permission": "Lets an app act as itself with no user, over all data the permission covers. Only an admin can grant it.",
-  "Delegated permission": "Lets an app act for a signed-in user. It can never do more than that user can.",
-  "Key Vault access policy": "An older, per-vault way to give access to a vault's keys, secrets and certificates. Microsoft recommends Azure roles instead.",
+  "Directory role": "Permissions to manage Microsoft Entra ID itself (users, groups, apps), such as Global Administrator.",
+  "Azure permission": "Access to Azure resources, given on a management group, subscription, resource group or resource. Lower levels inherit it.",
+  "Granted to the app itself": "Lets an app act as itself with no user, over all data the permission covers. Only an admin can grant it.",
+  "Granted by a person": "Lets an app act for a signed-in user. It can never do more than that user can.",
+  "Key Vault access list": "An older, per-vault way to give access to a vault's keys, secrets and certificates. Microsoft recommends Azure roles instead.",
   Inherited: "Granted once on its agent identity blueprint and passed down to this agent identity automatically (inheritable permissions).",
   "Federated credential": "A trust rule that lets an outside or Azure identity get this identity's tokens without a secret, such as a managed identity or GitHub.",
+  "Trusted outside sign-in": "A trust rule that lets an outside or Azure identity get this identity's tokens without a secret, such as a managed identity or GitHub.",
   Owner: "Can change this app's settings and add credentials, so it can effectively act as it.",
-  "Agent's user account": "The agent's paired user account. It signs in only through its agent identity.",
+  "The agent's user account": "The agent's paired user account. It signs in only through its agent identity.",
 } as const;
 
 export type AzureGlossaryTerm = keyof typeof AZURE_GLOSSARY;
