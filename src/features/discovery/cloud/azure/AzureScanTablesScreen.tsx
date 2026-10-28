@@ -149,11 +149,17 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
     };
     const state: AdaptiveColumn<Row> = {
       id: "state",
-      header: "State",
+      header: "Status",
       priority: 2,
       approxWidth: 100,
       cell: ({ row }) =>
-        cls === "identities" && (row.original as AzureIdentity).enabled === false ? <StatusBadge tone="neutral">Disabled</StatusBadge> : <span className={MUTED}>Active</span>,
+        cls !== "identities" ? (
+          <span className={MUTED}>In Azure</span>
+        ) : (row.original as AzureIdentity).enabled === false ? (
+          <StatusBadge tone="neutral">Disabled</StatusBadge>
+        ) : (
+          <span className={MUTED}>Enabled</span>
+        ),
     };
     const signIn: AdaptiveColumn<Row> = {
       id: "last_sign_in",
@@ -181,7 +187,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
     };
     const runsAs: AdaptiveColumn<Row> = {
       id: "runs_as",
-      header: "Runs as",
+      header: "Managed identity",
       priority: 4,
       approxWidth: 180,
       cell: ({ row }) => {
@@ -191,7 +197,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
             {w.identity_name} <span className="text-muted-foreground">({identityKindLabel(w.identity_kind)})</span>
           </span>
         ) : (
-          <span className={MUTED}>No identity recorded</span>
+          <span className={MUTED}>None recorded</span>
         );
       },
     };
@@ -235,7 +241,7 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
   const specs: FacetSpec[] = [
     {
       key: "source",
-      label: "Source",
+      label: "Tenant",
       kind: "choice",
       value: p.scope.kind === "one" ? p.scope.source.id : p.url.source,
       anyLabel: "Every tenant",
@@ -244,10 +250,10 @@ export default function AzureScanTablesScreen(p: ScreenProps & { cls: InventoryC
     },
     {
       key: "kind",
-      label: cls === "identities" ? "Kind" : cls === "resources" ? "Type" : "Runtime",
+      label: "Type",
       kind: "choice",
       value: kind,
-      anyLabel: cls === "identities" ? "Any kind" : cls === "resources" ? "Any type" : "Any runtime",
+      anyLabel: "Any type",
       options: kindOptions,
       onChange: (v) => p.url.patch({ kind: v }),
     },

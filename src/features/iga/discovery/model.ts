@@ -258,3 +258,52 @@ export function azureAgentSignals(agent: DiscoveredAgent): string[] {
   const s = (agent.metadata as Record<string, unknown> | undefined)?.["signals"];
   return Array.isArray(s) ? s.map(String) : [];
 }
+
+const AZURE_FOUND_IN: Record<string, string> = {
+  entra_agent_id: "Entra Agent ID",
+  foundry_agent_application: "Foundry agent application",
+  foundry_project_agent: "Foundry project",
+  agent_registry: "Microsoft 365 agent registry",
+  teams_app_catalog: "Teams app catalog",
+  azure_bot_service: "Azure Bot Service",
+  logic_apps_agent: "Logic Apps",
+};
+
+/** Where in Microsoft's services an Azure agent was found, in a few words (the All agents "Found in" column). Null off Azure. */
+export function azureAgentFoundIn(agent: DiscoveredAgent): string | null {
+  if (agent.source !== "azure") return null;
+  const src = azureMetaText(agent, "evidence_source");
+  return AZURE_FOUND_IN[src] ?? (evidenceModeOf(agent) === "declared" ? "Listed by Microsoft" : "Inferred by AuthSec");
+}
+
+/**
+ * The object ID of the Microsoft Entra identity an Azure agent signs in as: its
+ * agent identity, or the service principal or managed identity an inferred agent
+ * was found from. Null when discovery recorded none (a Teams app or bot may have no identity of its own).
+ */
+export function azureAgentEntraId(agent: DiscoveredAgent): string | null {
+  if (agent.source !== "azure") return null;
+  const reg = ((agent.metadata ?? {}) as Record<string, unknown>)["registry"] as Record<string, unknown> | undefined;
+  const fromRegistry = typeof reg?.["agent_identity_id"] === "string" ? (reg["agent_identity_id"] as string) : "";
+  return azureMetaText(agent, "object_id") || fromRegistry || null;
+}
+
+/**
+ * An Azure agent's sign-in, as Microsoft records it: deleted from Azure, signed
+ * in at a time (Microsoft Entra sign-in logs), active in the last 7 days with no
+ * sign-in time (Microsoft 365 usage), or no sign-in recorded.
+ */
+export type AzureSignIn = { kind: "deleted" } | { kind: "signed_in"; at: string } | { kind: "active" } | { kind: "none" };
+
+export function azureAgentSignIn(agent: DiscoveredAgent): AzureSignIn {
+  if (agent.runtime_status === "gone") return { kind: "deleted" };
+  const at = azureMetaText(agent, "last_sign_in");
+  if (at) return { kind: "signed_in", at };
+  return agent.runtime_status === "running" ? { kind: "active" } : { kind: "none" };
+}
+
+/** A text field of an Azure agent's metadata, or "" when absent. */
+export function azureMetaText(agent: DiscoveredAgent, key: string): string {
+  const v = ((agent.metadata ?? {}) as Record<string, unknown>)[key];
+  return typeof v === "string" ? v : "";
+}

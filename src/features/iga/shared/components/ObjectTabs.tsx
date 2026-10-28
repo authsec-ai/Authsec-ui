@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
+import { HoverExplain } from "./HoverExplain";
 
 import type { ViaState } from "../links";
 
@@ -9,6 +10,8 @@ export interface ObjectTab {
   label: string;
   /** Route of the tab; Overview is the object's bare URL. */
   to: string;
+  /** A short explanation shown above the tab on hover. */
+  hint?: string;
 }
 
 /** Query parameters that belong to the view that set them (§2.14.5). */
@@ -47,20 +50,21 @@ export function ObjectTabs({ tabs, active }: { tabs: ObjectTab[]; active: string
         {tabs.map((t) => {
           const current = t.key === active;
           return (
-            <Link
-              key={t.key}
-              to={href(t)}
-              state={state}
-              aria-current={current ? "page" : undefined}
-              className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                current
-                  ? "border-(--color-primary) text-(--color-text)"
-                  : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
-              )}
-            >
-              {t.label}
-            </Link>
+            <HoverExplain key={t.key} title={t.label} text={t.hint}>
+              <Link
+                to={href(t)}
+                state={state}
+                aria-current={current ? "page" : undefined}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                  current
+                    ? "border-(--color-primary) text-(--color-text)"
+                    : "border-transparent text-(--color-text-muted) hover:text-(--color-text)",
+                )}
+              >
+                {t.label}
+              </Link>
+            </HoverExplain>
           );
         })}
       </nav>

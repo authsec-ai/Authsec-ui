@@ -24,6 +24,8 @@ import { CloudPill } from "../CloudPill";
 import { InventoryToolbar } from "../InventoryToolbar";
 import { AWSFilterChips } from "../aws/AWSFilterChips";
 import { TruncationNotice } from "../aws/AWSInventoryNotices";
+import { AzureTerm } from "./AzureTerm";
+import { azureExplain } from "./azureGlossary";
 import { ALL, AzureSourceSelect, CopyableId, ListFrame, RefNames, RelativeDate } from "./AzureDiscoveryShared";
 import { AzureFoundryView } from "./AzureFoundryView";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
@@ -116,7 +118,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "AI agent",
+        header: () => <AzureTerm term="Agent identity" />,
+        label: "Agent identity",
         alwaysVisible: true,
         priority: 1,
         approxWidth: 340,
@@ -129,7 +132,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       },
       {
         id: "blueprint",
-        header: "Built from template",
+        header: () => <AzureTerm term="Agent identity blueprint" />,
+        label: "Agent identity blueprint",
         priority: 2,
         approxWidth: 220,
         cell: ({ row }) => {
@@ -143,32 +147,44 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           );
         },
       },
-      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
-      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "status",
-        header: "Switched on",
+        header: () => <AzureTerm term="Status" />,
+        label: "Status",
         priority: 5,
         approxWidth: 100,
         cell: ({ row }) => (
-          <CloudPill tone="muted" dot={false} title={row.original.enabled ? "Can sign in and use its permissions" : "Off: this agent cannot sign in"}>
-            {row.original.enabled ? "On" : "Off"}
+          <CloudPill tone="muted" dot={false} title={row.original.enabled ? "Can sign in and use its permissions" : "Disabled: this agent cannot sign in"}>
+            {row.original.enabled ? "Active" : "Disabled"}
           </CloudPill>
         ),
       },
       {
         id: "created",
-        header: "Created",
+        header: () => <AzureTerm term="Created" />, label: "Created",
         priority: 6,
         approxWidth: 160,
         cell: ({ row }) => (
           <span className="text-xs">
             <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">Created by {createdBy(row.original)}</span> : null}
+            {createdBy(row.original) ? (
+              <span className="block text-muted-foreground">
+                by <AzureTerm term={createdBy(row.original)!} />
+              </span>
+            ) : null}
           </span>
         ),
       },
-      { id: "last_sign_in", header: "Last used", priority: 7, approxWidth: 120, cell: ({ row }) => <RelativeDate iso={row.original.last_used_at} /> },
+      {
+        id: "last_sign_in",
+        header: () => <AzureTerm term="Last sign-in" />,
+        label: "Last sign-in",
+        priority: 7,
+        approxWidth: 120,
+        cell: ({ row }) => (row.original.last_used_at ? <RelativeDate iso={row.original.last_used_at} /> : <span className="text-xs text-muted-foreground">No sign-in recorded</span>),
+      },
     ],
     [],
   );
@@ -178,7 +194,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       {
         id: "name",
         accessorKey: "name",
-        header: "Agent template",
+        header: () => <AzureTerm term="Agent identity blueprint" />,
+        label: "Agent identity blueprint",
         alwaysVisible: true,
         priority: 1,
         approxWidth: 340,
@@ -191,7 +208,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       },
       {
         id: "agents",
-        header: "Agents made from it",
+        header: () => <AzureTerm term="Agent identities" />,
+        label: "Agent identities",
         priority: 2,
         approxWidth: 120,
         cell: ({ row }) => {
@@ -199,11 +217,12 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           return <span className="text-xs tabular-nums">{typeof n === "number" ? n : "Not recorded"}</span>;
         },
       },
-      { id: "sponsors", header: "Sponsor (accountable person)", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
-      { id: "owners", header: "Owners (can change it)", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
+      { id: "sponsors", header: () => <AzureTerm term="Sponsors" />, label: "Sponsors", priority: 3, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "sponsors")} empty="No sponsor listed" /> },
+      { id: "owners", header: () => <AzureTerm term="Owners" />, label: "Owners", priority: 4, approxWidth: 210, cell: ({ row }) => <RefNames refs={refsOf(row.original.attrs, "owners")} empty="No owner listed" /> },
       {
         id: "publisher",
-        header: "Publisher website",
+        header: () => <AzureTerm term="Publisher domain" />,
+        label: "Publisher domain",
         priority: 5,
         approxWidth: 150,
         cell: ({ row }) => {
@@ -217,13 +236,17 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
       },
       {
         id: "created",
-        header: "Created",
+        header: () => <AzureTerm term="Created" />, label: "Created",
         priority: 6,
         approxWidth: 160,
         cell: ({ row }) => (
           <span className="text-xs">
             <RelativeDate iso={row.original.created_at} />
-            {createdBy(row.original) ? <span className="block text-muted-foreground">by {createdBy(row.original)}</span> : null}
+            {createdBy(row.original) ? (
+              <span className="block text-muted-foreground">
+                by <AzureTerm term={createdBy(row.original)!} />
+              </span>
+            ) : null}
           </span>
         ),
       },
@@ -245,9 +268,9 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         setParams(next, { replace: true });
       }}
       options={[
-        { key: "identities", label: "AI agents" },
-        { key: "blueprints", label: "Agent templates" },
-        { key: "foundry", label: "Microsoft Foundry (AI projects)" },
+        { key: "identities", label: "Agent identities", hint: azureExplain("Agent identities") },
+        { key: "blueprints", label: "Agent identity blueprints", hint: azureExplain("Agent identity blueprints") },
+        { key: "foundry", label: "Microsoft Foundry", hint: azureExplain("Microsoft Foundry") },
       ]}
     />
   );
@@ -275,8 +298,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
           <InventoryToolbar
             search={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Search by name, ID, template or person"
-            applied={connectorId ? [{ key: "source", label: `Source: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
+            searchPlaceholder={`Search ${noun} by name, ID, blueprint, sponsor or owner`}
+            applied={connectorId ? [{ key: "source", label: `Tenant: ${connectorLabel(options.find((c) => c.id === connectorId))}`, onRemove: () => setParam("source", null) }] : []}
             onClearAll={() => {
               setParam("source", null);
               setSearch("");

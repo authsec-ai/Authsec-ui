@@ -4,6 +4,11 @@
  * delete is offered, and no enforcement status is shown (SPEC-console-revamp.md
  * *Sightings actions*; the capability remains in the backend, untouched).
  *
+ * On Azure the list is "All agents" and speaks Azure only: its last sign-in
+ * (Azure has no running state for an agent), where Microsoft lists it (Found
+ * in), the Entra identity it signs in as, and its tenant. The team's review
+ * shows only once someone has reviewed the agent.
+ *
  * Status, Live only and Source are the server's filters and its `total` is
  * exact. The server has no `q` and no sort for this list, so the search box acts
  * on the page LOADED and says so, and the rows are ordered on the page. Paging is by offset,
@@ -37,18 +42,23 @@ import type { PagedView } from "../shared/listView";
 import { resolvePagedView } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
-import { azureAgentOrigin, nonDefaultBranch, SIGHTING_SOURCE, sightingProviderOf } from "./model";
+import { AzureTerm } from "@/features/discovery/cloud/azure/AzureTerm";
+
+import { azureAgentEntraId, azureAgentFoundIn, azureAgentOrigin, nonDefaultBranch, SIGHTING_SOURCE, sightingProviderOf } from "./model";
 import { useClientsLookup } from "./useClientsLookup";
 import type { FacetSpec } from "./FacetBar";
 import { EmptyList, FilteredEmpty, UnknownSource } from "./ListStates";
 import { ScreenFrame } from "./ScreenFrame";
 import type { ScreenProps } from "./screenTypes";
-import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
+import { AzureLastSignIn, AzureReview, SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
 
 const MUTED = "text-(--color-text-muted)";
 const PAGE = 50;
 /** `Connection.scope_summary` for a GitHub organisation with nothing selected: "no repositories", "0 repositories". */
 const NO_REPOSITORIES = /^\s*(no|0)\b/i;
+
+/** An object ID cut to its first block; the whole ID is in the tip. */
+const shortId = (id: string) => (id.length > 12 ? `${id.slice(0, 8)}…` : id);
 
 const STATUSES: DiscoveredAgentStatus[] = ["unregistered", "registered", "quarantined", "ignored"];
 
@@ -143,49 +153,51 @@ export default function SightingsScreen(p: ScreenProps) {
     return s?.label ?? SOURCE_LABELS[a.source];
   };
 
-  const columns = useMemo<AdaptiveColumn<DiscoveredAgent>[]>(
-    () => [
+  const columns = useMemo<AdaptiveColumn<DiscoveredAgent>[]>(() => {
+    // Azure: where Microsoft lists the agent, the Entra identity it signs in as, and its tenant.
+    const azureColumns: AdaptiveColumn<DiscoveredAgent>[] = [
       {
-        id: "agent",
-        header: "Sighting",
-        primary: true,
-        minWidth: 240,
+        id: "found_in",
+        header: () => <AzureTerm term="Found in" />,
+        label: "Found in",
+        priority: 2,
+        approxWidth: 190,
         cell: ({ row }) => {
-          const branch = nonDefaultBranch(row.original);
+          const where = azureAgentFoundIn(row.original) ?? "";
           return (
-            <RowName
-              to={`/iga/sightings/${row.original.id}`}
-              name={row.original.display_name || "Unnamed"}
-              rowKey={row.original.id}
-              selected={selectedId === row.original.id}
-              context={[azureAgentOrigin(row.original) ?? SOURCE_LABELS[row.original.source]]}
-              account={sourceLabel(row.original)}
-              badge={
-                branch ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-(--color-surface-subtle) px-1.5 py-0.5 text-[11px] text-(--color-text-muted)">
-                    <GitBranch className="size-2.5" aria-hidden="true" />
-                    {branch}
-                  </span>
-                ) : null
-              }
-            />
+            <AzureTerm term={where} className="block max-w-[190px] truncate text-sm">
+              {where}
+            </AzureTerm>
           );
         },
       },
       {
-        id: "status",
-        header: "Status",
-        priority: 1,
-        approxWidth: 190,
-        cardSummary: true,
-        // Two badges, two axes: what was decided, and what was observed.
-        cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <SightingStatus status={row.original.status} />
-            <SightingRuntime runtime={row.original.runtime_status} />
-          </div>
-        ),
+        id: "entra_identity",
+        header: () => <AzureTerm term="Entra identity" />,
+        label: "Entra identity",
+        priority: 3,
+        approxWidth: 140,
+        cell: ({ row }) => {
+          const oid = azureAgentEntraId(row.original);
+          return oid ? (
+            <span className="font-mono text-xs" title={oid}>
+              {shortId(oid)}
+            </span>
+          ) : (
+            <span className={`text-xs ${MUTED}`}>None recorded</span>
+          );
+        },
       },
+      {
+        id: "account",
+        header: () => <AzureTerm term="Tenant" />,
+        label: "Tenant",
+        priority: 4,
+        approxWidth: 150,
+        cell: ({ row }) => <span className="truncate text-sm">{sourceLabel(row.original)}</span>,
+      },
+    ];
+    const otherColumns: AdaptiveColumn<DiscoveredAgent>[] = [
       { id: "evidence", header: "Evidence", priority: 2, approxWidth: 150, cell: ({ row }) => <SightingEvidence agent={row.original} /> },
       { id: "account", header: "Source", priority: 3, approxWidth: 150, cell: ({ row }) => <span className="truncate text-sm">{sourceLabel(row.original)}</span> },
       {
@@ -200,9 +212,70 @@ export default function SightingsScreen(p: ScreenProps) {
           return name ? <span className="block max-w-[150px] truncate text-xs" title={name}>{name}</span> : <span className={`text-xs ${MUTED}`}>Matched, name not available</span>;
         },
       },
+    ];
+    return [
+      {
+        id: "agent",
+        header: provider === "azure" ? "Agent" : "Sighting",
+        primary: true,
+        minWidth: 240,
+        cell: ({ row }) => {
+          const branch = nonDefaultBranch(row.original);
+          return (
+            <RowName
+              to={`/iga/sightings/${row.original.id}`}
+              name={row.original.display_name || "Unnamed"}
+              rowKey={row.original.id}
+              selected={selectedId === row.original.id}
+              context={[azureAgentOrigin(row.original) ?? SOURCE_LABELS[row.original.source]]}
+              account={sourceLabel(row.original)}
+              badge={
+                provider === "azure" ? (
+                  <AzureReview status={row.original.status} />
+                ) : branch ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-(--color-surface-subtle) px-1.5 py-0.5 text-[11px] text-(--color-text-muted)">
+                    <GitBranch className="size-2.5" aria-hidden="true" />
+                    {branch}
+                  </span>
+                ) : null
+              }
+            />
+          );
+        },
+      },
+      provider === "azure"
+        ? {
+            id: "last_sign_in",
+            header: () => <AzureTerm term="Last sign-in" />,
+            label: "Last sign-in",
+            priority: 1,
+            approxWidth: 170,
+            cardSummary: true,
+            cell: ({ row }) => (
+              <span className="text-sm">
+                <AzureLastSignIn agent={row.original} />
+              </span>
+            ),
+          }
+        : {
+            id: "status",
+            header: "Status",
+            priority: 1,
+            approxWidth: 190,
+            cardSummary: true,
+            // Two badges, two axes: what was decided, and what was observed.
+            cell: ({ row }) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <SightingStatus status={row.original.status} />
+                <SightingRuntime runtime={row.original.runtime_status} />
+              </div>
+            ),
+          },
+      ...(provider === "azure" ? azureColumns : otherColumns),
       {
         id: "last_seen_at",
-        header: "Last seen",
+        header: provider === "azure" ? () => <AzureTerm term="Last seen" /> : "Last seen",
+        label: "Last seen",
         priority: 3,
         approxWidth: 150,
         cell: ({ row }) => {
@@ -214,9 +287,11 @@ export default function SightingsScreen(p: ScreenProps) {
                 <Timestamp iso={row.original.last_seen_at} />
               </p>
               <p className={`text-[11px] ${MUTED}`}>
-                {declared
-                  ? `still ${row.original.source === "azure" ? "listed" : "declared"} · ${row.original.sighting_count} scan${row.original.sighting_count === 1 ? "" : "s"}`
-                  : `${row.original.sighting_count} sighting${row.original.sighting_count === 1 ? "" : "s"}`}
+                {row.original.source === "azure"
+                  ? `found in ${row.original.sighting_count} scan${row.original.sighting_count === 1 ? "" : "s"}`
+                  : declared
+                    ? `still declared · ${row.original.sighting_count} scan${row.original.sighting_count === 1 ? "" : "s"}`
+                    : `${row.original.sighting_count} sighting${row.original.sighting_count === 1 ? "" : "s"}`}
               </p>
             </div>
           );
@@ -238,60 +313,77 @@ export default function SightingsScreen(p: ScreenProps) {
           </div>
         ),
       },
-    ],
+    ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, clients, p.sources, navigate],
-  );
+  }, [selectedId, clients, p.sources, navigate, provider]);
   const prefs = useColumnPreferences("discovery-sightings", columns);
   const [layout, setLayout] = useState<AdaptiveColumnsLayout | undefined>();
 
   const specs: FacetSpec[] = [
     {
       key: "source",
-      label: "Source",
+      label: provider === "azure" ? "Tenant" : "Source",
       kind: "choice",
       value: p.scope.kind === "one" ? p.scope.source.id : p.url.source,
       anyLabel: provider === "github" ? "Every organisation" : provider === "azure" ? "Every tenant" : "Every cluster",
       options: p.sources.map((s) => ({ value: s.id, label: s.revoked ? `${s.label} (revoked)` : s.label })),
       onChange: (v) => p.url.patch({ source: v }),
     },
-    {
-      key: "status",
-      label: "Status",
-      kind: "choice",
-      value: status,
-      anyLabel: "Any status",
-      note: "What a person decided. It is separate from whether the agent is running.",
-      options: STATUSES.map((s) => ({ value: s, label: s === "unregistered" ? "Decision needed (unregistered)" : STATUS_LABELS[s] })),
-      onChange: (v) => p.url.patch({ status: v }),
-    },
-    { key: "live", label: "Live only", kind: "toggle", value: live ? "1" : undefined, onChange: (v) => p.url.patch({ live: v }) },
+    ...(provider === "azure"
+      ? []
+      : [
+          {
+            key: "status",
+            label: "Status",
+            kind: "choice",
+            value: status,
+            anyLabel: "Any status",
+            note: "What a person decided. It is separate from whether the agent is running.",
+            options: STATUSES.map((s) => ({ value: s, label: s === "unregistered" ? "Decision needed (unregistered)" : STATUS_LABELS[s] })),
+            onChange: (v: string | undefined) => p.url.patch({ status: v }),
+          } satisfies FacetSpec,
+        ]),
+    { key: "live", label: provider === "azure" ? "Active in the last 7 days" : "Live only", kind: "toggle", value: live ? "1" : undefined, onChange: (v) => p.url.patch({ live: v }) },
   ];
 
   const preview = (a: DiscoveredAgent): PreviewModel => ({
     key: a.id,
-    name: a.display_name || "Unnamed sighting",
-    kindLabel: `Agent sighting · ${SOURCE_LABELS[a.source]}`,
+    name: a.display_name || (provider === "azure" ? "Unnamed agent" : "Unnamed sighting"),
+    kindLabel: provider === "azure" ? `Azure agent · ${azureAgentFoundIn(a)}` : `Agent sighting · ${SOURCE_LABELS[a.source]}`,
     provider,
     context: [sourceLabel(a), azureAgentOrigin(a) ?? (evidenceModeOf(a) === "declared" ? "Declared in code — it may never have run" : "Observed running")],
     facts: [
-      { label: "Status", value: <span className="inline-flex flex-wrap gap-1.5"><SightingStatus status={a.status} /><SightingRuntime runtime={a.runtime_status} /></span> },
-      { label: "Matched identity", value: a.matched_client_id ? clients.nameOf(a.matched_client_id) ?? "Matched, name not available" : "Unmatched" },
+      ...(provider === "azure"
+        ? [
+            { label: "Last sign-in", value: <AzureLastSignIn agent={a} /> },
+            ...(a.status !== "unregistered" ? [{ label: "Review", value: <AzureReview status={a.status} /> }] : []),
+            { label: "Found in", value: azureAgentFoundIn(a) },
+            { label: "Entra identity", value: azureAgentEntraId(a) ?? "None recorded" },
+          ]
+        : [
+            { label: "Status", value: <span className="inline-flex flex-wrap gap-1.5"><SightingStatus status={a.status} /><SightingRuntime runtime={a.runtime_status} /></span> },
+            { label: "Matched identity", value: a.matched_client_id ? clients.nameOf(a.matched_client_id) ?? "Matched, name not available" : "Unmatched" },
+          ]),
     ],
-    exception: a.runtime_status === "gone" ? `No longer present${a.runtime_reason ? ` — ${a.runtime_reason}` : ""}. Kept as evidence it existed.` : undefined,
+    exception: a.runtime_status === "gone" && provider !== "azure" ? `No longer present${a.runtime_reason ? ` — ${a.runtime_reason}` : ""}. Kept as evidence it existed.` : undefined,
     detailsHref: `/iga/sightings/${a.id}`,
   });
 
-  if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider={p.provider} onClear={() => p.url.patch({ source: null })} />;
+  if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider={p.provider} noun={provider === "azure" ? "tenant" : undefined} onClear={() => p.url.patch({ source: null })} />;
 
   const inScope = p.scope.kind === "one" ? [p.scope.source.connection] : p.sources.map((s) => s.connection);
-  const narrowing = [needle && `search "${p.url.searchText.trim()}" (in the loaded rows)`, p.scope.kind === "one" && `source ${p.scope.source.label}`, status && `status ${STATUS_LABELS[status].toLowerCase()}`, live && "live only"].filter(Boolean) as string[];
+  const narrowing = [needle && `search "${p.url.searchText.trim()}" (in the loaded rows)`, p.scope.kind === "one" && `${provider === "azure" ? "tenant" : "source"} ${p.scope.source.label}`, status && `status ${STATUS_LABELS[status].toLowerCase()}`, live && (provider === "azure" ? "active in the last 7 days" : "live only")].filter(Boolean) as string[];
+
+  // Azure calls this list All agents; Kubernetes and GitHub call them sightings.
+  const noun = provider === "azure" ? "agents" : "sightings";
+  const nounTitle = noun.charAt(0).toUpperCase() + noun.slice(1);
 
   return (
     <ScreenFrame
       url={p.url}
-      searchPlaceholder={rows ? `Search the ${rows.length} loaded sightings by name, fingerprint or source` : "Search the loaded sightings by name, fingerprint or source"}
-      searchHint="Sightings have no server search: this narrows the sightings loaded on this page, and does not look further."
+      searchPlaceholder={`Search the ${rows ? `${rows.length} ` : ""}loaded ${noun} by ${provider === "azure" ? "name or Entra object ID" : "name, fingerprint or source"}`}
+      // Azure says nothing here: the search box says it searches the loaded agents, and the tab's hover says what All agents holds.
+      searchHint={provider === "azure" ? undefined : `${nounTitle} have no server search: this narrows the ${noun} loaded on this page, and does not look further.`}
       facets={specs}
       trailing={
         <>
@@ -319,20 +411,20 @@ export default function SightingsScreen(p: ScreenProps) {
                   onPrev={paging.prev}
                   onNext={paging.next}
                   onRetry={() => void q.refetch()}
-                  subject="sightings"
+                  subject={noun}
                   permission="discovery:read"
                   chosenColumns={prefs.chosen}
                   onColumnsLayout={setLayout}
                   rowFilter={needle || tenantOnly ? matches : undefined}
                   filterNote={(shown, loadedCount) =>
                     needle
-                      ? `Search matches ${shown} of the ${loadedCount} loaded rows. The server has no search for sightings, so it cannot look further.`
-                      : `${shown} of the ${loadedCount} loaded sightings belong to this tenant.`
+                      ? `Search matches ${shown} of the ${loadedCount} loaded rows. The server has no search for ${noun}, so it cannot look further.`
+                      : `${shown} of the ${loadedCount} loaded ${noun} belong to this tenant.`
                   }
                   empty={
                     narrowing.length ? (
                       <FilteredEmpty
-                        subject="sightings"
+                        subject={noun}
                         narrowing={narrowing}
                         onClear={() => {
                           p.url.setSearchText("");
@@ -341,7 +433,7 @@ export default function SightingsScreen(p: ScreenProps) {
                       />
                     ) : (
                       <EmptyList
-                        subject="sightings"
+                        subject={noun}
                         detail={
                           provider === "github"
                             ? githubEmptyDetail(inScope)

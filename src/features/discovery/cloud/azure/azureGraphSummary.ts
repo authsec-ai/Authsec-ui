@@ -14,7 +14,7 @@ export const SUMMARY_TABLES: { table: string; label: string; noun: [string, stri
   { table: "resource", label: "Resources", noun: ["resource", "resources"] },
   { table: "workload", label: "Workloads", noun: ["workload", "workloads"] },
   { table: "entitlement", label: "Roles and permissions", noun: ["role or permission", "roles and permissions"] },
-  { table: "access_edge", label: "Grants", noun: ["grant", "grants"] },
+  { table: "access_edge", label: "Access assignments", noun: ["access assignment", "access assignments"] },
   { table: "credential", label: "Credentials", noun: ["credential", "credentials"] },
   { table: "relationship", label: "Relationships", noun: ["relationship", "relationships"] },
 ];
@@ -78,8 +78,23 @@ export function summarizeGraph(rows: AzureGraphCount[]): SummarySection[] {
     });
 }
 
-/** A state as words: "tombstoned" → "Tombstoned", "not_in_inventory" → "Not in inventory". */
+/** The states the graph writes, in Azure's terms. */
+const STATE_LABEL: Record<string, string> = {
+  active: "In Azure",
+  current: "In Azure",
+  stale: "Not in latest scan",
+  retired: "Deleted from Azure",
+  tombstoned: "Deleted from Azure",
+  ended: "Removed",
+  revoked: "Revoked",
+  rotated: "Replaced by a newer one",
+  expired: "Expired",
+  not_in_inventory: "Outside the scanned subscriptions",
+};
+
+/** A state as words: "tombstoned" → "Deleted from Azure"; an unknown state as written ("some_state" → "Some state"). */
 export function stateLabel(state: string): string {
+  if (STATE_LABEL[state]) return STATE_LABEL[state];
   const s = state.replace(/_/g, " ");
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : "Not stated";
 }

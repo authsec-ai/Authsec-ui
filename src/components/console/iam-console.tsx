@@ -63,6 +63,8 @@ export interface ConsoleFilterOption {
   key: string;
   label: string;
   count?: number | string;
+  /** A short explanation shown above the chip on hover, when given. */
+  hint?: string;
 }
 
 export function ConsoleFilterBar({

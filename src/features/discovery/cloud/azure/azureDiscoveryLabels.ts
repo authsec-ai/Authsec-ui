@@ -48,6 +48,26 @@ export function identityKindLabel(kind: string): string {
   return IDENTITY_KIND_LABEL[kind] ?? OTHER_LABEL;
 }
 
+/**
+ * The tabs an Azure identity's page shows past Overview, Access Graph and
+ * Evidence: only those Microsoft makes possible for its kind, so no tab is
+ * always empty.
+ *   credentials   client secrets and certificates: app registrations and service
+ *                 principals only (an agent identity has none of its own; its
+ *                 blueprint holds them, and Azure manages a managed identity's)
+ *   token-access  who can act as it: anything but a user or a group
+ *   activity      sign-ins: anything that signs in (not a group or an app registration)
+ *   workloads     Azure resources signing in as it: managed identities only
+ */
+export function identityTabKeys(kind: string): string[] {
+  const keys = ["access"];
+  if (kind === "entra_application" || kind === "entra_service_principal") keys.push("credentials");
+  if (kind !== "entra_user" && kind !== "entra_group") keys.push("token-access");
+  if (kind !== "entra_group" && kind !== "entra_application") keys.push("activity");
+  if (kind === "entra_managed_identity") keys.push("workloads");
+  return keys;
+}
+
 /** A blueprint is an app registration and its principal a service principal;
  * Agent ID marks both in `attrs.agent_type`. */
 // Microsoft's full names; "agent blueprint" is the short form its own

@@ -49,6 +49,22 @@ export const TYPE_LABEL: Record<DiscoveryType, string> = {
   sightings: "Sightings",
 };
 
+/**
+ * Azure's names for two tabs, chosen so each says what it lists: Agents lists
+ * only what Microsoft Entra Agent ID declares, and Sightings lists every agent
+ * found from every source (Agent ID, the Microsoft 365 registry, Teams, bots,
+ * Logic Apps, Foundry, inferred). Every other provider keeps TYPE_LABEL.
+ */
+const AZURE_TYPE_LABEL: Partial<Record<DiscoveryType, string>> = {
+  agents: "Entra Agent ID",
+  sightings: "All agents",
+};
+
+/** A tab's name for a provider: Azure's own names where it has them, else TYPE_LABEL. */
+export function typeLabel(provider: DiscoveryProvider | undefined, type: DiscoveryType): string {
+  return (provider === "azure" && AZURE_TYPE_LABEL[type]) || TYPE_LABEL[type];
+}
+
 export function isProvider(v: string | null | undefined): v is DiscoveryProvider {
   return !!v && (DISCOVERY_PROVIDERS as readonly string[]).includes(v);
 }

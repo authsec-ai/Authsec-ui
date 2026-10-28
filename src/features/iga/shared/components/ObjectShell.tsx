@@ -30,7 +30,7 @@ import { CardContent } from "@/components/ui/card";
 import { TableCard } from "@/theme/components/cards";
 
 import { useEvidence } from "../../evidence/useEvidence";
-import { DISCOVERY_PATH, TYPE_LABEL, discoveryListHref, type DiscoveryProvider, type DiscoveryType } from "../../discovery/urlState";
+import { DISCOVERY_PATH, discoveryListHref, typeLabel, type DiscoveryProvider, type DiscoveryType } from "../../discovery/urlState";
 import type { NodeCategory, NodeIcon } from "../../graph/nodeView";
 import { useAnnounce } from "../announce";
 import type { GraphFailure } from "../graphErrors";
@@ -50,6 +50,8 @@ export interface ObjectTabDef extends TabRoute {
   path: string;
   /** Fills the page below the tabs and hosts evidence in its own inspector. */
   workspace?: boolean;
+  /** A short explanation shown above the tab on hover. */
+  hint?: string;
 }
 
 /** What the detail header says about one object. Every field is optional but the name and kind. */
@@ -202,7 +204,7 @@ export function ObjectShell({
           </div>
         ) : null}
         <ObjectTabs
-          tabs={shown.map<ObjectTab>((t) => ({ key: t.key, label: t.label, to: `${base}${t.path}` }))}
+          tabs={shown.map<ObjectTab>((t) => ({ key: t.key, label: t.label, to: `${base}${t.path}`, hint: t.hint }))}
           active={activeTab.key}
         />
         {activeTab.state === "ready"
@@ -245,7 +247,7 @@ export function ObjectShell({
           kindLabel
         )
       }
-      description={object ? <ObjectContext ws={ws} object={object} onRefresh={onRefresh} /> : undefined}
+      description={object ? <ObjectContext ws={ws} object={object} onRefresh={onRefresh} provider={provider} /> : undefined}
       actions={
         object ? (
           <>
@@ -281,7 +283,7 @@ export function ObjectShell({
         path: base,
         label: object?.name ?? kindLabel,
         list: {
-          label: TYPE_LABEL[listType],
+          label: typeLabel(provider, listType),
           // The segment returns to the list as the reader left it: filters, sort, page.
           href: discoveryListHref(listType, provider),
           parent: { label: "Discovery", href: DISCOVERY_PATH },
@@ -300,7 +302,7 @@ export function ObjectShell({
  * who classified it, the publication it is read at. The same on every tab, and
  * it wraps rather than truncating (X-02).
  */
-function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHeaderData; onRefresh: () => void }) {
+function ObjectContext({ ws, object, onRefresh, provider }: { ws: string; object: ObjectHeaderData; onRefresh: () => void; provider: DiscoveryProvider }) {
   const { isOpen: evidenceOpen } = useEvidence();
   const lc = object.lifecycle;
   const sweep = object.sweep;
@@ -337,8 +339,17 @@ function ObjectContext({ ws, object, onRefresh }: { ws: string; object: ObjectHe
         </span>
       ) : null}
       {!object.plainNote && !evidenceOpen ? (
-        <span className="inline-flex items-center gap-1 text-(--color-text-muted)" title="What a policy declares is shown; whether a request would succeed is not evaluated.">
-          <Info className="size-3.5" aria-hidden="true" /> Declared access — not evaluated
+        <span
+          className="inline-flex items-center gap-1 text-(--color-text-muted)"
+          title={
+            provider === "azure"
+              ? "Role assignments and permissions as Azure records them. AuthSec does not test whether a request would succeed: deny assignments and conditions are not applied."
+              : "What a policy declares is shown; whether a request would succeed is not evaluated."
+          }
+        >
+          <Info className="size-3.5" aria-hidden="true" /> {provider === "azure" ? "Access as assigned in Azure — not tested" : "Declared access — not evaluated"}
+        </span>
+      ) : null}
         </span>
       ) : null}
       {sweep?.warning ? <span className="basis-full">{sweep.warning}</span> : null}
