@@ -350,8 +350,6 @@ function ObjectContext({ ws, object, onRefresh, provider }: { ws: string; object
           <Info className="size-3.5" aria-hidden="true" /> {provider === "azure" ? "Access as assigned in Azure — not tested" : "Declared access — not evaluated"}
         </span>
       ) : null}
-        </span>
-      ) : null}
       {sweep?.warning ? <span className="basis-full">{sweep.warning}</span> : null}
     </span>
   );
