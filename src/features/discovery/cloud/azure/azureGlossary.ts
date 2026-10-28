@@ -119,7 +119,7 @@ export const AZURE_GLOSSARY = {
   "Agent applications": "Agents published from this project as agent applications, each with its own endpoint and agent identity. An older Foundry model.",
   "Agent blueprints that trust it": "Agent identity blueprints whose federated credential trusts this managed identity, so this resource can get their agents' tokens.",
   Projects: "The Foundry projects inside this Foundry resource.",
-  "Its application's credentials": "The secrets and certificates of its app registration, which can get this service principal's tokens.",
+  "The app's own password or certificate": "The secrets and certificates of its app registration, which can get this service principal's tokens.",
 
   /* Roles, permissions and who can act as an identity */
   "Directory role": "Permissions to manage Microsoft Entra ID itself (users, groups, apps), such as Global Administrator.",
