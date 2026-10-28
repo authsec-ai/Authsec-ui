@@ -64,7 +64,7 @@ export const AZURE_GLOSSARY = {
   Disabled: "It can't sign in or get tokens: the account is disabled in Microsoft Entra ID.",
 
   /* Identity types */
-  User: "A person's account in Microsoft Entra ID: a member of your organization or an invited guest.",
+  "Person (user)": "A person's account in Microsoft Entra ID: a member of your organization or an invited guest.",
   Group: "A set of users, apps or agents managed together. Access given to a group applies to every member.",
   "App registration": "An app's definition in its home tenant: how it gets tokens and which APIs it needs. Its service principals are made from it.",
   "Service principal": "An app's identity in one tenant: what it can do there and who can use it. Shown under Enterprise applications in Entra.",
