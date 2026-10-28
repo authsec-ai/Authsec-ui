@@ -51,7 +51,6 @@ import {
   BlueprintCredentialsTab,
   BlueprintOverview,
   BlueprintPermissionsTab,
-  agentPageKind,
 } from "./AzureAgentPages";
 import { AzureGraphPanel } from "./AzureGraphPanel";
 import { FoundryOverview } from "./AzureFoundryView";
@@ -69,7 +68,7 @@ import {
   ResourceOverview,
   WorkloadOverview,
 } from "./AzureObjectTabs";
-import { agentTypeLabel, armTypeLabel, connectorLabel, identityKindLabel, identityTabKeys } from "./azureDiscoveryLabels";
+import { agentPageKind, agentTypeLabel, armTypeLabel, connectorLabel, identityKindLabel, identityTabKeys } from "./azureDiscoveryLabels";
 
 type Kind = "identity" | "resource" | "workload";
 

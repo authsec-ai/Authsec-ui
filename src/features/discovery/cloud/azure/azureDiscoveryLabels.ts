@@ -386,3 +386,13 @@ export function refsOf(attrs: Record<string, unknown> | null | undefined, key: s
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is DirectoryRef => !!x && typeof x === "object" && typeof (x as DirectoryRef).id === "string");
 }
+
+export const identityHref = (objectId: string) => `/iga/azure/identity/${encodeURIComponent(objectId)}`;
+
+/** Is this identity an Entra Agent ID object with a page of its own? */
+export function agentPageKind(identity: AzureIdentity | undefined): "agent" | "blueprint" | null {
+  if (!identity) return null;
+  if (identity.kind === "entra_agent_identity") return "agent";
+  if (identity.kind === "entra_application" && identity.attrs?.["agent_type"] === "agent_identity_blueprint") return "blueprint";
+  return null;
+}

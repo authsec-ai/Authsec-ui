@@ -36,7 +36,7 @@ import { DrawerList, RefNames, RelativeDate } from "./AzureDiscoveryShared";
 import { GrantLine } from "./AzureObjectTabs";
 import { AzureTerm } from "./AzureTerm";
 import { foundryPlacement } from "./azureDetails";
-import { refsOf } from "./azureDiscoveryLabels";
+import { identityHref, refsOf } from "./azureDiscoveryLabels";
 
 const LIST_LIMIT = 200;
 const MUTED = "text-xs text-muted-foreground";
@@ -49,17 +49,7 @@ interface AuditChange {
   result?: string;
 }
 
-export const identityHref = (objectId: string) => `/iga/azure/identity/${encodeURIComponent(objectId)}`;
-
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
-
-/** Is this identity an Entra Agent ID object with a page of its own? */
-export function agentPageKind(identity: AzureIdentity | undefined): "agent" | "blueprint" | null {
-  if (!identity) return null;
-  if (identity.kind === "entra_agent_identity") return "agent";
-  if (identity.kind === "entra_application" && identity.attrs?.["agent_type"] === "agent_identity_blueprint") return "blueprint";
-  return null;
-}
 
 /** Active or Disabled, as the Entra admin center says it. */
 function StatusValue({ enabled }: { enabled: boolean }) {
