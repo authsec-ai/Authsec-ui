@@ -1,8 +1,8 @@
 /**
- * One sighting — `/iga/sightings/:id`. READ-ONLY: facts, the lifecycle trail,
- * the evidence it was found in, and the raw record collapsed. Nothing here
- * claims, provisions, quarantines, releases or deletes, and no enforcement
- * status is shown (SPEC-console-revamp.md *Sightings actions*).
+ * One sighting — `/iga/sightings/:id`: facts, the lifecycle trail, the
+ * evidence it was found in, and the raw record collapsed. Its one action is
+ * Quarantine / Release, with where enforcement stands (SightingQuarantine);
+ * nothing here claims, provisions or deletes.
  *
  * The two axes stay apart: what a person DECIDED (status) and what was
  * OBSERVED (runtime). A declared finding says it was declared — a workflow
@@ -26,6 +26,7 @@ import { CopyValue, Fact, Facts, Panel } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 import { FailurePanel } from "./ListStates";
 import { SightingEvidence, SightingRuntime, SightingStatus } from "./SightingParts";
+import { SightingQuarantine } from "./SightingQuarantine";
 import { useClientsLookup } from "./useClientsLookup";
 import { AzureAgentDetail } from "./AzureAgentDetail";
 import { azureAgentOrigin, sightingProvider } from "./model";
@@ -113,6 +114,8 @@ export default function SightingDetailPage() {
         <SightingRuntime runtime={a.runtime_status} />
         <SightingEvidence agent={a} />
       </div>
+
+      <SightingQuarantine agent={a} />
 
       <Panel title="Sighting" description="Where this was found and what it is matched to.">
         <Facts>
