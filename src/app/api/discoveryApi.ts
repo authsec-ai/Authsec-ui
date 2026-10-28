@@ -4,10 +4,10 @@
  * Types mirror `models/discovery.go` exactly. Response envelopes are
  * `{sources: […]}` and `{agents: […], total: n}`.
  *
- * Live: sources CRUD, agents list/get/events (sightings are read-only in the
- * console: the claim, quarantine, update and delete endpoints exist in the
- * backend and are not called), and the GitHub channel (source-from-connector,
- * repository selection, scan).
+ * Live: sources CRUD, agents list/get/events, quarantine and release of a
+ * sighting, a cluster's actuation token (the claim, update and delete endpoints
+ * exist in the backend and are not called), and the GitHub channel
+ * (source-from-connector, repository selection, scan).
  * Still mocked: Identities — the backend has no identity endpoint, so that page
  * keeps its fixtures and says so.
  *
@@ -54,6 +54,17 @@ export interface DiscoverySource {
   self_registered: boolean;
   /** Last runtime snapshot the agent reported. Opaque json blob. */
   runtime: unknown;
+  // ── In-cluster enforcement. actuation_enabled_at is when an actuation token was
+  //    minted (the hash never leaves the server); the rest is what the agent last
+  //    REPORTED it can do, never what the console asked for. ──
+  actuation_enabled_at?: string;
+  /** "" until an agent reports; then "observe" or "deny". */
+  enforcement_mode?: string;
+  enforced_plan_version?: number;
+  enforced_plan_at?: string;
+  enforcement_evict?: boolean;
+  /** The agent may change role bindings for access policies (iga-agent 0.5.0, enforcement.bindings). */
+  enforcement_bindings?: boolean;
   /** DERIVED at read time (heartbeat within ~5 min), not stored. Read it; don't recompute. */
   connected: boolean;
   seconds_since_heartbeat?: number;
@@ -623,6 +634,24 @@ export const discoveryApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: "DiscoveredAgent", id }],
     }),
 
+    // Quarantine: a governance decision (discovery:quarantine, audited, a reason is
+    // required). The server records it, then queues the in-cluster NetworkPolicy
+    // through the cluster's actuation agent; quarantine_enforced_at says it landed.
+    quarantineAgent: builder.mutation<DiscoveredAgent, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({ url: `/authsec/discovery/agents/${id}/quarantine`, method: "POST", body: { reason } }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoveredAgent", id }, "DiscoveredAgent"],
+    }),
+    unquarantineAgent: builder.mutation<DiscoveredAgent, { id: string }>({
+      query: ({ id }) => ({ url: `/authsec/discovery/agents/${id}/unquarantine`, method: "POST", body: {} }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoveredAgent", id }, "DiscoveredAgent"],
+    }),
+    // Mints (or rotates) a cluster's actuation token (governance:admin). Shown once:
+    // the server keeps only its hash, and a new one invalidates the old.
+    enableActuation: builder.mutation<{ actuation_token: string; note?: string }, string>({
+      query: (id) => ({ url: `/authsec/governance/connectors/${id}/actuation`, method: "POST", body: {} }),
+      invalidatesTags: (_r, _e, id) => [{ type: "DiscoverySource", id }, "Connections"],
+    }),
+
     // The lifecycle trail — the only place a user sees WHO deleted an agent and
     // HOW it was noticed. `pod_terminated` is a rollout (routine); `deleted` is
     // attributed admission; `absent` is a resync sweep with no attributable actor.
@@ -894,6 +923,9 @@ export const {
   useListDiscoveredAgentsQuery,
   useGetDiscoveredAgentQuery,
   useGetAgentEventsQuery,
+  useQuarantineAgentMutation,
+  useUnquarantineAgentMutation,
+  useEnableActuationMutation,
   useGetGitHubAppQuery,
   useDescribeGitHubAppQuery,
   useSetGitHubAppMutation,

@@ -15,8 +15,9 @@ describe("setupTarget", () => {
     expect(setupTarget([conn("z1", "azure")], "notifications")).toBe("/iga/connections/z1/notifications");
   });
 
-  it("defaults to enforcement, which only AWS accounts have", () => {
+  it("defaults to an AWS account's enforcement, even after a cluster with its own", () => {
     expect(setupTarget([conn("z1", "azure"), conn("a1", "aws")], undefined)).toBe("/iga/connections/a1/enforcement");
+    expect(setupTarget([conn("k1", "k8s"), conn("a1", "aws")], undefined)).toBe("/iga/connections/a1/enforcement");
     expect(setupTarget([conn("a1", "aws")], "nonsense")).toBe("/iga/connections/a1/enforcement");
   });
 

@@ -602,6 +602,8 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
     { key: "scope", label: "Scope" },
   ];
   if (c.provider === "github") tabs.push({ key: "rules", label: "Scan rules" });
+  // A cluster's quarantine and access-policy enforcement (K8sEnforcementTab).
+  if (c.provider === "k8s") tabs.push({ key: "enforcement", label: "Enforcement" });
   // AWS accounts carry the policy setup that used to live under Policy › AWS
   // access: enforcement, pull-request sources, notifications and settings.
   if (c.provider === "aws") {
@@ -630,7 +632,9 @@ const SETUP_SECTIONS: DetailTab[] = ["enforcement", "iac", "notifications", "set
  */
 export function setupTarget(connections: Connection[] | undefined, section: string | undefined): string {
   const tab = SETUP_SECTIONS.find((s) => s === section) ?? "enforcement";
-  const c = (connections ?? []).find((x) => tabsOf(x).some((t) => t.key === tab));
+  // These were AWS policy setup: an AWS account first (a cluster has an Enforcement tab of its own).
+  const has = (x: Connection) => tabsOf(x).some((t) => t.key === tab);
+  const c = (connections ?? []).find((x) => x.provider === "aws" && has(x)) ?? (connections ?? []).find(has);
   return c ? detailHref(c.id, tab) : "/iga/connections";
 }
 
