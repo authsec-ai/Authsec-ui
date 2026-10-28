@@ -20,9 +20,11 @@ export const AZURE_GLOSSARY = {
   "Agent identities": "The accounts AI agents use to sign in. Each is a special service principal created from a blueprint, with no credentials of its own.",
   "Agent identity blueprints": "Templates for a kind of agent. A blueprint holds the credentials that get tokens for every agent identity made from it.",
   "Agent identity": "The account an AI agent uses to sign in and reach resources: a special service principal, created from a blueprint, with no credentials of its own.",
+  "AI agent": "The account an AI agent uses to sign in and reach resources: a special service principal, created from a blueprint, with no credentials of its own.",
   "Agent identity blueprint": "The template this agent was made from. It holds the credentials that get the agent's tokens. Disabling it stops all its agent identities.",
   "Agent identity blueprint principal": "The blueprint's presence in this tenant. It requests tokens and creates agent identities; audit logs show it as the actor.",
   "Agent user": "An optional user account paired with one agent identity, for systems that need a user, such as a mailbox. It has no password.",
+  "User account of an AI agent": "An optional user account paired with one agent identity, for systems that need a user, such as a mailbox. It has no password.",
   "Microsoft Foundry": "Azure's platform for building AI agents and apps from models and tools. Foundry creates an agent identity for its agents automatically.",
   Sponsors: "The people accountable for the agent's business purpose. They can disable it but can't change its settings. Microsoft requires one when an agent is created.",
   Owners: "Technical admins of the agent or app. They can change its settings and credentials. Only owners can re-enable or restore an agent.",
@@ -65,10 +67,12 @@ export const AZURE_GLOSSARY = {
 
   /* Identity types */
   "Person (user)": "A person's account in Microsoft Entra ID: a member of your organization or an invited guest.",
-  Group: "A set of users, apps or agents managed together. Access given to a group applies to every member.",
-  "App registration": "An app's definition in its home tenant: how it gets tokens and which APIs it needs. Its service principals are made from it.",
+  "Team (group)": "A set of users, apps or agents managed together. Access given to a group applies to every member.",
+  "App definition (app registration)": "An app's definition in its home tenant: how it gets tokens and which APIs it needs. Its service principals are made from it.",
   "Service principal": "An app's identity in one tenant: what it can do there and who can use it. Shown under Enterprise applications in Entra.",
+  "App login (service principal)": "An app's identity in one tenant: what it can do there and who can use it. Shown under Enterprise applications in Entra.",
   "Managed identity": "An identity Azure manages for a resource, so there are no credentials to handle. The resource signs in to other Azure services with it.",
+  "Azure-run login (managed identity)": "An identity Azure manages for a resource, so there are no credentials to handle. The resource signs in to other Azure services with it.",
 
   /* Identity facts */
   "Object ID": "The unique ID of this object in your Microsoft Entra tenant. For an agent identity it equals its application ID.",
