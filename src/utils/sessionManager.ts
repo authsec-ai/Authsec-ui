@@ -104,6 +104,15 @@ export class SessionManager {
       localStorage.removeItem("refresh_token");
       localStorage.removeItem("authsec-ui-theme"); // Clear theme preference on logout
 
+      // Clear graph layout positions saved under the current user
+      const PREFIX = "iga-graph-layout:";
+      const layoutKeys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(PREFIX)) layoutKeys.push(k);
+      }
+      for (const k of layoutKeys) localStorage.removeItem(k);
+
       // Clear sessionStorage
       // Preserve OIDC flow values during OIDC login/callback so redirects don't break
       let preserveOidc = false;

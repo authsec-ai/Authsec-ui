@@ -37,6 +37,7 @@ import {
   type CollectorKind,
   type IssuedEnrollment,
 } from "@/app/api/collectorApi";
+import config from "@/config";
 
 function errorMessage(err: unknown, fallback: string): string {
   const status = (err as { status?: number })?.status;
@@ -87,17 +88,32 @@ const KIND_LABELS: Record<CollectorKind, string> = {
   node_sensor: "Node sensor",
 };
 
+// The command runs inside a container. localhost would be that container, and
+// macOS has no /proc to bind-mount. --pid host makes /proc the machine's
+// process list. An empty config path is valid; /dev/null is not JSON.
+function collectorAPIURL(): string {
+  const raw = config.VITE_API_URL || "http://localhost:7468";
+  try {
+    const u = new URL(raw);
+    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") {
+      u.hostname = "host.docker.internal";
+    }
+    return u.toString().replace(/\/$/, "");
+  } catch {
+    return "http://host.docker.internal:7468";
+  }
+}
+
 function dockerCommand(token: string): string {
-  const url = window.location.origin;
+  const url = collectorAPIURL();
   return [
-    "docker run -d --name authsec-collector --privileged \\",
+    "docker run -d --name authsec-collector --privileged --pid host \\",
+    "  --add-host=host.docker.internal:host-gateway \\",
     `  -e AUTHSEC_URL=${url} \\`,
-    "  -e AUTHSEC_HOST_ROOT=/host \\",
-    "  -v /proc:/host/proc:ro -v /sys:/host/sys:ro \\",
     "  -v authsec-collector-state:/var/lib/authsec-local \\",
     "  authsec/iga-host-collector:latest \\",
-    `  sh -c 'printf "%s" "${token}" > /tmp/t && authsec-local run \\`,
-    "    --config /dev/null --enrollment-token-file /tmp/t'",
+    `  sh -c 'printf "%s" "${token}" > /tmp/t && exec authsec-local run \\`,
+    "    --enrollment-token-file /tmp/t'",
   ].join("\n");
 }
 

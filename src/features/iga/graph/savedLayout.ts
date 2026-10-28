@@ -46,3 +46,21 @@ export function writeSavedLayout(ws: string, root: string, direction: string, po
     // Storage blocked or full: positions still apply for this visit.
   }
 }
+
+/**
+ * Remove all saved graph layouts from localStorage. Called on logout so a
+ * new session does not inherit positions from the previous user.
+ */
+export function clearAllSavedLayouts(): void {
+  try {
+    const PREFIX = "iga-graph-layout:";
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(PREFIX)) toRemove.push(k);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+  } catch {
+    // Storage may be blocked.
+  }
+}

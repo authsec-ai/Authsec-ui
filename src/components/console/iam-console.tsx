@@ -63,6 +63,8 @@ export interface ConsoleFilterOption {
   key: string;
   label: string;
   count?: number | string;
+  /** Quiet hover explanation. Shown as the control's native tooltip. */
+  title?: string;
 }
 
 export function ConsoleFilterBar({
@@ -110,8 +112,10 @@ export function ConsoleFilterBar({
                   <button
                     key={filter.key}
                     type="button"
+                    title={filter.title}
                     onClick={() => onFilterChange?.(filter.key)}
                     className={cn(
+                      filter.title && "cursor-help",
                       "inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-semibold transition-colors",
                       active
                         ? "border-transparent bg-(--color-primary-soft) text-(--color-primary-text)"

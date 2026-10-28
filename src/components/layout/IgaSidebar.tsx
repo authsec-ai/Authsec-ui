@@ -2,14 +2,14 @@
  * IgaSidebar — navigation for the Agentic IGA console.
  *
  * Deliberately separate from `AppSidebar`. Agentic IGA is a different product
- * from the AuthSec authorization console, not a section inside it (root
- * AGENTS.md, "Product transition"). Switching between them happens through the
- * product switcher in the bottom-left user menu.
+ * from Agentic CIAM, not a section inside it. Each sidebar offers the other
+ * product just above the account block.
  */
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowLeftRight,
   Boxes,
   Cloud,
   Database,
@@ -25,6 +25,8 @@ import {
   AlertTriangle,
   ScrollText,
   Radio,
+  KeyRound,
+  Layers,
   type LucideIcon,
 } from "lucide-react";
 
@@ -62,7 +64,10 @@ interface IgaNavItem {
 // Every route is unchanged; only the grouping and two labels moved.
 const NAV_EXPLORE: IgaNavItem[] = [
   // The identity graph's entry point.
-  { title: "Agents & workloads", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
+  { title: "Cloud Agents", url: "/iga/estate", icon: Boxes, graphFeature: "workloads" },
+  // Local agent inventory with Identity Graph and Actions tabs — mirrors
+  // Cloud Agents but for host/cluster processes.
+  { title: "Local Agents", url: "/iga/all-agents", icon: ScanSearch },
   // Estate-wide: an investigation often starts from a shared role or a
   // sensitive bucket rather than a workload.
   { title: "Identities", url: "/iga/identities", icon: Fingerprint, graphFeature: "identities" },
@@ -71,10 +76,8 @@ const NAV_EXPLORE: IgaNavItem[] = [
 
 const NAV_DATA_SOURCES: IgaNavItem[] = [
   { title: "Integrations", url: "/iga/integrations", icon: Radar },
-  // The discovered-agents workflow: sightings from repositories and clusters
-  // waiting for a decision (claim, provision, quarantine). Named for that
-  // purpose so it does not read as a second copy of Agents & workloads.
-  { title: "Agent sightings", url: "/iga/agents", icon: ScanSearch },
+  // Quarantine-first sighting queue — triage newly discovered agents.
+  { title: "Discovery Queue", url: "/iga/agents", icon: Layers },
   // The rows each scan collected, as collected — the graph's source. One
   // entry with Identities / Compute / Resources tabs, not one per provider.
   { title: "Cloud Inventory", url: "/iga/cloud", icon: Cloud },
@@ -92,6 +95,7 @@ const NAV_GOVERNANCE: IgaNavItem[] = [
   { title: "Enforcement queue", url: "/iga/enforcement", icon: Zap },
   { title: "ITDR Findings", url: "/iga/findings", icon: AlertTriangle },
   { title: "Runtime Policies", url: "/iga/policies", icon: ScrollText },
+  { title: "Access Requests", url: "/iga/access-requests", icon: KeyRound },
 ];
 
 export function IgaSidebar({
@@ -171,7 +175,18 @@ export function IgaSidebar({
         <NavMain title="Data sources" items={sourceItems} />
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="mt-auto gap-0 border-t border-[var(--app-shell-border)]">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Switch to Agentic CIAM"
+              onClick={() => handleNavigation("/dashboard")}
+            >
+              <ArrowLeftRight />
+              <span>Switch to Agentic CIAM</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser />
       </SidebarFooter>
     </Sidebar>

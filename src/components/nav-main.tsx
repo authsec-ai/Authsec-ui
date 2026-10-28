@@ -20,9 +20,7 @@ import {
 const ACTIVE_NAV =
   "relative " +
   "data-[active=true]:bg-(--color-primary-soft) data-[active=true]:hover:bg-(--color-primary-soft) " +
-  "data-[active=true]:text-(--color-primary-text) data-[active=true]:hover:text-(--color-primary-text) " +
-  "data-[active=true]:font-semibold " +
-  "data-[active=true]:[&>svg]:text-(--color-primary)";
+  "data-[active=true]:font-semibold";
 
 export function NavMain({
   items,

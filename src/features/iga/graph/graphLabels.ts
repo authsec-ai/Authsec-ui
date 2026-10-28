@@ -24,6 +24,8 @@ export const EDGE_LABEL: Record<VisualEdgeKind, string> = {
   target: "applies to",
   observed_access: "Observed",
   backed_by_directory: "directory backing",
+  runtime_binding: "runtime binding",
+  runtime_exec_identity: "runtime exec identity",
   // Overview only: identity → resource through a statement (see `summarize`).
   declares: "declares",
 };
@@ -38,6 +40,8 @@ export const EDGE_MEANING: Record<VisualEdgeKind, string> = {
   target: "The statement lists this resource or pattern.",
   observed_access: "An observation of an action. It is not a declared grant.",
   backed_by_directory: "The local identity is backed by a directory identity. The two stay separate.",
+  runtime_binding: "A runtime instance is bound to the workload. The binding was observed by a collector at runtime.",
+  runtime_exec_identity: "A runtime instance was observed executing as this identity. This is a runtime observation, not a declared grant.",
   declares: "A policy statement attached to the identity lists actions on this resource or pattern.",
 };
 
@@ -125,6 +129,7 @@ export const KIND_LABEL: Record<GraphNodeKind, string> = {
   exact: RESOURCE_KIND_LABEL.exact,
   selector: RESOURCE_KIND_LABEL.selector,
   external: RESOURCE_KIND_LABEL.external,
+  runtime_instance: "Runtime instance",
 };
 
 /**

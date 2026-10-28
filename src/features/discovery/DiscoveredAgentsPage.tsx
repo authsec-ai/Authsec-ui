@@ -14,9 +14,10 @@
  */
 
 import { tableFailure } from "@/components/console/load-failure";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { GitBranch } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ConsolePage } from "@/components/console/ConsolePage";
 import {
@@ -49,9 +50,11 @@ import {
   useGetAgentCoverageQuery,
   useListDiscoveredAgentsQuery,
   type DiscoveredAgent,
+  type DiscoveredAgentPolicyLink,
   type DiscoveredAgentStatus,
   type RuntimeStatus,
 } from "@/app/api/discoveryApi";
+import { lifecycleHelp } from "@/features/iga/policy/lifecycleHelp";
 import { useListWorkspaceClientsQuery } from "@/app/api/mcpClientsApi";
 import { GitHubEvidenceSection } from "./GitHubEvidenceSection";
 import {
@@ -178,7 +181,85 @@ function nonDefaultBranch(agent: DiscoveredAgent): string | null {
   return typeof b === "string" && b !== "" ? b : null;
 }
 
+type ObservedActivity = {
+  kind?: string;
+  service?: string;
+  action?: string;
+  target?: string;
+  detail?: string;
+  outcome?: string;
+};
+
+const ACTIVITY_SERVICE: Record<string, string> = {
+  grok: "Grok API",
+  github: "GitHub API",
+  x: "X API",
+};
+
+function observedActivity(agent: DiscoveredAgent): ObservedActivity[] {
+  const raw = agent.metadata?.activity;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((row): row is ObservedActivity => !!row && typeof row === "object");
+}
+
+function activityLabel(row: ObservedActivity): string {
+  const action = (row.action ?? "call").toUpperCase();
+  if (row.kind === "file") {
+    return `File ${action} ${row.target ?? ""}`.trim();
+  }
+  const service = ACTIVITY_SERVICE[row.service ?? ""] ?? "API";
+  const where = [row.target, row.detail].filter(Boolean).join("");
+  return `${service} ${action} ${where}`.trim();
+}
+
+function ObservedActivitySection({ agent }: { agent: DiscoveredAgent }) {
+  const rows = observedActivity(agent);
+  if (rows.length === 0) return null;
+  return (
+    <DrawerSection label="Observed activity">
+      <ul className="space-y-1 text-xs text-muted-foreground">
+        {rows.map((row, i) => (
+          <li key={`${row.kind}-${row.service}-${row.action}-${row.target}-${i}`}>
+            {activityLabel(row)}
+            {row.outcome ? ` — ${row.outcome}` : ""}
+          </li>
+        ))}
+      </ul>
+    </DrawerSection>
+  );
+}
+
+function AgentPolicyLinks({ policies }: { policies?: DiscoveredAgentPolicyLink[] }) {
+  if (!policies?.length) {
+    return (
+      <span
+        className="text-xs text-muted-foreground"
+        title="No runtime policy targets the workload adopted from this agent."
+      >
+        No policy
+      </span>
+    );
+  }
+  return (
+    <div className="flex max-w-[220px] flex-col gap-1">
+      {policies.map((policy) => (
+        <Link
+          key={policy.id}
+          to={`/iga/policies/${policy.id}`}
+          onClick={(event) => event.stopPropagation()}
+          className="truncate text-xs font-medium text-(--color-primary) hover:underline"
+          title={lifecycleHelp(policy.lifecycle) ?? policy.name}
+        >
+          {policy.name}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export default function DiscoveredAgentsPage() {
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState<Filter>("all");
   // The queue defaults to live agents only: a long-gone agent needs no decision,
   // and including it makes coverage look worse than the actionable reality.
@@ -207,13 +288,30 @@ export default function DiscoveredAgentsPage() {
   const [deprovisionTarget, setDeprovisionTarget] = useState<DiscoveredAgent | null>(null);
 
   const agents = useMemo(() => data?.agents ?? [], [data]);
+  const openAgent = params.get("agent");
+
+  useEffect(() => {
+    if (!openAgent || isLoading) return;
+    const found = agents.find((agent) => agent.id === openAgent);
+    if (found) {
+      setSelected(found);
+      return;
+    }
+    // Live-only hides a stopped agent. A policy link still has to open it.
+    if (liveOnly) setLiveOnly(false);
+  }, [openAgent, agents, isLoading, liveOnly]);
 
   const items = useMemo(() => {
     let list = agents;
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((a) =>
-        [a.display_name, a.fingerprint, SOURCE_LABELS[a.source]]
+        [
+          a.display_name,
+          a.fingerprint,
+          SOURCE_LABELS[a.source],
+          ...(a.policies ?? []).map((policy) => policy.name),
+        ]
           .join(" ")
           .toLowerCase()
           .includes(q),
@@ -300,6 +398,14 @@ export default function DiscoveredAgentsPage() {
         ),
       },
       {
+        id: "policy",
+        header: "Policy",
+        cardSummary: true,
+        priority: 1,
+        approxWidth: 220,
+        cell: ({ row }) => <AgentPolicyLinks policies={row.original.policies} />,
+      },
+      {
         id: "origin",
         header: "Origin",
         priority: 4,
@@ -375,6 +481,7 @@ export default function DiscoveredAgentsPage() {
           const agent = row.original;
           const actions: ConsoleActionItem[] = [
             { label: "View details", onSelect: () => setSelected(agent) },
+            { label: "View Identity Graph", onSelect: () => navigate(`/iga/all-agents/${agent.id}#identity-graph`) },
             { label: "Correct classification…", onSelect: () => setClassifyTarget(agent) },
           ];
           // The decided axis only moves forward: an unregistered agent can be
@@ -427,7 +534,7 @@ export default function DiscoveredAgentsPage() {
 
   return (
     <ConsolePage
-      title="Agent sightings"
+      title="Local Agents"
       description="Agents found in your repositories and clusters — one row per agent, however often it was seen. A running agent that matches no identity needs a decision: claim, provision or quarantine."
     >
       {coverage ? (
@@ -525,7 +632,14 @@ export default function DiscoveredAgentsPage() {
 
       <RightDrawer
         open={selected !== null}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null);
+          if (params.get("agent")) {
+            const next = new URLSearchParams(params);
+            next.delete("agent");
+            setParams(next, { replace: true });
+          }
+        }}
         ariaTitle="Discovered agent details"
       >
         {selected ? (
@@ -607,6 +721,24 @@ export default function DiscoveredAgentsPage() {
                 </DetailGrid>
               </DrawerSection>
 
+              <DrawerSection label="Runtime policy">
+                <AgentPolicyLinks policies={selected.policies} />
+              </DrawerSection>
+
+              <DrawerSection label="Identity Graph">
+                <Link
+                  to={`/iga/all-agents/${selected.id}#identity-graph`}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-(--color-primary) hover:underline"
+                >
+                  Open Identity Graph
+                </Link>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  View the identity graph for this agent's workload — see runtime
+                  bindings, observed access, and create deny policies from graph
+                  selections.
+                </p>
+              </DrawerSection>
+
               <DrawerSection label="Runtime">
                 <DetailGrid>
                   <DetailRow
@@ -651,6 +783,8 @@ export default function DiscoveredAgentsPage() {
                   />
                 </DetailGrid>
               </DrawerSection>
+
+              <ObservedActivitySection agent={selected} />
 
               <GitHubEvidenceSection agent={selected} />
 

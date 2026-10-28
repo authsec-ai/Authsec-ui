@@ -82,6 +82,48 @@
     background: var(--color-primary);
   }
 
+  /* Left-rail links are black. Hover turns the label blue and underlines it.
+     The mobile sidebar is portaled, so this keys off the sidebar itself.
+     Section labels and the account chip are not links. */
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"],
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"] > span,
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"],
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"] > span,
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"] > svg,
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"] > svg,
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]),
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]) > span,
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]) > svg {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"],
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"] > span,
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"],
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"] > span,
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"] > svg,
+  .dark [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"][data-active="true"] > svg,
+  .dark [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]),
+  .dark [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]) > span,
+  .dark [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]) > svg {
+    color: var(--color-text);
+  }
+
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"]:hover,
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"]:hover > svg,
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]):hover,
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]):hover > svg {
+    color: var(--color-primary);
+  }
+
+  [data-sidebar="sidebar"] [data-sidebar="content"] [data-sidebar="menu-button"]:hover > span,
+  [data-sidebar="sidebar"] [data-sidebar="footer"] [data-sidebar="menu-button"]:not([data-size="lg"]):hover > span {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
   /* Density toggle: "comfortable" is the tokens.css default; "compact" tightens
      table row rhythm for operators who want more rows on screen. */
   [data-ui-scope="admin-shell"][data-density="compact"] {

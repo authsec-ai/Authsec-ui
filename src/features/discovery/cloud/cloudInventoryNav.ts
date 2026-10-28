@@ -53,7 +53,7 @@ export const CLOUD_INVENTORY_TABS: CloudInventoryTab[] = [
     key: "compute",
     label: "Compute",
     description:
-      "The Lambda functions, ECS task definitions, EC2 instances and Bedrock runtimes each scan collected, as collected. To investigate one, use Explore › Agents & workloads.",
+      "The Lambda functions, ECS task definitions, EC2 instances and Bedrock runtimes each scan collected, as collected. To investigate one, use Explore › Cloud Agents.",
     scopedByAccount: false,
   },
   {

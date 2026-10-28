@@ -80,12 +80,15 @@ export function Breadcrumb() {
           label = "External principals";
           break;
         case "estate":
-          label = "Agents & workloads";
+          label = "Cloud Agents";
           break;
         case "agents":
           // Outside IGA this is the legacy agent-identities page; under IGA it
           // is the sightings workflow, named as the IGA sidebar names it.
-          label = pathname.startsWith("/iga/") ? "Agent sightings" : "Agents Identities";
+          label = pathname.startsWith("/iga/") ? "Local Agents" : "Agents Identities";
+          break;
+        case "all-agents":
+          label = "Locally discovered processes";
           break;
         case "cloud":
           label = "Cloud Inventory";

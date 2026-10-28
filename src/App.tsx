@@ -83,8 +83,10 @@ import BirthrightsPage from "./features/governance/BirthrightsPage";
 import InstructionsPage from "./features/governance/InstructionsPage";
 import { IgaLayout } from "./components/layout/IgaLayout";
 import { FindingsTable, FindingDetail } from "./features/iga/itdr";
-import { PolicyList } from "./features/iga/policy";
+import { PolicyListPage, PolicyDetailPage, PolicyCreatePage, PolicyEditorPage, PolicyContextBridgePage } from "./features/iga/policy";
 import { CollectorsPage } from "./features/iga/collectors";
+import { AccessRequestListPage, ApprovalInboxPage } from "./features/iga/access";
+import { AllAgentsPage, AgentDetailPage } from "./features/iga/agents";
 import { AdminVoiceAgentPage } from "./features/voice-auth/AdminVoiceAgentPage";
 import { LogsConfigurationPage } from "./features/logging/LogsConfigurationPage";
 import { AuthLogsPage } from "./features/logging/AuthLogsPage";
@@ -598,8 +600,8 @@ function AppContent() {
 
                   {/* ── Agentic IGA console (prototype) ──────────────────────
                       A separate product from the authorization console above:
-                      its own shell (IgaLayout) and its own sidebar. Reached via
-                      the product switcher in the bottom-left user menu. */}
+                      its own shell (IgaLayout) and its own sidebar. Reached from
+                      "Switch to Agentic IGA" above the account block. */}
                   <Route
                     path="/iga"
                     element={<Navigate to="/iga/integrations" replace />}
@@ -931,7 +933,57 @@ function AppContent() {
                     element={
                       <ProtectedRoute requireProject>
                         <IgaLayout>
-                          <PolicyList />
+                          <PolicyListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies/new"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyCreatePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies/from-graph/:contextId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyContextBridgePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/policies/:id/edit"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <PolicyEditorPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
@@ -943,6 +995,48 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <CollectorsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── Access requests & approval inbox (Batch 10) ── */}
+                  <Route
+                    path="/iga/access-requests"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AccessRequestListPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/access-requests/inbox"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <ApprovalInboxPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* ── All Agents inventory (Batch 17) ── */}
+                  <Route
+                    path="/iga/all-agents"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AllAgentsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/all-agents/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentDetailPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

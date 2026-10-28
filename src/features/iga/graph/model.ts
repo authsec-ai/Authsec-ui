@@ -467,6 +467,22 @@ export function buildVisual(state: ModelState, ungrouped: Set<GraphRef> = new Se
     membersOfBucket.set(bucketKey, list);
   }
 
+  // Fold runtime instances sharing the same workload via runtime_binding.
+  // Like workload grouping, this is visual only — each member keeps its
+  // evidence. Root and manually ungrouped members stay individual.
+  for (const ref of visible) {
+    const n = state.nodes.get(ref);
+    if (n?.kind !== "runtime_instance" || ref === state.root || ungrouped.has(ref)) continue;
+    const touching = edges.filter((e) => e.from === ref || e.to === ref);
+    const binding = touching.find((e) => e.kind === "runtime_binding");
+    if (!binding || touching.length !== 1) continue;
+    const workloadRef = binding.from === ref ? binding.to : binding.from;
+    const bucketKey = `runtime_instances:${workloadRef}:${n.state ?? "current"}`;
+    const list = membersOfBucket.get(bucketKey) ?? [];
+    list.push(ref);
+    membersOfBucket.set(bucketKey, list);
+  }
+
   // Maps preserve ingestion order. Anchor a group to its first loaded member,
   // so a later page containing an alphabetically earlier ref cannot move an
   // already drawn group. Every member retains its own raw position.

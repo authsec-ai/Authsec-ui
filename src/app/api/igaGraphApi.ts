@@ -721,7 +721,8 @@ export type GraphNodeKind =
   | AccountKind
   | "external_principal"
   | "statement"
-  | ResourceKind;
+  | ResourceKind
+  | "runtime_instance";
 
 export type GraphEdgeKind =
   | "executes_as"
@@ -731,7 +732,9 @@ export type GraphEdgeKind =
   | "grant"
   | "target"
   | "observed_access"
-  | "backed_by_directory";
+  | "backed_by_directory"
+  | "runtime_binding"
+  | "runtime_exec_identity";
 
 export interface GraphNode {
   ref: GraphRef;
@@ -1353,6 +1356,16 @@ export interface CollectorView {
   estate_id?: string | null;
 }
 
+/** One workload within a collector's estate. */
+export interface CollectorWorkloadRow {
+  ref: GraphRef;
+  name: string;
+  runtime_kind: string;
+  health_status: string;
+  mapping_status: string;
+  last_observed_at: string | null;
+}
+
 /* --------------------------------- helpers -------------------------------- */
 
 type ParamValue = string | number | boolean | string[] | null | undefined;
@@ -1445,6 +1458,7 @@ export const graphUrls = {
   evidence: (args: GraphScope & { claim: GraphRef; include?: "raw" }) => `${BASE}/evidence${q(args)}`,
   lookup: (args: GraphScope & { cloud_ref: string }) => `${BASE}/lookup${q(args)}`,
   collector: (id: string) => `${COLLECTOR_BASE}/collectors/${enc(id)}`,
+  collectorWorkloads: (args: ById & Paged) => `${BASE}/collectors/${enc(args.id)}/workloads${q(args, ["id"])}`,
 };
 
 /* -------------------------------- endpoints ------------------------------- */
@@ -1655,6 +1669,12 @@ export const igaGraphApi = baseApi.injectEndpoints({
       query: (args) => ({ url: graphUrls.collector(args.id) }),
       providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:collector:${args.id}` }],
     }),
+
+    /** Paginated workloads within a collector's estate, with health/mapping state. */
+    getCollectorWorkloads: builder.query<GraphList<CollectorWorkloadRow>, ById & Paged>({
+      query: (args) => ({ url: graphUrls.collectorWorkloads(args) }),
+      providesTags: (_r, _e, args) => [{ type: "IgaGraph", id: `${args.ws}:collector:${args.id}:workloads` }],
+    }),
   }),
   overrideExisting: false,
 });
@@ -1693,4 +1713,5 @@ export const {
   useGetWorkloadRuntimePolicyStatusQuery,
   useGetIdentityObservedUseQuery,
   useGetCollectorQuery,
+  useGetCollectorWorkloadsQuery,
 } = igaGraphApi;

@@ -7,6 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import { Plus } from "lucide-react";
 
@@ -187,6 +188,7 @@ function RevokeDialog({
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function CollectorsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -287,6 +289,10 @@ export default function CollectorsPage() {
               <ConsoleRowActions
                 items={[
                   { label: "View details", onSelect: () => setSelected(c) },
+                  {
+                    label: "Open workloads",
+                    onSelect: () => navigate(`/iga/estate?collector=${encodeURIComponent(c.id)}`),
+                  },
                   ...(c.status === "active"
                     ? [
                         {

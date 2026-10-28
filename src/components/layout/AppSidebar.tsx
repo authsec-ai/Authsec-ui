@@ -34,6 +34,7 @@ import {
   Fingerprint,
   FolderSync,
   KeyRound,
+  ArrowLeftRight,
   LayoutDashboard,
   Layers,
   Link2,
@@ -268,7 +269,7 @@ export function AppSidebar({
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-0 group-data-[collapsible=icon]:hidden">
                   <span className="truncate text-[13px] font-semibold leading-tight tracking-tight text-sidebar-foreground">
-                    AuthSec
+                    Agentic CIAM
                   </span>
                   <span
                     className="block truncate text-[9px] font-mono leading-tight text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground"
@@ -294,6 +295,17 @@ export function AppSidebar({
       </SidebarContent>
 
       <SidebarFooter className="mt-auto gap-0 border-t border-[var(--app-shell-border)]">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Switch to Agentic IGA"
+              onClick={() => handleNavigation("/iga/integrations", "agentic-iga")}
+            >
+              <ArrowLeftRight />
+              <span>Switch to Agentic IGA</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser />
       </SidebarFooter>
     </Sidebar>

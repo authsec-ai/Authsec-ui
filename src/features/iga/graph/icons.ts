@@ -1,6 +1,6 @@
 /** One icon per node kind, shared by the card, the inspector and the legend. */
 
-import { Boxes, Building2, Container, Cpu, FileText, Globe2, KeyRound, Monitor, MoreHorizontal, ScanSearch, Server, User, Users, type LucideIcon } from "lucide-react";
+import { Activity, Boxes, Building2, Container, Cpu, FileText, Globe2, KeyRound, Monitor, MoreHorizontal, ScanSearch, Server, User, Users, type LucideIcon } from "lucide-react";
 
 import type { NodeIcon } from "./nodeView";
 
@@ -18,4 +18,5 @@ export const NODE_ICON: Record<NodeIcon, LucideIcon> = {
   kubernetes: Container,
   directory: Building2,
   computer: Monitor,
+  runtime: Activity,
 };

@@ -172,6 +172,7 @@ export const baseApi = createApi({
     // Discovery (prototype — see app/api/discoveryApi.ts)
     "DiscoverySource",
     "DiscoveredAgent",
+    "DiscoveryCandidate",
     "DiscoveredIdentity",
     "AgentCoverage",
     // The workspace GitHub App, and where it is installed. The installation
@@ -226,6 +227,12 @@ export const baseApi = createApi({
     "IgaGraph",
     // Collector enrollment + management (see app/api/collectorApi.ts)
     "Collector",
+    // Runtime policy admin (see features/iga/policy/policyApi.ts)
+    "RuntimePolicy",
+    // IGA access requests & leases (see app/api/igaAccessApi.ts)
+    "IgaAccessRequest",
+    // Discovery agent inventory (see app/api/agentInventoryApi.ts)
+    "DiscoveryAgent",
   ],
   endpoints: () => ({}),
 });

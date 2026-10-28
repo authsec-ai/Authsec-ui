@@ -6,6 +6,7 @@
  * reads its own route at the same pinned revision.
  */
 
+import React, { Suspense } from "react";
 import { useRetainedDetail } from "../shared/useRetainedDetail";
 import { useParams } from "react-router-dom";
 
@@ -28,7 +29,11 @@ import { WorkloadObservedAccessTab } from "./WorkloadObservedAccessTab";
 import { WorkloadOverview } from "./WorkloadOverview";
 import { WorkloadResourcesTab } from "./WorkloadResourcesTab";
 import { RuntimePolicyStatus } from "./RuntimePolicyCard";
+import { ProtectionOverlay } from "./ProtectionOverlay";
 import { WorkloadRuntimeTab } from "./WorkloadRuntimeTab";
+
+const IdentityGraphTab = React.lazy(() => import("./IdentityGraphTab"));
+const ActionsTab = React.lazy(() => import("./ActionsTab"));
 
 export default function WorkloadPage() {
   const { id = "", tab } = useParams<{ id: string; tab?: string }>();
@@ -57,6 +62,8 @@ export default function WorkloadPage() {
     { key: "changes", label: "Changes", path: "/changes", gated: true, available: feature.loading ? undefined : feature.features.changes === true },
     { key: "runtime", label: "Runtime instances", path: "/runtime", gated: true, available: v2.loading ? undefined : v2.available },
     { key: "observed-access", label: "Observed access", path: "/observed-access", gated: true, available: v2.loading ? undefined : v2.available },
+    { key: "identity-graph", label: "Identity Graph", path: "/identity-graph", gated: true, available: v2.loading ? undefined : v2.available },
+    { key: "actions", label: "Actions", path: "/actions", gated: true, available: v2.loading ? undefined : v2.available },
   ];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
@@ -70,13 +77,14 @@ export default function WorkloadPage() {
   // is the exception: it stays mounted through a Refresh, because it carries
   // the investigation's expansions across to the new revision (§2.14.5).
   let body = null;
-  if (w && (active === "overview" || active === "graph" || rev != null)) {
+  if (w && (active === "overview" || active === "graph" || active === "identity-graph" || rev != null)) {
     const retired = w.lifecycle === "retired";
     if (active === "overview")
       body = (
         <div className="space-y-4">
           <WorkloadOverview ws={ws} workload={w} canClassify={!!meta?.capabilities?.can_classify} />
           {v2.available ? <RuntimePolicyStatus ws={ws} id={id} /> : null}
+          {v2.available ? <ProtectionOverlay ws={ws} id={id} /> : null}
         </div>
       );
     else if (retired) body = <RetiredTab name={w.name} lastConfirmed={w.last_confirmed_at} />;
@@ -87,12 +95,24 @@ export default function WorkloadPage() {
     else if (active === "changes") body = <ChangesTab ws={ws} object="workloads" id={id} />;
     else if (active === "runtime") body = <WorkloadRuntimeTab ws={ws} id={id} />;
     else if (active === "observed-access") body = <WorkloadObservedAccessTab ws={ws} id={id} />;
+    else if (active === "identity-graph")
+      body = (
+        <Suspense fallback={<div className="h-96 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading identity graph" />}>
+          <IdentityGraphTab workspaceId={ws} workloadId={id} workloadName={w.name} />
+        </Suspense>
+      );
+    else if (active === "actions")
+      body = (
+        <Suspense fallback={<div className="h-96 animate-pulse rounded-md bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading actions" />}>
+          <ActionsTab workspaceId={ws} workloadId={id} />
+        </Suspense>
+      );
   }
 
   return (
     <ObjectShell
       ws={ws}
-      listCrumb={{ label: "Agents & workloads", to: "/iga/estate" }}
+      listCrumb={{ label: "Cloud Agents", to: "/iga/estate" }}
       kindLabel="Workload"
       base={base}
       tabs={tabs}

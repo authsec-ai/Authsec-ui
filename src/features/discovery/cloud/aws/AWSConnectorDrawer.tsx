@@ -509,7 +509,7 @@ export function AWSConnectorDrawer({
                             <Link to={`/iga/estate?account=${encodeURIComponent(connector.scope_id)}`}>
                               <span className="flex items-center gap-1.5">
                                 <Boxes className="size-3.5" />
-                                Agents & workloads in the identity graph
+                                Cloud Agents in the identity graph
                               </span>
                               <ArrowRight className="size-3.5" />
                             </Link>

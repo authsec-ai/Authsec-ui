@@ -71,10 +71,13 @@ import {
 import { describeNode, nodeSize, type NodeCategory, type NodeDescription } from "./nodeView";
 import { PathsList } from "./PathsList";
 import { readSavedLayout, writeSavedLayout } from "./savedLayout";
+import { GraphPolicyMenu, type GraphPolicyMenuTarget } from "./GraphPolicyMenu";
 import { SelectionCard, type SelectionActions, type SelectionSubject } from "./SelectionCard";
 import { StatusBar } from "./StatusBar";
 import { useWorkspaceSize } from "./useWorkspaceSize";
 import { anchorOf, frontierKey, type FrontierKey, type GraphSelection, type VisualEdge } from "./types";
+
+import { usePrepareContextMutation, type PolicyContextRef } from "../policy/policyApi";
 
 function useMediaQuery(query: string): boolean {
   const [match, setMatch] = useState(() => window.matchMedia(query).matches);
@@ -865,6 +868,43 @@ function GraphInvestigation({ ws, root, rootName, direction, graphV2 }: GraphTab
     else pendingView.current = { kind: "edge", id: edge.id };
   }, [visual.edges, showPaths]);
 
+  /* ------------------------------ policy context menu ------------------------- */
+
+  const [policyMenuTarget, setPolicyMenuTarget] = useState<GraphPolicyMenuTarget | null>(null);
+  const [prepareContext, { isLoading: blockDenyLoading }] = usePrepareContextMutation();
+
+  const handleNodeContextMenu = useCallback(
+    (nodeId: string, x: number, y: number) => {
+      const v = visual.nodes.find((n) => n.id === nodeId);
+      if (v) setPolicyMenuTarget({ visual: v, x, y });
+    },
+    [visual.nodes],
+  );
+
+  const handleBlockDeny = useCallback(
+    async (refs: GraphRef[]) => {
+      const contextRefs: PolicyContextRef[] = refs.map((ref) => {
+        const node = model.nodes.get(ref);
+        return { ref, kind: refType(ref), label: node?.label };
+      });
+      try {
+        const ctx = await prepareContext({
+          selected_refs: contextRefs,
+          graph_root: root,
+          graph_revision: rev ?? undefined,
+        }).unwrap();
+        if (!ctx.publishable) {
+          announce(ctx.reason ?? "This selection cannot produce a publishable policy draft.");
+          return;
+        }
+        navigate(`/iga/policies/from-graph/${ctx.context_id}`);
+      } catch {
+        announce("Could not prepare policy context. Try again.");
+      }
+    },
+    [model.nodes, root, rev, prepareContext, navigate],
+  );
+
   /* --------------------------- workspace and fullscreen ----------------------- */
 
   // Expanded: the workspace fills the browser window (not the monitor) over
@@ -925,6 +965,8 @@ function GraphInvestigation({ ws, root, rootName, direction, graphV2 }: GraphTab
     onRefresh: refresh,
     stateOf,
     canLoadMore,
+    onBlockDeny: (refs) => void handleBlockDeny(refs),
+    blockDenyLoading,
   };
 
   // Things worth saying, one line each, only when they apply.
@@ -1061,6 +1103,7 @@ function GraphInvestigation({ ws, root, rootName, direction, graphV2 }: GraphTab
           viewport={model.viewport}
           onViewportChange={(viewport) => dispatchModel({ type: "viewport", viewport })}
           onApi={onApi}
+          onNodeContextMenu={handleNodeContextMenu}
         />
         {card && !evidenceOpen ? (
           <div className="pointer-events-none absolute inset-y-3 right-3 flex items-start">
@@ -1081,6 +1124,13 @@ function GraphInvestigation({ ws, root, rootName, direction, graphV2 }: GraphTab
               : `The latest scan recorded no relationships for ${rootName}. That is what was collected — if collection for its account was incomplete, some may be missing.`}
           </div>
         ) : null}
+        <GraphPolicyMenu
+          target={policyMenuTarget}
+          graphRoot={root}
+          graphRevision={rev ?? undefined}
+          onClose={() => setPolicyMenuTarget(null)}
+          onEvidence={openEvidence}
+        />
       </div>
     );
   }

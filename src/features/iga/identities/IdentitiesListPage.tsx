@@ -6,7 +6,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   igaGraphApi,
@@ -119,6 +119,23 @@ export default function IdentitiesListPage() {
     ...listGraphOptIn(provider),
   };
   const list = useListGraphIdentitiesQuery(args, { skip: feature.off || (v2.loading && !!f.value("provider")) });
+  const awsListEmpty =
+    !!list.currentData &&
+    list.currentData.meta.graph_state !== "not_published" &&
+    list.currentData.data.length === 0;
+  const lookAcrossProviders =
+    v2.available &&
+    !provider &&
+    !f.q &&
+    accounts.length === 0 &&
+    !kind &&
+    !usedBy &&
+    awsListEmpty;
+  const others = useListGraphIdentitiesQuery(
+    { ...args, cursor: undefined, key: `${paging.cacheKey}:other-providers`, ...listGraphOptIn("all") },
+    { skip: feature.off || !lookAcrossProviders },
+  );
+  const otherRows = others.currentData?.data ?? [];
   const view = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll("identities", view.kind === "rows");
   useTrackRevision(
@@ -350,15 +367,23 @@ export default function IdentitiesListPage() {
                 chosenColumns={prefs.chosen}
                 onColumnsLayout={setColumnsLayout}
                 empty={
-                  <EmptyScope
-                    subject="identities"
-                    narrowing={narrowing}
-                    unfiltered={unfilteredEmpty(
-                      "IAM roles, users or groups",
-                      incomplete,
-                    )}
-                    onClear={f.clear}
-                  />
+                  lookAcrossProviders && !others.currentData ? (
+                    <div className="px-6 py-14 text-center text-sm text-(--color-text-muted)" role="status">
+                      No AWS identities in this scope. Looking across the other providers.
+                    </div>
+                  ) : otherRows.length ? (
+                    <OtherProviderIdentities rows={otherRows} />
+                  ) : (
+                    <EmptyScope
+                      subject="identities"
+                      narrowing={narrowing}
+                      unfiltered={unfilteredEmpty(
+                        "IAM roles, users or groups",
+                        incomplete,
+                      )}
+                      onClear={f.clear}
+                    />
+                  )
                 }
               />
             )}
@@ -366,5 +391,29 @@ export default function IdentitiesListPage() {
         </TableCard>
       </ListGate>
     </IgaPage>
+  );
+}
+
+/** Identities the default AWS list does not include. */
+function OtherProviderIdentities({ rows }: { rows: IdentityRow[] }) {
+  return (
+    <div className="space-y-3 px-6 py-8">
+      <p className="text-sm text-(--color-text-muted)">
+        No AWS identities in this scope. {rows.length === 1 ? "This identity is" : `These ${rows.length} identities are`} from another provider.
+      </p>
+      <ul className="space-y-2 text-sm">
+        {rows.map((row) => (
+          <li key={row.ref}>
+            <Link
+              to={`/iga/identities/${refId(row.ref)}/graph`}
+              className="font-medium text-(--color-primary-text) hover:underline"
+            >
+              {row.name}
+            </Link>
+            <span className="text-(--color-text-muted)"> · {identityKindLabel(row.kind)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

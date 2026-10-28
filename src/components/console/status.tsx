@@ -67,6 +67,7 @@ export function StatusBadge({
       title={title}
       className={cn(
         "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-5",
+        title && "cursor-help",
         t.chip,
         className,
       )}

@@ -59,11 +59,20 @@ const nodeTypes = {
   iam_role: GraphNodeView,
   iam_user: GraphNodeView,
   iam_group: GraphNodeView,
+  local_user: GraphNodeView,
+  local_group: GraphNodeView,
+  k8s_service_account: GraphNodeView,
+  k8s_group: GraphNodeView,
+  ad_user: GraphNodeView,
+  ad_group: GraphNodeView,
+  ad_computer: GraphNodeView,
+  ad_managed_service_account: GraphNodeView,
   external_principal: GraphNodeView,
   statement: GraphNodeView,
   exact: GraphNodeView,
   selector: GraphNodeView,
   external: GraphNodeView,
+  runtime_instance: GraphNodeView,
 };
 
 const edgeTypes = { graphEdge: GraphEdgeView };
@@ -120,6 +129,8 @@ export interface GraphCanvasProps {
   /** The live zoom, for the status bar. */
   onZoomChange?: (zoom: number) => void;
   onApi: (api: CanvasApi | null) => void;
+  /** Right-click or Shift+F10 on a node: open the policy context menu at (x, y). */
+  onNodeContextMenu?: (nodeId: string, x: number, y: number) => void;
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
@@ -158,6 +169,7 @@ function GraphCanvasInner({
   viewport,
   onViewportChange,
   onApi,
+  onNodeContextMenu,
 }: GraphCanvasProps) {
   const reducedMotion = reducedMotionPreferred();
   const selectionRef = useRef(selection);
@@ -390,6 +402,17 @@ function GraphCanvasInner({
       onClearSelection();
       return;
     }
+    // Shift+F10 (keyboard context menu): open the policy menu on the focused node.
+    if (ev.key === "F10" && ev.shiftKey && onNodeContextMenu) {
+      const active = document.activeElement as HTMLElement | null;
+      const nodeId = active?.getAttribute("data-node-id");
+      if (nodeId) {
+        ev.preventDefault();
+        const rect = active!.getBoundingClientRect();
+        onNodeContextMenu(nodeId, rect.left + rect.width / 2, rect.top + rect.height / 2);
+      }
+      return;
+    }
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)) return;
     const active = document.activeElement as HTMLElement | null;
     const currentId = active?.getAttribute("data-node-id");
@@ -480,6 +503,11 @@ function GraphCanvasInner({
         onNodeDoubleClick={(_event, node) => {
           const v = visualNodes.find((x) => x.id === node.id);
           if (v) onOpenNode(v.members[0].ref);
+        }}
+        onNodeContextMenu={(event, node) => {
+          if (!onNodeContextMenu) return;
+          event.preventDefault();
+          onNodeContextMenu(node.id, event.clientX, event.clientY);
         }}
         nodesConnectable={false}
         // Our own card is the one focusable, described element (`nodes.tsx`);

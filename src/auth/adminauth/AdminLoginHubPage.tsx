@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Loader2,
@@ -36,6 +37,7 @@ import {
   type AdminLoginPrecheckResponse,
 } from "@/app/api/authApi";
 import { useAuth } from "../context/AuthContext";
+import { completeWebAuthnAuthentication } from "../slices/authSlice";
 import { toast } from "react-hot-toast";
 import {
   useGetUFlowOIDCProvidersMutation,
@@ -132,6 +134,10 @@ export function AdminLoginHubPage() {
     (location.state as { from?: { pathname?: string } } | null)?.from
       ?.pathname || "/dashboard";
   const { signIn } = useAuth();
+  const dispatch = useDispatch();
+  const [simpleUsername, setSimpleUsername] = useState("");
+  const [simplePassword, setSimplePassword] = useState("");
+  const [simpleSubmitting, setSimpleSubmitting] = useState(false);
   const [flowStage, setFlowStage] = useState<FlowStage>("idle");
   const [emailInput, setEmailInput] = useState("");
   const [checkedEmail, setCheckedEmail] = useState<string>("");
@@ -1140,6 +1146,53 @@ export function AdminLoginHubPage() {
     await handleEmailPrecheck();
   };
 
+  const signInWithSimple = async (identifier: string, password: string) => {
+    const base = (config.VITE_API_URL || "http://localhost:7468").replace(/\/$/, "");
+    const response = await fetch(`${base}/authsec/uflow/auth/admin/login/simple`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username: identifier, password }),
+    });
+    const body = await response.json().catch(() => ({} as { error?: string; token?: string; email?: string; workspace_id?: string }));
+    if (response.status === 404) {
+      return { ok: false as const, unavailable: true, error: "Sign in failed" };
+    }
+    if (!response.ok || !body.token) {
+      return { ok: false as const, unavailable: false, error: body.error || "Sign in failed" };
+    }
+    dispatch(completeWebAuthnAuthentication({
+      workspaceId: String(body.workspace_id || ""),
+      email: body.email || identifier,
+      token: body.token,
+    }));
+    return { ok: true as const };
+  };
+
+  const handleSimpleSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const username = simpleUsername.trim();
+    if (!username || !simplePassword) {
+      toast.error("Username and password are required");
+      return;
+    }
+    setSimpleSubmitting(true);
+    try {
+      const result = await signInWithSimple(username, simplePassword);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Signed in");
+      navigate(from, { replace: true });
+    } catch (error) {
+      console.error("Simple sign in error:", error);
+      toast.error("Sign in failed");
+    } finally {
+      setSimpleSubmitting(false);
+    }
+  };
+
   const handleExistingSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -1157,6 +1210,16 @@ export function AdminLoginHubPage() {
 
     try {
       setIsPasswordSubmitting(true);
+      const simple = await signInWithSimple(currentEmail, existingPassword);
+      if (simple.ok) {
+        toast.success("Signed in");
+        navigate(from, { replace: true });
+        return;
+      }
+      if (!simple.unavailable) {
+        toast.error(simple.error);
+        return;
+      }
       const tenantOverride = tenantDomain?.trim() || undefined;
       const result = await signIn(
         currentEmail,
@@ -1455,11 +1518,61 @@ export function AdminLoginHubPage() {
               <div className="w-full max-w-sm mx-auto">
                 <div className="text-center mb-8">
                   <h2 className="text-3xl font-bold mb-2 tracking-tight text-slate-900">
-                    Get started with your email
+                    Sign in
                   </h2>
                   <p className="text-gray-800 text-sm">
-                    Enter your work email to sign in or create an account
+                    Use your username and password
                   </p>
+                </div>
+
+                <form className="w-full mb-6" onSubmit={handleSimpleSignIn}>
+                  <div className="space-y-1.5 mb-4">
+                    <Label htmlFor="simple-username">Username or email</Label>
+                    <Input
+                      id="simple-username"
+                      type="text"
+                      autoComplete="username"
+                      required
+                      value={simpleUsername}
+                      onChange={(event) => setSimpleUsername(event.target.value)}
+                      className="h-11 rounded-xl px-4 text-[15px]"
+                      placeholder="demo@demo.com"
+                    />
+                  </div>
+                  <div className="space-y-1.5 mb-4">
+                    <Label htmlFor="simple-password">Password</Label>
+                    <PasswordInput
+                      id="simple-password"
+                      autoComplete="current-password"
+                      required
+                      value={simplePassword}
+                      onChange={(event) => setSimplePassword(event.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="password"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="h-12 w-full rounded-xl font-medium"
+                    disabled={simpleSubmitting}
+                  >
+                    {simpleSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign in"
+                    )}
+                  </Button>
+                </form>
+
+                <div className="flex items-center mb-6">
+                  <div className="flex-grow border-t border-gray-200" />
+                  <span className="flex-shrink-0 mx-4 text-sm text-gray-800">
+                    or use email
+                  </span>
+                  <div className="flex-grow border-t border-gray-200" />
                 </div>
 
                 <form

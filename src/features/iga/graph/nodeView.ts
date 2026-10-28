@@ -62,7 +62,8 @@ export type NodeIcon =
   | "linux"
   | "kubernetes"
   | "directory"
-  | "computer";
+  | "computer"
+  | "runtime";
 
 /**
  * What KIND of thing a card is — drawn with the `--color-object-*` tokens.
@@ -107,6 +108,7 @@ const ICON_OF: Record<GraphNodeKind, NodeIcon> = {
   exact: "resource",
   selector: "selector",
   external: "resource",
+  runtime_instance: "runtime",
 };
 
 const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
@@ -127,6 +129,7 @@ const CATEGORY_OF: Record<GraphNodeKind, NodeCategory> = {
   exact: "resource",
   selector: "resource",
   external: "external",
+  runtime_instance: "workload",
 };
 
 const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
@@ -144,6 +147,7 @@ const SUBTYPE: Partial<Record<GraphNodeKind, string>> = {
   exact: "Resource · Exact reference",
   selector: "Resource · Selector",
   external: "External resource",
+  runtime_instance: "Runtime instance",
 };
 
 const NOUN_OF: Partial<Record<GraphNodeKind, [string, string]>> = {
@@ -195,6 +199,8 @@ function contextOf(node: GraphNode): string | null {
     case "ad_computer":
     case "ad_managed_service_account":
       return node.account ? accountLabel(node.account) : "Account not known";
+    case "runtime_instance":
+      return node.account ? accountLabel(node.account) : "Runtime instance";
     case "external_principal":
       // Only AWS principals have an account; for a service or an identity
       // provider the issuer or subject is the context, not "Unknown account".

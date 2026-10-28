@@ -136,6 +136,27 @@ export interface DiscoveredAgent {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Runtime policies whose current revision targets this sighting's workload. */
+  policies?: DiscoveredAgentPolicyLink[];
+}
+
+/** One runtime policy linked from a discovered agent. */
+export interface DiscoveredAgentPolicyLink {
+  id: string;
+  name: string;
+  lifecycle: string;
+}
+
+/** GET /authsec/discovery/candidates — seen, not yet an inventory agent. */
+export interface DiscoveryCandidateRow {
+  id: string;
+  source: string;
+  kind: string;
+  display_name: string;
+  confidence: string;
+  decision: string;
+  reasons: string[];
+  observed_at: string;
 }
 
 /** GET /authsec/discovery/agents/:id/events → { events, total } */
@@ -638,6 +659,26 @@ export const discoveryApi = baseApi.injectEndpoints({
       providesTags: ["DiscoveredAgent"],
     }),
 
+    // Held rows are candidates, not discovered agents. Default decision=hold.
+    listHeldCandidates: builder.query<
+      { candidates: DiscoveryCandidateRow[]; total: number },
+      { decision?: string; limit?: number } | void
+    >({
+      query: (args) => ({
+        url: "/authsec/discovery/candidates",
+        method: "GET",
+        params: {
+          decision: args?.decision ?? "hold",
+          limit: args?.limit ?? 100,
+        },
+      }),
+      transformResponse: (raw: { candidates?: DiscoveryCandidateRow[]; total?: number }) => ({
+        candidates: raw.candidates ?? [],
+        total: raw.total ?? 0,
+      }),
+      providesTags: ["DiscoveryCandidate"],
+    }),
+
     getDiscoveredAgent: builder.query<DiscoveredAgent, string>({
       query: (id) => ({ url: `/authsec/discovery/agents/${id}`, method: "GET" }),
       providesTags: (_r, _e, id) => [{ type: "DiscoveredAgent", id }],
@@ -997,6 +1038,7 @@ export const {
   useUpdateDiscoverySourceMutation,
   useDeleteDiscoverySourceMutation,
   useListDiscoveredAgentsQuery,
+  useListHeldCandidatesQuery,
   useGetDiscoveredAgentQuery,
   useUpdateDiscoveredAgentMutation,
   useClaimAgentMutation,

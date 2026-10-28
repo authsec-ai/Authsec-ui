@@ -81,6 +81,28 @@ interface CollectorsEnvelope {
   next_cursor: string;
 }
 
+// ── Collector workloads ───────────────────────────────────────────────────────
+
+export interface CollectorWorkloadRow {
+  ref: string;
+  name: string;
+  runtime_kind: string;
+  health_status: string;
+  mapping_status: string;
+  last_observed_at: string | null;
+}
+
+export interface CollectorWorkloadsResponse {
+  data: CollectorWorkloadRow[];
+  next_cursor: string;
+}
+
+export interface GetCollectorWorkloadsParams {
+  collectorId: string;
+  limit?: number;
+  cursor?: string;
+}
+
 // ── Endpoints ────────────────────────────────────────────────────────────────
 
 export const collectorApi = baseApi.injectEndpoints({
@@ -127,6 +149,22 @@ export const collectorApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["Collector"],
     }),
+
+    getCollectorWorkloads: builder.query<CollectorWorkloadsResponse, GetCollectorWorkloadsParams>({
+      query: ({ collectorId, limit, cursor }) => ({
+        url: `/api/iga/v2/collectors/${collectorId}/workloads`,
+        method: "GET",
+        params: {
+          ...(limit ? { limit } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+      }),
+      transformResponse: (r: CollectorWorkloadsResponse) => ({
+        data: r.data ?? [],
+        next_cursor: r.next_cursor ?? "",
+      }),
+      providesTags: (_r, _e, args) => [{ type: "Collector" as const, id: `${args.collectorId}:workloads` }],
+    }),
   }),
 });
 
@@ -135,4 +173,5 @@ export const {
   useListCollectorsQuery,
   useGetCollectorQuery,
   useRevokeCollectorMutation,
+  useGetCollectorWorkloadsQuery,
 } = collectorApi;

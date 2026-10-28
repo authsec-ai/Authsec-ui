@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Ban, X } from "lucide-react";
 
 import { objectPath, refType, type GraphFrontier, type GraphNode, type GraphRef } from "@/app/api/igaGraphApi";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,10 @@ export interface SelectionActions {
   onRefresh: () => void;
   stateOf: (f: GraphFrontier) => FrontierControl;
   canLoadMore: (f: GraphFrontier) => boolean;
+  /** Initiate "Block / Deny access" flow for the given node refs. */
+  onBlockDeny?: (refs: GraphRef[]) => void;
+  /** Whether the Block/Deny mutation is in flight. */
+  blockDenyLoading?: boolean;
 }
 
 const CHIP: Record<NodeCategory, string> = {
@@ -97,10 +101,20 @@ function nodeSummary(v: VisualNode, edges: VisualEdge[], nodes: Map<GraphRef, Gr
     case "workload": {
       const runs = out("executes_as")[0]?.members[0];
       const infra = out("task_execution_role")[0]?.members[0];
+      const runtimeBindings = out("runtime_binding").length + inn("runtime_binding").length;
       sentence = runs
         ? `${d.type.replace("Workload · ", "")} configured to run as ${name(runs.to)}${first.runtime_kind === "ecs_task_definition" ? " (its task role — what the application runs as)" : ""}.`
         : "No identity it runs as is loaded.";
       if (infra) facts.push(["ECS agent uses", `${name(infra.to)} — to pull images and write logs, not for the application`]);
+      if (runtimeBindings) facts.push(["Runtime instances", `${runtimeBindings} bound`]);
+      facts.push(["Account", accountWithId(first.account) ?? "Not known"]);
+      break;
+    }
+    case "runtime_instance": {
+      const bindings = out("runtime_binding").length + inn("runtime_binding").length;
+      const execIdentities = out("runtime_exec_identity").length + inn("runtime_exec_identity").length;
+      sentence = `A runtime instance observed by a collector.${bindings ? ` Bound to ${bindings} workload${bindings === 1 ? "" : "s"}.` : ""}`;
+      if (execIdentities) facts.push(["Exec identities", `${execIdentities} observed`]);
       facts.push(["Account", accountWithId(first.account) ?? "Not known"]);
       break;
     }
@@ -195,6 +209,12 @@ function edgeSummary(e: VisualEdge, nodes: Map<GraphRef, GraphNode>) {
       break;
     case "backed_by_directory":
       sentence = `${from} and ${to} are linked by directory backing. They stay two identities.`;
+      break;
+    case "runtime_binding":
+      sentence = `${from} is bound to runtime instance ${to}. This binding was observed by a collector at runtime.`;
+      break;
+    case "runtime_exec_identity":
+      sentence = `Runtime instance ${from} was observed executing as identity ${to}. This is a runtime observation, not a declared grant.`;
       break;
   }
   facts.push(["Last confirmed", <Timestamp iso={m.last_confirmed_at} />]);
@@ -389,6 +409,18 @@ export function SelectionCard({
           {open && subject.kind === "node" && refType(open) !== "external_principal" && subject.visual.members[0].kind !== "statement" ? (
             <Button size="sm" variant="ghost" onClick={() => actions.onFocusHere(open!)}>
               Graph from here
+            </Button>
+          ) : null}
+          {actions.onBlockDeny && subject.kind === "node" && !subject.visual.overflow && subject.visual.members[0].kind !== "statement" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-(--color-destructive-text) border-(--color-destructive-text)/30 hover:bg-(--color-destructive-text)/5"
+              disabled={actions.blockDenyLoading}
+              onClick={() => actions.onBlockDeny!(subject.visual.members.map((m) => m.ref))}
+            >
+              <Ban className="size-3.5" />
+              {actions.blockDenyLoading ? "Preparing..." : "Block / Deny"}
             </Button>
           ) : null}
         </div>

@@ -8,8 +8,8 @@
  * and part of the name's context line when there is not.
  */
 
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   igaGraphApi,
@@ -67,6 +67,8 @@ import {
 import { EmptyScope, PagedTable } from "../shared/components/PagedTable";
 import { PipelineNotice } from "../pipeline/PipelineNotice";
 import { useLoadFirstPublication, usePipeline } from "../pipeline/usePipeline";
+
+const IdentityGraphTab = lazy(() => import("./IdentityGraphTab"));
 
 const RUNTIMES = Object.keys(RUNTIME_LABEL) as RuntimeKind[];
 
@@ -133,6 +135,26 @@ export default function EstateListPage() {
     ...listGraphOptIn(provider),
   };
   const list = useListGraphWorkloadsQuery(args, { skip: feature.off || (v2.loading && !!f.value("provider")) });
+  // The default list is AWS. This demo's sample graph is Kubernetes, so an
+  // unfiltered empty AWS list also reads every provider and draws that graph.
+  const awsListEmpty =
+    !!list.currentData &&
+    list.currentData.meta.graph_state !== "not_published" &&
+    list.currentData.data.length === 0;
+  const lookAcrossProviders =
+    v2.available &&
+    !provider &&
+    !f.q &&
+    accounts.length === 0 &&
+    !region &&
+    !runtime &&
+    !classification &&
+    awsListEmpty;
+  const others = useListGraphWorkloadsQuery(
+    { ...args, cursor: undefined, key: `${paging.cacheKey}:other-providers`, ...listGraphOptIn("all") },
+    { skip: feature.off || !lookAcrossProviders },
+  );
+  const otherRows = others.currentData?.data ?? [];
   const view = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll("workloads", view.kind === "rows");
 
@@ -340,10 +362,12 @@ export default function EstateListPage() {
   return (
     <IgaPage
       ws={ws}
-      title="Agents & workloads"
+      title="Cloud Agents"
       description={
-        coverageSummary(meta, accountCount, incomplete, accounts.length ? accounts.map(nameOf).join(", ") : undefined) ??
-        "What runs in your connected accounts, the identities it runs as, and what those identities declare — built from each scan into one graph."
+        otherRows.length
+          ? "No AWS workloads in this account. This is the identity graph from the other providers."
+          : coverageSummary(meta, accountCount, incomplete, accounts.length ? accounts.map(nameOf).join(", ") : undefined) ??
+            "What runs in your connected accounts, the identities it runs as, and what those identities declare — built from each scan into one graph."
       }
       actions={<AsOf meta={meta} />}
     >
@@ -353,16 +377,19 @@ export default function EstateListPage() {
         pipeline={pipeline}
         subject="agents and workloads"
       >
-        {restarted ? (
+        {otherRows.length ? (
+          <OtherProviderGraphs ws={ws} rows={otherRows} />
+        ) : null}
+        {otherRows.length ? null : restarted ? (
           <DecisionBanner
             tone="info"
             title="The list restarted at the first page"
             body="A classification changed while you were paging, so the next page could not continue where the last one ended."
           />
         ) : null}
-        {pipeline ? <PipelineNotice pipeline={pipeline} /> : null}
+        {otherRows.length || !pipeline ? null : <PipelineNotice pipeline={pipeline} />}
 
-        <ListToolbar
+        {otherRows.length ? null : <ListToolbar
           search={f.searchText}
           onSearchChange={(v) => {
             setRestarted(false);
@@ -418,57 +445,91 @@ export default function EstateListPage() {
           onClearAll={() => f.clearKeys(["account", "region", "runtime_kind", "provider"])}
           sort={<SortSelect value={sort} options={SORTS} onChange={(v) => f.set("sort", v === "name" ? null : v)} />}
           columns={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={columnsLayout} />}
-        />
+        />}
 
-        <CoverageSummary subject="workloads"
-          ws={ws}
-          gaps={gaps}
-          accountName={nameOf}
-          pipeline={pipeline}
-        />
+        {otherRows.length ? null : (
+          <>
+            <CoverageSummary subject="workloads"
+              ws={ws}
+              gaps={gaps}
+              accountName={nameOf}
+              pipeline={pipeline}
+            />
 
-        {paging.resetByRevision ? (
-          <p className="text-xs text-(--color-text-muted)">
-            The list was refreshed because a newer scan published.
-          </p>
-        ) : null}
+            {paging.resetByRevision ? (
+              <p className="text-xs text-(--color-text-muted)">
+                The list was refreshed because a newer scan published.
+              </p>
+            ) : null}
 
-        <TableCard>
-          <CardContent variant="flush">
-            {list.currentData?.meta.graph_state === "not_published" ? (
-              <NotPublished />
-            ) : (
-              <PagedTable
-                tableId="iga-estate"
-                view={view}
-                columns={columns}
-                getRowId={(r) => r.ref}
-                onRowClick={(r) => navigate(`/iga/estate/${refId(r.ref)}`)}
-                pageIndex={paging.pageIndex}
-                onPrev={paging.prev}
-                onNext={paging.next}
-                onRetry={() => void list.refetch()}
-                onRefresh={refresh}
-                subject="agents and workloads"
-                incompleteAccounts={incomplete}
-                chosenColumns={prefs.chosen}
-                onColumnsLayout={setColumnsLayout}
-                empty={
-                  <EmptyScope
-                    subject="agents or workloads"
-                    narrowing={narrowing}
-                    unfiltered={unfilteredEmpty(
-                      "compute or agent runtimes",
-                      incomplete,
-                    )}
-                    onClear={f.clear}
+            <TableCard>
+              <CardContent variant="flush">
+                {list.currentData?.meta.graph_state === "not_published" ? (
+                  <NotPublished />
+                ) : (
+                  <PagedTable
+                    tableId="iga-estate"
+                    view={view}
+                    columns={columns}
+                    getRowId={(r) => r.ref}
+                    onRowClick={(r) => navigate(`/iga/estate/${refId(r.ref)}`)}
+                    pageIndex={paging.pageIndex}
+                    onPrev={paging.prev}
+                    onNext={paging.next}
+                    onRetry={() => void list.refetch()}
+                    onRefresh={refresh}
+                    subject="agents and workloads"
+                    incompleteAccounts={incomplete}
+                    chosenColumns={prefs.chosen}
+                    onColumnsLayout={setColumnsLayout}
+                    empty={
+                      lookAcrossProviders && !others.currentData ? (
+                        <div className="px-6 py-14 text-center text-sm text-(--color-text-muted)" role="status">
+                          No AWS workloads in this scope. Looking across the other providers.
+                        </div>
+                      ) : (
+                        <EmptyScope
+                          subject="agents or workloads"
+                          narrowing={narrowing}
+                          unfiltered={unfilteredEmpty(
+                            "compute or agent runtimes",
+                            incomplete,
+                          )}
+                          onClear={f.clear}
+                        />
+                      )
+                    }
                   />
-                }
-              />
-            )}
-          </CardContent>
-        </TableCard>
+                )}
+              </CardContent>
+            </TableCard>
+          </>
+        )}
       </ListGate>
     </IgaPage>
+  );
+}
+
+/** Workloads the default AWS list does not include, with the first one's graph drawn. */
+function OtherProviderGraphs({ ws, rows }: { ws: string; rows: WorkloadRow[] }) {
+  const first = rows[0];
+  return (
+    <div className="space-y-3">
+      <ul className="space-y-1 text-sm">
+        {rows.map((row) => (
+          <li key={row.ref}>
+            <Link
+              to={`/iga/estate/${refId(row.ref)}/identity-graph`}
+              className="font-medium text-(--color-primary-text) hover:underline"
+            >
+              {row.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-(--color-surface-subtle)" aria-busy="true" />}>
+        <IdentityGraphTab workspaceId={ws} workloadId={refId(first.ref)} workloadName={first.name} />
+      </Suspense>
+    </div>
   );
 }
