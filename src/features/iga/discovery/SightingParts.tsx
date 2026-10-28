@@ -24,6 +24,12 @@ import {
   type RuntimeStatus,
 } from "@/app/api/discoveryApi";
 import { StatusBadge, type ConsoleTone } from "@/components/console/status";
+import { AzureTerm } from "@/features/discovery/cloud/azure/AzureTerm";
+import { azureExplain } from "@/features/discovery/cloud/azure/azureGlossary";
+import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
+import { Timestamp } from "@/features/iga/shared/components/Timestamp";
+
+import { azureAgentSignIn } from "./model";
 
 const STATUS_TONE: Record<DiscoveredAgentStatus, ConsoleTone> = {
   unregistered: "warning",
@@ -39,19 +45,24 @@ const RUNTIME_TONE: Record<RuntimeStatus, ConsoleTone> = {
   unknown: "neutral",
 };
 
-export function SightingStatus({ status }: { status: DiscoveredAgentStatus }) {
+/** `explain`: a short explanation above the badge on hover (Azure), instead of the browser's title tip. */
+export function SightingStatus({ status, explain = false }: { status: DiscoveredAgentStatus; explain?: boolean }) {
   return (
-    <span title="What a person has decided about this sighting">
-      <StatusBadge tone={STATUS_TONE[status]}>{STATUS_LABELS[status]}</StatusBadge>
-    </span>
+    <HoverExplain title={STATUS_LABELS[status]} text={explain ? azureExplain(STATUS_LABELS[status]) : undefined}>
+      <span title={explain ? undefined : "What a person has decided about this sighting"}>
+        <StatusBadge tone={STATUS_TONE[status]}>{STATUS_LABELS[status]}</StatusBadge>
+      </span>
+    </HoverExplain>
   );
 }
 
-export function SightingRuntime({ runtime }: { runtime: RuntimeStatus }) {
+export function SightingRuntime({ runtime, explain = false }: { runtime: RuntimeStatus; explain?: boolean }) {
   return (
-    <span title="What was last observed">
-      <StatusBadge tone={RUNTIME_TONE[runtime]}>{RUNTIME_STATUS_LABELS[runtime]}</StatusBadge>
-    </span>
+    <HoverExplain title={RUNTIME_STATUS_LABELS[runtime]} text={explain ? azureExplain(RUNTIME_STATUS_LABELS[runtime]) : undefined}>
+      <span title={explain ? undefined : "What was last observed"}>
+        <StatusBadge tone={RUNTIME_TONE[runtime]}>{RUNTIME_STATUS_LABELS[runtime]}</StatusBadge>
+      </span>
+    </HoverExplain>
   );
 }
 
@@ -77,4 +88,27 @@ export function SightingEvidence({ agent }: { agent: DiscoveredAgent }) {
       </StatusBadge>
     </span>
   );
+}
+
+/**
+ * Azure: the agent's sign-in in Microsoft's terms, in place of the running /
+ * stopped badge (Azure has no "running" state for an agent).
+ */
+export function AzureLastSignIn({ agent }: { agent: DiscoveredAgent }) {
+  const s = azureAgentSignIn(agent);
+  if (s.kind === "deleted") {
+    return (
+      <AzureTerm term="Deleted from Azure">
+        <StatusBadge tone="neutral">Deleted from Azure</StatusBadge>
+      </AzureTerm>
+    );
+  }
+  if (s.kind === "signed_in") return <Timestamp iso={s.at} />;
+  const label = s.kind === "active" ? "Active in the last 7 days" : "No sign-in recorded";
+  return <AzureTerm term={label} className="text-(--color-text-muted)" />;
+}
+
+/** Azure: the team's review, shown only once someone has reviewed the agent. */
+export function AzureReview({ status }: { status: DiscoveredAgentStatus }) {
+  return status === "unregistered" ? null : <SightingStatus status={status} explain />;
 }

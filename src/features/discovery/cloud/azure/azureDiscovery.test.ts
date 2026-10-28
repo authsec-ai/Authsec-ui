@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AzureFoundryTrust, AzureWorkload, CloudConnector } from "@/app/api/cloudDiscoveryApi";
 
-import { armTypeLabel, foundryKindLabel, graphKindLabel, surfaceLabel } from "./azureDiscoveryLabels";
+import { armTypeLabel, foundryKindLabel, graphKindLabel, identityTabKeys, surfaceLabel } from "./azureDiscoveryLabels";
 import { foundryCounts, foundryRowsOf, groupFoundry } from "./azureFoundry";
 import { azureFallbackScope, identityFilterArgs, scanTablesHref } from "./azureFallback";
 
@@ -137,5 +137,17 @@ describe("Azure scan-table fallback", () => {
     const r = { native_id: "/subscriptions/s/rg/x" } as AzureWorkload;
     expect(scanTablesHref("workloads", r)).toBe("/iga/azure/workload/%2Fsubscriptions%2Fs%2Frg%2Fx");
     expect(scanTablesHref("identities", { native_id: "abc" } as AzureWorkload)).toBe("/iga/azure/identity/abc");
+  });
+});
+
+describe("Azure identity tabs", () => {
+  it("shows only the tabs Microsoft makes possible for the kind", () => {
+    // An agent identity has no credentials of its own and runs on no Azure resource.
+    expect(identityTabKeys("entra_agent_identity")).toEqual(["access", "token-access", "activity"]);
+    expect(identityTabKeys("entra_service_principal")).toEqual(["access", "credentials", "token-access", "activity"]);
+    expect(identityTabKeys("entra_application")).toEqual(["access", "credentials", "token-access"]);
+    expect(identityTabKeys("entra_managed_identity")).toEqual(["access", "token-access", "activity", "workloads"]);
+    expect(identityTabKeys("entra_user")).toEqual(["access", "activity"]);
+    expect(identityTabKeys("entra_group")).toEqual(["access"]);
   });
 });

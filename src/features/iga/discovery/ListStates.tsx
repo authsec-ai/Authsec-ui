@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 
 import type { GraphFailure } from "../shared/graphErrors";
 import { notCollectedReason, TYPES_BY_PROVIDER } from "./model";
-import { PROVIDER_LABEL, TYPE_LABEL, discoveryHref, type DiscoveryProvider, type DiscoveryType } from "./urlState";
+import { typeLabel, PROVIDER_LABEL, discoveryHref, type DiscoveryProvider, type DiscoveryType } from "./urlState";
 
 function Panel({ title, children, role, action }: { title: string; children?: ReactNode; role?: "alert" | "status"; action?: ReactNode }) {
   return (
@@ -151,14 +151,14 @@ export function NotCollected({ provider, type }: { provider: DiscoveryProvider; 
           <>
             {supported.map((t) => (
               <Link key={t} to={discoveryHref({ provider, type: t })} className="text-sm font-semibold text-(--color-primary-text) hover:underline">
-                Show {TYPE_LABEL[t].toLowerCase()}
+                Show {typeLabel(provider, t).toLowerCase()}
               </Link>
             ))}
           </>
         }
       >
         <p>
-          {TYPE_LABEL[type]}: {notCollectedReason(provider, type)}
+          {typeLabel(provider, type)}: {notCollectedReason(provider, type)}
         </p>
         <p className="mt-1">This is not an empty list — nothing was looked for.</p>
       </Panel>
@@ -167,15 +167,15 @@ export function NotCollected({ provider, type }: { provider: DiscoveryProvider; 
 }
 
 /** The URL names a source that is not a connection of this provider. */
-export function UnknownSource({ id, provider, onClear }: { id: string; provider: DiscoveryProvider; onClear: () => void }) {
+export function UnknownSource({ id, provider, onClear, noun = "source" }: { id: string; provider: DiscoveryProvider; onClear: () => void; noun?: string }) {
   return (
     <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
       <Panel
-        title="This source is not connected"
+        title={`This ${noun} is not connected`}
         role="status"
         action={
           <button type="button" onClick={onClear} className="text-sm font-semibold text-(--color-primary-text) hover:underline">
-            Show every {PROVIDER_LABEL[provider]} source
+            Show every {PROVIDER_LABEL[provider]} {noun}
           </button>
         }
       >
@@ -186,7 +186,7 @@ export function UnknownSource({ id, provider, onClear }: { id: string; provider:
 }
 
 /** A connection that has no objects recorded yet. */
-export function SourceHasNoRows({ label, onClear }: { label: string; onClear: () => void }) {
+export function SourceHasNoRows({ label, onClear, noun = "source" }: { label: string; onClear: () => void; noun?: string }) {
   return (
     <div className="rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
       <Panel
@@ -194,11 +194,13 @@ export function SourceHasNoRows({ label, onClear }: { label: string; onClear: ()
         role="status"
         action={
           <button type="button" onClick={onClear} className="text-sm font-semibold text-(--color-primary-text) hover:underline">
-            Show every source
+            Show every {noun}
           </button>
         }
       >
-        This connection has no objects in the inventory. That is a state of the connection, not a finding that it holds none.
+        {noun === "tenant"
+          ? "No scan of this tenant has recorded anything yet. That is the state of the scan, not a finding that the tenant holds nothing."
+          : "This connection has no objects in the inventory. That is a state of the connection, not a finding that it holds none."}
       </Panel>
     </div>
   );

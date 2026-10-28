@@ -44,6 +44,14 @@ import { AZURE_TARGET_KINDS } from "@/features/iga/policy/access/model";
 
 import { Info } from "lucide-react";
 import { InventoryNotice } from "../aws/AWSInventoryNotices";
+import {
+  AgentIdentityOverview,
+  AuditLogTab,
+  BlueprintAgentsTab,
+  BlueprintCredentialsTab,
+  BlueprintOverview,
+  BlueprintPermissionsTab,
+} from "./AzureAgentPages";
 import { AzureGraphPanel } from "./AzureGraphPanel";
 import { FoundryOverview } from "./AzureFoundryView";
 import { foundryNodeOf, type FoundryNode } from "./azureFoundry";
@@ -60,28 +68,67 @@ import {
   ResourceOverview,
   WorkloadOverview,
 } from "./AzureObjectTabs";
-import { agentTypeLabel, armTypeLabel, connectorLabel, identityKindLabel } from "./azureDiscoveryLabels";
+import { agentPageKind, agentTypeLabel, armTypeLabel, connectorLabel, identityKindLabel, identityTabKeys } from "./azureDiscoveryLabels";
 
 type Kind = "identity" | "resource" | "workload";
 
-const IDENTITY_TABS: ObjectTabDef[] = [
-  { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Permissions", path: "/access" },
-  { key: "credentials", label: "Credentials", path: "/credentials" },
-  { key: "token-access", label: "Who can access", path: "/token-access" },
-  { key: "activity", label: "Activity", path: "/activity" },
-  { key: "workloads", label: "Workloads", path: "/workloads" },
-  { key: "evidence", label: "Evidence", path: "/evidence" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+const TAB_HINT = {
+  overview: "Who and what it is: IDs, status, sponsors and owners, and the key facts Microsoft records.",
+  access: "Its Azure role assignments, Microsoft Entra roles and API permissions, including any inherited from its blueprint.",
+  credentials: "Its client secrets and certificates: names, dates and status only. AuthSec never holds a secret value.",
+  tokenAccess: "Who can get its tokens without its own secret: federated credentials, owners and its agent identity blueprint.",
+  activity: "Its sign-ins, from Microsoft Entra sign-in logs, and its actions in the Azure Activity Log.",
+  workloads: "The Azure resources that sign in with this managed identity.",
+  graph: "A picture of what it can reach, and who or what can reach it.",
+  evidence: "Which Microsoft API each fact came from, and in how many scans. For audits.",
+  resourceAccess: "The Azure role assignments given directly on this resource.",
+  signIns: "Its sign-ins, from Microsoft Entra sign-in logs. Reading them needs Microsoft Entra ID P1 or P2.",
+  audit: "Changes made to it, from the Microsoft Entra audit log.",
+  agentOverview: "Status, its blueprint, created, last sign-in, sponsors and owners, and where Foundry placed it.",
+  agentAccess: "Its Azure roles and Microsoft Entra permissions, including any inherited from its blueprint.",
+  blueprintOverview: "Status, IDs, publisher, created, sponsors and owners.",
+  blueprintAgents: "The agent identities made from this blueprint.",
+  blueprintCredentials: "How this blueprint gets its agents' tokens: federated credentials, client secrets and certificates.",
+  blueprintPermissions: "Permissions granted to this blueprint. Inheritable ones pass to every agent identity made from it.",
+} as const;
+
+/** An Entra Agent ID agent identity: what the Entra admin center shows for one. */
+const AGENT_TABS: ObjectTabDef[] = [
+  { key: "overview", label: "Overview", path: "", hint: TAB_HINT.agentOverview },
+  { key: "access", label: "Roles and permissions", path: "/access", hint: TAB_HINT.agentAccess },
+  { key: "activity", label: "Sign-in logs", path: "/activity", hint: TAB_HINT.signIns },
+  { key: "audit", label: "Audit logs", path: "/audit", hint: TAB_HINT.audit },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true, hint: TAB_HINT.graph },
 ];
+/** An agent identity blueprint: what the Entra admin center shows for one. */
+const BLUEPRINT_TABS: ObjectTabDef[] = [
+  { key: "overview", label: "Overview", path: "", hint: TAB_HINT.blueprintOverview },
+  { key: "agents", label: "Agent identities", path: "/agents", hint: TAB_HINT.blueprintAgents },
+  { key: "credentials", label: "Credentials", path: "/credentials", hint: TAB_HINT.blueprintCredentials },
+  { key: "access", label: "Permissions", path: "/access", hint: TAB_HINT.blueprintPermissions },
+  { key: "audit", label: "Audit logs", path: "/audit", hint: TAB_HINT.audit },
+];
+
+const IDENTITY_TABS: ObjectTabDef[] = [
+  { key: "overview", label: "Overview", path: "", hint: TAB_HINT.overview },
+  { key: "access", label: "Roles and permissions", path: "/access", hint: TAB_HINT.access },
+  { key: "credentials", label: "Credentials", path: "/credentials", hint: TAB_HINT.credentials },
+  { key: "token-access", label: "Who can act as it", path: "/token-access", hint: TAB_HINT.tokenAccess },
+  { key: "activity", label: "Sign-ins and activity", path: "/activity", hint: TAB_HINT.activity },
+  { key: "workloads", label: "Runs on", path: "/workloads", hint: TAB_HINT.workloads },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true, hint: TAB_HINT.graph },
+  { key: "evidence", label: "Evidence", path: "/evidence", hint: TAB_HINT.evidence },
+];
+/** Overview, Access Graph and Evidence always; the rest only where its kind makes them possible (identityTabKeys). */
+const ALWAYS = new Set(["overview", "graph", "evidence"]);
 const RESOURCE_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "access", label: "Who can access", path: "/access" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+  { key: "access", label: "Who can access", path: "/access", hint: TAB_HINT.resourceAccess },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true, hint: TAB_HINT.graph },
 ];
 const WORKLOAD_TABS: ObjectTabDef[] = [
   { key: "overview", label: "Overview", path: "" },
-  { key: "graph", label: "Access Graph", path: "/graph", workspace: true },
+  { key: "graph", label: "Access Graph", path: "/graph", workspace: true, hint: TAB_HINT.graph },
 ];
 const TABS: Record<Kind, ObjectTabDef[]> = { identity: IDENTITY_TABS, resource: RESOURCE_TABS, workload: WORKLOAD_TABS };
 
@@ -165,8 +212,12 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   const nativeId = identity?.native_id ?? resource?.native_id ?? workload?.native_id ?? "";
   const lastSeen = record?.last_seen_at;
 
+  // An agent identity or blueprint opened from Entra Agent ID gets the pages the Entra admin center has for it.
+  const agentKind = agentPageKind(identity);
   let header: ObjectHeaderData["kind"] | undefined;
-  if (identity) {
+  if (agentKind) {
+    header = { label: agentKind === "agent" ? "Agent identity" : "Agent identity blueprint", category: "identity", icon: "service_account" };
+  } else if (identity) {
     const agent = agentTypeLabel(identity);
     header = {
       label: agent ?? identityKindLabel(identity.kind),
@@ -182,8 +233,8 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
           name,
           kind: header,
           context: [],
-          sweep: { context: [connectorLabel(connector)], line: `Last checked ${dayText(lastSeen)}` },
-          copy: { value: nativeId, label: "Copy ID", what: isIdentity ? "Object ID" : "Resource ID" },
+          sweep: { context: [connectorLabel(connector)], line: `Last seen by AuthSec ${dayText(lastSeen)}` },
+          copy: { value: nativeId, label: isIdentity ? "Copy object ID" : "Copy resource ID", what: isIdentity ? "Object ID" : "Resource ID" },
           plainNote: {
             short: "Recorded, not tested",
             long: "These are the permissions Azure has recorded. They have not been tested, so they do not prove a request would succeed.",
@@ -204,7 +255,15 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
         .map((w) => foundryNodeOf(w, foundryTrusts))
     : [];
 
-  const tabs = TABS[kind];
+  // An identity's tabs follow its kind once it is known: none is shown that Microsoft makes always empty.
+  const tabs =
+    agentKind === "agent"
+      ? AGENT_TABS
+      : agentKind === "blueprint"
+        ? BLUEPRINT_TABS
+        : identity
+          ? IDENTITY_TABS.filter((t) => ALWAYS.has(t.key) || identityTabKeys(identity.kind).includes(t.key))
+          : TABS[kind];
   const activeTab = activeTabOf(tabs, tab);
   const active = activeTab.state === "ready" ? activeTab.key : null;
 
@@ -213,7 +272,35 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   const runsAsObjectId = str(runsAs?.attrs?.object_id);
 
   let body: React.ReactNode = null;
-  if (record) {
+  if (identity && agentKind) {
+    body =
+      active === "overview" ? (
+        agentKind === "agent" ? (
+          <>
+            <AgentIdentityOverview identity={identity} tenant={connector} />
+            <AzurePolicySection ws={ws} what="identity" igaId={policyIgaId} />
+          </>
+        ) : (
+          <BlueprintOverview identity={identity} tenant={connector} />
+        )
+      ) : active === "access" ? (
+        agentKind === "agent" ? (
+          <IdentityAccessTab id={identity.id} />
+        ) : (
+          <BlueprintPermissionsTab blueprint={identity} />
+        )
+      ) : active === "activity" ? (
+        <IdentityActivityTab id={identity.id} />
+      ) : active === "audit" ? (
+        <AuditLogTab identity={identity} />
+      ) : active === "agents" ? (
+        <BlueprintAgentsTab blueprint={identity} />
+      ) : active === "credentials" ? (
+        <BlueprintCredentialsTab blueprint={identity} />
+      ) : active === "graph" ? (
+        <AzureGraphPanel kind="identity" id={id} name={name} objectId={id} />
+      ) : null;
+  } else if (record) {
     if (active === "overview") {
       body = identity ? (
         <>
@@ -234,7 +321,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
     } else if (active === "graph") {
       body = byArmId ? (
         <InventoryNotice icon={<Info />}>
-          The Access Graph is not ready for this object yet. Open it from Discovery once the Access Graph is ready on this server.
+          The Access Graph is not ready yet on this server, so this object can't be drawn. Open it again from Discovery once the Access Graph is ready.
         </InventoryNotice>
       ) : (
         <AzureGraphPanel kind={kind} id={id} name={name} objectId={kind === "identity" ? id : undefined} />
@@ -262,7 +349,7 @@ function AzureObject({ kind, id, tab }: { kind: Kind; id: string; tab: string | 
   return (
     <ObjectShell
       ws={ws}
-      listType={LIST_TYPE[kind]}
+      listType={agentKind ? "agents" : LIST_TYPE[kind]}
       provider="azure"
       kindLabel={KIND_WORD[kind]}
       base={`/iga/azure/${kind}/${encodeURIComponent(id)}`}
