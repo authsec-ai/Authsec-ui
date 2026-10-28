@@ -125,7 +125,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         approxWidth: 340,
         cell: ({ row }) => (
           <EntityCell
-            label={<NameLink r={row.original}>{row.original.name || "Unnamed AI agent"}</NameLink>}
+            label={<NameLink r={row.original}>{row.original.name || "Unnamed agent identity"}</NameLink>}
             detail={<CopyableId value={row.original.native_id} what="Object ID" />}
           />
         ),
@@ -201,7 +201,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
         approxWidth: 340,
         cell: ({ row }) => (
           <EntityCell
-            label={<NameLink r={row.original}>{row.original.name || "Unnamed template"}</NameLink>}
+            label={<NameLink r={row.original}>{row.original.name || "Unnamed blueprint"}</NameLink>}
             detail={<CopyableId value={row.original.native_id} what="Object ID" />}
           />
         ),
@@ -254,7 +254,7 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
     [],
   );
 
-  const noun = view === "identities" ? "AI agents" : "agent templates";
+  const noun = view === "identities" ? "agent identities" : "agent identity blueprints";
   const sourceSelect = <AzureSourceSelect options={options} value={connectorId ?? ALL} onChange={(v) => setParam("source", v)} allLabel="All Microsoft accounts" />;
   const viewChips = (
     <AWSFilterChips
@@ -321,8 +321,8 @@ export default function AzureAgentsScreen({ connectors }: { connectors: CloudCon
             noMatch={!filtered.length}
             emptyText={
               view === "identities"
-                ? "No AI agent was found in this directory. AuthSec reads them with the permission Read all agent identities (AgentIdentity.Read.All). The connection's Coverage tab shows whether that read ran. This is not proof there are none."
-                : "No agent template was found. AuthSec reads them with the permission Read all agent identity blueprints (AgentIdentityBlueprint.Read.All). The connection's Coverage tab shows whether that read ran."
+                ? "No agent identity was found in this directory. AuthSec reads them with the permission Read all agent identities (AgentIdentity.Read.All). The connection's Coverage tab shows whether that read ran. This is not proof there are none."
+                : "No agent identity blueprint was found. AuthSec reads them with the permission Read all agent identity blueprints (AgentIdentityBlueprint.Read.All). The connection's Coverage tab shows whether that read ran."
             }
           >
             <AdaptiveTable

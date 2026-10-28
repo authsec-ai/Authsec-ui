@@ -85,7 +85,7 @@ export function GrantLine({ g, showHolder = false }: { g: AzureGrant; showHolder
           </CloudPill>
         </AzureTerm>
         {g.inherited ? (
-          <CloudPill tone="info" dot={false} title="Granted to the agent template's login and inherited by this agent. Not granted to the agent itself.">
+          <CloudPill tone="info" dot={false} title="Granted to the agent identity blueprint's login and inherited by this agent identity. Not granted to the agent identity itself.">
             Inherited from its template
           </CloudPill>
         ) : null}
