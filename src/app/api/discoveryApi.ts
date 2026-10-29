@@ -54,10 +54,13 @@ export interface DiscoverySource {
   self_registered: boolean;
   /** Last runtime snapshot the agent reported. Opaque json blob. */
   runtime: unknown;
-  // ── In-cluster enforcement. actuation_enabled_at is when an actuation token was
-  //    minted (the hash never leaves the server); the rest is what the agent last
+  // ── In-cluster enforcement. actuation_enabled_at is when it was turned on (the
+  //    credential's hash never leaves the server); the rest is what the agent last
   //    REPORTED it can do, never what the console asked for. ──
   actuation_enabled_at?: string;
+  /** off; pending (turned on, the agent has not handed over its credential yet); on.
+   *  Absent from a control plane older than the hand-over. */
+  actuation_state?: "off" | "pending" | "on";
   /** "" until an agent reports; then "observe" or "deny". */
   enforcement_mode?: string;
   enforced_plan_version?: number;
@@ -645,10 +648,11 @@ export const discoveryApi = baseApi.injectEndpoints({
       query: ({ id }) => ({ url: `/authsec/discovery/agents/${id}/unquarantine`, method: "POST", body: {} }),
       invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoveredAgent", id }, "DiscoveredAgent"],
     }),
-    // Mints (or rotates) a cluster's actuation token (governance:admin). Shown once:
-    // the server keeps only its hash, and a new one invalidates the old.
-    enableActuation: builder.mutation<{ actuation_token: string; note?: string }, string>({
-      query: (id) => ({ url: `/authsec/governance/connectors/${id}/actuation`, method: "POST", body: {} }),
+    // Turns enforcement on, or rotates it (governance:admin). delivery "agent": the
+    // cluster's agent hands over its own credential on its next heartbeat, so no
+    // token is shown or copied anywhere.
+    enableActuation: builder.mutation<{ actuation_enabled: true; actuation_state: "pending" }, string>({
+      query: (id) => ({ url: `/authsec/governance/connectors/${id}/actuation`, method: "POST", body: { delivery: "agent" } }),
       invalidatesTags: (_r, _e, id) => [{ type: "DiscoverySource", id }, "Connections"],
     }),
     // Turns it off (governance:admin). 409 enforcement_in_use names what is still
