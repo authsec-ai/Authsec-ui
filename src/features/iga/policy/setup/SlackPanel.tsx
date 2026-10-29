@@ -35,7 +35,7 @@ import {
   usePolicyPermission,
 } from "../shared";
 import { ActionDialog } from "./ActionDialog";
-import { channelProblem } from "./slackModel";
+import { SLACK_UNAVAILABLE, channelProblem } from "./slackModel";
 
 function ApprovalsChannel({ status, canChange }: { status: SlackStatusView; canChange: boolean }) {
   const id = useId();
@@ -195,7 +195,7 @@ export function SlackPanel() {
         )
       ) : a && !a.available ? (
         <p className="text-[13px] text-(--color-text-muted)">
-          Slack is not available on this server{a.reason ? `: ${a.reason}` : ""}. Email and webhook notifications still work.
+          {SLACK_UNAVAILABLE}
         </p>
       ) : !connected ? (
         <div className="space-y-3">

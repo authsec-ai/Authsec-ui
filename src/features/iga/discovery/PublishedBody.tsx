@@ -62,6 +62,8 @@ export interface BodyProps<Row> {
   describeEmpty: string;
   restarted: boolean;
   chrome: ListChrome<Row>;
+  /** A screen's own line above the list. */
+  notice?: ReactNode;
 }
 
 export function PublishedBody<Row>(b: BodyProps<Row>) {
@@ -151,6 +153,7 @@ export function PublishedBody<Row>(b: BodyProps<Row>) {
       onClearAll={() => p.url.patch(Object.fromEntries(b.clearKeys.map((k) => [k, null])))}
       notices={
         <>
+          {b.notice}
           {b.restarted ? (
             <p role="status" className="text-xs text-(--color-text-muted)">
               The list restarted at the first page: it changed while you were paging, so the next page could not continue where the last one ended.

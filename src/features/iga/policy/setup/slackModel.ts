@@ -63,3 +63,11 @@ export function useSlackReturn(): { value: SlackReturn | null; consume: () => vo
   const consume = useCallback(() => setValue(null), []);
   return { value, consume };
 }
+
+/**
+ * What a member reads when this server has no Slack app (AS-166). The server's
+ * reason names its settings (a signing secret, Vault) for the operator; older
+ * servers send it to the console, so the panel never shows it.
+ */
+export const SLACK_UNAVAILABLE =
+  "Slack is not set up on this server. Ask your AuthSec administrator to set it up. Email and webhook notifications still work.";

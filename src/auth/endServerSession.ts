@@ -9,6 +9,14 @@ import { SessionManager } from "../utils/sessionManager";
 export async function endServerSession(): Promise<void> {
   const token = SessionManager.getSession()?.token;
   if (!token) return;
+  await revokeToken(token);
+}
+
+/**
+ * Revokes one token on the server (its jti only; the server never ends other
+ * sessions on this call). Best effort.
+ */
+export async function revokeToken(token: string): Promise<void> {
   try {
     await fetch(`${config.VITE_API_URL || "http://localhost:7468"}/authsec/auth/logout`, {
       method: "POST",

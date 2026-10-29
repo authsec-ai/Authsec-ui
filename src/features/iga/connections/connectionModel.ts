@@ -441,6 +441,41 @@ export function lastScanText(c: Connection): string {
 }
 
 /** The graph column: distinct from the scan outcome. */
+/** The breadcrumb's name for a connection page: its name, or what the page shows instead. */
+export function connectionCrumb(c: Connection | null | undefined, notFound: boolean): string {
+  if (c) return c.name;
+  return notFound ? "Not found" : "Connection";
+}
+
+/** How each provider's rows reach the graph when they have no numbered publication. */
+const UNREVISIONED_SENTENCE: Partial<Record<ConnectionProvider, string>> = {
+  k8s: "Kubernetes inventory is written as each sweep arrives. It has no numbered publication, and Discovery labels it by its sweep.",
+  azure: "Azure inventory is written as each scan is read. It has no numbered publication, and Discovery and the Access Graph read the latest scan.",
+  github: "GitHub inventory is written as each scan arrives. It has no numbered publication, and Discovery labels it by its scan.",
+};
+
+/** The Graph card's sentence: what the graph state means for this connection's provider. */
+export function graphSentence(c: Connection): string {
+  switch (c.graph.state) {
+    case "published":
+      return `Discovery's Published view shows what AuthSec concluded${c.graph.rev != null ? ` at revision ${c.graph.rev}` : ""}.`;
+    case "publishing":
+      return "The graph is being built from the latest scan. The previous publication stays until it finishes.";
+    case "failed":
+      return c.graph.published_at
+        ? `The graph from ${ago(c.graph.published_at)} is still shown. Scan again to retry.`
+        : "Nothing from this account is in the graph yet. Scan again to retry.";
+    case "not_published":
+      return "Nothing from this account is in a publication yet, so the Published view in Discovery is empty for it.";
+    case "unrevisioned":
+      return UNREVISIONED_SENTENCE[c.provider] ?? "This source is written as it is read. It has no numbered publication.";
+    case "not_applicable":
+      return "This source is not part of the graph. Discovery reads its latest collected results.";
+    default:
+      return "AuthSec reports a graph state this console does not recognise.";
+  }
+}
+
 export function graphText(c: Connection): { text: string; note?: string } {
   switch (c.graph.state) {
     case "published":
@@ -567,6 +602,8 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
     { key: "scope", label: "Scope" },
   ];
   if (c.provider === "github") tabs.push({ key: "rules", label: "Scan rules" });
+  // A cluster's quarantine and access-policy enforcement (K8sEnforcementTab).
+  if (c.provider === "k8s") tabs.push({ key: "enforcement", label: "Enforcement" });
   // AWS accounts carry the policy setup that used to live under Policy › AWS
   // access: enforcement, pull-request sources, notifications and settings.
   if (c.provider === "aws") {
@@ -577,12 +614,28 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
       { key: "settings", label: "Settings" },
     );
   }
+  // Notifications are workspace-wide; an Azure-only workspace reaches them here.
+  if (c.provider === "azure") tabs.push({ key: "notifications", label: "Notifications" });
   return tabs;
 }
 
 export function detailHref(id: string, tab: DetailTab = "overview"): string {
   const base = `/iga/connections/${encodeURIComponent(id)}`;
   return tab === "overview" ? base : `${base}/${tab}`;
+}
+
+const SETUP_SECTIONS: DetailTab[] = ["enforcement", "iac", "notifications", "settings"];
+
+/**
+ * Where an `/iga/policy/setup[/section]` link (Slack messages, older links)
+ * now lands: that tab of the first connection that has it, or the list.
+ */
+export function setupTarget(connections: Connection[] | undefined, section: string | undefined): string {
+  const tab = SETUP_SECTIONS.find((s) => s === section) ?? "enforcement";
+  // These were AWS policy setup: an AWS account first (a cluster has an Enforcement tab of its own).
+  const has = (x: Connection) => tabsOf(x).some((t) => t.key === tab);
+  const c = (connections ?? []).find((x) => x.provider === "aws" && has(x)) ?? (connections ?? []).find(has);
+  return c ? detailHref(c.id, tab) : "/iga/connections";
 }
 
 export function scanHref(id: string, runId: string): string {

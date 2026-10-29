@@ -32,6 +32,7 @@ import { resetGraphRevisions } from "../features/iga/shared/revision";
 import adminWebAuthnSlice, { resetAdminWebAuthnState } from "../auth/slices/adminWebAuthnSlice";
 import oidcWebAuthnSlice, { resetOIDCWebAuthnState } from "../auth/slices/oidcWebAuthnSlice";
 import { SESSION_KEY, sessionIdentityFromStorage } from "../utils/sessionManager";
+import { reloadForSessionChange } from "../utils/crossTabReload";
 
 /**
  * Redux store configuration with RTK Query integration
@@ -128,10 +129,8 @@ export const store = configureStore({
 setupListeners(store.dispatch);
 
 // Another tab signing in, switching workspace or signing out changes the
-// shared session. This tab's caches belong to the previous identity, so it
-// reloads rather than mix one workspace's data with another's token.
-const RELOAD_STAMP_KEY = "authsec_session_reload_at";
-
+// shared session. This tab's caches belong to the previous identity, so they
+// are reset at once and the tab reloads (utils/crossTabReload.ts).
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (event.key !== SESSION_KEY && event.key !== null) return;
@@ -139,17 +138,18 @@ if (typeof window !== "undefined") {
     const after = sessionIdentityFromStorage(event.key === null ? null : event.newValue);
     if (before === after) return;
     resetSessionScopedState(store.dispatch);
-    // Never reload twice within a few seconds. Two tabs that keep rewriting the
-    // session would otherwise reload each other in a loop; the state reset above
-    // still runs, so the tab never mixes one identity's data with another's.
+    let storage: Storage | null = null;
     try {
-      const last = Number(window.sessionStorage.getItem(RELOAD_STAMP_KEY) || 0);
-      if (Date.now() - last < 10_000) return;
-      window.sessionStorage.setItem(RELOAD_STAMP_KEY, String(Date.now()));
+      storage = window.sessionStorage;
     } catch {
-      // sessionStorage unavailable: reload as before.
+      // unavailable: reload without the loop guard
     }
-    window.location.reload();
+    reloadForSessionChange({
+      reload: () => window.location.reload(),
+      now: Date.now,
+      defer: (fn, ms) => window.setTimeout(fn, ms),
+      storage,
+    });
   });
 }
 

@@ -32,6 +32,7 @@ export function RowName({
   account,
   lifecycle,
   badge,
+  fullName,
 }: {
   to: string;
   state?: unknown;
@@ -45,6 +46,8 @@ export function RowName({
   /** "Retired" or "Stale", put first on the line only while the Lifecycle column is hidden. */
   lifecycle?: string | null;
   badge?: ReactNode;
+  /** The whole name, for the hover, when `name` is a shortened form of it. */
+  fullName?: string;
 }) {
   const accountShown = useAdaptiveColumnShown("account");
   // Card layout (an empty shown-set) draws lifecycle as a summary badge already.
@@ -60,7 +63,7 @@ export function RowName({
           data-row-link={rowKey}
           aria-current={selected ? "true" : undefined}
           className="block min-w-0 truncate font-medium text-(--color-text) hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--color-primary)"
-          title={name}
+          title={fullName ?? name}
         >
           {name}
         </Link>

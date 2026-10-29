@@ -23,6 +23,7 @@ import {
 } from "./ConnectionParts";
 import { CoverageTab } from "./CoverageTab";
 import { EnforcementTab, IacTab, NotificationsTab, SettingsTab } from "./ConnectionSetupTabs";
+import { K8sEnforcementTab } from "./K8sEnforcementTab";
 import { OverviewTab, ReadinessStrip } from "./OverviewTab";
 import { ConnPill } from "./ConnPill";
 import { RevokeConnectionDialog } from "./RevokeConnectionDialog";
@@ -32,6 +33,7 @@ import {
   actionsOf,
   ago,
   day,
+  connectionCrumb,
   detailHref,
   statusOf,
   discoveryLink,
@@ -63,7 +65,8 @@ export default function ConnectionDetailPage() {
   const { pending, failures, run, dismiss } = useConnectionActions();
   const [revokeOpen, setRevokeOpen] = useState(false);
 
-  useBreadcrumbTail(c ? detailHref(id) : null, c?.name ?? null, { label: "Connections", href: "/iga/connections" });
+  // Always name the page, so the breadcrumb never turns the URL's id into a title.
+  useBreadcrumbTail(id ? detailHref(id) : null, connectionCrumb(c, notFound), { label: "Connections", href: "/iga/connections" });
 
   // The Scope tab's region list is a live AWS call that takes seconds; start
   // it as soon as an AWS connection opens so the tab is ready when clicked.
@@ -183,7 +186,7 @@ export default function ConnectionDetailPage() {
       {active === "coverage" ? <CoverageTab c={c} /> : null}
       {active === "scope" ? <ScopeTab c={c} actions={actions} onScan={() => run(c, "scan")} /> : null}
       {active === "rules" ? <RuleCatalogPanel scansHref={detailHref(c.id, "scans")} /> : null}
-      {active === "enforcement" ? <EnforcementTab c={c} /> : null}
+      {active === "enforcement" ? c.provider === "k8s" ? <K8sEnforcementTab c={c} /> : <EnforcementTab c={c} /> : null}
       {active === "iac" ? <IacTab c={c} /> : null}
       {active === "notifications" ? <NotificationsTab /> : null}
       {active === "settings" ? <SettingsTab /> : null}

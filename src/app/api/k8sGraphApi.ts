@@ -85,10 +85,14 @@ export interface K8sWorkload {
  *    null, not empty, and the role may be unnamed.
  */
 export interface K8sGrant {
+  /** The role's graph id: what a Kubernetes access policy names. Absent when the role was not seen. */
+  role_id?: string;
   role_name: string;
   /** k8s_role | k8s_cluster_role; empty when the role was not seen. */
   role_kind: string;
   binding: string;
+  /** The binding's own name. */
+  binding_name?: string;
   /** k8s_role_binding | k8s_cluster_role_binding */
   binding_kind: string;
   namespace: string;

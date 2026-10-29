@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useListAzureConnectorsQuery } from "@/app/api/cloudDiscoveryApi";
+import { permissionCount, resourceExclusions } from "./entraPermissions";
 import { refId } from "@/app/api/igaGraphApi";
 import { useListInventoryQuery, type InventoryClass, type InventoryMeta, type InventoryRow } from "@/app/api/igaInventoryApi";
 import { ConsoleRowActions } from "@/components/console/iam-console";
@@ -74,6 +75,8 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const paging = usePaging(`discovery-azure-${type}`, 0);
   const [restarted, setRestarted] = useState(false);
   const kind = p.url.get("kind");
+  const permissionsShown = p.url.get("permissions") === "shown";
+  const excluded = resourceExclusions(type, kind, permissionsShown);
   const lifecycleFilter = valid(p.url.get("lifecycle"), ["retired", "all"] as const);
   // Rows per page, in the URL as on AWS's lists: 25 unless one of 25 / 50 / 100 is chosen.
   const pageSize = parsePageSize(p.url.get("size"));
@@ -92,13 +95,14 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const sources = useMemo(() => p.sources.map((s) => ({ ...s, label: tenantName(tenants.get(s.scopeId), s.label) })), [p.sources, tenants]);
 
   const list = useListInventoryQuery(
-    { ws: p.ws, key: paging.cacheKey, class: type, provider: "azure", kind, scope: scopeId, q: p.url.q, lifecycle: lifecycleFilter, sort: "name", limit: pageSize, cursor: paging.cursor },
+    { ws: p.ws, key: paging.cacheKey, class: type, provider: "azure", kind, exclude_kind: excluded, scope: scopeId, q: p.url.q, lifecycle: lifecycleFilter, sort: "name", limit: pageSize, cursor: paging.cursor },
     { skip: blocked },
   );
   useRestartOnListingChanged(list.error, paging.restart, () => setRestarted(true));
   const view: PagedView<InventoryRow, InventoryMeta> = resolvePagedView(list, paging.pageIndex);
   useRestoreScroll(`discovery-azure-${type}`, view.kind === "rows");
   const facets = list.currentData?.meta.facets;
+  const hiddenPermissions = permissionCount(facets);
 
   const rows = view.kind === "rows" ? view.rows : [];
   const selectedId = p.url.sel;
@@ -320,13 +324,29 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       searchHint={p.url.qTooShort ? "Type at least 2 characters to search." : undefined}
       facets={specs}
       trailing={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={layout} />}
-      onClearAll={() => p.url.patch({ kind: null, source: null, lifecycle: null, q: null })}
+      onClearAll={() => p.url.patch({ kind: null, source: null, lifecycle: null, q: null, permissions: null })}
       notices={
-        restarted ? (
-          <p role="status" className="text-xs text-(--color-text-muted)">
-            The list restarted at the first page: it changed while you were paging.
-          </p>
-        ) : undefined
+        <>
+          {type === "resources" && !kind && hiddenPermissions > 0 ? (
+            <p className="text-xs text-(--color-text-muted)">
+              {permissionsShown
+                ? "Entra app permissions are listed with the Azure resources."
+                : `${hiddenPermissions} Entra app ${hiddenPermissions === 1 ? "permission is" : "permissions are"} not listed: they are what an app may do in Microsoft Entra ID and Microsoft 365, not Azure resources.`}{" "}
+              <button
+                type="button"
+                className="font-medium text-(--color-primary-text) hover:underline"
+                onClick={() => p.url.patch({ permissions: permissionsShown ? null : "shown" })}
+              >
+                {permissionsShown ? "Hide them" : "Show them"}
+              </button>
+            </p>
+          ) : null}
+          {restarted ? (
+            <p role="status" className="text-xs text-(--color-text-muted)">
+              The list restarted at the first page: it changed while you were paging.
+            </p>
+          ) : null}
+        </>
       }
     >
       {(width) => (

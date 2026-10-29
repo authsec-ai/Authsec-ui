@@ -226,6 +226,7 @@ const READER_LABEL: Record<string, string> = {
   permission_denied: "Reader not assigned: no permission",
   skipped: "Skipped",
   failed: "Reader not assigned",
+  not_checked: "Not checked yet: Azure was busy, verify again",
 };
 
 export function AzureScope({ c }: { c: Connection }) {

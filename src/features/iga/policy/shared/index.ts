@@ -10,3 +10,4 @@ export * from "./remedy";
 export { PolicyCheckFailed, PolicyShell, PolicyUnavailable } from "./PolicyShell";
 export { StateChip } from "./StatusChip";
 export { KubernetesPolicyNote } from "./KubernetesPolicyNote";
+export { k8sPolicyHref } from "./k8sPolicyHref";

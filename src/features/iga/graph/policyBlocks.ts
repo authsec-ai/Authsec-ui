@@ -28,10 +28,17 @@ import { useListAccessPoliciesQuery, type AccessPolicy } from "@/app/api/igaAcce
 import { refId, type GraphNode } from "@/app/api/igaGraphApi";
 import { getWorkspaceId } from "@/utils/workspace";
 
-import { AZURE_TARGET_KINDS, bucketOf, pathInBucket } from "../policy/access/model";
+import { AZURE_TARGET_KINDS, bucketOf, modelOf, parameterOf, pathInBucket, secretOf, simpleTargetOf, tableOf } from "../policy/access/model";
 import { usePolicyCapabilities } from "../policy/shared/usePolicyCapabilities";
 
-const IN_FORCE = new Set(["applying", "active", "scheduled", "drift"]);
+// Statuses whose block AWS or Azure enforces now. A scheduled one does not yet
+// (its window has not started; Azure has not removed anything): it is no mark.
+export const IN_FORCE = ["applying", "active", "drift"] as const;
+
+/** Whether a block in this status is enforced now. */
+export function inForce(status: string): boolean {
+  return (IN_FORCE as readonly string[]).includes(status);
+}
 
 export interface BlockMark {
   /** Every action on the path is blocked; false when only some actions or part of the path are. */
@@ -65,13 +72,45 @@ export function isPolicyHolder(n: GraphNode | undefined): boolean {
   return n.provider === "azure" ? AZURE_TARGET_KINDS.has(String(n.kind)) : n.kind === "iam_role";
 }
 
-/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3 ARN; Azure by the resource itself. */
-function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
+/** How a policy covers a resource node: not at all, fully, or partly. AWS by the node's S3, DynamoDB or Secrets Manager ARN (a table's index or stream is the table; a secret is every secret of its name in the account, in any region); Azure by the resource itself. */
+export function coverage(p: AccessPolicy, n: GraphNode | undefined): "none" | "full" | "partial" {
   if (p.resource.provider === "azure") {
     if (n?.provider !== "azure" || n.kind !== "azure_resource" || refId(n.ref) !== p.resource.resource_id) return "none";
     return p.access.includes("all") ? "full" : "partial";
   }
   const text = textOf(n);
+  if (p.resource.resource_type === "bedrock_agent" || p.resource.resource_type === "agentcore_runtime") {
+    // A discovered agent: its workload node, or a record naming its ARN.
+    const own = (n && refId(n.ref) === p.resource.resource_id) || (!!text && text.trim() === p.resource.arn);
+    if (!own) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (["lambda_function", "kms_key", "sqs_queue", "sns_topic"].includes(p.resource.resource_type)) {
+    const s = simpleTargetOf(p.resource.resource_type, text);
+    if (!s || s.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "bedrock_model") {
+    const m = modelOf(text);
+    if (!m || m.model !== p.resource.name) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "dynamodb_table") {
+    const t = tableOf(text);
+    if (!t || t.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "ssm_parameter") {
+    const s = parameterOf(text);
+    if (!s || s.arn !== p.resource.arn) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
+  if (p.resource.resource_type === "secretsmanager_secret") {
+    const s = secretOf(text);
+    const own = secretOf(p.resource.arn);
+    if (!s || !own || s.partition !== own.partition || s.account !== own.account || s.name !== own.name) return "none";
+    return p.access.includes("all") ? "full" : "partial";
+  }
   const b = bucketOf(text ?? "");
   if (!b || b.bucket !== p.resource.bucket) return "none";
   const path = pathInBucket(text ?? "");
@@ -96,10 +135,14 @@ export function useGraphBlocks(): GraphBlocks {
   const ws = getWorkspaceId() ?? "";
   const caps = usePolicyCapabilities(ws);
   const on = caps.feature("access_policies");
-  const q = useListAccessPoliciesQuery({ ws, effect: "block", limit: 200 }, { skip: !on, pollingInterval: 60_000, skipPollingIfUnfocused: true });
+  // One read per status in force, so ended policies never take up the page.
+  const opts = { skip: !on, pollingInterval: 60_000, skipPollingIfUnfocused: true };
+  const applying = useListAccessPoliciesQuery({ ws, effect: "block", status: "applying", limit: 200 }, opts);
+  const active = useListAccessPoliciesQuery({ ws, effect: "block", status: "active", limit: 200 }, opts);
+  const drift = useListAccessPoliciesQuery({ ws, effect: "block", status: "drift", limit: 200 }, opts);
 
   return useMemo(() => {
-    const live = (q.data?.data ?? []).filter((p) => p.effect === "block" && IN_FORCE.has(p.status));
+    const live = [applying.data, active.data, drift.data].flatMap((d) => d?.data ?? []).filter((p) => p.effect === "block" && inForce(p.status));
     if (!on || !live.length) return NONE;
     const naming = (id: string) => live.filter((p) => p.roles.some((r) => r.identity_account_id === id));
     const covering = (n: GraphNode) =>
@@ -120,5 +163,5 @@ export function useGraphBlocks(): GraphBlocks {
       forRole: naming,
       forResource: (n) => covering(n).map((x) => x.p),
     };
-  }, [q.data, on]);
+  }, [applying.data, active.data, drift.data, on]);
 }

@@ -94,6 +94,7 @@ const READER_STATUS: Record<string, string> = {
   permission_denied: "Reader not assigned",
   skipped: "Skipped",
   failed: "Reader not assigned",
+  not_checked: "Not checked: Azure was busy, verify again",
 };
 
 function StepRail({ step, steps }: { step: number; steps: readonly string[] }) {

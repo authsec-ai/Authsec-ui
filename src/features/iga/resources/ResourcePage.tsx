@@ -3,12 +3,15 @@
  * §2.14.12): Overview · Access · Graph · Changes.
  */
 
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { igaGraphApi, useGetGraphResourceQuery } from "@/app/api/igaGraphApi";
 import { useAppDispatch } from "@/app/hooks";
+import { Button } from "@/components/ui/button";
 import { getWorkspaceId } from "@/utils/workspace";
 
+import { resourcePolicyHref } from "../policy/access/model";
+import { usePolicyCapabilities } from "../policy/shared";
 import { useGraphFeature } from "../shared/capabilities";
 import { classifyGraphError } from "../shared/graphErrors";
 
@@ -30,6 +33,7 @@ export default function ResourcePage() {
   const dispatch = useAppDispatch();
   const { rev, epoch, refresh } = useGraphRevision(ws);
   const feature = useGraphFeature(ws, "resources");
+  const caps = usePolicyCapabilities(ws);
 
   const args = { ws, rev, key: String(epoch), id };
   const detail = useGetGraphResourceQuery(args, { skip: feature.off || !id });
@@ -63,6 +67,9 @@ export default function ResourcePage() {
   // the investigation's expansions across to the new revision (§2.14.5).
   let body = null;
   const gone = vanished || r?.lifecycle === "retired";
+  // A resource an access policy can name opens the form with it chosen (UI-052).
+  const policyHref =
+    r && !gone && r.kind !== "selector" && caps.state === "on" ? resourcePolicyHref(id, r.text, r.type, caps.accessResourceTypes) : null;
   if (r) {
     // Overview and Changes remain for a retired or vanished object; the other
     // tabs say they have no current data (SPEC-console-revamp.md).
@@ -103,6 +110,11 @@ export default function ResourcePage() {
               ].filter((x): x is string => !!x),
               lifecycle: lifecycleView(r),
               publishedAt: meta?.published_at,
+              actions: policyHref ? (
+                <Button size="sm" asChild>
+                  <Link to={policyHref}>Create policy</Link>
+                </Button>
+              ) : undefined,
               copy:
                 r.kind === "selector"
                   ? { value: r.text, label: "Copy pattern", what: "Pattern" }

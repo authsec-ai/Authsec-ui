@@ -323,6 +323,19 @@ export type ExecutionRole =
   | { state: "not_in_scan" | "not_in_inventory"; execution_role_arn: string }
   | { state: "none" };
 
+/** One AWS access-policy resource type as capabilities describe it. */
+export interface AccessTypeView {
+  type: string;
+  service: string;
+  noun: string;
+  prefix: boolean;
+  block_only: boolean;
+  /** The levels an allow may name (none for a block-only type). */
+  allow_levels: ("read" | "write" | "delete")[];
+  /** The levels a block may name besides "all". */
+  levels: ("read" | "write" | "delete")[];
+}
+
 export interface WorkloadRow {
   ref: GraphRef;
   name: string;
@@ -1234,9 +1247,12 @@ export interface PolicyCapabilities {
   slack: boolean;
   /**
    * Block or allow roles on a resource for a time. Absent on a backend without
-   * them. The backend sends `{available, reason}`; a boolean is accepted too.
+   * them. The backend sends `{available, reason, resource_types}`; a boolean is
+   * accepted too. `resource_types` lists the AWS resource types a policy can
+   * name (`s3_bucket`, `dynamodb_table`, `secretsmanager_secret`); a backend
+   * without it supports S3 only. `block_only` lists the types that take no allow.
    */
-  access_policies?: { available: boolean; reason?: string | null } | boolean;
+  access_policies?: { available: boolean; reason?: string | null; resource_types?: string[]; block_only?: string[]; types?: AccessTypeView[]; k8s?: { available: boolean; reason?: string | null } } | boolean;
   reasons: Record<string, string>;
 }
 

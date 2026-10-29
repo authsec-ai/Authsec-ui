@@ -20,6 +20,7 @@ import {
   refId,
   useListGraphIdentitiesQuery,
   useListGraphResourcesQuery,
+  useListGraphWorkloadsQuery,
   type AccessRow,
   type ResourceRow,
 } from "@/app/api/igaGraphApi";
@@ -38,7 +39,8 @@ import { cn } from "@/lib/utils";
 
 import type { AccessEffect } from "@/app/api/igaAccessPoliciesApi";
 
-import { bucketOf, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { bucketOf, groupModels, groupParameters, groupSimple, groupSecrets, groupTables, pathInBucket, reachesFolder, type DraftResource, type DraftRole } from "./model";
+import { RESOURCE_TYPES, type AwsResourceType } from "./resourceTypes";
 import { useDebounced } from "./useDebounced";
 
 /** Every bucket the S3 records name, with its records (bucket record first) and the folders seen in it. */
@@ -49,7 +51,7 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
     if (!b) continue;
     let e = by.get(b.bucket);
     if (!e) {
-      e = { provider: "aws", resource_id: "", name: b.bucket, bucket: b.bucket, arn: `arn:aws:s3:::${b.bucket}`, account_id: r.account?.id ?? "", records: [], folders: [], hasBucketRecord: false };
+      e = { provider: "aws", resource_id: "", resource_type: "s3_bucket", name: b.bucket, bucket: b.bucket, arn: `arn:aws:s3:::${b.bucket}`, account_id: r.account?.id ?? "", records: [], folders: [], hasBucketRecord: false };
       by.set(b.bucket, e);
     }
     const rec = { id: refId(r.ref), text: r.text };
@@ -71,6 +73,17 @@ function groupBuckets(rows: ResourceRow[]): (DraftResource & { hasBucketRecord: 
   return [...by.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
 }
 
+const SERVICE: Record<AwsResourceType, string> = { s3_bucket: "s3", dynamodb_table: "dynamodb", secretsmanager_secret: "secretsmanager",
+  ssm_parameter: "ssm",
+  bedrock_model: "bedrock",
+  bedrock_agent: "bedrock",
+  agentcore_runtime: "bedrock-agentcore",
+  lambda_function: "lambda",
+  kms_key: "kms",
+  sqs_queue: "sqs",
+  sns_topic: "sns",
+};
+
 export const rowButton =
   "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-(--color-surface-subtle) focus-visible:bg-(--color-surface-subtle) focus-visible:outline-none";
 
@@ -78,11 +91,14 @@ export const rowButton =
 
 export function ResourcePicker({
   ws,
+  type = "s3_bucket",
   value,
   onChange,
   invalid,
 }: {
   ws: string;
+  /** What is picked: an S3 bucket or a DynamoDB table. */
+  type?: AwsResourceType;
   value: DraftResource | null;
   onChange: (r: DraftResource | null) => void;
   invalid?: boolean;
@@ -90,17 +106,43 @@ export function ResourcePicker({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim());
-  const list = useListGraphResourcesQuery({ ws, q: dq || undefined, service: "s3", limit: 200 }, { skip: !!value });
-  const buckets = useMemo(() => groupBuckets(list.data?.data ?? []), [list.data]);
+  const copy = RESOURCE_TYPES[type];
+  const workloadKind = "workloads" in copy ? copy.workloads : undefined;
+  const records = useListGraphResourcesQuery({ ws, q: dq || undefined, service: SERVICE[type], limit: 200 }, { skip: !!value || !!workloadKind });
+  // Agents and agent runtimes come from Discovery's workloads: IAM policies seldom name one.
+  const workloads = useListGraphWorkloadsQuery({ ws, q: dq || undefined, runtime_kind: workloadKind, limit: 200 }, { skip: !!value || !workloadKind });
+  const list = workloadKind ? workloads : records;
+  const buckets = useMemo(() => (type === "s3_bucket" ? groupBuckets(records.data?.data ?? []) : []), [records.data, type]);
+  // Any other type: one row per resource, its records grouped under it.
+  const tables = useMemo((): DraftResource[] => {
+    if (workloadKind) {
+      return (workloads.data?.data ?? []).map((w) => ({
+        provider: "aws",
+        resource_id: refId(w.ref),
+        resource_type: type,
+        name: w.name,
+        bucket: "",
+        arn: w.arn,
+        account_id: w.account?.id ?? "",
+        region: w.region ?? undefined,
+      }));
+    }
+    const rows = records.data?.data ?? [];
+    if (type === "dynamodb_table") return groupTables(rows);
+    if (type === "secretsmanager_secret") return groupSecrets(rows);
+    if (type === "ssm_parameter") return groupParameters(rows);
+    if (type === "bedrock_model") return groupModels(rows);
+    return groupSimple(type, rows);
+  }, [records.data, workloads.data, workloadKind, type]);
 
   if (value) {
     return (
       <div className="flex items-center gap-3 rounded-md border border-(--color-border-subtle) bg-(--color-surface-raised) px-3 py-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-(--color-text)">{value.bucket}</div>
+          <div className="truncate text-[13px] font-medium text-(--color-text)">{value.bucket || value.name}</div>
           <div className="truncate font-mono text-xs text-(--color-text-muted)">
             {value.arn}
-            {value.account_id ? ` · ${value.account_id}` : ""}
+            {value.account_id && !value.arn.includes(value.account_id) ? ` · ${value.account_id}` : ""}
           </div>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange(null)}>
@@ -118,36 +160,36 @@ export function ResourcePicker({
           type="button"
           role="combobox"
           aria-expanded={open}
-          aria-label="Choose an S3 bucket"
+          aria-label={copy.label}
           className={cn(
             "flex h-10 w-full items-center gap-2 rounded-md border bg-(--color-surface-raised) px-3 text-left text-[13px] shadow-xs transition-colors hover:bg-(--color-surface-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)",
             invalid ? "border-(--color-danger)" : "border-(--color-border-strong)",
           )}
         >
           <Search aria-hidden="true" className="size-4 shrink-0 text-(--color-text-muted)" />
-          <span className="flex-1 truncate text-(--color-text-muted)">Search for an S3 bucket</span>
+          <span className="flex-1 truncate text-(--color-text-muted)">{copy.search}</span>
           <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-(--color-text-muted)" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
         {/* Discovery filters server-side, so cmdk does not filter again. */}
         <Command shouldFilter={false}>
-          <CommandInput value={q} onValueChange={setQ} placeholder="Search for an S3 bucket" />
+          <CommandInput value={q} onValueChange={setQ} placeholder={copy.search} />
           <CommandList className="max-h-72">
             {list.isLoading || list.isFetching ? (
               <p role="status" className="px-3 py-6 text-center text-xs text-(--color-text-muted)">
-                Looking for buckets…
+                {copy.loading}
               </p>
             ) : list.isError ? (
               <p className="px-3 py-6 text-center text-xs text-(--color-danger-text)">
-                Buckets could not be read.{" "}
+                {copy.error}{" "}
                 <button type="button" className="font-medium underline" onClick={() => void list.refetch()}>
                   Retry
                 </button>
               </p>
-            ) : buckets.length === 0 ? (
+            ) : buckets.length + tables.length === 0 ? (
               <CommandEmpty>
-                {dq ? `No bucket matches “${dq}”.` : "No S3 bucket found yet. A bucket shows up here once one of your AWS policies mentions it."}
+                {dq ? `No ${copy.noun} matches “${dq}”.` : copy.empty}
               </CommandEmpty>
             ) : (
               <>
@@ -157,12 +199,30 @@ export function ResourcePicker({
                   </p>
                 ) : null}
                 <div className="p-1">
+                  {tables.map((t) => (
+                    <CommandItem
+                      key={t.records?.[0]?.id ?? t.arn}
+                      value={t.arn}
+                      onSelect={() => {
+                        onChange(t);
+                        setOpen(false);
+                      }}
+                      className="gap-3 px-2.5 py-2"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-(--color-text)">{t.name}</span>
+                        <span className="block truncate text-xs text-(--color-text-muted)">
+                          {[t.region ?? "every region", t.account_id].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                    </CommandItem>
+                  ))}
                   {buckets.map((b) => (
                     <CommandItem
                       key={b.bucket}
                       value={b.bucket}
                       onSelect={() => {
-                        onChange({ provider: "aws", resource_id: b.resource_id, name: b.bucket, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders });
+                        onChange({ provider: "aws", resource_id: b.resource_id, resource_type: "s3_bucket", name: b.bucket, bucket: b.bucket, arn: b.arn, account_id: b.account_id, records: b.records, folders: b.folders });
                         setOpen(false);
                       }}
                       className="gap-3 px-2.5 py-2"

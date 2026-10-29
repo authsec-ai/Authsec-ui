@@ -5,7 +5,7 @@
  * policy route renders "not available", never an error or an empty list.
  */
 
-import { useGetGraphCapabilitiesQuery, type PolicyCapabilities } from "@/app/api/igaGraphApi";
+import { useGetGraphCapabilitiesQuery, type AccessTypeView, type PolicyCapabilities } from "@/app/api/igaGraphApi";
 import { classifyGraphError } from "../../shared/graphErrors";
 
 export type PolicyGateState = "loading" | "on" | "off" | "error";
@@ -17,6 +17,14 @@ export interface PolicyCaps {
   caps: PolicyCapabilities | null;
   /** A flag is true only when the gate is on AND the feature is served. */
   feature: (name: "findings" | "proposals" | "export" | "iac" | "enforcement" | "slack" | "access_policies") => boolean;
+  /** The AWS resource types access policies take (`s3_bucket` from a backend that does not list them). */
+  accessResourceTypes: string[];
+  /** The types that take a block only. */
+  accessBlockOnly: string[];
+  /** Kubernetes access policies are served (migration 146). */
+  accessK8s: boolean;
+  /** Each type as the server describes it (absent from an older server). */
+  accessTypeViews: Record<string, AccessTypeView>;
   /** Why a feature is false, when the server said. */
   featureReason: (name: string) => string | null;
   /** Provider support: AWS supported, Kubernetes not in this release. */
@@ -30,11 +38,11 @@ export interface PolicyCaps {
  * shipped backend sends `{available, reason}`; a boolean is also accepted so an
  * older build reads correctly. `on` is false when the field is absent.
  */
-function accessPolicies(caps: PolicyCapabilities | null): { on: boolean; reason: string | null } {
+function accessPolicies(caps: PolicyCapabilities | null): { on: boolean; reason: string | null; types: string[]; blockOnly: string[] } {
   const v = caps?.access_policies;
-  if (v === undefined || v === null) return { on: false, reason: null };
-  if (typeof v === "boolean") return { on: v, reason: null };
-  return { on: v.available === true, reason: v.reason ?? null };
+  if (v === undefined || v === null) return { on: false, reason: null, types: ["s3_bucket"], blockOnly: [] };
+  if (typeof v === "boolean") return { on: v, reason: null, types: ["s3_bucket"], blockOnly: [] };
+  return { on: v.available === true, reason: v.reason ?? null, types: v.resource_types?.length ? v.resource_types : ["s3_bucket"], blockOnly: v.block_only ?? [] };
 }
 
 export function usePolicyCapabilities(ws: string): PolicyCaps {
@@ -51,6 +59,12 @@ export function usePolicyCapabilities(ws: string): PolicyCaps {
     reason: caps?.reason ?? (failure?.kind === "unavailable" ? failure.reason ?? null : null),
     caps,
     feature: (name) => state === "on" && (name === "access_policies" ? accessPolicies(caps).on : caps?.[name] === true),
+    accessResourceTypes: accessPolicies(caps).types,
+    accessBlockOnly: accessPolicies(caps).blockOnly,
+    accessK8s: !!(caps?.access_policies && typeof caps.access_policies === "object" && caps.access_policies.k8s?.available),
+    accessTypeViews: Object.fromEntries(
+      (caps?.access_policies && typeof caps.access_policies === "object" ? caps.access_policies.types ?? [] : []).map((v) => [v.type, v]),
+    ),
     featureReason: (name) =>
       name === "access_policies"
         ? accessPolicies(caps).reason ?? (caps?.access_policies !== undefined ? null : "Access policies are not available on this server yet.")

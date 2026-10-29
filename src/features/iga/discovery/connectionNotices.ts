@@ -5,8 +5,8 @@
 
 import type { Connection } from "@/app/api/connectionsApi";
 import type { ConsoleTone } from "@/components/console/status";
-
 import { surfaceLabel as azureSurfaceLabel } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
+
 import { readableSurface } from "../coverage/surfaceNames";
 import { K8S_SWEEP_SURFACE, gapName, neverProven, primaryOf, reasonCopy } from "../connections/connectionModel";
 import { surfaceStateText } from "../shared/labels";
@@ -57,9 +57,10 @@ export function connectionNotices(connections: Connection[], opts: { publishedVi
       out.push({ key: `${c.id}:graph`, tone: "info", label: "Publishing", text: `${name}: the graph is being built from the latest scan.`, href });
     }
     // On the published AWS lists the graph's own coverage summary says this, with
-    // its sheet. Azure has the same: AzureCoverageSummary, mounted once above the
-    // Discovery body, replaces this sentence with a one-line headline and a sheet.
-    if (!opts.publishedView && !opts.skipCoverage && c.provider !== "azure" && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
+    // its sheet. Azure gets this one closeable row like every other provider: its
+    // full-width strip above the lists was removed (1d1d9d9, abaa356) for taking
+    // too much room, not because its gaps stopped mattering.
+    if (!opts.publishedView && !opts.skipCoverage && (c.coverage.state === "partial" || c.coverage.state === "denied") && c.coverage.gaps.length) {
       const gaps = c.coverage.gaps
         .slice(0, 3)
         .map((g) =>

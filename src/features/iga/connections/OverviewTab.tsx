@@ -30,6 +30,7 @@ import {
   detailHref,
   discoveryLink,
   gapWords,
+  graphSentence,
   graphText,
   inventoryLagsHeartbeat,
   holdsLine,
@@ -161,27 +162,6 @@ function graphPill(c: Connection) {
   const g = graphText(c);
   const tone = c.graph.state === "published" ? "success" : c.graph.state === "failed" ? "danger" : c.graph.state === "publishing" ? "info" : "muted";
   return <ConnPill tone={tone}>{g.text}</ConnPill>;
-}
-
-function graphSentence(c: Connection): string {
-  switch (c.graph.state) {
-    case "published":
-      return `Discovery's Published view shows what AuthSec concluded${c.graph.rev != null ? ` at revision ${c.graph.rev}` : ""}.`;
-    case "publishing":
-      return "The graph is being built from the latest scan. The previous publication stays until it finishes.";
-    case "failed":
-      return c.graph.published_at
-        ? `The graph from ${ago(c.graph.published_at)} is still shown. Scan again to retry.`
-        : "Nothing from this account is in the graph yet. Scan again to retry.";
-    case "not_published":
-      return "Nothing from this account is in a publication yet, so the Published view in Discovery is empty for it.";
-    case "unrevisioned":
-      return "Kubernetes inventory is written as each sweep arrives. It has no numbered publication, and Discovery labels it by its sweep.";
-    case "not_applicable":
-      return "This source is not part of the graph. Discovery reads its latest collected results.";
-    default:
-      return "AuthSec reports a graph state this console does not recognise.";
-  }
 }
 
 /**
