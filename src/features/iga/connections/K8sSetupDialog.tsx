@@ -23,14 +23,14 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { resolveWorkspaceId } from "@/utils/workspace";
 
 import { ConnPill } from "./ConnPill";
-import { clusterNameProblem, connectedSource, enforceProblem, k8sSetupCommand } from "./k8sSetup";
+import { clusterNameProblem, connectedSource, k8sSetupCommand } from "./k8sSetup";
 
 const MUTED = "text-(--color-text-muted)";
 const WAIT_POLL_MS = 5_000;
 
 export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => void }) {
   const [clusterName, setClusterName] = useState("");
-  const [enforce, setEnforce] = useState("");
+  const [enforce, setEnforce] = useState(true);
   const [accessGraph, setAccessGraph] = useState(true);
   const [resync, setResync] = useState(true);
   const [token, setToken] = useState<string | null>(null);
@@ -49,11 +49,11 @@ export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolea
   const sources = useListDiscoverySourcesQuery({ kind: "k8s_webhook" }, { skip: !open, pollingInterval: token ? WAIT_POLL_MS : 0 });
   const connected = token ? connectedSource(sources.data, name) : undefined;
   const existing = !token ? connectedSource(sources.data, name) : undefined;
-  const problem = clusterNameProblem(name) ?? enforceProblem(enforce) ?? (workspaceId ? null : "Your session names no workspace. Sign in again.");
+  const problem = clusterNameProblem(name) ?? (workspaceId ? null : "Your session names no workspace. Sign in again.");
 
   const reset = () => {
     setClusterName("");
-    setEnforce("");
+    setEnforce(true);
     setAccessGraph(true);
     setResync(true);
     setToken(null);
@@ -79,7 +79,7 @@ export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolea
   };
 
   const command = token
-    ? k8sSetupCommand({ clusterName: name, controlPlaneUrl: config.VITE_API_URL, workspaceId, ingestToken: token, accessGraph, resync, enforceNamespaces: enforce })
+    ? k8sSetupCommand({ clusterName: name, controlPlaneUrl: config.VITE_API_URL, workspaceId, ingestToken: token, accessGraph, resync, enforce })
     : "";
 
   return (
@@ -110,15 +110,14 @@ export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolea
                 </p>
               ) : null}
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="k8s-enforce">Enforce in these namespaces (optional)</Label>
-              <Input id="k8s-enforce" value={enforce} placeholder="e.g. agents ml-platform" className="font-mono text-xs" onChange={(e) => setEnforce(e.target.value)} />
-              <p className={`text-xs ${MUTED}`}>
-                Lets the agent quarantine agents here once you turn enforcement on for the cluster. Empty installs discovery only; you can add it
-                later from the connection's Enforcement tab.
-              </p>
-            </div>
             <div className="space-y-2 text-xs">
+              <label className="flex items-start gap-2">
+                <input type="checkbox" className="mt-0.5" checked={enforce} onChange={(e) => setEnforce(e.target.checked)} />
+                <span>
+                  Let AuthSec enforce: quarantine agents in any namespace once you turn enforcement on for the cluster (never in kube-system or
+                  the agent&apos;s own namespace). Access policies are allowed role by role, when a policy needs one.
+                </span>
+              </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={accessGraph} onChange={(e) => setAccessGraph(e.target.checked)} />
                 Read the cluster's RBAC (the access graph, and what Kubernetes access policies act on)

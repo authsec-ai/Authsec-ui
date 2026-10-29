@@ -175,6 +175,8 @@ export interface AccessPolicyNotice {
   code: string;
   message: string;
   field?: string;
+  /** The refusal's own detail, e.g. k8s_agent_cannot_act's role and allowed_roles. */
+  detail?: Record<string, unknown>;
 }
 
 export interface AccessPolicyPreview {

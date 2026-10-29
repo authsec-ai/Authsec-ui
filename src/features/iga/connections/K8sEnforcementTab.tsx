@@ -28,6 +28,7 @@ import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 import { ConnPill } from "./ConnPill";
 import {
+  accessPoliciesOffReason,
   helmEnforcementCommand,
   helmRemoveRoleCommand,
   inUseText,
@@ -37,6 +38,7 @@ import {
   type EnforcementInUse,
   type PowerState,
 } from "./k8sEnforcement";
+import { allowedRoles } from "./k8sSetup";
 import { useCanAdminister } from "./permissions";
 
 const MUTED = "text-(--color-text-muted)";
@@ -96,7 +98,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const [turnedOff, setTurnedOff] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [install, setInstall] = useState({ quarantineNamespaces: "", bindingRoles: "", bindingNamespaces: "", clusterWide: false });
+  const [install, setInstall] = useState({ bindingRoles: "", clusterWide: false });
   const [ingestSecret, setIngestSecret] = useState("authsec-iga-ingest");
 
   const actuationState = source.data?.actuation_state;
@@ -116,6 +118,8 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
 
   const s = source.data;
   const st = k8sEnforcementState(s);
+  const allowed = allowedRoles(s);
+  const offReason = accessPoliciesOffReason(st, allowed);
   // Moving off a token given by hand: discovery must go back to the ingest token.
   const command = st.agent === "manual" ? { ...install, ingestSecret } : install;
   const problem = installProblem(command);
@@ -236,7 +240,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
             <span className="flex flex-wrap items-center gap-2">
               <Power state={st.accessPolicies} on="Can act" off="Off" waiting="Waiting for the agent" />
               <span className={`text-xs ${MUTED}`}>
-                Takes a ServiceAccount out of a role's bindings for a set time.{" "}
+                {offReason ?? "Takes a ServiceAccount out of a role's bindings for a set time."}{" "}
                 <Link to="/iga/policy/new?provider=k8s" className="text-(--color-primary-text) hover:underline">
                   Create policy
                 </Link>
@@ -273,15 +277,15 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
         {!canAdminister ? <p className={`mt-3 text-xs ${MUTED}`}>An administrator turns enforcement on.</p> : null}
         {st.agent === "ready" && !showSetup ? (
           <button type="button" onClick={() => setShowSetup(true)} className="mt-3 text-xs text-(--color-primary-text) hover:underline">
-            Change where the agent may act
+            Change what the agent may do
           </button>
         ) : null}
       </Panel>
 
       {setupOpen ? (
         <Panel
-          title={st.agent === "ready" ? "Change where the agent may act" : "Let the agent act"}
-          description="The one step only a cluster admin can take: write access for the agent, in the namespaces named here and nowhere else. AuthSec cannot grant it from the console."
+          title={st.agent === "ready" ? "Change what the agent may do" : "Let the agent act"}
+          description="The one step only a cluster admin can take: write access for the agent. Quarantine reaches every namespace except kube-system, kube-public, kube-node-lease and the agent's own; access policies only the roles named here. AuthSec cannot grant it from the console."
           actions={
             st.agent === "ready" ? (
               <Button size="sm" variant="outline" onClick={() => setShowSetup(false)}>
@@ -291,17 +295,19 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
           }
         >
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field id="ns" label="Quarantine may act in" hint="Namespaces, space-separated. Only these; never the agent's own.">
-                <Input id="ns" value={install.quarantineNamespaces} placeholder="e.g. agent-live-demo" onChange={(e) => setInstall({ ...install, quarantineNamespaces: e.target.value })} />
-              </Field>
-              <Field id="roles" label="Access policies may change bindings of" hint="Role or ClusterRole names. Empty keeps what the agent has now.">
-                <Input id="roles" value={install.bindingRoles} placeholder="e.g. llm-key-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
-              </Field>
-              <Field id="bns" label="…in RoleBindings of these namespaces" hint="The agent is granted bind on exactly the roles above, never escalate.">
-                <Input id="bns" value={install.bindingNamespaces} placeholder="e.g. agent-live-demo" onChange={(e) => setInstall({ ...install, bindingNamespaces: e.target.value })} />
-              </Field>
-            </div>
+            <Field
+              id="roles"
+              label="Also let access policies change bindings of"
+              hint={
+                <>
+                  Role or ClusterRole names, wherever they are bound.{" "}
+                  {allowed.length ? `Allowed now: ${allowed.join(", ")}.` : "None allowed yet."} The agent gets bind on exactly these roles, never on
+                  every role: that would let it make itself cluster-admin. A policy for another role offers this command for it.
+                </>
+              }
+            >
+              <Input id="roles" value={install.bindingRoles} placeholder="e.g. llm-key-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
+            </Field>
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={install.clusterWide} onChange={(e) => setInstall({ ...install, clusterWide: e.target.checked })} />
               Also ClusterRoleBindings (a role granted in every namespace)
@@ -316,7 +322,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
               </Field>
             ) : null}
             {problem ? <p className="text-xs text-(--color-warning-text)">{problem}</p> : null}
-            <Command label="Upgrade the agent" text={helmEnforcementCommand(command)} disabled={problem} />
+            <Command label="Upgrade the agent" text={helmEnforcementCommand(command, allowed)} disabled={problem} />
             <p className={`text-xs ${MUTED}`}>
               Within a minute of the upgrade the agent reports its powers here.
               {st.state === "off" ? " Then turn enforcement on above." : " It takes enforcement up on its own; there is no token to copy."}

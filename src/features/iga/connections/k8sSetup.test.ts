@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, clusterNameProblem, connectedSource, enforceProblem, k8sSetupCommand } from "./k8sSetup";
+import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, allowedRoles, clusterNameProblem, connectedSource, helmAllowRolesCommand, k8sSetupCommand } from "./k8sSetup";
 
 const setup = {
   clusterName: "prod-eks-us-east",
@@ -11,7 +11,7 @@ const setup = {
   ingestToken: "aid_abc",
   accessGraph: true,
   resync: true,
-  enforceNamespaces: "",
+  enforce: false,
 };
 
 describe("the one-time setup command", () => {
@@ -30,11 +30,10 @@ describe("the one-time setup command", () => {
     expect(cmd).not.toMatch(/\.\/charts|<[a-z-]+>/);
   });
 
-  it("adds the actuation role only when namespaces are named", () => {
-    const cmd = k8sSetupCommand({ ...setup, accessGraph: false, resync: false, enforceNamespaces: "agents, ml" });
+  it("gives the actuation role with nothing to list", () => {
+    const cmd = k8sSetupCommand({ ...setup, accessGraph: false, resync: false, enforce: true });
     expect(cmd).toContain('--set "roles={discovery,actuation}"');
-    expect(cmd).toContain('--set "actuation.namespaces=agents ml"');
-    expect(cmd).not.toMatch(/accessGraph|resync/);
+    expect(cmd).not.toMatch(/namespaces|accessGraph|resync/);
     expect(k8sSetupCommand(setup)).not.toContain("actuation");
   });
 });
@@ -47,10 +46,6 @@ describe("the cluster name", () => {
     expect(clusterNameProblem("a".repeat(64))).toMatch(/at most 63/);
     expect(clusterNameProblem("k3s-master")).toBeNull();
   });
-  it("never lets enforcement act in the agent's own namespace", () => {
-    expect(enforceProblem("agents authsec-system")).toMatch(/own namespace/);
-    expect(enforceProblem("")).toBeNull();
-  });
 });
 
 describe("waiting for the cluster", () => {
@@ -60,5 +55,22 @@ describe("waiting for the cluster", () => {
     expect(connectedSource(sources, "prod")?.id).toBe("agent");
     expect(connectedSource(sources, "staging")).toBeUndefined();
     expect(connectedSource(undefined, "prod")).toBeUndefined();
+  });
+});
+
+describe("allowing a role for access policies", () => {
+  it("reads the roles the agent reports", () => {
+    const src = (runtime: unknown) => ({ runtime }) as DiscoverySource;
+    expect(allowedRoles(src({ binding_roles: ["a", "b"] }))).toEqual(["a", "b"]);
+    expect(allowedRoles(src({}))).toEqual([]);
+    expect(allowedRoles(src(null))).toEqual([]);
+  });
+  it("adds the role to those already allowed, never to every role", () => {
+    const cmd = helmAllowRolesCommand(["pod-reader"], ["llm-key-reader", "pod-reader"]);
+    expect(cmd).toContain('--set "enforcement.bindings.roles=pod-reader llm-key-reader"');
+    expect(cmd).toContain("--set enforcement.bindings.enabled=true");
+    expect(cmd).toContain("--reset-then-reuse-values");
+    expect(cmd).not.toMatch(/clusterWide|namespaces/);
+    expect(helmAllowRolesCommand([], ["r"], true)).toContain("--set enforcement.bindings.clusterWide=true");
   });
 });

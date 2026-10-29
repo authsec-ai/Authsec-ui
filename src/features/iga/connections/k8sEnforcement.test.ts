@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { agentReadiness, helmEnforcementCommand, helmRemoveRoleCommand, inUseText, installProblem, k8sEnforcementState, statusLine } from "./k8sEnforcement";
+import { accessPoliciesOffReason, agentReadiness, helmEnforcementCommand, helmRemoveRoleCommand, inUseText, installProblem, k8sEnforcementState, statusLine } from "./k8sEnforcement";
 
 const src = (o: Partial<DiscoverySource>) => o as DiscoverySource;
 const managed = { runtime: { actuation_credential: "managed" } };
@@ -45,7 +45,7 @@ describe("whether the agent can take enforcement up", () => {
 });
 
 describe("the command that lets the agent act", () => {
-  const base = { quarantineNamespaces: "agent-live-demo, iga-demo", bindingRoles: "", bindingNamespaces: "", clusterWide: false };
+  const base = { bindingRoles: "", clusterWide: false };
 
   it("grants the role and namespaces; no token anywhere", () => {
     const helm = helmEnforcementCommand(base);
@@ -54,7 +54,8 @@ describe("the command that lets the agent act", () => {
     expect(helm).toMatch(/^helm upgrade authsec-iga-agent oci:\/\/docker-repo-public\.authnull\.com\/charts\/authsec-iga-agent --version \d+\.\d+\.\d+ -n authsec-system/);
     expect(helm).not.toContain("--reuse-values ");
     expect(helm).toContain('--set "roles={discovery,actuation}"');
-    expect(helm).toContain('--set "actuation.namespaces=agent-live-demo iga-demo"');
+    // Every namespace: nothing to list, and an earlier list is cleared.
+    expect(helm).toContain('--set actuation.namespaces=""');
     // A token given by hand would take precedence over the agent's own.
     expect(helm).toContain('--set actuation.existingSecret=""');
     expect(helm).not.toMatch(/authsec_act_|controlPlane|kubectl/);
@@ -68,19 +69,17 @@ describe("the command that lets the agent act", () => {
     expect(installProblem({ ...base, ingestSecret: " " })).toMatch(/ingest token/);
   });
 
-  it("turns access policies on only for the roles named", () => {
-    const helm = helmEnforcementCommand({ ...base, bindingRoles: "secret-reader", bindingNamespaces: "iga-test" });
+  it("adds roles to those the agent already allows, in every namespace", () => {
+    const helm = helmEnforcementCommand({ ...base, bindingRoles: "secret-reader" }, ["llm-key-reader"]);
     expect(helm).toContain("--set enforcement.bindings.enabled=true");
-    expect(helm).toContain('--set "enforcement.bindings.roles=secret-reader"');
-    expect(helm).toContain('--set "enforcement.bindings.namespaces=iga-test"');
+    expect(helm).toContain('--set "enforcement.bindings.roles=llm-key-reader secret-reader"');
+    expect(helm).toContain('--set enforcement.bindings.namespaces=""');
     expect(helm).not.toContain("clusterWide");
+    // Nothing named: the binding settings stay as the release has them.
+    expect(helmEnforcementCommand(base, ["llm-key-reader"])).not.toContain("bindings");
   });
 
-  it("says what is missing", () => {
-    expect(installProblem({ ...base, quarantineNamespaces: "" })).toMatch(/at least one namespace/);
-    expect(installProblem({ ...base, bindingRoles: "r" })).toMatch(/RoleBindings/);
-    expect(installProblem({ ...base, bindingRoles: "r", clusterWide: true })).toBeNull();
-    expect(installProblem({ ...base, quarantineNamespaces: "authsec-system" })).toMatch(/own namespace/);
+  it("needs nothing filled in", () => {
     expect(installProblem(base)).toBeNull();
   });
 });
@@ -98,5 +97,17 @@ describe("turning enforcement off", () => {
     // Turning bindings off as well would leave access policies off when the role
     // comes back (the release keeps --set values); the role alone removes the access.
     expect(cmd).not.toMatch(/bindings|controlPlane|kubectl/);
+  });
+});
+
+describe("why access policies are off", () => {
+  const on = k8sEnforcementState({ actuation_state: "on", enforcement_mode: "observe", enforcement_bindings: false } as DiscoverySource);
+  it("says no role is allowed yet, or that the switch is off", () => {
+    expect(accessPoliciesOffReason(on, [])).toMatch(/No role allowed yet/);
+    expect(accessPoliciesOffReason(on, ["llm-key-reader"])).toMatch(/Allowed for llm-key-reader, but binding changes are switched off/);
+  });
+  it("says nothing while they can act or enforcement is not on", () => {
+    expect(accessPoliciesOffReason(k8sEnforcementState({ actuation_state: "on", enforcement_mode: "observe", enforcement_bindings: true } as DiscoverySource), [])).toBeNull();
+    expect(accessPoliciesOffReason(k8sEnforcementState({ actuation_state: "off" } as DiscoverySource), [])).toBeNull();
   });
 });

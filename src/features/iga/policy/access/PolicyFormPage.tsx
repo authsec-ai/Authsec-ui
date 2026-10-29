@@ -46,6 +46,7 @@ import {
   CLOUD,
   PRESETS,
   accessBlurbs,
+  allowRoleOf,
   armParts,
   bodyOf,
   awsTypeOf,
@@ -69,6 +70,7 @@ import {
 } from "./model";
 import { EffectChip, PolicyChange } from "./parts";
 import { useAccessReadiness } from "./readiness";
+import { K8sAllowRole } from "./K8sAllowRole";
 import { K8sPicker } from "./K8sPickers";
 import { ResourcePicker, RolePicker } from "./Pickers";
 import { RESOURCE_TYPES, resourceTypeCopy, typeRules, type AwsResourceType, type ResourceTypeCopy } from "./resourceTypes";
@@ -731,7 +733,7 @@ export default function PolicyFormPage() {
                   {readiness.loading || (!aws && !draft.resource) ? null : k8s ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
                       <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-(--color-info-text)" />
-                      The cluster&rsquo;s agent makes the change. It must have enforcement.bindings on and list this role; the preview says if it does not.
+                      The cluster&rsquo;s agent makes the change, and must be allowed to change this role&rsquo;s bindings; if it is not yet, the preview gives the command that allows it.
                     </li>
                   ) : readiness.ready ? (
                     <li className="flex items-start gap-2 px-4 py-2.5 text-(--color-text)">
@@ -790,11 +792,15 @@ export default function PolicyFormPage() {
                     </li>
                   ) : null}
 
-                  {otherBlockers.map((b) => (
-                    <li key={`${b.code}:${b.message}`} role="alert" className="px-4 py-2.5 text-(--color-danger-text)">
-                      {b.message}
-                    </li>
-                  ))}
+                  {otherBlockers.map((b) => {
+                    const allow = allowRoleOf(b);
+                    return (
+                      <li key={`${b.code}:${b.message}`} role="alert" className="px-4 py-2.5 text-(--color-danger-text)">
+                        {b.message}
+                        {allow ? <K8sAllowRole role={allow.role} allowed={allow.allowed} /> : null}
+                      </li>
+                    );
+                  })}
                   {notes.map((w) => (
                     <li key={`${w.code}:${w.message}`} className="px-4 py-2.5 text-(--color-warning-text)">
                       {w.message}

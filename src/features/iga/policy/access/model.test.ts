@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   accessBlurbs,
+  allowRoleOf,
   azureNoDelete,
   bodyOf,
   bucketOf,
@@ -532,5 +533,17 @@ describe("resourcePolicyHref (UI-052)", () => {
   it("offers nothing the server does not take, or that no policy can name", () => {
     expect(resourcePolicyHref("r1", "arn:aws:sqs:us-east-1:220171243705:orders", "sqs_queue", all)).toBeNull();
     expect(resourcePolicyHref("r1", "arn:aws:apigateway:us-east-1::/apis/*", "apigateway", all)).toBeNull();
+  });
+});
+
+describe("allowing a Kubernetes role from the policy form", () => {
+  it("reads the role and the allowed roles off the agent's refusal", () => {
+    expect(allowRoleOf({ code: "k8s_agent_cannot_act", message: "m", detail: { role: "llm-key-reader", allowed_roles: ["pod-reader", 3] } })).toEqual({
+      role: "llm-key-reader",
+      allowed: ["pod-reader"],
+    });
+    // The agent cannot change bindings at all, or another blocker: no command.
+    expect(allowRoleOf({ code: "k8s_agent_cannot_act", message: "m" })).toBeNull();
+    expect(allowRoleOf({ code: "k8s_policy_conflict", message: "m", detail: { role: "r" } })).toBeNull();
   });
 });

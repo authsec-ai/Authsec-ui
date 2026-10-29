@@ -24,6 +24,7 @@ import type {
   AccessPolicy,
   AccessPolicyBody,
   AccessPolicyDetail,
+  AccessPolicyNotice,
   AccessPolicyStatus,
   AccessProvider,
   AccessResourceType,
@@ -903,4 +904,14 @@ export function holdersOf(g: GraphNeighbourhood | undefined): Holder[] {
     by.set(id, h);
   }
   return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/* ------------------------------- kubernetes -------------------------------- */
+
+/** The role to allow and those already allowed, when the blocker names them. */
+export function allowRoleOf(b: AccessPolicyNotice): { role: string; allowed: string[] } | null {
+  const role = b.detail?.role;
+  if (b.code !== "k8s_agent_cannot_act" || typeof role !== "string" || !role) return null;
+  const allowed = Array.isArray(b.detail?.allowed_roles) ? b.detail.allowed_roles.filter((r): r is string => typeof r === "string") : [];
+  return { role, allowed };
 }

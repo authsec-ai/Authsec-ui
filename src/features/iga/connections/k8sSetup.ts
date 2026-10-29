@@ -13,7 +13,7 @@ import type { DiscoverySource } from "@/app/api/discoveryApi";
 
 /** The published chart (an OCI registry, pulled anonymously) and the version this console was tested with. */
 export const IGA_AGENT_CHART = "oci://docker-repo-public.authnull.com/charts/authsec-iga-agent";
-export const IGA_AGENT_CHART_VERSION = "0.6.0";
+export const IGA_AGENT_CHART_VERSION = "0.6.1";
 
 /** `helm upgrade --install` of the published chart: the same line installs, re-runs and upgrades. */
 export const helmChartLine = (verb: "upgrade" | "upgrade --install") =>
@@ -29,15 +29,13 @@ export interface K8sSetup {
   accessGraph: boolean;
   /** Sweep existing workloads too, not only what is created after install. */
   resync: boolean;
-  /** Namespaces enforcement may act in; empty installs discovery only. */
-  enforceNamespaces: string;
+  /**
+   * Give the agent the actuation role: quarantine in every namespace (never
+   * kube-system and its peers, or the agent's own) once enforcement is turned
+   * on. Access policies are allowed role by role, when a policy needs one.
+   */
+  enforce: boolean;
 }
-
-const words = (v: string) =>
-  v
-    .split(/[\s,]+/)
-    .map((x) => x.trim())
-    .filter(Boolean);
 
 /** The cluster's name as the agent registers it: a DNS label, as Kubernetes names are. */
 const CLUSTER_NAME = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -54,14 +52,8 @@ export function connectedSource(sources: DiscoverySource[] | undefined, clusterN
   return sources?.find((s) => s.kind === "k8s_webhook" && s.self_registered && s.instance_id === `k8s:${clusterName}`);
 }
 
-/** What is wrong with the enforcement namespaces; null when nothing is. */
-export function enforceProblem(namespaces: string): string | null {
-  return words(namespaces).includes("authsec-system") ? "The agent's own namespace cannot be enforced in." : null;
-}
-
 /** The one-time setup command, every value filled in. */
 export function k8sSetupCommand(o: K8sSetup): string {
-  const ns = words(o.enforceNamespaces);
   const lines = [
     `${helmChartLine("upgrade --install")} --create-namespace`,
     `--set controlPlane.url=${o.controlPlaneUrl.replace(/\/+$/, "")}`,
@@ -72,6 +64,30 @@ export function k8sSetupCommand(o: K8sSetup): string {
   ];
   if (o.accessGraph) lines.push("--set accessGraph.enabled=true");
   if (o.resync) lines.push("--set resync.enabled=true");
-  if (ns.length) lines.push(`--set "roles={discovery,actuation}"`, `--set "actuation.namespaces=${ns.join(" ")}"`);
+  if (o.enforce) lines.push(`--set "roles={discovery,actuation}"`);
+  return lines.join(" \\\n  ");
+}
+
+/** The roles the cluster's agent says access policies may change (iga-agent 0.6.1+). */
+export function allowedRoles(s: DiscoverySource | undefined): string[] {
+  const rt = (s?.runtime ?? {}) as { binding_roles?: unknown };
+  return Array.isArray(rt.binding_roles) ? rt.binding_roles.filter((r): r is string => typeof r === "string") : [];
+}
+
+/**
+ * The upgrade that lets access policies change bindings of the roles named,
+ * on top of those already allowed (Helm replaces a list, so it is the union).
+ * `bind` is granted on exactly these names: never on every role, which would
+ * let the agent make itself cluster-admin.
+ */
+export function helmAllowRolesCommand(allowed: readonly string[], add: readonly string[], clusterWide = false): string {
+  const roles = [...new Set([...allowed, ...add].map((r) => r.trim()).filter(Boolean))];
+  const lines = [
+    `${helmChartLine("upgrade")} --reset-then-reuse-values`,
+    `--set "roles={discovery,actuation}"`,
+    "--set enforcement.bindings.enabled=true",
+    `--set "enforcement.bindings.roles=${roles.join(" ")}"`,
+  ];
+  if (clusterWide) lines.push("--set enforcement.bindings.clusterWide=true");
   return lines.join(" \\\n  ");
 }

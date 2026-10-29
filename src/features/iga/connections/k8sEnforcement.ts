@@ -109,14 +109,13 @@ const words = (v: string) =>
     .filter(Boolean);
 
 export interface EnforcementInstall {
-  /** Where quarantine may write NetworkPolicies. Empty: none. */
-  quarantineNamespaces: string;
   /**
-   * Roles whose bindings access policies may change. Empty leaves the agent's
-   * binding settings as the release has them (--reset-then-reuse-values).
+   * Roles access policies may change bindings of, ADDED to those the agent
+   * already reports (`allowed` in helmEnforcementCommand). Empty leaves the
+   * binding settings as the release has them.
    */
   bindingRoles: string;
-  bindingNamespaces: string;
+  /** Also ClusterRoleBindings, which grant a role in every namespace. */
   clusterWide: boolean;
   /**
    * Set when moving an agent off a token given by hand: the Secret holding its
@@ -132,11 +131,16 @@ export interface EnforcementInstall {
 // chart's defaults (iga-agent chart notes).
 const helmUpgrade = () => `${helmChartLine("upgrade")} --reset-then-reuse-values`;
 
-/** The upgrade that lets the agent act, keeping every other value the release was given. */
-export function helmEnforcementCommand(o: EnforcementInstall): string {
-  const ns = words(o.quarantineNamespaces);
-  const roles = words(o.bindingRoles);
-  const bns = words(o.bindingNamespaces);
+/**
+ * The upgrade that lets the agent act, keeping every other value the release
+ * was given. Nothing to list: quarantine reaches every namespace (the agent
+ * never acts in the cluster's own or its own), and access policies change
+ * RoleBindings wherever the named roles are bound. `allowed` is what the agent
+ * reports now: Helm replaces a list, so the roles are the union.
+ */
+export function helmEnforcementCommand(o: EnforcementInstall, allowed: readonly string[] = []): string {
+  const add = words(o.bindingRoles);
+  const roles = [...new Set([...allowed, ...add])];
   const lines = [
     helmUpgrade(),
     `--set "roles={discovery,actuation}"`,
@@ -144,15 +148,12 @@ export function helmEnforcementCommand(o: EnforcementInstall): string {
     // given by hand would take precedence.
     '--set actuation.existingSecret=""',
     '--set actuation.token=""',
-    `--set "actuation.namespaces=${ns.join(" ")}"`,
+    // Every namespace: an earlier release may have listed some.
+    '--set actuation.namespaces=""',
   ];
   if (o.ingestSecret?.trim()) lines.push(`--set controlPlane.existingSecret=${o.ingestSecret.trim()}`, "--set controlPlane.existingSecretKey=sourceToken");
-  if (roles.length) {
-    lines.push(
-      "--set enforcement.bindings.enabled=true",
-      `--set "enforcement.bindings.roles=${roles.join(" ")}"`,
-      `--set "enforcement.bindings.namespaces=${bns.join(" ")}"`,
-    );
+  if (add.length) {
+    lines.push("--set enforcement.bindings.enabled=true", `--set "enforcement.bindings.roles=${roles.join(" ")}"`, '--set enforcement.bindings.namespaces=""');
     if (o.clusterWide) lines.push("--set enforcement.bindings.clusterWide=true");
   }
   return lines.join(" \\\n  ");
@@ -160,12 +161,16 @@ export function helmEnforcementCommand(o: EnforcementInstall): string {
 
 /** What is missing before the command does what its fields say; null when nothing is. */
 export function installProblem(o: EnforcementInstall): string | null {
-  if (!words(o.quarantineNamespaces).length) return "Name at least one namespace quarantine may act in.";
-  if (words(o.bindingRoles).length && !words(o.bindingNamespaces).length && !o.clusterWide)
-    return "Name the namespaces whose RoleBindings access policies may change, or allow ClusterRoleBindings.";
-  if (words(o.quarantineNamespaces).includes("authsec-system")) return "The agent's own namespace cannot be quarantined.";
   if (o.ingestSecret !== undefined && !o.ingestSecret.trim()) return "Name the Secret that holds the agent's discovery ingest token.";
   return null;
+}
+
+/** Why access policies cannot act while quarantine can; null when they can, or nothing is on. */
+export function accessPoliciesOffReason(st: K8sEnforcementState, allowed: readonly string[]): string | null {
+  if (st.state !== "on" || st.quarantine !== "on" || st.accessPolicies === "on") return null;
+  return allowed.length
+    ? `Allowed for ${allowed.join(", ")}, but binding changes are switched off in the agent's chart.`
+    : "No role allowed yet. Create a policy and AuthSec offers the command for its role, or name roles under Change what the agent may do.";
 }
 
 /** What the server said is still in force when it refused to turn enforcement off. */
