@@ -84,7 +84,9 @@ export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolea
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
+      {/* One column that never grows past the dialog: the command's lines are long
+          and unbreakable, and must scroll inside their box, not widen the dialog. */}
+      <DialogContent className="max-h-[88vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Connect a Kubernetes cluster</DialogTitle>
           <DialogDescription>
