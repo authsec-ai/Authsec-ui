@@ -10,10 +10,11 @@
  */
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
+import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
 
 /** The published chart (an OCI registry, pulled anonymously) and the version this console was tested with. */
 export const IGA_AGENT_CHART = "oci://docker-repo-public.authnull.com/charts/authsec-iga-agent";
-export const IGA_AGENT_CHART_VERSION = "0.6.2";
+export const IGA_AGENT_CHART_VERSION = "0.6.3";
 
 /** `helm upgrade --install` of the published chart: the same line installs, re-runs and upgrades. */
 export const helmChartLine = (verb: "upgrade" | "upgrade --install") =>
@@ -82,7 +83,29 @@ export function allowedRoles(s: DiscoverySource | undefined): string[] {
   return Array.isArray(rt.binding_roles) ? rt.binding_roles.filter((r): r is string => typeof r === "string") : [];
 }
 
+/**
+ * The roles an installed agent older than removal receipts (0.6.1 and before)
+ * may have taken a subject out of: the named roles it reports, and the roles of
+ * this cluster's policies not yet ended. Passed as enforcement.bindings.
+ * legacyRoles when it moves to every role, so ending those policies still puts
+ * the subjects back -- an upgrade never loses anyone's access.
+ */
+export function legacyRoles(reported: readonly string[], policies: readonly AccessPolicy[] | undefined, cluster: string): string[] {
+  const out = new Set(reported.filter((r) => r !== "*"));
+  for (const p of policies ?? []) {
+    if (p.resource.provider !== "k8s" || p.resource.account_id !== cluster || p.status === "ended" || p.status === "scheduled") continue;
+    const role = p.resource.name.split("/").pop();
+    if (role) out.add(role);
+  }
+  return [...out].sort();
+}
+
+/** The flag that keeps an older agent's removals restorable; nothing when there are none. */
+export const legacyRolesFlag = (legacy: readonly string[]) => (legacy.length ? [`--set "enforcement.bindings.legacyRoles=${legacy.join(" ")}"`] : []);
+
 /** The one upgrade that lets an installed agent's access policies act on every role. */
-export function helmEveryRoleCommand(): string {
-  return [`${helmChartLine("upgrade")} --reset-then-reuse-values`, `--set "roles={discovery,actuation}"`, ...EVERY_ROLE].join(" \\\n  ");
+export function helmEveryRoleCommand(legacy: readonly string[] = []): string {
+  return [`${helmChartLine("upgrade")} --reset-then-reuse-values`, `--set "roles={discovery,actuation}"`, ...EVERY_ROLE, ...legacyRolesFlag(legacy)].join(
+    " \\\n  ",
+  );
 }

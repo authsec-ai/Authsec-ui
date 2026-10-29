@@ -38,7 +38,10 @@ import {
   type EnforcementInUse,
   type PowerState,
 } from "./k8sEnforcement";
-import { allowedRoles } from "./k8sSetup";
+import { useListAccessPoliciesQuery } from "@/app/api/igaAccessPoliciesApi";
+import { getWorkspaceId } from "@/utils/workspace";
+
+import { allowedRoles, legacyRoles } from "./k8sSetup";
 import { useCanAdminister } from "./permissions";
 
 const MUTED = "text-(--color-text-muted)";
@@ -91,6 +94,8 @@ type Confirm = "on" | "rotate" | "off" | null;
 export function K8sEnforcementTab({ c }: { c: Connection }) {
   const [pending, setPending] = useState(false);
   const source = useGetDiscoverySourceQuery(c.id, { pollingInterval: pending ? PENDING_POLL_MS : 0 });
+  // The cluster's Kubernetes policies: their roles keep an older agent's removals restorable across the upgrade.
+  const policies = useListAccessPoliciesQuery({ ws: getWorkspaceId() ?? "", provider: "k8s" });
   const canAdminister = useCanAdminister();
   const [enable, enabling] = useEnableActuationMutation();
   const [disable, disabling] = useDisableActuationMutation();
@@ -120,7 +125,8 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const allowed = allowedRoles(s);
   const offReason = accessPoliciesOffReason(st, allowed);
   // Moving off a token given by hand: discovery must go back to the ingest token.
-  const command = st.agent === "manual" ? { ingestSecret } : {};
+  const legacy = legacyRoles(allowed, policies.data?.data, s.cluster_name);
+  const command = st.agent === "manual" ? { ingestSecret, legacyRoles: legacy } : { legacyRoles: legacy };
   const problem = installProblem(command);
   const busy = enabling.isLoading || disabling.isLoading;
   // The command is the way forward whenever the agent cannot take enforcement up.

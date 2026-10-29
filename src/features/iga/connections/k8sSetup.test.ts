@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, allowedRoles, clusterNameProblem, connectedSource, helmEveryRoleCommand, k8sSetupCommand } from "./k8sSetup";
+import type { AccessPolicy } from "@/app/api/igaAccessPoliciesApi";
+
+import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, allowedRoles, clusterNameProblem, connectedSource, helmEveryRoleCommand, k8sSetupCommand, legacyRoles } from "./k8sSetup";
 
 const setup = {
   clusterName: "prod-eks-us-east",
@@ -73,5 +75,24 @@ describe("allowing a role for access policies", () => {
     expect(cmd).toContain('--set "enforcement.bindings.roles=*"');
     // An earlier namespace list is cleared: every namespace.
     expect(cmd).toContain('--set enforcement.bindings.namespaces=""');
+  });
+});
+
+describe("upgrading an agent to every role without losing anyone's access", () => {
+  const policy = (name: string, cluster: string, status: string) =>
+    ({ status, resource: { provider: "k8s", account_id: cluster, name } }) as unknown as AccessPolicy;
+  it("keeps the roles the old agent was limited to and those live policies hold", () => {
+    const pols = [
+      policy("agent-live-demo/llm-key-reader", "k3s-master", "active"),
+      policy("research-lab/research-key-reader", "k3s-master", "ending"),
+      policy("ns/done-role", "k3s-master", "ended"),
+      policy("ns/other-cluster", "elsewhere", "active"),
+    ];
+    expect(legacyRoles(["llm-key-reader", "*"], pols, "k3s-master")).toEqual(["llm-key-reader", "research-key-reader"]);
+    expect(legacyRoles([], undefined, "k3s-master")).toEqual([]);
+  });
+  it("passes them as legacyRoles, and nothing when there are none", () => {
+    expect(helmEveryRoleCommand(["llm-key-reader"])).toContain('--set "enforcement.bindings.legacyRoles=llm-key-reader"');
+    expect(helmEveryRoleCommand()).not.toContain("legacyRoles");
   });
 });

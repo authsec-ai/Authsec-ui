@@ -797,7 +797,7 @@ export default function PolicyFormPage() {
                     return (
                       <li key={`${b.code}:${b.message}`} role="alert" className="px-4 py-2.5 text-(--color-danger-text)">
                         {b.message}
-                        {allow ? <K8sAllowRole role={allow.role} /> : null}
+                        {allow ? <K8sAllowRole role={allow.role} allowed={allow.allowed} /> : null}
                       </li>
                     );
                   })}

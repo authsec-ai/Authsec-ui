@@ -68,6 +68,11 @@ describe("the command that lets the agent act", () => {
     expect(installProblem({ ...base, ingestSecret: " " })).toMatch(/ingest token/);
   });
 
+  it("keeps an older agent's removals restorable", () => {
+    expect(helmEnforcementCommand({ legacyRoles: ["llm-key-reader"] })).toContain('--set "enforcement.bindings.legacyRoles=llm-key-reader"');
+    expect(helmEnforcementCommand(base)).not.toContain("legacyRoles");
+  });
+
   it("lets access policies act on every role, in every namespace", () => {
     const helm = helmEnforcementCommand(base);
     expect(helm).toContain("--set enforcement.bindings.enabled=true");

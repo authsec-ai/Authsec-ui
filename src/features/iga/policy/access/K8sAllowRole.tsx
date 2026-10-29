@@ -10,8 +10,9 @@ import { Copy } from "lucide-react";
 import { helmEveryRoleCommand } from "@/features/iga/connections/k8sSetup";
 import { copyToClipboard } from "@/lib/clipboard";
 
-export function K8sAllowRole({ role }: { role: string }) {
-  const cmd = helmEveryRoleCommand();
+export function K8sAllowRole({ role, allowed }: { role: string; allowed: string[] }) {
+  // The roles the agent was limited to: its removals there stay restorable.
+  const cmd = helmEveryRoleCommand(allowed);
   return (
     <div className="mt-2 space-y-1 text-(--color-text)">
       <div className="flex items-center justify-between">

@@ -22,7 +22,7 @@
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { EVERY_ROLE, helmChartLine } from "./k8sSetup";
+import { EVERY_ROLE, helmChartLine, legacyRolesFlag } from "./k8sSetup";
 
 export type PowerState = "on" | "off" | "not_reported";
 
@@ -110,6 +110,8 @@ export interface EnforcementInstall {
    * the agent hands over its own.
    */
   ingestSecret?: string;
+  /** legacyRoles (k8sSetup.ts): an older agent's removals stay restorable. */
+  legacyRoles?: readonly string[];
 }
 
 // The published chart at the console's version; --reset-then-reuse-values, not
@@ -133,6 +135,7 @@ export function helmEnforcementCommand(o: EnforcementInstall = {}): string {
     '--set actuation.token=""',
     '--set actuation.namespaces=""',
     ...EVERY_ROLE,
+    ...legacyRolesFlag(o.legacyRoles ?? []),
   ];
   if (o.ingestSecret?.trim()) lines.push(`--set controlPlane.existingSecret=${o.ingestSecret.trim()}`, "--set controlPlane.existingSecretKey=sourceToken");
   return lines.join(" \\\n  ");
