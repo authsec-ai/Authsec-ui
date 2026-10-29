@@ -13,7 +13,7 @@ import type { DiscoverySource } from "@/app/api/discoveryApi";
 
 /** The published chart (an OCI registry, pulled anonymously) and the version this console was tested with. */
 export const IGA_AGENT_CHART = "oci://docker-repo-public.authnull.com/charts/authsec-iga-agent";
-export const IGA_AGENT_CHART_VERSION = "0.6.1";
+export const IGA_AGENT_CHART_VERSION = "0.6.2";
 
 /** `helm upgrade --install` of the published chart: the same line installs, re-runs and upgrades. */
 export const helmChartLine = (verb: "upgrade" | "upgrade --install") =>
@@ -30,9 +30,9 @@ export interface K8sSetup {
   /** Sweep existing workloads too, not only what is created after install. */
   resync: boolean;
   /**
-   * Give the agent the actuation role: quarantine in every namespace (never
-   * kube-system and its peers, or the agent's own) once enforcement is turned
-   * on. Access policies are allowed role by role, when a policy needs one.
+   * Give the agent the actuation role, once enforcement is turned on:
+   * quarantine in every namespace and access policies on every role (never
+   * kube-system and its peers, the agent's own namespace, or system: roles).
    */
   enforce: boolean;
 }
@@ -64,9 +64,17 @@ export function k8sSetupCommand(o: K8sSetup): string {
   ];
   if (o.accessGraph) lines.push("--set accessGraph.enabled=true");
   if (o.resync) lines.push("--set resync.enabled=true");
-  if (o.enforce) lines.push(`--set "roles={discovery,actuation}"`);
+  if (o.enforce) lines.push(`--set "roles={discovery,actuation}"`, ...EVERY_ROLE);
   return lines.join(" \\\n  ");
 }
+
+/**
+ * Access policies on every role, wherever it is bound (iga-agent 0.6.2+). The
+ * agent then holds `bind` on every role, so it bounds itself: it puts back only
+ * a subject it recorded removing, and never touches system: roles or the
+ * cluster's own namespaces.
+ */
+export const EVERY_ROLE = ["--set enforcement.bindings.enabled=true", '--set "enforcement.bindings.roles=*"', '--set enforcement.bindings.namespaces=""'];
 
 /** The roles the cluster's agent says access policies may change (iga-agent 0.6.1+). */
 export function allowedRoles(s: DiscoverySource | undefined): string[] {
@@ -74,20 +82,7 @@ export function allowedRoles(s: DiscoverySource | undefined): string[] {
   return Array.isArray(rt.binding_roles) ? rt.binding_roles.filter((r): r is string => typeof r === "string") : [];
 }
 
-/**
- * The upgrade that lets access policies change bindings of the roles named,
- * on top of those already allowed (Helm replaces a list, so it is the union).
- * `bind` is granted on exactly these names: never on every role, which would
- * let the agent make itself cluster-admin.
- */
-export function helmAllowRolesCommand(allowed: readonly string[], add: readonly string[], clusterWide = false): string {
-  const roles = [...new Set([...allowed, ...add].map((r) => r.trim()).filter(Boolean))];
-  const lines = [
-    `${helmChartLine("upgrade")} --reset-then-reuse-values`,
-    `--set "roles={discovery,actuation}"`,
-    "--set enforcement.bindings.enabled=true",
-    `--set "enforcement.bindings.roles=${roles.join(" ")}"`,
-  ];
-  if (clusterWide) lines.push("--set enforcement.bindings.clusterWide=true");
-  return lines.join(" \\\n  ");
+/** The one upgrade that lets an installed agent's access policies act on every role. */
+export function helmEveryRoleCommand(): string {
+  return [`${helmChartLine("upgrade")} --reset-then-reuse-values`, `--set "roles={discovery,actuation}"`, ...EVERY_ROLE].join(" \\\n  ");
 }

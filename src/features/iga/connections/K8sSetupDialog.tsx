@@ -114,8 +114,9 @@ export function K8sSetupDialog({ open, onOpenChange, onCreated }: { open: boolea
               <label className="flex items-start gap-2">
                 <input type="checkbox" className="mt-0.5" checked={enforce} onChange={(e) => setEnforce(e.target.checked)} />
                 <span>
-                  Let AuthSec enforce: quarantine agents in any namespace once you turn enforcement on for the cluster (never in kube-system or
-                  the agent&apos;s own namespace). Access policies are allowed role by role, when a policy needs one.
+                  Let AuthSec enforce, once you turn enforcement on for the cluster: quarantine agents in any namespace, and access policies on
+                  any role they hold, for agents deployed now or later. Never in kube-system or the agent&apos;s own namespace, or on system:
+                  roles.
                 </span>
               </label>
               <label className="flex items-center gap-2">

@@ -98,7 +98,6 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const [turnedOff, setTurnedOff] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [install, setInstall] = useState({ bindingRoles: "", clusterWide: false });
   const [ingestSecret, setIngestSecret] = useState("authsec-iga-ingest");
 
   const actuationState = source.data?.actuation_state;
@@ -121,7 +120,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const allowed = allowedRoles(s);
   const offReason = accessPoliciesOffReason(st, allowed);
   // Moving off a token given by hand: discovery must go back to the ingest token.
-  const command = st.agent === "manual" ? { ...install, ingestSecret } : install;
+  const command = st.agent === "manual" ? { ingestSecret } : {};
   const problem = installProblem(command);
   const busy = enabling.isLoading || disabling.isLoading;
   // The command is the way forward whenever the agent cannot take enforcement up.
@@ -285,7 +284,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
       {setupOpen ? (
         <Panel
           title={st.agent === "ready" ? "Change what the agent may do" : "Let the agent act"}
-          description="The one step only a cluster admin can take: write access for the agent. Quarantine reaches every namespace except kube-system, kube-public, kube-node-lease and the agent's own; access policies only the roles named here. AuthSec cannot grant it from the console."
+          description="The one step only a cluster admin can take: write access for the agent, run once. Quarantine then reaches every namespace and access policies every role, for agents deployed now or later; never kube-system, kube-public, kube-node-lease, the agent's own namespace or system: roles. AuthSec cannot grant it from the console."
           actions={
             st.agent === "ready" ? (
               <Button size="sm" variant="outline" onClick={() => setShowSetup(false)}>
@@ -295,23 +294,6 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
           }
         >
           <div className="space-y-4">
-            <Field
-              id="roles"
-              label="Also let access policies change bindings of"
-              hint={
-                <>
-                  Role or ClusterRole names, wherever they are bound.{" "}
-                  {allowed.length ? `Allowed now: ${allowed.join(", ")}.` : "None allowed yet."} The agent gets bind on exactly these roles, never on
-                  every role: that would let it make itself cluster-admin. A policy for another role offers this command for it.
-                </>
-              }
-            >
-              <Input id="roles" value={install.bindingRoles} placeholder="e.g. llm-key-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
-            </Field>
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={install.clusterWide} onChange={(e) => setInstall({ ...install, clusterWide: e.target.checked })} />
-              Also ClusterRoleBindings (a role granted in every namespace)
-            </label>
             {st.agent === "manual" ? (
               <Field
                 id="ingest"
@@ -322,7 +304,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
               </Field>
             ) : null}
             {problem ? <p className="text-xs text-(--color-warning-text)">{problem}</p> : null}
-            <Command label="Upgrade the agent" text={helmEnforcementCommand(command, allowed)} disabled={problem} />
+            <Command label="Upgrade the agent" text={helmEnforcementCommand(command)} disabled={problem} />
             <p className={`text-xs ${MUTED}`}>
               Within a minute of the upgrade the agent reports its powers here.
               {st.state === "off" ? " Then turn enforcement on above." : " It takes enforcement up on its own; there is no token to copy."}

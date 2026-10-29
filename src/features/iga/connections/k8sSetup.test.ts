@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, allowedRoles, clusterNameProblem, connectedSource, helmAllowRolesCommand, k8sSetupCommand } from "./k8sSetup";
+import { IGA_AGENT_CHART, IGA_AGENT_CHART_VERSION, allowedRoles, clusterNameProblem, connectedSource, helmEveryRoleCommand, k8sSetupCommand } from "./k8sSetup";
 
 const setup = {
   clusterName: "prod-eks-us-east",
@@ -30,11 +30,13 @@ describe("the one-time setup command", () => {
     expect(cmd).not.toMatch(/\.\/charts|<[a-z-]+>/);
   });
 
-  it("gives the actuation role with nothing to list", () => {
+  it("enforces on every namespace and every role, with nothing to list", () => {
     const cmd = k8sSetupCommand({ ...setup, accessGraph: false, resync: false, enforce: true });
     expect(cmd).toContain('--set "roles={discovery,actuation}"');
-    expect(cmd).not.toMatch(/namespaces|accessGraph|resync/);
-    expect(k8sSetupCommand(setup)).not.toContain("actuation");
+    expect(cmd).toContain("--set enforcement.bindings.enabled=true");
+    expect(cmd).toContain('--set "enforcement.bindings.roles=*"');
+    expect(cmd).not.toMatch(/accessGraph|resync|actuation\.namespaces=[a-z]/);
+    expect(k8sSetupCommand(setup)).not.toMatch(/actuation|bindings/);
   });
 });
 
@@ -65,12 +67,11 @@ describe("allowing a role for access policies", () => {
     expect(allowedRoles(src({}))).toEqual([]);
     expect(allowedRoles(src(null))).toEqual([]);
   });
-  it("adds the role to those already allowed, never to every role", () => {
-    const cmd = helmAllowRolesCommand(["pod-reader"], ["llm-key-reader", "pod-reader"]);
-    expect(cmd).toContain('--set "enforcement.bindings.roles=pod-reader llm-key-reader"');
-    expect(cmd).toContain("--set enforcement.bindings.enabled=true");
+  it("switches an installed agent to every role in one upgrade", () => {
+    const cmd = helmEveryRoleCommand();
     expect(cmd).toContain("--reset-then-reuse-values");
-    expect(cmd).not.toMatch(/clusterWide|namespaces/);
-    expect(helmAllowRolesCommand([], ["r"], true)).toContain("--set enforcement.bindings.clusterWide=true");
+    expect(cmd).toContain('--set "enforcement.bindings.roles=*"');
+    // An earlier namespace list is cleared: every namespace.
+    expect(cmd).toContain('--set enforcement.bindings.namespaces=""');
   });
 });

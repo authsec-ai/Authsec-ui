@@ -22,7 +22,7 @@
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-import { helmChartLine } from "./k8sSetup";
+import { EVERY_ROLE, helmChartLine } from "./k8sSetup";
 
 export type PowerState = "on" | "off" | "not_reported";
 
@@ -102,21 +102,7 @@ export function statusLine(st: K8sEnforcementState, agentVersion: string): strin
   }
 }
 
-const words = (v: string) =>
-  v
-    .split(/[\s,]+/)
-    .map((x) => x.trim())
-    .filter(Boolean);
-
 export interface EnforcementInstall {
-  /**
-   * Roles access policies may change bindings of, ADDED to those the agent
-   * already reports (`allowed` in helmEnforcementCommand). Empty leaves the
-   * binding settings as the release has them.
-   */
-  bindingRoles: string;
-  /** Also ClusterRoleBindings, which grant a role in every namespace. */
-  clusterWide: boolean;
   /**
    * Set when moving an agent off a token given by hand: the Secret holding its
    * discovery ingest token (key sourceToken). The earlier Enforcement command
@@ -133,14 +119,11 @@ const helmUpgrade = () => `${helmChartLine("upgrade")} --reset-then-reuse-values
 
 /**
  * The upgrade that lets the agent act, keeping every other value the release
- * was given. Nothing to list: quarantine reaches every namespace (the agent
- * never acts in the cluster's own or its own), and access policies change
- * RoleBindings wherever the named roles are bound. `allowed` is what the agent
- * reports now: Helm replaces a list, so the roles are the union.
+ * was given. Nothing to list: quarantine reaches every namespace and access
+ * policies every role (never the cluster's own namespaces, the agent's, or
+ * system: roles); earlier lists are cleared.
  */
-export function helmEnforcementCommand(o: EnforcementInstall, allowed: readonly string[] = []): string {
-  const add = words(o.bindingRoles);
-  const roles = [...new Set([...allowed, ...add])];
+export function helmEnforcementCommand(o: EnforcementInstall = {}): string {
   const lines = [
     helmUpgrade(),
     `--set "roles={discovery,actuation}"`,
@@ -148,14 +131,10 @@ export function helmEnforcementCommand(o: EnforcementInstall, allowed: readonly 
     // given by hand would take precedence.
     '--set actuation.existingSecret=""',
     '--set actuation.token=""',
-    // Every namespace: an earlier release may have listed some.
     '--set actuation.namespaces=""',
+    ...EVERY_ROLE,
   ];
   if (o.ingestSecret?.trim()) lines.push(`--set controlPlane.existingSecret=${o.ingestSecret.trim()}`, "--set controlPlane.existingSecretKey=sourceToken");
-  if (add.length) {
-    lines.push("--set enforcement.bindings.enabled=true", `--set "enforcement.bindings.roles=${roles.join(" ")}"`, '--set enforcement.bindings.namespaces=""');
-    if (o.clusterWide) lines.push("--set enforcement.bindings.clusterWide=true");
-  }
   return lines.join(" \\\n  ");
 }
 
@@ -169,8 +148,8 @@ export function installProblem(o: EnforcementInstall): string | null {
 export function accessPoliciesOffReason(st: K8sEnforcementState, allowed: readonly string[]): string | null {
   if (st.state !== "on" || st.quarantine !== "on" || st.accessPolicies === "on") return null;
   return allowed.length
-    ? `Allowed for ${allowed.join(", ")}, but binding changes are switched off in the agent's chart.`
-    : "No role allowed yet. Create a policy and AuthSec offers the command for its role, or name roles under Change what the agent may do.";
+    ? "Binding changes are switched off in the agent's chart. Run the command under Change what the agent may do."
+    : "Not switched on for this agent yet. Run the command under Change what the agent may do, once: it covers every role.";
 }
 
 /** What the server said is still in force when it refused to turn enforcement off. */
