@@ -90,10 +90,11 @@ describe("turning enforcement off", () => {
     );
     expect(inUseText(undefined)).toMatch(/could not be turned off/);
   });
-  it("offers to remove the role, and nothing else is needed", () => {
+  it("offers to remove the role, and nothing else", () => {
     const cmd = helmRemoveRoleCommand("");
     expect(cmd).toContain('--set "roles={discovery}"');
-    expect(cmd).toContain("--set enforcement.bindings.enabled=false");
-    expect(cmd).not.toMatch(/controlPlane|kubectl/);
+    // Turning bindings off as well would leave access policies off when the role
+    // comes back (the release keeps --set values); the role alone removes the access.
+    expect(cmd).not.toMatch(/bindings|controlPlane|kubectl/);
   });
 });

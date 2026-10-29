@@ -112,7 +112,10 @@ export interface EnforcementInstall {
   chartRef: string;
   /** Where quarantine may write NetworkPolicies. Empty: none. */
   quarantineNamespaces: string;
-  /** Roles whose bindings access policies may change. Empty: access policies off. */
+  /**
+   * Roles whose bindings access policies may change. Empty leaves the agent's
+   * binding settings as the release has them (--reset-then-reuse-values).
+   */
   bindingRoles: string;
   bindingNamespaces: string;
   clusterWide: boolean;
@@ -183,7 +186,12 @@ export function inUseText(u: EnforcementInUse | undefined): string {
   return `Still in force on this cluster: ${parts.join(", ")}. Turned off now, the agent could not undo them.`;
 }
 
-/** Optional after turning off: take the agent's write access away too. */
+/**
+ * Optional after turning off: take the agent's write access away too. The role
+ * alone: without it the chart grants no write at all, binding changes included,
+ * and the binding settings stay in the release, so giving the role back
+ * restores them instead of leaving access policies off.
+ */
 export function helmRemoveRoleCommand(chartRef: string): string {
-  return [helmUpgrade(chartRef), `--set "roles={discovery}"`, "--set enforcement.bindings.enabled=false"].join(" \\\n  ");
+  return [helmUpgrade(chartRef), `--set "roles={discovery}"`].join(" \\\n  ");
 }

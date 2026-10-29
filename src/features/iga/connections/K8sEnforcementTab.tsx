@@ -299,7 +299,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
               <Field id="chart" label="Chart" hint="Where your deployment publishes the iga-agent chart (0.6.0 or later). Run from the iga-agent repo for the default.">
                 <Input id="chart" value={install.chartRef} onChange={(e) => setInstall({ ...install, chartRef: e.target.value })} />
               </Field>
-              <Field id="roles" label="Access policies may change bindings of" hint="Role or ClusterRole names. Empty leaves access policies off.">
+              <Field id="roles" label="Access policies may change bindings of" hint="Role or ClusterRole names. Empty keeps what the agent has now.">
                 <Input id="roles" value={install.bindingRoles} placeholder="e.g. llm-key-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
               </Field>
               <Field id="bns" label="…in RoleBindings of these namespaces" hint="The agent is granted bind on exactly the roles above, never escalate.">
