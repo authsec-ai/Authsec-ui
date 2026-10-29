@@ -1,13 +1,12 @@
 /**
  * Add a connection: the provider picker, then that provider's own setup.
  * The setup flows are the existing ones, unchanged — AWS Quick Create / role
- * ARN, Google Cloud, the Kubernetes agent install, GitHub App setup — and
+ * ARN, Google Cloud, the Kubernetes one-command setup (K8sSetupDialog), GitHub App setup — and
  * after a successful add the list refetches.
  */
 
 import { toast } from "react-hot-toast";
 
-import { DeployCollectorWizard } from "@/features/discovery/DeployCollectorWizard";
 import { GitHubSetupWizard } from "@/features/discovery/GitHubSetupWizard";
 import { CloudProviderPicker, type PickerProvider } from "@/features/discovery/cloud/CloudProviderPicker";
 import { AWSOnboardingWizard } from "@/features/discovery/cloud/aws/AWSOnboardingWizard";
@@ -15,6 +14,8 @@ import { AzureOnboardingWizard } from "@/features/discovery/cloud/azure/AzureOnb
 import { GCPOnboardingWizard } from "@/features/discovery/cloud/gcp/GCPOnboardingWizard";
 
 import type { ConnectionProvider } from "@/app/api/connectionsApi";
+
+import { K8sSetupDialog } from "./K8sSetupDialog";
 
 export type Wizard = ConnectionProvider | null;
 
@@ -46,7 +47,7 @@ export function AddConnectionDialogs({
       <AWSOnboardingWizard open={wizard === "aws"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <AzureOnboardingWizard open={wizard === "azure"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <GCPOnboardingWizard open={wizard === "gcp"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
-      <DeployCollectorWizard open={wizard === "k8s"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
+      <K8sSetupDialog open={wizard === "k8s"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
       <GitHubSetupWizard
         open={wizard === "github"}
         onOpenChange={(o) => !o && close()}

@@ -648,6 +648,11 @@ export const discoveryApi = baseApi.injectEndpoints({
       query: ({ id }) => ({ url: `/authsec/discovery/agents/${id}/unquarantine`, method: "POST", body: {} }),
       invalidatesTags: (_r, _e, { id }) => [{ type: "DiscoveredAgent", id }, "DiscoveredAgent"],
     }),
+    // An ingest token for a new agent (discovery:admin). The plaintext comes back
+    // once and is never stored; only its prefix is listed afterwards.
+    mintIngestToken: builder.mutation<{ id: string; token: string; token_prefix: string }, { label: string }>({
+      query: (body) => ({ url: "/authsec/discovery/ingest-tokens", method: "POST", body }),
+    }),
     // Turns enforcement on, or rotates it (governance:admin). delivery "agent": the
     // cluster's agent hands over its own credential on its next heartbeat, so no
     // token is shown or copied anywhere.
@@ -937,6 +942,7 @@ export const {
   useQuarantineAgentMutation,
   useUnquarantineAgentMutation,
   useEnableActuationMutation,
+  useMintIngestTokenMutation,
   useDisableActuationMutation,
   useGetGitHubAppQuery,
   useDescribeGitHubAppQuery,
@@ -1055,25 +1061,6 @@ export type WorkloadKind =
   | "CronJob"
   | "Pod";
 
-export const WORKLOAD_KINDS: WorkloadKind[] = [
-  "Deployment",
-  "StatefulSet",
-  "DaemonSet",
-  "Job",
-  "CronJob",
-  "Pod",
-];
-
-/** Which API group each kind lives in, for RBAC generation. */
-const KIND_RESOURCE: Record<WorkloadKind, { group: string; resource: string }> = {
-  Deployment: { group: "apps", resource: "deployments" },
-  StatefulSet: { group: "apps", resource: "statefulsets" },
-  DaemonSet: { group: "apps", resource: "daemonsets" },
-  Job: { group: "batch", resource: "jobs" },
-  CronJob: { group: "batch", resource: "cronjobs" },
-  Pod: { group: "", resource: "pods" },
-};
-
 export interface DetectionRules {
   labelSelectors: string[];
   imagePatterns: string[];
@@ -1161,82 +1148,6 @@ export function connectorStatusFromSource(source: DiscoverySource): ConnectorSta
     workloadsMatched: rt.workloads_matched ?? null,
   };
 }
-
-/** Minimum RBAC for the selected kinds. Read-only, by construction. */
-export function generateClusterRole(config: CollectorConfig, name = "authsec-discovery"): string {
-  const byGroup = new Map<string, string[]>();
-  for (const kind of config.kinds) {
-    const { group, resource } = KIND_RESOURCE[kind];
-    byGroup.set(group, [...(byGroup.get(group) ?? []), resource]);
-  }
-  // Namespaces are always needed to enumerate scope.
-  byGroup.set("", [...(byGroup.get("") ?? []), "namespaces"]);
-
-  const scoped = config.namespaceMode === "include" && config.namespaces.length > 0;
-  const rules = [...byGroup.entries()]
-    .map(
-      ([group, resources]) =>
-        `  - apiGroups: ["${group}"]\n    resources: [${[...new Set(resources)]
-          .map((r) => `"${r}"`)
-          .join(", ")}]\n    verbs: ["get", "list", "watch"]`,
-    )
-    .join("\n");
-
-  if (scoped) {
-    return config.namespaces
-      .map(
-        (ns) =>
-          `apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: ${name}\n  namespace: ${ns}\nrules:\n${rules}`,
-      )
-      .join("\n---\n");
-  }
-  return `apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: ${name}\nrules:\n${rules}`;
-}
-
-/**
- * The install command for the `authsec-iga-agent` Helm chart, generated from
- * the values the chart actually requires. Read off the chart's own
- * `values.yaml` and README, not inferred:
- *
- *   - The release name MUST be the literal `authsec-iga-agent`. It matches the
- *     chart name, so Helm renders resources unprefixed (`authsec-iga-agent`)
- *     rather than `<release>-authsec-iga-agent` — which is what every
- *     troubleshooting command in the chart's NOTES output and the agent docs
- *     assumes. It is NEVER derived from a user-supplied display name.
- *   - `controlPlane.url`, `workspace.id` and `cluster.name` are all required;
- *     the chart refuses to render without workspace.id / cluster.name, by design.
- *   - There is NO token and NO `discovery.sourceId`: the sightings endpoint is
- *     unauthenticated and the agent self-registers by `cluster.name`
- *     (instance id `k8s:<cluster.name>`), so nothing binds the install to a
- *     pre-created source row.
- *   - `chartRef` is caller-supplied because this deployment publishes no fixed
- *     Helm repo URL we can hardcode. It may be a local path
- *     (`./charts/authsec-iga-agent`) or an OCI/HTTP chart reference.
- */
-export function helmInstallCommand(opts: {
-  controlPlaneUrl: string;
-  workspaceId: string;
-  clusterName: string;
-  /** Whatever chart reference this deployment publishes. Not a hardcoded guess. */
-  chartRef: string;
-  /** Chart version, e.g. "0.3.0". Optional — omitted means the chart's default. */
-  chartVersion?: string;
-}): string {
-  const lines = [
-    // The release name is intentionally the literal chart name. Do not templatise it.
-    `helm install authsec-iga-agent ${opts.chartRef} \\`,
-    "  --namespace authsec-system --create-namespace \\",
-    ...(opts.chartVersion ? [`  --version ${opts.chartVersion} \\`] : []),
-    `  --set controlPlane.url=${opts.controlPlaneUrl} \\`,
-    `  --set workspace.id=${opts.workspaceId} \\`,
-    // cluster.name is part of every agent fingerprint AND the self-registration
-    // key, so it must be stable and unique per cluster — a typo silently merges
-    // two clusters' inventories.
-    `  --set cluster.name=${opts.clusterName}`,
-  ];
-  return lines.join("\n");
-}
-
 
 // The scan configuration displayed on the integration detail page. The wizard
 // writes this into source.config; there is no separate config endpoint, so we

@@ -24,7 +24,7 @@
  * choice and the server creates both records together, in one call, so there is
  * no half-built state for a failure to strand.
  *
- * Step shape follows DeployCollectorWizard (numeric index, inline rail).
+ * Step shape: a numeric index and an inline step rail.
  * `src/features/wizards/` is an onboarding-tour framework and is deliberately
  * not used here.
  */

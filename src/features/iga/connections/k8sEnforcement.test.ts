@@ -45,11 +45,13 @@ describe("whether the agent can take enforcement up", () => {
 });
 
 describe("the command that lets the agent act", () => {
-  const base = { chartRef: "", quarantineNamespaces: "agent-live-demo, iga-demo", bindingRoles: "", bindingNamespaces: "", clusterWide: false };
+  const base = { quarantineNamespaces: "agent-live-demo, iga-demo", bindingRoles: "", bindingNamespaces: "", clusterWide: false };
 
   it("grants the role and namespaces; no token anywhere", () => {
     const helm = helmEnforcementCommand(base);
     expect(helm).toContain("--reset-then-reuse-values");
+    // The published chart at the console's version: nothing to clone.
+    expect(helm).toMatch(/^helm upgrade authsec-iga-agent oci:\/\/docker-repo-public\.authnull\.com\/charts\/authsec-iga-agent --version \d+\.\d+\.\d+ -n authsec-system/);
     expect(helm).not.toContain("--reuse-values ");
     expect(helm).toContain('--set "roles={discovery,actuation}"');
     expect(helm).toContain('--set "actuation.namespaces=agent-live-demo iga-demo"');
@@ -91,7 +93,7 @@ describe("turning enforcement off", () => {
     expect(inUseText(undefined)).toMatch(/could not be turned off/);
   });
   it("offers to remove the role, and nothing else", () => {
-    const cmd = helmRemoveRoleCommand("");
+    const cmd = helmRemoveRoleCommand();
     expect(cmd).toContain('--set "roles={discovery}"');
     // Turning bindings off as well would leave access policies off when the role
     // comes back (the release keeps --set values); the role alone removes the access.

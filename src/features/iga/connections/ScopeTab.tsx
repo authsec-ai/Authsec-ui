@@ -19,6 +19,7 @@ import { CopyValue, Fact, Facts, Meta, Panel } from "@/features/iga/shared/compo
 import type { ActionSet } from "./connectionModel";
 import { awsAttrs, gcpScopeRows, useSourceFacts } from "./providerData";
 import { AzureScope } from "./AzureConnectionTabs";
+import { helmChartLine } from "./k8sSetup";
 
 function AwsScope({ c, actions, onScan }: { c: Connection; actions: ActionSet; onScan?: () => Promise<boolean> }) {
   const q = useGetAwsConnectorQuery(c.id);
@@ -70,7 +71,7 @@ function GcpScope({ c }: { c: Connection }) {
 function K8sScope({ c }: { c: Connection }) {
   const source = useSourceFacts(c);
   const config = source.data ? collectorConfigFromSource(source.data) : null;
-  const snippet = `helm upgrade authsec-iga-agent <chart> --reuse-values \\\n  --set "webhook.includedNamespaces=ns-one ns-two"`;
+  const snippet = `${helmChartLine("upgrade")} --reset-then-reuse-values \\\n  --set "webhook.includedNamespaces=ns-one ns-two"`;
   return (
     <div className="space-y-4">
       <Panel title="Namespaces" description="The agent decides what it reads; this page cannot change it.">

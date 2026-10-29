@@ -28,7 +28,6 @@ import { Fact, Facts, Panel } from "../shared/components/Panel";
 import { Timestamp } from "../shared/components/Timestamp";
 import { ConnPill } from "./ConnPill";
 import {
-  DEFAULT_CHART_REF,
   helmEnforcementCommand,
   helmRemoveRoleCommand,
   inUseText,
@@ -97,7 +96,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
   const [turnedOff, setTurnedOff] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [install, setInstall] = useState({ chartRef: DEFAULT_CHART_REF, quarantineNamespaces: "", bindingRoles: "", bindingNamespaces: "", clusterWide: false });
+  const [install, setInstall] = useState({ quarantineNamespaces: "", bindingRoles: "", bindingNamespaces: "", clusterWide: false });
   const [ingestSecret, setIngestSecret] = useState("authsec-iga-ingest");
 
   const actuationState = source.data?.actuation_state;
@@ -296,9 +295,6 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
               <Field id="ns" label="Quarantine may act in" hint="Namespaces, space-separated. Only these; never the agent's own.">
                 <Input id="ns" value={install.quarantineNamespaces} placeholder="e.g. agent-live-demo" onChange={(e) => setInstall({ ...install, quarantineNamespaces: e.target.value })} />
               </Field>
-              <Field id="chart" label="Chart" hint="Where your deployment publishes the iga-agent chart (0.6.0 or later). Run from the iga-agent repo for the default.">
-                <Input id="chart" value={install.chartRef} onChange={(e) => setInstall({ ...install, chartRef: e.target.value })} />
-              </Field>
               <Field id="roles" label="Access policies may change bindings of" hint="Role or ClusterRole names. Empty keeps what the agent has now.">
                 <Input id="roles" value={install.bindingRoles} placeholder="e.g. llm-key-reader" onChange={(e) => setInstall({ ...install, bindingRoles: e.target.value })} />
               </Field>
@@ -339,7 +335,7 @@ export function K8sEnforcementTab({ c }: { c: Connection }) {
             </Button>
           }
         >
-          <Command label="Optional: remove the actuation role" text={helmRemoveRoleCommand(install.chartRef)} />
+          <Command label="Optional: remove the actuation role" text={helmRemoveRoleCommand()} />
         </Panel>
       ) : null}
 

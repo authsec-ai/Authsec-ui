@@ -45,7 +45,7 @@
  * doesn't assert.
  *
  * Shape follows the existing in-Dialog step-wizard pattern
- * (DeployCollectorWizard.tsx / GitHubSetupWizard.tsx): local STEPS array,
+ * (GitHubSetupWizard.tsx): local STEPS array,
  * numbered step rail, per-step conditional blocks, Back/Continue footer.
  *
  * Never exposes: the uploaded JSON key value, Vault paths, or any raw

@@ -22,7 +22,7 @@
 
 import type { DiscoverySource } from "@/app/api/discoveryApi";
 
-export const DEFAULT_CHART_REF = "./charts/authsec-iga-agent";
+import { helmChartLine } from "./k8sSetup";
 
 export type PowerState = "on" | "off" | "not_reported";
 
@@ -109,7 +109,6 @@ const words = (v: string) =>
     .filter(Boolean);
 
 export interface EnforcementInstall {
-  chartRef: string;
   /** Where quarantine may write NetworkPolicies. Empty: none. */
   quarantineNamespaces: string;
   /**
@@ -128,10 +127,10 @@ export interface EnforcementInstall {
   ingestSecret?: string;
 }
 
-const helmUpgrade = (chartRef: string) =>
-  // --reset-then-reuse-values, not --reuse-values: a release from an older chart
-  // would otherwise keep that chart's defaults (iga-agent chart notes).
-  `helm upgrade authsec-iga-agent ${chartRef.trim() || DEFAULT_CHART_REF} -n authsec-system --reset-then-reuse-values`;
+// The published chart at the console's version; --reset-then-reuse-values, not
+// --reuse-values: a release from an older chart would otherwise keep that
+// chart's defaults (iga-agent chart notes).
+const helmUpgrade = () => `${helmChartLine("upgrade")} --reset-then-reuse-values`;
 
 /** The upgrade that lets the agent act, keeping every other value the release was given. */
 export function helmEnforcementCommand(o: EnforcementInstall): string {
@@ -139,7 +138,7 @@ export function helmEnforcementCommand(o: EnforcementInstall): string {
   const roles = words(o.bindingRoles);
   const bns = words(o.bindingNamespaces);
   const lines = [
-    helmUpgrade(o.chartRef),
+    helmUpgrade(),
     `--set "roles={discovery,actuation}"`,
     // Empty: the agent generates its credential and hands it over. A token
     // given by hand would take precedence.
@@ -192,6 +191,6 @@ export function inUseText(u: EnforcementInUse | undefined): string {
  * and the binding settings stay in the release, so giving the role back
  * restores them instead of leaving access policies off.
  */
-export function helmRemoveRoleCommand(chartRef: string): string {
-  return [helmUpgrade(chartRef), `--set "roles={discovery}"`].join(" \\\n  ");
+export function helmRemoveRoleCommand(): string {
+  return [helmUpgrade(), `--set "roles={discovery}"`].join(" \\\n  ");
 }
