@@ -100,10 +100,6 @@ export interface InventoryArgs {
   exclude_kind?: string[];
   /** A connection's `scope_id`. */
   scope?: string;
-  /** Azure: a subscription id, as the `subscription` facet gives it. */
-  subscription?: string;
-  /** Azure: "<subscription id>/<resource group>", as the `resource_group` facet gives it. */
-  resource_group?: string;
   q?: string;
   lifecycle?: "active" | "retired" | "all";
   sort?: "name" | "-last_seen";
