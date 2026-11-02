@@ -426,6 +426,9 @@ export interface AgentFilters {
   discovery_source_id?: string;
   /** An Entra tenant: Azure agents have no discovery source, their metadata names the tenant. */
   tenant_id?: string;
+  /** Azure: where the agent lives, as the inventory's filters of the same names. */
+  subscription?: string;
+  resource_group?: string;
   limit?: number;
   offset?: number;
 }
@@ -624,6 +627,8 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.runtime_status ? { runtime_status: f.runtime_status } : {}),
           ...(f?.discovery_source_id ? { discovery_source_id: f.discovery_source_id } : {}),
           ...(f?.tenant_id ? { tenant_id: f.tenant_id } : {}),
+          ...(f?.subscription ? { subscription: f.subscription } : {}),
+          ...(f?.resource_group ? { resource_group: f.resource_group } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },

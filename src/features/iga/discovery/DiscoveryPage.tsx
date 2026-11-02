@@ -22,6 +22,8 @@ import AzureDiscoveryScreen from "@/features/discovery/cloud/azure/AzureDiscover
 import { azureExplain } from "@/features/discovery/cloud/azure/azureGlossary";
 import { HoverExplain } from "@/features/iga/shared/components/HoverExplain";
 import AzureInventoryScreen from "@/features/discovery/cloud/azure/AzureInventoryScreen";
+import AzurePlacementBar from "@/features/discovery/cloud/azure/AzurePlacementBar";
+import { placementOf } from "@/features/discovery/cloud/azure/azurePlacement";
 import type { AzureDiscoveryType } from "@/features/discovery/cloud/azure/azureDiscoveryLabels";
 import { tenantName, tenantScopeId } from "@/features/discovery/cloud/azure/azureInventoryLabels";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -132,7 +134,8 @@ export default function DiscoveryPage() {
   const awsPublished = active === "aws" && view === "published";
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);
   usePipeline(ws, !awsPublished);
-  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source });
+  const placement = active === "azure" ? placementOf(url) : undefined;
+  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source, placement });
 
   // Make the resolved provider and type explicit in the URL, once. A Kubernetes cluster
   // that has reported sightings but no inventory yet opens on its sightings: landing on
@@ -280,6 +283,9 @@ export default function DiscoveryPage() {
     // it is not remounted by a change of either and keeps the keyboard focus.
     const props: ScreenProps = { ws, url, provider, type, view, sources, scope };
     body = (
+      <>
+      {/* Azure's Subscription and Resource group apply to every tab, so they sit above the tabs. */}
+      {provider === "azure" ? <AzurePlacementBar ws={ws} url={url} type={type} scope={scope} /> : null}
       <div data-discovery-card className="overflow-clip rounded-lg border border-(--color-border-subtle) bg-(--color-surface-raised)">
         {switcher}
         <div id="discovery-tabpanel" role="tabpanel" aria-labelledby={`discovery-tab-${type}`}>
@@ -300,6 +306,7 @@ export default function DiscoveryPage() {
         )}
         </div>
       </div>
+      </>
     );
   }
 

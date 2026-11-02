@@ -43,6 +43,7 @@ import { resolvePagedView } from "../shared/listView";
 import { usePaging, useRestoreScroll } from "../shared/paging";
 import { DiscoveryTable, RowName } from "./DiscoveryTable";
 import { AzureTerm } from "@/features/discovery/cloud/azure/AzureTerm";
+import { placementOf } from "@/features/discovery/cloud/azure/azurePlacement";
 
 import { azureAgentEntraId, azureAgentFoundIn, azureAgentOrigin, nonDefaultBranch, SIGHTING_SOURCE, sightingProviderOf } from "./model";
 import { useClientsLookup } from "./useClientsLookup";
@@ -109,6 +110,8 @@ export default function SightingsScreen(p: ScreenProps) {
       // narrows by the tenant each one names, so paging and totals are the tenant's.
       ...(p.scope.kind === "one" && provider !== "azure" ? { discovery_source_id: p.scope.source.id } : {}),
       ...(p.scope.kind === "one" && provider === "azure" ? { tenant_id: p.scope.source.scopeId } : {}),
+      // The page's Subscription and Resource group (AzurePlacementBar): an agent lives in its resource's or Foundry project's.
+      ...(provider === "azure" ? placementOf(p.url) : {}),
     },
     { skip: blocked },
   );
@@ -370,7 +373,7 @@ export default function SightingsScreen(p: ScreenProps) {
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider={p.provider} noun={provider === "azure" ? "tenant" : undefined} onClear={() => p.url.patch({ source: null })} />;
 
   const inScope = p.scope.kind === "one" ? [p.scope.source.connection] : p.sources.map((s) => s.connection);
-  const narrowing = [needle && `search "${p.url.searchText.trim()}" (in the loaded rows)`, p.scope.kind === "one" && `${provider === "azure" ? "tenant" : "source"} ${p.scope.source.label}`, status && `status ${STATUS_LABELS[status].toLowerCase()}`, live && (provider === "azure" ? "active in the last 7 days" : "live only")].filter(Boolean) as string[];
+  const narrowing = [needle && `search "${p.url.searchText.trim()}" (in the loaded rows)`, p.scope.kind === "one" && `${provider === "azure" ? "tenant" : "source"} ${p.scope.source.label}`, status && `status ${STATUS_LABELS[status].toLowerCase()}`, live && (provider === "azure" ? "active in the last 7 days" : "live only"), provider === "azure" && placementOf(p.url).subscription && "the chosen subscription", provider === "azure" && placementOf(p.url).resource_group && "the chosen resource group"].filter(Boolean) as string[];
 
   // Azure calls this list All agents; Kubernetes and GitHub call them sightings.
   const noun = provider === "azure" ? "agents" : "sightings";
@@ -424,7 +427,7 @@ export default function SightingsScreen(p: ScreenProps) {
                         narrowing={narrowing}
                         onClear={() => {
                           p.url.setSearchText("");
-                          p.url.patch({ status: null, live: null, source: null });
+                          p.url.patch({ status: null, live: null, source: null, subscription: null, resource_group: null });
                         }}
                       />
                     ) : (

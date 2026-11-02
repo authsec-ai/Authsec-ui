@@ -111,7 +111,13 @@ const FILTER_LABEL: Record<FilterKey, string> = {
 };
 
 /** The URL parameters that are not type-specific filters. */
-export const NON_FILTER_PARAMS = ["provider", "type", "view", "q", "source", "sel", "sort", "evidence", "via"] as const;
+export const NON_FILTER_PARAMS = ["provider", "type", "view", "q", "source", "sel", "sort", "evidence", "via", "subscription", "resource_group"] as const;
+
+/** Azure's Subscription and Resource group: the page's filter, not a tab's (AzurePlacementBar). */
+const AZURE_PLACEMENT: readonly { key: string; label: string }[] = [
+  { key: "subscription", label: "Subscription" },
+  { key: "resource_group", label: "Resource group" },
+];
 
 /** Server-side or client-side; the filters each list offers. Source is always offered and is not listed. */
 function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: DiscoveryType): FilterKey[] {
@@ -185,6 +191,12 @@ export function planSwitch(current: URLSearchParams, from: Scope, to: Scope): { 
   if (source) {
     if (sameProvider) next.set("source", source);
     else removed.push({ key: "source", label: "Source", reason: `belongs to ${PROVIDER_LABEL[from.provider]}` });
+  }
+  for (const { key, label } of AZURE_PLACEMENT) {
+    const value = current.get(key);
+    if (!value) continue;
+    if (sameProvider && to.provider === "azure") next.set(key, value);
+    else removed.push({ key, label, reason: `belongs to ${PROVIDER_LABEL[from.provider]}` });
   }
 
   const seen = new Set<string>();

@@ -94,7 +94,7 @@ function Choice({ facet, onPicked }: { facet: FacetSpec; onPicked?: () => void }
   );
 }
 
-function FacetPopover({ facet }: { facet: FacetSpec }) {
+export function FacetPopover({ facet }: { facet: FacetSpec }) {
   const [open, setOpen] = useState(false);
   const chosen = selectedLabel(facet);
   return (

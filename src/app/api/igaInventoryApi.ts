@@ -112,7 +112,7 @@ export interface InventoryArgs {
   facets?: string;
 }
 
-export type InventorySummaryArgs = Pick<InventoryArgs, "ws" | "key" | "provider" | "exclude_kind" | "scope" | "q" | "lifecycle">;
+export type InventorySummaryArgs = Pick<InventoryArgs, "ws" | "key" | "provider" | "exclude_kind" | "scope" | "subscription" | "resource_group" | "q" | "lifecycle">;
 
 function qs(args: object): string {
   const skip = new Set(["ws", "key"]);
