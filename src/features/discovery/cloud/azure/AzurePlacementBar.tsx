@@ -12,12 +12,12 @@
 
 import { useListInventoryQuery, type InventoryMeta } from "@/app/api/igaInventoryApi";
 import { Button } from "@/components/ui/button";
-import { FacetPopover, type FacetSpec } from "@/features/iga/discovery/FacetBar";
+import { MultiFacetPopover, type MultiFacetSpec } from "@/features/iga/discovery/FacetBar";
 import { reportedFacet } from "@/features/iga/discovery/facets";
 import type { ScreenProps } from "@/features/iga/discovery/screenTypes";
 import { typeLabel, type DiscoveryType } from "@/features/iga/discovery/urlState";
 
-import { labelGroups, mergeOptions, PLACED_TYPES, placementOf } from "./azurePlacement";
+import { groupsWithin, labelGroups, mergeOptions, PLACED_TYPES, placementOf, placementParam } from "./azurePlacement";
 import { ENTRA_PERMISSION_KINDS } from "./entraPermissions";
 
 /** What a tab leaves out while a subscription or resource group is chosen. */
@@ -46,31 +46,29 @@ export default function AzurePlacementBar(p: Pick<ScreenProps, "ws" | "url" | "t
   const groups = facetOf("resource_group");
   groups.options = labelGroups(groups.options, subscriptions.options);
 
-  const subscriptionFacet: FacetSpec = {
+  // Several of each may be ticked: a row is in any one of the subscriptions, and any one of the resource groups.
+  const subscriptionFacet: MultiFacetSpec = {
     key: "subscription",
     label: "Subscription",
-    kind: "choice",
-    value: subscription,
-    anyLabel: "Every subscription",
+    values: subscription ?? [],
     ...subscriptions,
-    onChange: (v) => p.url.patch({ subscription: v, resource_group: null }),
+    // A resource group stays ticked while its subscription is still chosen (or none is).
+    onChange: (v) => p.url.patch({ subscription: placementParam(v), resource_group: placementParam(groupsWithin(resourceGroup ?? [], v)) }),
   };
-  const groupFacet: FacetSpec = {
+  const groupFacet: MultiFacetSpec = {
     key: "resource_group",
     label: "Resource group",
-    kind: "choice",
-    value: resourceGroup,
-    anyLabel: "Every resource group",
+    values: resourceGroup ?? [],
     ...groups,
-    onChange: (v) => p.url.patch({ resource_group: v }),
+    onChange: (v) => p.url.patch({ resource_group: placementParam(v) }),
   };
   const active = !!(subscription || resourceGroup);
   const placed = PLACED_TYPES.includes(p.type);
 
   return (
     <div role="group" aria-label="Azure subscription and resource group" className="flex flex-wrap items-center gap-2">
-      <FacetPopover facet={subscriptionFacet} />
-      <FacetPopover facet={groupFacet} />
+      <MultiFacetPopover facet={subscriptionFacet} />
+      <MultiFacetPopover facet={groupFacet} />
       {active ? (
         <Button variant="ghost" size="sm" className="h-8" onClick={() => p.url.patch({ subscription: null, resource_group: null })}>
           Clear

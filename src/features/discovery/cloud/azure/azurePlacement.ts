@@ -14,9 +14,27 @@ import type { DiscoveryType } from "@/features/iga/discovery/urlState";
  */
 export const PLACED_TYPES: readonly DiscoveryType[] = ["resources", "workloads", "identities", "sightings"];
 
-/** The page's subscription and resource group, as the inventory takes them. */
-export function placementOf(url: ScreenProps["url"]): { subscription?: string; resource_group?: string } {
-  return { subscription: url.get("subscription"), resource_group: url.get("resource_group") };
+/** A list the URL keeps comma-separated (subscription ids and resource group values have no commas); none is undefined. */
+function listOf(raw: string | undefined): string[] | undefined {
+  const values = (raw ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  return values.length ? values : undefined;
+}
+
+/** The page's subscriptions and resource groups, as the inventory and the agents list take them: any one of each. */
+export function placementOf(url: Pick<ScreenProps["url"], "get">): { subscription?: string[]; resource_group?: string[] } {
+  return { subscription: listOf(url.get("subscription")), resource_group: listOf(url.get("resource_group")) };
+}
+
+/** Values back into the URL: comma-separated, or the parameter removed when none is chosen. */
+export function placementParam(values: string[]): string | null {
+  return values.length ? values.join(",") : null;
+}
+
+/** The resource groups ("<subscription id>/<group>") that stay chosen when the subscriptions change: those of a chosen one, or all when none is. */
+export function groupsWithin(groups: string[], subscriptions: string[]): string[] {
+  if (!subscriptions.length) return groups;
+  const chosen = new Set(subscriptions.map((s) => s.toLowerCase()));
+  return groups.filter((g) => chosen.has(g.split("/")[0].toLowerCase()));
 }
 
 /** One option per value across the lists, their counts added. */

@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { labelGroups } from "@/features/discovery/cloud/azure/azurePlacement";
+import { groupsWithin, labelGroups, placementOf, placementParam } from "@/features/discovery/cloud/azure/azurePlacement";
 
 import { planSwitch } from "./model";
 
 const exact = (value: number) => ({ kind: "exact" as const, value });
 
 describe("Azure subscription and resource group", () => {
-  const params = new URLSearchParams({ provider: "azure", type: "resources", subscription: "sub-a", resource_group: "sub-a/iga-test", kind: "microsoft.keyvault/vaults" });
+  const params = new URLSearchParams({ provider: "azure", type: "resources", subscription: "sub-a,sub-b", resource_group: "sub-a/iga-test", kind: "microsoft.keyvault/vaults" });
 
-  it("stay on every Azure tab", () => {
+  it("stay on every Azure tab, every one chosen", () => {
     for (const type of ["workloads", "identities", "agents", "sightings"] as const) {
       const { params: next, removed } = planSwitch(params, { provider: "azure", type: "resources", view: "published" }, { provider: "azure", type, view: "published" });
-      expect(next.get("subscription")).toBe("sub-a");
+      expect(next.get("subscription")).toBe("sub-a,sub-b");
       expect(next.get("resource_group")).toBe("sub-a/iga-test");
       expect(removed.map((r) => r.key)).not.toContain("subscription");
       expect(removed.map((r) => r.key)).not.toContain("resource_group");
@@ -34,5 +34,19 @@ describe("Azure subscription and resource group", () => {
     ];
     const subscriptions = [{ value: "sub-a", label: "Authsec", count: exact(5) }];
     expect(labelGroups(groups, subscriptions).map((o) => o.label)).toEqual(["iga-test (Authsec)", "IGA-TEST (sub-b)", "other"]);
+  });
+
+  it("are read from the URL as lists, and written back comma-separated", () => {
+    const url = (q: Record<string, string>) => ({ get: (k: string) => q[k] });
+    expect(placementOf(url({ subscription: "sub-a, sub-b,", resource_group: "sub-a/iga-test" }))).toEqual({ subscription: ["sub-a", "sub-b"], resource_group: ["sub-a/iga-test"] });
+    expect(placementOf(url({ subscription: "" }))).toEqual({ subscription: undefined, resource_group: undefined });
+    expect(placementParam(["sub-a", "sub-b"])).toBe("sub-a,sub-b");
+    expect(placementParam([])).toBeNull();
+  });
+
+  it("keep the resource groups of a subscription still chosen", () => {
+    const groups = ["sub-a/iga-test", "SUB-B/rg-b", "sub-c/rg-c"];
+    expect(groupsWithin(groups, ["sub-a", "sub-b"])).toEqual(["sub-a/iga-test", "SUB-B/rg-b"]);
+    expect(groupsWithin(groups, [])).toEqual(groups);
   });
 });

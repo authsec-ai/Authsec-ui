@@ -58,8 +58,8 @@ interface Args {
   /** Azure: its connectors, and the Source in the URL (checked per type). */
   azureConnectors?: CloudConnector[];
   source?: string;
-  /** Azure: the page's Subscription and Resource group (AzurePlacementBar). */
-  placement?: { subscription?: string; resource_group?: string };
+  /** Azure: the page's subscriptions and resource groups (AzurePlacementBar): any one of each. */
+  placement?: { subscription?: string[]; resource_group?: string[] };
 }
 
 function pageCount(p: { total: number; totalKnown: boolean } | undefined, failed: boolean): CountValue {

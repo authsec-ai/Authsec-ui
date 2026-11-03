@@ -327,7 +327,18 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
   };
 
-  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `tenant ${p.scope.source.label}`, subscription && (subscriptionName.has(subscription) ? `subscription ${subscriptionName.get(subscription)}` : "the chosen subscription"), resourceGroup && `resource group ${groupOptions.find((o) => o.value === resourceGroup)?.label ?? resourceGroup.split("/").pop()}`, kind && `type ${kindLabel(kind)}`, lifecycleFilter && (lifecycleFilter === "retired" ? "deleted from Azure" : "everything AuthSec has found")].filter(Boolean) as string[];
+  // "subscription Authsec", "subscriptions Authsec, Authnull"; one this list's facets do not name is "the chosen subscription".
+  const named = (values: string[] | undefined, noun: string, label: (v: string) => string | undefined) => {
+    if (!values) return undefined;
+    const names = values.map(label);
+    if (names.some((n) => !n)) return values.length === 1 ? `the chosen ${noun}` : `${values.length} chosen ${noun}s`;
+    return `${noun}${values.length === 1 ? "" : "s"} ${names.join(", ")}`;
+  };
+  const placedNarrowing = [
+    named(subscription, "subscription", (v) => subscriptionName.get(v)),
+    named(resourceGroup, "resource group", (v) => groupOptions.find((o) => o.value === v)?.label ?? v.split("/").pop()),
+  ];
+  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `tenant ${p.scope.source.label}`, ...placedNarrowing, kind && `type ${kindLabel(kind)}`, lifecycleFilter && (lifecycleFilter === "retired" ? "deleted from Azure" : "everything AuthSec has found")].filter(Boolean) as string[];
 
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" noun="tenant" onClear={() => p.url.patch({ source: null })} />;
   if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} noun="tenant" onClear={() => p.url.patch({ source: null })} />;
