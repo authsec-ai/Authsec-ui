@@ -94,7 +94,7 @@ function Choice({ facet, onPicked }: { facet: FacetSpec; onPicked?: () => void }
   );
 }
 
-function FacetPopover({ facet }: { facet: FacetSpec }) {
+export function FacetPopover({ facet }: { facet: FacetSpec }) {
   const [open, setOpen] = useState(false);
   const chosen = selectedLabel(facet);
   return (
@@ -112,6 +112,70 @@ function FacetPopover({ facet }: { facet: FacetSpec }) {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 space-y-2 p-3">
         <Choice facet={facet} onPicked={() => setOpen(false)} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A facet of several values, ticked: a row matches any one of them. */
+export interface MultiFacetSpec {
+  key: string;
+  label: string;
+  values: string[];
+  options?: FacetOption[];
+  /** The facet's counts timed out: every option says Unavailable. */
+  countsUnavailable?: boolean;
+  onChange: (values: string[]) => void;
+}
+
+/** A checkbox list in a popover that stays open while options are ticked. */
+export function MultiFacetPopover({ facet }: { facet: MultiFacetSpec }) {
+  const [open, setOpen] = useState(false);
+  const options = facet.options ?? [];
+  // A ticked value the options no longer list stays, so it can be unticked.
+  const all: FacetOption[] = [...options, ...facet.values.filter((v) => !options.some((o) => o.value === v)).map((v) => ({ value: v, label: v }))];
+  const chosen =
+    facet.values.length === 0 ? undefined : facet.values.length === 1 ? (all.find((o) => o.value === facet.values[0])?.label ?? facet.values[0]) : `${facet.values.length} selected`;
+  const toggle = (v: string) => facet.onChange(facet.values.includes(v) ? facet.values.filter((x) => x !== v) : [...facet.values, v]);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn("h-8 gap-1.5", chosen && "border-(--color-primary) bg-(--color-primary-soft) text-(--color-primary-text)")}
+          aria-label={chosen ? `${facet.label}: ${chosen}` : facet.label}
+        >
+          <span className="max-w-48 truncate">{chosen ? `${facet.label}: ${chosen}` : facet.label}</span>
+          <ChevronDown aria-hidden="true" className="size-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 space-y-2 p-3">
+        <fieldset className="space-y-1">
+          <legend className="text-xs font-medium text-(--color-text-muted)">{facet.label}</legend>
+          <div className="max-h-64 overflow-y-auto rounded-md border border-(--color-border-subtle)">
+            {all.map((o) => (
+              <label
+                key={o.value}
+                className="flex cursor-pointer items-center gap-2 px-2 py-1.5 text-sm hover:bg-(--color-surface-subtle) has-[:focus-visible]:outline-2 has-[:focus-visible]:-outline-offset-2 has-[:focus-visible]:outline-(--color-primary)"
+              >
+                <input type="checkbox" checked={facet.values.includes(o.value)} onChange={() => toggle(o.value)} />
+                <span className="min-w-0 flex-1 break-words">{o.label}</span>
+                {facet.countsUnavailable ? (
+                  <CountText count={{ kind: "unavailable" }} className="text-xs" />
+                ) : o.count ? (
+                  <CountText count={o.count} className="text-xs text-(--color-text-muted)" />
+                ) : null}
+              </label>
+            ))}
+            {!all.length ? <p className="p-2 text-xs text-(--color-text-muted)">{facet.countsUnavailable ? "Options unavailable — the count timed out." : "None reported."}</p> : null}
+          </div>
+          {facet.values.length ? (
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => facet.onChange([])}>
+              Clear {facet.label.toLowerCase()}
+            </Button>
+          ) : null}
+        </fieldset>
       </PopoverContent>
     </Popover>
   );

@@ -40,6 +40,7 @@ import { usePaging, useRestoreScroll } from "@/features/iga/shared/paging";
 import { classifyGraphError } from "@/features/iga/shared/graphErrors";
 import { TableCard } from "@/theme/components/cards";
 
+import { labelGroups, placementOf } from "./azurePlacement";
 import AzureScanTablesScreen from "./AzureScanTablesScreen";
 import { AzureTerm } from "./AzureTerm";
 
@@ -66,7 +67,7 @@ const SEARCH_PLACEHOLDER: Record<InventoryClass, string> = {
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
-/** Resources and workloads live in a subscription and resource group; Entra objects are tenant-wide. */
+/** Every list asks for its subscription and resource group counts: a managed identity is placed where its resource is; other Entra objects are tenant-wide. */
 const PLACED_FACETS = "provider,kind,scope,subscription,resource_group";
 /** Groups and app registrations never sign in themselves (an app signs in through its service principal). */
 const SIGNS_IN = (kind: string) => kind !== "entra_group" && kind !== "entra_application";
@@ -83,9 +84,8 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   // Rows per page, in the URL as on AWS's lists: 25 unless one of 25 / 50 / 100 is chosen.
   const pageSize = parsePageSize(p.url.get("size"));
   const setPageSize = (n: number) => p.url.patch({ size: pageSizeParam(n) });
-  const placed = type !== "identities";
-  const subscription = placed ? p.url.get("subscription") : undefined;
-  const resourceGroup = placed ? p.url.get("resource_group") : undefined;
+  // The page's Subscription and Resource group (AzurePlacementBar); a managed identity is placed where its resource is.
+  const { subscription, resource_group: resourceGroup } = placementOf(p.url);
   const blocked = p.scope.kind === "unknown" || p.scope.kind === "no_rows";
   const scopeId = p.scope.kind === "one" ? p.scope.source.scopeId : undefined;
 
@@ -100,7 +100,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const sources = useMemo(() => p.sources.map((s) => ({ ...s, label: tenantName(tenants.get(s.scopeId), s.label) })), [p.sources, tenants]);
 
   const list = useListInventoryQuery(
-    { ws: p.ws, key: paging.cacheKey, class: type, provider: "azure", kind, exclude_kind: excluded, scope: scopeId, subscription, resource_group: resourceGroup, ...(placed ? { facets: PLACED_FACETS } : {}), q: p.url.q, lifecycle: lifecycleFilter, sort: "name", limit: pageSize, cursor: paging.cursor },
+    { ws: p.ws, key: paging.cacheKey, class: type, provider: "azure", kind, exclude_kind: excluded, scope: scopeId, subscription, resource_group: resourceGroup, facets: PLACED_FACETS, q: p.url.q, lifecycle: lifecycleFilter, sort: "name", limit: pageSize, cursor: paging.cursor },
     { skip: blocked },
   );
   useRestartOnListingChanged(list.error, paging.restart, () => setRestarted(true));
@@ -261,41 +261,10 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const [layout, setLayout] = useState<AdaptiveColumnsLayout | undefined>();
 
   const kindOptions = reportedFacet(facets, "kind", (v) => kindLabel(v));
+  // Subscription and Resource group are chosen above the tabs (AzurePlacementBar); here they only name the empty state.
   const subscriptionOptions = reportedFacet(facets, "subscription");
   const subscriptionName = new Map(subscriptionOptions.options.map((o) => [o.value, o.label]));
-  // A resource group's name is unique only in its subscription: name the subscription when two share it.
-  const groupOptions = reportedFacet(facets, "resource_group");
-  const groupNames = groupOptions.options.map((o) => o.label.toLowerCase());
-  groupOptions.options = groupOptions.options.map((o) =>
-    groupNames.filter((n) => n === o.label.toLowerCase()).length > 1 ? { ...o, label: `${o.label} (${subscriptionName.get(o.value.split("/")[0]) ?? o.value.split("/")[0]})` } : o,
-  );
-  const placement: FacetSpec[] = placed
-    ? [
-        // One subscription is no choice: its resource groups are.
-        ...(subscriptionOptions.options.length > 1 || subscription
-          ? [
-              {
-                key: "subscription",
-                label: "Subscription",
-                kind: "choice" as const,
-                value: subscription,
-                anyLabel: "Every subscription",
-                ...subscriptionOptions,
-                onChange: (v: string | undefined) => p.url.patch({ subscription: v, resource_group: null }),
-              },
-            ]
-          : []),
-        {
-          key: "resource_group",
-          label: "Resource group",
-          kind: "choice",
-          value: resourceGroup,
-          anyLabel: "Every resource group",
-          ...groupOptions,
-          onChange: (v) => p.url.patch({ resource_group: v }),
-        },
-      ]
-    : [];
+  const groupOptions = labelGroups(reportedFacet(facets, "resource_group").options, subscriptionOptions.options);
   const specs: FacetSpec[] = [
     {
       key: "source",
@@ -306,7 +275,6 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       ...sourceFacet(sources, facets?.scope),
       onChange: (v) => p.url.patch({ source: v }),
     },
-    ...placement,
     {
       key: "kind",
       label: KIND_FACET_LABEL[type],
@@ -331,7 +299,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
   const preview = (r: InventoryRow): PreviewModel => {
     const facts: PreviewModel["facts"] = [
       { label: "Tenant", value: tenantLabel(r.scope?.id) },
-      ...(type !== "identities" ? [{ label: "Subscription", value: r.sub_scope ? subscriptionLabel(r.sub_scope) : <span className={MUTED}>Tenant-wide</span> }] : []),
+      ...(type !== "identities" || r.sub_scope ? [{ label: "Subscription", value: r.sub_scope ? subscriptionLabel(r.sub_scope) : <span className={MUTED}>Tenant-wide</span> }] : []),
       ...(str(r.attrs.resource_group) ? [{ label: "Resource group", value: str(r.attrs.resource_group) }] : []),
       ...(type === "identities" && SIGNS_IN(r.kind) ? [{ label: "Last sign-in", value: <ConfirmedValue iso={str(r.attrs.last_sign_in_at)} /> }] : []),
       ...(type === "workloads" && str(r.attrs.region) ? [{ label: "Region", value: str(r.attrs.region) }] : []),
@@ -359,7 +327,18 @@ export default function AzureInventoryScreen(p: ScreenProps) {
     };
   };
 
-  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `tenant ${p.scope.source.label}`, subscription && `subscription ${subscriptionName.get(subscription) ?? subscription}`, resourceGroup && `resource group ${groupOptions.options.find((o) => o.value === resourceGroup)?.label ?? resourceGroup.split("/").pop()}`, kind && `type ${kindLabel(kind)}`, lifecycleFilter && (lifecycleFilter === "retired" ? "deleted from Azure" : "everything AuthSec has found")].filter(Boolean) as string[];
+  // "subscription Authsec", "subscriptions Authsec, Authnull"; one this list's facets do not name is "the chosen subscription".
+  const named = (values: string[] | undefined, noun: string, label: (v: string) => string | undefined) => {
+    if (!values) return undefined;
+    const names = values.map(label);
+    if (names.some((n) => !n)) return values.length === 1 ? `the chosen ${noun}` : `${values.length} chosen ${noun}s`;
+    return `${noun}${values.length === 1 ? "" : "s"} ${names.join(", ")}`;
+  };
+  const placedNarrowing = [
+    named(subscription, "subscription", (v) => subscriptionName.get(v)),
+    named(resourceGroup, "resource group", (v) => groupOptions.find((o) => o.value === v)?.label ?? v.split("/").pop()),
+  ];
+  const narrowing = [p.url.q && `search "${p.url.q}"`, p.scope.kind === "one" && `tenant ${p.scope.source.label}`, ...placedNarrowing, kind && `type ${kindLabel(kind)}`, lifecycleFilter && (lifecycleFilter === "retired" ? "deleted from Azure" : "everything AuthSec has found")].filter(Boolean) as string[];
 
   if (p.scope.kind === "unknown") return <UnknownSource id={p.scope.id} provider="azure" noun="tenant" onClear={() => p.url.patch({ source: null })} />;
   if (p.scope.kind === "no_rows") return <SourceHasNoRows label={p.scope.source.label} noun="tenant" onClear={() => p.url.patch({ source: null })} />;
@@ -374,7 +353,7 @@ export default function AzureInventoryScreen(p: ScreenProps) {
       searchHint={p.url.qTooShort ? "Type at least 2 characters to search." : undefined}
       facets={specs}
       trailing={<ColumnsMenu optional={prefs.optional} chosen={prefs.chosen} onChange={prefs.setChosen} onReset={prefs.reset} layout={layout} />}
-      onClearAll={() => p.url.patch({ kind: null, source: null, subscription: null, resource_group: null, lifecycle: null, q: null, permissions: null })}
+      onClearAll={() => p.url.patch({ kind: null, source: null, lifecycle: null, q: null, permissions: null })}
       notices={
         <>
           {type === "resources" && !kind && hiddenPermissions > 0 ? (

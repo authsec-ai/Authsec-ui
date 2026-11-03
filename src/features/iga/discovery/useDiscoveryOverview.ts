@@ -58,6 +58,10 @@ interface Args {
   /** Azure: its connectors, and the Source in the URL (checked per type). */
   azureConnectors?: CloudConnector[];
   source?: string;
+  /** Azure: the page's subscriptions and resource groups (AzurePlacementBar): any one of each. */
+  placement?: { subscription?: string[]; resource_group?: string[] };
+  /** Azure: All agents' "Also show likely agents" is on (else it counts agents only). */
+  likelyAgents?: boolean;
 }
 
 function pageCount(p: { total: number; totalKnown: boolean } | undefined, failed: boolean): CountValue {
@@ -73,7 +77,7 @@ function sum(a: CountValue, b: CountValue): CountValue {
   return { kind: exact ? "exact" : "at_least", value: a.value + b.value };
 }
 
-export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch, azureConnectors = [], source }: Args): Overview {
+export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch, azureConnectors = [], source, placement, likelyAgents }: Args): Overview {
   const blocked = scope.kind === "unknown" || scope.kind === "no_rows";
   const sourceId = scope.kind === "one" ? scope.source.id : undefined;
   const scopeId = scope.kind === "one" ? scope.source.scopeId : undefined;
@@ -107,7 +111,8 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const azureOn = provider === "azure";
   const aa = useListAzureIdentitiesQuery({ limit: 1, connector_id: azureSourceFor(azureConnectors, "agents", source), kind: "entra_agent_identity" }, { skip: !azureOn });
   // Resources counts Azure resources, not the Entra permissions its list leaves out (UI-056).
-  const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", exclude_kind: [...ENTRA_PERMISSION_KINDS], scope: scopeId, q }, { skip: !azureOn || blocked });
+  // Every class follows the page's subscription and resource group (a managed identity is placed where its resource is).
+  const azSummary = useGetInventorySummaryQuery({ ws, provider: "azure", exclude_kind: [...ENTRA_PERMISSION_KINDS], scope: scopeId, q, ...placement }, { skip: !azureOn || blocked });
   // The graph not ready: the lists read the scan tables, and so do their counts.
   const azGraphOff = azureOn && classifyGraphError(azSummary.error)?.kind === "unavailable";
   const fbId = azureFallbackScope(azureConnectors, "identities", scopeId);
@@ -128,7 +133,12 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const sightingsOf = provider ? sightingProviderOf(provider) : "k8s";
   const sightings = useListDiscoveredAgentsQuery(
     // An Azure agent comes from a tenant connector, not a discovery source, so it has no discovery_source_id to filter by.
-    { source: SIGHTING_SOURCE[sightingsOf], limit: 1, ...(sourceId && sightingsOf !== "azure" ? { discovery_source_id: sourceId } : {}) },
+    {
+      source: SIGHTING_SOURCE[sightingsOf],
+      limit: 1,
+      ...(sourceId && sightingsOf !== "azure" ? { discovery_source_id: sourceId } : {}),
+      ...(sightingsOf === "azure" ? { ...placement, only_agents: !likelyAgents } : {}),
+    },
     { skip: !sightingsOn },
   );
   const sightingsCount: CountValue = sightings.isError ? COUNT_UNAVAILABLE : sightings.data ? { kind: "exact", value: sightings.data.total } : COUNT_LOADING;
