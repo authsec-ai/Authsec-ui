@@ -89,6 +89,7 @@ export type FilterKey =
   | "namespace"
   | "status"
   | "live"
+  | "likely"
   | "attribution"
   | "section";
 
@@ -106,6 +107,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   namespace: "Namespace",
   status: "Status",
   live: "Live only",
+  likely: "Likely agents",
   attribution: "Attribution",
   section: "Section",
 };
@@ -136,7 +138,8 @@ function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: D
     if (type === "sightings") return ["status", "live"];
   }
   if (provider === "azure" && (type === "identities" || type === "resources" || type === "workloads")) return ["kind", "lifecycle"];
-  if ((provider === "github" || provider === "azure") && type === "sightings") return ["status", "live"];
+  if (provider === "github" && type === "sightings") return ["status", "live"];
+  if (provider === "azure" && type === "sightings") return ["status", "live", "likely"];
   return [];
 }
 
@@ -251,7 +254,7 @@ export function nonDefaultBranch(agent: DiscoveredAgent): string | null {
 export function azureAgentOrigin(agent: DiscoveredAgent): string | null {
   if (agent.source !== "azure") return null;
   const meta = (agent.metadata ?? {}) as Record<string, unknown>;
-  if (meta["evidence_source"] === "entra_agent_id") return "Listed by Microsoft Entra Agent ID";
+  if (meta["evidence_source"] === "entra_agent_id") return azureAgentName(agent) ? "A Microsoft Foundry agent, listed by its Entra agent identity" : "Listed by Microsoft Entra Agent ID";
   if (meta["evidence_source"] === "foundry_agent_application") return "Published as a Microsoft Foundry agent application";
   if (meta["evidence_source"] === "azure_bot_service") return "An Azure Bot Service bot";
   if (meta["evidence_source"] === "foundry_project_agent") return "An agent of a Microsoft Foundry project";
@@ -318,4 +321,12 @@ export function azureAgentSignIn(agent: DiscoveredAgent): AzureSignIn {
 export function azureMetaText(agent: DiscoveredAgent, key: string): string {
   const v = ((agent.metadata ?? {}) as Record<string, unknown>)[key];
   return typeof v === "string" ? v : "";
+}
+
+/** The Foundry agent an Entra agent identity is: Foundry tags an agent's own identity agentName:<agent>. Null otherwise. */
+export function azureAgentName(agent: DiscoveredAgent): string | null {
+  const tags = ((agent.metadata ?? {}) as Record<string, unknown>)["tags"];
+  if (!Array.isArray(tags)) return null;
+  const tag = tags.find((t): t is string => typeof t === "string" && t.startsWith("agentName:"));
+  return tag ? tag.slice("agentName:".length) || null : null;
 }

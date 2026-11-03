@@ -60,6 +60,8 @@ interface Args {
   source?: string;
   /** Azure: the page's subscriptions and resource groups (AzurePlacementBar): any one of each. */
   placement?: { subscription?: string[]; resource_group?: string[] };
+  /** Azure: All agents' "Also show likely agents" is on (else it counts agents only). */
+  likelyAgents?: boolean;
 }
 
 function pageCount(p: { total: number; totalKnown: boolean } | undefined, failed: boolean): CountValue {
@@ -75,7 +77,7 @@ function sum(a: CountValue, b: CountValue): CountValue {
   return { kind: exact ? "exact" : "at_least", value: a.value + b.value };
 }
 
-export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch, azureConnectors = [], source, placement }: Args): Overview {
+export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch, azureConnectors = [], source, placement, likelyAgents }: Args): Overview {
   const blocked = scope.kind === "unknown" || scope.kind === "no_rows";
   const sourceId = scope.kind === "one" ? scope.source.id : undefined;
   const scopeId = scope.kind === "one" ? scope.source.scopeId : undefined;
@@ -135,7 +137,7 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
       source: SIGHTING_SOURCE[sightingsOf],
       limit: 1,
       ...(sourceId && sightingsOf !== "azure" ? { discovery_source_id: sourceId } : {}),
-      ...(sightingsOf === "azure" ? placement : {}),
+      ...(sightingsOf === "azure" ? { ...placement, only_agents: !likelyAgents } : {}),
     },
     { skip: !sightingsOn },
   );

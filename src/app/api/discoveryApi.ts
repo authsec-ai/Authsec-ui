@@ -429,6 +429,8 @@ export interface AgentFilters {
   /** Azure: where the agent lives, as the inventory's filters of the same names (any one of each). */
   subscription?: string[];
   resource_group?: string[];
+  /** Agents only: leave out identities inferred from sign-ins and agent identities not tied to one agent. */
+  only_agents?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -629,6 +631,7 @@ export const discoveryApi = baseApi.injectEndpoints({
           ...(f?.tenant_id ? { tenant_id: f.tenant_id } : {}),
           ...(f?.subscription?.length ? { subscription: f.subscription.join(",") } : {}),
           ...(f?.resource_group?.length ? { resource_group: f.resource_group.join(",") } : {}),
+          ...(f?.only_agents ? { only_agents: "true" } : {}),
           ...(f?.limit ? { limit: f.limit } : {}),
           ...(f?.offset ? { offset: f.offset } : {}),
         },

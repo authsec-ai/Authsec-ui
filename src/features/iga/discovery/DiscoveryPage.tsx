@@ -135,7 +135,7 @@ export default function DiscoveryPage() {
   const { rev, epoch, stale, refresh } = useGraphRevision(ws);
   usePipeline(ws, !awsPublished);
   const placement = active === "azure" ? placementOf(url) : undefined;
-  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source, placement });
+  const overview = useDiscoveryOverview({ ws, provider: active, view, scope, q: url.q, rev, epoch, azureConnectors, source: url.source, placement, likelyAgents: !!url.get("likely") });
 
   // Make the resolved provider and type explicit in the URL, once. A Kubernetes cluster
   // that has reported sightings but no inventory yet opens on its sightings: landing on
