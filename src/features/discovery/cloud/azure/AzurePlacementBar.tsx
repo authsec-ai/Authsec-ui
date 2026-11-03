@@ -22,8 +22,10 @@ import { ENTRA_PERMISSION_KINDS } from "./entraPermissions";
 
 /** What a tab leaves out while a subscription or resource group is chosen. */
 const PLACED_NOTE: Partial<Record<DiscoveryType, string>> = {
-  identities: "Only managed identities live in a subscription, under their resource's. Users, groups and app registrations belong to the tenant and are not listed.",
-  sightings: "Agents are listed under their resource's or Foundry project's subscription. Agents that are only Entra objects belong to the tenant and are not listed.",
+  identities:
+    "Managed identities are listed under their resource's subscription, and Foundry agent identities under their project's. Users, groups and app registrations belong to the tenant and are not listed.",
+  sightings:
+    "Agents are listed under their resource's or Foundry project's subscription, or their identity's. Agents whose identity belongs only to the tenant are not listed.",
 };
 
 export default function AzurePlacementBar(p: Pick<ScreenProps, "ws" | "url" | "type" | "scope">) {
