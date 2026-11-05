@@ -73,6 +73,10 @@ const PolicySetupRedirect = React.lazy(() => import("./features/iga/connections/
 const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
 const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
+const AgentAlertsPage = React.lazy(() => import("./features/iga/agentRuntime/AlertsPage"));
+const AgentAlertDetailPage = React.lazy(() => import("./features/iga/agentRuntime/AlertDetailPage"));
+const AgentAlertSettingsPage = React.lazy(() => import("./features/iga/agentRuntime/AlertSettingsPage"));
+const AgentContainmentsPage = React.lazy(() => import("./features/iga/agentRuntime/ContainmentsPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
 const IdentityPage = React.lazy(() => import("./features/iga/identities/IdentityPage"));
@@ -888,6 +892,48 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <LogsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Agent runtime visibility on AWS: alerts (the Slack and SIEM links point at the detail route), their settings, containments. */}
+                  <Route
+                    path="/iga/agent-runtime/alerts"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/alerts/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/alert-settings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertSettingsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/containments"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentContainmentsPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

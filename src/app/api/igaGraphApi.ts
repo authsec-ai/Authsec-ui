@@ -1262,6 +1262,34 @@ export interface Capabilities {
   features: Partial<Record<GraphFeature, boolean>>;
   schema_head: string | null;
   policy?: PolicyCapabilities;
+  /**
+   * Agent runtime visibility (SPEC-agent-runtime-visibility.md). Each key is
+   * absent from a backend that predates it: read it through
+   * `features/iga/agentRuntime/useAgentRuntimeCaps`, never directly.
+   */
+  agent_containment?: AgentContainmentCapabilities;
+  agent_alerts?: AgentFeatureCapability;
+  agent_runtime?: AgentFeatureCapability;
+}
+
+/** `{available, reason?}`: one agent-runtime feature as /capabilities reports it. */
+export interface AgentFeatureCapability {
+  available: boolean;
+  reason?: string | null;
+}
+
+/** `agent_containment` (services.AgentContainCapabilities, agent_runtime_contain.go:646). */
+export interface AgentContainmentCapabilities extends AgentFeatureCapability {
+  levels?: string[];
+  workload_containment?: AgentFeatureCapability;
+  accounts?: {
+    connector_id: string;
+    account_id: string;
+    identity_and_model: boolean;
+    identity_and_model_reason?: string;
+    workload_containment: boolean;
+    workload_containment_reason?: string;
+  }[];
 }
 
 /* --------------------------------- args ---------------------------------- */

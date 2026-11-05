@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Cable, Radar, Scale, type LucideIcon } from "lucide-react";
+import { BellRing, Cable, Radar, Scale, ShieldAlert, type LucideIcon } from "lucide-react";
 // import { ScrollText } from "lucide-react"; // for the Logs entry below
 
 import { NavMain } from "@/components/nav-main";
@@ -53,6 +53,9 @@ const NAV: IgaNavItem[] = [
     activeFor: ["/iga/estate", "/iga/identities", "/iga/resources", "/iga/external-principals", "/iga/sightings", "/iga/k8s"],
   },
   { title: "Policy", url: "/iga/policy", icon: Scale, tag: "Preview" },
+  // Agent runtime visibility on AWS: alerts (with their settings) and containments.
+  { title: "Agent alerts", url: "/iga/agent-runtime/alerts", icon: BellRing, activeFor: ["/iga/agent-runtime/alert-settings"] },
+  { title: "Containments", url: "/iga/agent-runtime/containments", icon: ShieldAlert },
   // Logs is hidden from the sidebar for now. Its route still works (/iga/logs).
   // Uncomment this entry and the ScrollText import above to bring it back.
   // { title: "Logs", url: "/iga/logs", icon: ScrollText, tag: "Preview" },

@@ -591,6 +591,7 @@ export type DetailTab =
   | "rules"
   | "enforcement"
   | "iac"
+  | "event-stream"
   | "notifications"
   | "settings";
 
@@ -610,6 +611,7 @@ export function tabsOf(c: Connection): { key: DetailTab; label: string }[] {
     tabs.push(
       { key: "enforcement", label: "Enforcement" },
       { key: "iac", label: "IaC sources" },
+      { key: "event-stream", label: "Event stream" },
       { key: "notifications", label: "Notifications" },
       { key: "settings", label: "Settings" },
     );
