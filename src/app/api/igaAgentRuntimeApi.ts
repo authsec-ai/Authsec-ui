@@ -551,8 +551,8 @@ export interface EventStreamTemplateDoc {
   notes: string[];
 }
 
-/** scp: service control policy; policy: deny policy on chosen roles (services/agent_runtime_templates.go:135). */
-export type ModelAccessForm = "scp" | "policy";
+/** scp: service control policy; rcp: resource control policy (stops tags set by the assumer); policy: deny policy on chosen roles (services/agent_runtime_templates.go). */
+export type ModelAccessForm = "scp" | "rcp" | "policy";
 
 export interface ModelAccessTemplate {
   template_version: string;
