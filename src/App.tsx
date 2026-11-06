@@ -73,6 +73,15 @@ const PolicySetupRedirect = React.lazy(() => import("./features/iga/connections/
 const PolicyFormPage = React.lazy(() => import("./features/iga/policy/access/PolicyFormPage"));
 const PolicyDetailPage = React.lazy(() => import("./features/iga/policy/access/PolicyDetailPage"));
 const LogsPage = React.lazy(() => import("./features/iga/logs/LogsPage"));
+const AgentAlertsPage = React.lazy(() => import("./features/iga/agentRuntime/AlertsPage"));
+const AgentAlertDetailPage = React.lazy(() => import("./features/iga/agentRuntime/AlertDetailPage"));
+const AgentAlertSettingsPage = React.lazy(() => import("./features/iga/agentRuntime/AlertSettingsPage"));
+const AgentContainmentsPage = React.lazy(() => import("./features/iga/agentRuntime/ContainmentsPage"));
+const AgentModelProvidersPage = React.lazy(() => import("./features/iga/agentRuntime/providers/ModelProvidersPage"));
+const AgentModelProviderDetailPage = React.lazy(() => import("./features/iga/agentRuntime/providers/ModelProviderDetailPage"));
+const AgentActivityPage = React.lazy(() => import("./features/iga/agentRuntime/activity/ActivityPage"));
+const AgentActivityTracePage = React.lazy(() => import("./features/iga/agentRuntime/activity/ActivityTracePage"));
+const AgentGatewayPage = React.lazy(() => import("./features/iga/agentRuntime/gateway/AgentGatewayPage"));
 const RetiredPage = React.lazy(() => import("./features/iga/retired/RetiredPage"));
 import { legacyRedirect, type LegacyDiscoveryRoute } from "./features/iga/discovery/urlState";
 const IdentityPage = React.lazy(() => import("./features/iga/identities/IdentityPage"));
@@ -888,6 +897,98 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <LogsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Agent runtime visibility on AWS: alerts (the Slack and SIEM links point at the detail route), their settings, containments. */}
+                  <Route
+                    path="/iga/agent-runtime/alerts"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/alerts/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/alert-settings"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentAlertSettingsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/containments"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentContainmentsPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/model-providers"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentModelProvidersPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/model-providers/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentModelProviderDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/activity"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentActivityPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/activity/traces/:traceId"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentActivityTracePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/agent-runtime/gateway"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <AgentGatewayPage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }

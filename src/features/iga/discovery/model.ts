@@ -18,7 +18,7 @@ import {
 
 /** The object types each provider collects today. Anything else is *not collected*. */
 export const TYPES_BY_PROVIDER: Record<DiscoveryProvider, DiscoveryType[]> = {
-  aws: ["workloads", "identities", "resources"],
+  aws: ["workloads", "identities", "resources", "ai_workloads"],
   k8s: ["workloads", "identities", "sightings"],
   gcp: ["identities"],
   azure: ["agents", "sightings", "identities", "resources", "workloads"],
@@ -63,7 +63,7 @@ export function notCollectedReason(provider: DiscoveryProvider, type: DiscoveryT
 
 /** Does this provider/type have both a Published and a Latest collected reading? */
 export function hasViews(provider: DiscoveryProvider, type: DiscoveryType): boolean {
-  return provider === "aws" && type !== "sightings";
+  return provider === "aws" && type !== "sightings" && type !== "ai_workloads";
 }
 
 /** The reading in force: Published by default; Google Cloud has only Latest collected. */
@@ -159,6 +159,7 @@ const NOUN: Record<DiscoveryType, string> = {
   identities: "identity",
   resources: "resource",
   sightings: "sighting",
+  ai_workloads: "AI workload",
 };
 
 export interface Scope {

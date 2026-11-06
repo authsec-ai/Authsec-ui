@@ -42,6 +42,7 @@ import { useGraphRevision, useTrackRevision } from "../shared/revision";
 import { useEvidence } from "../evidence/useEvidence";
 import { useWorkloadAccess } from "../shared/useWorkloadAccess";
 import { ClassificationHistory } from "../classification/ClassificationHistory";
+import { AgentRuntimePanel } from "../agentRuntime/AgentRuntimePanel";
 import { CopyValue, Fact, Facts, Meta, Panel } from "../shared/components/Panel";
 import { DeclaredExamples, type ExampleLine } from "../shared/components/DeclaredExamples";
 import { InlineState } from "../shared/components/InlineState";
@@ -350,6 +351,7 @@ export function WorkloadOverview({
           {/* Hidden for now: the Policy tile has no action yet. Restore with the workload policy flow.
           {!frozen && w.lifecycle !== "retired" ? <WorkloadPolicySection ws={ws} workloadId={refId(w.ref)} /> : null}
           */}
+          <AgentRuntimePanel ar={w.agent_runtime} />
           {/* Who does it act as? */}
           <Panel
             title="Identity"

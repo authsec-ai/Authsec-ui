@@ -27,7 +27,7 @@ export const DISCOVERY_PATH = "/iga/discovery";
 export const DISCOVERY_PROVIDERS = ["aws", "k8s", "gcp", "azure", "github"] as const;
 export type DiscoveryProvider = (typeof DISCOVERY_PROVIDERS)[number];
 
-const DISCOVERY_TYPES = ["agents", "workloads", "identities", "resources", "sightings"] as const;
+const DISCOVERY_TYPES = ["agents", "workloads", "identities", "resources", "sightings", "ai_workloads"] as const;
 export type DiscoveryType = (typeof DISCOVERY_TYPES)[number];
 
 export const DISCOVERY_VIEWS = ["published", "latest"] as const;
@@ -47,6 +47,7 @@ export const TYPE_LABEL: Record<DiscoveryType, string> = {
   identities: "Identities",
   resources: "Resources",
   sightings: "Sightings",
+  ai_workloads: "AI workloads",
 };
 
 /**

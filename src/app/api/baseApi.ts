@@ -238,6 +238,14 @@ export const baseApi = createApi({
     "IgaGovSettings",
     "IgaGovMetrics",
     "IgaGovSetup",
+    // Agent runtime visibility on AWS (SPEC-agent-runtime-visibility.md).
+    "AgentRuntime",
+    "AgentAlert",
+    "AgentContainment",
+    "AgentModelProvider",
+    "AgentActivity",
+    "AgentGateway",
+    "AgentEventStream",
   ],
   endpoints: () => ({}),
 });
