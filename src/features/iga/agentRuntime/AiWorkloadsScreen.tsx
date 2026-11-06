@@ -32,7 +32,7 @@ import { LabelChip, NotAvailable, ReadFailure } from "./parts";
 import { SuggestionDialog, type SuggestionDecision } from "./SuggestionDialogs";
 import { useAgentRuntimeCaps } from "./useAgentRuntimeCaps";
 
-const LABELS: AgentLabel[] = ["ai_workload", "suggested_agent", "agent"];
+const LABELS: AgentLabel[] = ["possible_ai_workload", "ai_workload", "suggested_agent", "agent"];
 type Section = "workloads" | "findings";
 
 export default function AiWorkloadsScreen({ ws, connectorId }: { ws: string; connectorId?: string }) {
@@ -51,7 +51,7 @@ export default function AiWorkloadsScreen({ ws, connectorId }: { ws: string; con
     <div className="space-y-3 p-4">
       <p className="text-xs text-(--color-text-muted)">
         Shows what the evidence read so far supports, per source and per window: model calls that CloudTrail reported to AuthSec, and platform-declared agents. It does not claim to list every agent. Calls made through a trail
-        without data events, or to a non-AWS provider, are not seen.
+        without data events are not seen; direct calls to other providers are seen only where Route 53 Resolver query logs are read.
       </p>
       <div role="tablist" aria-label="View" className="flex gap-1">
         {(["workloads", "findings"] as const).map((s) => (
@@ -84,7 +84,7 @@ function WorkloadsList({ ws, connectorId, containOn }: { ws: string; connectorId
   const suggestions = useMemo(() => new Map((pending.data?.data ?? []).map((s) => [s.id, s] as const)), [pending.data]);
   const all = useMemo(() => list.data?.data ?? [], [list.data]);
   const counts = useMemo(() => {
-    const c: Record<AgentLabel, number> = { ai_workload: 0, suggested_agent: 0, agent: 0 };
+    const c: Record<AgentLabel, number> = { possible_ai_workload: 0, ai_workload: 0, suggested_agent: 0, agent: 0 };
     for (const a of all) c[a.label] = (c[a.label] ?? 0) + 1;
     return c;
   }, [all]);

@@ -1,5 +1,7 @@
 /** One finding's subject and evidence, per kind (agent_runtime_findings.go:222). */
 
+import { Link } from "react-router-dom";
+
 import type { AgentFinding } from "@/app/api/igaAgentRuntimeApi";
 import { DetailGrid, DetailRow } from "@/components/console/detail";
 
@@ -72,6 +74,44 @@ export function FindingEvidence({ finding }: { finding: AgentFinding }) {
             ))}
             {arr(ev.readers).length === 0 ? <li className="text-xs text-muted-foreground">No identity is granted read.</li> : null}
           </ul>
+        </div>
+      ) : null}
+
+      {finding.kind === "ai_config_hint" ? (
+        <p className="text-xs text-muted-foreground">
+          Names only ({arr(ev.env_var_names).length ? (ev.env_var_names as unknown[]).map(String).join(", ") : "no variable names of interest"}). A hint makes a possible AI workload, never an AI workload or a suggestion.
+        </p>
+      ) : null}
+
+      {finding.kind === "ai_network_traffic" ? (
+        <div>
+          <p className="mb-1 text-xs text-muted-foreground">
+            {str(ev.queries)} DNS lookups of {Array.isArray(ev.providers) ? (ev.providers as unknown[]).map(String).join(", ") : "model providers"}, attributed by{" "}
+            {str(rec(ev.attribution).how).replace(/_/g, " ") || "unknown"} ({str(rec(ev.attribution).confidence) === "query_time" ? "at lookup time: evidence" : "at scan time: a lead only"}).
+          </p>
+          <ul className="space-y-0.5">
+            {arr(ev.domains).slice(0, 8).map((d, i) => (
+              <li key={str(d.domain) || i} className="flex justify-between gap-3">
+                <Mono>{str(d.domain)}</Mono>
+                <span className="text-xs tabular-nums text-muted-foreground">{str(d.queries)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {finding.kind === "unaccounted_model_usage" ? (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {str(subject.provider)} key <Mono>{str(subject.key_name) || str(subject.provider_key_id)}</Mono>
+            {str(subject.project_name) ? ` in project ${str(subject.project_name)}` : ""}: {str(ev.requests)} requests in {str(ev.window_days)} days, last used {shortTime(str(ev.last_used_at))}.
+          </p>
+          <p className="text-xs text-muted-foreground">Weak: no AWS secret or Lambda variable name in this workspace contains the key or project name ({str(ev.names_checked)} names checked). The key's value is never read.</p>
+          {str(subject.connection_id) ? (
+            <Link to={`/iga/agent-runtime/model-providers/${str(subject.connection_id)}`} className="text-xs font-medium text-(--color-primary-text) hover:underline">
+              Open {str(subject.connection_name) || "the connection"}
+            </Link>
+          ) : null}
         </div>
       ) : null}
 

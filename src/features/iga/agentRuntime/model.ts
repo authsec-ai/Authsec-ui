@@ -2,7 +2,8 @@
  * Words and small helpers shared by the agent-runtime screens
  * (SPEC-agent-runtime-visibility.md §1, §5.7, §5.8).
  *
- * The three labels are exact and mean different things:
+ * The labels are exact and mean different things:
+ *   Possible AI workload  names or a scan-time network match only. Shown, nothing else.
  *   AI workload      calls a model. Evidence only; NOT an agent.
  *   Suggested agent  an AI workload that also acted on other resources. A suggestion.
  *   Agent            declared by a platform, or classified by a person.
@@ -13,18 +14,21 @@ import type { AICoverage, AgentLabel, ContainState, DetectionId } from "@/app/ap
 import type { ConsoleTone } from "@/components/console/status";
 
 export const LABEL_TEXT: Record<AgentLabel, string> = {
+  possible_ai_workload: "Possible AI workload",
   ai_workload: "AI workload",
   suggested_agent: "Suggested agent",
   agent: "Agent",
 };
 
 export const LABEL_TONE: Record<AgentLabel, ConsoleTone> = {
+  possible_ai_workload: "neutral",
   ai_workload: "neutral",
   suggested_agent: "warning",
   agent: "info",
 };
 
 export const LABEL_HINT: Record<AgentLabel, string> = {
+  possible_ai_workload: "Configuration names or network traffic hint at a model, but no model call is tied to it. Not evidence of model use.",
   ai_workload: "Seen calling a model. This is evidence only; it is not classified as an agent.",
   suggested_agent: "Also acted on other resources under its own identity. A suggestion until a person classifies it.",
   agent: "Declared by its platform, or classified as an agent by a person.",
@@ -53,6 +57,9 @@ export const FINDING_TEXT: Record<string, string> = {
   human_credentials: "Human credentials",
   long_lived_key: "IAM user with long-lived key",
   model_key_secret: "Model-key secret",
+  ai_config_hint: "Configuration hint",
+  ai_network_traffic: "Model provider network traffic",
+  unaccounted_model_usage: "Unaccounted model-provider key",
 };
 
 export const CONTAIN_LEVEL_TEXT: Record<string, { title: string; short: string }> = {

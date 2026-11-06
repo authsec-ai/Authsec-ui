@@ -381,6 +381,22 @@ export interface GatewayTarget {
   type: string;
 }
 
+/**
+ * A node's agent-runtime picture (internal/igaread/agent_runtime.go:161),
+ * on graph nodes and on identity and workload detail: absent unless there is
+ * something to say.
+ */
+export interface GraphAgentRuntime {
+  /** null: shown only for an alert, finding or containment, with no label. */
+  label: "possible_ai_workload" | "ai_workload" | "suggested_agent" | "agent" | null;
+  /** null: not an AI workload. */
+  model_calls: { calls: number; denied: number; last_call_at: string | null; models: { model: string; calls: number }[] } | null;
+  open_alerts: { count: number; highest_severity: string | null };
+  open_findings: number;
+  suggestion: { id: string; state: string } | null;
+  containment: { id: string; level: string; state: string; effective: boolean | null } | null;
+}
+
 export interface WorkloadDetail extends WorkloadRow {
   retired_reason: string | null;
   continuity: Continuity;
@@ -393,6 +409,7 @@ export interface WorkloadDetail extends WorkloadRow {
   };
   sources: GraphSource[];
   decision: LatestDecision | null;
+  agent_runtime?: GraphAgentRuntime;
 }
 
 export type WorkloadSort = "name" | "-name" | "account" | "last_confirmed" | "classification";
@@ -507,6 +524,7 @@ export interface IdentityDetail extends IdentityRow {
   };
   credentials?: IdentityCredential[];
   sources: GraphSource[];
+  agent_runtime?: GraphAgentRuntime;
 }
 
 export type IdentitySort = "name" | "-name" | "kind" | "account" | "last_confirmed";
@@ -774,6 +792,8 @@ export type GraphEdgeKind =
 
 export interface GraphNode {
   ref: GraphRef;
+  /** AWS identity and workload nodes (traverse.go:244). */
+  agent_runtime?: GraphAgentRuntime;
   kind: GraphNodeKind;
   label: string;
   /** Absent on statements. */

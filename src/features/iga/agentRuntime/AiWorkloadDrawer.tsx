@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { RightDrawer } from "@/components/primitives/RightDrawer";
 
 import { coverageText, shortTime, topEntries } from "./model";
+import { ActivityTimelineSection } from "./activity/ActivityTimelineSection";
+import { ConfigHintEvidence, LiveEvidence, NetworkTrafficEvidence } from "./EvidenceSections";
 import { LabelChip, Mono } from "./parts";
 
 function Counts({ entries, empty }: { entries: [string, number][]; empty: string }) {
@@ -57,6 +59,11 @@ export function AiWorkloadDrawer({
           <DrawerBody>
             {ai.label === "ai_workload" ? (
               <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">This is evidence of model use. It is not classified as an agent.</p>
+            ) : null}
+            {ai.label === "possible_ai_workload" ? (
+              <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                Possible AI workload: names or a scan-time network match hint at a model, but no model call is tied to it. It raises no alerts and is never suggested as an agent.
+              </p>
             ) : null}
             {ai.shared_role ? (
               <p className="rounded-md border border-(--color-warning) bg-(--color-warning-soft) px-3 py-2 text-xs text-(--color-warning-text)">
@@ -130,6 +137,11 @@ export function AiWorkloadDrawer({
                 </div>
               </div>
             </DrawerSection>
+
+            <LiveEvidence ai={ai} />
+            <NetworkTrafficEvidence ai={ai} />
+            <ConfigHintEvidence ai={ai} />
+            <ActivityTimelineSection identityId={ai.identity.id} inDrawer />
 
             <DrawerSection label="Other services it called">
               <Counts entries={topEntries(ai.other_services)} empty="None seen in the window read." />

@@ -3,7 +3,7 @@
  * workloads and suggested agents, findings, alerts and their settings, SIEM
  * endpoints, containment, and the AWS event stream. Every shape below was
  * traced from the Go struct the handler serialises (`authsec`,
- * `.worktrees/arv-be`); a field the backend does not send is not declared.
+ * `authsec-staging`); a field the backend does not send is not declared.
  *
  * The workspace is always the token's: nothing here sends one. `ws` on a query
  * argument is a client-only cache key and never reaches the server.
@@ -48,8 +48,12 @@ const DISCOVERY = "/authsec/discovery/aws";
 
 /* --------------------------------- labels --------------------------------- */
 
-/** services.AIWorkload.Label (agent_runtime_inference.go:485). */
-export type AgentLabel = "ai_workload" | "suggested_agent" | "agent";
+/**
+ * services.AIWorkload.Label (agent_runtime_inference.go). possible_ai_workload
+ * rests on configuration hints (or network traffic attributed only at scan
+ * time): shown, never suggested.
+ */
+export type AgentLabel = "possible_ai_workload" | "ai_workload" | "suggested_agent" | "agent";
 
 /* ------------------------------- AI workloads ------------------------------ */
 
@@ -106,6 +110,21 @@ export interface AIWorkload {
   suggestion: { id: string; state: string } | null;
   open_findings: number;
   usage_id: string;
+  /** Model calls the event stream reported since the last scan (agent_runtime_inference.go:569). */
+  live: { calls: number; denied: number; last_call_at: string | null; models: Record<string, number> };
+  seen_live: boolean;
+  /** Open ai_config_hint findings: names only, never decide a label above "possible". */
+  config_hints: AIFindingRef[];
+  /** Open ai_network_traffic findings: DNS lookups of model API hosts (spec §11). */
+  network_traffic: AIFindingRef[];
+}
+
+/** services.AIFindingRef (agent_runtime_config_hints.go:222). */
+export interface AIFindingRef {
+  finding_id: string;
+  kind: string;
+  subject: Record<string, unknown>;
+  evidence: Record<string, unknown>;
 }
 
 export interface ArListEnvelope<T> {
@@ -203,12 +222,20 @@ export interface ConfirmSuggestionArgs {
 
 /* --------------------------------- findings --------------------------------- */
 
-export type FindingKind = "shared_role" | "human_credentials" | "long_lived_key" | "model_key_secret";
+export type FindingKind =
+  | "shared_role"
+  | "human_credentials"
+  | "long_lived_key"
+  | "model_key_secret"
+  | "ai_config_hint"
+  | "ai_network_traffic"
+  | "unaccounted_model_usage";
 
 /** services.AgentFinding (agent_runtime_findings.go:381). Subject and evidence vary by kind. */
 export interface AgentFinding {
   id: string;
-  connector_id: string;
+  /** Null for unaccounted_model_usage: it names a model-provider connection, not an AWS connector. */
+  connector_id: string | null;
   kind: FindingKind;
   subject_key: string;
   identity_id: string | null;
@@ -524,8 +551,8 @@ export interface EventStreamTemplateDoc {
   notes: string[];
 }
 
-/** scp: service control policy; rcp: resource control policy (stops tags set by the assumer); policy: deny policy on chosen roles. */
-export type ModelAccessForm = "scp" | "rcp" | "policy";
+/** scp: service control policy; policy: deny policy on chosen roles (services/agent_runtime_templates.go:135). */
+export type ModelAccessForm = "scp" | "policy";
 
 export interface ModelAccessTemplate {
   template_version: string;

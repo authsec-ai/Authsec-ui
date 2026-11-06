@@ -37,6 +37,7 @@ import { shortResourceName } from "../shared/sketch";
 import { DeclaredExamples, type ExampleLine } from "../shared/components/DeclaredExamples";
 import { InlineState } from "../shared/components/InlineState";
 import { NeighbourhoodSketch, type SketchEdge, type SketchNode } from "../shared/components/NeighbourhoodSketch";
+import { AgentRuntimePanel } from "../agentRuntime/AgentRuntimePanel";
 import { CopyValue, Fact, Facts, Meta, Panel, TechnicalDetails } from "../shared/components/Panel";
 import { EvidenceSummary } from "../evidence/EvidenceSummary";
 import { Timestamp } from "../shared/components/Timestamp";
@@ -253,6 +254,7 @@ export function IdentityOverview({
       <div className="gap-4 lg:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
           {/* Policy: only an IAM role can be right-sized (SPEC-iga-phase3-policy.md §9.4). */}
           {i.kind === "iam_role" && !frozen && i.lifecycle !== "retired" ? <IdentityPolicySection ws={ws} identityId={id} /> : null}
+          <AgentRuntimePanel ar={i.agent_runtime} />
           <Panel title="What it is">
             <Facts>
               <Fact label="Kind">{kind}</Fact>

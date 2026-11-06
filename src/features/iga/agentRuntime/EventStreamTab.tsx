@@ -262,7 +262,7 @@ function ModelAccessPanel() {
             ))}
           </div>
           <div role="radiogroup" aria-label="Form" className="flex gap-1.5">
-            {([["scp", "Service control policy"], ["rcp", "Resource control policy"], ["policy", "Deny policy on roles"]] as const).map(([k, l]) => (
+            {([["scp", "Service control policy"], ["policy", "Deny policy on roles"]] as const).map(([k, l]) => (
               <button key={k} type="button" role="radio" aria-checked={form === k} onClick={() => setForm(k)} className={chipButtonClass(form === k)}>
                 {l}
               </button>
