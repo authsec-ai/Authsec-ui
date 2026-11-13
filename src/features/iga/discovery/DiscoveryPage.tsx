@@ -10,7 +10,7 @@
  * restores it.
  */
 
-import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
@@ -53,6 +53,7 @@ import { useDiscoveryOverview } from "./useDiscoveryOverview";
 import { useDiscoveryUrl } from "./useDiscoveryUrl";
 import { inScope } from "./k8s";
 import { typeLabel, DISCOVERY_PROVIDERS, PROVIDER_LABEL, rememberDiscoverySearch, type DiscoveryProvider, type DiscoveryType, type DiscoveryView } from "./urlState";
+const AiWorkloadsScreen = lazy(() => import("../agentRuntime/AiWorkloadsScreen"));
 import LatestScreen from "./LatestScreen";
 import InventoryScreen from "./InventoryScreen";
 import PublishedScreen from "./PublishedScreen";
@@ -291,6 +292,15 @@ export default function DiscoveryPage() {
         <div id="discovery-tabpanel" role="tabpanel" aria-labelledby={`discovery-tab-${type}`}>
         {!supportsType(provider, type) ? (
           <NotCollected provider={provider} type={type} />
+        ) : type === "ai_workloads" ? (
+          <Suspense fallback={<div className="h-40 animate-pulse bg-(--color-surface-subtle)" aria-busy="true" aria-label="Loading AI workloads" />}>
+            {scope.kind === "unknown" ? (
+              <p role="status" className="p-4 text-sm text-(--color-text-muted)">This link names a source that is not connected, so nothing is shown. Choose a source above.</p>
+            ) : (
+              // One account stays one account: the chosen source's connector narrows every list.
+              <AiWorkloadsScreen ws={ws} connectorId={scope.kind === "one" || scope.kind === "no_rows" ? scope.source.id : undefined} />
+            )}
+          </Suspense>
         ) : type === "sightings" ? (
           <SightingsScreen {...props} />
         ) : provider === "azure" && type === "agents" ? (

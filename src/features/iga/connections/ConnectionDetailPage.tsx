@@ -21,6 +21,7 @@ import {
   PendingWord,
   StatusBlock,
 } from "./ConnectionParts";
+import { EventStreamTab } from "@/features/iga/agentRuntime/EventStreamTab";
 import { CoverageTab } from "./CoverageTab";
 import { EnforcementTab, IacTab, NotificationsTab, SettingsTab } from "./ConnectionSetupTabs";
 import { K8sEnforcementTab } from "./K8sEnforcementTab";
@@ -188,6 +189,7 @@ export default function ConnectionDetailPage() {
       {active === "rules" ? <RuleCatalogPanel scansHref={detailHref(c.id, "scans")} /> : null}
       {active === "enforcement" ? c.provider === "k8s" ? <K8sEnforcementTab c={c} /> : <EnforcementTab c={c} /> : null}
       {active === "iac" ? <IacTab c={c} /> : null}
+      {active === "event-stream" && c.provider === "aws" ? <EventStreamTab c={c} /> : null}
       {active === "notifications" ? <NotificationsTab /> : null}
       {active === "settings" ? <SettingsTab /> : null}
       {active === null ? (

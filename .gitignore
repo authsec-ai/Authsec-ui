@@ -52,3 +52,5 @@ next-env.d.ts
 
 #bakcend
 backend
+# Agent instructions are private to each developer: never committed.
+AGENTS.md
