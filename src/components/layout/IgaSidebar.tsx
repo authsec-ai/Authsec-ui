@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Cable, Radar, Scale, type LucideIcon } from "lucide-react";
+import { Cable, Laptop, Radar, Scale, type LucideIcon } from "lucide-react";
 // import { ScrollText } from "lucide-react"; // for the Logs entry below
 
 import { NavMain } from "@/components/nav-main";
@@ -46,6 +46,7 @@ interface IgaNavItem {
 
 const NAV: IgaNavItem[] = [
   { title: "Connections", url: "/iga/connections", icon: Cable },
+  { title: "Machines", url: "/iga/machines", icon: Laptop },
   {
     title: "Discovery",
     url: "/iga/discovery",

@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { Laptop } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,7 @@ import { ProviderGlyph } from "@/features/iga/connections/ProviderGlyph";
 import { CLOUD_PROVIDER_META } from "./cloudProviderMeta";
 
 /** What can be connected: the clouds, plus the two sources that are not clouds. */
-export type PickerProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
+export type PickerProvider = "aws" | "gcp" | "azure" | "k8s" | "github" | "machine";
 
 interface PickerEntry {
   key: PickerProvider;
@@ -50,6 +51,12 @@ const PROVIDERS: PickerEntry[] = [
     available: true,
   },
   CLOUD_PROVIDER_META.azure,
+  {
+    key: "machine",
+    label: "Machine",
+    tagline: "AI agents on a laptop, workstation or server, reported by the AuthSec Agent Kit.",
+    available: true,
+  },
 ];
 
 export function CloudProviderPicker({
@@ -104,6 +111,10 @@ export function CloudProviderPicker({
                 <div className="flex w-full items-center gap-2">
                   {meta.key === "azure" ? (
                     <CloudProviderBadge provider="azure" size="size-9" />
+                  ) : meta.key === "machine" ? (
+                    <span className="flex size-9 flex-none items-center justify-center rounded-md border border-border bg-muted p-1.5 text-foreground">
+                      <Laptop className="size-full" aria-hidden />
+                    </span>
                   ) : (
                     <ProviderGlyph provider={meta.key} size="size-9" />
                   )}

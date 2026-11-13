@@ -5,6 +5,7 @@
  * after a successful add the list refetches.
  */
 
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import { GitHubSetupWizard } from "@/features/discovery/GitHubSetupWizard";
@@ -34,6 +35,7 @@ export function AddConnectionDialogs({
   onAdded: (id?: string) => void;
 }) {
   const close = () => onWizardChange(null);
+  const navigate = useNavigate();
   return (
     <>
       <CloudProviderPicker
@@ -41,6 +43,8 @@ export function AddConnectionDialogs({
         onOpenChange={onPickerOpenChange}
         onContinue={(p: PickerProvider) => {
           if (p === "aws" || p === "gcp" || p === "azure" || p === "k8s" || p === "github") onWizardChange(p);
+          // Machines have their own page; its Add machine dialog opens there.
+          else if (p === "machine") navigate("/iga/machines?add=1");
           else toast("That provider is not available yet.");
         }}
       />

@@ -60,6 +60,8 @@ const AgentsPage = React.lazy(() => import("./features/agents/AgentsPage"));
 const ServiceAccountsPage = React.lazy(() => import("./features/service-accounts/ServiceAccountsPage"));
 const WorkloadPage = React.lazy(() => import("./features/iga/estate/WorkloadPage"));
 const ConnectionsPage = React.lazy(() => import("./features/iga/connections/ConnectionsPage"));
+const MachinesPage = React.lazy(() => import("./features/iga/machines/MachinesPage"));
+const MachineDetailPage = React.lazy(() => import("./features/iga/machines/MachineDetailPage"));
 const ConnectionDetailPage = React.lazy(() => import("./features/iga/connections/ConnectionDetailPage"));
 const ScanDetailPage = React.lazy(() => import("./features/iga/connections/ScanDetailPage"));
 const DiscoveryPage = React.lazy(() => import("./features/iga/discovery/DiscoveryPage"));
@@ -614,6 +616,28 @@ function AppContent() {
                       the object pages Discovery opens (SPEC-console-revamp.md).
                       Every earlier route redirects here WITH its query string. */}
                   <Route path="/iga" element={<Navigate to="/iga/discovery" replace />} />
+
+                  {/* Machines (AuthSec Agent Kit) */}
+                  <Route
+                    path="/iga/machines"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <MachinesPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/machines/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <MachineDetailPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Connections */}
                   <Route
