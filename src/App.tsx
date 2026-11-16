@@ -90,6 +90,8 @@ const ExternalPrincipalPage = React.lazy(() => import("./features/iga/external/E
 const GoogleOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/gcp/GoogleOAuthCallbackPage"));
 const AzureOAuthCallbackPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureOAuthCallbackPage"));
 const AzureObjectPage = React.lazy(() => import("./features/discovery/cloud/azure/AzureObjectPage"));
+const GcpIdentityPage = React.lazy(() => import("./features/discovery/cloud/gcp/GcpIdentityPage"));
+const GcpResourcePage = React.lazy(() => import("./features/discovery/cloud/gcp/GcpResourcePage"));
 import { IgaLayout } from "./components/layout/IgaLayout";
 const AdminVoiceAgentPage = React.lazy(() => import("./features/voice-auth/AdminVoiceAgentPage").then((m) => ({ default: m.AdminVoiceAgentPage })));
 const LogsConfigurationPage = React.lazy(() => import("./features/logging/LogsConfigurationPage").then((m) => ({ default: m.LogsConfigurationPage })));
@@ -723,6 +725,48 @@ function AppContent() {
                       <ProtectedRoute requireProject>
                         <IgaLayout>
                           <AzureObjectPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* One Google Cloud service account: the page the Google Cloud list opens in place of the side drawer. */}
+                  <Route
+                    path="/iga/gcp/identity/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <GcpIdentityPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/gcp/identity/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <GcpIdentityPage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* One Google Cloud resource with its own IAM policy (GCP-3). */}
+                  <Route
+                    path="/iga/gcp/resource/:id"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <GcpResourcePage />
+                        </IgaLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/iga/gcp/resource/:id/:tab"
+                    element={
+                      <ProtectedRoute requireProject>
+                        <IgaLayout>
+                          <GcpResourcePage />
                         </IgaLayout>
                       </ProtectedRoute>
                     }
