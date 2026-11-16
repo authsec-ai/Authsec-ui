@@ -27,6 +27,7 @@ import {
   READINESS_LABEL,
   READINESS_TONE,
   readinessReason,
+  roleSetNote,
 } from "@/features/discovery/cloud/gcp/gcpConnectorCopy";
 import { Fact, Facts, Panel, CopyValue } from "@/features/iga/shared/components/Panel";
 import { Timestamp } from "@/features/iga/shared/components/Timestamp";
@@ -167,6 +168,13 @@ export function GcpFacts({ c }: { c: Connection }) {
             <Fact label="Reader account">
               <CopyValue value={attrs.reader_sa_email} what="Reader service account" />
             </Fact>
+          ) : null}
+          {/* Which roles this connector was granted from: the answer to "does it hold what discovery needs". */}
+          <Fact label="Role set" mono>
+            {attrs.role_set_version || "—"}
+          </Fact>
+          {roleSetNote(attrs.role_set_version, !!attrs.capability_limits?.includes("quota_project_unusable")) ? (
+            <Fact label="Role set note">{roleSetNote(attrs.role_set_version, !!attrs.capability_limits?.includes("quota_project_unusable"))}</Fact>
           ) : null}
           <Fact label="Last verified">
             <Timestamp iso={q.data.verified_at} missing="Never proven" />

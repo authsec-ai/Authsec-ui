@@ -15,11 +15,13 @@
  * they are wired now, and the claim is true as written.)
  *
  * GCP: onboarding, plus `POST /gcp/connectors/:id/scan`. There are still no
- * GCP identity/secret/permission/resource LIST endpoints, so a GCP scan
- * produces a coverage report and nothing to browse. Do not add GCP discovery
- * list endpoints here until the backend ships them; a page reading from an
- * endpoint that doesn't exist is the "invented API" mistake the investigation
- * flagged.
+ * GCP-specific identity/secret/permission/resource LIST endpoints. GCP
+ * identities and secrets are read through the provider-neutral
+ * `/aws/identities` and `/aws/secrets` endpoints (the `cloud_identity` /
+ * `cloud_secret` tables are shared), filtered by `kind` / `identity_id`. Do not
+ * add GCP-specific list endpoints here until the backend ships them; a page
+ * reading from an endpoint that doesn't exist is the "invented API" mistake the
+ * investigation flagged.
  *
  * PAGINATION IS UNIFORM, and this is the single most load-bearing fact about
  * these endpoints. All seven accept `limit`/`offset`/`connector_id` and report
@@ -496,12 +498,43 @@ interface CloudScanRunEnvelope {
  * inventory is one table across providers, and pretending otherwise is what
  * produced "38 identities" from 31 AWS roles, 4 AWS users and 3 GCP service
  * accounts. */
-export type CloudIdentityKind = "iam_role" | "iam_user" | "gcp_service_account";
+export type CloudIdentityKind =
+  | "iam_role"
+  | "iam_user"
+  | "gcp_service_account"
+  // GCP principals found only in IAM bindings, and the synthetic owner row of a
+  // project-level credential (an API key).
+  | "gcp_user"
+  | "gcp_group"
+  | "gcp_domain"
+  | "gcp_public"
+  | "gcp_federated"
+  | "gcp_service_agent"
+  | "gcp_deleted"
+  | "gcp_project"
+  | "gcp_folder"
+  | "gcp_organization";
+
+/** Every GCP identity kind. The AWS identity list excludes all of these: the
+ * inventory is one table across providers. */
+export const GCP_IDENTITY_KINDS: readonly CloudIdentityKind[] = [
+  "gcp_service_account",
+  "gcp_user",
+  "gcp_group",
+  "gcp_domain",
+  "gcp_public",
+  "gcp_federated",
+  "gcp_service_agent",
+  "gcp_deleted",
+  "gcp_project",
+  "gcp_folder",
+  "gcp_organization",
+];
 
 /** Which provider an identity kind belongs to. Used to keep provider-mixed
  * totals out of a panel that describes one provider. */
 export function providerOfKind(kind: CloudIdentityKind): "aws" | "gcp" {
-  return kind === "gcp_service_account" ? "gcp" : "aws";
+  return kind.startsWith("gcp_") ? "gcp" : "aws";
 }
 
 /** `models.AWSIdentityAttrs`'s wire shape — `CloudIdentity.attrs` for AWS. */
@@ -845,6 +878,87 @@ export interface CloudResource {
   row_updated_at: string;
 }
 
+
+// ── Google Cloud IAM bindings (GCP-3) ───────────────────────────────────────
+
+/** `models.GCPPermissionAttrs`: where a binding is attached and what Google returned. */
+export interface GcpBindingAttrs {
+  /** Full Cloud Asset name of the resource whose policy holds the binding. */
+  attached_to?: string;
+  gcp_scope_kind?: "organization" | "folder" | "project" | "resource" | string;
+  /** The chain above the attachment point, nearest first. */
+  ancestors?: string[];
+  project?: string;
+  /** The member string as it appears in the policy. */
+  member?: string;
+  read_time?: string;
+  binding_raw?: unknown;
+  /** From a simple request.time bound in the condition; never evaluated. */
+  expires_at?: string;
+  starts_at?: string;
+  role_unresolved?: boolean;
+  basic_role?: boolean;
+  role_stage?: string;
+  role_state?: string;
+}
+
+/** One GCP IAM binding (a `cloud_permission` row) with its holder's and resource's names. */
+export interface GcpBinding extends Omit<CloudPermission, "plane"> {
+  plane: string;
+  attrs?: GcpBindingAttrs | null;
+  identity_name: string;
+  identity_kind: CloudIdentityKind | string;
+  identity_native_id: string;
+  resource_name?: string;
+  resource_kind?: string;
+  resource_native_id?: string;
+}
+
+/** `models.GCPAssumeEdgeAttrs` (GCP-4): why an edge exists and where it came from. */
+export interface GcpEdgeAttrs {
+  roles?: string[];
+  /** act_as | mint_token | create_key | federate */
+  capabilities?: string[];
+  source_permission_ids?: string[];
+  /** Set when the grant sits on a project, folder or organization and reaches every service account beneath it. */
+  via_scope?: string;
+  member?: string;
+  subject_identity_id?: string;
+  conditional?: boolean;
+  expires_at?: string;
+  basic_role?: boolean;
+  external?: boolean;
+  pool?: string;
+  providers?: string[];
+  issuers?: string[];
+  attribute_mapping?: Record<string, string>;
+  attribute_condition?: string;
+  unconditioned?: boolean;
+  provider_unknown?: boolean;
+  workforce?: boolean;
+}
+
+/** One GCP trust edge: `subject` can become the identity `identity_id`. */
+export interface GcpEdge {
+  id: string;
+  connector_id: string;
+  identity_id: string;
+  subject_kind: string;
+  subject: string;
+  issuer?: string | null;
+  mechanism: string;
+  k8s_ref?: string | null;
+  attrs?: GcpEdgeAttrs | null;
+  last_seen_at: string;
+  identity_name: string;
+  identity_kind: string;
+  identity_native_id: string;
+}
+
+/** A GCP resource that carries its own IAM policy, with its binding count. */
+export interface GcpResource extends CloudResource {
+  binding_count: number;
+}
 
 // ── AWS workloads and activity (PR #52 surfaces) ────────────────────────────
 
@@ -1797,7 +1911,9 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
     // Candidate identities, not agents — see CloudIdentity's own comment.
     listAwsIdentityPage: builder.query<
       CloudIdentityPage,
-      CloudPageArgs & { kind?: CloudIdentityKind }
+      // `id` narrows to one identity: how a detail page opened from a link reads
+      // the identity in its URL without paging a whole estate.
+      CloudPageArgs & { kind?: CloudIdentityKind; id?: string }
     >({
       query: (params) => ({
         url: "/authsec/discovery/aws/identities",
@@ -1881,6 +1997,54 @@ export const cloudDiscoveryApi = baseApi.injectEndpoints({
         params,
       }),
       transformResponse: (r: CloudListEnvelope<CloudResource>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
+        { type: "CloudResource" as const, id: "ALL" },
+      ],
+    }),
+
+    /* ──────────── Google Cloud: identities, bindings, resources ─────────────
+     *
+     * GCP rows are kept out of the AWS lists above (a binding names a role and
+     * a condition those views do not render). These read them, fenced
+     * server-side to the workspace's GCP connectors.
+     */
+    listGcpIdentities: builder.query<CloudIdentityPage, CloudPageArgs & { kind?: string; id?: string }>({
+      query: (params) => ({ url: "/authsec/discovery/gcp/identities", method: "GET", params }),
+      transformResponse: (r: CloudListEnvelope<CloudIdentity>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((i) => ({ type: "CloudIdentity" as const, id: i.id })),
+        { type: "CloudIdentity" as const, id: "ALL" },
+      ],
+    }),
+    listGcpBindings: builder.query<
+      CloudPage<GcpBinding>,
+      CloudPageArgs & { identity_id?: string; resource_id?: string }
+    >({
+      query: (params) => ({ url: "/authsec/discovery/gcp/bindings", method: "GET", params }),
+      transformResponse: (r: CloudListEnvelope<GcpBinding>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((p) => ({ type: "CloudPermission" as const, id: p.id })),
+        { type: "CloudPermission" as const, id: "ALL" },
+      ],
+    }),
+    // GCP-4 trust edges. identity_id + include_scopes: who can become this (with
+    // the grants on its project, folders and organization); subject_identity_id:
+    // what this can become.
+    listGcpEdges: builder.query<
+      CloudPage<GcpEdge>,
+      CloudPageArgs & { identity_id?: string; subject_identity_id?: string; include_scopes?: boolean }
+    >({
+      query: (params) => ({ url: "/authsec/discovery/gcp/edges", method: "GET", params }),
+      transformResponse: (r: CloudListEnvelope<GcpEdge>, _meta, arg) => toCloudPage(r, arg),
+      providesTags: (result) => [
+        ...(result?.rows ?? []).map((e) => ({ type: "CloudAssumeEdge" as const, id: e.id })),
+        { type: "CloudAssumeEdge" as const, id: "ALL" },
+      ],
+    }),
+    listGcpResources: builder.query<CloudPage<GcpResource>, CloudPageArgs & { kind?: string; id?: string }>({
+      query: (params) => ({ url: "/authsec/discovery/gcp/resources", method: "GET", params }),
+      transformResponse: (r: CloudListEnvelope<GcpResource>, _meta, arg) => toCloudPage(r, arg),
       providesTags: (result) => [
         ...(result?.rows ?? []).map((r2) => ({ type: "CloudResource" as const, id: r2.id })),
         { type: "CloudResource" as const, id: "ALL" },
@@ -2335,6 +2499,10 @@ export const {
   useListAwsAssumeEdgesQuery,
   useListAwsPermissionsQuery,
   useListAwsResourcesQuery,
+  useListGcpIdentitiesQuery,
+  useListGcpBindingsQuery,
+  useListGcpResourcesQuery,
+  useListGcpEdgesQuery,
   useListAwsObservationsQuery,
   useListAwsWorkloadsQuery,
   useListAwsUsageQuery,

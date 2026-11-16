@@ -221,7 +221,7 @@ export function legacyRedirect(route: LegacyDiscoveryRoute, search: string): Leg
       if (value === "external") set("external", "1");
       else if (value === "exact" || value === "selector") set("representation", value);
     } else if (key === "kind" && base.provider === "gcp") {
-      // The Google Cloud list is service accounts only.
+      set("kind", value);
     } else if (key === "view" && route === "cloud-compute") {
       if (value === "workload-identities") set("section", value);
     } else set(key, value);

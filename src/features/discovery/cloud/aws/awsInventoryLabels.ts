@@ -47,6 +47,16 @@ export const IDENTITY_KIND_LABEL: Record<CloudIdentityKind, string> = {
   // and a service account are governed differently and reviewed by different
   // people.
   gcp_service_account: "GCP service account",
+  gcp_user: "GCP user",
+  gcp_group: "GCP group",
+  gcp_domain: "GCP domain",
+  gcp_public: "Public (allUsers)",
+  gcp_federated: "GCP federated principal",
+  gcp_service_agent: "Google service agent",
+  gcp_deleted: "Deleted principal",
+  gcp_project: "GCP project",
+  gcp_folder: "GCP folder",
+  gcp_organization: "GCP organization",
 };
 
 /* ──────────────────────────── compute ───────────────────────────────────── */

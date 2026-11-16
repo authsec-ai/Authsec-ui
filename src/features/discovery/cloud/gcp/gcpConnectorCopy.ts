@@ -32,12 +32,16 @@ export const SURFACE_LABEL: Record<string, string> = {
   deny: "Deny policies",
   pab: "Principal Access Boundary",
   resource_iam: "Resources",
+  sa_iam: "Service-account policies",
   workloads: "Workload hosts",
   agents: "Agent runtimes",
   registry: "Agent Registry",
   logs: "Audit logs",
   audit_configs: "Audit configuration",
   apis: "API enablement",
+  hmac_keys: "HMAC keys",
+  api_keys: "API keys",
+  federation_config: "Workload identity federation",
 };
 
 /** Why a probe could not answer, in words. These are the backend's sanitized
@@ -75,8 +79,9 @@ export const LIMIT_COPY: Record<GCPCapabilityLimit, { label: string; body: strin
       label: "Quota project unusable",
       body:
         "The reader cannot use the quota project that Cloud Asset calls bill against, so those reads will " +
-        "fail however complete its other permissions are. Usually the reader project sits outside the " +
-        "onboarded scope and the role grants there do not reach it.",
+        "fail however complete its other permissions are. Grant the reader roles/serviceusage.serviceUsageConsumer " +
+        "on the quota project (re-running the setup script does this). If the reader project sits outside the " +
+        "onboarded scope, the role grants at the scope do not reach it either.",
     },
   };
 
@@ -96,6 +101,24 @@ export const READINESS_LABEL: Record<string, string> = {
  * They differ in what they could configure, and therefore in what a shortfall
  * means — so the value is worth showing, but not as the raw
  * "oauth_default" / "manual_wif" / "manual_key". */
+/**
+ * Role sets older than the current one, by the label a connector recorded when its
+ * roles were granted. v3 added serviceusage.serviceUsageConsumer: a connector still
+ * on v1 or v2 lacks it and can read as blocked (quota_project_unusable) until the
+ * setup script is re-run.
+ */
+const OUTDATED_ROLE_SETS = new Set(["gcp-reader-p1-v1", "gcp-reader-p1-v2"]);
+
+/**
+ * A note about an older role set, shown only when it is the likely cause of a block
+ * (`blockedByQuotaProject`). A connector on an older set may have had the role added
+ * by hand, and then the label alone is not a problem worth raising.
+ */
+export function roleSetNote(version: string | undefined, blockedByQuotaProject: boolean): string | null {
+  if (!blockedByQuotaProject || !version || !OUTDATED_ROLE_SETS.has(version)) return null;
+  return "An older role set. It lacks Service Usage Consumer, which Cloud Asset needs on the quota project. Re-run the setup script to add it.";
+}
+
 export const ONBOARDING_PATH_LABEL: Record<string, string> = {
   oauth_default: "Google Authentication",
   manual_wif: "Workload Identity Federation (manual)",
@@ -122,7 +145,7 @@ export const READINESS_REASON: Record<string, string> = {
   keyed_credential:
     "Authenticates with a downloaded service-account key rather than federation, so the credential cannot be rotated by AuthSec.",
   quota_project_unusable:
-    "The reader cannot use the quota project Cloud Asset calls bill against, so those reads will fail however complete its other permissions are.",
+    "The reader cannot use the quota project Cloud Asset calls bill against, so those reads will fail however complete its other permissions are. Grant it roles/serviceusage.serviceUsageConsumer there, or re-run the setup script.",
   missing_permissions: "The reader is missing one or more required read permissions.",
   api_not_enabled: "An API a first-phase surface depends on is not enabled on the reader project.",
   vpc_service_controls: "A VPC Service Controls perimeter refuses some reads by design.",

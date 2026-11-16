@@ -5,16 +5,19 @@
  * toolbars — search, Kind, Attribution and Unused access all narrow the rows
  * LOADED, and say so; only Source is the server's.
  *
- * Google Cloud has no published reading: its identities are this view, with the
- * page forced to service accounts.
+ * Google Cloud has no published reading: its identities (service accounts and
+ * the principals its IAM bindings name) and resources are this view.
  */
 
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { GCP_IDENTITY_KINDS } from "@/app/api/cloudDiscoveryApi";
 import AWSComputePage from "@/features/discovery/cloud/aws/AWSComputePage";
 import AWSIdentitiesPage from "@/features/discovery/cloud/aws/AWSIdentitiesPage";
 import AWSResourcesPage from "@/features/discovery/cloud/aws/AWSResourcesPage";
+import GcpIdentitiesPage from "@/features/discovery/cloud/gcp/GcpIdentitiesPage";
+import GcpResourcesPage from "@/features/discovery/cloud/gcp/GcpResourcesPage";
 
 import { FacetBar } from "./FacetBar";
 import { SourceHasNoRows, UnknownSource } from "./ListStates";
@@ -27,9 +30,9 @@ export const LATEST_NOTE =
 export default function LatestScreen(p: ScreenProps) {
   let body: ReactNode;
   if (p.scope.kind === "unknown") body = <UnknownSource id={p.scope.id} provider={p.provider} onClear={() => p.url.patch({ source: null })} />;
-  else if (p.provider === "gcp") body = <AWSIdentitiesPage forcedKind="gcp_service_account" />;
+  else if (p.provider === "gcp") body = p.type === "resources" ? <GcpResourcesPage /> : <GcpIdentitiesPage />;
   else if (p.type === "workloads") body = <AWSComputePage />;
-  else if (p.type === "identities") body = <AWSIdentitiesPage excludeKinds={["gcp_service_account"]} />;
+  else if (p.type === "identities") body = <AWSIdentitiesPage excludeKinds={[...GCP_IDENTITY_KINDS]} />;
   else body = <AWSResourcesPage />;
 
   const fo = sourceFacet(p.sources, undefined);
