@@ -19,7 +19,7 @@ import {
   AWS_DISCOVERY_MAX_LIMIT,
   type CloudIdentity,
 } from "@/app/api/cloudDiscoveryApi";
-import { EntityCell, type AppliedFilter } from "@/components/console/iam-console";
+import { type AppliedFilter } from "@/components/console/iam-console";
 import { CardContent } from "@/components/ui/card";
 import { AdaptiveTable, type AdaptiveColumn } from "@/components/ui/adaptive-table";
 import { DataTableSkeleton } from "@/components/ui/table-skeleton";
@@ -66,8 +66,6 @@ export default function GcpIdentitiesPage() {
     offset: 0,
   });
   const rows = useMemo(() => q.data?.rows ?? [], [q.data]);
-  const total = q.data?.total ?? 0;
-  const truncated = q.data ? truncationOf(q.data).truncated : false;
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -77,7 +75,6 @@ export default function GcpIdentitiesPage() {
 
   // Drawer pager
   const selectedIndex = filtered.findIndex((i) => i.id === selectedId);
-  const selected = selectedIndex >= 0 ? filtered[selectedIndex] : null;
 
   useEffect(() => {
     if (selectedId && selectedIndex === -1) setSelectedId(null);
