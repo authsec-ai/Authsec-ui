@@ -16,8 +16,9 @@ import { tenantName } from "@/features/discovery/cloud/azure/azureInventoryLabel
 import { baseApi } from "./baseApi";
 import type { CloudConnector } from "./cloudDiscoveryApi";
 
-export type ConnectionProvider = "aws" | "gcp" | "azure" | "k8s" | "github";
-export type ConnectionScopeKind = "account" | "project" | "cluster" | "organisation" | "tenant";
+/** `machine`: a computer running the AuthSec Agent Kit (authsec-cli daemon). */
+export type ConnectionProvider = "aws" | "gcp" | "azure" | "k8s" | "machine" | "github";
+export type ConnectionScopeKind = "account" | "project" | "cluster" | "machine" | "organisation" | "tenant";
 
 /** Can AuthSec reach it? */
 export type ConnectionState = "connected" | "authentication_failed" | "revoked" | "not_verified";

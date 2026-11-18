@@ -285,7 +285,8 @@ export default function ConnectionsPage() {
           const a = actionsOf(c, canAdminister);
           const busy: ActionKind | undefined = pending[c.id];
           const items: ConsoleActionItem[] = [{ label: "View details", onSelect: () => navigate(detailHref(c.id)) }];
-          if (c.discovery.ready) items.push({ label: "Open in Discovery", onSelect: () => navigate(discoveryLink(c)) });
+          // A machine's agents are on its own page (View details), not a Discovery list.
+          if (c.discovery.ready && c.provider !== "machine") items.push({ label: "Open in Discovery", onSelect: () => navigate(discoveryLink(c)) });
           if (a.verify) items.push({ label: "Verify", onSelect: () => void run(c, "verify") });
           if (a.editScope) items.push({ label: "Edit scope", onSelect: () => navigate(detailHref(c.id, "scope")) });
           if (a.rules) items.push({ label: "Scan rules", onSelect: () => navigate(detailHref(c.id, "rules")) });
@@ -294,7 +295,7 @@ export default function ConnectionsPage() {
             <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
               {busy ? (
                 <PendingWord kind={busy} />
-              ) : c.provider === "k8s" && c.scan.reports_every_seconds ? (
+              ) : (c.provider === "k8s" || c.provider === "machine") && c.scan.reports_every_seconds ? (
                 <span className="text-xs text-muted-foreground">
                   Reports every {Math.max(1, Math.round(c.scan.reports_every_seconds / 60))} min
                 </span>
@@ -332,8 +333,8 @@ export default function ConnectionsPage() {
     <div className="mx-auto max-w-md space-y-3 py-4">
       <p className="text-sm font-medium text-foreground">Nothing is connected yet.</p>
       <p>
-        Connect an AWS account, a Google Cloud project, a Kubernetes cluster or a GitHub organisation. AuthSec scans it, and
-        Discovery then shows what it found.
+        Connect an AWS account, a Google Cloud project, a Kubernetes cluster, a GitHub organisation or a machine running AI agents.
+        AuthSec reads it, and Discovery then shows what it found.
       </p>
       {canAdminister || adminLoading ? (
         <Button className="text-[length:var(--text-sm)] text-white" disabled={adminLoading} onClick={() => setPickerOpen(true)}>
@@ -352,8 +353,8 @@ export default function ConnectionsPage() {
       title="Connections"
       description={
         <span className="inline-flex flex-wrap items-center gap-1">
-          Connect your cloud accounts, Kubernetes clusters, and GitHub organisations to AuthSec. Discover your AI agents, identify their access
-          permissions, and understand what they can access across your infrastructure.
+          Connect your cloud accounts, Kubernetes clusters, GitHub organisations and machines to AuthSec. Discover your AI agents, identify their
+          access permissions, and understand what they can access across your infrastructure.
         </span>
       }
       actions={

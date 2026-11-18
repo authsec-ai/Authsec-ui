@@ -5,16 +5,20 @@
  * after a successful add the list refetches.
  */
 
-import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import { GitHubSetupWizard } from "@/features/discovery/GitHubSetupWizard";
-import { CloudProviderPicker, type PickerProvider } from "@/features/discovery/cloud/CloudProviderPicker";
+import {
+  CloudProviderPicker,
+  type PickerProvider,
+} from "@/features/discovery/cloud/CloudProviderPicker";
 import { AWSOnboardingWizard } from "@/features/discovery/cloud/aws/AWSOnboardingWizard";
 import { AzureOnboardingWizard } from "@/features/discovery/cloud/azure/AzureOnboardingWizard";
 import { GCPOnboardingWizard } from "@/features/discovery/cloud/gcp/GCPOnboardingWizard";
 
 import type { ConnectionProvider } from "@/app/api/connectionsApi";
+
+import { AddMachineDialog } from "@/features/iga/machines/AddMachineDialog";
 
 import { K8sSetupDialog } from "./K8sSetupDialog";
 
@@ -35,23 +39,53 @@ export function AddConnectionDialogs({
   onAdded: (id?: string) => void;
 }) {
   const close = () => onWizardChange(null);
-  const navigate = useNavigate();
   return (
     <>
       <CloudProviderPicker
         open={pickerOpen}
         onOpenChange={onPickerOpenChange}
         onContinue={(p: PickerProvider) => {
-          if (p === "aws" || p === "gcp" || p === "azure" || p === "k8s" || p === "github") onWizardChange(p);
-          // Machines have their own page; its Add machine dialog opens there.
-          else if (p === "machine") navigate("/iga/machines?add=1");
+          if (
+            p === "aws" ||
+            p === "gcp" ||
+            p === "azure" ||
+            p === "k8s" ||
+            p === "github" ||
+            p === "machine"
+          )
+            onWizardChange(p);
           else toast("That provider is not available yet.");
         }}
       />
-      <AWSOnboardingWizard open={wizard === "aws"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
-      <AzureOnboardingWizard open={wizard === "azure"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
-      <GCPOnboardingWizard open={wizard === "gcp"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
-      <K8sSetupDialog open={wizard === "k8s"} onOpenChange={(o) => !o && close()} onCreated={() => onAdded()} />
+      <AWSOnboardingWizard
+        open={wizard === "aws"}
+        onOpenChange={(o) => !o && close()}
+        onCreated={() => onAdded()}
+      />
+      <AzureOnboardingWizard
+        open={wizard === "azure"}
+        onOpenChange={(o) => !o && close()}
+        onCreated={() => onAdded()}
+      />
+      <GCPOnboardingWizard
+        open={wizard === "gcp"}
+        onOpenChange={(o) => !o && close()}
+        onCreated={() => onAdded()}
+      />
+      <K8sSetupDialog
+        open={wizard === "k8s"}
+        onOpenChange={(o) => !o && close()}
+        onCreated={() => onAdded()}
+      />
+      <AddMachineDialog
+        open={wizard === "machine"}
+        onOpenChange={(o) => {
+          if (o) return;
+          close();
+          // The machine registers itself while the dialog is open; show it in the list.
+          onAdded();
+        }}
+      />
       <GitHubSetupWizard
         open={wizard === "github"}
         onOpenChange={(o) => !o && close()}

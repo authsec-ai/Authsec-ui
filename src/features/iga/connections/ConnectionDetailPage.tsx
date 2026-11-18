@@ -50,6 +50,7 @@ import { useConnectionActions, type ActionKind } from "./useConnectionActions";
 import { useListDiscoveryConnectionsQuery } from "@/app/api/connectionsApi";
 import { cloudDiscoveryApi } from "@/app/api/cloudDiscoveryApi";
 import { ProviderGlyph } from "./ProviderGlyph";
+import MachineDetailPage from "@/features/iga/machines/MachineDetailPage";
 
 const BACK = (
   <Button variant="outline" asChild>
@@ -92,6 +93,9 @@ export default function ConnectionDetailPage() {
       </ConsolePage>
     );
   }
+
+  // A machine has its own page: agents, access, policies, logs, enforcement.
+  if (c.provider === "machine") return <MachineDetailPage id={c.id} />;
 
   const tabs = tabsOf(c);
   const active: DetailTab | null = !tabParam ? "overview" : (tabs.find((t) => t.key === tabParam)?.key ?? null);

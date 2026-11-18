@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import config from "@/config";
 import { ConnPill } from "@/features/iga/connections/ConnPill";
+import { detailHref } from "@/features/iga/connections/connectionModel";
 import { resolveWorkspaceId } from "@/utils/workspace";
 
 import { CommandBlock, MUTED } from "./MachineParts";
@@ -180,7 +181,7 @@ export function AddMachineDialog({
                       : ""}
                     .{" "}
                     <Link
-                      to={`/iga/machines/${encodeURIComponent(connected.id)}`}
+                      to={detailHref(connected.id)}
                       onClick={close}
                       className="text-(--color-primary-text) hover:underline"
                     >

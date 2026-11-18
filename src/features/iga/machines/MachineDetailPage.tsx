@@ -1,11 +1,14 @@
 /**
  * One machine: its agents (quarantine), what each reached (block), the
  * policies it applies, its logs, and enforcement and SIEM forwarding.
- * Another workspace's machine, or one that does not exist, is "not found".
+ * A machine is a connection: ConnectionDetailPage renders this for one of
+ * provider `machine`, at /iga/connections/:id, and names it in the
+ * breadcrumb. Another workspace's machine, or one that does not exist, is
+ * "not found".
  */
 
 import { useCallback } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useGetDiscoverySourceQuery } from "@/app/api/discoveryApi";
 import { ConsolePage } from "@/components/console/ConsolePage";
@@ -29,8 +32,7 @@ const TABS = [
   { key: "enforcement", label: "Enforcement and SIEM" },
 ] as const;
 
-export default function MachineDetailPage() {
-  const { id = "" } = useParams();
+export default function MachineDetailPage({ id }: { id: string }) {
   const [params, setParams] = useSearchParams();
   const tab = TABS.find((t) => t.key === params.get("tab"))?.key ?? "agents";
   const agent = params.get("agent") ?? undefined;
@@ -62,10 +64,10 @@ export default function MachineDetailPage() {
             ? "This machine was not found."
             : "The machine could not be loaded."}{" "}
           <Link
-            to="/iga/machines"
+            to="/iga/connections"
             className="text-(--color-primary-text) hover:underline"
           >
-            All machines
+            All connections
           </Link>
         </p>
       </ConsolePage>

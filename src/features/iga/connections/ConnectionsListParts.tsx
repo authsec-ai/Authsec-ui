@@ -130,6 +130,7 @@ const SOURCE_COPY: Record<ConnectionProvider, { title: string; note: string }> =
   k8s: { title: "Kubernetes cluster", note: "Service accounts and RBAC" },
   gcp: { title: "Google Cloud project", note: "IAM bindings and keys" },
   github: { title: "GitHub organisation", note: "Apps, tokens and members" },
+  machine: { title: "Machine", note: "AI agents on a computer: access, policies and quarantine" },
 };
 
 /** One card per provider with no connection yet; each opens that provider's own setup. */

@@ -104,9 +104,6 @@ export function Breadcrumb() {
         case "connections":
           label = "Connections";
           break;
-        case "machines":
-          label = "Machines";
-          break;
         case "discovery":
           label = "Discovery";
           break;
