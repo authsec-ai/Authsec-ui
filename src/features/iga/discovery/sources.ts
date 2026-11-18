@@ -92,10 +92,13 @@ export function writeLastProvider(provider: DiscoveryProvider): void {
 function mostRecentlyAvailable(connections: Connection[], candidates: DiscoveryProvider[]): DiscoveryProvider | undefined {
   let best: { provider: DiscoveryProvider; at: number } | undefined;
   for (const c of connections) {
-    if (!candidates.includes(c.provider) || !c.discovery?.ready || !c.discovery.as_of) continue;
+    // A machine is not a Discovery provider: its agents are on its own page.
+    const provider = c.provider;
+    if (provider === "machine") continue;
+    if (!candidates.includes(provider) || !c.discovery?.ready || !c.discovery.as_of) continue;
     const at = Date.parse(c.discovery.as_of);
     if (Number.isNaN(at)) continue;
-    if (!best || at > best.at) best = { provider: c.provider, at };
+    if (!best || at > best.at) best = { provider, at };
   }
   return best?.provider;
 }

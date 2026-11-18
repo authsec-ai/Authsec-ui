@@ -29,6 +29,7 @@ const PROVIDER_WORDS: Record<ConnectionProvider, string> = {
   gcp: "Google Cloud",
   azure: "Azure",
   k8s: "Kubernetes",
+  machine: "Machine",
   github: "GitHub",
 };
 
@@ -53,6 +54,8 @@ export function typeWord(c: Connection): string {
       return "GCP scope";
     case "k8s":
       return "Kubernetes cluster";
+    case "machine":
+      return "Machine";
     case "azure":
       return "Azure tenant";
     case "github":
@@ -62,7 +65,7 @@ export function typeWord(c: Connection): string {
   }
 }
 
-export const PROVIDERS: ConnectionProvider[] = ["aws", "azure", "k8s", "gcp", "github"];
+export const PROVIDERS: ConnectionProvider[] = ["aws", "azure", "k8s", "gcp", "github", "machine"];
 
 export function isConnectionProvider(v: string | null | undefined): v is ConnectionProvider {
   return !!v && (PROVIDERS as string[]).includes(v);
@@ -136,6 +139,8 @@ function notVerifiedLabel(c: Connection): string {
   switch (c.provider) {
     case "k8s":
       return r === "no_heartbeat" ? "Waiting for agent" : "Agent not reporting";
+    case "machine":
+      return r === "no_heartbeat" ? "Waiting for machine" : "Machine not reporting";
     case "github":
       return r === "integration_missing" ? "App not installed" : r === "integration_pending" ? "Installation pending" : "Not yet verified";
     default:
@@ -323,9 +328,13 @@ function reasonAction(c: Connection, code: string | null): string {
     case "scope_invalid":
       return "Reconnect with valid settings.";
     case "no_heartbeat":
-      return "Install the agent in the cluster and it will appear here.";
+      return provider === "machine"
+        ? "Run the commands from Add machine on the computer and it will appear here."
+        : "Install the agent in the cluster and it will appear here.";
     case "heartbeat_lost":
-      return "Check that the agent is running in the cluster and can reach AuthSec.";
+      return provider === "machine"
+        ? "Check the service on the machine (sudo authsec-cli daemon status) and that it can reach AuthSec."
+        : "Check that the agent is running in the cluster and can reach AuthSec.";
     case "disabled":
       return "It can be removed here.";
     case "integration_missing":
@@ -341,6 +350,7 @@ function reasonAction(c: Connection, code: string | null): string {
       return "Remove this connection, and connect the organisation again to scan it.";
     default:
       if (provider === "k8s") return "Check that the agent is running in the cluster and can reach AuthSec.";
+      if (provider === "machine") return "Check the service on the machine (sudo authsec-cli daemon status) and that it can reach AuthSec.";
       if (provider === "github") return "Check that the GitHub App is still installed on the organisation.";
       if (!c.capabilities.verify) return "Check the connection's settings with the provider.";
       return c.connection.state === "not_verified" ? "Verify the connection to confirm AuthSec can read it." : "Verify the connection to see why.";
@@ -406,8 +416,15 @@ export function statusOf(c: Connection): StatusSummary {
   }
 }
 
+/** A machine reports every minute: its last report is all there is to say. */
+export function machineHealthLine(c: Connection): string {
+  const hb = c.scan.heartbeat_at;
+  return hb ? `Reporting, last report ${ago(hb)}` : "No report received yet";
+}
+
 function connectedLine(c: Connection): string {
   if (c.provider === "k8s") return k8sHealthLine(c);
+  if (c.provider === "machine") return machineHealthLine(c);
   const parts: string[] = [];
   if (c.scan.state === "finished" && c.scan.at) parts.push(`Latest scan finished ${ago(c.scan.at)}`);
   else if (c.scan.state === "never_run") parts.push("Not scanned yet");
@@ -420,6 +437,7 @@ function connectedLine(c: Connection): string {
 
 /** "Finished 6 days ago" · "Failed 2 hours ago" · "Running" · "Queued" · "Never run". */
 export function lastScanText(c: Connection): string {
+  if (c.provider === "machine") return c.scan.at ? `Last report ${ago(c.scan.at)}` : "No report yet";
   if (c.provider === "k8s") {
     if (c.scan.state === "never_run" || !c.scan.at) return "No inventory yet";
     return `Inventory ${ago(c.scan.at)}`;
@@ -559,7 +577,7 @@ export function actionsOf(c: Connection, canAdminister: boolean): ActionSet {
   const cap = c.capabilities;
   // A cluster's or an organisation's "revoke" is the source's DELETE, so a disabled or
   // revoked one must stay removable. AWS and GCP revoke once: a revoked row keeps its history.
-  const removable = c.provider === "k8s" || c.provider === "github";
+  const removable = c.provider === "k8s" || c.provider === "github" || c.provider === "machine";
   return {
     scan: canAdminister && live && cap.scan && (c.provider === "aws" || c.provider === "gcp" || c.provider === "github" || c.provider === "azure"),
     verify: canAdminister && live && verifiable(c),
@@ -680,6 +698,8 @@ export function discoveryWaitingFor(c: Connection): string {
   switch (c.provider) {
     case "k8s":
       return "Waiting for a usable sweep from the agent.";
+    case "machine":
+      return "Waiting for the machine's first report.";
     case "github":
       return "Waiting for a completed scan of the organisation.";
     case "gcp":

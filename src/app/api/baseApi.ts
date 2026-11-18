@@ -72,6 +72,8 @@ export const baseApi = createApi({
   // 401 on a signed-in request ends the session (UI-011).
   baseQuery: withLoginTicket(withUnauthorizedHandler(baseQuery)),
   tagTypes: [
+    "AgentKitEvent",
+    "AgentKitPolicy",
     "Auth",
     "AdminAuth",
     "MFAAuth",

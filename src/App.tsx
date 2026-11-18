@@ -624,6 +624,10 @@ function AppContent() {
                       Every earlier route redirects here WITH its query string. */}
                   <Route path="/iga" element={<Navigate to="/iga/discovery" replace />} />
 
+                  {/* Machines (AuthSec Agent Kit) are connections; the old addresses redirect. */}
+                  <Route path="/iga/machines" element={<Navigate to="/iga/connections?type=machine" replace />} />
+                  <Route path="/iga/machines/:id" element={<LegacyIdRedirect base="/iga/connections" />} />
+
                   {/* Connections */}
                   <Route
                     path="/iga/connections"
