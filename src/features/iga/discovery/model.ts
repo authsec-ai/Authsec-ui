@@ -20,7 +20,7 @@ import {
 export const TYPES_BY_PROVIDER: Record<DiscoveryProvider, DiscoveryType[]> = {
   aws: ["workloads", "identities", "resources", "ai_workloads"],
   k8s: ["workloads", "identities", "sightings"],
-  gcp: ["identities"],
+  gcp: ["identities", "resources"],
   azure: ["agents", "sightings", "identities", "resources", "workloads"],
   github: ["sightings"],
 };
@@ -51,7 +51,7 @@ export function notCollectedReason(provider: DiscoveryProvider, type: DiscoveryT
     case "gcp":
       return type === "sightings"
         ? "AuthSec does not collect agent sightings from Google Cloud."
-        : `AuthSec collects only service accounts from Google Cloud today, not ${what}.`;
+        : `AuthSec does not collect ${what} from Google Cloud yet.`;
     case "azure":
       return `AuthSec does not collect ${what} from Azure.`;
     case "github":
@@ -128,6 +128,7 @@ function filterKeysFor(provider: DiscoveryProvider, view: DiscoveryView, type: D
     if (type === "identities") return ["lifecycle", "kind", "bound"];
     if (type === "resources") return ["region", "lifecycle", "representation", "external", "service"];
   }
+  if (provider === "gcp" && type === "identities") return ["kind"];
   if (provider === "aws" && view === "latest") {
     if (type === "workloads") return ["runtime", "attribution", "section"];
     if (type === "identities") return ["kind"];

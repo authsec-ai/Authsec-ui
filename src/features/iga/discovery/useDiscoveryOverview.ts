@@ -21,6 +21,8 @@ import {
   useListAwsIdentityPageQuery,
   useListAwsResourcesQuery,
   useListAwsWorkloadsQuery,
+  useListGcpIdentitiesQuery,
+  useListGcpResourcesQuery,
 } from "@/app/api/cloudDiscoveryApi";
 import { useListDiscoveredAgentsQuery } from "@/app/api/discoveryApi";
 import { useListGraphIdentitiesQuery, useListGraphResourcesQuery, useListGraphWorkloadsQuery } from "@/app/api/igaGraphApi";
@@ -94,10 +96,11 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
   const aws = provider === "aws";
   const lw = useListAwsWorkloadsQuery({ limit: 1, connector_id: sourceId }, { skip: !latestOn || !aws });
   const lr = useListAwsResourcesQuery({ limit: 1, connector_id: sourceId }, { skip: !latestOn || !aws });
-  // The identity table is shared across providers: AWS identities are roles plus users, Google Cloud's are service accounts.
+  // AWS identities are roles plus users. Google Cloud's have their own reads, fenced to its connectors.
   const lrole = useListAwsIdentityPageQuery({ limit: 1, kind: "iam_role", connector_id: sourceId }, { skip: !latestOn || !aws });
   const luser = useListAwsIdentityPageQuery({ limit: 1, kind: "iam_user", connector_id: sourceId }, { skip: !latestOn || !aws });
-  const lgcp = useListAwsIdentityPageQuery({ limit: 1, kind: "gcp_service_account", connector_id: sourceId }, { skip: !latestOn || aws });
+  const lgcp = useListGcpIdentitiesQuery({ limit: 1, connector_id: sourceId }, { skip: !latestOn || aws });
+  const lgcpr = useListGcpResourcesQuery({ limit: 1, connector_id: sourceId }, { skip: !latestOn || aws });
 
   /* ---- Kubernetes: the inventory summary, then each list's own total ---- */
   const k8sOn = provider === "k8s" && !blocked;
@@ -174,7 +177,7 @@ export function useDiscoveryOverview({ ws, provider, view, scope, q, rev, epoch,
       },
     };
   }
-  if (latestOn) return { counts: { identities: pageCount(lgcp.data, lgcp.isError) } };
+  if (latestOn) return { counts: { identities: pageCount(lgcp.data, lgcp.isError), resources: pageCount(lgcpr.data, lgcpr.isError) } };
   if (k8sOn) {
     const notes = summary.data?.meta.coverage ?? kw.currentData?.meta.coverage ?? ki.currentData?.meta.coverage;
     const sweeps = clusterSweeps(notes, clusters.data?.clusters);

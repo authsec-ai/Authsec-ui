@@ -32,7 +32,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Info } from "lucide-react";
 
@@ -91,6 +91,7 @@ export default function AWSIdentitiesPage({
   excludeKinds?: CloudIdentityKind[];
 } = {}) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const gcp = forcedKind === "gcp_service_account";
   const provider = gcp ? "gcp" : "aws";
 
@@ -591,7 +592,9 @@ export default function AWSIdentitiesPage({
               // the window width. Every field here is a column or is in the row's own
               // drawer, which the row click opens, so there is nothing to reveal.
               rowDetails={false}
-              onRowClick={(i) => setSelectedId(i.id)}
+              // A Google Cloud service account opens its own page, as an Azure object
+              // does; an AWS identity still opens the drawer.
+              onRowClick={(i) => (gcp ? navigate(`/iga/gcp/identity/${encodeURIComponent(i.id)}`) : setSelectedId(i.id))}
               pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], alwaysVisible: true }}
             />
           )}
@@ -610,14 +613,16 @@ export default function AWSIdentitiesPage({
         ) : null}
       </footer>
 
-      <AWSIdentityDrawer
-        identity={selected}
-        onClose={() => setSelectedId(null)}
-        onPrev={() => setSelectedId(filtered[selectedIndex - 1]?.id ?? null)}
-        onNext={() => setSelectedId(filtered[selectedIndex + 1]?.id ?? null)}
-        index={selectedIndex >= 0 ? selectedIndex : 0}
-        total={filtered.length}
-      />
+      {gcp ? null : (
+        <AWSIdentityDrawer
+          identity={selected}
+          onClose={() => setSelectedId(null)}
+          onPrev={() => setSelectedId(filtered[selectedIndex - 1]?.id ?? null)}
+          onNext={() => setSelectedId(filtered[selectedIndex + 1]?.id ?? null)}
+          index={selectedIndex >= 0 ? selectedIndex : 0}
+          total={filtered.length}
+        />
+      )}
     </div>
   );
 }
